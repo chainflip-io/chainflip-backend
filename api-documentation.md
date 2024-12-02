@@ -1,82 +1,215 @@
 # Broker API Documentation
 
-## Methods Overview
+This document describes the JSON-RPC API methods available in the Broker API. The API supports cross-chain asset swaps, account management, and fee withdrawals.
 
-### broker_RequestSwapDepositAddress
+## Using the API
 
-Request a deposit address for initiating a swap between different assets and chains.
+All methods follow the JSON-RPC 2.0 specification. Each request should be formatted as:
 
-#### Request Parameters
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "broker_methodName",
+  "params": <request parameters>,
+  "id": <unique request id>
+}
+```
 
-- `source_asset`: Source asset and chain (required)
-- `destination_asset`: Destination asset and chain (required)
-- `destination_address`: Recipient address (required)
-- `broker_commission`: Commission in basis points (required)
-- `affiliate_fees`: Array of `{account, bps}` objects for fee distribution
-- `boost_fee`: Additional fee in basis points
-- `dca_parameters`: Configuration for Dollar Cost Averaging
-  - `number_of_chunks`: Number of swaps to execute
-  - `chunk_interval`: Block interval between swaps
-- `channel_metadata`: Cross-chain message parameters
-- `refund_parameters`: Configuration for handling failed swaps
+The response will follow the format:
 
-#### Response
+```json
+{
+  "jsonrpc": "2.0",
+  "result": <response data>,
+  "id": <matching request id>
+}
+```
 
-- `address`: Deposit address
-- `channel_id`: Unique channel identifier
-- `channel_opening_fee`: Fee as 32-byte hex string
-- `issued_block`: Block number when issued
-- `source_chain_expiry_block`: Expiration block number
-- `refund_parameters`: Refund configuration
+If an error occurs, the response will contain an error object instead of the result:
 
-### broker_RegisterAccount
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": <error code>,
+    "message": <error message>
+  },
+  "id": <matching request id>
+}
+```
 
-Register a new broker account.
+## Methods
 
-#### Request
+### broker_requestSwapDepositAddress
 
-Empty request body
-
-#### Response
-
-- `transaction_hash`: 32-byte transaction hash
-
-### broker_RequestSwapParameterEncoding
-
-Generate encoded parameters for a swap transaction.
-
-#### Request Parameters
-
-Similar to RequestSwapDepositAddress, plus:
-
-- `input_amount`: Amount to swap (uint128)
-
-#### Response
-
-For Bitcoin chain:
-
-- `deposit_address`: Bitcoin address
-- `nulldata_utxo`: Encoded transaction data
-- `chain`: "Bitcoin"
-
-### broker_WithdrawFees
-
-Withdraw accumulated fees.
+Requests a deposit address for initiating a cross-chain asset swap.
 
 #### Request Parameters
+- `source_asset`: The asset you want to swap from, specified by chain and asset name (see Asset Identifiers in Data Types)
+- `destination_asset`: The asset you want to receive, specified by chain and asset name
+- `destination_address`: The address where the swapped assets should be sent
+- `broker_commission`: Commission rate in basis points (1 bps = 0.01%)
+- `affiliate_fees`: Optional array of affiliate fee specifications, each containing an account address and fee rate in basis points
+- `boost_fee`: Optional fee rate in basis points to boost transaction priority
+- `channel_metadata`: Optional metadata for cross-chain messaging, containing message data and gas budget
+- `dca_parameters`: Optional parameters for dollar-cost averaging, specifying the number and interval of swap chunks
+- `refund_parameters`: Optional parameters for handling failed swaps, including retry duration and refund address
 
-- `asset`: Asset and chain to withdraw
-- `destination_address`: Withdrawal address
+#### Response Fields
+- `address`: The deposit address where the source assets should be sent
+- `issued_block`: The block number when this deposit address was issued
+- `channel_id`: Unique identifier for this swap channel
+- `source_chain_expiry_block`: The block number after which this deposit address expires
+- `channel_opening_fee`: The fee required to open this swap channel
+- `refund_parameters`: Parameters for handling potential refunds, including the retry duration and refund address
 
-#### Response
+#### Example
+```bash copy
+curl -X POST http://localhost:80 \
+-H "Content-Type: application/json" \
+-d '{
+  "jsonrpc": "2.0",
+  "method": "broker_requestSwapDepositAddress",
+  "params": {
+    "source_asset": {
+      "chain": "Ethereum",
+      "asset": "ETH"
+    },
+    "destination_asset": {
+      "chain": "Bitcoin",
+      "asset": "BTC"
+    },
+    "destination_address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+    "broker_commission": 100
+  },
+  "id": 1
+}'
+```
 
-- `tx_hash`: Transaction hash
-- `egress_id`: `[chain, uint64]` tuple
-- `egress_amount`: 32-byte hex string
-- `egress_fee`: 32-byte hex string
-- `destination_address`: Confirmed destination
+### broker_registerAccount
 
-## Supported Assets by Chain
+Registers a new broker account in the system.
+
+#### Request Parameters
+This method takes no parameters (empty object `{}` or array `[]`).
+
+#### Response Fields
+- `transaction_hash`: The transaction hash of the registration transaction, confirming the account creation
+
+#### Example
+```bash copy
+curl -X POST http://localhost:80 \
+-H "Content-Type: application/json" \
+-d '{
+  "jsonrpc": "2.0",
+  "method": "broker_registerAccount",
+  "params": {},
+  "id": 1
+}'
+```
+
+### broker_requestSwapParameterEncoding
+
+Requests encoding of swap parameters for a cross-chain transaction.
+
+#### Request Parameters
+- `input_amount`: The amount of source asset to be swapped
+- `source_asset`: The asset being swapped from
+- `destination_asset`: The asset being swapped to
+- `destination_address`: The address where the swapped assets should be sent
+- `broker_commission`: Commission rate in basis points
+- Other optional parameters match broker_requestSwapDepositAddress
+
+#### Response Fields
+- `chain`: The blockchain where the swap will be initiated (currently only "Bitcoin" is supported)
+- `nulldata_utxo`: Encoded swap parameters as a hex string
+- `deposit_address`: The address where the source assets should be sent in order to initiate a swap.
+
+#### Example
+```bash copy
+curl -X POST http://localhost:80 \
+-H "Content-Type: application/json" \
+-d '{
+  "jsonrpc": "2.0",
+  "method": "broker_requestSwapParameterEncoding",
+  "params": {
+    "input_amount": "0x1234",
+    "source_asset": {
+      "chain": "Ethereum",
+      "asset": "ETH"
+    },
+    "destination_asset": {
+      "chain": "Bitcoin",
+      "asset": "BTC"
+    },
+    "destination_address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+    "broker_commission": 100
+  },
+  "id": 1
+}'
+```
+
+### broker_withdrawFees
+
+Withdraws accumulated fees to a specified destination address.
+
+#### Request Parameters
+- `asset`: The asset type to withdraw, specified by chain and asset name
+- `destination_address`: The address where the withdrawn fees should be sent
+
+#### Response Fields
+- `tx_hash`: Transaction hash of the withdrawal transaction
+- `egress_id`: Two-element array containing the chain name and a unique identifier
+- `egress_amount`: The amount being withdrawn
+- `egress_fee`: The fee charged for the withdrawal
+- `destination_address`: Confirmation of the withdrawal destination address
+
+#### Example
+```bash copy
+curl -X POST http://localhost:80 \
+-H "Content-Type: application/json" \
+-d '{
+  "jsonrpc": "2.0",
+  "method": "broker_withdrawFees",
+  "params": {
+    "asset": {
+      "chain": "Ethereum",
+      "asset": "ETH"
+    },
+    "destination_address": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
+  },
+  "id": 1
+}'
+```
+
+### broker_schema
+
+Retrieves the API schema for specified methods.
+
+#### Request Parameters
+- `methods`: Array of method names to retrieve schemas for. An empty array implies 'all methods'.
+
+#### Response Fields
+- `methods`: Array of method specifications, each containing the method name and its request/response schema definitions
+
+#### Example
+```bash copy
+curl -X POST http://localhost:80 \
+-H "Content-Type: application/json" \
+-d '{
+  "jsonrpc": "2.0",
+  "method": "broker_schema",
+  "params": {
+    "methods": ["broker_requestSwapDepositAddress"]
+  },
+  "id": 1
+}'
+```
+
+## Data Types
+
+### Asset Identifier
+Represents a specific asset on a particular blockchain, consisting of a chain name and asset symbol. Valid combinations are:
 
 - Ethereum: ETH, FLIP, USDC, USDT
 - Polkadot: DOT
@@ -84,362 +217,19 @@ Withdraw accumulated fees.
 - Arbitrum: ETH, USDC
 - Solana: SOL, USDC
 
-# Detailed Broker API Documentation
-
-## Common Parameter Definitions
-
-### Asset Specification
-
-An object specifying both the asset and its chain:
-
-```json
-{
-  "chain": string,  // One of: "Ethereum", "Polkadot", "Bitcoin", "Arbitrum", "Solana"
-  "asset": string   // Asset symbol, availability depends on chain
-}
-```
-
-Supported combinations:
-
-- Ethereum: "ETH", "FLIP", "USDC", "USDT"
-- Polkadot: "DOT"
-- Bitcoin: "BTC"
-- Arbitrum: "ETH", "USDC"
-- Solana: "SOL", "USDC"
-
-### Fee Structures
-
-- All fee parameters use basis points (bps)
-- 1 bps = 0.01%
-- Range: 0 to 65535 (uint16)
-
-### Hex String Format
-
-- Prefixed with "0x"
-- Contains only hexadecimal characters (0-9, a-f, A-F)
-- Used for various binary data representations
-
-## API Methods
-
-### broker_RequestSwapDepositAddress
-
-Generates a deposit address for cross-chain asset swaps.
-
-#### Request Parameters
-
-##### Required Parameters
-
-```json
-{
-  "source_asset": AssetSpecification,
-  "destination_asset": AssetSpecification,
-  "destination_address": string,
-  "broker_commission": uint16
-}
-```
-
-##### Optional Parameters
-
-**affiliate_fees**
-
-```json
-{
-  "affiliate_fees": [
-    {
-      "account": string,
-      "bps": uint16
-    }
-  ]
-}
-```
-
-**boost_fee**
-
-```json
-{
-  "boost_fee": uint16
-}
-```
-
-**dca_parameters**
-
-```json
-{
-  "dca_parameters": {
-    "number_of_chunks": uint32,    // Number of swap operations
-    "chunk_interval": uint32       // Blocks between swaps
-  }
-}
-```
-
-**channel_metadata**
-
-```json
-{
-  "channel_metadata": {
-    "message": string,             // 10000 chars hex string
-    "gas_budget": uint64 | string, // Either number or hex string
-    "ccm_additional_data": string  // 1000 chars hex string
-  }
-}
-```
-
-**refund_parameters**
-
-```json
-{
-  "refund_parameters": {
-    "retry_duration": uint32,
-    "refund_address": string,
-    "min_price": string           // 32-byte hex string
-  }
-}
-```
-
-#### Response
-
-```json
-{
-  "address": string,
-  "issued_block": uint32,
-  "channel_id": uint64,
-  "source_chain_expiry_block": uint64 | string,  // Number or 32-byte hex
-  "channel_opening_fee": string,                 // 32-byte hex
-  "refund_parameters": {
-    "retry_duration": uint32,
-    "refund_address": string,
-    "min_price": string                         // 32-byte hex
-  }
-}
-```
-
-### broker_RegisterAccount
-
-Registers a new broker account.
-
-#### Request
-
-Empty request (null)
-
-#### Response
-
-```json
-{
-  "transaction_hash": string  // 32-byte hex
-}
-```
-
-### broker_RequestSwapParameterEncoding
-
-Generates encoded parameters for swap transactions.
-
-#### Request Parameters
-
-Similar to RequestSwapDepositAddress, plus:
-
-```json
-{
-  "input_amount": uint128,
-  // ... all other parameters from RequestSwapDepositAddress
-  "refund_parameters": {
-    "retry_duration": uint32,
-    "refund_address": null,    // Must be null
-    "min_price": string       // 32-byte hex
-  }
-}
-```
-
-#### Response
-
-Bitcoin chain only:
-
-```json
-{
-  "chain": "Bitcoin",
-  "nulldata_utxo": string,     // Hex string
-  "deposit_address": string
-}
-```
-
-### broker_WithdrawFees
-
-Withdraws accumulated fees for a specific asset.
-
-#### Request Parameters
-
-```json
-{
-  "asset": AssetSpecification,
-  "destination_address": string
-}
-```
-
-#### Response
-
-```json
-{
-  "tx_hash": string,          // 32-byte hex
-  "egress_id": [
-    string,                   // Chain name
-    uint64                    // Identifier
-  ],
-  "egress_amount": string,    // 32-byte hex
-  "egress_fee": string,       // 32-byte hex
-  "destination_address": string
-}
-```
-
-### broker_Schema
-
-Returns API schema information.
-
-#### Request
-
-```json
-{
-  "methods": string[]  // Array of method names
-}
-```
-
-#### Response
-
-```json
-{
-  "methods": [
-    {
-      "method": string,
-      "request": object | boolean,
-      "response": object | boolean
-    }
-  ]
-}
-```
-
-## Data Type Constraints
-
-- **uint16**: 0 to 65,535
-- **uint32**: 0 to 4,294,967,295
-- **uint64**: 0 to 18,446,744,073,709,551,615
-- **uint128**: 0 to 340,282,366,920,938,463,463,374,607,431,768,211,455
-- **32-byte hex**: 32 characters after "0x" prefix
-- **Chain names**: "Ethereum", "Polkadot", "Bitcoin", "Arbitrum", "Solana"
-
-## Example API Calls
-
-### broker_RequestSwapDepositAddress
-
-```bash
-curl -X POST http://api-endpoint/v1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "broker_RequestSwapDepositAddress",
-    "params": {
-      "source_asset": {
-        "chain": "Ethereum",
-        "asset": "ETH"
-      },
-      "destination_asset": {
-        "chain": "Bitcoin",
-        "asset": "BTC"
-      },
-      "destination_address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
-      "broker_commission": 25,
-      "affiliate_fees": [
-        {
-          "account": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
-          "bps": 10
-        }
-      ],
-      "refund_parameters": {
-        "retry_duration": 14400,
-        "refund_address": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
-        "min_price": "0x000000000000000000000000000000000000000000000000000000000000000a"
-      }
-    }
-  }'
-```
-
-### broker_RegisterAccount
-
-```bash
-curl -X POST http://api-endpoint/v1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "broker_RegisterAccount",
-    "params": null
-  }'
-```
-
-### broker_RequestSwapParameterEncoding
-
-```bash
-curl -X POST http://api-endpoint/v1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "broker_RequestSwapParameterEncoding",
-    "params": {
-      "input_amount": 1000000000000000000,
-      "source_asset": {
-        "chain": "Ethereum",
-        "asset": "ETH"
-      },
-      "destination_asset": {
-        "chain": "Bitcoin",
-        "asset": "BTC"
-      },
-      "destination_address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
-      "broker_commission": 25,
-      "refund_parameters": {
-        "retry_duration": 14400,
-        "refund_address": null,
-        "min_price": "0x000000000000000000000000000000000000000000000000000000000000000a"
-      }
-    }
-  }'
-```
-
-### broker_WithdrawFees
-
-```bash
-curl -X POST http://api-endpoint/v1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "broker_WithdrawFees",
-    "params": {
-      "asset": {
-        "chain": "Ethereum",
-        "asset": "ETH"
-      },
-      "destination_address": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
-    }
-  }'
-```
-
-### broker_Schema
-
-```bash
-curl -X POST http://api-endpoint/v1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "broker_Schema",
-    "params": {
-      "methods": [
-        "request_swap_deposit_address",
-        "register_account",
-        "request_swap_parameter_encoding",
-        "withdraw_fees",
-        "schema"
-      ]
-    }
-  }'
-```
+### Channel Metadata
+Information required for cross-chain messaging:
+- `message`: The payload data for the cross-chain message
+- `gas_budget`: Amount of gas allocated for message execution
+- `ccm_additional_data`: Additional parameters for the cross-chain message
+
+### DCA Parameters
+Configuration for Dollar Cost Averaging:
+- `number_of_chunks`: How many separate swaps to split the transaction into
+- `chunk_interval`: Number of blocks to wait between each chunk
+
+### Refund Parameters
+Settings for handling failed transactions:
+- `retry_duration`: How long to keep trying the transaction
+- `refund_address`: Where to send funds if the swap fails
+- `min_price`: Minimum acceptable price for the swap
