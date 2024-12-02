@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
@@ -16,7 +17,7 @@ use clap::Parser;
 use futures::{stream, FutureExt, StreamExt};
 use jsonrpsee::core::ClientError;
 use jsonrpsee_flatten::{
-	core::async_trait,
+	core::{async_trait, SubscriptionResult},
 	proc_macros::rpc,
 	server::ServerBuilder,
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
@@ -133,7 +134,7 @@ pub trait Rpc {
 	) -> RpcResult<ChainAccounts>;
 
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
-	async fn subscribe_transaction_screening_events(&self);
+	async fn subscribe_transaction_screening_events(&self) -> SubscriptionResult;
 
 	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId>;
@@ -227,7 +228,10 @@ impl RpcServer for RpcServerImpl {
 			.map_err(BrokerApiError::ClientError)
 	}
 
-	async fn subscribe_transaction_screening_events(&self, pending_sink: PendingSubscriptionSink) {
+	async fn subscribe_transaction_screening_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+	) -> SubscriptionResult {
 		// pipe results through from custom-rpc subscription
 		if let Ok(api) = self.chainflip_api() {
 			match api
@@ -263,6 +267,8 @@ impl RpcServer for RpcServerImpl {
 		} else {
 			pending_sink.reject(BrokerApiError::NoConnection).await;
 		}
+
+		Ok(())
 	}
 
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
@@ -328,10 +334,90 @@ impl RpcServerImpl {
 	}
 }
 
+struct MockServerImpl;
+
+#[async_trait]
+impl RpcServer for MockServerImpl {
+	async fn register_account(
+		&self,
+		request: EndpointRequest<register_account::Endpoint>,
+	) -> RpcResult<EndpointResponse<register_account::Endpoint>> {
+		Ok(api_json_schema::respond::<_, register_account::Endpoint>(MockApi, request).await?)
+	}
+	async fn request_swap_deposit_address(
+		&self,
+		request: EndpointRequest<request_swap_deposit_address::Endpoint>,
+	) -> RpcResult<EndpointResponse<request_swap_deposit_address::Endpoint>> {
+		Ok(api_json_schema::respond::<_, request_swap_deposit_address::Endpoint>(MockApi, request)
+			.await?)
+	}
+	async fn request_swap_parameter_encoding(
+		&self,
+		request: EndpointRequest<request_swap_parameter_encoding::Endpoint>,
+	) -> RpcResult<EndpointResponse<request_swap_parameter_encoding::Endpoint>> {
+		Ok(api_json_schema::respond::<_, request_swap_parameter_encoding::Endpoint>(
+			MockApi, request,
+		)
+		.await?)
+	}
+	async fn withdraw_fees(
+		&self,
+		request: EndpointRequest<withdraw_fees::Endpoint>,
+	) -> RpcResult<EndpointResponse<withdraw_fees::Endpoint>> {
+		Ok(api_json_schema::respond::<_, withdraw_fees::Endpoint>(MockApi, request).await?)
+	}
+
+	async fn mark_transaction_for_rejection(&self, _tx_id: TransactionInId) -> RpcResult<()> {
+		Err(BrokerApiError::Anyhow(anyhow!("Example not implemented.")))
+	}
+
+	async fn get_open_deposit_channels(
+		&self,
+		_query: GetOpenDepositChannelsQuery,
+	) -> RpcResult<ChainAccounts> {
+		Err(BrokerApiError::Anyhow(anyhow!("Example not implemented.")))
+	}
+
+	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
+		Err(BrokerApiError::Anyhow(anyhow!("Example not implemented.")))
+	}
+
+	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
+		Err(BrokerApiError::Anyhow(anyhow!("Example not implemented.")))
+	}
+
+	async fn register_affiliate(
+		&self,
+		_affiliate_id: AccountId32,
+		_short_id: Option<AffiliateShortId>,
+	) -> RpcResult<AffiliateShortId> {
+		Err(BrokerApiError::Anyhow(anyhow!("Example not implemented.")))
+	}
+
+	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
+		Err(BrokerApiError::Anyhow(anyhow!("Example not implemented.")))
+	}
+
+	async fn subscribe_transaction_screening_events(
+		&self,
+		_subscription_sink: jsonrpsee_flatten::PendingSubscriptionSink,
+	) -> SubscriptionResult {
+		Err("Example not implemented.".into())
+	}
+
+	async fn schema(
+		&self,
+		request: EndpointRequest<schema::Endpoint>,
+	) -> RpcResult<EndpointResponse<schema::Endpoint>> {
+		Ok(api_json_schema::respond(SchemaApi, request).await?)
+	}
+}
+
 #[derive(Parser, Debug, Clone, Copy)]
 
 enum SubCommand {
 	Schema,
+	Mock,
 }
 
 #[derive(clap::Args, Debug, Clone, Default)]
@@ -384,35 +470,43 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			// initialize healthcheck endpoint
-			let has_completed_initialising = Arc::new(AtomicBool::new(false));
-			health::start_if_configured(
-				scope,
-				&opts.health_check,
-				has_completed_initialising.clone(),
-			)
-			.await?;
-
-			if let Some(SubCommand::Schema) = opts.subcommand {
-				let schemas = api_json_schema::respond(SchemaApi, Default::default()).await?;
-				println!("{}", serde_json::to_string(&schemas)?);
-				Ok(())
-			} else {
-				let server = ServerBuilder::default()
-					.max_connections(opts.max_connections)
-					.build(format!("0.0.0.0:{}", opts.port))
+			match opts.subcommand {
+				Some(SubCommand::Schema) => {
+					let schemas = api_json_schema::respond(SchemaApi, Default::default()).await?;
+					println!("{}", serde_json::to_string(&schemas)?);
+					Ok(())
+				},
+				subcommand => {
+					// initialize healthcheck endpoint
+					let has_completed_initialising = Arc::new(AtomicBool::new(false));
+					health::start_if_configured(
+						scope,
+						&opts.health_check,
+						has_completed_initialising.clone(),
+					)
 					.await?;
-				let server_addr = server.local_addr()?;
-				let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
 
-				log::info!("🎙 Server is listening on {server_addr}.");
+					let server = ServerBuilder::default()
+						.max_connections(opts.max_connections)
+						.build(format!("0.0.0.0:{}", opts.port))
+						.await?;
+					let server_addr = server.local_addr()?;
 
-				// notify healthcheck completed
-				has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
+					let server = if let Some(SubCommand::Mock) = subcommand {
+						server.start(MockServerImpl.into_rpc())
+					} else {
+						server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())
+					};
 
-				server.stopped().await;
+					log::info!("🎙 Server is listening on {server_addr}.");
 
-				Ok(())
+					// notify healthcheck completed
+					has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
+
+					server.stopped().await;
+
+					Ok(())
+				},
 			}
 		}
 		.boxed()

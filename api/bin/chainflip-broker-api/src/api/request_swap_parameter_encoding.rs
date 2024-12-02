@@ -6,7 +6,7 @@ use chainflip_api::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::ApiWrapper;
+use super::{ApiWrapper, MockApi};
 
 pub struct Endpoint;
 
@@ -60,5 +60,23 @@ impl<T: ChainflipApi> api_json_schema::Responder<Endpoint> for ApiWrapper<T> {
 				None,
 			)
 			.await?)
+	}
+}
+
+impl api_json_schema::Responder<Endpoint> for MockApi {
+	async fn respond(
+		&self,
+		// TODO: use the request payload to return examples for the correct chain
+		_request: <Endpoint as api_json_schema::Endpoint>::Request,
+	) -> api_json_schema::EndpointResult<Endpoint> {
+		Ok(VaultSwapDetails::Bitcoin {
+			// Generated from the test code for UtxoEncodedData.
+			nulldata_payload: hex::decode(
+				"000409090909090909090909090909090909090909090909090909090909090909090500ffffffffffffffffffffffffffffffffffff0200050a0806070809").unwrap(),
+			deposit_address: "bc1pw75mqye4q9t0m649vtk0a9clsrf2fagq3mr6agekfzsx0lulfyxsvxqadt"
+				.parse()
+				.unwrap(),
+			expires_at: 1687520000,
+		})
 	}
 }
