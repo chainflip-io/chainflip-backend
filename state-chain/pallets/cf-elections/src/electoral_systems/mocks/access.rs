@@ -6,7 +6,7 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use codec::{Decode, Encode};
-use core::cell::RefCell;
+use core::{cell::RefCell, cmp::Ord};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use std::collections::BTreeMap;
 
@@ -86,7 +86,7 @@ thread_local! {
 	pub static ELECTION_SETTINGS: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
 	pub static ELECTORAL_UNSYNCHRONISED_SETTINGS: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 	pub static ELECTORAL_UNSYNCHRONISED_STATE: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
-	pub static ELECTORAL_UNSYNCHRONISED_STATE_MAP: RefCell<BTreeMap<Vec<u8>, Option<Vec<u8>>>> = const { RefCell::new(BTreeMap::new()) };
+	pub static ELECTORAL_UNSYNCHRONISED_STATE_MAP: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
 	pub static CONSENSUS_STATUS: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
 	pub static NEXT_ELECTION_ID: RefCell<UniqueMonotonicIdentifier> = const { RefCell::new(UniqueMonotonicIdentifier::from_u64(0)) };
 }
@@ -110,8 +110,12 @@ impl<ES: ElectoralSystem> ElectionWriteAccess for MockWriteAccess<ES> {
 		new_extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
 		properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
 	) -> Result<(), CorruptStorageError> {
+		// Remove the old properties and replace it with the new one.
+		MockStorageAccess::set_election_properties::<ES>(self.identifier(), None);
+
 		self.election_identifier = self.election_identifier.with_extra(new_extra);
-		MockStorageAccess::set_election_properties::<ES>(self.identifier(), properties);
+
+		MockStorageAccess::set_election_properties::<ES>(self.identifier(), Some(properties));
 		Ok(())
 	}
 
@@ -260,7 +264,7 @@ impl MockStorageAccess {
 	) {
 		ELECTION_SETTINGS.with(|old_settings| {
 			let mut settings_ref = old_settings.borrow_mut();
-			settings_ref.insert(identifier.encode(), settings.encode());
+			settings_ref.insert(identifier.unique_monotonic().encode(), settings.encode());
 		});
 	}
 
@@ -270,7 +274,7 @@ impl MockStorageAccess {
 		ELECTION_SETTINGS.with(|settings| {
 			let settings_ref = settings.borrow();
 			settings_ref
-				.get(&identifier.encode())
+				.get(&identifier.unique_monotonic().encode())
 				.map(|v| ES::ElectoralSettings::decode(&mut &v[..]).unwrap())
 				.unwrap()
 		})
@@ -283,7 +287,7 @@ impl MockStorageAccess {
 		});
 		ELECTION_STATE.with(|state| {
 			let mut state_ref = state.borrow_mut();
-			state_ref.remove(&identifier.encode());
+			state_ref.remove(&identifier.unique_monotonic().encode());
 		});
 	}
 
@@ -294,7 +298,7 @@ impl MockStorageAccess {
 		println!("Setting election state for identifier: {:?}", identifier);
 		ELECTION_STATE.with(|old_state| {
 			let mut state_ref = old_state.borrow_mut();
-			state_ref.insert(identifier.encode(), state.encode());
+			state_ref.insert(identifier.unique_monotonic().encode(), state.encode());
 		});
 	}
 
@@ -304,19 +308,39 @@ impl MockStorageAccess {
 		ELECTION_STATE.with(|old_state| {
 			let state_ref = old_state.borrow();
 			state_ref
-				.get(&identifier.encode())
+				.get(&identifier.unique_monotonic().encode())
 				.map(|v| ES::ElectionState::decode(&mut &v[..]).unwrap())
 				.unwrap()
 		})
 	}
 
+	pub fn election_state_all<ES: ElectoralSystem>(
+	) -> BTreeMap<UniqueMonotonicIdentifier, ES::ElectionState> {
+		ELECTION_STATE.with(|old_state| {
+			let state_ref = old_state.borrow();
+			state_ref
+				.clone()
+				.into_iter()
+				.map(|(k, v)| {
+					(
+						UniqueMonotonicIdentifier::decode(&mut &k[..]).unwrap(),
+						ES::ElectionState::decode(&mut &v[..]).unwrap(),
+					)
+				})
+				.collect::<BTreeMap<_, _>>()
+		})
+	}
+
 	pub fn set_election_properties<ES: ElectoralSystem>(
 		identifier: ElectionIdentifierOf<ES>,
-		properties: ES::ElectionProperties,
+		properties: Option<ES::ElectionProperties>,
 	) {
 		ELECTION_PROPERTIES.with(|old_properties| {
 			let mut properties_ref = old_properties.borrow_mut();
-			properties_ref.insert(identifier.encode(), properties.encode());
+			match properties {
+				Some(properties) => properties_ref.insert(identifier.encode(), properties.encode()),
+				None => properties_ref.remove(&identifier.encode()),
+			};
 		});
 	}
 
@@ -365,24 +389,30 @@ impl MockStorageAccess {
 			ES::ElectoralUnsynchronisedState::decode(&mut &state_ref[..]).unwrap()
 		})
 	}
-
 	pub fn unsynchronised_state_map<ES: ElectoralSystem>(
 		key: &ES::ElectoralUnsynchronisedStateMapKey,
 	) -> Option<ES::ElectoralUnsynchronisedStateMapValue> {
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
 			let state_map_ref = old_state_map.borrow();
-			state_map_ref
-				.get(&key.encode())
-				.expect("Key should exist")
-				.clone()
-				.map(|v| ES::ElectoralUnsynchronisedStateMapValue::decode(&mut &v[..]).unwrap())
+			let value = state_map_ref.get(&key.encode()).cloned();
+
+			value.map(|v| ES::ElectoralUnsynchronisedStateMapValue::decode(&mut &v[..]).unwrap())
 		})
 	}
 
-	pub fn raw_unsynchronised_state_map() -> BTreeMap<Vec<u8>, Option<Vec<u8>>> {
+	pub fn unsynchronised_state_map_all<ES: ElectoralSystem>(
+	) -> BTreeMap<ES::ElectoralUnsynchronisedStateMapKey, ES::ElectoralUnsynchronisedStateMapValue>
+	where
+		ES::ElectoralUnsynchronisedStateMapKey: Ord,
+	{
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
 			let state_map_ref = old_state_map.borrow();
-			state_map_ref.clone()
+			BTreeMap::from_iter(state_map_ref.clone().into_iter().map(|(key, value)| {
+				(
+					ES::ElectoralUnsynchronisedStateMapKey::decode(&mut &key[..]).unwrap(),
+					ES::ElectoralUnsynchronisedStateMapValue::decode(&mut &value[..]).unwrap(),
+				)
+			}))
 		})
 	}
 
@@ -392,7 +422,10 @@ impl MockStorageAccess {
 	) {
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
 			let mut state_map_ref = old_state_map.borrow_mut();
-			state_map_ref.insert(key.encode(), value.map(|v| v.encode()));
+			match value {
+				Some(v) => state_map_ref.insert(key.encode(), v.encode()),
+				None => state_map_ref.remove(&key.encode()),
+			};
 		});
 	}
 
@@ -439,7 +472,7 @@ impl MockStorageAccess {
 		let election_identifier = ElectionIdentifier::new(next_umi, extra);
 		Self::increment_next_umi();
 
-		Self::set_election_properties::<ES>(election_identifier, properties);
+		Self::set_election_properties::<ES>(election_identifier, Some(properties));
 		Self::set_state::<ES>(election_identifier, state);
 		// These are normally stored once and synchronised by election identifier. In the tests we
 		// simplify this by just storing the electoral settings (that would be fetched by

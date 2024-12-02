@@ -239,11 +239,7 @@ where
 							);
 						},
 						Ordering::Greater => {
-							Sink::on_ingress_reverted(
-								account.clone(),
-								details.asset,
-								ingress_total.amount - previous_amount,
-							);
+							log::warn!("Deposit channels on Solana chain has reverted! Account: {:?}, Asset: {:?}, Previous ingressed total: {:?}, new ingressed total: {:?}", account, details.asset, previous_amount, ingress_total.amount);
 						},
 						Ordering::Equal => (),
 					}

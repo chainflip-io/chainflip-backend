@@ -1373,8 +1373,6 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 			});
 	}
 
-	fn on_ingress_reverted(_channel: Self::Account, _asset: Self::Asset, _amount: Self::Amount) {}
-
 	fn on_channel_closed(channel: Self::Account) {
 		Self::recycle_channel(&mut Weight::zero(), channel);
 	}

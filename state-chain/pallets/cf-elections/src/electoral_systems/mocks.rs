@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, vec::Vec};
 
 use crate::{
 	electoral_system::{
@@ -21,6 +21,8 @@ pub struct TestSetup<ES: ElectoralSystem> {
 	electoral_settings: ES::ElectoralSettings,
 	initial_election_state:
 		Option<(ES::ElectionIdentifierExtra, ES::ElectionProperties, ES::ElectionState)>,
+	initial_state_map:
+		Vec<(ES::ElectoralUnsynchronisedStateMapKey, ES::ElectoralUnsynchronisedStateMapValue)>,
 }
 
 impl<ES: ElectoralSystem> Default for TestSetup<ES>
@@ -28,6 +30,7 @@ where
 	ES::ElectoralUnsynchronisedState: Default,
 	ES::ElectoralUnsynchronisedSettings: Default,
 	ES::ElectoralSettings: Default,
+	ES::ElectoralUnsynchronisedStateMapKey: Ord,
 {
 	fn default() -> Self {
 		Self {
@@ -35,6 +38,7 @@ where
 			unsynchronised_settings: Default::default(),
 			electoral_settings: Default::default(),
 			initial_election_state: None,
+			initial_state_map: Default::default(),
 		}
 	}
 }
@@ -49,12 +53,24 @@ where
 	ES::ElectionIdentifierExtra: Default,
 	ES::ElectionProperties: Default,
 	ES::ElectionState: Default,
+	ES::ElectoralUnsynchronisedStateMapKey: Ord,
 {
 	pub fn with_unsynchronised_state(
 		self,
 		unsynchronised_state: ES::ElectoralUnsynchronisedState,
 	) -> Self {
 		Self { unsynchronised_state, ..self }
+	}
+
+	#[allow(dead_code)]
+	pub fn with_initial_state_map(
+		self,
+		initial_state_map: Vec<(
+			ES::ElectoralUnsynchronisedStateMapKey,
+			ES::ElectoralUnsynchronisedStateMapValue,
+		)>,
+	) -> Self {
+		Self { initial_state_map, ..self }
 	}
 
 	#[allow(dead_code)]
@@ -100,6 +116,9 @@ where
 
 		MockStorageAccess::set_unsynchronised_state::<ES>(setup.unsynchronised_state.clone());
 		MockStorageAccess::set_unsynchronised_settings::<ES>(setup.unsynchronised_settings.clone());
+		for (key, value) in &setup.initial_state_map {
+			MockStorageAccess::set_unsynchronised_state_map::<ES>(key.clone(), Some(value.clone()));
+		}
 
 		let election = MockAccess::<ES>::new_election(
 			election_identifier_extra,
@@ -131,7 +150,10 @@ where
 	}
 }
 
-impl<ES: ElectoralSystem> TestContext<ES> {
+impl<ES: ElectoralSystem> TestContext<ES>
+where
+	ES::ElectoralUnsynchronisedStateMapKey: Ord,
+{
 	/// Based on some authority count and votes, evaluate the consensus and the final state.
 	#[allow(clippy::type_complexity)]
 	#[track_caller]
@@ -232,6 +254,17 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 			check.check(&pre_finalize, &post_finalize);
 		}
 		self
+	}
+
+	/// For running some code that mutates the stats of current Electoral System storage.
+	pub fn then(self, f: impl FnOnce()) -> Self {
+		f();
+		self
+	}
+
+	/// Returns the latest list of Election identifiers
+	pub fn identifiers() -> Vec<ElectionIdentifierOf<ES>> {
+		MockStorageAccess::election_identifiers::<ES>()
 	}
 }
 
@@ -395,19 +428,25 @@ register_checks! {
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
 pub struct ElectoralSystemState<ES: ElectoralSystem> {
 	pub unsynchronised_state: ES::ElectoralUnsynchronisedState,
-	pub unsynchronised_state_map: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+	pub unsynchronised_state_map:
+		BTreeMap<ES::ElectoralUnsynchronisedStateMapKey, ES::ElectoralUnsynchronisedStateMapValue>,
 	pub unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
 	pub election_identifiers: Vec<ElectionIdentifierOf<ES>>,
+	pub election_state: BTreeMap<UniqueMonotonicIdentifier, ES::ElectionState>,
 	pub next_umi: UniqueMonotonicIdentifier,
 }
 
-impl<ES: ElectoralSystem> ElectoralSystemState<ES> {
+impl<ES: ElectoralSystem> ElectoralSystemState<ES>
+where
+	ES::ElectoralUnsynchronisedStateMapKey: Ord,
+{
 	pub fn load_state() -> Self {
 		Self {
 			unsynchronised_settings: MockStorageAccess::unsynchronised_settings::<ES>(),
 			unsynchronised_state: MockStorageAccess::unsynchronised_state::<ES>(),
-			unsynchronised_state_map: MockStorageAccess::raw_unsynchronised_state_map(),
+			unsynchronised_state_map: MockStorageAccess::unsynchronised_state_map_all::<ES>(),
 			election_identifiers: MockStorageAccess::election_identifiers::<ES>(),
+			election_state: MockStorageAccess::election_state_all::<ES>(),
 			next_umi: MockStorageAccess::next_umi(),
 		}
 	}

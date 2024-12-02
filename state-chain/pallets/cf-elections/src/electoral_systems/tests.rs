@@ -2,6 +2,7 @@ pub(crate) use super::mocks;
 
 pub(crate) use crate::register_checks;
 
+pub mod delta_based_ingress;
 pub mod egress_success;
 pub mod liveness;
 pub mod monotonic_change;
