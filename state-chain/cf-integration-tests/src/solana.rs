@@ -14,8 +14,8 @@ use cf_chains::{
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
 		SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, CcmFailReason, Chain, ChannelRefundParameters,
-	DepositChannel, ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, DepositChannel,
+	DepositFailedReason, ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh,
 	SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
@@ -533,8 +533,8 @@ fn solana_ccm_fails_with_invalid_input() {
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
 					Runtime,
 					SolanaInstance,
-				>::CcmFailed {
-					reason: CcmFailReason::InvalidMetadata,
+				>::DepositFailedReason {
+					reason: DepositFailedReason::CcmInvalidMetadata,
 					..
 				}),
 			);

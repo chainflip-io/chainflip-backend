@@ -749,12 +749,6 @@ pub struct CcmSwapAmounts {
 	pub other_gas_asset: Option<Asset>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum CcmFailReason {
-	UnsupportedForTargetChain,
-	InvalidMetadata,
-}
-
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
 )]

@@ -1,7 +1,7 @@
 use crate::{
 	mock_btc::*,
 	tests::{ALICE, BROKER},
-	BoostPoolId, DepositChannelLookup, DepositIgnoredReason, DepositWitness, ReportExpiresAt,
+	BoostPoolId, DepositChannelLookup, DepositFailedReason, DepositWitness, ReportExpiresAt,
 	ScheduledTxForReject, TaintedTransactionDetails, TaintedTransactionStatus, TaintedTransactions,
 	TAINTED_TX_EXPIRATION_BLOCKS,
 };
@@ -132,12 +132,12 @@ fn process_tainted_transaction_and_expect_refund() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
+			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFailed {
 				deposit_address: _address,
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
 				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionTainted,
+				reason: DepositFailedReason::TransactionTainted,
 			})
 		);
 
@@ -225,12 +225,12 @@ fn reject_tx_if_tainted_before_prewitness() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
+			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
 				deposit_address: _,
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
 				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionTainted,
+				reason: DepositFailedReason::TransactionTainted,
 			})
 		);
 	});
@@ -402,12 +402,12 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
+			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
 				deposit_address: _,
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
 				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionTainted,
+				reason: DepositFailedReason::TransactionTainted,
 			})
 		);
 	});

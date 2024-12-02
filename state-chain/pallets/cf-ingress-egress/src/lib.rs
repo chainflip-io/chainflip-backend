@@ -28,10 +28,10 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
-	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata,
-	CcmFailReason, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
-	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
+	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
+	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall,
+	DepositChannel, DepositDetailsToTransactionInId, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
 	TransferAssetParams,
 };
 use cf_primitives::{
@@ -131,13 +131,14 @@ impl<C: Chain> FetchOrTransfer<C> {
 }
 
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
-pub enum DepositIgnoredReason {
+pub enum DepositFailedReason {
 	BelowMinimumDeposit,
-
 	/// The deposit was ignored because the amount provided was not high enough to pay for the fees
 	/// required to process the requisite transactions.
 	NotEnoughToPayFees,
 	TransactionTainted,
+	CcmUnsupportedForTargetChain,
+	CcmInvalidMetadata,
 }
 
 /// Holds information about a tainted transaction.
@@ -339,6 +340,23 @@ pub mod pallet {
 		LiquidityProvision { lp_account: AccountId },
 		NoAction,
 		BoostersCredited { prewitnessed_deposit_id: PrewitnessedDepositId },
+	}
+
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct VaultSwapDetails<AccountId> {
+		pub destination_asset: Asset,
+		pub destination_address: EncodedAddress,
+		pub broker_fees: Beneficiary<AccountId>,
+		pub affiliate_fees: Affiliates<AffiliateShortId>,
+		pub deposit_metadata: Option<CcmDepositMetadataEncoded>,
+		pub refund_params: Option<ChannelRefundParameters>,
+		pub dca_params: Option<DcaParameters>,
+	}
+
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub enum DepositDetails<AccountId> {
+		DepositChannel { action: ChannelAction<AccountId> },
+		VaultSwap { details: VaultSwapDetails<AccountId> },
 	}
 
 	#[pallet::genesis_config]
@@ -634,12 +652,14 @@ pub mod pallet {
 			lifetime: TargetChainBlockNumber<T, I>,
 		},
 		/// The deposits was rejected because the amount was below the minimum allowed.
-		DepositIgnored {
+		DepositFailed {
+			reason: DepositFailedReason,
+			origin: SwapOrigin,
 			deposit_address: Option<TargetChainAccount<T, I>>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
-			reason: DepositIgnoredReason,
+			details: Box<DepositDetails<T::AccountId>>,
 		},
 		TransferFallbackRequested {
 			asset: TargetChainAsset<T, I>,
@@ -720,12 +740,6 @@ pub mod pallet {
 		BoostedDepositLost {
 			prewitnessed_deposit_id: PrewitnessedDepositId,
 			amount: TargetChainAmount<T, I>,
-		},
-		CcmFailed {
-			reason: CcmFailReason,
-			destination_address: EncodedAddress,
-			deposit_metadata: CcmDepositMetadataEncoded,
-			origin: SwapOrigin,
 		},
 		TaintedTransactionReportReceived {
 			account_id: T::AccountId,
@@ -1798,6 +1812,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							deposit_channel,
 							amount_after_fees,
 							block_height,
+							deposit_details.clone(),
 						)?;
 
 						Self::deposit_event(Event::DepositBoosted {
@@ -1837,6 +1852,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		>,
 		amount_after_fees: TargetChainAmount<T, I>,
 		block_height: TargetChainBlockNumber<T, I>,
+		deposit_details: <T::TargetChain as Chain>::DepositDetails,
 	) -> Result<DepositAction<T::AccountId>, DispatchError> {
 		let swap_origin = SwapOrigin::DepositChannel {
 			deposit_address: T::AddressConverter::to_encoded_address(
@@ -1848,7 +1864,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_block_height: block_height.into(),
 		};
 
-		let action = match action {
+		let action = match action.clone() {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
 				T::Balance::try_credit_account(
 					&lp_account,
@@ -1872,18 +1888,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				});
 
 				let destination_chain: ForeignChain = destination_asset.into();
-				if let Some(metadata) = deposit_metadata.clone() {
-					if !destination_chain.ccm_support() {
-						Self::deposit_event(Event::<T, I>::CcmFailed {
-							reason: CcmFailReason::UnsupportedForTargetChain,
-							destination_address: T::AddressConverter::to_encoded_address(
-								destination_address,
-							),
-							deposit_metadata: metadata.to_encoded::<T::AddressConverter>(),
-							origin: swap_origin.clone(),
-						});
-						return Ok(DepositAction::NoAction);
-					}
+				if deposit_metadata.is_some() && !destination_chain.ccm_support() {
+					Self::deposit_event(Event::<T, I>::DepositFailed {
+						reason: DepositFailedReason::CcmUnsupportedForTargetChain,
+						origin: swap_origin.clone(),
+						deposit_address: Some(deposit_address),
+						asset,
+						amount: amount_after_fees,
+						deposit_details,
+						details: Box::new(DepositDetails::DepositChannel { action }),
+					});
+					return Ok(DepositAction::NoAction);
 				}
 				let swap_request_id = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
@@ -1923,6 +1938,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
+		let origin = SwapOrigin::DepositChannel {
+			deposit_address: T::AddressConverter::to_encoded_address(
+				<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
+					deposit_address.clone(),
+				),
+			),
+			channel_id,
+			deposit_block_height: block_height.into(),
+		};
 
 		if DepositChannelPool::<T, I>::get(channel_id).is_some() {
 			log_or_panic!(
@@ -1940,12 +1964,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
 			// If the deposit amount is below the minimum allowed, the deposit is ignored.
 			// TODO: track these funds somewhere, for example add them to the withheld fees.
-			Self::deposit_event(Event::<T, I>::DepositIgnored {
+			Self::deposit_event(Event::<T, I>::DepositFailed {
 				deposit_address: Some(deposit_address),
 				asset,
 				amount: deposit_amount,
 				deposit_details,
-				reason: DepositIgnoredReason::BelowMinimumDeposit,
+				reason: DepositFailedReason::BelowMinimumDeposit,
+				origin,
+				details: Box::new(DepositDetails::DepositChannel {
+					action: deposit_channel_details.action.clone(),
+				}),
 			});
 			return Ok(())
 		}
@@ -1971,12 +1999,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				};
 				ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
 
-				Self::deposit_event(Event::<T, I>::DepositIgnored {
+				Self::deposit_event(Event::<T, I>::DepositFailed {
 					deposit_address: Some(deposit_address),
 					asset,
 					amount: deposit_amount,
 					deposit_details,
-					reason: DepositIgnoredReason::TransactionTainted,
+					reason: DepositFailedReason::TransactionTainted,
+					origin,
+					details: Box::new(DepositDetails::DepositChannel {
+						action: deposit_channel_details.action.clone(),
+					}),
 				});
 				return Ok(())
 			}
@@ -2054,12 +2086,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 
 			if amount_after_fees.is_zero() {
-				Self::deposit_event(Event::<T, I>::DepositIgnored {
+				Self::deposit_event(Event::<T, I>::DepositFailed {
 					deposit_address: Some(deposit_address),
 					asset,
 					amount: deposit_amount,
 					deposit_details,
-					reason: DepositIgnoredReason::NotEnoughToPayFees,
+					reason: DepositFailedReason::NotEnoughToPayFees,
+					origin,
+					details: Box::new(DepositDetails::DepositChannel {
+						action: deposit_channel_details.action.clone(),
+					}),
 				});
 			} else {
 				let deposit_action = Self::perform_channel_action(
@@ -2067,6 +2103,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_channel_details.deposit_channel,
 					amount_after_fees,
 					block_height,
+					deposit_details.clone(),
 				)?;
 
 				Self::deposit_event(Event::DepositFinalised {
@@ -2100,20 +2137,41 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// This is only to be checked in the pre-witnessed version (not implemented yet)
 		_boost_fee: BasisPoints,
 	) {
-		if deposit_amount < MinimumDeposit::<T, I>::get(source_asset) {
-			// If the deposit amount is below the minimum allowed, the deposit is ignored.
-			// TODO: track these funds somewhere, for example add them to the withheld fees.
-			Self::deposit_event(Event::<T, I>::DepositIgnored {
+		let swap_origin =
+			SwapOrigin::Vault { tx_id: tx_id.clone().into_transaction_in_id_for_any_chain() };
+
+		let emit_deposit_failed_event = |reason: DepositFailedReason| {
+			Self::deposit_event(Event::<T, I>::DepositFailed {
 				deposit_address: None,
 				asset: source_asset,
 				amount: deposit_amount,
-				deposit_details,
-				reason: DepositIgnoredReason::BelowMinimumDeposit,
+				deposit_details: deposit_details.clone(),
+				reason,
+				origin: swap_origin.clone(),
+				details: Box::new(DepositDetails::VaultSwap {
+					details: VaultSwapDetails {
+						destination_asset,
+						destination_address: destination_address.clone(),
+						broker_fees: broker_fee.clone(),
+						affiliate_fees: affiliate_fees.clone(),
+						deposit_metadata: deposit_metadata
+							.clone()
+							.map(|metadata| metadata.to_encoded::<T::AddressConverter>()),
+						refund_params: Some(refund_params.clone()),
+						dca_params: dca_params.clone(),
+					},
+				}),
 			});
+		};
+
+		if deposit_amount < MinimumDeposit::<T, I>::get(source_asset) {
+			// If the deposit amount is below the minimum allowed, the deposit is ignored.
+			// TODO: track these funds somewhere, for example add them to the withheld fees.
+			emit_deposit_failed_event(DepositFailedReason::BelowMinimumDeposit);
 			return;
 		}
 
-		T::DepositHandler::on_deposit_made(deposit_details);
+		T::DepositHandler::on_deposit_made(deposit_details.clone());
 
 		let destination_address_internal =
 			match T::AddressConverter::decode_and_validate_address_for_asset(
@@ -2127,34 +2185,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			};
 
-		let swap_origin =
-			SwapOrigin::Vault { tx_id: tx_id.clone().into_transaction_in_id_for_any_chain() };
-
 		if let Some(deposit_metadata) = deposit_metadata.clone() {
-			let ccm_failed = |reason| {
-				log::warn!("Failed to process CCM. Tx id: {:?}, Reason: {:?}", tx_id, reason);
-
-				Self::deposit_event(Event::<T, I>::CcmFailed {
-					reason,
-					destination_address: destination_address.clone(),
-					deposit_metadata: deposit_metadata.clone().to_encoded::<T::AddressConverter>(),
-					origin: swap_origin.clone(),
-				});
-			};
-
 			if T::CcmValidityChecker::check_and_decode(
 				&deposit_metadata.channel_metadata,
 				destination_asset,
 			)
 			.is_err()
 			{
-				ccm_failed(CcmFailReason::InvalidMetadata);
+				emit_deposit_failed_event(DepositFailedReason::CcmInvalidMetadata);
 				return;
 			};
 
 			let destination_chain: ForeignChain = destination_asset.into();
 			if !destination_chain.ccm_support() {
-				ccm_failed(CcmFailReason::UnsupportedForTargetChain);
+				emit_deposit_failed_event(DepositFailedReason::CcmUnsupportedForTargetChain);
 				return;
 			};
 		}
