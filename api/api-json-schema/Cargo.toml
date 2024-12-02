@@ -11,3 +11,4 @@ workspace = true
 schemars = { workspace = true }
 serde = { workspace = true, default-features = true, features = ["derive"] }
 serde_with = { workspace = true }
+heck = { workspace = true }
