@@ -19,6 +19,7 @@ pub struct Endpoint;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct Request<A> {
+	/// The amount of the input asset that the user wishes to swap.
 	pub input_amount: NumberOrHex,
 	#[serde(flatten)]
 	pub inner: request_swap_deposit_address::Request<A>,
