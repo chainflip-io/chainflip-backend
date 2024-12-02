@@ -2,11 +2,21 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Copy, Clone, JsonSchema)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Copy, Clone)]
 #[serde(untagged)]
 pub enum NumberOrHex {
 	Number(u64),
-	Hex(#[schemars(schema_with = "super::json_schema::hex_array::<32>")] U256),
+	Hex(U256),
+}
+
+impl JsonSchema for NumberOrHex {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"number_or_hex".into()
+	}
+
+	fn json_schema(gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		super::json_schema::number_or_hex(gen)
+	}
 }
 
 impl Default for NumberOrHex {

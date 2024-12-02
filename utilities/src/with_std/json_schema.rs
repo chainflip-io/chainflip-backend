@@ -34,18 +34,15 @@ pub fn bounded_hex_vec<const MAX_LEN: u32>(_: &mut SchemaGenerator) -> Schema {
 		"type": "string",
 		"description": format!("A sequence of at most {} bytes encoded as a `0x`-prefixed hex string.", MAX_LEN),
 		"pattern": HEX_REGEX,
-		"maxLength": MAX_LEN,
+		"maxLength": hex_string_len::<MAX_LEN>(),
 	})
 }
-pub fn number_or_hex(_: &mut SchemaGenerator) -> Schema {
+pub fn number_or_hex(gen: &mut SchemaGenerator) -> Schema {
 	json_schema!(
 		{
 			"description": "A number represented as a JSON number or a `0x`-prefixed hex-encoded string.",
 			"oneOf": [
-				{
-					"type": "string",
-					"pattern": HEX_REGEX
-				},
+				u256_hex(gen),
 				{
 					"type": "integer",
 					"minimum": 0,
