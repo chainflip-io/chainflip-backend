@@ -193,6 +193,7 @@ checksum = "4c95c10ba0b00a02636238b814946408b1322d5ac4760326e6fb8ec956d85775"
 name = "api-json-schema"
 version = "0.1.0"
 dependencies = [
+ "heck 0.5.0",
  "schemars",
  "serde",
  "serde_with",
