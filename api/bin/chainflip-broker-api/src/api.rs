@@ -17,8 +17,9 @@ api_json_schema::impl_schema_endpoint! {
 	Schema: schema::Endpoint,
 }
 
-/// The empty type.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct MockApi;
+
 pub struct Empty;
 impl ArrayParam for Empty {
 	type ArrayTuple = ((),);

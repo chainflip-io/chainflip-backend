@@ -1,8 +1,10 @@
 use crate::api::request_swap_deposit_address;
+use anyhow::anyhow;
+use cf_utilities::rpc::NumberOrHex;
 use chainflip_api::{
 	primitives::{
-		state_chain_runtime::runtime_apis::VaultSwapDetails, AssetAmount, CcmChannelMetadata,
-		DcaParameters, RefundParameters,
+		state_chain_runtime::runtime_apis::VaultSwapDetails, CcmChannelMetadata, DcaParameters,
+		RefundParameters,
 	},
 	AccountId32, AddressString, Affiliates, Asset, BaseRpcApi, BasisPoints, ChainflipApi,
 	CustomApiClient,
@@ -11,13 +13,13 @@ use jsonrpsee_flatten::types::ArrayParam;
 use schemars::JsonSchema;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use super::ApiWrapper;
+use super::{ApiWrapper, MockApi};
 
 pub struct Endpoint;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct Request<A> {
-	pub input_amount: AssetAmount,
+	pub input_amount: NumberOrHex,
 	#[serde(flatten)]
 	pub inner: request_swap_deposit_address::Request<A>,
 }
@@ -49,10 +51,13 @@ impl<T: ChainflipApi> api_json_schema::Responder<Endpoint> for ApiWrapper<T> {
 	) -> api_json_schema::EndpointResult<Endpoint> {
 		// TODO: Use refund params including address in the runtime rpc. Make refund address
 		// mandatory.
-		let min_output_amount = refund_parameters
-			.as_ref()
-			.map(|refund_parameters| refund_parameters.min_output_amount(input_amount))
-			.unwrap_or_default();
+		let min_output_amount = if let Some(ref params) = refund_parameters {
+			params.min_output_amount(
+				input_amount.try_into().map_err(|_| anyhow!("Input amount overflow."))?,
+			)
+		} else {
+			0
+		};
 		let retry_duration = refund_parameters
 			.as_ref()
 			.map(|refund_parameters| refund_parameters.retry_duration)
@@ -79,7 +84,7 @@ impl<T: ChainflipApi> api_json_schema::Responder<Endpoint> for ApiWrapper<T> {
 
 impl<A: Clone + Serialize + DeserializeOwned> ArrayParam for Request<A> {
 	type ArrayTuple = (
-		AssetAmount,
+		NumberOrHex,
 		Asset,
 		Asset,
 		AddressString,
@@ -134,5 +139,22 @@ impl<A: Clone + Serialize + DeserializeOwned> ArrayParam for Request<A> {
 				dca_parameters,
 			},
 		}
+	}
+}
+
+impl api_json_schema::Responder<Endpoint> for MockApi {
+	async fn respond(
+		&self,
+		// TODO: use the request payload to return examples for the correct chain
+		_request: <Endpoint as api_json_schema::Endpoint>::Request,
+	) -> api_json_schema::EndpointResult<Endpoint> {
+		Ok(VaultSwapDetails::Bitcoin {
+			// Generated from the test code for UtxoEncodedData.
+			nulldata_utxo: hex::decode(
+				"000409090909090909090909090909090909090909090909090909090909090909090500ffffffffffffffffffffffffffffffffffff0200050a0806070809").unwrap(),
+			deposit_address: "bc1pw75mqye4q9t0m649vtk0a9clsrf2fagq3mr6agekfzsx0lulfyxsvxqadt"
+				.parse()
+				.unwrap()
+		})
 	}
 }
