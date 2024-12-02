@@ -773,6 +773,22 @@ assets!(
 				gas: true,
 				index: 11,
 			},
+			Asset {
+				variant: HubUsdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 12,
+			},
+			Asset {
+				variant: HubUsdc,
+				member: usdc,
+				string: "USDC" (aliases: ["Usdc", "usdc"]),
+				json: "USDC",
+				gas: false,
+				index: 13,
+			},
 		],
 	},
 );
@@ -809,6 +825,8 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(9).unwrap(), any::Asset::Sol);
 		assert_eq!(any::Asset::try_from(10).unwrap(), any::Asset::SolUsdc);
 		assert_eq!(any::Asset::try_from(11).unwrap(), any::Asset::HubDot);
+		assert_eq!(any::Asset::try_from(12).unwrap(), any::Asset::HubUsdt);
+		assert_eq!(any::Asset::try_from(13).unwrap(), any::Asset::HubUsdc);
 	}
 
 	#[test]

@@ -1,3 +1,5 @@
+use core::str::FromStr;
+
 use crate::*;
 
 pub mod api;
@@ -8,19 +10,24 @@ pub use crate::dot::serializable_address::*;
 use dot::{
 	fee_constants, polkadot_sdk_types, EncodedPolkadotPayload, GenericUncheckedExtrinsic,
 	PolkadotAccountId, PolkadotAccountIdLookup, PolkadotBalance, PolkadotCallHash,
-	PolkadotChannelId, PolkadotChannelState, PolkadotChargeTransactionPayment,
-	PolkadotCheckMortality, PolkadotCheckNonce, PolkadotExtrinsicIndex, PolkadotIndex,
-	PolkadotProxyType, PolkadotPublicKey, PolkadotReplayProtection, PolkadotSignature,
-	PolkadotSignedExtra, PolkadotTransactionData, PolkadotTransactionId, ResetProxyAccountNonce,
-	RuntimeVersion,
+	PolkadotChannelId, PolkadotChannelState, PolkadotCheckMortality, PolkadotCheckNonce,
+	PolkadotExtrinsicIndex, PolkadotHash, PolkadotIndex, PolkadotProxyType, PolkadotPublicKey,
+	PolkadotReplayProtection, PolkadotSignature, PolkadotSpecVersion, PolkadotTransactionData,
+	PolkadotTransactionId, PolkadotTransactionVersion, ResetProxyAccountNonce, RuntimeVersion,
 };
 
 pub use cf_primitives::chains::Assethub;
 use cf_primitives::PolkadotBlockNumber;
 use codec::{Decode, Encode};
-use frame_support::sp_runtime::generic::Era;
+use frame_support::{
+	pallet_prelude::{TransactionValidity, TransactionValidityError, ValidTransaction},
+	sp_runtime::generic::Era,
+};
 use scale_info::TypeInfo;
-use sp_runtime::generic::SignedPayload;
+use sp_runtime::{
+	generic::SignedPayload,
+	traits::{DispatchInfoOf, SignedExtension},
+};
 
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
@@ -48,9 +55,10 @@ impl Chain for Assethub {
 }
 
 /// The payload being signed in transactions.
-pub type AssethubPayload = SignedPayload<AssethubRuntimeCall, PolkadotSignedExtra>;
+pub type AssethubPayload = SignedPayload<AssethubRuntimeCall, AssethubSignedExtra>;
 
-type AssethubUncheckedExtrinsic = GenericUncheckedExtrinsic<AssethubRuntimeCall>;
+pub type AssethubUncheckedExtrinsic =
+	GenericUncheckedExtrinsic<AssethubRuntimeCall, AssethubSignedExtra>;
 
 /// The builder for creating and signing assethub extrinsics, and creating signature payload
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
@@ -58,6 +66,87 @@ pub struct AssethubExtrinsicBuilder {
 	pub extrinsic_call: AssethubRuntimeCall,
 	pub replay_protection: PolkadotReplayProtection,
 	pub signer_and_signature: Option<(PolkadotPublicKey, PolkadotSignature)>,
+}
+
+#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+pub struct AssethubChargeAssetTxPayment {
+	#[codec(compact)]
+	tip: u128,
+	asset_id: Option<u32>,
+}
+
+#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+pub struct AssethubSignedExtra(
+	pub  (
+		(),
+		(),
+		(),
+		(),
+		PolkadotCheckMortality,
+		PolkadotCheckNonce,
+		(),
+		AssethubChargeAssetTxPayment,
+		polkadot_sdk_types::CheckMetadataHash,
+	),
+);
+
+impl SignedExtension for AssethubSignedExtra {
+	type AccountId = PolkadotAccountId;
+	type Call = ();
+	type AdditionalSigned = (
+		(),
+		PolkadotSpecVersion,
+		PolkadotTransactionVersion,
+		PolkadotHash,
+		PolkadotHash,
+		(),
+		(),
+		(),
+		polkadot_sdk_types::MetadataHash,
+	);
+	type Pre = ();
+	const IDENTIFIER: &'static str = "AssethubSignedExtra";
+
+	// This is a dummy implementation of additional_signed required by SignedPayload. This is never
+	// actually used since the extrinsic builder that constructs the payload uses its own
+	// additional_signed and constructs payload from raw.
+	fn additional_signed(
+		&self,
+	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok((
+			(),
+			9300,
+			15,
+			H256::from_str("91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3")
+				.unwrap(),
+			H256::from_str("91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3")
+				.unwrap(),
+			(),
+			(),
+			(),
+			polkadot_sdk_types::MetadataHash::None,
+		))
+	}
+
+	fn pre_dispatch(
+		self,
+		_who: &Self::AccountId,
+		_call: &Self::Call,
+		_info: &DispatchInfoOf<Self::Call>,
+		_len: usize,
+	) -> Result<(), TransactionValidityError> {
+		Ok(())
+	}
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		_call: &Self::Call,
+		_info: &DispatchInfoOf<Self::Call>,
+		_len: usize,
+	) -> TransactionValidity {
+		Ok(<ValidTransaction as Default>::default())
+	}
 }
 
 impl AssethubExtrinsicBuilder {
@@ -72,10 +161,10 @@ impl AssethubExtrinsicBuilder {
 		self.signer_and_signature.as_ref().map(|(_, signature)| signature.clone())
 	}
 
-	fn extra(&self) -> PolkadotSignedExtra {
+	fn extra(&self) -> AssethubSignedExtra {
 		// TODO: use chain data to estimate fees
 		const TIP: PolkadotBalance = 0;
-		PolkadotSignedExtra((
+		AssethubSignedExtra((
 			(),
 			(),
 			(),
@@ -83,8 +172,7 @@ impl AssethubExtrinsicBuilder {
 			PolkadotCheckMortality(Era::Immortal),
 			PolkadotCheckNonce(self.replay_protection.nonce),
 			(),
-			PolkadotChargeTransactionPayment(TIP),
-			(),
+			AssethubChargeAssetTxPayment { tip: TIP, asset_id: None },
 			polkadot_sdk_types::CheckMetadataHash::default(),
 		))
 	}
@@ -104,7 +192,6 @@ impl AssethubExtrinsicBuilder {
 					transaction_version,
 					self.replay_protection.genesis_hash,
 					self.replay_protection.genesis_hash,
-					(),
 					(),
 					(),
 					(),
@@ -593,7 +680,7 @@ pub enum ProxyCall {
 #[allow(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum AssetsCall {
-	#[codec(index = 0u8)]
+	#[codec(index = 8u8)]
 	transfer {
 		#[allow(missing_docs)]
 		#[codec(compact)]

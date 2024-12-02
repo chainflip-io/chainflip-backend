@@ -318,8 +318,7 @@ async fn run_main(
 			let hub_client = {
 				let expected_hub_genesis_hash = PolkadotHash::from(
 					state_chain_client
-						.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
-							// Change to Assethub
+						.storage_value::<pallet_cf_environment::AssethubGenesisHash<state_chain_runtime::Runtime>>(
 							state_chain_client.latest_finalized_block().hash,
 						)
 						.await

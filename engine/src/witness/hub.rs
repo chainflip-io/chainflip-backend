@@ -2,9 +2,12 @@ mod hub_chain_tracking;
 mod hub_deposits;
 mod hub_source;
 
-use cf_chains::dot::{
-	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature,
-	PolkadotTransactionId, PolkadotUncheckedExtrinsic,
+use cf_chains::{
+	dot::{
+		PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash,
+		PolkadotSignature, PolkadotTransactionId,
+	},
+	hub::AssethubUncheckedExtrinsic,
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
@@ -96,7 +99,7 @@ pub fn filter_map_events(
 }
 
 pub async fn proxy_added_witnessing(
-	epoch: Vault<cf_chains::Polkadot, PolkadotAccountId, ()>,
+	epoch: Vault<cf_chains::Assethub, PolkadotAccountId, ()>,
 	header: Header<PolkadotBlockNumber, PolkadotHash, Vec<(Phase, EventWrapper)>>,
 ) -> (Vec<(Phase, EventWrapper)>, BTreeSet<u32>) {
 	let events = header.data;
@@ -107,7 +110,7 @@ pub async fn proxy_added_witnessing(
 
 #[allow(clippy::type_complexity)]
 pub async fn process_egress<ProcessCall, ProcessingFut>(
-	epoch: Vault<cf_chains::Polkadot, PolkadotAccountId, ()>,
+	epoch: Vault<cf_chains::Assethub, PolkadotAccountId, ()>,
 	header: Header<
 		PolkadotBlockNumber,
 		PolkadotHash,
@@ -117,7 +120,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		),
 	>,
 	process_call: ProcessCall,
-	dot_client: DotRetryRpcClient,
+	hub_client: DotRetryRpcClient,
 ) where
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
@@ -136,7 +139,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
 	extrinsic_indices.extend(extrinsic_success_indices(&events));
 
-	let extrinsics: Vec<Bytes> = dot_client.extrinsics(header.hash).await;
+	let extrinsics: Vec<Bytes> = hub_client.extrinsics(header.hash).await;
 
 	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
 		let xt = extrinsics.get(extrinsic_index as usize).expect(
@@ -145,7 +148,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		);
 		let mut xt_bytes = xt.0.as_slice();
 
-		match PolkadotUncheckedExtrinsic::decode(&mut xt_bytes) {
+		match AssethubUncheckedExtrinsic::decode(&mut xt_bytes) {
 			Ok(unchecked) =>
 				if let Some(signature) = unchecked.signature() {
 					if monitored_egress_ids.contains(&signature) {
@@ -181,7 +184,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 
 pub async fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
-	dot_client: DotRetryRpcClient,
+	hub_client: DotRetryRpcClient,
 	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
@@ -197,7 +200,7 @@ where
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let unfinalised_source = HubUnfinalisedSource::new(dot_client.clone())
+	let unfinalised_source = HubUnfinalisedSource::new(hub_client.clone())
 		.strictly_monotonic()
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.shared(scope);
@@ -205,7 +208,7 @@ where
 	unfinalised_source
 		.clone()
 		.chunk_by_time(epoch_source.clone(), scope)
-		.chain_tracking(state_chain_client.clone(), dot_client.clone())
+		.chain_tracking(state_chain_client.clone(), hub_client.clone())
 		.logging("chain tracking")
 		.spawn(scope);
 
@@ -226,7 +229,7 @@ where
 	let vaults = epoch_source.vaults::<cf_chains::Assethub>().await;
 
 	// Full witnessing
-	HubFinalisedSource::new(dot_client.clone())
+	HubFinalisedSource::new(hub_client.clone())
 		.strictly_monotonic()
 		.logging("finalised block produced")
 		.then(|header| async move {
@@ -244,9 +247,9 @@ where
 		.await
 		.then({
 			let process_call = process_call.clone();
-			let dot_client = dot_client.clone();
+			let hub_client = hub_client.clone();
 			move |epoch, header| {
-				process_egress(epoch, header, process_call.clone(), dot_client.clone())
+				process_egress(epoch, header, process_call.clone(), hub_client.clone())
 			}
 		})
 		.continuous("Polkadot".to_string(), db)

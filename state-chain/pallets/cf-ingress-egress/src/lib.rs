@@ -287,6 +287,7 @@ macro_rules! append_chain_to_name {
 			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
 			"Arbitrum" => concat!(stringify!($name), "Arbitrum"),
 			"Solana" => concat!(stringify!($name), "Solana"),
+			"Assethub" => concat!(stringify!($name), "Assethub"),
 			_ => concat!(stringify!($name), "Other"),
 		}
 	};
@@ -911,6 +912,8 @@ pub mod pallet {
 		UnsupportedChain,
 		/// Transaction cannot be reported after being pre-witnessed or boosted.
 		TransactionAlreadyPrewitnessed,
+		/// Assethub's Vault Account does not exist in storage.
+		MissingAssethubVault,
 	}
 
 	#[pallet::hooks]
@@ -2575,6 +2578,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							Error::<T, I>::SolanaAddressDerivationError,
 						AddressDerivationError::MissingSolanaApiEnvironment =>
 							Error::<T, I>::MissingSolanaApiEnvironment,
+						AddressDerivationError::MissingAssethubVault =>
+							Error::<T, I>::MissingAssethubVault,
 					})?,
 				next_channel_id,
 			)

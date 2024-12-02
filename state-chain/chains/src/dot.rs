@@ -156,20 +156,15 @@ pub type PolkadotChannelId = u64;
 pub type PolkadotTransactionVersion = u32;
 
 #[derive(Debug, Clone, Encode, Decode, TypeInfo)]
-pub struct GenericUncheckedExtrinsic<Call>(
-	UncheckedExtrinsic<
-		MultiAddress<PolkadotAccountId, ()>,
-		Call,
-		MultiSignature,
-		PolkadotSignedExtra,
-	>,
+pub struct GenericUncheckedExtrinsic<Call, Extra: SignedExtension>(
+	UncheckedExtrinsic<MultiAddress<PolkadotAccountId, ()>, Call, MultiSignature, Extra>,
 );
-impl<Call: Decode> GenericUncheckedExtrinsic<Call> {
+impl<Call: Decode, Extra: SignedExtension> GenericUncheckedExtrinsic<Call, Extra> {
 	pub fn new_signed(
 		function: Call,
 		signed: PolkadotAccountId,
 		signature: PolkadotSignature,
-		extra: PolkadotSignedExtra,
+		extra: Extra,
 	) -> Self {
 		Self(UncheckedExtrinsic::new_signed(
 			function,
@@ -194,7 +189,8 @@ impl<Call: Decode> GenericUncheckedExtrinsic<Call> {
 	}
 }
 
-pub type PolkadotUncheckedExtrinsic = GenericUncheckedExtrinsic<PolkadotRuntimeCall>;
+pub type PolkadotUncheckedExtrinsic =
+	GenericUncheckedExtrinsic<PolkadotRuntimeCall, PolkadotSignedExtra>;
 
 /// The payload being signed in transactions.
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
