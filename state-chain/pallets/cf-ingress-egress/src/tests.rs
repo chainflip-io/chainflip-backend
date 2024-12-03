@@ -20,8 +20,8 @@ use cf_chains::{
 	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiary, ChannelId, DcaParameters,
-	ForeignChain,
+	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,
+	DcaParameters, ForeignChain, MAX_AFFILIATES,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -47,7 +47,7 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::{bounded_vec, H160};
+use sp_core::{bounded_vec, H160, U256};
 use sp_runtime::{DispatchError, DispatchResult};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -2205,5 +2205,40 @@ fn private_and_regular_channel_ids_do_not_overlap() {
 		// Open a regular channel again to check that opening a private channel
 		// updates the channel id counter:
 		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_2);
+	});
+}
+
+#[test]
+fn assembling_broker_fees() {
+	new_test_ext().execute_with(|| {
+		let broker_fee = Beneficiary { account: BROKER, bps: 0 };
+
+		const AFFILIATE_IDS: [u64; 5] = [10, 20, 30, 40, 50];
+		const AFFILIATE_SHORT_IDS: [u8; 5] = [1, 2, 3, 4, 5];
+
+		assert_eq!(AFFILIATE_IDS.len(), MAX_AFFILIATES as usize);
+
+		for (i, id) in AFFILIATE_IDS.into_iter().enumerate() {
+			let short_id = AFFILIATE_SHORT_IDS[i];
+			MockAffiliateRegistry::register_affiliate(BROKER, id, short_id.into());
+		}
+
+		let affiliate_fees: Vec<Beneficiary<AffiliateShortId>> = AFFILIATE_SHORT_IDS
+			.into_iter()
+			.map(|short_id| Beneficiary { account: short_id.into(), bps: short_id.into() })
+			.collect();
+
+		let affiliate_fees: Affiliates<AffiliateShortId> = affiliate_fees.try_into().unwrap();
+
+		let expected: Beneficiaries<u64> = bounded_vec![
+			Beneficiary { account: BROKER, bps: 0 },
+			Beneficiary { account: 10, bps: 1 },
+			Beneficiary { account: 20, bps: 2 },
+			Beneficiary { account: 30, bps: 3 },
+			Beneficiary { account: 40, bps: 4 },
+			Beneficiary { account: 50, bps: 5 },
+		];
+
+		assert_eq!(IngressEgress::assemble_broker_fees(broker_fee, affiliate_fees), expected);
 	});
 }
