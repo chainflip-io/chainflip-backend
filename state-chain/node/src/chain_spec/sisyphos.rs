@@ -52,7 +52,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	hub_genesis_hash: H256(hex_literal::hex!(
-		"9d82ff77553763de4ccdd0e719e9a134bcfb3128581153f3fa892a1fd757c93a"
+		"4d515dfd1fceb9c43f7ddb50b85b45ab971688e46082f5bfd2f2bf1d8f6d71c7"
 	)),
 	hub_vault_account_id: None,
 	hub_runtime_version: RuntimeVersion { spec_version: 1003004, transaction_version: 15 },
@@ -73,7 +73,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_durable_nonces_and_accounts: [
 		(
 			const_address("Cr5YnF9p4M91CrQGHJhP3Syy4aGZNVAwF6zvTxkAZZfj"),
-			const_hash("9QVwTXtwGTbq4U3KPN9THdnxQ38bVFu6P15cwhURJqNC"),
+			const_hash("9QVwTXtwGTbq4U3KPN9THd0x4d515dfd1fceb9c43f7ddb50b85b45ab971688e46082f5bfd2f2bf1d8f6d71c7nxQ38bVFu6P15cwhURJqNC"),
 		),
 		(
 			const_address("3E14JFszKMCDcxXuGk4mDsBddHxSpXrzZ2ZpGHGr8WJv"),
