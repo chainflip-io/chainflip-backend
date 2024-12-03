@@ -309,8 +309,6 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 	}
 }
 
-pub type RefundParameters = ChannelRefundParametersGeneric<AddressString>;
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwapDepositAddress {
 	pub address: AddressString,

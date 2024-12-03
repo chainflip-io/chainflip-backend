@@ -1,13 +1,9 @@
-use crate::{
+use crate::
 	sol::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
 		rpc_client_api::{RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding},
-	},
-	witness::common::cf_parameters::{
-		CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
-	},
-};
+	};
 use anyhow::{anyhow, bail, ensure, Context};
 use base64::Engine;
 use cf_chains::{
@@ -22,6 +18,9 @@ use cf_chains::{
 		SolAddress,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, ForeignChainAddress,
+	cf_parameters::{
+		CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
+	}
 };
 use codec::Decode;
 use futures::{stream, StreamExt, TryStreamExt};

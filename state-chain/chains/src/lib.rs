@@ -7,7 +7,7 @@ use crate::{
 	sol::SolanaCrypto,
 };
 use core::{fmt::Display, iter::Step};
-use sol::api::VaultSwapAccountAndSender;
+use sol::{api::VaultSwapAccountAndSender, SolPubkey, SolAmount};
 use sp_std::marker::PhantomData;
 
 use crate::{
@@ -20,7 +20,7 @@ use address::{
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
 use cf_amm_math::Price;
-use cf_primitives::{Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, TxId};
+use cf_primitives::{Asset, AssetAmount, BlockNumber, BroadcastId, ChannelId, EgressId, EthAmount, TxId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -65,6 +65,7 @@ pub use deposit_channel::*;
 use strum::IntoEnumIterator;
 pub mod ccm_checker;
 pub mod instances;
+pub mod cf_parameters;
 
 pub mod mocks;
 
@@ -930,7 +931,8 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
 		}
 	}
 }
-
+#[cfg(feature = "std")]
+pub type RefundParameters = ChannelRefundParametersGeneric<crate::address::AddressString>;
 pub type ChannelRefundParameters = ChannelRefundParametersGeneric<ForeignChainAddress>;
 pub type ChannelRefundParametersEncoded = ChannelRefundParametersGeneric<EncodedAddress>;
 
@@ -942,10 +944,10 @@ impl<A: Clone> ChannelRefundParametersGeneric<A> {
 			min_price: self.min_price,
 		}
 	}
-	pub fn try_map_address<B, F: FnOnce(A) -> Result<B, sp_runtime::DispatchError>>(
+	pub fn try_map_address<B, F: FnOnce(A) -> Result<B, DispatchError>>(
 		&self,
 		f: F,
-	) -> Result<ChannelRefundParametersGeneric<B>, sp_runtime::DispatchError> {
+	) -> Result<ChannelRefundParametersGeneric<B>, DispatchError> {
 		Ok(ChannelRefundParametersGeneric {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone())?,
@@ -969,3 +971,53 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 		None
 	}
 }
+
+#[derive(
+	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
+)]
+pub enum GenericVaultSwapExtraParameters<Address, Number> {
+	Btc { min_output_amount: Number, retry_duration: BlockNumber },
+	Sol { from: Address, event_data_account: Address, input_amount: Number, refund_parameters: ChannelRefundParametersGeneric<Address>, },
+	SolUsdc { from: Address, from_token_account: Address, event_data_account: Address, input_amount: SolAmount, refund_parameters: ChannelRefundParametersGeneric<Address>, },
+}
+
+impl<Address, Number> GenericVaultSwapExtraParameters<Address, Number> {
+	pub fn try_map_address<AddressOther>(
+		&self,
+		f: impl Fn(Address) -> Result<AddressOther, DispatchError>,
+	) -> Result<GenericVaultSwapExtraParameters<AddressOther, Number>, DispatchError> {
+		Ok(
+			match self {
+				GenericVaultSwapExtraParameters::Sol { 
+					from, 
+					event_data_account, 
+					input_amount, 
+					refund_parameters, 
+				} => GenericVaultSwapExtraParameters::Sol {
+					from: f(from.clone())?,
+					event_data_account: f(event_data_account.clone())?,
+					input_amount: *input_amount,
+					refund_parameters: refund_parameters.try_map_address(f)?,
+				},
+				GenericVaultSwapExtraParameters::SolUsdc { 
+					from, 
+					from_token_account, 
+					event_data_account, 
+					input_amount, 
+					refund_parameters, 
+				} => GenericVaultSwapExtraParameters::SolUsdc {
+					from: f(from.clone())?,
+					from_token_account: f(from_token_account.clone())?,
+					event_data_account: f(event_data_account.clone())?,
+					input_amount: *input_amount,
+					refund_parameters: refund_parameters.try_map_address(f)?,
+				},
+				_ => self,
+			}
+		)
+	}
+}
+
+#[cfg(feature = "std")]
+pub type VaultSwapExtraParameters = GenericVaultSwapExtraParameters<crate::address::AddressString, cf_utilities::rpc::NumberOrHex>;
+pub type VaultSwapExtraParametersDecoded = GenericVaultSwapExtraParameters<ForeignChainAddress, AssetAmount>;

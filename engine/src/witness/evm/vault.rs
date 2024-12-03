@@ -1,12 +1,10 @@
 use crate::evm::retry_rpc::EvmRetryRpcApi;
-use codec::Decode;
 use ethers::types::Bloom;
 use sp_core::H256;
 use std::collections::HashMap;
 
 use super::{
 	super::common::{
-		cf_parameters::*,
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
@@ -19,7 +17,7 @@ use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, cf_parameters::*,
 };
 use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
 use ethers::prelude::*;
