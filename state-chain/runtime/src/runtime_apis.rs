@@ -5,8 +5,9 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress, Chain,
-	ChainCrypto, ForeignChainAddress,
+	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
+	CcmChannelMetadata, Chain, ChainCrypto, ForeignChainAddress, VaultSwapExtraParameters,
+	ChannelRefundParameters,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
@@ -416,8 +417,8 @@ decl_runtime_apis!(
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
-			min_output_amount: AssetAmount,
-			retry_duration: BlockNumber,
+			extra_parameters: VaultSwapExtraParameters,
+			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId32>,
 			dca_parameters: Option<DcaParameters>,

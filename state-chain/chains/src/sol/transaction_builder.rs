@@ -1,7 +1,7 @@
-//! This file contains a Instruction builder for the Solana chain.
+//! This file contains a Transaction Builder for the Solana chain.
 //!
 //! The builder provides a interface for the API to create raw Solana
-//! Instructions and Instruction sets with some level of abstraction.
+//! Transactions with some level of abstraction.
 //! This avoids the need to deal with low level Solana core types.
 
 use sol_prim::consts::{
