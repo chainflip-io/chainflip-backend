@@ -15,8 +15,8 @@ use cf_chains::{
 		SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, DepositChannel,
-	DepositFailedReason, ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh,
-	SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
+	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
+	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -34,7 +34,7 @@ use pallet_cf_elections::{
 	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
 	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
-use pallet_cf_ingress_egress::{DepositWitness, FetchOrTransfer};
+use pallet_cf_ingress_egress::{DepositFailedReason, DepositWitness, FetchOrTransfer};
 use pallet_cf_validator::RotationPhase;
 use sp_core::ConstU32;
 use sp_runtime::BoundedBTreeMap;
@@ -533,7 +533,7 @@ fn solana_ccm_fails_with_invalid_input() {
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
 					Runtime,
 					SolanaInstance,
-				>::DepositFailedReason {
+				>::DepositFailed {
 					reason: DepositFailedReason::CcmInvalidMetadata,
 					..
 				}),

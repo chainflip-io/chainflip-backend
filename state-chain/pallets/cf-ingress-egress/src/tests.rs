@@ -4,7 +4,7 @@ mod screening;
 use crate::{
 	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
-	DepositChannelLookup, DepositChannelPool, DepositFailedReason, DepositWitness,
+	DepositChannelLookup, DepositChannelPool, DepositFailedReason, DepositInfo, DepositWitness,
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
 	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
 	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
@@ -831,14 +831,26 @@ fn deposits_below_minimum_are_rejected() {
 		));
 
 		// Observe that eth deposit gets rejected.
-		let (_, deposit_address) = request_address_and_deposit(0, eth);
+		let (channel_id, deposit_address) = request_address_and_deposit(0, eth);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, ()>::DepositFailed {
-				deposit_address: Some(deposit_address),
 				asset: eth,
 				amount: default_deposit_amount,
 				deposit_details: Default::default(),
 				reason: DepositFailedReason::BelowMinimumDeposit,
+				origin: SwapOrigin::DepositChannel {
+					deposit_address: MockAddressConverter::to_encoded_address(
+						ForeignChainAddress::Eth(deposit_address),
+					),
+					channel_id,
+					deposit_block_height: Default::default(),
+				},
+				details: Box::new(DepositInfo::DepositChannel {
+					action: ChannelAction::LiquidityProvision {
+						lp_account: 0,
+						refund_address: Some(ForeignChainAddress::Eth(Default::default())),
+					},
+				}),
 			},
 		));
 

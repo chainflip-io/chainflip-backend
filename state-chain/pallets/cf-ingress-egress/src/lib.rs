@@ -354,7 +354,7 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum DepositDetails<AccountId> {
+	pub enum DepositInfo<AccountId> {
 		DepositChannel { action: ChannelAction<AccountId> },
 		VaultSwap { details: VaultSwapDetails<AccountId> },
 	}
@@ -655,11 +655,10 @@ pub mod pallet {
 		DepositFailed {
 			reason: DepositFailedReason,
 			origin: SwapOrigin,
-			deposit_address: Option<TargetChainAccount<T, I>>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
-			details: Box<DepositDetails<T::AccountId>>,
+			details: Box<DepositInfo<T::AccountId>>,
 		},
 		TransferFallbackRequested {
 			asset: TargetChainAsset<T, I>,
@@ -1892,11 +1891,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Self::deposit_event(Event::<T, I>::DepositFailed {
 						reason: DepositFailedReason::CcmUnsupportedForTargetChain,
 						origin: swap_origin.clone(),
-						deposit_address: Some(deposit_address),
 						asset,
 						amount: amount_after_fees,
 						deposit_details,
-						details: Box::new(DepositDetails::DepositChannel { action }),
+						details: Box::new(DepositInfo::DepositChannel { action }),
 					});
 					return Ok(DepositAction::NoAction);
 				}
@@ -1965,13 +1963,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// If the deposit amount is below the minimum allowed, the deposit is ignored.
 			// TODO: track these funds somewhere, for example add them to the withheld fees.
 			Self::deposit_event(Event::<T, I>::DepositFailed {
-				deposit_address: Some(deposit_address),
 				asset,
 				amount: deposit_amount,
 				deposit_details,
 				reason: DepositFailedReason::BelowMinimumDeposit,
 				origin,
-				details: Box::new(DepositDetails::DepositChannel {
+				details: Box::new(DepositInfo::DepositChannel {
 					action: deposit_channel_details.action.clone(),
 				}),
 			});
@@ -2000,13 +1997,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
 
 				Self::deposit_event(Event::<T, I>::DepositFailed {
-					deposit_address: Some(deposit_address),
 					asset,
 					amount: deposit_amount,
 					deposit_details,
 					reason: DepositFailedReason::TransactionTainted,
 					origin,
-					details: Box::new(DepositDetails::DepositChannel {
+					details: Box::new(DepositInfo::DepositChannel {
 						action: deposit_channel_details.action.clone(),
 					}),
 				});
@@ -2087,13 +2083,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			if amount_after_fees.is_zero() {
 				Self::deposit_event(Event::<T, I>::DepositFailed {
-					deposit_address: Some(deposit_address),
 					asset,
 					amount: deposit_amount,
 					deposit_details,
 					reason: DepositFailedReason::NotEnoughToPayFees,
 					origin,
-					details: Box::new(DepositDetails::DepositChannel {
+					details: Box::new(DepositInfo::DepositChannel {
 						action: deposit_channel_details.action.clone(),
 					}),
 				});
@@ -2142,13 +2137,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let emit_deposit_failed_event = |reason: DepositFailedReason| {
 			Self::deposit_event(Event::<T, I>::DepositFailed {
-				deposit_address: None,
 				asset: source_asset,
 				amount: deposit_amount,
 				deposit_details: deposit_details.clone(),
 				reason,
 				origin: swap_origin.clone(),
-				details: Box::new(DepositDetails::VaultSwap {
+				details: Box::new(DepositInfo::VaultSwap {
 					details: VaultSwapDetails {
 						destination_asset,
 						destination_address: destination_address.clone(),
