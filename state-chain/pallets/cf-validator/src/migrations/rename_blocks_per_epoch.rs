@@ -10,7 +10,7 @@ pub mod old {
 	use super::*;
 
 	#[frame_support::storage_alias]
-	pub type BlocksPerEpoch<T: Config> = StorageValue<Config, BlockNumberFor<T>, ValueQuery>;
+	pub type BlocksPerEpoch<T: Config> = StorageValue<Pallet<T>, BlockNumberFor<T>, ValueQuery>;
 }
 
 pub struct BlocksPerEpochMigration<T: Config>(sp_std::marker::PhantomData<T>);
