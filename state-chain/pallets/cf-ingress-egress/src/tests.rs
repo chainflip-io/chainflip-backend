@@ -4,7 +4,7 @@ mod screening;
 use crate::{
 	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
-	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	DepositChannelLookup, DepositChannelPool, DepositFailedReason, DepositInfo, DepositWitness,
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
 	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
 	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
@@ -16,8 +16,8 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
-	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
+	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
+	TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
 	AffiliateShortId, AssetAmount, BasisPoints, Beneficiary, ChannelId, ForeignChain,
@@ -831,14 +831,26 @@ fn deposits_below_minimum_are_rejected() {
 		));
 
 		// Observe that eth deposit gets rejected.
-		let (_, deposit_address) = request_address_and_deposit(0, eth);
+		let (channel_id, deposit_address) = request_address_and_deposit(0, eth);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test, ()>::DepositIgnored {
-				deposit_address: Some(deposit_address),
+			crate::Event::<Test, ()>::DepositFailed {
 				asset: eth,
 				amount: default_deposit_amount,
 				deposit_details: Default::default(),
-				reason: DepositIgnoredReason::BelowMinimumDeposit,
+				reason: DepositFailedReason::BelowMinimumDeposit,
+				origin: SwapOrigin::DepositChannel {
+					deposit_address: MockAddressConverter::to_encoded_address(
+						ForeignChainAddress::Eth(deposit_address),
+					),
+					channel_id,
+					deposit_block_height: Default::default(),
+				},
+				details: Box::new(DepositInfo::DepositChannel {
+					action: ChannelAction::LiquidityProvision {
+						lp_account: 0,
+						refund_address: Some(ForeignChainAddress::Eth(Default::default())),
+					},
+				}),
 			},
 		));
 
@@ -891,19 +903,19 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 			vec![deposit_detail.clone()],
 			Default::default(),
 		));
-		// Observe the DepositIgnored Event
+		// Observe the DepositFailed Event
 		assert!(
 			matches!(
 				cf_test_utilities::last_event::<Test>(),
-				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
+				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFailed {
 					asset: ASSET,
 					amount: DEPOSIT_AMOUNT,
 					deposit_details: DepositDetails { tx_hashes: None },
-					reason: DepositIgnoredReason::NotEnoughToPayFees,
+					reason: DepositFailedReason::NotEnoughToPayFees,
 					..
 				},)
 			),
-			"Expected DepositIgnored Event, got: {:?}",
+			"Expected DepositFailed Event, got: {:?}",
 			cf_test_utilities::last_event::<Test>()
 		);
 
@@ -2091,8 +2103,8 @@ fn failed_ccm_deposit_can_deposit_event() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::CcmFailed {
-				reason: CcmFailReason::UnsupportedForTargetChain,
+			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
+				reason: DepositFailedReason::CcmUnsupportedForTargetChain,
 				..
 			})
 		);

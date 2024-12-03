@@ -1,7 +1,7 @@
 use crate::{
 	mock_btc::*,
 	tests::{ALICE, BROKER},
-	BoostPoolId, DepositChannelLookup, DepositIgnoredReason, DepositWitness, ReportExpiresAt,
+	BoostPoolId, DepositChannelLookup, DepositFailedReason, DepositWitness, ReportExpiresAt,
 	ScheduledTxForReject, TransactionPrewitnessedStatus, TransactionRejectionDetails,
 	TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
 };
@@ -132,12 +132,13 @@ fn process_marked_transaction_and_expect_refund() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
-				deposit_address: _address,
+			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFailed {
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
 				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionRejectedByBroker,
+				reason: DepositFailedReason::TransactionRejectedByBroker,
+				origin: _,
+				details: _,
 			})
 		);
 
@@ -231,12 +232,13 @@ fn reject_tx_if_marked_before_prewitness() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
-				deposit_address: _,
+			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
 				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionRejectedByBroker,
+				reason: DepositFailedReason::TransactionRejectedByBroker,
+				origin: _,
+				details: _,
 			})
 		);
 	});
@@ -421,12 +423,13 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
-				deposit_address: _,
+			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
 				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionRejectedByBroker,
+				reason: DepositFailedReason::TransactionRejectedByBroker,
+				origin: _,
+				details: _,
 			})
 		);
 	});
