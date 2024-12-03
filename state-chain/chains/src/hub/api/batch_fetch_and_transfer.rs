@@ -45,7 +45,7 @@ pub fn extrinsic_builder(
 								}),
 							cf_primitives::chains::assets::hub::Asset::HubUsdc =>
 								AssethubRuntimeCall::Assets(AssetsCall::transfer {
-									id: ASSETHUB_USDT_ASSET_ID,
+									id: ASSETHUB_USDC_ASSET_ID,
 									dest: PolkadotAccountIdLookup::from(transfer_param.to),
 									value: transfer_param.amount,
 								}),
@@ -100,8 +100,10 @@ fn utility_fetch(
 mod test_batch_fetch {
 
 	use super::*;
-	use crate::dot::{PolkadotPair, NONCE_1, RAW_SEED_1, RAW_SEED_2};
-	use crate::hub::TEST_RUNTIME_VERSION;
+	use crate::{
+		dot::{PolkadotPair, NONCE_1, RAW_SEED_1, RAW_SEED_2},
+		hub::TEST_RUNTIME_VERSION,
+	};
 	use cf_primitives::chains::assets;
 
 	#[test]
@@ -151,7 +153,10 @@ mod test_batch_fetch {
 			PolkadotReplayProtection {
 				nonce: NONCE_1,
 				signer: keypair_proxy.public_key(),
-				genesis_hash: Default::default(),
+				genesis_hash: hex_literal::hex!(
+					"68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f"
+				)
+				.into(),
 			},
 			dummy_fetch_params,
 			dummy_transfer_params,
@@ -164,7 +169,7 @@ mod test_batch_fetch {
 		);
 		assert_eq!(
 			hex::encode(&payload.0),
-			"fedd552924ecdbf18c13d7f534b344926b2a771a03a59d095af0676f98f6d19e"
+			"050486994422289de8a869459a13fb7b3c7af8a1de45c1bcf7c5d805e6ea9721"
 		);
 		builder
 			.insert_signer_and_signature(keypair_proxy.public_key(), keypair_proxy.sign(&payload));

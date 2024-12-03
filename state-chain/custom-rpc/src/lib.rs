@@ -2216,7 +2216,11 @@ mod test {
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 					sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None },
-					hub: hub::AssetMap { dot: Some((u64::MAX / 2 - 1).into()), usdc: None, usdt: None },
+					hub: hub::AssetMap {
+						dot: Some((u64::MAX / 2 - 1).into()),
+						usdc: None,
+						usdt: None,
+					},
 				},
 				egress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -2229,7 +2233,11 @@ mod test {
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 					sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None },
-					hub: hub::AssetMap { dot: Some((u64::MAX / 2 - 1).into()), usdc: None, usdt: None },
+					hub: hub::AssetMap {
+						dot: Some((u64::MAX / 2 - 1).into()),
+						usdc: None,
+						usdt: None,
+					},
 				},
 				witness_safety_margins: HashMap::from([
 					(ForeignChain::Bitcoin, Some(3u64)),
@@ -2287,7 +2295,11 @@ mod test {
 						dot: dot::AssetMap { dot: Some(pool_info) },
 						arb: arb::AssetMap { eth: Some(pool_info), usdc: Some(pool_info) },
 						sol: sol::AssetMap { sol: Some(pool_info), usdc: None },
-						hub: hub::AssetMap { dot: Some(pool_info), usdc: Some(pool_info), usdt: Some(pool_info) },
+						hub: hub::AssetMap {
+							dot: Some(pool_info),
+							usdc: Some(pool_info),
+							usdt: Some(pool_info),
+						},
 					},
 				}
 			},

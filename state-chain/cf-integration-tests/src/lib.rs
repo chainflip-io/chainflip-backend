@@ -85,9 +85,9 @@ pub fn witness_call(call: RuntimeCall) {
 }
 
 /// this function witnesses the rotation tx broadcasts for all chains. It takes in the broadcast ids
-/// of the rotation tx in the following chains order: Ethereum, Polkadot, Bitcoin, Arbitrum, Solana
+/// of the rotation tx in the following chains order: Ethereum, Polkadot, Bitcoin, Arbitrum, Solana, Assethub
 /// (the order in which these chains were integrated in chainflip)
-pub fn witness_rotation_broadcasts(broadcast_ids: [cf_primitives::BroadcastId; 5]) {
+pub fn witness_rotation_broadcasts(broadcast_ids: [cf_primitives::BroadcastId; 6]) {
 	witness_ethereum_rotation_broadcast(broadcast_ids[0]);
 	witness_call(RuntimeCall::PolkadotBroadcaster(
 		pallet_cf_broadcast::Call::transaction_succeeded {
@@ -151,6 +151,19 @@ pub fn witness_rotation_broadcasts(broadcast_ids: [cf_primitives::BroadcastId; 5
 	pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::append((
 		<cf_chains::sol::SolAddress as Default>::default(),
 		<cf_chains::sol::SolHash as Default>::default(),
+	));
+	witness_call(RuntimeCall::AssethubBroadcaster(
+		pallet_cf_broadcast::Call::transaction_succeeded {
+			tx_out_id: AwaitingBroadcast::<Runtime, state_chain_runtime::AssethubInstance>::get(
+				broadcast_ids[5],
+			)
+			.unwrap()
+			.transaction_out_id,
+			signer_id: Default::default(),
+			tx_fee: 1000,
+			tx_metadata: Default::default(),
+			transaction_ref: Default::default(),
+		},
 	));
 }
 

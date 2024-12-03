@@ -848,7 +848,7 @@ fn can_resign_failed_ccm() {
 			testnet.move_to_the_next_epoch();
 			// the rotation tx for ethereum is the third broadcast overall (2 broadcasts already
 			// created above) whereas for other chains it is the first broadcast
-			witness_rotation_broadcasts([3, 1, 1, 1, 1]);
+			witness_rotation_broadcasts([3, 1, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(2);
 
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
@@ -862,7 +862,7 @@ fn can_resign_failed_ccm() {
 			// the rotation tx for ethereum is the fourth broadcast overall (3 broadcasts already
 			// created above) whereas for other chains it is the second broadcast (first broadcast
 			// was the previous rotation)
-			witness_rotation_broadcasts([4, 2, 2, 2, 2]);
+			witness_rotation_broadcasts([4, 2, 2, 2, 2, 2]);
 			testnet.move_forward_blocks(2);
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
 			assert_eq!(
@@ -952,7 +952,7 @@ fn can_handle_failed_vault_transfer() {
 			testnet.move_to_the_next_epoch();
 			// the rotation tx for ethereum is the third broadcast (2 broadcasts already created
 			// above) whereas for other chains it is the first broadcast
-			witness_rotation_broadcasts([3, 1, 1, 1, 1]);
+			witness_rotation_broadcasts([3, 1, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(2);
 
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
