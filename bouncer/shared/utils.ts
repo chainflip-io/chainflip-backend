@@ -47,8 +47,8 @@ export const snowWhiteMutex = new Mutex();
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 
-export type Asset = SDKAsset | 'HubDot';
-export type Chain = SDKChain | 'Assethub';
+export type Asset = SDKAsset;
+export type Chain = SDKChain;
 
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
@@ -205,7 +205,6 @@ export function assetContractId(asset: Asset): number {
 
 export function assetDecimals(asset: Asset): number {
   if (isSDKAsset(asset)) return assetConstants[asset].decimals;
-  else if (asset === 'HubDot') return 10;
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
@@ -227,7 +226,7 @@ export function chainGasAsset(chain: Chain): Asset {
     case 'Solana':
       return Assets.Sol;
     case 'Assethub':
-      return 'HubDot';
+      return Assets.HubDot;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -565,7 +564,9 @@ export async function newAddress(
       rawAddress = newEvmAddress(seed);
       break;
     case Assets.Dot:
-    case 'HubDot':
+    case Assets.HubDot:
+    case Assets.HubUsdc:
+    case Assets.HubUsdt:
       rawAddress = await newDotAddress(seed);
       break;
     case Assets.Btc:
@@ -585,7 +586,6 @@ export async function newAddress(
 export function chainFromAsset(asset: Asset): Chain {
   if (isSDKAsset(asset)) return assetConstants[asset].chain;
   else if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
-  else if (asset === 'HubDot') return 'Assethub';
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
@@ -990,8 +990,6 @@ export function parseAssetString(input: string): Asset {
 
   if (foundAsset) {
     return foundAsset as Asset;
-  } else if (input.toLowerCase() === 'hubdot'){
-    return 'HubDot';
   }
   throw new Error(`Unsupported asset: ${input}`);
 }

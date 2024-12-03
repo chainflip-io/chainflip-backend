@@ -249,7 +249,7 @@ pub fn evm_all_batch_builder<
 ) -> Result<EvmTransactionBuilder<all_batch::AllBatch>, AllBatchError> {
 	let mut fetch_only_params = vec![];
 	let mut fetch_deploy_params = vec![];
-	for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
+	for FetchAssetParams { deposit_fetch_id, asset, .. } in fetch_params {
 		if let Some(token_address) = token_address_fn(asset) {
 			match deposit_fetch_id {
 				EvmFetchId::Fetch(contract_address) => {

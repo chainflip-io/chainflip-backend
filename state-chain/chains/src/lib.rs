@@ -429,6 +429,7 @@ impl<C: Chain> TransactionMetadata<C> for () {
 pub struct FetchAssetParams<C: Chain> {
 	pub deposit_fetch_id: <C as Chain>::DepositFetchId,
 	pub asset: <C as Chain>::ChainAsset,
+	pub amount: <C as Chain>::ChainAmount,
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.

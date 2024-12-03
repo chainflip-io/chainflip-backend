@@ -68,7 +68,7 @@ mod test {
 	use super::*;
 	use crate::Runtime;
 	use cf_chains::dot::PolkadotAccountId;
-	use cf_primitives::chains::assets::dot;
+	use cf_primitives::chains::assets::hub;
 	use frame_support::sp_runtime::app_crypto::Ss58Codec;
 	use pallet_cf_environment::PolkadotVaultAccountId;
 
@@ -87,8 +87,8 @@ mod test {
 			assert_eq!(
 				"12AeXofJkQErqQuiJmJapqwS4KiAZXBhAYoj9HZ2sYo36mRg",
 				sp_runtime::AccountId32::new(
-					*<AddressDerivation as AddressDerivationApi<Polkadot>>::generate_address(
-						dot::Asset::Dot,
+					*<AddressDerivation as AddressDerivationApi<Assethub>>::generate_address(
+						hub::Asset::HubUsdc,
 						6259
 					)
 					.unwrap()
@@ -128,8 +128,8 @@ mod test {
 				//                 ---- -^-- ---- -^-- ---- -^-- ---- -^--      b"HALLO"
 				"1422Jc2BYRh5ENjxWJchoHPSC2Rd4jFs8PDWHqBJue4yskEt",
 				sp_runtime::AccountId32::new(
-					*<AddressDerivation as AddressDerivationApi<Polkadot>>::generate_address(
-						dot::Asset::Dot,
+					*<AddressDerivation as AddressDerivationApi<Assethub>>::generate_address(
+						hub::Asset::HubDot,
 						0x0004_0003_0002_0001
 					)
 					.unwrap()

@@ -692,3 +692,7 @@ pub enum AssetsCall {
 		value: PolkadotBalance,
 	},
 }
+
+#[cfg(test)]
+pub(crate) const TEST_RUNTIME_VERSION: RuntimeVersion =
+	RuntimeVersion { spec_version: 1003004, transaction_version: 15 };

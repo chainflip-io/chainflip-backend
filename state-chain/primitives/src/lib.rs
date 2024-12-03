@@ -182,6 +182,12 @@ pub const MAX_BASIS_POINTS: u16 = 10_000;
 
 pub const STABLE_ASSET: Asset = Asset::Usdc;
 
+/// This determines the asset ID used for USDC on Assethub
+pub const ASSETHUB_USDC_ASSET_ID: u32 = 1337;
+
+/// This determines the asset ID used for USDT on Assethub
+pub const ASSETHUB_USDT_ASSET_ID: u32 = 1984;
+
 /// Determines the default (genesis) maximum allowed reduction of authority set size in
 /// between two consecutive epochs.
 pub const DEFAULT_MAX_AUTHORITY_SET_CONTRACTION: Percent = Percent::from_percent(30);
