@@ -1153,7 +1153,10 @@ pub mod pallet {
 			block_height: TargetChainBlockNumber<T, I>,
 		) -> DispatchResult {
 			if T::EnsurePrewitnessed::ensure_origin(origin.clone()).is_ok() {
-				Self::add_prewitnessed_deposits(deposit_witnesses, block_height)?;
+				for deposit_witness in deposit_witnesses {
+					// TODO: emit event on error?
+					let _ = Self::process_channel_deposit_prewitness(deposit_witness, block_height);
+				}
 			} else {
 				T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -1786,47 +1789,41 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Err("Insufficient boost funds".into())
 	}
 
-	fn add_prewitnessed_deposits(
-		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+	fn process_channel_deposit_prewitness(
+		DepositWitness { deposit_address, asset, amount, deposit_details }: DepositWitness<
+			T::TargetChain,
+		>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) -> DispatchResult {
-		for DepositWitness { deposit_address, asset, amount, deposit_details } in deposit_witnesses
-		{
-			let DepositChannelDetails {
-				deposit_channel,
-				action,
-				boost_fee,
-				boost_status,
-				owner,
-				..
-			} = DepositChannelLookup::<T, I>::get(&deposit_address)
-				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+		let DepositChannelDetails {
+			deposit_channel, action, boost_fee, boost_status, owner, ..
+		} = DepositChannelLookup::<T, I>::get(&deposit_address)
+			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-			if let Some(new_boost_status) = Self::process_prewitness_deposit_inner(
-				amount,
-				asset,
-				deposit_details,
-				Some(deposit_address.clone()),
-				None, // source address is unknown
-				action,
-				&owner,
-				boost_fee,
-				boost_status,
-				Some(deposit_channel.channel_id),
+		if let Some(new_boost_status) = Self::process_prewitness_deposit_inner(
+			amount,
+			asset,
+			deposit_details,
+			Some(deposit_address.clone()),
+			None, // source address is unknown
+			action,
+			&owner,
+			boost_fee,
+			boost_status,
+			Some(deposit_channel.channel_id),
+			block_height,
+			DepositOrigin::deposit_channel(
+				deposit_address.clone(),
+				deposit_channel.channel_id,
 				block_height,
-				DepositOrigin::deposit_channel(
-					deposit_address.clone(),
-					deposit_channel.channel_id,
-					block_height,
-				),
-			) {
-				// Update boost status
-				DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
-					if let Some(details) = details {
-						details.boost_status = new_boost_status;
-					}
-				});
-			}
+			),
+		) {
+			// Update boost status
+			DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
+				if let Some(details) = details {
+					details.boost_status = new_boost_status;
+				}
+			});
 		}
 		Ok(())
 	}

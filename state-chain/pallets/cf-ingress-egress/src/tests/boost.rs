@@ -63,13 +63,13 @@ fn request_deposit_address_eth(account_id: u64, max_boost_fee: BasisPoints) -> (
 
 #[track_caller]
 fn prewitness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmount) -> u64 {
-	assert_ok!(Pallet::<Test, _>::add_prewitnessed_deposits(
-		vec![DepositWitness::<Ethereum> {
+	assert_ok!(IngressEgress::process_channel_deposit_prewitness(
+		DepositWitness::<Ethereum> {
 			deposit_address,
 			asset,
 			amount,
 			deposit_details: Default::default()
-		}],
+		},
 		0
 	),);
 
