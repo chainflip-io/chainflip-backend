@@ -532,7 +532,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			assert_ok!(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposits: vec![vault_swap_deposit_witness(Some(invalid_ccm))],
+					deposit: Box::new(vault_swap_deposit_witness(Some(invalid_ccm))),
 				}
 			)
 			.dispatch_bypass_filter(
@@ -577,7 +577,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposits: vec![vault_swap_deposit_witness(Some(ccm))],
+					deposit: Box::new(vault_swap_deposit_witness(Some(ccm))),
 				},
 			));
 			// Setting the current agg key will invalidate the CCM.
@@ -792,7 +792,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposits: vec![vault_swap_deposit_witness(Some(ccm))],
+					deposit: Box::new(vault_swap_deposit_witness(Some(ccm))),
 				}
 			));
 

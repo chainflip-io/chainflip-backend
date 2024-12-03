@@ -7,9 +7,7 @@ use cf_chains::{
 	evm::{DepositDetails, H256},
 	Arbitrum, CcmDepositMetadata,
 };
-use cf_primitives::{
-	chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount, Beneficiary, EpochIndex,
-};
+use cf_primitives::{chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount, EpochIndex};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use itertools::Itertools;
@@ -208,7 +206,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
 				block_height,
-				deposits: vec![deposit],
+				deposit: Box::new(deposit),
 			},
 		)
 	}

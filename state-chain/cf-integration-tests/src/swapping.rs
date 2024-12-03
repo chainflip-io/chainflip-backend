@@ -604,7 +604,7 @@ fn can_process_ccm_via_direct_deposit() {
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
 				block_height: 0,
-				deposits: vec![vault_swap_deposit_witness(deposit_amount, Asset::Usdc)],
+				deposit: Box::new(vault_swap_deposit_witness(deposit_amount, Asset::Usdc)),
 			},
 		));
 
@@ -645,7 +645,7 @@ fn failed_swaps_are_rolled_back() {
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
 				block_height: 0,
-				deposits: vec![vault_swap_deposit_witness(10_000 * DECIMALS, Asset::Flip)],
+				deposit: Box::new(vault_swap_deposit_witness(10_000 * DECIMALS, Asset::Flip)),
 			},
 		));
 
@@ -798,7 +798,7 @@ fn can_resign_failed_ccm() {
 			witness_call(RuntimeCall::EthereumIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposits: vec![vault_swap_deposit_witness(10_000_000_000_000, Asset::Usdc)],
+					deposit: Box::new(vault_swap_deposit_witness(10_000_000_000_000, Asset::Usdc)),
 				},
 			));
 

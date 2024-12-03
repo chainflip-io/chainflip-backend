@@ -61,6 +61,7 @@ use scale_info::{
 };
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
+	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	marker::PhantomData,
 	vec,
@@ -1418,18 +1419,14 @@ pub mod pallet {
 		pub fn vault_swap_request(
 			origin: OriginFor<T>,
 			block_height: TargetChainBlockNumber<T, I>,
-			deposits: Vec<VaultDepositWitness<T, I>>,
+			deposit: Box<VaultDepositWitness<T, I>>,
 		) -> DispatchResult {
 			if T::EnsureWitnessed::ensure_origin(origin.clone()).is_ok() {
-				for deposit in deposits {
-					Self::process_vault_swap_request_full_witness(block_height, deposit);
-				}
+				Self::process_vault_swap_request_full_witness(block_height, *deposit);
 			} else {
 				T::EnsurePrewitnessed::ensure_origin(origin)?;
 
-				for deposit in deposits {
-					Self::process_vault_swap_request_prewitness(block_height, deposit);
-				}
+				Self::process_vault_swap_request_prewitness(block_height, *deposit);
 			}
 
 			Ok(())

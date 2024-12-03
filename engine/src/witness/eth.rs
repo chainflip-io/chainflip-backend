@@ -257,7 +257,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
 				block_height,
-				deposits: vec![deposit],
+				deposit: Box::new(deposit),
 			},
 		)
 	}

@@ -47,7 +47,7 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::{bounded_vec, H160, U256};
+use sp_core::{bounded_vec, H160};
 use sp_runtime::{DispatchError, DispatchResult};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -1817,7 +1817,7 @@ fn submit_vault_swap_request(
 	IngressEgress::vault_swap_request(
 		RuntimeOrigin::root(),
 		0,
-		vec![VaultDepositWitness {
+		Box::new(VaultDepositWitness {
 			input_asset: input_asset.try_into().unwrap(),
 			deposit_address: Some(deposit_address),
 			channel_id: Some(0),
@@ -1832,7 +1832,7 @@ fn submit_vault_swap_request(
 			refund_params,
 			dca_params,
 			boost_fee,
-		}],
+		}),
 	)
 }
 

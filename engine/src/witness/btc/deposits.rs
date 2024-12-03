@@ -96,7 +96,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							process_call(
 								BtcIngressEgressCall::vault_swap_request {
 									block_height: header.index,
-									deposits: vec![deposit],
+									deposit: Box::new(deposit),
 								}
 								.into(),
 								epoch.index,

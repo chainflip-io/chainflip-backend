@@ -1,7 +1,6 @@
 use crate::evm::retry_rpc::EvmRetryRpcApi;
 use codec::Decode;
 use ethers::types::Bloom;
-use pallet_cf_ingress_egress::VaultDepositWitness;
 use sp_core::H256;
 use std::collections::HashMap;
 
