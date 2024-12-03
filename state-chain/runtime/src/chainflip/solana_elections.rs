@@ -565,8 +565,8 @@ impl
 			block_height,
 			VaultDepositWitness {
 				input_asset: swap_details.from,
-				deposit_address: todo!(),
-				channel_id: todo!(),
+				deposit_address: None,
+				channel_id: None,
 				deposit_amount: swap_details.deposit_amount,
 				deposit_details: (),
 				output_asset: swap_details.to,

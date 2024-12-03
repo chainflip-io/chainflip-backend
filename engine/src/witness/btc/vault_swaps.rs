@@ -170,8 +170,8 @@ pub fn try_extract_vault_swap_witness(
 		}),
 		// This is only to be checked in the pre-witnessed version
 		boost_fee: data.parameters.boost_fee.into(),
-		channel_id,
-		deposit_address: vault_address.script_pubkey(),
+		channel_id: Some(channel_id),
+		deposit_address: Some(vault_address.script_pubkey()),
 	})
 }
 
@@ -328,8 +328,8 @@ mod tests {
 					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval.into(),
 				}),
 				boost_fee: MOCK_SWAP_PARAMS.parameters.boost_fee.into(),
-				deposit_address: vault_deposit_address.script_pubkey(),
-				channel_id: CHANNEL_ID,
+				deposit_address: Some(vault_deposit_address.script_pubkey()),
+				channel_id: Some(CHANNEL_ID),
 			})
 		);
 	}

@@ -618,7 +618,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 				crate::Event::DepositFinalised {
 					deposit_address,
 					..
-				}) if deposit_address == expected_accepted_address
+				}) if deposit_address.as_ref() == Some(expected_accepted_address)
 			)),);
 		});
 }
@@ -848,14 +848,14 @@ fn deposits_below_minimum_are_rejected() {
 		let (channel_id, deposit_address) = request_address_and_deposit(LP_ACCOUNT, flip);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, ()>::DepositFinalised {
-				deposit_address,
+				deposit_address: Some(deposit_address),
 				asset: flip,
 				amount: default_deposit_amount,
 				block_height: Default::default(),
 				deposit_details: Default::default(),
 				ingress_fee: 0,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
-				channel_id,
+				channel_id: Some(channel_id),
 				origin_type: DepositOriginType::DepositChannel,
 			},
 		));
@@ -1812,8 +1812,8 @@ fn submit_vault_swap_request(
 		0,
 		vec![VaultDepositWitness {
 			input_asset: input_asset.try_into().unwrap(),
-			deposit_address,
-			channel_id: 0,
+			deposit_address: Some(deposit_address),
+			channel_id: Some(0),
 			deposit_amount,
 			deposit_details,
 			output_asset,

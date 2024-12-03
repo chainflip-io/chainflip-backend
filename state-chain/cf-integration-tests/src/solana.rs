@@ -456,8 +456,8 @@ fn vault_swap_deposit_witness(
 		refund_params: REFUND_PARAMS,
 		dca_params: None,
 		boost_fee: 0,
-		deposit_address: SolAddress([2u8; 32]),
-		channel_id: 0,
+		deposit_address: Some(SolAddress([2u8; 32])),
+		channel_id: Some(0),
 	}
 }
 

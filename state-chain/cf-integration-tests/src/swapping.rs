@@ -589,8 +589,8 @@ fn vault_swap_deposit_witness(
 		refund_params: ETH_REFUND_PARAMS,
 		dca_params: None,
 		boost_fee: 0,
-		deposit_address: H160::from([0x03; 20]),
-		channel_id: 0,
+		deposit_address: Some(H160::from([0x03; 20])),
+		channel_id: Some(0),
 	}
 }
 

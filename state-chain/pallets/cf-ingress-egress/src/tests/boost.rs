@@ -214,14 +214,14 @@ fn basic_passive_boosting() {
 			const POOL_2_CONTRIBUTION: AssetAmount = DEPOSIT_AMOUNT - POOL_1_CONTRIBUTION;
 
 			System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositBoosted {
-				deposit_address,
+				deposit_address: Some(deposit_address),
 				asset: ASSET,
 				amounts: BTreeMap::from_iter(vec![
 					(TIER_5_BPS, POOL_1_CONTRIBUTION),
 					(TIER_10_BPS, POOL_2_CONTRIBUTION),
 				]),
 				block_height: Default::default(),
-				channel_id,
+				channel_id: Some(channel_id),
 				prewitnessed_deposit_id,
 				deposit_details: Default::default(),
 				ingress_fee: INGRESS_FEE,
@@ -247,14 +247,14 @@ fn basic_passive_boosting() {
 			witness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 
 			System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositFinalised {
-				deposit_address,
+				deposit_address: Some(deposit_address),
 				asset: ASSET,
 				amount: DEPOSIT_AMOUNT,
 				block_height: Default::default(),
 				deposit_details: Default::default(),
 				ingress_fee: 0,
 				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
-				channel_id,
+				channel_id: Some(channel_id),
 				origin_type: DepositOriginType::DepositChannel,
 			}));
 
@@ -672,7 +672,7 @@ fn insufficient_funds_for_boost() {
 			prewitnessed_deposit_id: deposit_id,
 			asset: EthAsset::Eth,
 			amount_attempted: DEPOSIT_AMOUNT,
-			channel_id,
+			channel_id: Some(channel_id),
 		}));
 
 		// When the deposit is finalised, it is processed as normal:
@@ -1031,8 +1031,8 @@ mod vault_swaps {
 
 			let deposit = VaultDepositWitness {
 				input_asset: INPUT_ASSET.try_into().unwrap(),
-				deposit_address,
-				channel_id: CHANNEL_ID,
+				deposit_address: Some(deposit_address),
+				channel_id: Some(CHANNEL_ID),
 				deposit_amount: DEPOSIT_AMOUNT,
 				deposit_details: Default::default(),
 				output_asset: OUTPUT_ASSET,
@@ -1082,7 +1082,7 @@ mod vault_swaps {
 					Test,
 					RuntimeEvent::IngressEgress(Event::DepositBoosted {
 						prewitnessed_deposit_id: PREWITNESS_DEPOSIT_ID,
-						channel_id: CHANNEL_ID,
+						channel_id: Some(CHANNEL_ID),
 						action: DepositAction::Swap { .. },
 						..
 					})
@@ -1146,7 +1146,7 @@ mod vault_swaps {
 				assert_has_matching_event!(
 					Test,
 					RuntimeEvent::IngressEgress(Event::DepositFinalised {
-						channel_id: CHANNEL_ID,
+						channel_id: Some(CHANNEL_ID),
 						action: DepositAction::BoostersCredited {
 							prewitnessed_deposit_id: PREWITNESS_DEPOSIT_ID
 						},
