@@ -1336,7 +1336,7 @@ pub mod pallet {
 					pool.stop_boosting(booster.clone())
 				})?;
 
-			T::Balance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
+			T::Balance::credit_account(&booster, asset.into(), unlocked_amount.into());
 
 			Self::deposit_event(Event::StoppedBoosting {
 				booster_id: booster,
@@ -1831,14 +1831,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_address: Option<ForeignChainAddress>,
 		amount_after_fees: TargetChainAmount<T, I>,
 		origin: DepositOrigin<T, I>,
-	) -> Result<DepositAction<T::AccountId>, DispatchError> {
-		let action = match action {
+	) -> DepositAction<T::AccountId> {
+		match action {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
-				T::Balance::try_credit_account(
-					&lp_account,
-					asset.into(),
-					amount_after_fees.into(),
-				)?;
+				T::Balance::credit_account(&lp_account, asset.into(), amount_after_fees.into());
 				DepositAction::LiquidityProvision { lp_account }
 			},
 			ChannelAction::Swap {
@@ -1909,9 +1905,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 				}
 			},
-		};
-
-		Ok(action)
+		}
 	}
 
 	/// Completes a single deposit request.
@@ -2071,29 +2065,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 					let used_pool_tiers = used_pools.keys().cloned().collect();
 
-					if let Ok(action) = Self::perform_channel_action(
+					let action = Self::perform_channel_action(
 						action,
 						asset,
 						source_address,
 						amount_after_fees,
 						origin.clone(),
-					) {
-						Self::deposit_event(Event::DepositBoosted {
-							deposit_address,
-							asset,
-							amounts: used_pools,
-							block_height,
-							prewitnessed_deposit_id,
-							channel_id,
-							deposit_details: deposit_details.clone(),
-							ingress_fee,
-							boost_fee: boost_fee_amount,
-							action,
-							origin_type: origin.into(),
-						});
-					} else {
-						// TODO: emit error?
-					}
+					);
+
+					Self::deposit_event(Event::DepositBoosted {
+						deposit_address,
+						asset,
+						amounts: used_pools,
+						block_height,
+						prewitnessed_deposit_id,
+						channel_id,
+						deposit_details: deposit_details.clone(),
+						ingress_fee,
+						boost_fee: boost_fee_amount,
+						action,
+						origin_type: origin.into(),
+					});
 
 					return Some(BoostStatus::Boosted {
 						prewitnessed_deposit_id,
@@ -2309,16 +2301,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						for (booster_id, finalised_withdrawn_amount) in
 							pool.process_deposit_as_finalised(prewitnessed_deposit_id)
 						{
-							if let Err(err) = T::Balance::try_credit_account(
+							T::Balance::credit_account(
 								&booster_id,
 								asset.into(),
 								finalised_withdrawn_amount.into(),
-							) {
-								log_or_panic!(
-									"Failed to credit booster account {:?} after unlock of {finalised_withdrawn_amount:?} {asset:?}: {:?}",
-									booster_id, err
-								);
-							}
+							);
 						}
 					}
 				});
@@ -2353,29 +2340,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(())
 			} else {
 				// Processing as a non-boosted deposit:
-
-				if let Ok(action) = Self::perform_channel_action(
+				let action = Self::perform_channel_action(
 					action,
 					asset,
 					source_address,
 					amount_after_fees,
 					origin.clone(),
-				) {
-					Self::deposit_event(Event::DepositFinalised {
-						deposit_address,
-						asset,
-						amount: deposit_amount,
-						block_height,
-						deposit_details,
-						ingress_fee: fees_withheld,
-						action,
-						channel_id,
-						origin_type: origin.into(),
-					});
-					Ok(FullWitnessDepositOutcome::DepositActionPerformed)
-				} else {
-					Err(())
-				}
+				);
+
+				Self::deposit_event(Event::DepositFinalised {
+					deposit_address,
+					asset,
+					amount: deposit_amount,
+					block_height,
+					deposit_details,
+					ingress_fee: fees_withheld,
+					action,
+					channel_id,
+					origin_type: origin.into(),
+				});
+
+				Ok(FullWitnessDepositOutcome::DepositActionPerformed)
 			}
 		}
 	}

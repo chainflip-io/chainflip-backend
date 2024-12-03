@@ -374,7 +374,8 @@ fn withdraw_broker_fees() {
 			),
 			<Error<Test>>::NoFundsAvailable
 		);
-		credit_broker_account::<Test>(&BROKER, Asset::Eth, 200);
+
+		<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 200);
 		assert_ok!(Swapping::withdraw(
 			RuntimeOrigin::signed(BROKER),
 			Asset::Eth,

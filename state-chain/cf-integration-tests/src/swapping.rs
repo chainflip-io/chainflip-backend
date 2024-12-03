@@ -81,7 +81,7 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price
 
 fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 	let original_amount = pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset);
-	assert_ok!(AssetBalances::try_credit_account(account_id, asset, amount));
+	AssetBalances::credit_account(account_id, asset, amount);
 	assert_eq!(
 		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset),
 		original_amount + amount

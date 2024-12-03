@@ -121,17 +121,17 @@ fn setup() {
 	);
 
 	for asset in EthAsset::all() {
-		assert_ok!(<Test as crate::Config>::Balance::try_credit_account(
+		<Test as crate::Config>::Balance::credit_account(
 			&BOOSTER_1,
 			asset.into(),
 			INIT_BOOSTER_ETH_BALANCE,
-		));
+		);
 
-		assert_ok!(<Test as crate::Config>::Balance::try_credit_account(
+		<Test as crate::Config>::Balance::credit_account(
 			&BOOSTER_2,
 			asset.into(),
 			INIT_BOOSTER_ETH_BALANCE,
-		));
+		);
 	}
 
 	assert_eq!(get_lp_eth_balance(&BOOSTER_1), INIT_BOOSTER_ETH_BALANCE);

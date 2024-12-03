@@ -364,7 +364,7 @@ impl<T: Config> Pallet<T> {
 					T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
 
 					// Credit the asset to the destination account.
-					T::BalanceApi::try_credit_account(&destination_account, asset, amount)?;
+					T::BalanceApi::credit_account(&destination_account, asset, amount);
 
 					Self::deposit_event(Event::AssetTransferred {
 						from: account_id,

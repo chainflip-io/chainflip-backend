@@ -38,7 +38,7 @@ mod benchmarks {
 			AccountRole::LiquidityProvider,
 		)
 		.unwrap();
-		assert_ok!(T::BalanceApi::try_credit_account(&caller, Asset::Eth, 1_000_000,));
+		T::BalanceApi::credit_account(&caller, Asset::Eth, 1_000_000);
 
 		#[extrinsic_call]
 		withdraw_asset(

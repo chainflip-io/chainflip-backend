@@ -1004,6 +1004,8 @@ pub trait SwapLimitsProvider {
 pub trait BalanceApi {
 	type AccountId;
 
+	fn credit_account(who: &Self::AccountId, asset: Asset, amount: AssetAmount);
+
 	/// Attempt to credit the account with the given asset and amount.
 	fn try_credit_account(
 		who: &Self::AccountId,

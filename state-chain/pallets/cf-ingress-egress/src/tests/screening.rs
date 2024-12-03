@@ -79,8 +79,7 @@ mod helpers {
 			vec![BoostPoolId { asset: btc::Asset::Btc, tier: 10 }],
 		));
 
-		<Test as crate::Config>::Balance::try_credit_account(&ALICE, btc::Asset::Btc.into(), 1000)
-			.unwrap();
+		<Test as crate::Config>::Balance::credit_account(&ALICE, btc::Asset::Btc.into(), 1000);
 
 		let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
 			btc::Asset::Btc,

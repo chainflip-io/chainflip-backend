@@ -1472,11 +1472,11 @@ impl<T: Config> Pallet<T> {
 				}?;
 
 				let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
-				T::LpBalance::try_credit_account(
+				T::LpBalance::credit_account(
 					lp,
 					asset_pair.assets()[side.to_sold_pair()],
 					withdrawn_amount,
-				)?;
+				);
 
 				(IncreaseOrDecrease::Decrease(withdrawn_amount), position_info, collected)
 			},
@@ -1584,12 +1584,14 @@ impl<T: Config> Pallet<T> {
 
 				let assets_withdrawn = asset_pair.assets().zip(assets_withdrawn).try_map(
 					|(asset, amount_withdrawn)| {
-						AssetAmount::try_from(amount_withdrawn).map_err(Into::into).and_then(
-							|amount_withdrawn| {
-								T::LpBalance::try_credit_account(lp, asset, amount_withdrawn)
-									.map(|()| amount_withdrawn)
-							},
-						)
+						AssetAmount::try_from(amount_withdrawn)
+							.map_err(Into::<DispatchError>::into)
+							// Use map?
+							.and_then(|amount_withdrawn| {
+								T::LpBalance::credit_account(lp, asset, amount_withdrawn);
+
+								Ok(amount_withdrawn)
+							})
 					},
 				)?;
 

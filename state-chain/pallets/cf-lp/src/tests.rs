@@ -320,7 +320,7 @@ fn account_registration_and_deregistration() {
 			EncodedAddress::Eth([0x01; 20])
 		));
 
-		MockBalanceApi::try_credit_account(&LP_ACCOUNT_ID, Asset::Eth, DEPOSIT_AMOUNT).unwrap();
+		MockBalanceApi::credit_account(&LP_ACCOUNT_ID, Asset::Eth, DEPOSIT_AMOUNT);
 
 		assert_noop!(
 			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
