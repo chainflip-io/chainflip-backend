@@ -994,7 +994,7 @@ fn test_create_boost_pools() {
 
 mod vault_swaps {
 
-	use crate::BoostedVaultTxs;
+	use crate::BoostedVaultTransactions;
 
 	use super::*;
 
@@ -1027,7 +1027,7 @@ mod vault_swaps {
 			let tx_id = [9u8; 32].into();
 
 			// Initially tx is not recorded as boosted
-			assert!(!BoostedVaultTxs::<Test, ()>::contains_key(tx_id));
+			assert!(!BoostedVaultTransactions::<Test, ()>::contains_key(tx_id));
 
 			let deposit = VaultDepositWitness {
 				input_asset: INPUT_ASSET.try_into().unwrap(),
@@ -1089,7 +1089,7 @@ mod vault_swaps {
 				);
 
 				// Now the tx is recorded as boosted
-				assert!(BoostedVaultTxs::<Test, ()>::contains_key(tx_id));
+				assert!(BoostedVaultTransactions::<Test, ()>::contains_key(tx_id));
 			}
 
 			// Prewitnessing the same deposit (e.g. due to a reorg) should not result in a second
@@ -1155,7 +1155,7 @@ mod vault_swaps {
 				);
 
 				// Boost record for tx is removed:
-				assert!(!BoostedVaultTxs::<Test, ()>::contains_key(tx_id));
+				assert!(!BoostedVaultTransactions::<Test, ()>::contains_key(tx_id));
 			}
 		});
 	}

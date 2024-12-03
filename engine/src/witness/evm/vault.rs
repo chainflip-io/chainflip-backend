@@ -1,6 +1,7 @@
 use crate::evm::retry_rpc::EvmRetryRpcApi;
 use codec::Decode;
 use ethers::types::Bloom;
+use pallet_cf_ingress_egress::VaultDepositWitness;
 use sp_core::H256;
 use std::collections::HashMap;
 
@@ -224,6 +225,35 @@ where
 		_ => None,
 	})
 }
+
+macro_rules! vault_deposit_witness {
+	($source_asset: expr, $deposit_amount: expr, $dest_asset: expr, $dest_address: expr, $metadata: expr, $tx_id: expr, $params: expr) => {
+		VaultDepositWitness {
+			input_asset: $source_asset.try_into().expect("invalid asset for chain"),
+			output_asset: $dest_asset,
+			deposit_amount: $deposit_amount,
+			destination_address: $dest_address,
+			deposit_metadata: $metadata,
+			tx_id: $tx_id,
+			deposit_details: DepositDetails { tx_hashes: Some(vec![$tx_id]) },
+			broker_fee: $params.broker_fee,
+			affiliate_fees: $params
+				.affiliate_fees
+				.into_iter()
+				.map(Into::into)
+				.collect_vec()
+				.try_into()
+				.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
+			boost_fee: $params.boost_fee.into(),
+			dca_params: $params.dca_params,
+			refund_params: $params.refund_params,
+			channel_id: None,
+			deposit_address: None,
+		}
+	}
+}
+
+pub(crate) use vault_deposit_witness;
 
 pub trait IngressCallBuilder {
 	type Chain: cf_chains::Chain<ChainAccount = EthereumAddress>;

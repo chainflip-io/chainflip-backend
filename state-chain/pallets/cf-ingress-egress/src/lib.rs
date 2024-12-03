@@ -155,7 +155,7 @@ mod deposit_origin {
 			deposit_block_height: u64,
 		},
 		Vault {
-			tx_id: TransactionInIdForAnyChain,
+			tx_id: TransactionInIdFor<T, I>,
 		},
 	}
 
@@ -173,7 +173,7 @@ mod deposit_origin {
 		}
 
 		pub(super) fn vault(tx_id: TransactionInIdFor<T, I>) -> Self {
-			DepositOrigin::Vault { tx_id: tx_id.into_transaction_in_id_for_any_chain() }
+			DepositOrigin::Vault { tx_id }
 		}
 	}
 
@@ -189,7 +189,8 @@ mod deposit_origin {
 	impl<T: Config<I>, I: 'static> From<DepositOrigin<T, I>> for SwapOrigin {
 		fn from(origin: DepositOrigin<T, I>) -> SwapOrigin {
 			match origin {
-				DepositOrigin::Vault { tx_id } => SwapOrigin::Vault { tx_id },
+				DepositOrigin::Vault { tx_id } =>
+					SwapOrigin::Vault { tx_id: tx_id.into_transaction_in_id_for_any_chain() },
 				DepositOrigin::DepositChannel {
 					deposit_address,
 					channel_id,
@@ -691,7 +692,7 @@ pub mod pallet {
 
 	/// Stores transaction ids that have been boosted but have not yet been finalised.
 	#[pallet::storage]
-	pub(crate) type BoostedVaultTxs<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub(crate) type BoostedVaultTransactions<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Identity,
 		TransactionInIdFor<T, I>,
@@ -2205,7 +2206,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 		};
 
-		let boost_status = BoostedVaultTxs::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
+		let boost_status =
+			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
 
 		let origin = DepositOrigin::vault(tx_id.clone());
 
@@ -2223,7 +2225,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			block_height,
 			origin,
 		) {
-			BoostedVaultTxs::<T, I>::insert(&tx_id, new_boost_status);
+			BoostedVaultTransactions::<T, I>::insert(&tx_id, new_boost_status);
 		}
 	}
 
@@ -2258,6 +2260,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		if let Some(tx_id) = deposit_details.deposit_id() {
+			// Only check if the transaction is tainted if we haven't already boosted it,
+			// since by boosting the protocol is committing to accept the deposit.
 			if TaintedTransactions::<T, I>::take(broker, &tx_id).is_some() &&
 				!matches!(boost_status, BoostStatus::Boosted { .. })
 			{
@@ -2428,7 +2432,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee: _,
 		}: VaultDepositWitness<T, I>,
 	) {
-		let boost_status = BoostedVaultTxs::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
+		let boost_status =
+			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
 
 		let destination_address_internal =
 			match T::AddressConverter::decode_and_validate_address_for_asset(
@@ -2530,7 +2535,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_origin,
 			) {
 			// This allows the channel to be boosted again:
-			BoostedVaultTxs::<T, I>::remove(&tx_id);
+			BoostedVaultTransactions::<T, I>::remove(&tx_id);
 		}
 	}
 

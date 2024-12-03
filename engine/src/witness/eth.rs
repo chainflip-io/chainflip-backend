@@ -31,7 +31,10 @@ use crate::{
 	},
 };
 
-use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
+use super::{
+	common::epoch_source::EpochSourceBuilder,
+	evm::{source::EvmSource, vault::vault_deposit_witness},
+};
 use crate::witness::common::chain_source::extension::ChainSourceExt;
 
 use anyhow::{Context, Result};
@@ -242,32 +245,19 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		tx_id: H256,
 		vault_swap_parameters: VaultSwapParameters,
 	) -> state_chain_runtime::RuntimeCall {
+		let deposit = vault_deposit_witness!(
+			source_asset,
+			deposit_amount,
+			destination_asset,
+			destination_address,
+			deposit_metadata,
+			tx_id,
+			vault_swap_parameters
+		);
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
 				block_height,
-				deposits: vec![ VaultDepositWitness {
-					input_asset: source_asset.try_into().expect("invalid asset for chain"),
-					output_asset: destination_asset,
-					deposit_amount,
-					destination_address,
-					deposit_metadata,
-					tx_id,
-					deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
-					broker_fee: vault_swap_parameters.broker_fee,
-					affiliate_fees: vault_swap_parameters
-						.affiliate_fees
-						.into_iter()
-						.map(Into::into)
-						.collect_vec()
-						.try_into()
-						.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
-					boost_fee: vault_swap_parameters.boost_fee.into(),
-					dca_params: vault_swap_parameters.dca_params,
-					refund_params: vault_swap_parameters.refund_params,
-					channel_id: None,
-					deposit_address: None,
-				}
-				],
+				deposits: vec![deposit],
 			},
 		)
 	}
