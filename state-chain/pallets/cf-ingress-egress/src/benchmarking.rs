@@ -49,7 +49,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn process_single_deposit() {
+	fn process_channel_deposit_full_witness() {
 		const CHANNEL_ID: u64 = 1;
 
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount =
@@ -82,7 +82,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T, I>::process_single_deposit(
+			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness(
 				deposit_address,
 				source_asset,
 				deposit_amount,
@@ -478,7 +478,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T, I>::process_single_deposit(
+			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness(
 				deposit_address,
 				asset,
 				1_000u32.into(),
@@ -544,7 +544,7 @@ mod benchmarks {
 			_finalise_ingress::<Test, ()>(100, true);
 		});
 		new_test_ext().execute_with(|| {
-			_process_single_deposit::<Test, ()>(true);
+			_process_channel_deposit_full_witness::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
 			_disable_asset_egress::<Test, ()>(true);

@@ -78,14 +78,14 @@ fn prewitness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmoun
 
 #[track_caller]
 fn witness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmount) {
-	assert_ok!(Pallet::<Test, _>::process_deposit_witnesses(
-		vec![DepositWitness::<Ethereum> {
+	assert_ok!(Pallet::<Test, _>::process_channel_deposit_full_witness(
+		&DepositWitness::<Ethereum> {
 			deposit_address,
 			asset,
 			amount,
-			deposit_details: Default::default()
-		}],
-		Default::default()
+			deposit_details: Default::default(),
+		},
+		Default::default(),
 	));
 }
 

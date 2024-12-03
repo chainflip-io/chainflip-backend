@@ -55,11 +55,13 @@ mod helpers {
 		)
 		.unwrap();
 		let address: <Bitcoin as Chain>::ChainAccount = address.try_into().unwrap();
-		assert_ok!(IngressEgress::process_single_deposit(
-			address.clone(),
-			asset,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			&DepositWitness {
+				deposit_address: address.clone(),
+				asset,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details
+			},
 			Default::default()
 		));
 		(id, address)
@@ -122,11 +124,13 @@ fn process_tainted_transaction_and_expect_refund() {
 			tx_in_id,
 		));
 
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			btc::Asset::Btc,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			&DepositWitness {
+				deposit_address: address.clone(),
+				asset: btc::Asset::Btc,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details
+			},
 			Default::default()
 		));
 
@@ -171,11 +175,13 @@ fn finalize_boosted_tx_if_tainted_after_prewitness() {
 		// It's possible to report the tx, but reporting will have no effect.
 		assert_ok!(IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,),);
 
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			btc::Asset::Btc,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			&DepositWitness {
+				deposit_address: address.clone(),
+				asset: btc::Asset::Btc,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details
+			},
 			Default::default()
 		));
 
@@ -215,11 +221,13 @@ fn reject_tx_if_tainted_before_prewitness() {
 			10,
 		);
 
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			btc::Asset::Btc,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			&DepositWitness {
+				deposit_address: address.clone(),
+				asset: btc::Asset::Btc,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details
+			},
 			Default::default()
 		));
 
@@ -389,16 +397,16 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 			_ => unreachable!(),
 		};
 
-		let deposit_witnesses = vec![DepositWitness {
+		let deposit_witness = DepositWitness {
 			deposit_address,
 			asset: btc::Asset::Btc,
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			deposit_details,
-		}];
+		};
 
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(), 10,));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(vec![deposit_witness.clone()], 10,));
 		assert_ok!(IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,));
-		assert_ok!(IngressEgress::process_deposit_witnesses(deposit_witnesses, 10,));
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness(&deposit_witness, 10));
 
 		assert_has_matching_event!(
 			Test,

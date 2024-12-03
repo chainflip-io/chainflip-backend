@@ -31,7 +31,7 @@ use cf_chains::{
 	CcmFailReason, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
 	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain,
-	RejectCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
+	RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -1156,7 +1156,16 @@ pub mod pallet {
 				Self::add_prewitnessed_deposits(deposit_witnesses, block_height)?;
 			} else {
 				T::EnsureWitnessed::ensure_origin(origin)?;
-				Self::process_deposit_witnesses(deposit_witnesses, block_height)?;
+
+				for deposit_witness in deposit_witnesses {
+					Self::process_channel_deposit_full_witness(&deposit_witness, block_height)
+						.unwrap_or_else(|e| {
+							Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
+								reason: e,
+								deposit_witness,
+							});
+						})
+				}
 			}
 			Ok(())
 		}
@@ -1439,18 +1448,16 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 		block_number: Self::BlockNumber,
 		details: Self::DepositDetails,
 	) {
-		Self::process_single_deposit(channel.clone(), asset, amount, details.clone(), block_number)
-			.unwrap_or_else(|e| {
+		let deposit_witness =
+			DepositWitness { deposit_address: channel, asset, amount, deposit_details: details };
+		Self::process_channel_deposit_full_witness(&deposit_witness, block_number).unwrap_or_else(
+			|e| {
 				Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
 					reason: e,
-					deposit_witness: DepositWitness {
-						deposit_address: channel,
-						asset,
-						amount,
-						deposit_details: details,
-					},
+					deposit_witness,
 				});
-			});
+			},
+		);
 	}
 
 	fn on_ingress_reverted(_channel: Self::Account, _asset: Self::Asset, _amount: Self::Amount) {}
@@ -1716,34 +1723,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn process_deposit_witnesses(
-		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
-		block_height: TargetChainBlockNumber<T, I>,
-	) -> DispatchResult {
-		for ref deposit_witness @ DepositWitness {
-			ref deposit_address,
-			asset,
-			amount,
-			ref deposit_details,
-		} in deposit_witnesses
-		{
-			Self::process_single_deposit(
-				deposit_address.clone(),
-				asset,
-				amount,
-				deposit_details.clone(),
-				block_height,
-			)
-			.unwrap_or_else(|e| {
-				Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
-					reason: e,
-					deposit_witness: deposit_witness.clone(),
-				});
-			})
-		}
-		Ok(())
-	}
-
 	/// Returns a list of contributions from the used pools and the total boost fee.
 	#[transactional]
 	fn try_boosting(
@@ -1943,18 +1922,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Completes a single deposit request.
 	#[transactional]
-	fn process_single_deposit(
-		deposit_address: TargetChainAccount<T, I>,
-		asset: TargetChainAsset<T, I>,
-		deposit_amount: TargetChainAmount<T, I>,
-		deposit_details: <T::TargetChain as Chain>::DepositDetails,
+	fn process_channel_deposit_full_witness(
+		DepositWitness { deposit_address, asset, amount, deposit_details }: &DepositWitness<
+			T::TargetChain,
+		>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) -> DispatchResult {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
 		ensure!(
-			deposit_channel_details.deposit_channel.asset == asset,
+			deposit_channel_details.deposit_channel.asset == *asset,
 			Error::<T, I>::AssetMismatch
 		);
 
@@ -1972,9 +1950,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Ok(FullWitnessDepositOutcome::BoostFinalised) =
 			Self::process_full_witness_deposit_inner(
 				Some(deposit_address.clone()),
-				asset,
-				deposit_amount,
-				deposit_details,
+				*asset,
+				*amount,
+				deposit_details.clone(),
 				None, // source address is unknown
 				&deposit_channel_details.owner,
 				deposit_channel_details.boost_status,
@@ -2129,16 +2107,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						amount,
 					});
 				},
-				Err(err) => {
+				Err(_) => {
 					Self::deposit_event(Event::InsufficientBoostLiquidity {
 						prewitnessed_deposit_id,
 						asset,
 						amount_attempted: amount,
 						channel_id,
 					});
-					log::debug!(
-						"Deposit (id: {prewitnessed_deposit_id}) of {amount:?} {asset:?} and boost fee {boost_fee} could not be boosted: {err:?}"
-					);
 				},
 			}
 		}
@@ -2392,7 +2367,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount_after_fees,
 					origin.clone(),
 				) {
-					// TODO: this needs to include deposit type (vault/channel)
 					Self::deposit_event(Event::DepositFinalised {
 						deposit_address,
 						asset,
@@ -2534,7 +2508,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				block_height,
 				deposit_origin,
 			) {
-			// This allows the channel to be boosted again:
+			// Clean up a record that's no longer needed:
 			BoostedVaultTransactions::<T, I>::remove(&tx_id);
 		}
 	}

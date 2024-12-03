@@ -33,7 +33,7 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_ingress_egress.
 pub trait WeightInfo {
 	fn disable_asset_egress() -> Weight;
-	fn process_single_deposit() -> Weight;
+	fn process_channel_deposit_full_witness() -> Weight;
 	fn finalise_ingress(a: u32, ) -> Weight;
 	fn vault_transfer_failed() -> Weight;
 	fn ccm_broadcast_failed() -> Weight;
@@ -75,7 +75,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
 	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
 	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn process_single_deposit() -> Weight {
+	fn process_channel_deposit_full_witness() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `624`
 		//  Estimated: `4089`
@@ -325,7 +325,7 @@ impl WeightInfo for () {
 	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
 	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
 	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn process_single_deposit() -> Weight {
+	fn process_channel_deposit_full_witness() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `624`
 		//  Estimated: `4089`
