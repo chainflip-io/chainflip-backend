@@ -1,7 +1,7 @@
 use crate::{
 	ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
 };
-use cf_chains::{arb::ArbitrumTrackedData, btc::BitcoinFeeInfo};
+use cf_chains::{arb::ArbitrumTrackedData, btc::BitcoinFeeInfo, instances::AssethubInstance};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_runtime::FixedU64;
@@ -58,6 +58,15 @@ impl WitnessDataExtraction for RuntimeCall {
 				);
 				Some(tracked_data.encode())
 			},
+			RuntimeCall::AssethubChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				AssethubInstance,
+			>::update_chain_state {
+				ref mut new_chain_state,
+			}) => {
+				let fee_info = mem::take(&mut new_chain_state.tracked_data.median_tip);
+				Some(fee_info.encode())
+			},
 			_ => None,
 		}
 	}
@@ -101,9 +110,19 @@ impl WitnessDataExtraction for RuntimeCall {
 				if let Some(tracked_data) = arb_select_median_base_and_multiplier(data) {
 					new_chain_state.tracked_data = tracked_data;
 				},
+			RuntimeCall::AssethubChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				AssethubInstance,
+			>::update_chain_state {
+				new_chain_state,
+			}) => {
+				if let Some(median) = decode_and_select(data, select_median) {
+					new_chain_state.tracked_data.median_tip = median;
+				};
+			},
 			_ => {
 				log::warn!("No witness data injection for call {:?}", self);
-			},
+			}
 		}
 	}
 }

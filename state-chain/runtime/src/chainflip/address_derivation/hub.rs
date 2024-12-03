@@ -70,7 +70,7 @@ mod test {
 	use cf_chains::dot::PolkadotAccountId;
 	use cf_primitives::chains::assets::hub;
 	use frame_support::sp_runtime::app_crypto::Ss58Codec;
-	use pallet_cf_environment::PolkadotVaultAccountId;
+	use pallet_cf_environment::AssethubVaultAccountId;
 
 	#[test]
 	fn single_layer() {
@@ -80,7 +80,7 @@ mod test {
 					"15uPkKV7SsNXxw5VCu3LgnuaR5uSZ4QMyzxnLfDFE9J5nni9",
 				)
 				.unwrap();
-			PolkadotVaultAccountId::<Runtime>::put(PolkadotAccountId::from_aliased(
+			AssethubVaultAccountId::<Runtime>::put(PolkadotAccountId::from_aliased(
 				*account_id.as_ref(),
 			));
 
@@ -106,7 +106,7 @@ mod test {
 				"15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
 			)
 			.unwrap();
-			PolkadotVaultAccountId::<Runtime>::put(PolkadotAccountId::from_aliased(
+			AssethubVaultAccountId::<Runtime>::put(PolkadotAccountId::from_aliased(
 				*alice.as_ref(),
 			));
 
