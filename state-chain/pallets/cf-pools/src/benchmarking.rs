@@ -61,8 +61,8 @@ mod benchmarks {
 			0,
 			price_at_tick(0).unwrap()
 		));
-		assert_ok!(T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000));
-		assert_ok!(T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 
 		#[extrinsic_call]
 		update_range_order(

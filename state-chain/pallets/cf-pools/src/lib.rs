@@ -1586,11 +1586,8 @@ impl<T: Config> Pallet<T> {
 					|(asset, amount_withdrawn)| {
 						AssetAmount::try_from(amount_withdrawn)
 							.map_err(Into::<DispatchError>::into)
-							// Use map?
-							.and_then(|amount_withdrawn| {
+							.inspect(|&amount_withdrawn| {
 								T::LpBalance::credit_account(lp, asset, amount_withdrawn);
-
-								Ok(amount_withdrawn)
 							})
 					},
 				)?;

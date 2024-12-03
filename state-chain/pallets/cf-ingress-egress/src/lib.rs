@@ -1916,7 +1916,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) -> DispatchResult {
-		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
+		let deposit_channel_details = DepositChannelLookup::<T, I>::get(deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
 		ensure!(
@@ -1950,7 +1950,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				DepositOrigin::deposit_channel(deposit_address.clone(), channel_id, block_height),
 			) {
 			// This allows the channel to be boosted again:
-			DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
+			DepositChannelLookup::<T, I>::mutate(deposit_address, |details| {
 				if let Some(details) = details {
 					details.boost_status = BoostStatus::NotBoosted;
 				}
@@ -2254,9 +2254,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return Err(());
 			}
 		}
-
-		// Vault deposits don't need to be fetched:
-		if !matches!(origin, DepositOrigin::Vault { .. }) {}
 
 		match &origin {
 			DepositOrigin::DepositChannel { deposit_address, channel_id, .. } => {

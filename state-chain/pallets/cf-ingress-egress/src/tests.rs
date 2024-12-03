@@ -245,7 +245,7 @@ fn request_address_and_deposit(
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::process_channel_deposit_full_witness(
 		&DepositWitness {
-			deposit_address: address.clone(),
+			deposit_address: address,
 			asset,
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			deposit_details: Default::default()

@@ -83,10 +83,12 @@ mod benchmarks {
 		#[block]
 		{
 			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness(
-				deposit_address,
-				source_asset,
-				deposit_amount,
-				BenchmarkValue::benchmark_value(),
+				&DepositWitness {
+					deposit_address,
+					asset: source_asset,
+					amount: deposit_amount,
+					deposit_details: BenchmarkValue::benchmark_value(),
+				},
 				BenchmarkValue::benchmark_value()
 			));
 		}
@@ -236,15 +238,15 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		assert_ok!(Pallet::<T, I>::add_prewitnessed_deposits(
-			vec![DepositWitness::<T::TargetChain> {
+		assert_ok!(Pallet::<T, I>::process_channel_deposit_prewitness(
+			DepositWitness::<T::TargetChain> {
 				deposit_address: deposit_address.clone(),
 				asset,
 				amount: TargetChainAmount::<T, I>::from(1000u32),
 				deposit_details: BenchmarkValue::benchmark_value()
-			}],
+			},
 			BenchmarkValue::benchmark_value()
-		),);
+		));
 
 		deposit_address
 	}
@@ -304,7 +306,7 @@ mod benchmarks {
 		};
 		let call = Call::<T, I>::vault_swap_request {
 			block_height: 0u32.into(),
-			deposits: vec![VaultDepositWitness {
+			deposit: Box::new(VaultDepositWitness {
 				input_asset: BenchmarkValue::benchmark_value(),
 				output_asset: Asset::Eth,
 				deposit_amount: 1_000u32.into(),
@@ -321,9 +323,9 @@ mod benchmarks {
 				},
 				dca_params: None,
 				boost_fee: 0,
-				channel_id: 0,
-				deposit_address: BenchmarkValue::benchmark_value(),
-			}],
+				channel_id: None,
+				deposit_address: None,
+			}),
 		};
 
 		#[block]
@@ -410,13 +412,13 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T, I>::add_prewitnessed_deposits(
-				vec![DepositWitness::<T::TargetChain> {
+			assert_ok!(Pallet::<T, I>::process_channel_deposit_prewitness(
+				DepositWitness::<T::TargetChain> {
 					deposit_address,
 					asset,
 					amount: TargetChainAmount::<T, I>::from(1000u32),
 					deposit_details: BenchmarkValue::benchmark_value()
-				}],
+				},
 				BenchmarkValue::benchmark_value()
 			),);
 		}
@@ -475,10 +477,12 @@ mod benchmarks {
 		#[block]
 		{
 			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness(
-				deposit_address,
-				asset,
-				1_000u32.into(),
-				BenchmarkValue::benchmark_value(),
+				&DepositWitness {
+					deposit_address,
+					asset,
+					amount: 1_000u32.into(),
+					deposit_details: BenchmarkValue::benchmark_value(),
+				},
 				BenchmarkValue::benchmark_value()
 			));
 		}
