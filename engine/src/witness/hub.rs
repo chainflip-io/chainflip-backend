@@ -45,21 +45,40 @@ use super::common::{
 };
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
-// subxt metadata --pallets Proxy,Balances,TransactionPayment,System --url
+// subxt metadata --pallets Proxy,Balances,TransactionPayment,System,Assets --url
 // wss://asset-hub-polkadot-rpc.dwellir.com:443 > metadata.assethub.scale
 #[subxt::subxt(runtime_metadata_path = "metadata.assethub.scale")]
 pub mod assethub {}
 
+pub type HubAssetId = u32;
+
 #[derive(Debug, Clone)]
 pub enum EventWrapper {
-	ProxyAdded { delegator: AccountId32, delegatee: AccountId32 },
-	Transfer { to: AccountId32, from: AccountId32, amount: PolkadotBalance },
-	TransactionFeePaid { actual_fee: PolkadotBalance, tip: PolkadotBalance },
+	ProxyAdded {
+		delegator: AccountId32,
+		delegatee: AccountId32,
+	},
+	BalancesTransfer {
+		to: AccountId32,
+		from: AccountId32,
+		amount: PolkadotBalance,
+	},
+	AssetsTransfer {
+		asset_id: HubAssetId,
+		to: AccountId32,
+		from: AccountId32,
+		amount: PolkadotBalance,
+	},
+	TransactionFeePaid {
+		actual_fee: PolkadotBalance,
+		tip: PolkadotBalance,
+	},
 	ExtrinsicSuccess,
 }
 
 use assethub::{
-	balances::events::Transfer, proxy::events::ProxyAdded, system::events::ExtrinsicSuccess,
+	assets::events::Transferred as AssetsTransferred, balances::events::Transfer,
+	proxy::events::ProxyAdded, system::events::ExtrinsicSuccess,
 	transaction_payment::events::TransactionFeePaid,
 };
 
@@ -76,7 +95,7 @@ pub fn filter_map_events(
 			(Transfer::PALLET, Transfer::EVENT) => {
 				let Transfer { to, amount, from } =
 					event_details.as_event::<Transfer>().unwrap().unwrap();
-				Some(EventWrapper::Transfer { to, amount, from })
+				Some(EventWrapper::BalancesTransfer { to, amount, from })
 			},
 			(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) => {
 				let TransactionFeePaid { actual_fee, tip, .. } =
@@ -87,6 +106,11 @@ pub fn filter_map_events(
 				let ExtrinsicSuccess { .. } =
 					event_details.as_event::<ExtrinsicSuccess>().unwrap().unwrap();
 				Some(EventWrapper::ExtrinsicSuccess)
+			},
+			(AssetsTransferred::PALLET, AssetsTransferred::EVENT) => {
+				let AssetsTransferred { asset_id, from, to, amount } =
+					event_details.as_event::<AssetsTransferred>().unwrap().unwrap();
+				Some(EventWrapper::AssetsTransfer { asset_id, to, amount, from })
 			},
 			_ => None,
 		}

@@ -1,4 +1,6 @@
-use cf_primitives::{EpochIndex, PolkadotBlockNumber};
+use cf_primitives::{
+	EpochIndex, PolkadotBlockNumber, ASSETHUB_USDC_ASSET_ID, ASSETHUB_USDT_ASSET_ID,
+};
 use futures_core::Future;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use state_chain_runtime::AssethubInstance;
@@ -86,7 +88,11 @@ fn address_and_details_to_addresses(
 	address_and_details
 		.into_iter()
 		.map(|deposit_channel_details| {
-			assert_eq!(deposit_channel_details.deposit_channel.asset, Asset::HubDot);
+			assert!(
+				deposit_channel_details.deposit_channel.asset == Asset::HubDot ||
+					deposit_channel_details.deposit_channel.asset == Asset::HubUsdc ||
+					deposit_channel_details.deposit_channel.asset == Asset::HubUsdt
+			);
 			deposit_channel_details.deposit_channel.address
 		})
 		.collect()
@@ -101,16 +107,39 @@ fn deposit_witnesses(
 	let mut deposit_witnesses = vec![];
 	for (phase, wrapped_event) in events {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
-			if let EventWrapper::Transfer { to, amount, from: _ } = wrapped_event {
-				let deposit_address = PolkadotAccountId::from_aliased(to.0);
-				if monitored_addresses.contains(&deposit_address) {
-					deposit_witnesses.push(DepositWitness {
-						deposit_address,
-						asset: Asset::HubDot,
-						amount: *amount,
-						deposit_details: *extrinsic_index,
-					});
-				}
+			match wrapped_event {
+				EventWrapper::BalancesTransfer { to, amount, from: _ } => {
+					let deposit_address = PolkadotAccountId::from_aliased(to.0);
+					if monitored_addresses.contains(&deposit_address) {
+						deposit_witnesses.push(DepositWitness {
+							deposit_address,
+							asset: Asset::HubDot,
+							amount: *amount,
+							deposit_details: *extrinsic_index,
+						});
+					}
+				},
+
+				EventWrapper::AssetsTransfer { asset_id, to, amount, from: _ } => {
+					let deposit_address = PolkadotAccountId::from_aliased(to.0);
+
+					if let Some(asset) = match *asset_id {
+						ASSETHUB_USDT_ASSET_ID => Some(Asset::HubUsdt),
+						ASSETHUB_USDC_ASSET_ID => Some(Asset::HubUsdc),
+						_ => None,
+					} {
+						if monitored_addresses.contains(&deposit_address) {
+							deposit_witnesses.push(DepositWitness {
+								deposit_address,
+								asset,
+								amount: *amount,
+								deposit_details: *extrinsic_index,
+							});
+						}
+					}
+				},
+
+				_ => (),
 			}
 		}
 	}
@@ -120,8 +149,9 @@ fn deposit_witnesses(
 #[cfg(test)]
 mod test {
 	use cf_chains::dot::PolkadotBalance;
+	use cf_primitives::ASSETHUB_USDC_ASSET_ID;
 
-	use crate::witness::hub::test::phase_and_events;
+	use crate::witness::hub::{test::phase_and_events, HubAssetId};
 
 	use super::*;
 
@@ -130,7 +160,21 @@ mod test {
 		to: &PolkadotAccountId,
 		amount: PolkadotBalance,
 	) -> EventWrapper {
-		EventWrapper::Transfer {
+		EventWrapper::BalancesTransfer {
+			from: from.aliased_ref().to_owned().into(),
+			to: to.aliased_ref().to_owned().into(),
+			amount,
+		}
+	}
+
+	fn mock_assets_transfer(
+		asset_id: HubAssetId,
+		from: &PolkadotAccountId,
+		to: &PolkadotAccountId,
+		amount: PolkadotBalance,
+	) -> EventWrapper {
+		EventWrapper::AssetsTransfer {
+			asset_id,
 			from: from.aliased_ref().to_owned().into(),
 			to: to.aliased_ref().to_owned().into(),
 			amount,
@@ -149,6 +193,14 @@ mod test {
 		const TRANSFER_2_INDEX: u32 = 2;
 		let transfer_2_deposit_address = PolkadotAccountId::from_aliased([2; 32]);
 		const TRANSFER_2_AMOUNT: PolkadotBalance = 20000;
+
+		const TRANSFER_3_INDEX: u32 = 3;
+		let transfer_3_deposit_address = PolkadotAccountId::from_aliased([2; 32]);
+		const TRANSFER_3_AMOUNT: PolkadotBalance = 30000;
+
+		const TRANSFER_4_INDEX: u32 = 3;
+		let transfer_4_deposit_address = PolkadotAccountId::from_aliased([2; 32]);
+		const TRANSFER_4_AMOUNT: PolkadotBalance = 40000;
 
 		const TRANSFER_FROM_OUR_VAULT_INDEX: u32 = 7;
 		const TRANSFER_TO_OUR_VAULT_INDEX: u32 = 8;
@@ -173,6 +225,26 @@ mod test {
 					&PolkadotAccountId::from_aliased([7; 32]),
 					&transfer_2_deposit_address,
 					TRANSFER_2_AMOUNT,
+				),
+			),
+			// an assethub USDC `assets` transfer
+			(
+				TRANSFER_3_INDEX,
+				mock_assets_transfer(
+					ASSETHUB_USDC_ASSET_ID,
+					&PolkadotAccountId::from_aliased([7; 32]),
+					&transfer_3_deposit_address,
+					TRANSFER_3_AMOUNT,
+				),
+			),
+			// an assethub USDT `assets` transfer
+			(
+				TRANSFER_3_INDEX,
+				mock_assets_transfer(
+					ASSETHUB_USDT_ASSET_ID,
+					&PolkadotAccountId::from_aliased([7; 32]),
+					&transfer_4_deposit_address,
+					TRANSFER_4_AMOUNT,
 				),
 			),
 			// this one is not for us
@@ -221,6 +293,18 @@ mod test {
 					asset: Asset::HubDot,
 					amount: TRANSFER_2_AMOUNT,
 					deposit_details: TRANSFER_2_INDEX
+				},
+				DepositWitness {
+					deposit_address: transfer_3_deposit_address,
+					asset: Asset::HubUsdc,
+					amount: TRANSFER_3_AMOUNT,
+					deposit_details: TRANSFER_3_INDEX
+				},
+				DepositWitness {
+					deposit_address: transfer_4_deposit_address,
+					asset: Asset::HubUsdt,
+					amount: TRANSFER_4_AMOUNT,
+					deposit_details: TRANSFER_4_INDEX
 				},
 				DepositWitness {
 					deposit_address: transfer_2_deposit_address,
