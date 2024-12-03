@@ -22,9 +22,7 @@ use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, BitcoinInstance, Funding,
-	LiquidityProvider, PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent,
-	RuntimeOrigin, SolanaInstance, Validator, Weight,
+	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, AssethubInstance, AssethubVault, BitcoinInstance, Funding, LiquidityProvider, PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, SolanaInstance, Validator, Weight
 };
 use std::{
 	cell::RefCell,
@@ -267,6 +265,18 @@ impl Engine {
 						queue_dispatch_extrinsic(
 							RuntimeCall::Environment(pallet_cf_environment::Call::witness_polkadot_vault_creation {
 								dot_pure_proxy_vault_key: Default::default(),
+								tx_id: TxId {
+									block_number: 1,
+									extrinsic_index: 0,
+								},
+							}),
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
+						);
+					}
+					RuntimeEvent::AssethubVault(pallet_cf_vaults::Event::<_, AssethubInstance>::AwaitingGovernanceActivation { .. }) => {
+						queue_dispatch_extrinsic(
+							RuntimeCall::Environment(pallet_cf_environment::Call::witness_assethub_vault_creation {
+								hub_pure_proxy_vault_key: Default::default(),
 								tx_id: TxId {
 									block_number: 1,
 									extrinsic_index: 0,
@@ -592,6 +602,11 @@ pub fn dispatch_all_pending_extrinsics() {
 						"Validator status: {:?}\nVault Status: {:?}",
 						Validator::current_rotation_phase(),
 						PolkadotVault::pending_vault_rotations()
+					),
+					RuntimeCall::AssethubVault(..) => log::info!(
+						"Validator status: {:?}\nVault Status: {:?}",
+						Validator::current_rotation_phase(),
+						AssethubVault::pending_vault_rotations()
 					),
 					RuntimeCall::BitcoinVault(..) => log::info!(
 						"Validator status: {:?}\nVault Status: {:?}",

@@ -513,7 +513,7 @@ fn can_move_through_multiple_epochs() {
 
 			for i in 1..21 {
 				testnet.move_to_the_next_epoch();
-				witness_rotation_broadcasts([i + 1, i, i, i, i]);
+				witness_rotation_broadcasts([i + 1, i, i, i, i, i]);
 			}
 			assert_eq!(GENESIS_EPOCH + 21, Validator::epoch_index());
 		});
@@ -548,7 +548,7 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 
 			// we witness the rotation txs of the older epoch which then causes the rotation to
 			// start on the next block.
-			witness_rotation_broadcasts([2, 1, 1, 1, 1]);
+			witness_rotation_broadcasts([2, 1, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(epoch_index + 1, Validator::epoch_index());
 		});
