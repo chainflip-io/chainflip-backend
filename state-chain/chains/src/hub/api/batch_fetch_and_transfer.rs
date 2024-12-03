@@ -3,12 +3,12 @@ use crate::{
 		PolkadotAccountId, PolkadotAccountIdLookup, PolkadotProxyType, PolkadotReplayProtection,
 	},
 	hub::{
-		Assethub, AssethubExtrinsicBuilder, AssethubRuntimeCall, BalancesCall, ProxyCall,
-		UtilityCall,
+		Assethub, AssethubExtrinsicBuilder, AssethubRuntimeCall, AssetsCall, BalancesCall,
+		ProxyCall, UtilityCall,
 	},
 	FetchAssetParams, TransferAssetParams,
 };
-use cf_primitives::ChannelId;
+use cf_primitives::{ASSETHUB_USDC_ASSET_ID, ASSETHUB_USDT_ASSET_ID};
 use cf_utilities::SliceToArray;
 use sp_std::{boxed::Box, vec::Vec};
 
@@ -27,17 +27,28 @@ pub fn extrinsic_builder(
 				calls: [
 					fetch_params
 						.into_iter()
-						.map(|fetch_param| {
-							utility_fetch(fetch_param.deposit_fetch_id, vault_account)
-						})
+						.map(|fetch_param| utility_fetch(fetch_param, vault_account))
 						.collect::<Vec<AssethubRuntimeCall>>(),
 					transfer_params
 						.into_iter()
-						.map(|transfer_param| {
-							AssethubRuntimeCall::Balances(BalancesCall::transfer_allow_death {
-								dest: PolkadotAccountIdLookup::from(transfer_param.to),
-								value: transfer_param.amount,
-							})
+						.map(|transfer_param| match transfer_param.asset {
+							cf_primitives::chains::assets::hub::Asset::HubDot =>
+								AssethubRuntimeCall::Balances(BalancesCall::transfer_allow_death {
+									dest: PolkadotAccountIdLookup::from(transfer_param.to),
+									value: transfer_param.amount,
+								}),
+							cf_primitives::chains::assets::hub::Asset::HubUsdt =>
+								AssethubRuntimeCall::Assets(AssetsCall::transfer {
+									id: ASSETHUB_USDT_ASSET_ID,
+									dest: PolkadotAccountIdLookup::from(transfer_param.to),
+									value: transfer_param.amount,
+								}),
+							cf_primitives::chains::assets::hub::Asset::HubUsdc =>
+								AssethubRuntimeCall::Assets(AssetsCall::transfer {
+									id: ASSETHUB_USDT_ASSET_ID,
+									dest: PolkadotAccountIdLookup::from(transfer_param.to),
+									value: transfer_param.amount,
+								}),
 						})
 						.collect::<Vec<AssethubRuntimeCall>>(),
 				]
@@ -47,8 +58,12 @@ pub fn extrinsic_builder(
 	)
 }
 
-fn utility_fetch(channel_id: ChannelId, vault_account: PolkadotAccountId) -> AssethubRuntimeCall {
-	let layers = channel_id
+fn utility_fetch(
+	fetch_param: FetchAssetParams<Assethub>,
+	vault_account: PolkadotAccountId,
+) -> AssethubRuntimeCall {
+	let layers = fetch_param
+		.deposit_fetch_id
 		.to_be_bytes()
 		.chunks(2)
 		.map(|chunk| u16::from_be_bytes(chunk.as_array::<2>()))
@@ -56,10 +71,25 @@ fn utility_fetch(channel_id: ChannelId, vault_account: PolkadotAccountId) -> Ass
 		.collect::<Vec<u16>>();
 
 	layers.into_iter().fold(
-		AssethubRuntimeCall::Balances(BalancesCall::transfer_all {
-			dest: PolkadotAccountIdLookup::from(vault_account),
-			keep_alive: false,
-		}),
+		match fetch_param.asset {
+			cf_primitives::chains::assets::hub::Asset::HubDot =>
+				AssethubRuntimeCall::Balances(BalancesCall::transfer_all {
+					dest: PolkadotAccountIdLookup::from(vault_account),
+					keep_alive: false,
+				}),
+			cf_primitives::chains::assets::hub::Asset::HubUsdt =>
+				AssethubRuntimeCall::Assets(AssetsCall::transfer {
+					id: ASSETHUB_USDT_ASSET_ID,
+					dest: PolkadotAccountIdLookup::from(vault_account),
+					value: fetch_param.amount,
+				}),
+			cf_primitives::chains::assets::hub::Asset::HubUsdc =>
+				AssethubRuntimeCall::Assets(AssetsCall::transfer {
+					id: ASSETHUB_USDC_ASSET_ID,
+					dest: PolkadotAccountIdLookup::from(vault_account),
+					value: fetch_param.amount,
+				}),
+		},
 		|call, index| {
 			AssethubRuntimeCall::Utility(UtilityCall::as_derivative { index, call: Box::new(call) })
 		},
@@ -70,7 +100,8 @@ fn utility_fetch(channel_id: ChannelId, vault_account: PolkadotAccountId) -> Ass
 mod test_batch_fetch {
 
 	use super::*;
-	use crate::dot::{PolkadotPair, NONCE_1, RAW_SEED_1, RAW_SEED_2, TEST_RUNTIME_VERSION};
+	use crate::dot::{PolkadotPair, NONCE_1, RAW_SEED_1, RAW_SEED_2};
+	use crate::hub::TEST_RUNTIME_VERSION;
 	use cf_primitives::chains::assets;
 
 	#[test]
@@ -81,9 +112,21 @@ mod test_batch_fetch {
 		let keypair_proxy = PolkadotPair::from_seed(&RAW_SEED_2);
 
 		let dummy_fetch_params: Vec<FetchAssetParams<Assethub>> = vec![
-			FetchAssetParams::<Assethub> { deposit_fetch_id: 1, asset: assets::hub::Asset::HubDot },
-			FetchAssetParams::<Assethub> { deposit_fetch_id: 2, asset: assets::hub::Asset::HubDot },
-			FetchAssetParams::<Assethub> { deposit_fetch_id: 3, asset: assets::hub::Asset::HubDot },
+			FetchAssetParams::<Assethub> {
+				deposit_fetch_id: 1,
+				asset: assets::hub::Asset::HubDot,
+				amount: 44,
+			},
+			FetchAssetParams::<Assethub> {
+				deposit_fetch_id: 2,
+				asset: assets::hub::Asset::HubUsdc,
+				amount: 55,
+			},
+			FetchAssetParams::<Assethub> {
+				deposit_fetch_id: 3,
+				asset: assets::hub::Asset::HubUsdt,
+				amount: 66,
+			},
 		];
 
 		let dummy_transfer_params: Vec<TransferAssetParams<Assethub>> = vec![
@@ -95,16 +138,16 @@ mod test_batch_fetch {
 			TransferAssetParams::<Assethub> {
 				to: PolkadotAccountId::from_aliased([8u8; 32]),
 				amount: 5,
-				asset: assets::hub::Asset::HubDot,
+				asset: assets::hub::Asset::HubUsdc,
 			},
 			TransferAssetParams::<Assethub> {
 				to: PolkadotAccountId::from_aliased([9u8; 32]),
 				amount: 6,
-				asset: assets::hub::Asset::HubDot,
+				asset: assets::hub::Asset::HubUsdt,
 			},
 		];
 
-		let mut builder = super::extrinsic_builder(
+		let mut builder: AssethubExtrinsicBuilder = super::extrinsic_builder(
 			PolkadotReplayProtection {
 				nonce: NONCE_1,
 				signer: keypair_proxy.public_key(),
@@ -130,9 +173,13 @@ mod test_batch_fetch {
 
 	#[test]
 	fn nested_fetch() {
-		let channel_id = 0x0004_0003_0002_0001;
+		let fetch_param = FetchAssetParams::<Assethub> {
+			deposit_fetch_id: 0x0004_0003_0002_0001,
+			asset: assets::hub::Asset::HubDot,
+			amount: 123456,
+		};
 		let vault_account = PolkadotAccountId::from_aliased([1u8; 32]);
-		let call = utility_fetch(channel_id, vault_account);
+		let call = utility_fetch(fetch_param, vault_account);
 
 		assert_eq!(
 			call,
@@ -156,17 +203,22 @@ mod test_batch_fetch {
 			})
 		);
 
-		let channel_id = 1;
+		let fetch_param = FetchAssetParams::<Assethub> {
+			deposit_fetch_id: 1,
+			asset: assets::hub::Asset::HubUsdc,
+			amount: 123456,
+		};
 		let vault_account = PolkadotAccountId::from_aliased([1u8; 32]);
-		let call = utility_fetch(channel_id, vault_account);
+		let call = utility_fetch(fetch_param, vault_account);
 
 		assert_eq!(
 			call,
 			AssethubRuntimeCall::Utility(UtilityCall::as_derivative {
 				index: 1,
-				call: Box::new(AssethubRuntimeCall::Balances(BalancesCall::transfer_all {
+				call: Box::new(AssethubRuntimeCall::Assets(AssetsCall::transfer {
 					dest: PolkadotAccountIdLookup::from(vault_account),
-					keep_alive: false,
+					id: ASSETHUB_USDC_ASSET_ID,
+					value: 123456
 				})),
 			})
 		);
@@ -174,11 +226,19 @@ mod test_batch_fetch {
 
 	#[test]
 	fn fetch_equivalence() {
-		let channel_id_1 = 0x0000_0000_0000_0001;
-		let channel_id_2 = 0x0000_0000_0001_0000;
+		let fetch_param_1 = FetchAssetParams::<Assethub> {
+			deposit_fetch_id: 0x0000_0000_0000_0001,
+			asset: assets::hub::Asset::HubDot,
+			amount: 123456,
+		};
+		let fetch_param_2 = FetchAssetParams::<Assethub> {
+			deposit_fetch_id: 0x0000_0000_0001_0000,
+			asset: assets::hub::Asset::HubDot,
+			amount: 123456,
+		};
 		let vault_account = PolkadotAccountId::from_aliased([1u8; 32]);
-		let call_1 = utility_fetch(channel_id_1, vault_account);
-		let call_2 = utility_fetch(channel_id_2, vault_account);
+		let call_1 = utility_fetch(fetch_param_1, vault_account);
+		let call_2 = utility_fetch(fetch_param_2, vault_account);
 
 		assert_ne!(call_1, call_2);
 	}

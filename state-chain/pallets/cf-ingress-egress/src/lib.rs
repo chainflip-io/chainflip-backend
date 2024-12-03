@@ -1615,7 +1615,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Ok(())
 		}
 
-		let mut fetch_params = vec![];
+		let mut fetch_params: Vec<FetchAssetParams<<T as Config<I>>::TargetChain>> = vec![];
 		let mut transfer_params = vec![];
 		let mut addresses = vec![];
 
@@ -1625,11 +1625,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset,
 					deposit_address,
 					deposit_fetch_id,
-					..
+					amount,
 				} => {
 					fetch_params.push(FetchAssetParams {
 						deposit_fetch_id: deposit_fetch_id.expect("Checked in extract_if"),
 						asset,
+						amount,
 					});
 					addresses.push(deposit_address.clone());
 				},
