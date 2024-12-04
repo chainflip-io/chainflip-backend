@@ -214,13 +214,7 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 }
 
 impl<E> ArbitrumApi<E> {
-	pub fn gas_budget(&self) -> Option<GasAmount> {
-		map_over_api_variants!(self, call, call.gas_budget())
-	}
-	pub fn message_length(&self) -> Option<usize> {
-		map_over_api_variants!(self, call, call.message_length())
-	}
-	pub fn transfer_asset(&self) -> Option<Address> {
-		map_over_api_variants!(self, call, call.transfer_asset())
+	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+		map_over_api_variants!(self, call, call.ccm_transfer_data())
 	}
 }

@@ -246,16 +246,17 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 
 			/// Calculate the gas limit for this evm chain's call. This is only for CCM calls.
 			fn calculate_gas_limit(call: &$chain_api<$env>) -> Option<U256> {
-				if let (Some(gas_budget), Some(message_length), Some(transfer_asset), Some(native_asset)) = (call.gas_budget(), call.message_length(), call.transfer_asset(), <$env as EvmEnvironmentProvider<$chain>>::token_address($chain::GAS_ASSET)) {
-					let gas_limit = $chain_tracking::chain_state()
-					.or_else(||{
-						log::warn!("No chain data for {}. This should never happen. Please check Chain Tracking data.", $chain::NAME);
-						None
-					})?
-					.tracked_data
-					.calculate_ccm_gas_limit(transfer_asset ==  native_asset, gas_budget, message_length);
+				if let (Some((gas_budget, message_length, transfer_asset)), Some(native_asset)) =
+					(call.ccm_transfer_data(), <$env as EvmEnvironmentProvider<$chain>>::token_address($chain::GAS_ASSET)) {
+						let gas_limit = $chain_tracking::chain_state()
+						.or_else(||{
+							log::warn!("No chain data for {}. This should never happen. Please check Chain Tracking data.", $chain::NAME);
+							None
+						})?
+						.tracked_data
+						.calculate_ccm_gas_limit(transfer_asset ==  native_asset, gas_budget, message_length);
 
-					Some(gas_limit.into())
+						Some(gas_limit.into())
 				} else {
 					log::warn!("CCM calls should have all the data. This should never happen. Please check {}", $chain::NAME);
 					None

@@ -63,16 +63,8 @@ impl EvmCall for ExecutexSwapAndCall {
 		]
 	}
 
-	fn gas_budget(&self) -> Option<GasAmount> {
-		Some(self.gas_budget)
-	}
-
-	fn message_length(&self) -> Option<usize> {
-		Some(self.message.len())
-	}
-
-	fn transfer_asset(&self) -> Option<Address> {
-		Some(self.transfer_param.asset)
+	fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+		Some((self.gas_budget, self.message.len(), self.transfer_param.asset))
 	}
 }
 
