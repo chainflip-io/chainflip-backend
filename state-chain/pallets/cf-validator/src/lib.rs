@@ -495,7 +495,7 @@ pub mod pallet {
 			if let Some(epoch_to_expire) = EpochExpiries::<T>::take(block_number) {
 				Self::expire_epochs_up_to(epoch_to_expire, remaining_weight)
 			} else {
-				remaining_weight
+				Default::default()
 			}
 		}
 	}
@@ -1033,26 +1033,22 @@ impl<T: Config> Pallet<T> {
 		HistoricalBonds::<T>::remove(epoch);
 	}
 
-	fn expire_epochs_up_to(
-		latest_epoch_to_expire: EpochIndex,
-		mut remaining_weight: Weight,
-	) -> Weight {
-		// use frame_support::storage::StorageDecodeLength;
-
+	fn expire_epochs_up_to(latest_epoch_to_expire: EpochIndex, remaining_weight: Weight) -> Weight {
+		let mut weight_used = Weight::from_parts(0, 0);
 		LastExpiredEpoch::<T>::mutate(|last_expired_epoch| {
 			let first_unexpired_epoch = *last_expired_epoch + 1;
 			for epoch in first_unexpired_epoch..=latest_epoch_to_expire {
 				let required_weight = T::ValidatorWeightInfo::expire_epoch(
 					HistoricalAuthorities::<T>::decode_len(epoch).unwrap_or_default() as u32,
 				);
-				if remaining_weight.all_gte(required_weight) {
-					remaining_weight.saturating_reduce(required_weight);
+				if remaining_weight.all_gte(weight_used.saturating_add(required_weight)) {
 					Self::expire_epoch(epoch);
+					weight_used.saturating_accrue(required_weight);
 					*last_expired_epoch = epoch;
 				}
 			}
 		});
-		remaining_weight
+		weight_used
 	}
 
 	/// Does all state updates related to the *new* epoch. Is also called at genesis to initialise
