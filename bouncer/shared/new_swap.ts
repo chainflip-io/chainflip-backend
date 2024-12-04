@@ -10,8 +10,8 @@ export type FillOrKillParamsX128 = NonNullable<RequestDepositChannelParams['fill
 export type DcaParams = NonNullable<RequestDepositChannelParams['dcaParams']>;
 
 export async function newSwap(
-  sourceAsset: Asset | 'HubDot',
-  destAsset: Asset | 'HubDot',
+  sourceAsset: Asset,
+  destAsset: Asset,
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps = defaultCommissionBps,
@@ -20,7 +20,7 @@ export async function newSwap(
   dcaParams?: DcaParams,
 ): Promise<void> {
   const destinationAddress =
-    (destAsset === 'Dot' || destAsset === 'HubDot') ? decodeDotAddressForContract(destAddress) : destAddress;
+    (destAsset === 'Dot' || destAsset === 'HubDot' || destAsset === 'HubUsdc' || destAsset === 'HubUsdt') ? decodeDotAddressForContract(destAddress) : destAddress;
   const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
 
   // If the dry_run of the extrinsic fails on the broker-api then it won't retry. So we retry here to
