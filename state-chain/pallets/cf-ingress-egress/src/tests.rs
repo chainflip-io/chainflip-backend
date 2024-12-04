@@ -667,8 +667,8 @@ fn multi_use_deposit_address_different_blocks() {
 		})
 		// The channel should be closed at the next block.
 		.then_execute_at_next_block(|deposit_address| {
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
-				&DepositWitness {
+			IngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
 					deposit_address,
 					asset: ETH,
 					amount: 1,
@@ -676,7 +676,7 @@ fn multi_use_deposit_address_different_blocks() {
 				},
 				// block height is purely informative.
 				BlockHeightProvider::<MockEthereum>::get_block_height(),
-			));
+			);
 			deposit_address
 		})
 		.then_process_events(|_, event| match event {
