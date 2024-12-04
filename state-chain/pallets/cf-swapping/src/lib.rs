@@ -1463,7 +1463,7 @@ pub mod pallet {
 				return;
 			};
 
-			let swap_request_completed = match &mut request.state {
+			match &mut request.state {
 				SwapRequestState::UserSwap {
 					ccm_deposit_metadata: _,
 					output_address,
@@ -1496,24 +1496,15 @@ pub mod pallet {
 							false, /* refund */
 						);
 					}
-
-					true
 				},
 				non_refundable_request => {
 					log_or_panic!(
 						"Refund for swap request is not supported: {non_refundable_request:?}"
 					);
-					true
 				},
 			};
 
-			if swap_request_completed {
-				Self::deposit_event(Event::<T>::SwapRequestCompleted {
-					swap_request_id: request.id,
-				});
-			} else {
-				SwapRequests::<T>::insert(swap_request_id, request);
-			}
+			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
 		}
 
 		fn process_swap_outcome(swap: SwapState<T>) {
