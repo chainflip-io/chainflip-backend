@@ -1470,19 +1470,14 @@ pub mod pallet {
 					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
 					broker_fees: _,
 				} => {
-					let refund = |amount: AssetAmount| {
-						Self::egress_for_swap(
-							request.id,
-							amount,
-							request.input_asset,
-							refund_params.refund_address.clone(),
-							None, /* refunds don't use ccm parameters */
-							true, /* refund */
-						);
-					};
-
-					// Refund the failed swap and any unused input amount:
-					refund(swap.input_amount + *remaining_input_amount);
+					Self::egress_for_swap(
+						request.id,
+						swap.input_amount + *remaining_input_amount,
+						request.input_asset,
+						refund_params.refund_address.clone(),
+						None, /* refunds don't use ccm parameters */
+						true, /* refund */
+					);
 
 					// In case of DCA we may have partially swapped and now have some output
 					// asset to egress to the output address:

@@ -806,10 +806,12 @@ pub trait FeeEstimationApi<C: Chain> {
 
 	fn estimate_ccm_fee(
 		&self,
-		asset: C::ChainAsset,
-		gas_budget: GasAmount,
-		message_length: usize,
-	) -> Option<C::ChainAmount>;
+		_asset: C::ChainAsset,
+		_gas_budget: GasAmount,
+		_message_length: usize,
+	) -> Option<C::ChainAmount> {
+		None
+	}
 }
 
 impl<C: Chain> FeeEstimationApi<C> for () {

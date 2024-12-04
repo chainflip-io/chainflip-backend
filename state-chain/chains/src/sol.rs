@@ -204,10 +204,7 @@ impl SolTrackedData {
 			SolAsset::Sol => CCM_COMPUTE_UNITS_OVERHEAD_NATIVE,
 			SolAsset::SolUsdc => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
 		});
-		sp_std::cmp::min(
-			MAX_COMPUTE_UNITS_PER_CCM_TRANSFER,
-			compute_limit_with_overhead,
-		)
+		sp_std::cmp::min(MAX_COMPUTE_UNITS_PER_CCM_TRANSFER, compute_limit_with_overhead)
 	}
 
 	// Calculate the estimated fee for broadcasting a transaction given its compute units

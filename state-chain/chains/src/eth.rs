@@ -89,7 +89,7 @@ impl EthereumTrackedData {
 	) -> GasAmount {
 		use crate::eth::fees::*;
 		// Adding one extra gas unit per message's length (byte) for the extra gas overhead of
-		// passing the message through the Vault. The extra l2 gas per message's calldata byte
+		// passing the message through the Vault. The extra gas per message's calldata byte
 		// should be included in the user's gas budget.
 		(gas_budget
 			.saturating_add(if is_native_asset {
