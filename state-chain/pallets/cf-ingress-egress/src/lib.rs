@@ -2038,8 +2038,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// Pre-witnessing twice is unlikely but possible. Either way we don't want
 					// to change the status and we don't want to allow boosting.
 					Some(TransactionPrewitnessedStatus::Prewitnessed) => true,
-					// Transaction has not been reported, mark it as boosted to prevent further
-					// reports.
+					// Transaction has not been reported
 					None => false,
 				}
 			}) {

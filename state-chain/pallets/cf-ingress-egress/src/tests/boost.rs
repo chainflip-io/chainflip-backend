@@ -993,6 +993,53 @@ fn test_create_boost_pools() {
 	});
 }
 
+#[test]
+fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
+	new_test_ext().execute_with(|| {
+		setup();
+
+		assert_ok!(IngressEgress::add_boost_funds(
+			RuntimeOrigin::signed(BOOSTER_1),
+			EthAsset::Eth,
+			DEFAULT_DEPOSIT_AMOUNT,
+			TIER_5_BPS
+		));
+
+		let (_, address, _, _) = IngressEgress::open_channel(
+			&ALICE,
+			EthAsset::Eth,
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			TIER_5_BPS,
+		)
+		.unwrap();
+
+		assert_ok!(IngressEgress::process_deposits(
+			RuntimeOrigin::root(),
+			vec![
+				// The deposit into an unkown address should fail
+				DepositWitness {
+					deposit_address: [0; 20].into(),
+					asset: EthAsset::Eth,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details: Default::default(),
+				// This deposit should succeed:
+				}, DepositWitness {
+					deposit_address: address,
+					asset: EthAsset::Eth,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details: Default::default(),
+				}
+			],
+			0
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(Event::DepositBoosted { deposit_address, .. }) if deposit_address == &Some(address)
+		);
+	});
+}
+
 mod vault_swaps {
 
 	use crate::BoostedVaultTransactions;
