@@ -91,6 +91,7 @@ sp-session = { workspace = true }
 sp-std = { workspace = true }
 sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true }
+frame-metadata-hash-extension = { workspace = true }
 
 sp-genesis-builder = { workspace = true }
 
@@ -207,6 +208,7 @@ std = [
   "sp-version/std",
   "dep:cf-test-utilities",
   "dep:substrate-wasm-builder",
+  "frame-metadata-hash-extension/std",
 ]
 try-runtime = [
   "cf-runtime-utilities/try-runtime",
@@ -243,3 +245,4 @@ try-runtime = [
   "pallet-authorship/try-runtime",
   "sp-runtime/try-runtime",
 ]
+metadata-hash = ["substrate-wasm-builder/metadata-hash"]
