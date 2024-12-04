@@ -180,7 +180,10 @@ mod tests {
 		key::TweakedPublicKey,
 		PubkeyHash, ScriptHash, WPubkeyHash, WScriptHash,
 	};
-	use cf_chains::address::EncodedAddress;
+	use cf_chains::{
+		address::EncodedAddress,
+		btc::{BitcoinOp, BitcoinScript},
+	};
 	use secp256k1::XOnlyPublicKey;
 	use sp_core::bounded_vec;
 
@@ -208,6 +211,16 @@ mod tests {
 			}],
 		},
 	});
+
+	fn add_opcodes_to_data(data: Vec<u8>) -> ScriptBuf {
+		ScriptBuf::from_bytes(
+			BitcoinScript::new(&[
+				BitcoinOp::Return,
+				BitcoinOp::PushBytes { bytes: data.try_into().unwrap() },
+			])
+			.raw(),
+		)
+	}
 
 	#[test]
 	fn script_buf_to_script_pubkey_conversion() {
@@ -261,7 +274,6 @@ mod tests {
 		let refund_pubkey = ScriptPubkey::P2PKH(REFUND_PK_HASH);
 		let refund_script = ScriptBuf::new_p2pkh(&PubkeyHash::from_byte_array(REFUND_PK_HASH));
 		assert_eq!(refund_pubkey.bytes(), refund_script.to_bytes());
-
 		let tx = fake_transaction(
 			vec![
 				// A UTXO spending into our vault;
@@ -274,9 +286,9 @@ mod tests {
 				VerboseTxOut {
 					value: Amount::from_sat(0),
 					n: 1,
-					script_pubkey: ScriptBuf::from_bytes(
-						encode_swap_params_in_nulldata_utxo(MOCK_SWAP_PARAMS.clone()).raw(),
-					),
+					script_pubkey: add_opcodes_to_data(encode_swap_params_in_nulldata_payload(
+						MOCK_SWAP_PARAMS.clone(),
+					)),
 				},
 				// A UTXO containing refund address:
 				VerboseTxOut {
@@ -327,9 +339,7 @@ mod tests {
 	#[test]
 	fn extract_nulldata_utxo() {
 		for data in [vec![0x3u8; 1_usize], vec![0x3u8; 75_usize], vec![0x3u8; 80_usize]] {
-			let script_buf =
-				ScriptBuf::from_bytes(encode_data_in_nulldata_utxo(&data).unwrap().raw());
-
+			let script_buf = add_opcodes_to_data(data.clone());
 			assert_eq!(try_extract_utxo_encoded_data(&script_buf), Some(&data[..]));
 		}
 

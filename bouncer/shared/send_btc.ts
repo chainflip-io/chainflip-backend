@@ -36,7 +36,7 @@ export async function fundAndSendTransaction(
 }
 
 export async function sendVaultTransaction(
-  nulldataUtxo: string,
+  nulldata_payload: string,
   amountBtc: number,
   depositAddress: string,
   refundAddress: string,
@@ -47,8 +47,7 @@ export async function sendVaultTransaction(
         [depositAddress]: amountBtc,
       },
       {
-        // The `createRawTransaction` function will add the op codes, so we have to remove them here.
-        data: nulldataUtxo.replace('0x', '').substring(4),
+        data: nulldata_payload.replace('0x', ''),
       },
     ],
     refundAddress,
