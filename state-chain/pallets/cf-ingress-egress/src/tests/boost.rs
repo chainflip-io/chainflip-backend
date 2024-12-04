@@ -673,6 +673,7 @@ fn insufficient_funds_for_boost() {
 			asset: EthAsset::Eth,
 			amount_attempted: DEPOSIT_AMOUNT,
 			channel_id: Some(channel_id),
+			origin_type: DepositOriginType::DepositChannel,
 		}));
 
 		// When the deposit is finalised, it is processed as normal:

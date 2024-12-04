@@ -826,6 +826,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount_attempted: TargetChainAmount<T, I>,
 			channel_id: Option<ChannelId>,
+			origin_type: DepositOriginType,
 		},
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
@@ -2103,6 +2104,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						asset,
 						amount_attempted: amount,
 						channel_id,
+						origin_type: origin.into(),
 					});
 				},
 			}
