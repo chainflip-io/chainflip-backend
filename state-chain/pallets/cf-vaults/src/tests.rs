@@ -4,9 +4,11 @@ use crate::{mock::*, PendingVaultActivation, VaultActivationStatus, VaultStartBl
 use cf_chains::mocks::{MockAggKey, MockEthereum};
 use cf_test_utilities::last_event;
 use cf_traits::{
-	mocks::block_height_provider::BlockHeightProvider, AsyncResult, EpochInfo, VaultActivator,
+	mocks::block_height_provider::BlockHeightProvider, AsyncResult, EpochInfo,
+	EpochTransitionHandler, VaultActivator,
 };
 use frame_support::assert_noop;
+use std::collections::BTreeSet;
 
 pub const NEW_AGG_PUBKEY: MockAggKey = MockAggKey(*b"newk");
 
@@ -92,6 +94,28 @@ fn only_governance_can_initialize_chain() {
 		assert_noop!(
 			VaultsPallet::initialize_chain(RuntimeOrigin::signed(100)),
 			sp_runtime::traits::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn cleanup_start_block_numbers_up_to_expired_epoch() {
+	new_test_ext_no_key().execute_with(|| {
+		let init_epoch = MockEpochInfo::epoch_index();
+		VaultStartBlockNumbers::<Test, _>::insert(init_epoch, 0);
+		VaultStartBlockNumbers::<Test, _>::insert(init_epoch.saturating_add(1), 1001);
+		VaultStartBlockNumbers::<Test, _>::insert(init_epoch.saturating_add(2), 2001);
+		VaultStartBlockNumbers::<Test, _>::insert(init_epoch.saturating_add(3), 3001);
+
+		assert_eq!(
+			VaultStartBlockNumbers::<Test, _>::iter_values().collect::<BTreeSet<_>>(),
+			BTreeSet::from([0, 1001, 2001, 3001])
+		);
+
+		VaultsPallet::on_expired_epoch(init_epoch.saturating_add(2));
+		assert_eq!(
+			VaultStartBlockNumbers::<Test, _>::iter_values().collect::<BTreeSet<_>>(),
+			BTreeSet::from([3001])
 		);
 	});
 }

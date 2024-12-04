@@ -1041,7 +1041,6 @@ pub trait IngressSink {
 		block_number: Self::BlockNumber,
 		details: Self::DepositDetails,
 	);
-	fn on_ingress_reverted(channel: Self::Account, asset: Self::Asset, amount: Self::Amount);
 	fn on_channel_closed(channel: Self::Account);
 }
 
