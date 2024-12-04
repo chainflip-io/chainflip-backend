@@ -288,11 +288,7 @@ pub mod balance_api {
 			let alice = AccountId::from([1; 32]);
 			const AMOUNT: u128 = 100;
 			const DELTA: u128 = 10;
-			assert_ok!(Pallet::<Test>::try_credit_account(
-				&alice,
-				ForeignChain::Ethereum.gas_asset(),
-				AMOUNT
-			));
+			Pallet::<Test>::credit_account(&alice, ForeignChain::Ethereum.gas_asset(), AMOUNT);
 			assert_has_event::<Test>(
 				crate::Event::AccountCredited {
 					account_id: alice.clone(),

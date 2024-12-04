@@ -235,10 +235,6 @@ fn get_broker_balance<T: Config>(who: &T::AccountId, asset: Asset) -> AssetAmoun
 	T::BalanceApi::get_balance(who, asset)
 }
 
-fn credit_broker_account<T: Config>(who: &T::AccountId, asset: Asset, amount: AssetAmount) {
-	assert_ok!(T::BalanceApi::try_credit_account(who, asset, amount));
-}
-
 #[track_caller]
 fn assert_swaps_queue_is_empty() {
 	assert_eq!(SwapQueue::<Test>::iter_keys().count(), 0);
@@ -1228,7 +1224,7 @@ fn broker_deregistration_checks_earned_fees() {
 		.expect("BROKER was registered in test setup.");
 
 		// Earn some fees.
-		credit_broker_account::<Test>(&BROKER, Asset::Eth, 100);
+		<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 100);
 
 		assert_noop!(
 			Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),

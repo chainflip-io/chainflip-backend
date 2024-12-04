@@ -1,6 +1,6 @@
 use super::*;
 
-use cf_chains::FeeEstimationApi;
+use cf_chains::{DepositOriginType, FeeEstimationApi};
 use cf_primitives::{AssetAmount, BasisPoints, PrewitnessedDepositId};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -63,13 +63,13 @@ fn request_deposit_address_eth(account_id: u64, max_boost_fee: BasisPoints) -> (
 
 #[track_caller]
 fn prewitness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmount) -> u64 {
-	assert_ok!(Pallet::<Test, _>::add_prewitnessed_deposits(
-		vec![DepositWitness::<Ethereum> {
+	assert_ok!(IngressEgress::process_channel_deposit_prewitness(
+		DepositWitness::<Ethereum> {
 			deposit_address,
 			asset,
 			amount,
 			deposit_details: Default::default()
-		}],
+		},
 		0
 	),);
 
@@ -78,14 +78,14 @@ fn prewitness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmoun
 
 #[track_caller]
 fn witness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmount) {
-	assert_ok!(Pallet::<Test, _>::process_deposit_witnesses(
-		vec![DepositWitness::<Ethereum> {
+	assert_ok!(Pallet::<Test, _>::process_channel_deposit_full_witness_inner(
+		&DepositWitness::<Ethereum> {
 			deposit_address,
 			asset,
 			amount,
-			deposit_details: Default::default()
-		}],
-		Default::default()
+			deposit_details: Default::default(),
+		},
+		Default::default(),
 	));
 }
 
@@ -121,17 +121,17 @@ fn setup() {
 	);
 
 	for asset in EthAsset::all() {
-		assert_ok!(<Test as crate::Config>::Balance::try_credit_account(
+		<Test as crate::Config>::Balance::credit_account(
 			&BOOSTER_1,
 			asset.into(),
 			INIT_BOOSTER_ETH_BALANCE,
-		));
+		);
 
-		assert_ok!(<Test as crate::Config>::Balance::try_credit_account(
+		<Test as crate::Config>::Balance::credit_account(
 			&BOOSTER_2,
 			asset.into(),
 			INIT_BOOSTER_ETH_BALANCE,
-		));
+		);
 	}
 
 	assert_eq!(get_lp_eth_balance(&BOOSTER_1), INIT_BOOSTER_ETH_BALANCE);
@@ -214,19 +214,20 @@ fn basic_passive_boosting() {
 			const POOL_2_CONTRIBUTION: AssetAmount = DEPOSIT_AMOUNT - POOL_1_CONTRIBUTION;
 
 			System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositBoosted {
-				deposit_address,
+				deposit_address: Some(deposit_address),
 				asset: ASSET,
 				amounts: BTreeMap::from_iter(vec![
 					(TIER_5_BPS, POOL_1_CONTRIBUTION),
 					(TIER_10_BPS, POOL_2_CONTRIBUTION),
 				]),
 				block_height: Default::default(),
-				channel_id,
+				channel_id: Some(channel_id),
 				prewitnessed_deposit_id,
 				deposit_details: Default::default(),
 				ingress_fee: INGRESS_FEE,
 				boost_fee: POOL_1_FEE + POOL_2_FEE,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
+				origin_type: DepositOriginType::DepositChannel,
 			}));
 
 			assert_boosted(deposit_address, prewitnessed_deposit_id, [TIER_5_BPS, TIER_10_BPS]);
@@ -246,14 +247,15 @@ fn basic_passive_boosting() {
 			witness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 
 			System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositFinalised {
-				deposit_address,
+				deposit_address: Some(deposit_address),
 				asset: ASSET,
 				amount: DEPOSIT_AMOUNT,
 				block_height: Default::default(),
 				deposit_details: Default::default(),
 				ingress_fee: 0,
 				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
-				channel_id,
+				channel_id: Some(channel_id),
+				origin_type: DepositOriginType::DepositChannel,
 			}));
 
 			assert_eq!(get_available_amount(ASSET, TIER_5_BPS), BOOSTER_AMOUNT_1 + POOL_1_FEE);
@@ -670,7 +672,8 @@ fn insufficient_funds_for_boost() {
 			prewitnessed_deposit_id: deposit_id,
 			asset: EthAsset::Eth,
 			amount_attempted: DEPOSIT_AMOUNT,
-			channel_id,
+			channel_id: Some(channel_id),
+			origin_type: DepositOriginType::DepositChannel,
 		}));
 
 		// When the deposit is finalised, it is processed as normal:
@@ -988,4 +991,220 @@ fn test_create_boost_pools() {
 			sp_runtime::traits::BadOrigin
 		);
 	});
+}
+
+#[test]
+fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
+	new_test_ext().execute_with(|| {
+		setup();
+
+		assert_ok!(IngressEgress::add_boost_funds(
+			RuntimeOrigin::signed(BOOSTER_1),
+			EthAsset::Eth,
+			DEFAULT_DEPOSIT_AMOUNT,
+			TIER_5_BPS
+		));
+
+		let (_, address, _, _) = IngressEgress::open_channel(
+			&ALICE,
+			EthAsset::Eth,
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			TIER_5_BPS,
+		)
+		.unwrap();
+
+		assert_ok!(IngressEgress::process_deposits(
+			RuntimeOrigin::root(),
+			vec![
+				// The deposit into an unkown address should fail
+				DepositWitness {
+					deposit_address: [0; 20].into(),
+					asset: EthAsset::Eth,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details: Default::default(),
+				// This deposit should succeed:
+				}, DepositWitness {
+					deposit_address: address,
+					asset: EthAsset::Eth,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details: Default::default(),
+				}
+			],
+			0
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(Event::DepositBoosted { deposit_address, .. }) if deposit_address == &Some(address)
+		);
+	});
+}
+
+mod vault_swaps {
+
+	use crate::BoostedVaultTransactions;
+
+	use super::*;
+
+	#[test]
+	fn vault_swap_boosting() {
+		new_test_ext().execute_with(|| {
+			let output_address = ForeignChainAddress::Eth([1; 20].into());
+
+			let block_height = 10;
+			let deposit_address = [1; 20].into();
+
+			const BOOSTER_AMOUNT: AssetAmount = 500_000_000;
+			const DEPOSIT_AMOUNT: AssetAmount = 100_000_000;
+			const INPUT_ASSET: Asset = Asset::Eth;
+			const OUTPUT_ASSET: Asset = Asset::Flip;
+
+			const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * TIER_5_BPS as u128 / 10_000;
+			const PREWITNESS_DEPOSIT_ID: PrewitnessedDepositId = 1;
+			const CHANNEL_ID: ChannelId = 1;
+
+			setup();
+
+			assert_ok!(IngressEgress::add_boost_funds(
+				RuntimeOrigin::signed(BOOSTER_1),
+				EthAsset::Eth,
+				BOOSTER_AMOUNT,
+				TIER_5_BPS
+			));
+
+			let tx_id = [9u8; 32].into();
+
+			// Initially tx is not recorded as boosted
+			assert!(!BoostedVaultTransactions::<Test, ()>::contains_key(tx_id));
+
+			let deposit = VaultDepositWitness {
+				input_asset: INPUT_ASSET.try_into().unwrap(),
+				deposit_address: Some(deposit_address),
+				channel_id: Some(CHANNEL_ID),
+				deposit_amount: DEPOSIT_AMOUNT,
+				deposit_details: Default::default(),
+				output_asset: OUTPUT_ASSET,
+				destination_address: MockAddressConverter::to_encoded_address(
+					output_address.clone(),
+				),
+				deposit_metadata: None,
+				tx_id,
+				broker_fee: Beneficiary { account: BROKER, bps: 5 },
+				affiliate_fees: Default::default(),
+				refund_params: ChannelRefundParameters {
+					retry_duration: 2,
+					refund_address: ForeignChainAddress::Eth([2; 20].into()),
+					min_price: Default::default(),
+				},
+				dca_params: None,
+				boost_fee: 5,
+			};
+
+			// Prewitnessing a deposit for the first time should result in a boost:
+			{
+				IngressEgress::process_vault_swap_request_prewitness(block_height, deposit.clone());
+				assert_eq!(PrewitnessedDepositIdCounter::<Test, _>::get(), PREWITNESS_DEPOSIT_ID);
+
+				assert_eq!(
+					BoostPools::<Test, ()>::get(EthAsset::Eth, TIER_5_BPS)
+						.unwrap()
+						.get_pending_boost_ids()
+						.len(),
+					1
+				);
+
+				assert_eq!(
+					MockSwapRequestHandler::<Test>::get_swap_requests(),
+					vec![MockSwapRequest {
+						input_asset: INPUT_ASSET,
+						output_asset: OUTPUT_ASSET,
+						// Note that ingress fee is not charged:
+						input_amount: DEPOSIT_AMOUNT - BOOST_FEE,
+						swap_type: SwapRequestType::Regular { output_address },
+						broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 5 }],
+						origin: SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(tx_id) },
+					},]
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::IngressEgress(Event::DepositBoosted {
+						prewitnessed_deposit_id: PREWITNESS_DEPOSIT_ID,
+						channel_id: Some(CHANNEL_ID),
+						action: DepositAction::Swap { .. },
+						..
+					})
+				);
+
+				// Now the tx is recorded as boosted
+				assert!(BoostedVaultTransactions::<Test, ()>::contains_key(tx_id));
+			}
+
+			// Prewitnessing the same deposit (e.g. due to a reorg) should not result in a second
+			// boost:
+			{
+				IngressEgress::process_vault_swap_request_prewitness(block_height, deposit.clone());
+
+				assert_eq!(
+					BoostPools::<Test, ()>::get(EthAsset::Eth, TIER_5_BPS)
+						.unwrap()
+						.get_pending_boost_ids()
+						.len(),
+					1
+				);
+
+				assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests().len(), 1);
+			}
+
+			// Prewitnessing a different deposit *should* result in a second boost:
+			{
+				let other_deposit =
+					VaultDepositWitness { tx_id: [10u8; 32].into(), ..deposit.clone() };
+				IngressEgress::process_vault_swap_request_prewitness(block_height, other_deposit);
+
+				assert_eq!(
+					BoostPools::<Test, ()>::get(EthAsset::Eth, TIER_5_BPS)
+						.unwrap()
+						.get_pending_boost_ids()
+						.len(),
+					2
+				);
+
+				assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests().len(), 2);
+			}
+
+			// Fully witnessing a boosted deposit should finalise boost:
+			{
+				IngressEgress::process_vault_swap_request_full_witness(
+					block_height,
+					deposit.clone(),
+				);
+
+				// No new swap is initiated:
+				assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests().len(), 2);
+
+				assert_eq!(
+					BoostPools::<Test, ()>::get(EthAsset::Eth, TIER_5_BPS)
+						.unwrap()
+						.get_pending_boost_ids()
+						.len(),
+					1
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::IngressEgress(Event::DepositFinalised {
+						channel_id: Some(CHANNEL_ID),
+						action: DepositAction::BoostersCredited {
+							prewitnessed_deposit_id: PREWITNESS_DEPOSIT_ID
+						},
+						..
+					})
+				);
+
+				// Boost record for tx is removed:
+				assert!(!BoostedVaultTransactions::<Test, ()>::contains_key(tx_id));
+			}
+		});
+	}
 }

@@ -50,11 +50,7 @@ pub struct MockBalance;
 impl BalanceApi for MockBalance {
 	type AccountId = AccountId;
 
-	fn try_credit_account(
-		who: &Self::AccountId,
-		asset: cf_primitives::Asset,
-		amount: cf_primitives::AssetAmount,
-	) -> DispatchResult {
+	fn credit_account(who: &Self::AccountId, asset: Asset, amount: AssetAmount) {
 		match (*who, asset) {
 			(ALICE, Asset::Eth) => AliceCollectedEth::set(AliceCollectedEth::get() + amount),
 			(ALICE, Asset::Usdc) => AliceCollectedUsdc::set(AliceCollectedUsdc::get() + amount),
@@ -62,6 +58,14 @@ impl BalanceApi for MockBalance {
 			(BOB, Asset::Usdc) => BobCollectedUsdc::set(BobCollectedUsdc::get() + amount),
 			_ => (),
 		}
+	}
+
+	fn try_credit_account(
+		who: &Self::AccountId,
+		asset: cf_primitives::Asset,
+		amount: cf_primitives::AssetAmount,
+	) -> DispatchResult {
+		Self::credit_account(who, asset, amount);
 		Ok(())
 	}
 

@@ -7,12 +7,11 @@ use cf_chains::{
 	evm::{DepositDetails, H256},
 	Arbitrum, CcmDepositMetadata,
 };
-use cf_primitives::{
-	chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount, Beneficiary, EpochIndex,
-};
+use cf_primitives::{chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount, EpochIndex};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use itertools::Itertools;
+use pallet_cf_ingress_egress::VaultDepositWitness;
 use sp_core::H160;
 
 use crate::{
@@ -30,7 +29,7 @@ use crate::{
 
 use super::{
 	common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
-	evm::source::EvmSource,
+	evm::{source::EvmSource, vault::vault_deposit_witness},
 };
 
 use anyhow::{Context, Result};
@@ -185,6 +184,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 	type Chain = Arbitrum;
 
 	fn vault_swap_request(
+		block_height: u64,
 		source_asset: Asset,
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
@@ -193,26 +193,20 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		tx_id: H256,
 		vault_swap_parameters: VaultSwapParameters,
 	) -> state_chain_runtime::RuntimeCall {
+		let deposit = vault_deposit_witness!(
+			source_asset,
+			deposit_amount,
+			destination_asset,
+			destination_address,
+			deposit_metadata,
+			tx_id,
+			vault_swap_parameters
+		);
+
 		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
-				input_asset: source_asset.try_into().expect("invalid asset for chain"),
-				output_asset: destination_asset,
-				deposit_amount,
-				destination_address,
-				deposit_metadata,
-				tx_id,
-				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_id]) }),
-				broker_fee: vault_swap_parameters.broker_fee,
-				affiliate_fees: vault_swap_parameters
-					.affiliate_fees
-					.into_iter()
-					.map(|entry| Beneficiary { account: entry.affiliate, bps: entry.fee.into() })
-					.collect_vec()
-					.try_into()
-					.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
-				boost_fee: vault_swap_parameters.boost_fee.into(),
-				dca_params: vault_swap_parameters.dca_params,
-				refund_params: Box::new(vault_swap_parameters.refund_params),
+				block_height,
+				deposit: Box::new(deposit),
 			},
 		)
 	}

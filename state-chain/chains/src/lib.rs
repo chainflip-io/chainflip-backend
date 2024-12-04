@@ -665,6 +665,12 @@ pub enum SwapOrigin {
 	Internal,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum DepositOriginType {
+	DepositChannel,
+	Vault,
+}
+
 pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
 pub const MAX_CCM_ADDITIONAL_DATA_LENGTH: u32 = 1_000;
 
@@ -785,6 +791,8 @@ impl<Address> CcmDepositMetadataGeneric<Address> {
 
 		let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
 
+		// TODO: we already check ccm support when opening a channel (and we have to).
+		// If we can also check this in vault swaps, we should be able to remove this here.
 		let destination_chain: ForeignChain = destination_asset.into();
 		if !destination_chain.ccm_support() {
 			return Err(CcmFailReason::UnsupportedForTargetChain)

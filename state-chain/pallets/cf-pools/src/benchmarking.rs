@@ -61,8 +61,8 @@ mod benchmarks {
 			0,
 			price_at_tick(0).unwrap()
 		));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 
 		#[extrinsic_call]
 		update_range_order(
@@ -88,8 +88,8 @@ mod benchmarks {
 			0,
 			price_at_tick(0).unwrap()
 		));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 
 		#[extrinsic_call]
 		set_range_order(
@@ -115,8 +115,8 @@ mod benchmarks {
 			0,
 			price_at_tick(0).unwrap()
 		));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 
 		#[extrinsic_call]
 		update_limit_order(
@@ -140,8 +140,8 @@ mod benchmarks {
 			0,
 			price_at_tick(0).unwrap()
 		));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 
 		#[extrinsic_call]
 		set_limit_order(
@@ -165,8 +165,8 @@ mod benchmarks {
 			0,
 			price_at_tick(0).unwrap()
 		));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 		assert_ok!(Pallet::<T>::set_limit_order(
 			RawOrigin::Signed(caller.clone()).into(),
 			Asset::Eth,
@@ -219,8 +219,8 @@ mod benchmarks {
 			0,
 			price_at_tick(0).unwrap()
 		));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 		#[extrinsic_call]
 		schedule_limit_order_update(
 			RawOrigin::Signed(caller.clone()),
@@ -278,8 +278,8 @@ mod benchmarks {
 			0,
 			price_at_tick(0).unwrap()
 		));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000_000,));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000_000,));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000_000);
 		let mut orders_to_delete: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>> =
 			vec![].try_into().unwrap();
 		for i in 1..101i32 {

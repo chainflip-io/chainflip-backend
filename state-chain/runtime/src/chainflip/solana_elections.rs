@@ -37,6 +37,7 @@ use pallet_cf_elections::{
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
+use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
@@ -559,19 +560,25 @@ impl
 	> for SolanaVaultSwapsHandler
 {
 	fn initiate_vault_swap(swap_details: SolanaVaultSwapDetails) {
-		SolanaIngressEgress::process_vault_swap_request(
-			swap_details.from,
-			swap_details.deposit_amount,
-			swap_details.to,
-			swap_details.destination_address,
-			swap_details.deposit_metadata,
-			(swap_details.swap_account, swap_details.creation_slot),
-			(),
-			swap_details.broker_fee,
-			swap_details.affiliate_fees,
-			swap_details.refund_params,
-			swap_details.dca_params,
-			swap_details.boost_fee.into(),
+		let block_height = swap_details.creation_slot;
+		SolanaIngressEgress::process_vault_swap_request_full_witness(
+			block_height,
+			VaultDepositWitness {
+				input_asset: swap_details.from,
+				deposit_address: None,
+				channel_id: None,
+				deposit_amount: swap_details.deposit_amount,
+				deposit_details: (),
+				output_asset: swap_details.to,
+				destination_address: swap_details.destination_address,
+				deposit_metadata: swap_details.deposit_metadata,
+				tx_id: (swap_details.swap_account, swap_details.creation_slot),
+				broker_fee: swap_details.broker_fee,
+				affiliate_fees: swap_details.affiliate_fees,
+				dca_params: swap_details.dca_params,
+				refund_params: swap_details.refund_params,
+				boost_fee: swap_details.boost_fee.into(),
+			},
 		);
 	}
 

@@ -8,7 +8,7 @@ use crate::{
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
 	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
 	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer,
+	ScheduledEgressFetchOrTransfer, VaultDepositWitness,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -16,11 +16,12 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
+	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel, DepositOriginType,
 	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
-	AffiliateShortId, AssetAmount, BasisPoints, Beneficiary, ChannelId, ForeignChain,
+	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,
+	DcaParameters, ForeignChain, MAX_AFFILIATES,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -47,7 +48,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::{bounded_vec, H160};
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, DispatchResult};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -242,11 +243,13 @@ fn request_address_and_deposit(
 	)
 	.unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-	assert_ok!(IngressEgress::process_single_deposit(
-		address,
-		asset,
-		DEFAULT_DEPOSIT_AMOUNT,
-		Default::default(),
+	assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+		&DepositWitness {
+			deposit_address: address,
+			asset,
+			amount: DEFAULT_DEPOSIT_AMOUNT,
+			deposit_details: Default::default()
+		},
 		Default::default()
 	));
 	(id, address)
@@ -575,25 +578,27 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			(address, address2)
 		})
 		.then_execute_at_next_block(|(address, address2)| {
-			IngressEgress::process_deposit_witnesses(
-				vec![
-					DepositWitness {
-						deposit_address: address,
-						asset: ETH,
-						amount: 1,
-						deposit_details: Default::default(),
-					},
-					DepositWitness {
-						deposit_address: address2,
-						asset: ETH,
-						amount: 1,
-						deposit_details: Default::default(),
-					},
-				],
-				// block height is purely informative.
-				BlockHeightProvider::<MockEthereum>::get_block_height(),
-			)
-			.unwrap();
+			// block height is purely informative.
+			let block_height = BlockHeightProvider::<MockEthereum>::get_block_height();
+			IngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
+					deposit_address: address,
+					asset: ETH,
+					amount: 1,
+					deposit_details: Default::default(),
+				},
+				block_height,
+			);
+
+			IngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
+					deposit_address: address2,
+					asset: ETH,
+					amount: 1,
+					deposit_details: Default::default(),
+				},
+				block_height,
+			);
 			(address, address2)
 		})
 		.then_process_events(|_, event| match event {
@@ -617,7 +622,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 				crate::Event::DepositFinalised {
 					deposit_address,
 					..
-				}) if deposit_address == expected_accepted_address
+				}) if deposit_address.as_ref() == Some(expected_accepted_address)
 			)),);
 		});
 }
@@ -629,25 +634,26 @@ fn multi_use_deposit_address_different_blocks() {
 	new_test_ext()
 		.then_execute_at_next_block(|_| request_address_and_deposit(ALICE, ETH))
 		.then_execute_at_next_block(|(_, deposit_address)| {
-			IngressEgress::process_deposit_witnesses(
-				vec![DepositWitness {
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+				&DepositWitness {
 					deposit_address,
 					asset: ETH,
 					amount: 1,
 					deposit_details: Default::default(),
-				}],
+				},
 				// block height is purely informative.
 				BlockHeightProvider::<MockEthereum>::get_block_height(),
-			)
-			.unwrap();
+			));
 			deposit_address
 		})
 		.then_execute_at_next_block(|deposit_address| {
-			assert_ok!(Pallet::<Test, _>::process_single_deposit(
-				deposit_address,
-				ETH,
-				1,
-				Default::default(),
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+				&DepositWitness {
+					deposit_address,
+					asset: ETH,
+					amount: 1,
+					deposit_details: Default::default()
+				},
 				Default::default()
 			));
 			assert!(
@@ -661,17 +667,16 @@ fn multi_use_deposit_address_different_blocks() {
 		})
 		// The channel should be closed at the next block.
 		.then_execute_at_next_block(|deposit_address| {
-			IngressEgress::process_deposit_witnesses(
-				vec![DepositWitness {
+			IngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
 					deposit_address,
 					asset: ETH,
 					amount: 1,
 					deposit_details: Default::default(),
-				}],
+				},
 				// block height is purely informative.
 				BlockHeightProvider::<MockEthereum>::get_block_height(),
-			)
-			.unwrap();
+			);
 			deposit_address
 		})
 		.then_process_events(|_, event| match event {
@@ -707,24 +712,22 @@ fn multi_use_deposit_same_block() {
 		})
 		.then_execute_at_next_block(|(request, channel_id, deposit_address)| {
 			let asset = request.source_asset();
-			IngressEgress::process_deposit_witnesses(
-				vec![
-					DepositWitness {
-						deposit_address,
-						asset,
-						amount: MinimumDeposit::<Test, ()>::get(asset) + DEPOSIT_AMOUNT,
-						deposit_details: Default::default(),
-					},
-					DepositWitness {
-						deposit_address,
-						asset,
-						amount: MinimumDeposit::<Test, ()>::get(asset) + DEPOSIT_AMOUNT,
-						deposit_details: Default::default(),
-					},
-				],
+			let deposit_witness = DepositWitness {
+				deposit_address,
+				asset,
+				amount: MinimumDeposit::<Test, ()>::get(asset) + DEPOSIT_AMOUNT,
+				deposit_details: Default::default(),
+			};
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+				&deposit_witness,
 				Default::default(),
-			)
-			.unwrap();
+			));
+
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+				&deposit_witness,
+				Default::default(),
+			));
+
 			(request, channel_id, deposit_address)
 		})
 		.then_execute_with_keep_context(|(_, channel_id, deposit_address)| {
@@ -847,14 +850,15 @@ fn deposits_below_minimum_are_rejected() {
 		let (channel_id, deposit_address) = request_address_and_deposit(LP_ACCOUNT, flip);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, ()>::DepositFinalised {
-				deposit_address,
+				deposit_address: Some(deposit_address),
 				asset: flip,
 				amount: default_deposit_amount,
 				block_height: Default::default(),
 				deposit_details: Default::default(),
 				ingress_fee: 0,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
-				channel_id,
+				channel_id: Some(channel_id),
+				origin_type: DepositOriginType::DepositChannel,
 			},
 		));
 	});
@@ -881,15 +885,16 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		let deposit_address = address.try_into().unwrap();
 
 		// Swap a low enough amount such that it gets swallowed by fees
-		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
+		let deposit = DepositWitness::<Ethereum> {
 			deposit_address,
 			asset: ASSET,
 			amount: DEPOSIT_AMOUNT,
 			deposit_details: Default::default(),
 		};
-		assert_ok!(IngressEgress::process_deposit_witnesses(
-			vec![deposit_detail.clone()],
-			Default::default(),
+
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&deposit,
+			Default::default()
 		));
 		// Observe the DepositIgnored Event
 		assert!(
@@ -910,9 +915,9 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		// Set fees to less than the deposit amount and retry.
 		ChainTracker::<Ethereum>::set_fee(LOW_FEE);
 
-		assert_ok!(IngressEgress::process_deposit_witnesses(
-			vec![deposit_detail],
-			Default::default(),
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&deposit,
+			Default::default()
 		));
 		// Observe the DepositReceived Event
 		assert!(
@@ -944,14 +949,15 @@ fn handle_pending_deployment() {
 		IngressEgress::on_finalize(1);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
 		// Process deposit again the same address.
-		Pallet::<Test, _>::process_single_deposit(
-			deposit_address,
-			ETH,
-			1,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&DepositWitness {
+				deposit_address,
+				asset: ETH,
+				amount: 1,
+				deposit_details: Default::default(),
+			},
 			Default::default(),
-			Default::default(),
-		)
-		.unwrap();
+		));
 		assert!(MockBalance::get_balance(&ALICE, ETH.into()) > 0, "LP account hasn't earned fees!");
 		// None-pending requests can still be sent
 		request_address_and_deposit(1u64, EthAsset::Eth);
@@ -974,14 +980,15 @@ fn handle_pending_deployment_same_block() {
 	new_test_ext().execute_with(|| {
 		// Initial request.
 		let (_, deposit_address) = request_address_and_deposit(ALICE, EthAsset::Eth);
-		Pallet::<Test, _>::process_single_deposit(
-			deposit_address,
-			EthAsset::Eth,
-			1,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&DepositWitness {
+				deposit_address,
+				asset: EthAsset::Eth,
+				amount: 1,
+				deposit_details: Default::default(),
+			},
 			Default::default(),
-			Default::default(),
-		)
-		.unwrap();
+		));
 		assert!(
 			MockBalance::get_balance(&ALICE, EthAsset::Eth.into()) > 0,
 			"LP account hasn't earned fees!"
@@ -1709,11 +1716,13 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 			.unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 
-			assert_ok!(IngressEgress::process_single_deposit(
-				address,
-				ASSET,
-				DEFAULT_DEPOSIT_AMOUNT,
-				Default::default(),
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+				&DepositWitness {
+					deposit_address: address,
+					asset: ASSET,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details: Default::default(),
+				},
 				Default::default()
 			));
 		}
@@ -1790,6 +1799,43 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 	});
 }
 
+fn submit_vault_swap_request(
+	input_asset: Asset,
+	output_asset: Asset,
+	deposit_amount: AssetAmount,
+	deposit_address: H160,
+	destination_address: EncodedAddress,
+	deposit_metadata: Option<CcmDepositMetadata>,
+	tx_id: H256,
+	deposit_details: DepositDetails,
+	broker_fee: Beneficiary<u64>,
+	affiliate_fees: Affiliates<AffiliateShortId>,
+	refund_params: ChannelRefundParameters,
+	dca_params: Option<DcaParameters>,
+	boost_fee: BasisPoints,
+) -> DispatchResult {
+	IngressEgress::vault_swap_request(
+		RuntimeOrigin::root(),
+		0,
+		Box::new(VaultDepositWitness {
+			input_asset: input_asset.try_into().unwrap(),
+			deposit_address: Some(deposit_address),
+			channel_id: Some(0),
+			deposit_amount,
+			deposit_details,
+			output_asset,
+			destination_address,
+			deposit_metadata,
+			tx_id,
+			broker_fee,
+			affiliate_fees,
+			refund_params,
+			dca_params,
+			boost_fee,
+		}),
+	)
+}
+
 #[test]
 fn can_request_swap_via_extrinsic() {
 	const INPUT_ASSET: Asset = Asset::Eth;
@@ -1799,20 +1845,20 @@ fn can_request_swap_via_extrinsic() {
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			INPUT_ASSET.try_into().unwrap(),
+		assert_ok!(submit_vault_swap_request(
+			INPUT_ASSET,
 			OUTPUT_ASSET,
 			INPUT_AMOUNT,
+			Default::default(),
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
-			0,
+			0
 		));
 
 		assert_eq!(
@@ -1855,21 +1901,21 @@ fn vault_swaps_support_affiliate_fees() {
 		// have no effect on the test:
 		MockAffiliateRegistry::register_affiliate(BROKER + 1, AFFILIATE_2, AFFILIATE_SHORT_1);
 
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			INPUT_ASSET.try_into().unwrap(),
+		assert_ok!(submit_vault_swap_request(
+			INPUT_ASSET,
 			OUTPUT_ASSET,
 			INPUT_AMOUNT,
+			Default::default(),
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: BROKER, bps: BROKER_FEE },
 			bounded_vec![
 				Beneficiary { account: AFFILIATE_SHORT_1, bps: AFFILIATE_FEE },
 				Beneficiary { account: AFFILIATE_SHORT_2, bps: AFFILIATE_FEE }
 			],
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
@@ -1913,18 +1959,18 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 
 		let output_address = ForeignChainAddress::Eth([1; 20].into());
 
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			INPUT_ASSET.try_into().unwrap(),
+		assert_ok!(submit_vault_swap_request(
+			INPUT_ASSET,
 			OUTPUT_ASSET,
 			INPUT_AMOUNT,
+			Default::default(),
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: NOT_A_BROKER, bps: BROKER_FEE },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
@@ -1959,7 +2005,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 
 	let ccm_deposit_metadata = CcmDepositMetadata {
 		source_chain: ForeignChain::Ethereum,
-		source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+		source_address: None,
 		channel_metadata: CcmChannelMetadata {
 			message: vec![0x01].try_into().unwrap(),
 			gas_budget: 1_000,
@@ -1970,18 +2016,18 @@ fn can_request_ccm_swap_via_extrinsic() {
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			INPUT_ASSET.try_into().unwrap(),
+		assert_ok!(submit_vault_swap_request(
+			INPUT_ASSET,
 			OUTPUT_ASSET,
 			10_000,
+			Default::default(),
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			Some(ccm_deposit_metadata.clone()),
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
@@ -2020,41 +2066,41 @@ fn rejects_invalid_swap_by_witnesser() {
 			MockAddressConverter::to_encoded_address(ForeignChainAddress::Btc(script_pubkey));
 
 		// Is valid Bitcoin address, but asset is Dot, so not compatible
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			EthAsset::Eth,
+		assert_ok!(submit_vault_swap_request(
+			Asset::Eth,
 			Asset::Dot,
 			10000,
+			Default::default(),
 			btc_encoded_address,
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
-		),);
+		));
 
 		// No swap request created -> the call was ignored
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 		// Invalid BTC address:
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			EthAsset::Eth,
+		assert_ok!(submit_vault_swap_request(
+			Asset::Eth,
 			Asset::Btc,
 			10000,
+			Default::default(),
 			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
-		),);
+		));
 
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
@@ -2076,18 +2122,18 @@ fn failed_ccm_deposit_can_deposit_event() {
 
 	new_test_ext().execute_with(|| {
 		// CCM is not supported for Dot:
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			EthAsset::Flip,
+		assert_ok!(submit_vault_swap_request(
+			Asset::Flip,
 			Asset::Dot,
 			10_000,
+			Default::default(),
 			EncodedAddress::Dot(Default::default()),
 			Some(ccm_deposit_metadata.clone()),
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
@@ -2103,18 +2149,18 @@ fn failed_ccm_deposit_can_deposit_event() {
 		System::reset_events();
 
 		// Insufficient deposit amount:
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			EthAsset::Flip,
+		assert_ok!(submit_vault_swap_request(
+			Asset::Flip,
 			Asset::Eth,
 			GAS_BUDGET - 1,
+			Default::default(),
 			EncodedAddress::Eth(Default::default()),
 			Some(ccm_deposit_metadata),
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
@@ -2159,5 +2205,40 @@ fn private_and_regular_channel_ids_do_not_overlap() {
 		// Open a regular channel again to check that opening a private channel
 		// updates the channel id counter:
 		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_2);
+	});
+}
+
+#[test]
+fn assembling_broker_fees() {
+	new_test_ext().execute_with(|| {
+		let broker_fee = Beneficiary { account: BROKER, bps: 0 };
+
+		const AFFILIATE_IDS: [u64; 5] = [10, 20, 30, 40, 50];
+		const AFFILIATE_SHORT_IDS: [u8; 5] = [1, 2, 3, 4, 5];
+
+		assert_eq!(AFFILIATE_IDS.len(), MAX_AFFILIATES as usize);
+
+		for (i, id) in AFFILIATE_IDS.into_iter().enumerate() {
+			let short_id = AFFILIATE_SHORT_IDS[i];
+			MockAffiliateRegistry::register_affiliate(BROKER, id, short_id.into());
+		}
+
+		let affiliate_fees: Vec<Beneficiary<AffiliateShortId>> = AFFILIATE_SHORT_IDS
+			.into_iter()
+			.map(|short_id| Beneficiary { account: short_id.into(), bps: short_id.into() })
+			.collect();
+
+		let affiliate_fees: Affiliates<AffiliateShortId> = affiliate_fees.try_into().unwrap();
+
+		let expected: Beneficiaries<u64> = bounded_vec![
+			Beneficiary { account: BROKER, bps: 0 },
+			Beneficiary { account: 10, bps: 1 },
+			Beneficiary { account: 20, bps: 2 },
+			Beneficiary { account: 30, bps: 3 },
+			Beneficiary { account: 40, bps: 4 },
+			Beneficiary { account: 50, bps: 5 },
+		];
+
+		assert_eq!(IngressEgress::assemble_broker_fees(broker_fee, affiliate_fees), expected);
 	});
 }

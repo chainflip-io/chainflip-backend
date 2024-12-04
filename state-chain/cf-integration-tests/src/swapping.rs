@@ -37,10 +37,10 @@ use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls, RequestFailureCallbacks,
 	RequestSuccessCallbacks,
 };
-use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
+use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepositWitness};
 use pallet_cf_pools::{HistoricalEarnedFees, OrderId, RangeOrderSize};
 use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
-use sp_core::U256;
+use sp_core::{H160, U256};
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
@@ -81,7 +81,7 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price
 
 fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 	let original_amount = pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset);
-	assert_ok!(AssetBalances::try_credit_account(account_id, asset, amount));
+	AssetBalances::credit_account(account_id, asset, amount);
 	assert_eq!(
 		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset),
 		original_amount + amount
@@ -569,6 +569,31 @@ fn ccm_deposit_metadata_mock() -> CcmDepositMetadata {
 	}
 }
 
+fn vault_swap_deposit_witness(
+	deposit_amount: u128,
+	output_asset: Asset,
+) -> VaultDepositWitness<Runtime, EthereumInstance> {
+	VaultDepositWitness {
+		input_asset: EthAsset::Eth,
+		output_asset,
+		deposit_amount,
+		destination_address: EncodedAddress::Eth([0x02; 20]),
+		deposit_metadata: Some(ccm_deposit_metadata_mock()),
+		tx_id: Default::default(),
+		deposit_details: DepositDetails { tx_hashes: None },
+		broker_fee: cf_primitives::Beneficiary {
+			account: sp_runtime::AccountId32::new([0; 32]),
+			bps: 0,
+		},
+		affiliate_fees: Default::default(),
+		refund_params: ETH_REFUND_PARAMS,
+		dca_params: None,
+		boost_fee: 0,
+		deposit_address: Some(H160::from([0x03; 20])),
+		channel_id: Some(0),
+	}
+}
+
 #[test]
 fn can_process_ccm_via_direct_deposit() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
@@ -578,21 +603,8 @@ fn can_process_ccm_via_direct_deposit() {
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
-				input_asset: EthAsset::Flip,
-				output_asset: Asset::Usdc,
-				deposit_amount,
-				destination_address: EncodedAddress::Eth([0x02; 20]),
-				deposit_metadata: Some(ccm_deposit_metadata_mock()),
-				tx_id: Default::default(),
-				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
-				broker_fee: cf_primitives::Beneficiary {
-					account: sp_runtime::AccountId32::new([0; 32]),
-					bps: 0,
-				},
-				affiliate_fees: Default::default(),
-				refund_params: Box::new(ETH_REFUND_PARAMS),
-				dca_params: None,
-				boost_fee: 0,
+				block_height: 0,
+				deposit: Box::new(vault_swap_deposit_witness(deposit_amount, Asset::Usdc)),
 			},
 		));
 
@@ -632,21 +644,8 @@ fn failed_swaps_are_rolled_back() {
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
-				input_asset: EthAsset::Eth,
-				output_asset: Asset::Flip,
-				deposit_amount: 10_000 * DECIMALS,
-				destination_address: EncodedAddress::Eth(Default::default()),
-				tx_id: Default::default(),
-				deposit_metadata: None,
-				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
-				broker_fee: cf_primitives::Beneficiary {
-					account: sp_runtime::AccountId32::new([0; 32]),
-					bps: 0,
-				},
-				affiliate_fees: Default::default(),
-				refund_params: Box::new(ETH_REFUND_PARAMS),
-				dca_params: None,
-				boost_fee: 0,
+				block_height: 0,
+				deposit: Box::new(vault_swap_deposit_witness(10_000 * DECIMALS, Asset::Flip)),
 			},
 		));
 
@@ -798,22 +797,8 @@ fn can_resign_failed_ccm() {
 
 			witness_call(RuntimeCall::EthereumIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
-					input_asset: EthAsset::Flip,
-					output_asset: Asset::Usdc,
-					deposit_amount: 10_000_000_000_000,
-					destination_address: EncodedAddress::Eth([0x02; 20]),
-					deposit_metadata: Some(ccm_deposit_metadata_mock()),
-					tx_id: Default::default(),
-					deposit_details: Box::new(DepositDetails { tx_hashes: None }),
-					broker_fee: cf_primitives::Beneficiary {
-						account: sp_runtime::AccountId32::new([0; 32]),
-						bps: 0,
-					},
-					affiliate_fees: Default::default(),
-
-					refund_params: Box::new(ETH_REFUND_PARAMS),
-					dca_params: None,
-					boost_fee: 0,
+					block_height: 0,
+					deposit: Box::new(vault_swap_deposit_witness(10_000_000_000_000, Asset::Usdc)),
 				},
 			));
 
