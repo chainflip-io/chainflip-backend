@@ -194,7 +194,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 					.zip(amounts)
 					.map(|((request, channel_id, deposit_address), amount)| {
 						if !amount.is_zero() {
-							IngressEgress::process_channel_deposit_full_witness(
+							IngressEgress::process_channel_deposit_full_witness_inner(
 								&DepositWitness {
 									deposit_address,
 									asset: request.source_asset(),

@@ -243,7 +243,7 @@ fn request_address_and_deposit(
 	)
 	.unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-	assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+	assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 		&DepositWitness {
 			deposit_address: address,
 			asset,
@@ -580,25 +580,25 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		.then_execute_at_next_block(|(address, address2)| {
 			// block height is purely informative.
 			let block_height = BlockHeightProvider::<MockEthereum>::get_block_height();
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness(
-				&DepositWitness {
+			IngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
 					deposit_address: address,
 					asset: ETH,
 					amount: 1,
 					deposit_details: Default::default(),
 				},
 				block_height,
-			));
+			);
 
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness(
-				&DepositWitness {
+			IngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
 					deposit_address: address2,
 					asset: ETH,
 					amount: 1,
 					deposit_details: Default::default(),
 				},
 				block_height,
-			));
+			);
 			(address, address2)
 		})
 		.then_process_events(|_, event| match event {
@@ -634,7 +634,7 @@ fn multi_use_deposit_address_different_blocks() {
 	new_test_ext()
 		.then_execute_at_next_block(|_| request_address_and_deposit(ALICE, ETH))
 		.then_execute_at_next_block(|(_, deposit_address)| {
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 				&DepositWitness {
 					deposit_address,
 					asset: ETH,
@@ -647,7 +647,7 @@ fn multi_use_deposit_address_different_blocks() {
 			deposit_address
 		})
 		.then_execute_at_next_block(|deposit_address| {
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 				&DepositWitness {
 					deposit_address,
 					asset: ETH,
@@ -667,7 +667,7 @@ fn multi_use_deposit_address_different_blocks() {
 		})
 		// The channel should be closed at the next block.
 		.then_execute_at_next_block(|deposit_address| {
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 				&DepositWitness {
 					deposit_address,
 					asset: ETH,
@@ -718,12 +718,12 @@ fn multi_use_deposit_same_block() {
 				amount: MinimumDeposit::<Test, ()>::get(asset) + DEPOSIT_AMOUNT,
 				deposit_details: Default::default(),
 			};
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 				&deposit_witness,
 				Default::default(),
 			));
 
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 				&deposit_witness,
 				Default::default(),
 			));
@@ -892,7 +892,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 			deposit_details: Default::default(),
 		};
 
-		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 			&deposit,
 			Default::default()
 		));
@@ -915,7 +915,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		// Set fees to less than the deposit amount and retry.
 		ChainTracker::<Ethereum>::set_fee(LOW_FEE);
 
-		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 			&deposit,
 			Default::default()
 		));
@@ -949,7 +949,7 @@ fn handle_pending_deployment() {
 		IngressEgress::on_finalize(1);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
 		// Process deposit again the same address.
-		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 			&DepositWitness {
 				deposit_address,
 				asset: ETH,
@@ -980,7 +980,7 @@ fn handle_pending_deployment_same_block() {
 	new_test_ext().execute_with(|| {
 		// Initial request.
 		let (_, deposit_address) = request_address_and_deposit(ALICE, EthAsset::Eth);
-		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 			&DepositWitness {
 				deposit_address,
 				asset: EthAsset::Eth,
@@ -1716,7 +1716,7 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 			.unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 				&DepositWitness {
 					deposit_address: address,
 					asset: ASSET,

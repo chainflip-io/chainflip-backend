@@ -55,7 +55,7 @@ mod helpers {
 		)
 		.unwrap();
 		let address: <Bitcoin as Chain>::ChainAccount = address.try_into().unwrap();
-		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 			&DepositWitness {
 				deposit_address: address.clone(),
 				asset,
@@ -123,7 +123,7 @@ fn process_marked_transaction_and_expect_refund() {
 			tx_in_id,
 		));
 
-		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 			&DepositWitness {
 				deposit_address: address.clone(),
 				asset: btc::Asset::Btc,
@@ -177,7 +177,7 @@ fn finalize_boosted_tx_if_marked_after_prewitness() {
 			tx_id,
 		),);
 
-		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 			&DepositWitness {
 				deposit_address: address.clone(),
 				asset: btc::Asset::Btc,
@@ -226,7 +226,7 @@ fn reject_tx_if_marked_before_prewitness() {
 			10,
 		));
 
-		assert_ok!(IngressEgress::process_channel_deposit_full_witness(
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
 			&DepositWitness {
 				deposit_address: address.clone(),
 				asset: btc::Asset::Btc,
@@ -424,7 +424,7 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 			OriginTrait::signed(BROKER),
 			tx_id
 		));
-		assert_ok!(IngressEgress::process_channel_deposit_full_witness(&deposit_witness, 10));
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(&deposit_witness, 10));
 
 		assert_has_matching_event!(
 			Test,

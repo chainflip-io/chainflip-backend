@@ -1169,13 +1169,7 @@ pub mod pallet {
 				T::EnsureWitnessed::ensure_origin(origin)?;
 
 				for deposit_witness in deposit_witnesses {
-					Self::process_channel_deposit_full_witness(&deposit_witness, block_height)
-						.unwrap_or_else(|e| {
-							Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
-								reason: e,
-								deposit_witness,
-							});
-						})
+					Self::process_channel_deposit_full_witness(deposit_witness, block_height);
 				}
 			}
 			Ok(())
@@ -1455,15 +1449,9 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 		block_number: Self::BlockNumber,
 		details: Self::DepositDetails,
 	) {
-		let deposit_witness =
-			DepositWitness { deposit_address: channel, asset, amount, deposit_details: details };
-		Self::process_channel_deposit_full_witness(&deposit_witness, block_number).unwrap_or_else(
-			|e| {
-				Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
-					reason: e,
-					deposit_witness,
-				});
-			},
+		Self::process_channel_deposit_full_witness(
+			DepositWitness { deposit_address: channel, asset, amount, deposit_details: details },
+			block_number,
 		);
 	}
 
@@ -1913,9 +1901,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	// A wrapper around `process_channel_deposit_full_witness_inner` that catches any
+	// error and emits a rejection event
+	fn process_channel_deposit_full_witness(
+		deposit_witness: DepositWitness<T::TargetChain>,
+		block_height: TargetChainBlockNumber<T, I>,
+	) {
+		Self::process_channel_deposit_full_witness_inner(&deposit_witness, block_height)
+			.unwrap_or_else(|e| {
+				Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
+					reason: e,
+					deposit_witness,
+				});
+			})
+	}
+
 	/// Completes a single deposit request.
 	#[transactional]
-	fn process_channel_deposit_full_witness(
+	fn process_channel_deposit_full_witness_inner(
 		DepositWitness { deposit_address, asset, amount, deposit_details }: &DepositWitness<
 			T::TargetChain,
 		>,

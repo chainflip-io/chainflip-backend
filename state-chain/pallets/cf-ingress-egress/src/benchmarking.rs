@@ -82,7 +82,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness(
+			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness_inner(
 				&DepositWitness {
 					deposit_address,
 					asset: source_asset,
@@ -476,7 +476,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness(
+			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness_inner(
 				&DepositWitness {
 					deposit_address,
 					asset,

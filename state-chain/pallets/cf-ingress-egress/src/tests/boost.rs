@@ -78,7 +78,7 @@ fn prewitness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmoun
 
 #[track_caller]
 fn witness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmount) {
-	assert_ok!(Pallet::<Test, _>::process_channel_deposit_full_witness(
+	assert_ok!(Pallet::<Test, _>::process_channel_deposit_full_witness_inner(
 		&DepositWitness::<Ethereum> {
 			deposit_address,
 			asset,
