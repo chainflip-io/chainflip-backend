@@ -10,16 +10,16 @@ CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 # `rustup completions --help` to find out how to set this up.
 
 [alias]
-cf-test = "test --features runtime-benchmarks,try-runtime"
-cf-test-ci = "test --release --features runtime-benchmarks,slow-tests,try-runtime"
+cf-test = "test --features runtime-benchmarks,try-runtime,metadata-hash"
+cf-test-ci = "test --release --features runtime-benchmarks,slow-tests,try-runtime,metadata-hash"
 cf-test-cfe = "test --package chainflip-engine --package multisig"
 
-cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings -A deprecated"
-cf-clippy-ci = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings -A deprecated"
+cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests,metadata-hash -- -D warnings -A deprecated"
+cf-clippy-ci = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests,metadata-hash -- -D warnings -A deprecated"
 
-cf-build-benchmarks = "build --release --features=runtime-benchmarks"
-cf-build-try-runtime = "build --release --features try-runtime"
-cf-build-release = "build --release"
+cf-build-benchmarks = "build --release --features=runtime-benchmarks,metadata-hash"
+cf-build-try-runtime = "build --release --features try-runtime,metadata-hash"
+cf-build-release = "build --release --features metadata-hash"
 cf-build-production = "build --profile=production"
 # Check for feature inconsistencies.
 check-sc-features = '''
