@@ -205,7 +205,7 @@ impl SolTrackedData {
 			SolAsset::SolUsdc => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
 		});
 		sp_std::cmp::min(
-			MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as SolComputeLimit,
+			MAX_COMPUTE_UNITS_PER_CCM_TRANSFER,
 			compute_limit_with_overhead,
 		)
 	}
