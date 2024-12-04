@@ -16,7 +16,7 @@ import { send } from '../shared/send';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
 export async function depositLiquidity(
-  ccy: Asset | 'HubDot',
+  ccy: Asset,
   amount: number,
   waitForFinalization = false,
   lpKey?: string,

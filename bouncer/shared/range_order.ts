@@ -8,7 +8,7 @@ import {
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
-export async function rangeOrder(ccy: Asset | 'HubDot', amount: number, lpKey?: string, orderId?: number) {
+export async function rangeOrder(ccy: Asset, amount: number, lpKey?: string, orderId?: number) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 

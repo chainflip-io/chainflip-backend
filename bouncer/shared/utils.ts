@@ -168,6 +168,8 @@ export function shortChainFromAsset(asset: Asset) {
     case 'SolUsdc':
       return 'Sol';
     case 'HubDot':
+    case 'HubUsdc':
+    case 'HubUsdt':
       return 'Hub';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
@@ -197,6 +199,8 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'ArbUsdc':
     case 'Flip':
     case 'SolUsdc':
+    case 'HubUsdc':
+    case 'HubUsdt':
       return '500';
     case 'Sol':
       return '100';
