@@ -537,16 +537,24 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			// Find the lowest unused short id
 			let mut used_ids: Vec<AffiliateShortId> =
 				affiliates.into_iter().map(|(short_id, _)| short_id).collect();
-			used_ids.sort_unstable();
-			let lowest_unused = move || {
-				for (index, assigned_id) in (0..=u8::MAX).zip(used_ids) {
-					if AffiliateShortId::from(index) != assigned_id {
-						return Ok(index.into());
-					}
-				}
-				Err(anyhow!("No unused affiliate short IDs available"))
-			};
-			lowest_unused()?
+			let used_id_len = used_ids.len();
+			if used_ids.is_empty() {
+				AffiliateShortId::from(0)
+			} else if used_id_len > u8::MAX as usize {
+				bail!("No unused affiliate short IDs available")
+			} else {
+				used_ids.sort_unstable();
+				AffiliateShortId::from(
+					used_ids
+						.into_iter()
+						.enumerate()
+						.find(|(index, assigned_id)| {
+							AffiliateShortId::from(*index as u8) != *assigned_id
+						})
+						.map(|(index, _)| index)
+						.unwrap_or(used_id_len) as u8,
+				)
+			}
 		};
 
 		let (_, events, ..) =
