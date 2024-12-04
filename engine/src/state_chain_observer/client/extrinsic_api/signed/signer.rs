@@ -2,7 +2,7 @@ use codec::Encode;
 use sp_core::Pair;
 use sp_runtime::{
 	generic::Era,
-	traits::{IdentifyAccount, Verify},
+	traits::{IdentifyAccount, SignedExtension, Verify},
 	MultiAddress,
 };
 use sp_version::RuntimeVersion;
@@ -47,6 +47,10 @@ where
 
 		let lifetime = ..era.death(current_block_number as u64) as state_chain_runtime::BlockNumber;
 
+		let check_metadata_hash = frame_metadata_hash_extension::CheckMetadataHash::<
+			state_chain_runtime::Runtime,
+		>::new(true);
+
 		let extra: state_chain_runtime::SignedExtra = (
 			frame_system::CheckNonZeroSender::new(),
 			frame_system::CheckSpecVersion::new(),
@@ -58,6 +62,7 @@ where
 			// This is the tx fee tip. Normally this determines transaction priority. We currently
 			// ignore this in the runtime but it needs to be set to some default value.
 			state_chain_runtime::ChargeTransactionPayment::from(0),
+			check_metadata_hash.clone(),
 		);
 		let additional_signed = (
 			(),
@@ -68,6 +73,7 @@ where
 			(),
 			(),
 			(),
+			check_metadata_hash.additional_signed().unwrap(),
 		);
 
 		let signed_payload = state_chain_runtime::SignedPayload::from_raw(
