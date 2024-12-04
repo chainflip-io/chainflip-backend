@@ -55,6 +55,7 @@ pub mod btc;
 pub mod dot;
 pub mod eth;
 pub mod evm;
+pub mod hub;
 pub mod none;
 pub mod sol;
 

@@ -184,7 +184,9 @@ mod tests {
 		btc::{BitcoinFeeInfo, BitcoinTrackedData},
 		dot::PolkadotTrackedData,
 		eth::EthereumTrackedData,
-		Bitcoin, Chain, ChainState, Ethereum, Polkadot,
+		hub::AssethubTrackedData,
+		instances::AssethubInstance,
+		Assethub, Bitcoin, Chain, ChainState, Ethereum, Polkadot,
 	};
 	use cf_primitives::{AccountRole, ForeignChain};
 	use cf_traits::EpochInfo;
@@ -238,6 +240,19 @@ mod tests {
 				}),
 			ForeignChain::Arbitrum => unimplemented!(),
 			ForeignChain::Solana => unimplemented!(),
+			ForeignChain::Assethub =>
+				RuntimeCall::AssethubChainTracking(pallet_cf_chain_tracking::Call::<
+					Runtime,
+					AssethubInstance,
+				>::update_chain_state {
+					new_chain_state: ChainState {
+						block_height: BLOCK_HEIGHT as u32,
+						tracked_data: AssethubTrackedData {
+							median_tip: fee.into(),
+							runtime_version: Default::default(),
+						},
+					},
+				}),
 		}
 	}
 
@@ -249,6 +264,7 @@ mod tests {
 		// we dont test medians for Arbitrum since there is no priority fee in arbitrum
 		// we dont test medians for Solana as we use a different method for Solana block height
 		// tracking
+		test_medians::<Assethub>();
 	}
 
 	#[track_caller]

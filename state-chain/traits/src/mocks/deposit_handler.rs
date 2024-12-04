@@ -67,6 +67,9 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 				),
 				ForeignChain::Bitcoin => todo!("Bitcoin address"),
 				ForeignChain::Solana => todo!("Solana address"),
+				ForeignChain::Assethub => ForeignChainAddress::Hub(
+					PolkadotAccountId::from_aliased([channel_id as u8; 32]),
+				),
 			},
 			Default::default(),
 		)
