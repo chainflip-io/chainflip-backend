@@ -1,6 +1,6 @@
-use frame_support::traits::{OnRuntimeUpgrade, UncheckedOnRuntimeUpgrade};
+use frame_support::traits::OnRuntimeUpgrade;
 
-use pallet_cf_ingress_egress::DepositChannelDetails;
+use pallet_cf_ingress_egress::{Config, DepositChannelDetails};
 
 use crate::*;
 use frame_support::pallet_prelude::Weight;
@@ -13,7 +13,7 @@ pub mod old {
 	use cf_chains::{
 		CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ForeignChainAddress,
 	};
-	use cf_primitives::{AccountId, Beneficiaries};
+	use cf_primitives::Beneficiaries;
 	use frame_support::{pallet_prelude::OptionQuery, Twox64Concat};
 	use pallet_cf_ingress_egress::BoostStatus;
 
@@ -21,20 +21,12 @@ pub mod old {
 
 	#[derive(PartialEq, Eq, Encode, Decode)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
-		/// The owner of the deposit channel.
 		pub owner: T::AccountId,
 		pub deposit_channel: DepositChannel<T::TargetChain>,
-		/// The block number at which the deposit channel was opened, expressed as a block number
-		/// on the external Chain.
 		pub opened_at: TargetChainBlockNumber<T, I>,
-		/// The last block on the target chain that the witnessing will witness it in. If funds are
-		/// sent after this block, they will not be witnessed.
 		pub expires_at: TargetChainBlockNumber<T, I>,
-		/// The action to be taken when the DepositChannel is deposited to.
 		pub action: ChannelAction<T::AccountId>,
-		/// The boost fee
 		pub boost_fee: BasisPoints,
-		/// Boost status, indicating whether there is pending boost on the channel
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>>,
 	}
 
@@ -62,18 +54,18 @@ pub mod old {
 		},
 	}
 
-	pub type DepositChannelLookup<T: pallet_cf_ingress_egress::Config<I>, I: 'static> = StorageMap<
+	pub type DepositChannelLookup<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
-		TargetChainAccount<T, I>,
+		Config<I>::TargetChainAccount<T, I>,
 		DepositChannelDetails<T, I>,
 		OptionQuery,
 	>;
 }
 
-pub struct DepositChannelDetailsMigration;
+pub struct DepositChannelDetailsMigration<T: Config<I>, I: 'static = ()>;
 
-impl OnRuntimeUpgrade for DepositChannelDetailsMigration {
+impl OnRuntimeUpgrade for DepositChannelDetailsMigration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		Ok((old::DepositChannelLookup::iter().count() as u64).encode())
@@ -108,11 +100,11 @@ impl OnRuntimeUpgrade for DepositChannelDetailsMigration {
 					channel_metadata,
 					refund_params,
 					dca_params,
-				} => ChannelAction::CcmTransfer {
+				} => ChannelAction::Swap {
 					destination_asset,
 					destination_address,
 					broker_fees,
-					channel_metadata,
+					channel_metadata: Some(channel_metadata),
 					refund_params,
 					dca_params,
 				},
@@ -123,14 +115,7 @@ impl OnRuntimeUpgrade for DepositChannelDetailsMigration {
 				deposit_channel: old_deposit_channel_details.deposit_channel,
 				opened_at: old_deposit_channel_details.opened_at,
 				expires_at: old_deposit_channel_details.expires_at,
-				action: ChannelAction::Swap {
-					destination_asset: old_deposit_channel_details.action.destination_asset,
-					destination_address: old_deposit_channel_details.action.destination_address,
-					broker_fees: old_deposit_channel_details.action.broker_fees,
-					channel_metadata: None,
-					refund_params: old_deposit_channel_details.action.refund_params,
-					dca_params: old_deposit_channel_details.action.dca_params,
-				},
+				action,
 				boost_fee: old_deposit_channel_details.boost_fee,
 				boost_status: old_deposit_channel_details.boost_status,
 			})
