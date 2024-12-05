@@ -6,7 +6,7 @@ use sp_runtime::{
 	MultiAddress,
 };
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{AccountId, Signature, RUNTIME_METADATA_HASH};
+use state_chain_runtime::{AccountId, Signature};
 
 /// A wrapper around a substrate [`Pair`] that can be used for signing.
 #[derive(Clone, Debug)]
@@ -47,10 +47,6 @@ where
 
 		let lifetime = ..era.death(current_block_number as u64) as state_chain_runtime::BlockNumber;
 
-		let check_metadata_hash = frame_metadata_hash_extension::CheckMetadataHash::<
-			state_chain_runtime::Runtime,
-		>::new(true);
-
 		let extra: state_chain_runtime::SignedExtra = (
 			frame_system::CheckNonZeroSender::new(),
 			frame_system::CheckSpecVersion::new(),
@@ -62,7 +58,9 @@ where
 			// This is the tx fee tip. Normally this determines transaction priority. We currently
 			// ignore this in the runtime but it needs to be set to some default value.
 			state_chain_runtime::ChargeTransactionPayment::from(0),
-			check_metadata_hash.clone(),
+			frame_metadata_hash_extension::CheckMetadataHash::<state_chain_runtime::Runtime>::new(
+				false,
+			),
 		);
 		let additional_signed = (
 			(),
@@ -73,7 +71,7 @@ where
 			(),
 			(),
 			(),
-			RUNTIME_METADATA_HASH.map(array_bytes::hex2array_unchecked),
+			None,
 		);
 
 		let signed_payload = state_chain_runtime::SignedPayload::from_raw(

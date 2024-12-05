@@ -163,8 +163,6 @@ pub use pallet_transaction_payment::ChargeTransactionPayment;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-pub const RUNTIME_METADATA_HASH: Option<&'static str> = option_env!("RUNTIME_METADATA_HASH");
-
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
 
@@ -214,7 +212,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_version: 180,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 13,
+	transaction_version: 12,
 	state_version: 1,
 };
 

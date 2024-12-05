@@ -35,7 +35,6 @@ sol-prim = { workspace = true, default-features = true }
 hex = { workspace = true, default-features = true }
 hex-literal = { workspace = true, default-features = true }
 log = { workspace = true }
-array-bytes = { workspace = true }
 frame-metadata-hash-extension = { workspace = true }
 
 # Substrate-node-template dependencies
