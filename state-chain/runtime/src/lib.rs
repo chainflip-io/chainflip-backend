@@ -1217,6 +1217,7 @@ pub type PalletExecutionOrder = (
 	SolanaChainTracking,
 	// Elections
 	SolanaElections,
+	BitcoinElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -1403,6 +1404,16 @@ impl_runtime_apis! {
 			SolanaElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
 	}
+
+	// impl runtime_apis::ElectoralRuntimeApi<Block, BitcoinInstance> for Runtime {
+	// 	fn cf_electoral_data(account_id: AccountId) -> Vec<u8> {
+	// 		BitcoinElections::electoral_data(&account_id).encode()
+	// 	}
+
+	// 	fn cf_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+	// 		BitcoinElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+	// 	}
+	// }
 
 	// START custom runtime APIs
 	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
