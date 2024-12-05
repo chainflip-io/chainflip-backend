@@ -33,11 +33,7 @@ const FREE_BALANCES: &[u8] = b"FREE_BALANCES";
 impl BalanceApi for MockBalance {
 	type AccountId = u64;
 
-	fn try_credit_account(
-		who: &Self::AccountId,
-		asset: Asset,
-		amount_to_credit: AssetAmount,
-	) -> DispatchResult {
+	fn credit_account(who: &Self::AccountId, asset: Asset, amount_to_credit: AssetAmount) {
 		Self::mutate_storage::<(u64, cf_primitives::Asset), _, _, _, _>(
 			FREE_BALANCES,
 			&(*who, asset),
@@ -46,6 +42,14 @@ impl BalanceApi for MockBalance {
 				*amount = amount.saturating_add(amount_to_credit);
 			},
 		);
+	}
+
+	fn try_credit_account(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount_to_credit: AssetAmount,
+	) -> DispatchResult {
+		Self::credit_account(who, asset, amount_to_credit);
 		Ok(())
 	}
 

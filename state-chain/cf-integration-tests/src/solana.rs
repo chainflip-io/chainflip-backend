@@ -34,7 +34,9 @@ use pallet_cf_elections::{
 	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
 	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
-use pallet_cf_ingress_egress::{DepositFailedReason, DepositWitness, FetchOrTransfer};
+use pallet_cf_ingress_egress::{
+	DepositFailedReason, DepositWitness, FetchOrTransfer, VaultDepositWitness,
+};
 use pallet_cf_validator::RotationPhase;
 use sp_core::ConstU32;
 use sp_runtime::BoundedBTreeMap;
@@ -437,6 +439,30 @@ fn can_send_solana_ccm() {
 		});
 }
 
+fn vault_swap_deposit_witness(
+	deposit_metadata: Option<CcmDepositMetadata>,
+) -> VaultDepositWitness<Runtime, SolanaInstance> {
+	VaultDepositWitness {
+		input_asset: SolAsset::Sol,
+		output_asset: Asset::SolUsdc,
+		deposit_amount: 1_000_000_000_000u64,
+		destination_address: EncodedAddress::Sol([1u8; 32]),
+		deposit_metadata,
+		tx_id: Default::default(),
+		deposit_details: (),
+		broker_fee: cf_primitives::Beneficiary {
+			account: sp_runtime::AccountId32::new([0; 32]),
+			bps: 0,
+		},
+		affiliate_fees: Default::default(),
+		refund_params: REFUND_PARAMS,
+		dca_params: None,
+		boost_fee: 0,
+		deposit_address: Some(SolAddress([2u8; 32])),
+		channel_id: Some(0),
+	}
+}
+
 #[test]
 fn solana_ccm_fails_with_invalid_input() {
 	const EPOCH_BLOCKS: u32 = 100;
@@ -507,21 +533,8 @@ fn solana_ccm_fails_with_invalid_input() {
 			// Contract call fails with invalid CCM
 			assert_ok!(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
-					input_asset: SolAsset::Sol,
-					output_asset: Asset::SolUsdc,
-					deposit_amount: 1_000_000_000_000u64,
-					destination_address: EncodedAddress::Sol([1u8; 32]),
-					deposit_metadata: Some(invalid_ccm),
-					tx_id: Default::default(),
-					deposit_details: Box::new(()),
-					broker_fee: cf_primitives::Beneficiary {
-						account: sp_runtime::AccountId32::new([0; 32]),
-						bps: 0,
-					},
-					affiliate_fees: Default::default(),
-					refund_params: Box::new(REFUND_PARAMS),
-					dca_params: None,
-					boost_fee: 0,
+					block_height: 0,
+					deposit: Box::new(vault_swap_deposit_witness(Some(invalid_ccm))),
 				}
 			)
 			.dispatch_bypass_filter(
@@ -565,21 +578,8 @@ fn solana_ccm_fails_with_invalid_input() {
 
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
-					input_asset: SolAsset::Sol,
-					output_asset: Asset::SolUsdc,
-					deposit_amount: 1_000_000_000_000u64,
-					destination_address: EncodedAddress::Sol([1u8; 32]),
-					deposit_metadata: Some(ccm),
-					tx_id: Default::default(),
-					deposit_details: Box::new(()),
-					broker_fee: cf_primitives::Beneficiary {
-						account: sp_runtime::AccountId32::new([0; 32]),
-						bps: 0,
-					},
-					affiliate_fees: Default::default(),
-					refund_params: Box::new(REFUND_PARAMS),
-					dca_params: None,
-					boost_fee: 0,
+					block_height: 0,
+					deposit: Box::new(vault_swap_deposit_witness(Some(ccm))),
 				},
 			));
 			// Setting the current agg key will invalidate the CCM.
@@ -793,23 +793,9 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			};
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
-					input_asset: SolAsset::Sol,
-					output_asset: Asset::SolUsdc,
-					deposit_amount: 1_000_000_000_000u64,
-					destination_address: EncodedAddress::Sol([1u8; 32]),
-					deposit_metadata: Some(ccm),
-					tx_id: Default::default(),
-					deposit_details: Box::new(()),
-					broker_fee: cf_primitives::Beneficiary {
-						account: sp_runtime::AccountId32::new([0; 32]),
-						bps: 0,
-					},
-					affiliate_fees: Default::default(),
-					refund_params:  Box::new(REFUND_PARAMS),
-					dca_params: None,
-					boost_fee: 0,
-
-				},
+					block_height: 0,
+					deposit: Box::new(vault_swap_deposit_witness(Some(ccm))),
+				}
 			));
 
 			// Wait for the swaps to complete and call broadcasted.

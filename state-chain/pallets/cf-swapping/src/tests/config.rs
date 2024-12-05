@@ -278,7 +278,7 @@ fn cannot_swap_in_safe_mode() {
 #[test]
 fn cannot_withdraw_in_safe_mode() {
 	new_test_ext().execute_with(|| {
-		credit_broker_account::<Test>(&BROKER, Asset::Eth, 200);
+		<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 200);
 
 		// Activate code red
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();

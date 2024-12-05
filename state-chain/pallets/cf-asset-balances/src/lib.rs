@@ -370,19 +370,15 @@ where
 {
 	type AccountId = T::AccountId;
 
-	fn try_credit_account(
-		account_id: &Self::AccountId,
-		asset: Asset,
-		amount: AssetAmount,
-	) -> DispatchResult {
+	fn credit_account(account_id: &Self::AccountId, asset: Asset, amount: AssetAmount) {
 		if amount == 0 {
-			return Ok(())
+			return;
 		}
 
-		let new_balance = FreeBalances::<T>::try_mutate(account_id, asset, |balance| {
-			*balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
-			Ok::<_, Error<T>>(*balance)
-		})?;
+		let new_balance = FreeBalances::<T>::mutate(account_id, asset, |balance| {
+			*balance = balance.saturating_add(amount);
+			*balance
+		});
 
 		Self::deposit_event(Event::AccountCredited {
 			account_id: account_id.clone(),
@@ -390,6 +386,20 @@ where
 			amount_credited: amount,
 			new_balance,
 		});
+	}
+
+	fn try_credit_account(
+		account_id: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		// Check if the result would overflow:
+		FreeBalances::<T>::get(account_id, asset)
+			.checked_add(amount)
+			.ok_or(Error::<T>::BalanceOverflow)?;
+
+		Self::credit_account(account_id, asset, amount);
+
 		Ok(())
 	}
 

@@ -1295,15 +1295,7 @@ pub mod pallet {
 						let fee = Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) *
 							stable_amount;
 
-						if let Err(err) =
-							T::BalanceApi::try_credit_account(account, STABLE_ASSET, fee)
-						{
-							log_or_panic!(
-								"Failed to credit broker fee to account {:?} with error: {:?}",
-								account,
-								err
-							);
-						}
+						T::BalanceApi::credit_account(account, STABLE_ASSET, fee);
 
 						fee_accumulator.saturating_add(fee)
 					},

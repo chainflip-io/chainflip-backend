@@ -907,7 +907,7 @@ mod tests {
 		.unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(start_paused = true)]
 	async fn backup_used_for_next_request_if_primary_fails() {
 		async fn get_client_primary_or_backup(
 			primary_or_backup: PrimaryOrBackup,
@@ -984,7 +984,6 @@ mod tests {
 				}
 
 				// We want to advance time so that we can try the primary again.
-				tokio::time::pause();
 				tokio::time::advance(TRY_PRIMARY_AFTER * 2).await;
 				tokio::time::resume();
 

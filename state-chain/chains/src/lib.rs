@@ -667,6 +667,12 @@ pub enum SwapOrigin {
 	Internal,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum DepositOriginType {
+	DepositChannel,
+	Vault,
+}
+
 pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
 pub const MAX_CCM_ADDITIONAL_DATA_LENGTH: u32 = 1_000;
 

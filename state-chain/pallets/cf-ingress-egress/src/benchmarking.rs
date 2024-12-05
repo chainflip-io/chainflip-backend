@@ -49,7 +49,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn process_single_deposit() {
+	fn process_channel_deposit_full_witness() {
 		const CHANNEL_ID: u64 = 1;
 
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount =
@@ -82,11 +82,13 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T, I>::process_single_deposit(
-				deposit_address,
-				source_asset,
-				deposit_amount,
-				BenchmarkValue::benchmark_value(),
+			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness_inner(
+				&DepositWitness {
+					deposit_address,
+					asset: source_asset,
+					amount: deposit_amount,
+					deposit_details: BenchmarkValue::benchmark_value(),
+				},
 				BenchmarkValue::benchmark_value()
 			));
 		}
@@ -183,16 +185,12 @@ mod benchmarks {
 		}
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller));
-		assert_ok!(T::Balance::try_credit_account(&caller, asset.into(), 1_000_000,));
+		T::Balance::credit_account(&caller, asset.into(), 1_000_000);
 
 		// A non-zero balance is required to pay for the channel opening fee.
 		T::FeePayment::mint_to_account(&caller, u32::MAX.into());
 
-		assert_ok!(T::Balance::try_credit_account(
-			&caller,
-			asset.into(),
-			5_000_000_000_000_000_000u128
-		));
+		T::Balance::credit_account(&caller, asset.into(), 5_000_000_000_000_000_000u128);
 
 		caller
 	}
@@ -240,15 +238,15 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		assert_ok!(Pallet::<T, I>::add_prewitnessed_deposits(
-			vec![DepositWitness::<T::TargetChain> {
+		assert_ok!(Pallet::<T, I>::process_channel_deposit_prewitness(
+			DepositWitness::<T::TargetChain> {
 				deposit_address: deposit_address.clone(),
 				asset,
 				amount: TargetChainAmount::<T, I>::from(1000u32),
 				deposit_details: BenchmarkValue::benchmark_value()
-			}],
+			},
 			BenchmarkValue::benchmark_value()
-		),);
+		));
 
 		deposit_address
 	}
@@ -307,22 +305,27 @@ mod benchmarks {
 			},
 		};
 		let call = Call::<T, I>::vault_swap_request {
-			input_asset: BenchmarkValue::benchmark_value(),
-			deposit_amount: 1_000u32.into(),
-			output_asset: Asset::Eth,
-			destination_address: EncodedAddress::benchmark_value(),
-			deposit_metadata: Some(deposit_metadata),
-			tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
-			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
-			broker_fee: cf_primitives::Beneficiary { account: account("broker", 0, 0), bps: 0 },
-			affiliate_fees: Default::default(),
-			refund_params: Box::new(ChannelRefundParameters {
-				retry_duration: Default::default(),
-				refund_address: ForeignChainAddress::Eth(Default::default()),
-				min_price: Default::default(),
+			block_height: 0u32.into(),
+			deposit: Box::new(VaultDepositWitness {
+				input_asset: BenchmarkValue::benchmark_value(),
+				output_asset: Asset::Eth,
+				deposit_amount: 1_000u32.into(),
+				destination_address: EncodedAddress::benchmark_value(),
+				deposit_metadata: Some(deposit_metadata),
+				tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
+				deposit_details: BenchmarkValue::benchmark_value(),
+				broker_fee: cf_primitives::Beneficiary { account: account("broker", 0, 0), bps: 0 },
+				affiliate_fees: Default::default(),
+				refund_params: ChannelRefundParameters {
+					retry_duration: Default::default(),
+					refund_address: ForeignChainAddress::Eth(Default::default()),
+					min_price: Default::default(),
+				},
+				dca_params: None,
+				boost_fee: 0,
+				channel_id: None,
+				deposit_address: None,
 			}),
-			dca_params: None,
-			boost_fee: 0,
 		};
 
 		#[block]
@@ -409,13 +412,13 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T, I>::add_prewitnessed_deposits(
-				vec![DepositWitness::<T::TargetChain> {
+			assert_ok!(Pallet::<T, I>::process_channel_deposit_prewitness(
+				DepositWitness::<T::TargetChain> {
 					deposit_address,
 					asset,
 					amount: TargetChainAmount::<T, I>::from(1000u32),
 					deposit_details: BenchmarkValue::benchmark_value()
-				}],
+				},
 				BenchmarkValue::benchmark_value()
 			),);
 		}
@@ -473,11 +476,13 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T, I>::process_single_deposit(
-				deposit_address,
-				asset,
-				1_000u32.into(),
-				BenchmarkValue::benchmark_value(),
+			assert_ok!(Pallet::<T, I>::process_channel_deposit_full_witness_inner(
+				&DepositWitness {
+					deposit_address,
+					asset,
+					amount: 1_000u32.into(),
+					deposit_details: BenchmarkValue::benchmark_value(),
+				},
 				BenchmarkValue::benchmark_value()
 			));
 		}
@@ -539,7 +544,7 @@ mod benchmarks {
 			_finalise_ingress::<Test, ()>(100, true);
 		});
 		new_test_ext().execute_with(|| {
-			_process_single_deposit::<Test, ()>(true);
+			_process_channel_deposit_full_witness::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
 			_disable_asset_egress::<Test, ()>(true);

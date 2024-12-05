@@ -55,11 +55,13 @@ mod helpers {
 		)
 		.unwrap();
 		let address: <Bitcoin as Chain>::ChainAccount = address.try_into().unwrap();
-		assert_ok!(IngressEgress::process_single_deposit(
-			address.clone(),
-			asset,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&DepositWitness {
+				deposit_address: address.clone(),
+				asset,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details
+			},
 			Default::default()
 		));
 		(id, address)
@@ -77,8 +79,7 @@ mod helpers {
 			vec![BoostPoolId { asset: btc::Asset::Btc, tier: 10 }],
 		));
 
-		<Test as crate::Config>::Balance::try_credit_account(&ALICE, btc::Asset::Btc.into(), 1000)
-			.unwrap();
+		<Test as crate::Config>::Balance::credit_account(&ALICE, btc::Asset::Btc.into(), 1000);
 
 		let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
 			btc::Asset::Btc,
@@ -122,11 +123,13 @@ fn process_marked_transaction_and_expect_refund() {
 			tx_in_id,
 		));
 
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			btc::Asset::Btc,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&DepositWitness {
+				deposit_address: address.clone(),
+				asset: btc::Asset::Btc,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details
+			},
 			Default::default()
 		));
 
@@ -135,10 +138,8 @@ fn process_marked_transaction_and_expect_refund() {
 			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFailed {
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
 				reason: DepositFailedReason::TransactionRejectedByBroker,
-				origin: _,
-				details: _,
+				..
 			})
 		);
 
@@ -159,13 +160,13 @@ fn finalize_boosted_tx_if_marked_after_prewitness() {
 		let address: <Bitcoin as Chain>::ChainAccount =
 			helpers::setup_boost_swap().try_into().unwrap();
 
-		let _ = IngressEgress::add_prewitnessed_deposits(
-			vec![DepositWitness {
+		let _ = IngressEgress::process_channel_deposit_prewitness(
+			DepositWitness {
 				deposit_address: address.clone(),
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
 				deposit_details: deposit_details.clone(),
-			}],
+			},
 			10,
 		);
 
@@ -175,11 +176,13 @@ fn finalize_boosted_tx_if_marked_after_prewitness() {
 			tx_id,
 		),);
 
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			btc::Asset::Btc,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&DepositWitness {
+				deposit_address: address.clone(),
+				asset: btc::Asset::Btc,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details
+			},
 			Default::default()
 		));
 
@@ -212,21 +215,23 @@ fn reject_tx_if_marked_before_prewitness() {
 			tx_id,
 		));
 
-		let _ = IngressEgress::add_prewitnessed_deposits(
-			vec![DepositWitness {
+		assert_ok!(IngressEgress::process_channel_deposit_prewitness(
+			DepositWitness {
 				deposit_address: address.clone(),
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
 				deposit_details: deposit_details.clone(),
-			}],
+			},
 			10,
-		);
+		));
 
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			btc::Asset::Btc,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&DepositWitness {
+				deposit_address: address.clone(),
+				asset: btc::Asset::Btc,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details
+			},
 			Default::default()
 		));
 
@@ -235,10 +240,8 @@ fn reject_tx_if_marked_before_prewitness() {
 			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
 				reason: DepositFailedReason::TransactionRejectedByBroker,
-				origin: _,
-				details: _,
+				..
 			})
 		);
 	});
@@ -407,29 +410,27 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 			_ => unreachable!(),
 		};
 
-		let deposit_witnesses = vec![DepositWitness {
+		let deposit_witness = DepositWitness {
 			deposit_address,
 			asset: btc::Asset::Btc,
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			deposit_details,
-		}];
+		};
 
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(), 10,));
+		assert_ok!(IngressEgress::process_channel_deposit_prewitness(deposit_witness.clone(), 10,));
 		assert_ok!(IngressEgress::mark_transaction_for_rejection(
 			OriginTrait::signed(BROKER),
-			tx_id,
+			tx_id
 		));
-		assert_ok!(IngressEgress::process_deposit_witnesses(deposit_witnesses, 10,));
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(&deposit_witness, 10));
 
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
 				asset: btc::Asset::Btc,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
 				reason: DepositFailedReason::TransactionRejectedByBroker,
-				origin: _,
-				details: _,
+				..
 			})
 		);
 	});

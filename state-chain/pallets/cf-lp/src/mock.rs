@@ -78,16 +78,20 @@ pub struct MockBalanceApi;
 impl BalanceApi for MockBalanceApi {
 	type AccountId = AccountId;
 
-	fn try_credit_account(
-		who: &Self::AccountId,
-		_asset: cf_primitives::Asset,
-		amount: cf_primitives::AssetAmount,
-	) -> frame_support::dispatch::DispatchResult {
+	fn credit_account(who: &Self::AccountId, _asset: Asset, amount: AssetAmount) {
 		BALANCE_MAP.with(|balance_map| {
 			let mut balance_map = balance_map.borrow_mut();
 			*balance_map.entry(who.to_owned()).or_default() += amount;
-			Ok(())
-		})
+		});
+	}
+
+	fn try_credit_account(
+		who: &Self::AccountId,
+		asset: cf_primitives::Asset,
+		amount: cf_primitives::AssetAmount,
+	) -> frame_support::dispatch::DispatchResult {
+		Self::credit_account(who, asset, amount);
+		Ok(())
 	}
 
 	fn try_debit_account(
