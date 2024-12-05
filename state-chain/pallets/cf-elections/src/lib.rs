@@ -1601,6 +1601,7 @@ pub mod pallet {
 								}
 							}
 
+							log::info!("calling on_finalize for ElectionSystemRunner");
 							T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
 
 							Ok(())

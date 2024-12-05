@@ -56,7 +56,15 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 
 		let deposit_addresses = map_script_addresses(deposit_addresses);
 
-		Ok(deposit_witnesses(&txs, &deposit_addresses))
+		let witnesses = deposit_witnesses(&txs, &deposit_addresses);
+
+		if witnesses.is_empty() {
+			tracing::info!("No witnesses found for BTCE");
+		} else {
+			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
+		}
+
+		Ok(witnesses)
 	}
 }
 
@@ -69,7 +77,7 @@ where
 	StateChainClient: StorageApi
 		+ ChainApi
 		+ SignedExtrinsicApi
-		+ ElectoralApi<BitcoinInstance>
+		+ ElectoralApi<cf_chains::Bitcoin, BitcoinInstance>
 		+ 'static
 		+ Send
 		+ Sync,

@@ -978,6 +978,21 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>>;
 
+	#[method(name = "bitcoin_electoral_data")]
+	fn cf_bitcoin_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "bitcoin_filter_votes")]
+	fn cf_bitcoin_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
 	#[method(name = "validate_dca_params")]
 	fn cf_validate_dca_params(
 		&self,
@@ -1861,6 +1876,23 @@ where
 	}
 
 	fn cf_solana_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
+	}
+
+	fn cf_bitcoin_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.with_runtime_api(at, |api, hash| api.cf_electoral_data(hash, validator))
+	}
+
+	fn cf_bitcoin_filter_votes(
 		&self,
 		validator: state_chain_runtime::AccountId,
 		proposed_votes: Vec<u8>,
