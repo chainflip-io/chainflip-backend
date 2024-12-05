@@ -79,9 +79,9 @@ where
 
 	pub async fn continuously_vote(self) {
 		loop {
-			info!("Beginning voting");
+			info!("{}: Beginning voting", Chain::NAME);
 			if let Err(error) = self.reset_and_continuously_vote().await {
-				error!("Voting reset due to error: '{}'", error);
+				error!("{}: Voting reset due to error: '{error}'", Chain::NAME);
 			}
 		}
 	}
@@ -90,9 +90,11 @@ where
 		let mut rng = rand::rngs::OsRng;
 		let latest_unfinalized_block = self.state_chain_client.latest_unfinalized_block();
 		if let Some(_electoral_data) = self.state_chain_client.electoral_data(latest_unfinalized_block).await {
+			tracing::info!("{}: Got some electoral data", Chain::NAME);
 			let (_, _, block_header, _) = self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, ChainInstance<Chain>>::ignore_my_votes {}).await.until_in_block().await?;
 
 			if let Some(electoral_data) = self.state_chain_client.electoral_data(block_header.into()).await {
+				tracing::info!("{}: Got some electoral data 2", Chain::NAME);
 				stream::iter(electoral_data.current_elections).map(|(election_identifier, election_data)| {
 					let state_chain_client = &self.state_chain_client;
 					async move {
@@ -105,7 +107,9 @@ where
 					}
 				}).buffer_unordered(32).try_collect::<Vec<_>>().await?;
 
+				tracing::info!("{}: Submitting signed extrinsic", Chain::NAME);
 				self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, ChainInstance<Chain>>::stop_ignoring_my_votes {}).await.until_in_block().await?;
+				tracing::info!("{}: Submitted signed extrinsic", Chain::NAME);
 			}
 		}
 
@@ -153,7 +157,7 @@ where
 					let state_chain_client = &self.state_chain_client;
 					async move {
 						for (election_identifier, _) in votes.iter() {
-							info!("Submitting vote for election: '{:?}'", election_identifier);
+							info!("{}: Submitting vote for election: '{election_identifier:?}'", Chain::NAME);
 						}
 						// TODO: Use block hash you got this vote tasks details from as the based of the mortal of the extrinsic
 						state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, ChainInstance<Chain>>::vote {
@@ -165,7 +169,7 @@ where
 			let (election_identifier, result_vote) = vote_tasks.next_or_pending() => {
 				match result_vote {
 					Ok(vote) => {
-						info!("Voting task for election: '{:?}' succeeded.", election_identifier);
+						info!("{}: Voting task for election: '{election_identifier:?}' succeeded.", Chain::NAME);
 						// Create the partial_vote early so that SharedData can be provided as soon as the vote has been generated, rather than only after it is submitted.
 						let partial_vote = <<<state_chain_runtime::Runtime as pallet_cf_elections::Config<ChainInstance<Chain>>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::vote_into_partial_vote(&vote, |shared_data| {
 							let shared_data_hash = SharedDataHash::of(&shared_data);
@@ -181,7 +185,7 @@ where
 						pending_submissions.insert(election_identifier,	(partial_vote, vote));
 					},
 					Err(error) => {
-						warn!("Voting task for election '{:?}' failed with error: '{:?}'.", election_identifier, error);
+						warn!("{}: Voting task for election '{election_identifier:?}' failed with error: '{error:?}'.", Chain::NAME);
 					}
 				}
 			},
@@ -194,16 +198,18 @@ where
 					added_to_cache.elapsed() < LIFETIME_OF_SHARED_DATA_IN_CACHE
 				});
 
+				tracing::info!("{}: Unfinalised next, getting electoral_data", Chain::NAME);
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
+					tracing::info!("{}: Unfinalised next, got some electoral_data", Chain::NAME);
 					if electoral_data.contributing {
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
 								if !vote_tasks.contains_key(&election_identifier) {
-									info!("Voting task for election: '{:?}' initiate.", election_identifier);
+									info!("{}: Voting task for election: '{election_identifier:?}' initiate.", Chain::NAME);
 									vote_tasks.insert(
 										election_identifier,
 										Box::pin(self.voter.request_with_limit(
-											RequestLog::new("vote".to_string(), Some(format!("{election_identifier:?}"))), // Add some identifier for `Instance`.
+											RequestLog::new("vote".to_string(), Some(format!("{}: {election_identifier:?}", Chain::NAME))), // Add some identifier for `Instance`.
 											Box::pin(move |client| {
 												let election_data = election_data.clone();
 												#[allow(clippy::redundant_async_block)]
@@ -218,7 +224,7 @@ where
 										))
 									);
 								} else {
-									info!("Voting task for election: '{:?}' not initiated as a task is already running for that election.", election_identifier);
+									info!("{}: Voting task for election: '{election_identifier:?}' not initiated as a task is already running for that election.", Chain::NAME);
 								}
 							}
 						}
@@ -246,10 +252,10 @@ where
 					} else {
 						// We expect this to happen when a validator joins the set, since they won't be contributing, but will be a validator.
 						// Therefore they get Some() from `electoral_data` but `contributing` is false, until we reset the voting by throwing an error here.
-						return Err(anyhow!("Validator has just joined the authority set, or has been unexpectedly set as not contributing."));
+						return Err(anyhow!("{}: Validator has just joined the authority set, or has been unexpectedly set as not contributing.", Chain::NAME));
 					}
 				} else {
-					info!("Not voting as not an authority.");
+					info!("{}: Not voting as not an authority.", Chain::NAME);
 				}
 			} else break Ok(()),
 		}
