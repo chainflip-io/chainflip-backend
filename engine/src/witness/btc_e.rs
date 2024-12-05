@@ -82,6 +82,7 @@ where
 		+ Send
 		+ Sync,
 {
+	tracing::info!("Starting BTC witness");
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
 			async {
