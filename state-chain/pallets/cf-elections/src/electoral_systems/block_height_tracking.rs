@@ -16,7 +16,7 @@ use frame_support::{
 use itertools::Itertools;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
+use sp_std::{collections::vec_deque::VecDeque, vec::Vec, collections::btree_map::BTreeMap};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -56,28 +56,11 @@ pub enum ChainBlocksMergeResult<N> {
 }
 
 
-// [10] [11] [12] | [13-wrong] [14-wrong]
-// => failure
-// => we keep [10] [11] [12] as blocks, and we retry with a longer chain
-// =>  [10] [11] [12]
-//         | [11b] [12b] [13b]
-//
-// => if the new chain starts with a block number <= the old chain, and they don't match,
-//    we simply use the new chain
-
-// we have an extension if 
-
-
 struct MergeInfo<H,N> {
 	removed: VecDeque<Header<H,N>>,
 	added: VecDeque<Header<H,N>>
 }
 
-// enum MergeSuccess<H,N> {
-// 	Extension { keep: ChainBlocks<H,N>, remove: Vec<Header<H,N>>, add: Vec<Header<H,N>> },
-// 	Replacement { remove: Vec<Header<H,N>> }
-
-// }
 
 enum MergeFailure<H,N> {
 	// If we get a new range of blocks, [lowest_new_block, ...], where the parent of
@@ -90,44 +73,6 @@ enum MergeFailure<H,N> {
 	// MissingBlocks { range: Range<N>},
 
 	InternalError
-}
-
-enum Either<A,B> {
-	Left(A),
-	Right(B)
-}
-
-impl<A,B> Either<A,B> {
-	pub fn left(self) -> Option<A> {
-		match self {
-			Either::Left(a) => Some(a),
-			Either::Right(_) => None,
-		}
-	}
-
-	pub fn right(self) -> Option<B> {
-		match self {
-			Either::Left(_) => None,
-			Either::Right(b) => Some(b),
-		}
-	}
-}
-
-type Headers<H,N> = VecDeque<Header<H,N>>;
-
-struct MatchSplit<Item> {
-	prefix: Option<Either<VecDeque<Item>, VecDeque<Item>>>,
-	common : VecDeque<(Item,Item)>,
-	postfix: Option<Either<VecDeque<Item>, VecDeque<Item>>>,
-}
-
-enum MatchSplitError {
-	ItemsMissingAfterLeft,
-	ItemsMissingAfterRight,
-}
-
-pub fn match_split<Item, Height: Ord>(h: impl Fn(Item) -> Height, left: VecDeque<Item>, right: VecDeque<Item>) -> Result<MatchSplit<Item>, MatchSplitError> {
-	todo!()
 }
 
 pub fn extract_common_prefix<A: Eq>(a: &mut VecDeque<A>, b: &mut VecDeque<A>) -> VecDeque<A> {
@@ -181,12 +126,14 @@ impl<H: Eq + Clone, N: Ord + From<u32> + Add<N, Output=N> + Sub<N, Output=N> + S
 	}
 
 
-	// there are two cases where we want to merge:
+	// There are two cases we want to deal with:
 	//
     //      1. [aaaaaaa] 
     //                [bbbbbbb]
     //      2. [aaaaaaa] 
     //         [bbbbb]
+	//
+	// This means we have the following assumptions:
 	//
 	// Assumptions:
 	//   1. `other`:
@@ -272,6 +219,106 @@ pub fn validate_vote<ChainBlockHash, ChainBlockNumber>(properties: BlockHeightTr
 }
 
 
+// -- abstract Consensus for computing solutions
+pub trait Consensus : Default {
+	type Vote;
+	type Result;
+	type Settings;
+	fn insert_vote(&mut self, vote: Self::Vote);
+	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result>;
+}
+
+struct SupermajorityConsensus<Vote: PartialEq> {
+	votes: BTreeMap<Vote, u32>,
+}
+
+struct Threshold {
+	threshold: u32
+}
+
+impl<Vote: PartialEq> Default for SupermajorityConsensus<Vote> {
+	fn default() -> Self {
+		Self { votes: Default::default() }
+	}
+}
+
+impl<Vote: Ord + PartialEq + Clone> Consensus for SupermajorityConsensus<Vote> {
+	type Vote = Vote;
+	type Result = Vote;
+	type Settings = Threshold;
+
+	fn insert_vote(&mut self, vote: Self::Vote) {
+		if let Some(count) = self.votes.get_mut(&vote) {
+			*count += 1;
+		} else {
+			self.votes.insert(vote, 1);
+		}
+	}
+
+	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
+		let best = self.votes.iter().sorted_by_key(|(vote, count)| **count).last();
+
+		if let Some((best_vote, best_count)) = best {
+			if best_count >= &settings.threshold {
+				return Some(best_vote.clone());
+			}
+		}
+
+		return None;
+	}
+}
+
+
+// --
+struct StagedConsensus<Stage: Consensus, Index: Ord> {
+	stages: BTreeMap<Index, Stage>,
+}
+
+impl<Stage: Consensus, Index: Ord> StagedConsensus<Stage, Index> {
+	pub fn new() -> Self {
+		Self { stages: BTreeMap::new() }
+	}
+}
+
+impl<Stage: Consensus, Index: Ord> Default for StagedConsensus<Stage, Index> {
+	fn default() -> Self {
+		Self { stages: Default::default() }
+	}
+}
+
+impl<Stage: Consensus, Index: Ord + Copy> Consensus for StagedConsensus<Stage, Index> {
+	type Result = Stage::Result;
+	type Vote = (Index, Stage::Vote);
+	type Settings = Stage::Settings;
+	
+	fn insert_vote(&mut self, (index, vote): Self::Vote) {
+		if let Some(stage) = self.stages.get_mut(&index) {
+			stage.insert_vote(vote)
+		} else {
+			let mut stage = Stage::default();
+			stage.insert_vote(vote);
+			self.stages.insert(index, stage);
+		}
+	}
+	
+	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
+
+		// we check all stages starting with the highest index,
+		// the first one that has consensus wins
+		for (_, stage) in self.stages.iter().sorted_by_key(|(k,_)| **k).rev() {
+			if let Some(result) = stage.check_consensus(settings) {
+				return Some(result);
+			}
+		}
+
+		None
+	}
+
+}
+
+
+
+// -- electoral system
 pub struct BlockHeightTracking<
 	const SAFETY_MARGIN: usize,
 	ChainBlockNumber,
@@ -301,7 +348,7 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = BlockHeightTrackingProperties<ChainBlockNumber>;
 	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<Header<ChainBlockHash, ChainBlockNumber>>;
+	type Vote = vote_storage::bitmap::Bitmap<VecDeque<Header<ChainBlockHash, ChainBlockNumber>>>;
 	type Consensus = VecDeque<Header<ChainBlockHash, ChainBlockNumber>>;
 	type OnFinalizeContext = ();
 
@@ -337,7 +384,7 @@ impl<
 
 				let (last_safe_index, next_index) = ElectoralAccess::mutate_unsynchronised_state(|unsynchronised_state| {
 
-					let result = match unsynchronised_state.headers.merge(new_headers) {
+					match unsynchronised_state.headers.merge(new_headers) {
 						Ok(merge_info) => {
 							log::info!("added new blocks: {:?}, replacing these blocks: {:?}", merge_info.added, merge_info.removed);
 
@@ -348,21 +395,20 @@ impl<
 
 							// we only return a new safe index if it actually increased
 							if safe_headers.len() > 0 {
-								Ok(Some(unsynchronised_state.last_safe_index))
+								Ok((Some(unsynchronised_state.last_safe_index), unsynchronised_state.headers.next_height))
 							} else {
-								Ok(None)
+								Ok((None, unsynchronised_state.headers.next_height))
 							}
 						},
 						Err(MergeFailure::ReorgWithUnknownRoot { new_block, existing_wrong_parent }) => {
-							log::warn!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
-							Ok(None)
+							log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
+							Ok((Some(unsynchronised_state.last_safe_index), unsynchronised_state.last_safe_index))
 						},
 						Err(MergeFailure::InternalError) => {
 							Err(CorruptStorageError {})
 						}
-					}?;
+					}
 
-					Ok((result, unsynchronised_state.headers.next_height))
 				})?;
 
 				let properties = BlockHeightTrackingProperties {
@@ -377,12 +423,16 @@ impl<
 				Ok(None)
 			}
 		} else {
+
 			// If we have no elections to process we should start one to get an updated header.
-			// ElectoralAccess::new_election((), (), ())?;
+			// But we have to know which block we want to start witnessing from
+			let properties = BlockHeightTrackingProperties {
+				// TODO: this block height has to come from storage / governance?
+				witness_from_index: 0u32.into(),
+			};
+			ElectoralAccess::new_election((), properties, ())?;
 			Ok(None)
 		}
-
-		// if we have consensus on a block header, then header - safety is safe.
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
@@ -390,21 +440,22 @@ impl<
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-		todo!()
-		/*
+
 		let num_authorities = consensus_votes.num_authorities();
-		let success_threshold = success_threshold_from_share_count(num_authorities);
-		let mut active_votes = consensus_votes.active_votes();
-		let num_active_votes = active_votes.len() as u32;
-		Ok(if num_active_votes >= success_threshold {
-			// Calculating the median this way means atleast 2/3 of validators would be needed to
-			// increase the calculated median.
-			let (_, median_vote, _) =
-				active_votes.select_nth_unstable((num_authorities - success_threshold) as usize);
-			Some(median_vote.clone())
-		} else {
-			None
-		})
- 		*/
+
+		let mut consensus : StagedConsensus<SupermajorityConsensus<Self::Consensus>, usize> = StagedConsensus::new();
+
+		for mut vote in consensus_votes.active_votes() {
+			// we count a given vote as multiple votes for all nonempty subchains 
+			while vote.len() > 0 {
+				consensus.insert_vote((vote.len(), vote.clone()));
+				vote.pop_back();
+			}
+		}
+
+		Ok(consensus.check_consensus(&Threshold {
+			threshold: success_threshold_from_share_count(num_authorities)
+		}))
+
 	}
 }
