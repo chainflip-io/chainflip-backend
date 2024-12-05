@@ -2575,7 +2575,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-api",
- "sp-blockchain",
  "sp-core 34.0.0",
  "sp-rpc",
  "sp-runtime 39.0.0",
