@@ -1,3 +1,4 @@
+use anyhow::bail;
 use engine_upgrade_utils::{CStrArray, NEW_VERSION, OLD_VERSION};
 
 // Declare the entrypoints into each version of the engine
@@ -44,11 +45,12 @@ fn main() -> anyhow::Result<()> {
 	// Attempt to run the new version first
 	let exit_status_new_first =
 		new::cfe_entrypoint(c_str_array.clone(), engine_upgrade_utils::NO_START_FROM);
+
 	println!("The new version has exited with exit status: {:?}", exit_status_new_first);
 
 	match exit_status_new_first.status_code {
 		engine_upgrade_utils::NO_LONGER_COMPATIBLE => {
-			println!("You need to update your CFE. The current version of the CFE you are running is not compatible with the latest runtime update.");
+			bail!("You need to update your CFE. The current version of the CFE you are running is not compatible with the latest runtime update.");
 		},
 		engine_upgrade_utils::NOT_YET_COMPATIBLE => {
 			// The new version is not compatible yet, so run the old version
@@ -63,22 +65,21 @@ fn main() -> anyhow::Result<()> {
 				println!("Switching to the new version {NEW_VERSION} after the old version {OLD_VERSION} is no longer compatible.");
 				// Attempt to run the new version again
 				let exit_status_new = new::cfe_entrypoint(c_str_array, exit_status_old.at_block);
-				println!("New version has exited with exit status: {:?}", exit_status_new);
+				bail!("New version has exited with exit status: {:?}", exit_status_new);
 			} else {
-				println!(
+				bail!(
 					"An error has occurred running the old version with exit status: {:?}",
 					exit_status_old
 				);
 			}
 		},
 		_ => {
-			println!(
+			bail!(
 				"An error has occurred running the new version on first run with exit status: {:?}",
 				exit_status_new_first
 			);
 		},
 	}
-	Ok(())
 }
 
 #[cfg(test)]
