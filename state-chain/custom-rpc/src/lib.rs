@@ -1240,7 +1240,7 @@ where
 		+ BlockBackend<B>
 		+ ExecutorProvider<B>
 		+ HeaderBackend<B>
-		+ HeaderMetadata<B>
+		+ HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
 		+ BlockchainEvents<B>
 		+ CallApiAt<B>
 		+ StorageProvider<B, BE>,
@@ -1985,18 +1985,18 @@ where
 
 		// construct either best or finalized blocks stream from the chain head subscription
 		let blocks_stream = Box::pin(stream::unfold(
-			(VecDeque::<Hash>::new(), subscription, only_finalized),
-			|(mut st_items_to_stream, mut st_subscription, st_only_finalized)| async move {
+			(VecDeque::<Hash>::new(), subscription),
+			move |(mut st_items_to_stream, mut st_subscription)| async move {
 				// before checking for events, stream any remaining items from the previous run
 				// This can happen since finalization can produce an array of finalized_block_hashes
 				// unlike best block production which always produces only 1 best_block_hash
 				if let Some(hash) = st_items_to_stream.pop_front() {
-					Some((hash, (st_items_to_stream, st_subscription, st_only_finalized)))
+					Some((hash, (st_items_to_stream, st_subscription)))
 				} else {
 					while let Some(result) = st_subscription.next().await {
 						match result {
 							Ok((event, _subs_id)) => {
-								if st_only_finalized {
+								if only_finalized {
 									// when only_finalized is set, handle both initialized and
 									// finalized events
 									match event {
@@ -2011,7 +2011,6 @@ where
 												(
 													VecDeque::with_capacity(0),
 													st_subscription,
-													st_only_finalized,
 												)
 											))
 										},
@@ -2027,7 +2026,6 @@ where
 													(
 														block_hashes,
 														st_subscription,
-														st_only_finalized,
 													),
 												))
 										},
@@ -2040,11 +2038,7 @@ where
 										FollowEvent::BestBlockChanged(ev_best_block) =>
 											return Some((
 												ev_best_block.best_block_hash,
-												(
-													VecDeque::with_capacity(0),
-													st_subscription,
-													st_only_finalized,
-												),
+												(VecDeque::with_capacity(0), st_subscription),
 											)),
 										_ => continue,
 									}
