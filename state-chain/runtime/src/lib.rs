@@ -1428,25 +1428,23 @@ mod benches {
 }
 
 impl_runtime_apis! {
-	impl runtime_apis::ElectoralRuntimeApi<Block, SolanaInstance> for Runtime {
-		fn cf_electoral_data(account_id: AccountId) -> Vec<u8> {
+	impl runtime_apis::ElectoralRuntimeApi<Block> for Runtime {
+		fn cf_solana_electoral_data(account_id: AccountId) -> Vec<u8> {
 			SolanaElections::electoral_data(&account_id).encode()
 		}
 
-		fn cf_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+		fn cf_solana_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			SolanaElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
+
+		fn cf_bitcoin_electoral_data(account_id: AccountId) -> Vec<u8> {
+			BitcoinElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_bitcoin_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			BitcoinElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
 	}
-
-	// impl runtime_apis::ElectoralRuntimeApi<Block, BitcoinInstance> for Runtime {
-	// 	fn cf_electoral_data(account_id: AccountId) -> Vec<u8> {
-	// 		BitcoinElections::electoral_data(&account_id).encode()
-	// 	}
-
-	// 	fn cf_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
-	// 		BitcoinElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
-	// 	}
-	// }
 
 	// START custom runtime APIs
 	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
