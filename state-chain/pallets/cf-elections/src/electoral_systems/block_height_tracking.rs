@@ -156,17 +156,22 @@ pub fn head_and_tail<A: Clone>(mut items: &VecDeque<A>) -> Option<(A , VecDeque<
 	items.clone().pop_front().map(|head| (head, items))
 }
 
+enum VoteValidationError {
+	BlockHeightsNotContinuous,
+	ParentHashMismatch
+}
+
 impl<H: Eq + Clone, N: Ord + From<u32> + Add<N, Output=N> + Sub<N, Output=N> + SubAssign<N> + AddAssign<N> + Copy> ChainBlocks<H,N> {
 
 
-	fn validate(&self) -> Result<(), String> {
+	fn validate(&self) -> Result<(), VoteValidationError> {
 
 		let mut required_block_height = self.next_height - 1u32.into();
 		let mut required_hash = None;
 
 		for header in self.headers.iter().rev() {
-			ensure!(header.block_height == required_block_height, "unexpected block height");
-			ensure!(Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)), "wrong hash");
+			ensure!(header.block_height == required_block_height, VoteValidationError::BlockHeightsNotContinuous);
+			ensure!(Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)), VoteValidationError::ParentHashMismatch);
 
 			required_block_height -= 1u32.into();
 			required_hash = Some(header.parent_hash.clone());
