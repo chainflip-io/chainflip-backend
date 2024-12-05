@@ -36,7 +36,7 @@ export async function fundAndSendTransaction(
 }
 
 export async function sendVaultTransaction(
-  nulldata_payload: string,
+  nulldataPayload: string,
   amountBtc: number,
   depositAddress: string,
   refundAddress: string,
@@ -47,7 +47,7 @@ export async function sendVaultTransaction(
         [depositAddress]: amountBtc,
       },
       {
-        data: nulldata_payload.replace('0x', ''),
+        data: nulldataPayload.replace('0x', ''),
       },
     ],
     refundAddress,
