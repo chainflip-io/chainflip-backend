@@ -44,7 +44,7 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 
 		let mut txs = vec![];
 		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
-		for block in BlockWitnessRange::<u64>::into_range_inclusive(witness_range) {
+		for _block in BlockWitnessRange::<u64>::into_range_inclusive(witness_range) {
 			// TODO: these queries should not be infinite
 			// let block_hash = self.client.block_hash(block).await;
 

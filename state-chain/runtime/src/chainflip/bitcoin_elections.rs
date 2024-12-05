@@ -1,5 +1,5 @@
 use crate::{BitcoinIngressEgress, Runtime};
-use cf_chains::{btc, Bitcoin, DepositChannel};
+use cf_chains::{btc, Bitcoin};
 use cf_traits::Chainflip;
 use log::info;
 

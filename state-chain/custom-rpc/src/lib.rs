@@ -1871,7 +1871,7 @@ where
 		validator: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
-		self.with_runtime_api(at, |api, hash| api.cf_electoral_data(hash, validator))
+		self.with_runtime_api(at, |api, hash| api.cf_solana_electoral_data(hash, validator))
 	}
 
 	fn cf_solana_filter_votes(
@@ -1880,7 +1880,9 @@ where
 		proposed_votes: Vec<u8>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
-		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
+		self.with_runtime_api(at, |api, hash| {
+			api.cf_solana_filter_votes(hash, validator, proposed_votes)
+		})
 	}
 
 	fn cf_bitcoin_electoral_data(
@@ -1888,7 +1890,7 @@ where
 		validator: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
-		self.with_runtime_api(at, |api, hash| api.cf_electoral_data(hash, validator))
+		self.with_runtime_api(at, |api, hash| api.cf_bitcoin_electoral_data(hash, validator))
 	}
 
 	fn cf_bitcoin_filter_votes(
@@ -1897,7 +1899,9 @@ where
 		proposed_votes: Vec<u8>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
-		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
+		self.with_runtime_api(at, |api, hash| {
+			api.cf_bitcoin_filter_votes(hash, validator, proposed_votes)
+		})
 	}
 
 	fn cf_get_vault_swap_details(
