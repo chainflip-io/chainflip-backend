@@ -2,11 +2,11 @@ use codec::Encode;
 use sp_core::Pair;
 use sp_runtime::{
 	generic::Era,
-	traits::{IdentifyAccount, SignedExtension, Verify},
+	traits::{IdentifyAccount, Verify},
 	MultiAddress,
 };
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{AccountId, Signature};
+use state_chain_runtime::{AccountId, Signature, RUNTIME_METADATA_HASH};
 
 /// A wrapper around a substrate [`Pair`] that can be used for signing.
 #[derive(Clone, Debug)]
@@ -73,7 +73,7 @@ where
 			(),
 			(),
 			(),
-			check_metadata_hash.additional_signed().unwrap(),
+			RUNTIME_METADATA_HASH.map(array_bytes::hex2array_unchecked),
 		);
 
 		let signed_payload = state_chain_runtime::SignedPayload::from_raw(

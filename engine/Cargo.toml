@@ -66,6 +66,7 @@ warp = { workspace = true }
 regex = { workspace = true }
 lazy_format = { workspace = true }
 zmq = { workspace = true, features = ["vendored"] }
+array-bytes = { workspace = true }
 
 # Local deps
 cf-chains = { workspace = true, default-features = true }

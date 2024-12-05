@@ -11,7 +11,7 @@ use sc_client_api::BlockBackend;
 use sp_core::{Encode, Pair};
 use sp_inherents::{InherentData, InherentDataProvider};
 use sp_keyring::Sr25519Keyring;
-use sp_runtime::{traits::SignedExtension, OpaqueExtrinsic, SaturatedConversion};
+use sp_runtime::{OpaqueExtrinsic, SaturatedConversion};
 use state_chain_runtime as runtime;
 
 use std::{sync::Arc, time::Duration};
@@ -101,7 +101,7 @@ pub fn create_benchmark_extrinsic(
 			(),
 			(),
 			(),
-			check_metadata_hash.additional_signed().unwrap(),
+			state_chain_runtime::RUNTIME_METADATA_HASH.map(array_bytes::hex2array_unchecked),
 		),
 	);
 	let signature = raw_payload.using_encoded(|e| sender.sign(e));
