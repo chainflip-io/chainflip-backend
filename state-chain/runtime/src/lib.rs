@@ -47,7 +47,7 @@ use cf_chains::{
 	btc::{
 		api::BitcoinApi,
 		vault_swap_encoding::{
-			encode_swap_params_in_nulldata_utxo, SharedCfParameters, UtxoEncodedData,
+			encode_swap_params_in_nulldata_payload, SharedCfParameters, UtxoEncodedData,
 		},
 		BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey,
 	},
@@ -2191,7 +2191,7 @@ impl_runtime_apis! {
 					.to_address(&Environment::network_environment().into());
 
 					Ok(VaultSwapDetails::Bitcoin {
-						nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw(),
+						nulldata_payload: encode_swap_params_in_nulldata_payload(params),
 						deposit_address,
 					})
 				},

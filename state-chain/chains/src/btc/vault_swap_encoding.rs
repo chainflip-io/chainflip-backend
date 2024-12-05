@@ -6,8 +6,6 @@ use sp_core::ConstU32;
 use sp_runtime::BoundedVec;
 use sp_std::vec::Vec;
 
-use super::{BitcoinOp, BitcoinScript};
-
 // The maximum length of data that can be encoded in a nulldata utxo
 const MAX_NULLDATA_LENGTH: usize = 80;
 const CURRENT_VERSION: u8 = 0;
@@ -91,19 +89,8 @@ pub struct SharedCfParameters {
 	pub affiliates: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
 }
 
-pub fn encode_data_in_nulldata_utxo(data: &[u8]) -> Option<BitcoinScript> {
-	if data.len() > MAX_NULLDATA_LENGTH {
-		return None;
-	}
-
-	Some(BitcoinScript::new(&[
-		BitcoinOp::Return,
-		BitcoinOp::PushBytes { bytes: data.to_vec().try_into().expect("size checked just above") },
-	]))
-}
-
-pub fn encode_swap_params_in_nulldata_utxo(params: UtxoEncodedData) -> BitcoinScript {
-	encode_data_in_nulldata_utxo(&params.encode()).expect("params must always fit in utxo")
+pub fn encode_swap_params_in_nulldata_payload(params: UtxoEncodedData) -> Vec<u8> {
+	params.encode()
 }
 
 #[cfg(test)]
