@@ -21,7 +21,7 @@ use sp_core::{
 	Pair, Public,
 };
 use state_chain_runtime::{
-	chainflip::{solana_elections, Offence},
+	chainflip::{bitcoin_elections, solana_elections, Offence},
 	constants::common::{
 		BLOCKS_PER_MINUTE_ARBITRUM, BLOCKS_PER_MINUTE_ETHEREUM, BLOCKS_PER_MINUTE_POLKADOT,
 		BLOCKS_PER_MINUTE_SOLANA,
@@ -377,6 +377,9 @@ pub fn inner_cf_development_config(
 					sol_swap_endpoint_program_data_account,
 				)),
 			},
+			BitcoinElectionsConfig {
+				option_initial_state: Some(bitcoin_elections::initial_state()),
+			},
 		))
 		.build())
 }
@@ -539,6 +542,9 @@ macro_rules! network_spec {
 								sol_swap_endpoint_program_data_account,
 							)),
 						},
+						BitcoinElectionsConfig {
+							option_initial_state: Some(bitcoin_elections::initial_state()),
+						},
 					))
 					.build())
 			}
@@ -591,6 +597,7 @@ fn testnet_genesis(
 	solana_safety_margin: u64,
 	auction_bid_cutoff_percentage: Percent,
 	solana_elections: state_chain_runtime::SolanaElectionsConfig,
+	bitcoin_elections: state_chain_runtime::BitcoinElectionsConfig,
 ) -> serde_json::Value {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -851,7 +858,7 @@ fn testnet_genesis(
 		solana_elections,
 
 		// TODO: Set correct initial state
-		bitcoin_elections: BitcoinElectionsConfig { option_initial_state: None },
+		bitcoin_elections,
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.

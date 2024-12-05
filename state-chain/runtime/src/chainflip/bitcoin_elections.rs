@@ -15,7 +15,7 @@ use pallet_cf_elections::{
 			CompositeRunner,
 		},
 	},
-	CorruptStorageError, ElectionIdentifier, RunnerStorageAccess,
+	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
 
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
@@ -132,3 +132,11 @@ impl Hooks<BitcoinDepositChannelWitnessing> for BitcoinElectionHooks {
 // expiry is done correctly. During safe mode pause, we could get into a situation where the current
 // state suggests that a channel is expired, but at the time of a previous block which we have not
 // yet processed, the channel was not expired.
+
+pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
+	InitialState {
+		unsynchronised_state: (Default::default(),),
+		unsynchronised_settings: (Default::default()),
+		settings: (Default::default()),
+	}
+}
