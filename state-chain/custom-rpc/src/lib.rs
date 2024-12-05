@@ -1681,6 +1681,7 @@ where
 			base_asset,
 			quote_asset,
 		) else {
+			pending_sink.reject(call_error("requested pool does not exist")).await;
 			return;
 		};
 
