@@ -37,7 +37,6 @@ sp-rpc = { workspace = true, default-features = true }
 sc-rpc = { workspace = true, default-features = true }
 sc-rpc-api = { workspace = true, default-features = true }
 sc-rpc-spec-v2 = { workspace = true, default-features = true }
-sp-blockchain = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-state-machine = { workspace = true, default-features = true }
 sc-client-api = { workspace = true, default-features = true }

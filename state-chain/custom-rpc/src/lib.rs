@@ -1240,7 +1240,7 @@ where
 		+ BlockBackend<B>
 		+ ExecutorProvider<B>
 		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ HeaderMetadata<B>
 		+ BlockchainEvents<B>
 		+ CallApiAt<B>
 		+ StorageProvider<B, BE>,
@@ -1916,7 +1916,7 @@ where
 		+ BlockBackend<B>
 		+ ExecutorProvider<B>
 		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
 		+ BlockchainEvents<B>
 		+ CallApiAt<B>
 		+ StorageProvider<B, BE>,
