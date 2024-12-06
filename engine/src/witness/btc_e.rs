@@ -5,7 +5,7 @@ use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
 use state_chain_runtime::{
-	chainflip::bitcoin_elections::{BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner},
+	chainflip::bitcoin_elections::{BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner},
 	BitcoinInstance,
 };
 
@@ -68,6 +68,26 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 	}
 }
 
+
+#[derive(Clone)]
+pub struct BitcoinBlockHeightTrackingVoter {
+	client: BtcRetryRpcClient,
+}
+
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
+	async fn vote(
+			&self,
+			settings: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectoralSettings,
+			properties: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectionProperties,
+		) -> std::result::Result<<<BitcoinBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error> {
+		todo!()
+	}
+}
+
+
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: BtcRetryRpcClient,
@@ -90,7 +110,8 @@ where
 					scope,
 					state_chain_client,
 					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
-						BitcoinDepositChannelWitnessingVoter { client },
+						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
+						BitcoinBlockHeightTrackingVoter { client }
 					)),
 				)
 				.continuously_vote()

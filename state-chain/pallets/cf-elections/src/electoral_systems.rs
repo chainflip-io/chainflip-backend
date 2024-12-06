@@ -1,3 +1,4 @@
+pub mod block_height_tracking;
 pub mod block_witnesser;
 pub mod blockchain;
 pub mod composite;
