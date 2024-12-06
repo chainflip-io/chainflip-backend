@@ -214,6 +214,16 @@ pub struct BlockHeightTrackingState<BlockHash, BlockNumber> {
 	pub last_safe_index: BlockNumber,
 }
 
+impl<H,N: From<u32>> Default for BlockHeightTrackingState<H,N> {
+	fn default() -> Self {
+		let headers = ChainBlocks {
+			headers: Default::default(),
+			next_height: 0u32.into(),
+		};
+		Self { headers, last_safe_index: 0u32.into() }
+	}
+}
+
 pub fn validate_vote<ChainBlockHash, ChainBlockNumber>(properties: BlockHeightTrackingProperties<ChainBlockNumber>, vote: Header<ChainBlockHash, ChainBlockNumber>) {
 
 }
@@ -256,7 +266,7 @@ impl<Vote: Ord + PartialEq + Clone> Consensus for SupermajorityConsensus<Vote> {
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-		let best = self.votes.iter().sorted_by_key(|(vote, count)| **count).last();
+		let best = self.votes.iter().last();
 
 		if let Some((best_vote, best_count)) = best {
 			if best_count >= &settings.threshold {
@@ -305,7 +315,7 @@ impl<Stage: Consensus, Index: Ord + Copy> Consensus for StagedConsensus<Stage, I
 
 		// we check all stages starting with the highest index,
 		// the first one that has consensus wins
-		for (_, stage) in self.stages.iter().sorted_by_key(|(k,_)| **k).rev() {
+		for (_, stage) in self.stages.iter().rev() {
 			if let Some(result) = stage.check_consensus(settings) {
 				return Some(result);
 			}
