@@ -8,7 +8,7 @@ use crate::{
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
 	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
 	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, VaultDepositWitness,
+	ScheduledEgressFetchOrTransfer, VaultDepositWitness, DepositFailedDetails
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -17,7 +17,7 @@ use cf_chains::{
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
 	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
-	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
+	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,
@@ -602,7 +602,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			(address, address2)
 		})
 		.then_process_events(|_, event| match event {
-			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected { .. }) |
+			RuntimeEvent::IngressEgress(crate::Event::DepositFailed { .. }) |
 			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised { .. }) => Some(event),
 			_ => None,
 		})
@@ -611,8 +611,8 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			assert!(emitted.iter().any(|e| matches!(
 			e,
 			RuntimeEvent::IngressEgress(
-				crate::Event::DepositWitnessRejected {
-					deposit_witness,
+				crate::Event::DepositFailed {
+					details: DepositFailedDetails::DepositChannel { deposit_witness },
 					..
 				}) if deposit_witness.deposit_address == *expected_rejected_address
 			)),);
@@ -680,8 +680,8 @@ fn multi_use_deposit_address_different_blocks() {
 			deposit_address
 		})
 		.then_process_events(|_, event| match event {
-			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected {
-				deposit_witness,
+			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
+				details: DepositFailedDetails::DepositChannel { deposit_witness },
 				..
 			}) => Some(deposit_witness.deposit_address),
 			_ => None,
@@ -834,24 +834,18 @@ fn deposits_below_minimum_are_rejected() {
 		));
 
 		// Observe that eth deposit gets rejected.
-		let (channel_id, deposit_address) = request_address_and_deposit(0, eth);
+		let (_channel_id, deposit_address) = request_address_and_deposit(0, eth);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, ()>::DepositFailed {
-				asset: eth,
-				amount: default_deposit_amount,
-				deposit_details: Default::default(),
-				reason: DepositFailedReason::BelowMinimumDeposit,
-				origin: SwapOrigin::DepositChannel {
-					deposit_address: MockAddressConverter::to_encoded_address(
-						ForeignChainAddress::Eth(deposit_address),
-					),
-					channel_id,
-					deposit_block_height: Default::default(),
+				details: DepositFailedDetails::DepositChannel {
+					deposit_witness: DepositWitness {
+						deposit_address,
+						asset: eth,
+						amount: default_deposit_amount,
+						deposit_details: Default::default(),
+					},
 				},
-				action: Box::new(ChannelAction::LiquidityProvision {
-					lp_account: 0,
-					refund_address: Some(ForeignChainAddress::Eth(Default::default())),
-				}),
+				reason: DepositFailedReason::BelowMinimumDeposit,
 			},
 		));
 
@@ -911,9 +905,6 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 			matches!(
 				cf_test_utilities::last_event::<Test>(),
 				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFailed {
-					asset: ASSET,
-					amount: DEPOSIT_AMOUNT,
-					deposit_details: DepositDetails { tx_hashes: None },
 					reason: DepositFailedReason::NotEnoughToPayFees,
 					..
 				},)

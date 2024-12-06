@@ -3,7 +3,7 @@ use crate::{
 	tests::{ALICE, BROKER},
 	BoostPoolId, DepositChannelLookup, DepositFailedReason, DepositWitness, ReportExpiresAt,
 	ScheduledTxForReject, TransactionPrewitnessedStatus, TransactionRejectionDetails,
-	TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
+	TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS, DepositFailedDetails
 };
 
 use frame_support::{
@@ -136,10 +136,16 @@ fn process_marked_transaction_and_expect_refund() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFailed {
-				asset: btc::Asset::Btc,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
+				details: DepositFailedDetails::DepositChannel {
+					deposit_witness: DepositWitness {
+						deposit_address: _,
+						asset: btc::Asset::Btc,
+						amount: DEFAULT_DEPOSIT_AMOUNT,
+						deposit_details: _,
+					},
+				},
 				reason: DepositFailedReason::TransactionRejectedByBroker,
-				..
+				
 			})
 		);
 
@@ -238,10 +244,15 @@ fn reject_tx_if_marked_before_prewitness() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
-				asset: btc::Asset::Btc,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
+				details: DepositFailedDetails::DepositChannel {
+					deposit_witness: DepositWitness {
+						deposit_address: _,
+						asset: btc::Asset::Btc,
+						amount: DEFAULT_DEPOSIT_AMOUNT,
+						deposit_details: _,
+					},
+				},
 				reason: DepositFailedReason::TransactionRejectedByBroker,
-				..
 			})
 		);
 	});
@@ -427,10 +438,15 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::IngressEgress(crate::Event::DepositFailed {
-				asset: btc::Asset::Btc,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
+				details: DepositFailedDetails::DepositChannel {
+					deposit_witness: DepositWitness {
+						deposit_address: _,
+						asset: btc::Asset::Btc,
+						amount: DEFAULT_DEPOSIT_AMOUNT,
+						deposit_details: _,
+					},
+				},
 				reason: DepositFailedReason::TransactionRejectedByBroker,
-				..
 			})
 		);
 	});
