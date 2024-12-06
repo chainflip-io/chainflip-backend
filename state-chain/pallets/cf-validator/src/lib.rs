@@ -1042,9 +1042,18 @@ impl<T: Config> Pallet<T> {
 					HistoricalAuthorities::<T>::decode_len(epoch).unwrap_or_default() as u32,
 				);
 				if remaining_weight.all_gte(weight_used.saturating_add(required_weight)) {
+					log::info!(target: "cf-validator", "🚮 Expiring epoch {}.", epoch);
 					Self::expire_epoch(epoch);
 					weight_used.saturating_accrue(required_weight);
 					*last_expired_epoch = epoch;
+				} else {
+					log::info!(
+						target: "cf-validator",
+						"🚮 Postponing expiry of epoch {}. Required/Available weights: {}/{}.",
+						epoch,
+						required_weight.ref_time(),
+						remaining_weight.ref_time(),
+					);
 				}
 			}
 		});
