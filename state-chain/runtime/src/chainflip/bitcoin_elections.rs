@@ -9,11 +9,11 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
-		block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData},
-		composite::{
-			tuple_1_impls::{DerivedElectoralAccess, Hooks},
+		block_height_tracking::{self, BlockHeightTracking}, block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData}, composite::{
+			// tuple_1_impls::{DerivedElectoralAccess, Hooks},
+			tuple_2_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
-		},
+		}
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
@@ -24,7 +24,7 @@ use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
-	(BitcoinDepositChannelWitnessing,),
+	(BitcoinDepositChannelWitnessing,BitcoinBlockHeightTracking),
 	<Runtime as Chainflip>::ValidatorId,
 	RunnerStorageAccess<Runtime, BitcoinInstance>,
 	BitcoinElectionHooks,
@@ -43,6 +43,14 @@ pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 	<Runtime as Chainflip>::ValidatorId,
 	BitcoinDepositChannelWitessingProcessor,
 	BitcoinDepositChannelWitnessingGenerator,
+>;
+
+pub type BitcoinBlockHeightTracking = BlockHeightTracking<
+	6,
+	btc::BlockNumber,
+	btc::Hash,
+	(),
+	<Runtime as Chainflip>::ValidatorId
 >;
 
 pub struct BitcoinDepositChannelWitnessingGenerator;
@@ -102,12 +110,17 @@ impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 
 pub struct BitcoinElectionHooks;
 
-impl Hooks<BitcoinDepositChannelWitnessing> for BitcoinElectionHooks {
+impl Hooks<BitcoinDepositChannelWitnessing, BitcoinBlockHeightTracking> for BitcoinElectionHooks {
 	fn on_finalize(
-		(deposit_channel_witnessing_identifiers,): (
+		(deposit_channel_witnessing_identifiers,block_height_tracking_identifiers): (
 			Vec<
 				ElectionIdentifier<
 					<BitcoinDepositChannelWitnessing as ElectoralSystem>::ElectionIdentifierExtra,
+				>,
+			>,
+			Vec<
+				ElectionIdentifier<
+					<BitcoinBlockHeightTracking as ElectoralSystem>::ElectionIdentifierExtra,
 				>,
 			>,
 		),
@@ -135,8 +148,8 @@ impl Hooks<BitcoinDepositChannelWitnessing> for BitcoinElectionHooks {
 
 pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 	InitialState {
-		unsynchronised_state: (Default::default(),),
-		unsynchronised_settings: (Default::default()),
-		settings: (Default::default()),
+		unsynchronised_state: (Default::default(), Default::default()),
+		unsynchronised_settings: (Default::default(), Default::default()),
+		settings: (Default::default(), Default::default()),
 	}
 }
