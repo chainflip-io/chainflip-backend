@@ -1967,7 +1967,8 @@ where
 	}
 
 	/// The subscription will return the first value immediately and then either return new values
-	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
+	/// only when it changes, or every new block.
+	/// Note depending on the notification_behaviour blocks can be skipped. Also this
 	/// subscription can either filter out, or end the stream if the provided async closure returns
 	/// an error.
 	async fn new_subscription_with_state<
@@ -1996,7 +1997,7 @@ where
 			return;
 		};
 
-		// construct either best or finalized blocks stream from the chain head subscription
+		// construct either best, new or finalized blocks stream from the chain head subscription
 		let blocks_stream = stream::unfold(subscription, move |mut sub| async move {
 			match sub.next::<FollowEvent<Hash>>().await {
 				Some(Ok((event, _subs_id))) => Some((event, sub)),
@@ -2008,11 +2009,15 @@ where
 			}
 		})
 		.filter_map(move |event| async move {
+			// When NotificationBehaviour is:
+			// * NotificationBehaviour::Finalized: listen to initialized and finalized events
+			// * NotificationBehaviour::Best: listen to just bestBlockChanged events
+			// * NotificationBehaviour::New: listen to just newBlock events
+			// See: https://paritytech.github.io/json-rpc-interface-spec/api/chainHead_v1_follow.html
 			match (notification_behaviour, event) {
 				(
-					// Always return the most recent finalized block hash as the first event.
-					// See: https://paritytech.github.io/json-rpc-interface-spec/api/chainHead_v1_follow.html
-					_,
+					// Always start from the most recent finalized block hash
+					NotificationBehaviour::Finalized,
 					FollowEvent::Initialized(sc_rpc_spec_v2::chain_head::Initialized {
 						mut finalized_block_hashes,
 						..
