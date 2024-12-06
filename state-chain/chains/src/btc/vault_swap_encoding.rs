@@ -33,6 +33,7 @@ impl Encode for UtxoEncodedData {
 			EncodedAddress::Btc(inner) => inner.encode_to(&mut r),
 			EncodedAddress::Arb(inner) => inner.encode_to(&mut r),
 			EncodedAddress::Sol(inner) => inner.encode_to(&mut r),
+			EncodedAddress::Hub(inner) => inner.encode_to(&mut r),
 		}
 
 		self.parameters.encode_to(&mut r);
@@ -60,6 +61,7 @@ impl Decode for UtxoEncodedData {
 			ForeignChain::Bitcoin => EncodedAddress::Btc(Decode::decode(input)?),
 			ForeignChain::Arbitrum => EncodedAddress::Arb(Decode::decode(input)?),
 			ForeignChain::Solana => EncodedAddress::Sol(Decode::decode(input)?),
+			ForeignChain::Assethub => EncodedAddress::Hub(Decode::decode(input)?),
 		};
 
 		let parameters = SharedCfParameters::decode(input)?;

@@ -12,6 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
+	hub::Assethub,
 	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, Solana},
 	Chain,
 };
@@ -83,6 +84,8 @@ pub mod pallet {
 		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
 		/// On new key witnessed handler for Solana
 		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
+		/// On new key witnessed handler for Assethub
+		type AssethubVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Assethub>;
 
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
@@ -228,6 +231,21 @@ pub mod pallet {
 	#[pallet::getter(fn solana_api_environment)]
 	pub type SolanaApiEnvironment<T> = StorageValue<_, SolApiEnvironment, ValueQuery>;
 
+	// ASSETHUB CHAIN RELATED ENVIRONMENT ITEMS
+
+	#[pallet::storage]
+	#[pallet::getter(fn assethub_genesis_hash)]
+	pub type AssethubGenesisHash<T> = StorageValue<_, PolkadotHash, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn assethub_vault_account)]
+	/// The Assethub Vault Anonymous Account
+	pub type AssethubVaultAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
+
+	#[pallet::storage]
+	/// Current Nonce of the current Assethub Proxy Account
+	pub type AssethubProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
+
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
@@ -272,6 +290,8 @@ pub mod pallet {
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
 		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
+		/// Assethub Vault Account is successfully set
+		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
 	}
 
 	#[pallet::call]
@@ -488,6 +508,46 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Manually initiates Assethub vault key rotation completion steps so Epoch rotation can be
+		/// continued and sets the Assethub Pure Proxy Vault in environment pallet. The extrinsic
+		/// takes in the hub_pure_proxy_vault_key, which is obtained from the Assethub blockchain as
+		/// a result of creating an assethub vault which is done by executing the extrinsic
+		/// create_assethub_vault(), hub_witnessed_aggkey, the aggkey which initiated the assethub
+		/// creation transaction and the tx hash and block number of the Assethub block the
+		/// vault creation transaction was witnessed in. This extrinsic should complete the Assethub
+		/// initiation process and the vault should rotate successfully.
+		///
+		/// ## Events
+		///
+		/// - [AssethubVaultCreationCallInitiated](Event::AssethubVaultCreationCallInitiated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(unused_variables)]
+		#[pallet::call_index(8)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
+		pub fn witness_assethub_vault_creation(
+			origin: OriginFor<T>,
+			hub_pure_proxy_vault_key: PolkadotAccountId,
+			tx_id: TxId,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Set Assethub Pure Proxy Vault Account
+			AssethubVaultAccountId::<T>::put(hub_pure_proxy_vault_key);
+			Self::deposit_event(Event::<T>::AssethubVaultAccountSet {
+				assethub_vault_account_id: hub_pure_proxy_vault_key,
+			});
+
+			// Witness the agg_key rotation manually in the vaults pallet for assethub
+			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -512,6 +572,8 @@ pub mod pallet {
 		pub sol_genesis_hash: Option<SolHash>,
 		pub sol_api_env: SolApiEnvironment,
 		pub sol_durable_nonces_and_accounts: Vec<DurableNonceAndAccount>,
+		pub assethub_genesis_hash: PolkadotHash,
+		pub assethub_vault_account_id: Option<PolkadotAccountId>,
 		pub _config: PhantomData<T>,
 	}
 
@@ -545,6 +607,10 @@ pub mod pallet {
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 			SolanaApiEnvironment::<T>::set(self.sol_api_env);
 			SolanaAvailableNonceAccounts::<T>::set(self.sol_durable_nonces_and_accounts.clone());
+
+			AssethubGenesisHash::<T>::set(self.assethub_genesis_hash);
+			AssethubVaultAccountId::<T>::set(self.assethub_vault_account_id);
+			AssethubProxyAccountNonce::<T>::set(0);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
@@ -740,6 +806,19 @@ impl<T: Config> Pallet<T> {
 		} else {
 			log::error!("Nonce account {nonce_account} not found in unavailable nonce accounts");
 		}
+	}
+
+	pub fn next_assethub_proxy_account_nonce(reset_nonce: bool) -> PolkadotIndex {
+		AssethubProxyAccountNonce::<T>::mutate(|nonce| {
+			let current_nonce = *nonce;
+
+			if reset_nonce {
+				*nonce = 0;
+			} else {
+				*nonce += 1;
+			}
+			current_nonce
+		})
 	}
 }
 

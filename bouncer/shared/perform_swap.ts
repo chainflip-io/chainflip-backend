@@ -31,7 +31,7 @@ import { executeSolVaultSwap } from './sol_vault_swap';
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
 
-  if (destAddress && destAsset === 'Dot') {
+  if (destAddress && (destAsset === 'Dot' || destAsset === 'HubDot' || destAsset === 'HubUsdc' || destAsset == 'HubUsdt')) {
     destAddress = encodeAddress(destAddress);
   } else if (shortChainFromAsset(destAsset) === 'Sol') {
     destAddress = getEncodedSolAddress(destAddress);
@@ -167,7 +167,7 @@ export async function doPerformSwap(
     ]);
 
     const chain = chainFromAsset(sourceAsset);
-    if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
+    if (chain !== 'Bitcoin' && chain !== 'Polkadot' && chain !== 'Assethub') {
       if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }
