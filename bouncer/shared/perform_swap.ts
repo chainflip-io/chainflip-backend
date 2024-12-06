@@ -167,7 +167,7 @@ export async function doPerformSwap(
     ]);
 
     const chain = chainFromAsset(sourceAsset);
-    if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
+    if (chain !== 'Bitcoin' && chain !== 'Polkadot' && chain !== 'Assethub') {
       if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }

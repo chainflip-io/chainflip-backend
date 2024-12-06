@@ -60,6 +60,17 @@ export type VaultSwapParams = {
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
+export type HubAsset = 'HubUsdc' | 'HubUsdt'
+
+export function getHubAssetId(asset: HubAsset) {
+  switch (asset) {
+    case 'HubUsdc':
+      return 1337;
+    case 'HubUsdt':
+      return 1984;
+  }
+}
+
 export const solanaNumberOfNonces = 10;
 
 export const solCcmAdditionalDataCodec = Struct({
