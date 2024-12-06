@@ -1,9 +1,9 @@
 use crate::{
 	mock_btc::*,
 	tests::{ALICE, BROKER},
-	BoostPoolId, DepositChannelLookup, DepositFailedReason, DepositWitness, ReportExpiresAt,
-	ScheduledTxForReject, TransactionPrewitnessedStatus, TransactionRejectionDetails,
-	TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS, DepositFailedDetails
+	BoostPoolId, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness,
+	ReportExpiresAt, ScheduledTxForReject, TransactionPrewitnessedStatus,
+	TransactionRejectionDetails, TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
 };
 
 use frame_support::{
@@ -145,7 +145,6 @@ fn process_marked_transaction_and_expect_refund() {
 					},
 				},
 				reason: DepositFailedReason::TransactionRejectedByBroker,
-				
 			})
 		);
 

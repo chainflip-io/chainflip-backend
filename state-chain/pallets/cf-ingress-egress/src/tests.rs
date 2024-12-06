@@ -4,11 +4,11 @@ mod screening;
 use crate::{
 	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
-	DepositChannelLookup, DepositChannelPool, DepositFailedReason, DepositWitness,
-	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
-	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
-	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, VaultDepositWitness, DepositFailedDetails
+	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
+	DepositWitness, DisabledEgressAssets, EgressDustLimit, Event as PalletEvent,
+	FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet,
+	PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, VaultDepositWitness,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -17,7 +17,7 @@ use cf_chains::{
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
 	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
-	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams
+	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,

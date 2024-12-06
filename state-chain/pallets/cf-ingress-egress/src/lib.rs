@@ -1859,7 +1859,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.unwrap_or_else(|_| {
 				Self::deposit_event(Event::<T, I>::DepositFailed {
 					reason: DepositFailedReason::DepositWitnessRejected,
-					details: DepositFailedDetails::DepositChannel {deposit_witness},
+					details: DepositFailedDetails::DepositChannel { deposit_witness },
 				});
 			})
 	}
