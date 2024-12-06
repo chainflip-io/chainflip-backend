@@ -4,7 +4,7 @@ on:
       test_features:
         description: Features to enable in tests
         type: string
-        default: "runtime-benchmarks,slow-tests,metadata-hash"
+        default: "metada-hash,runtime-benchmarks,slow-tests"
 
 env:
   FORCE_COLOR: 1
