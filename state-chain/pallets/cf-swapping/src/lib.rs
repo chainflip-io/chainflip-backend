@@ -2539,8 +2539,8 @@ pub(crate) mod utilities {
 			Asset::Usdt => Some(USD_ESTIMATION_CAP),
 			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
 			Asset::SolUsdc => Some(USD_ESTIMATION_CAP),
-			Asset::HubUsdc => Some (USD_ESTIMATION_CAP),
-			Asset::HubUsdt => Some (USD_ESTIMATION_CAP),
+			Asset::HubUsdc => Some(USD_ESTIMATION_CAP),
+			Asset::HubUsdt => Some(USD_ESTIMATION_CAP),
 			_ => None,
 		}
 	}
