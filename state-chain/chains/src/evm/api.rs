@@ -148,7 +148,7 @@ pub trait EvmCall {
 				.collect::<Vec<_>>(),
 		))
 	}
-	fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+	fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
 		None
 	}
 }
@@ -173,8 +173,8 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		self.replay_protection.chain_id
 	}
 
-	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
-		self.call.gas_budget()
+	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+		self.call.ccm_transfer_data()
 	}
 
 	pub fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
@@ -322,7 +322,7 @@ mod tests {
 
 		assert_eq!(builder.chain_id(), 1);
 		assert_eq!(builder.replay_protection(), replay_protection);
-		assert_eq!(builder.gas_budget(), None);
+		assert_eq!(builder.ccm_transfer_data(), None);
 		assert!(!builder.is_signed());
 
 		let threshold_signature =

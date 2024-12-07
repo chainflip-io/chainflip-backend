@@ -18,7 +18,7 @@ use super::{api::ArbitrumApi, ArbitrumTrackedData};
 
 impl BenchmarkValue for ArbitrumTrackedData {
 	fn benchmark_value() -> Self {
-		Self { base_fee: 10_000_000_000, gas_limit_multiplier: 1.into() }
+		Self { base_fee: 10_000_000_000, l1_base_fee_estimate: 1u128 }
 	}
 }
 

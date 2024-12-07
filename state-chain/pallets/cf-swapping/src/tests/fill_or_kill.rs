@@ -4,12 +4,8 @@ use super::*;
 
 const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 
-fn fok_swap(refund_params: Option<TestRefundParams>) -> TestSwapParams {
-	TestSwapParams::new(None, refund_params, false)
-}
-
-fn fok_swap_ccm(refund_params: Option<TestRefundParams>) -> TestSwapParams {
-	TestSwapParams::new(None, refund_params, true)
+fn fok_swap(refund_params: Option<TestRefundParams>, is_ccm: bool) -> TestSwapParams {
+	TestSwapParams::new(None, refund_params, is_ccm)
 }
 
 #[track_caller]
@@ -21,9 +17,17 @@ fn assert_swaps_scheduled_for_block(swap_ids: &[SwapId], expected_block_number: 
 		);
 	}
 }
+#[test]
+fn both_fok_and_regular_swaps_succeed_first_try_no_ccm() {
+	both_fok_and_regular_swaps_succeed_first_try(false);
+}
 
 #[test]
-fn both_fok_and_regular_swaps_succeed_first_try() {
+fn both_fok_and_regular_swaps_succeed_first_try_ccm() {
+	both_fok_and_regular_swaps_succeed_first_try(true);
+}
+
+fn both_fok_and_regular_swaps_succeed_first_try(is_ccm: bool) {
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	const REGULAR_SWAP_ID: SwapId = SwapId(1);
@@ -44,7 +48,7 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 					MockAddressConverter::to_encoded_address(refund_address)
 				});
 
-			insert_swaps(&vec![fok_swap(None), fok_swap(Some(REFUND_PARAMS))]);
+			insert_swaps(&vec![fok_swap(None, is_ccm), fok_swap(Some(REFUND_PARAMS), is_ccm)]);
 
 			assert_has_matching_event!(
 				Test,
@@ -85,7 +89,16 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 }
 
 #[test]
-fn price_limit_is_respected_in_fok_swap() {
+fn price_limit_is_respected_in_fok_swap_no_ccm() {
+	price_limit_is_respected_in_fok_swap(false);
+}
+
+#[test]
+fn price_limit_is_respected_in_fok_swap_ccm() {
+	price_limit_is_respected_in_fok_swap(true);
+}
+
+fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const SWAP_RETRIED_AT_BLOCK: u64 =
 		SWAPS_SCHEDULED_FOR_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
@@ -102,15 +115,21 @@ fn price_limit_is_respected_in_fok_swap() {
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			insert_swaps(&vec![
-				fok_swap(None),
-				fok_swap(Some(TestRefundParams {
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-					min_output: HIGH_OUTPUT,
-				})),
-				fok_swap(Some(TestRefundParams {
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-					min_output: EXPECTED_OUTPUT,
-				})),
+				fok_swap(None, is_ccm),
+				fok_swap(
+					Some(TestRefundParams {
+						retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
+						min_output: HIGH_OUTPUT,
+					}),
+					is_ccm,
+				),
+				fok_swap(
+					Some(TestRefundParams {
+						retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
+						min_output: EXPECTED_OUTPUT,
+					}),
+					is_ccm,
+				),
 			]);
 
 			assert_swaps_scheduled_for_block(
@@ -172,7 +191,16 @@ fn price_limit_is_respected_in_fok_swap() {
 }
 
 #[test]
-fn fok_swap_gets_refunded_due_to_price_limit() {
+fn fok_swap_gets_refunded_due_to_price_limit_no_ccm() {
+	fok_swap_gets_refunded_due_to_price_limit(false);
+}
+
+#[test]
+fn fok_swap_gets_refunded_due_to_price_limit_ccm() {
+	fok_swap_gets_refunded_due_to_price_limit(true);
+}
+
+fn fok_swap_gets_refunded_due_to_price_limit(is_ccm: bool) {
 	const FOK_SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(1);
 	const OTHER_SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(2);
 
@@ -187,12 +215,15 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			// Min output for swap 1 is too high to be executed:
 			const MIN_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE + 1;
-			insert_swaps(&[fok_swap(Some(TestRefundParams {
-				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-				min_output: MIN_OUTPUT,
-			}))]);
+			insert_swaps(&[fok_swap(
+				Some(TestRefundParams {
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
+					min_output: MIN_OUTPUT,
+				}),
+				is_ccm,
+			)]);
 			// However, swap 2 is non-FoK and should still be executed:
-			insert_swaps(&[fok_swap(None)]);
+			insert_swaps(&[fok_swap(None, is_ccm)]);
 
 			assert_swaps_scheduled_for_block(
 				&[FOK_SWAP_ID, OTHER_SWAP_ID],
@@ -239,7 +270,16 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 }
 
 #[test]
-fn storage_state_rolls_back_on_fok_violation() {
+fn storage_state_rolls_back_on_fok_violation_no_ccm() {
+	storage_state_rolls_back_on_fok_violation(false);
+}
+
+#[test]
+fn storage_state_rolls_back_on_fok_violation_ccm() {
+	storage_state_rolls_back_on_fok_violation(true);
+}
+
+fn storage_state_rolls_back_on_fok_violation(is_ccm: bool) {
 	const FOK_SWAP_ID: SwapId = SwapId(1);
 	const OTHER_SWAP_ID: SwapId = SwapId(2);
 
@@ -255,12 +295,15 @@ fn storage_state_rolls_back_on_fok_violation() {
 
 			// This is about 2 times (ignoring fees) what the output will be, so will fail
 			const MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE * 2;
-			insert_swaps(&[fok_swap(Some(TestRefundParams {
-				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-				min_output: MIN_OUTPUT,
-			}))]);
+			insert_swaps(&[fok_swap(
+				Some(TestRefundParams {
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
+					min_output: MIN_OUTPUT,
+				}),
+				is_ccm,
+			)]);
 			// However, swap 2 is non-FoK and should still be executed:
-			insert_swaps(&[fok_swap(None)]);
+			insert_swaps(&[fok_swap(None, is_ccm)]);
 
 			assert_swaps_scheduled_for_block(
 				&[FOK_SWAP_ID, OTHER_SWAP_ID],
@@ -293,7 +336,16 @@ fn storage_state_rolls_back_on_fok_violation() {
 }
 
 #[test]
-fn fok_swap_gets_refunded_due_to_price_impact_protection() {
+fn fok_swap_gets_refunded_due_to_price_impact_protection_no_ccm() {
+	fok_swap_gets_refunded_due_to_price_impact_protection(false);
+}
+
+#[test]
+fn fok_swap_gets_refunded_due_to_price_impact_protection_ccm() {
+	fok_swap_gets_refunded_due_to_price_impact_protection(true);
+}
+
+fn fok_swap_gets_refunded_due_to_price_impact_protection(is_ccm: bool) {
 	const FOK_SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(1);
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const SWAP_RETRIED_AT_BLOCK: u64 =
@@ -305,13 +357,16 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			// FoK swap 1 should fail and will eventually be refunded
-			insert_swaps(&[fok_swap(Some(TestRefundParams {
-				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-				min_output: INPUT_AMOUNT,
-			}))]);
+			insert_swaps(&[fok_swap(
+				Some(TestRefundParams {
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
+					min_output: INPUT_AMOUNT,
+				}),
+				is_ccm,
+			)]);
 
 			// Non-FoK swap 2 will fail together with swap 1, but should be retried indefinitely
-			insert_swaps(&[fok_swap(None)]);
+			insert_swaps(&[fok_swap(None, is_ccm)]);
 
 			assert_swaps_scheduled_for_block(
 				&[FOK_SWAP_ID, REGULAR_SWAP_ID],
@@ -362,16 +417,25 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 }
 
 #[test]
-fn fok_test_zero_refund_duration() {
+fn fok_test_zero_refund_duration_no_ccm() {
+	fok_test_zero_refund_duration(false);
+}
+
+#[test]
+fn fok_test_zero_refund_duration_ccm() {
+	fok_test_zero_refund_duration(true);
+}
+
+fn fok_test_zero_refund_duration(is_ccm: bool) {
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			// A swap with 0 retry duration should be tried exactly 1 time
-			insert_swaps(&[fok_swap(Some(TestRefundParams {
-				retry_duration: 0,
-				min_output: INPUT_AMOUNT,
-			}))]);
+			insert_swaps(&[fok_swap(
+				Some(TestRefundParams { retry_duration: 0, min_output: INPUT_AMOUNT }),
+				is_ccm,
+			)]);
 
 			assert_swaps_scheduled_for_block(&[1.into()], SWAPS_SCHEDULED_FOR_BLOCK);
 		})
@@ -392,152 +456,6 @@ fn fok_test_zero_refund_duration() {
 					swap_request_id: SwapRequestId(1),
 					..
 				}),
-			);
-		});
-}
-
-#[test]
-fn fok_ccm_happy_path() {
-	const PRINCIPAL_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const GAS_BLOCK: u64 = PRINCIPAL_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
-	const REQUEST_ID: SwapRequestId = SwapRequestId(1);
-	const PRINCIPAL_SWAP_ID: SwapId = SwapId(1);
-	const GAS_SWAP_ID: SwapId = SwapId(2);
-
-	const EXPECTED_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE;
-
-	new_test_ext()
-		.then_execute_at_block(INIT_BLOCK, |_| {
-			insert_swaps(&[fok_swap_ccm(Some(TestRefundParams {
-				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-				min_output: EXPECTED_OUTPUT,
-			}))]);
-
-			assert_swaps_scheduled_for_block(&[PRINCIPAL_SWAP_ID], PRINCIPAL_BLOCK);
-		})
-		.then_process_blocks_until_block(PRINCIPAL_BLOCK)
-		.then_execute_with(|_| {
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: PRINCIPAL_SWAP_ID, .. }),
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_id: GAS_SWAP_ID,
-					swap_type: SwapType::CcmGas,
-					..
-				}),
-			);
-		})
-		.then_process_blocks_until_block(GAS_BLOCK)
-		.then_execute_with(|_| {
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: GAS_SWAP_ID, .. }),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-					swap_request_id: REQUEST_ID,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
-			);
-		});
-}
-
-#[test]
-fn fok_ccm_refunded() {
-	const PRINCIPAL_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
-	const REQUEST_ID: SwapRequestId = SwapRequestId(1);
-	const PRINCIPAL_SWAP_ID: SwapId = SwapId(1);
-
-	const PRINCIPAL_AMOUNT: AssetAmount = INPUT_AMOUNT - GAS_BUDGET;
-
-	new_test_ext()
-		.then_execute_at_block(INIT_BLOCK, |_| {
-			insert_swaps(&[fok_swap_ccm(Some(TestRefundParams {
-				retry_duration: 0,
-				min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
-			}))]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_id: PRINCIPAL_SWAP_ID,
-					swap_type: SwapType::CcmPrincipal,
-					input_amount: PRINCIPAL_AMOUNT,
-					..
-				}),
-			);
-
-			assert_swaps_scheduled_for_block(&[PRINCIPAL_SWAP_ID], PRINCIPAL_BLOCK);
-		})
-		.then_process_blocks_until_block(PRINCIPAL_BLOCK)
-		.then_execute_with(|_| {
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
-					swap_request_id: REQUEST_ID,
-					// Note that gas is refunded too:
-					amount: INPUT_AMOUNT,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
-			);
-		});
-}
-
-#[test]
-fn fok_ccm_refunded_no_gas_swap() {
-	const PRINCIPAL_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
-	const REQUEST_ID: SwapRequestId = SwapRequestId(1);
-	const PRINCIPAL_SWAP_ID: SwapId = SwapId(1);
-
-	const PRINCIPAL_AMOUNT: AssetAmount = INPUT_AMOUNT - GAS_BUDGET;
-
-	const INPUT_ASSET: Asset = Asset::Eth;
-	const OUTPUT_ASSET: Asset = Asset::Usdc;
-
-	new_test_ext()
-		.then_execute_at_block(INIT_BLOCK, |_| {
-			let refund_params = TestRefundParams {
-				retry_duration: 0,
-				min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
-			}
-			.into_channel_params(INPUT_AMOUNT);
-
-			insert_swaps(&[TestSwapParams {
-				input_asset: INPUT_ASSET,
-				output_asset: OUTPUT_ASSET,
-				input_amount: INPUT_AMOUNT,
-				refund_params: Some(refund_params),
-				dca_params: None,
-				output_address: (*EVM_OUTPUT_ADDRESS).clone(),
-				is_ccm: true,
-			}]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_id: PRINCIPAL_SWAP_ID,
-					swap_type: SwapType::CcmPrincipal,
-					input_amount: PRINCIPAL_AMOUNT,
-					..
-				}),
-			);
-
-			assert_swaps_scheduled_for_block(&[PRINCIPAL_SWAP_ID], PRINCIPAL_BLOCK);
-		})
-		.then_process_blocks_until_block(PRINCIPAL_BLOCK)
-		.then_execute_with(|_| {
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
-					swap_request_id: REQUEST_ID,
-					// Note that gas is refunded too:
-					amount: INPUT_AMOUNT,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
 			);
 		});
 }

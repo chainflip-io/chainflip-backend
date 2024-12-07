@@ -16,15 +16,15 @@ use crate::{
 	},
 	sol::{
 		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolHash, SolTransaction, SolanaCrypto,
+		SolAsset, SolHash, SolTrackedData, SolTransaction, SolanaCrypto,
 	},
-	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
+	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	CloseSolanaVaultSwapAccounts, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall,
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey,
 	SetGovKeyWithAggKey, Solana, TransferAssetParams, TransferFallback, TransferFallbackError,
 };
 
-use cf_primitives::{EgressId, ForeignChain};
+use cf_primitives::{EgressId, ForeignChain, GasAmount};
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
@@ -284,7 +284,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Solana as Chain>::ChainAmount,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
@@ -336,6 +336,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			to: ccm_accounts.fallback_address.into(),
 		};
 
+		let compute_limit =
+			SolTrackedData::calculate_ccm_compute_limit(gas_budget, transfer_param.asset);
+
 		// Build the transaction
 		let transaction = match transfer_param.asset {
 			SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
@@ -350,7 +353,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				agg_key,
 				durable_nonce,
 				compute_price,
-				gas_budget,
+				compute_limit,
 			),
 			SolAsset::SolUsdc => {
 				let ata =
@@ -377,7 +380,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					durable_nonce,
 					compute_price,
 					SOL_USDC_DECIMAL,
-					gas_budget,
+					compute_limit,
 				)
 			},
 		}
@@ -499,7 +502,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Solana as Chain>::ChainAmount,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
