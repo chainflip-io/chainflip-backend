@@ -2,13 +2,13 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 use crate::Pallet;
-mod channel_action_ccm;
+pub mod deposit_channel_details_migration;
 
 pub type PalletMigration<T, I> = (
 	VersionedMigration<
 		16,
 		17,
-		channel_action_ccm::Migration<T, I>,
+		deposit_channel_details_migration::DepositChannelDetailsMigration<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,

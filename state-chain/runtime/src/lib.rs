@@ -61,7 +61,6 @@ use cf_primitives::{
 	AffiliateAndFee, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
 	DcaParameters, EpochIndex, NetworkEnvironment, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
-use cf_runtime_utilities::PlaceholderMigration;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter, BalanceApi,
 	DummyEgressSuccessWitnesser, DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider,
@@ -1302,13 +1301,6 @@ type MigrationsForV1_8 = (
 		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
 		DbWeight,
 	>,
-	// VersionedMigration<
-	// 	2,
-	// 	3,
-	// 	PlaceholderMigration<2, pallet_cf_elections::Pallet<Runtime, EthereumInstance>>,
-	// 	pallet_cf_elections::Pallet<Runtime, EthereumInstance>,
-	// 	DbWeight,
-	// >,
 	VersionedMigration<
 		3,
 		4,

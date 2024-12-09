@@ -1,6 +1,6 @@
 use frame_support::traits::OnRuntimeUpgrade;
 
-use pallet_cf_ingress_egress::{Config, DepositChannelDetails};
+use crate::{Config, DepositChannelDetails};
 
 use crate::*;
 use frame_support::pallet_prelude::Weight;
@@ -10,12 +10,12 @@ use sp_runtime::DispatchError;
 use codec::{Decode, Encode};
 
 pub mod old {
+	use crate::BoostStatus;
 	use cf_chains::{
 		CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ForeignChainAddress,
 	};
 	use cf_primitives::Beneficiaries;
 	use frame_support::{pallet_prelude::OptionQuery, Twox64Concat};
-	use pallet_cf_ingress_egress::BoostStatus;
 
 	use super::*;
 
@@ -54,72 +54,72 @@ pub mod old {
 		},
 	}
 
-	pub type DepositChannelLookup<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
+	#[frame_support::storage_alias]
+	pub type DepositChannelLookup<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
 		Twox64Concat,
-		Config<I>::TargetChainAccount<T, I>,
+		TargetChainAccount<T, I>,
 		DepositChannelDetails<T, I>,
 		OptionQuery,
 	>;
 }
 
-pub struct DepositChannelDetailsMigration<T: Config<I>, I: 'static = ()>;
+pub struct DepositChannelDetailsMigration<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
 
-impl OnRuntimeUpgrade for DepositChannelDetailsMigration<T> {
+impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for DepositChannelDetailsMigration<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok((old::DepositChannelLookup::iter().count() as u64).encode())
+		Ok((old::DepositChannelLookup::<T, I>::iter_keys().count() as u64).encode())
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, _>::translate_values::<
-			old::DepositChannelDetails,
-			_,
-		>(|old_deposit_channel_details| {
-			let action = match old_deposit_channel_details.action {
-				old::ChannelAction::LiquidityProvision { lp_account, refund_address } =>
-					ChannelAction::LiquidityProvision { lp_account, refund_address },
-				old::ChannelAction::Swap {
-					destination_asset,
-					destination_address,
-					broker_fees,
-					refund_params,
-					dca_params,
-				} => ChannelAction::Swap {
-					destination_asset,
-					destination_address,
-					broker_fees,
-					channel_metadata: None,
-					refund_params,
-					dca_params,
-				},
-				old::ChannelAction::CcmTransfer {
-					destination_asset,
-					destination_address,
-					broker_fees,
-					channel_metadata,
-					refund_params,
-					dca_params,
-				} => ChannelAction::Swap {
-					destination_asset,
-					destination_address,
-					broker_fees,
-					channel_metadata: Some(channel_metadata),
-					refund_params,
-					dca_params,
-				},
-			};
+		crate::DepositChannelLookup::<T, I>::translate_values::<old::DepositChannelDetails<T, I>, _>(
+			|old_deposit_channel_details| {
+				let action = match old_deposit_channel_details.action {
+					old::ChannelAction::LiquidityProvision { lp_account, refund_address } =>
+						ChannelAction::LiquidityProvision { lp_account, refund_address },
+					old::ChannelAction::Swap {
+						destination_asset,
+						destination_address,
+						broker_fees,
+						refund_params,
+						dca_params,
+					} => ChannelAction::Swap {
+						destination_asset,
+						destination_address,
+						broker_fees,
+						channel_metadata: None,
+						refund_params,
+						dca_params,
+					},
+					old::ChannelAction::CcmTransfer {
+						destination_asset,
+						destination_address,
+						broker_fees,
+						channel_metadata,
+						refund_params,
+						dca_params,
+					} => ChannelAction::Swap {
+						destination_asset,
+						destination_address,
+						broker_fees,
+						channel_metadata: Some(channel_metadata),
+						refund_params,
+						dca_params,
+					},
+				};
 
-			Some(DepositChannelDetails::<Runtime, _> {
-				owner: old_deposit_channel_details.owner,
-				deposit_channel: old_deposit_channel_details.deposit_channel,
-				opened_at: old_deposit_channel_details.opened_at,
-				expires_at: old_deposit_channel_details.expires_at,
-				action,
-				boost_fee: old_deposit_channel_details.boost_fee,
-				boost_status: old_deposit_channel_details.boost_status,
-			})
-		});
+				Some(DepositChannelDetails::<T, I> {
+					owner: old_deposit_channel_details.owner,
+					deposit_channel: old_deposit_channel_details.deposit_channel,
+					opened_at: old_deposit_channel_details.opened_at,
+					expires_at: old_deposit_channel_details.expires_at,
+					action,
+					boost_fee: old_deposit_channel_details.boost_fee,
+					boost_status: old_deposit_channel_details.boost_status,
+				})
+			},
+		);
 
 		Weight::zero()
 	}
@@ -130,7 +130,7 @@ impl OnRuntimeUpgrade for DepositChannelDetailsMigration<T> {
 			.map_err(|_| DispatchError::from("Failed to decode state"))?;
 
 		let post_deposit_channel_lookup_count =
-			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, _>::iter().count() as u64;
+			crate::DepositChannelLookup::<T, I>::iter().count() as u64;
 
 		assert_eq!(pre_deposit_channel_lookup_count, post_deposit_channel_lookup_count);
 		Ok(())
