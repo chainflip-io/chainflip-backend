@@ -51,7 +51,7 @@ impl BtcRetryRpcClient {
 
 #[async_trait::async_trait]
 pub trait BtcRetryRpcApi: Clone {
-	async fn block(&self, block_hash: BlockHash) -> VerboseBlock;
+	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock>;
 
 	async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
 
@@ -61,19 +61,20 @@ pub trait BtcRetryRpcApi: Clone {
 
 	async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
 
-	async fn best_block_header(&self) -> BlockHeader;
+	async fn best_block_header(&self) -> anyhow::Result<BlockHeader>;
 }
 
 #[async_trait::async_trait]
 impl BtcRetryRpcApi for BtcRetryRpcClient {
-	async fn block(&self, block_hash: BlockHash) -> VerboseBlock {
+	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock> {
 		self.retry_client
-			.request(
+			.request_with_limit(
 				RequestLog::new("block".to_string(), Some(format!("{block_hash}"))),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block(block_hash).await })
 				}),
+				2,
 			)
 			.await
 	}
@@ -134,9 +135,9 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 			.await
 	}
 
-	async fn best_block_header(&self) -> BlockHeader {
+	async fn best_block_header(&self) -> anyhow::Result<BlockHeader> {
 		self.retry_client
-			.request(
+			.request_with_limit(
 				RequestLog::new("best_block_header".to_string(), None),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
@@ -147,6 +148,11 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 						Ok(header)
 					})
 				}),
+				// TODO: Set this to, this is to work around a localnet startup issue when
+				// the bitcoin node is not yet ready, which isn't a problem when using the
+				// elections based witnessing, since a particular vote is allowed to fail in
+				// elections based witnessing.
+				10000,
 			)
 			.await
 	}
@@ -200,7 +206,7 @@ pub mod mocks {
 
 		#[async_trait::async_trait]
 		impl BtcRetryRpcApi for BtcRetryRpcClient {
-			async fn block(&self, block_hash: BlockHash) -> VerboseBlock;
+			async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock>;
 
 			async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
 
@@ -210,7 +216,7 @@ pub mod mocks {
 
 			async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
 
-			async fn best_block_header(&self) -> BlockHeader;
+			async fn best_block_header(&self) -> anyhow::Result<BlockHeader>;
 		}
 	}
 }

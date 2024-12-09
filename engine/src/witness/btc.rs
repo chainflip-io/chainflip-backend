@@ -115,7 +115,7 @@ where
 			move |header| {
 				let btc_client = btc_client.clone();
 				async move {
-					let block = btc_client.block(header.hash).await;
+					let block = btc_client.block(header.hash).await.expect("TODO: Delete this");
 					(header.data, block.txdata)
 				}
 			}
