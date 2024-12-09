@@ -112,6 +112,7 @@ sp-rpc = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-version = { workspace = true, default-features = true }
 substrate-frame-rpc-system = { workspace = true }
+frame-metadata-hash-extension = { workspace = true }
 
 frame-metadata = { workspace = true, default-features = true, features = [
   "current",
