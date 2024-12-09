@@ -146,7 +146,7 @@ impl<
 	type ElectionState = ();
 	type Vote = vote_storage::bitmap::Bitmap<BlockData>;
 	type Consensus = BlockData;
-	type OnFinalizeContext = RangeInclusive<<Chain as cf_chains::Chain>::ChainBlockNumber>;
+	type OnFinalizeContext = <Chain as cf_chains::Chain>::ChainBlockNumber;
 	type OnFinalizeReturn = ();
 
 	fn generate_vote_properties(
@@ -166,9 +166,8 @@ impl<
 
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
-		new_block_heights: &Self::OnFinalizeContext,
+		current_chain_block_number: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
-		let current_chain_block_number = new_block_heights.start();
 
 		ensure!(<Chain as cf_chains::Chain>::is_block_witness_root(*current_chain_block_number), {
 			log::error!(

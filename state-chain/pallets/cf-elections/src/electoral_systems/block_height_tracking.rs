@@ -8,6 +8,7 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
+use cf_chains::btc::BlockNumber;
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
 use frame_support::{
@@ -157,7 +158,7 @@ impl<
 	//   1. `other`: a. is well-formed (contains incrementing heights) b. is nonempty
 	// 	 2. `self`: a. is well-formed (contains incrementing heights)
 	//   3. one of the following cases holds
-	//       - case 1: `other` starts exactly after `self` ends
+	//       - case 1: `other` starts exactly after `self` ends OR self is `Default::default()`
 	//       - case 2: (`self` and `other` start at the same block) AND (self is nonempty)
 	//
 	pub fn merge(
@@ -167,7 +168,7 @@ impl<
 		// assumption (1b)
 		let other_head = other.front().ok_or(MergeFailure::InternalError)?;
 
-		if self.next_height == other_head.block_height {
+		if self.next_height == other_head.block_height || (self.next_height == 0u32.into() && self.headers.len() == 0) {
 			// this is "assumption (3): case 1"
 			//
 			// This means that our new blocks start exactly after the ones we already have,
@@ -379,10 +380,9 @@ impl<
 		Ok(())
 	}
 
-	/// Emits the most recent block that we deem safe. Thus, any downstream system can process any
-	/// blocks up to this block safely.
-	// How does it start up -> migrates last processed chain tracking? how do we know we want dupe
-	// witnesses?
+	// Emits the range of blocks which should be witnessed next.
+	// If a reorg happened then the lower bound of the range is going
+	// to be <= a previously emitted (inclusive) upper bound.
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
 		_context: &Self::OnFinalizeContext,
@@ -460,25 +460,55 @@ impl<
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_access: &ElectionAccess,
+		election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let num_authorities = consensus_votes.num_authorities();
 
-		let mut consensus: StagedConsensus<SupermajorityConsensus<Self::Consensus>, usize> =
-			StagedConsensus::new();
+		let properties = election_access.properties()?;
+		if properties.witness_from_index == 0u32.into() {
+			// This is the case for finding an appropriate block number to start witnessing from
 
-		for mut vote in consensus_votes.active_votes() {
-			// we count a given vote as multiple votes for all nonempty subchains
-			while vote.len() > 0 {
-				consensus.insert_vote((vote.len(), vote.clone()));
-				vote.pop_back();
+			let mut consensus: SupermajorityConsensus<_> = SupermajorityConsensus::default();
+
+			for vote in consensus_votes.active_votes() {
+				// we currently only count votes consisting of a single block height
+				// there has to be a supermajority voting for the exact same header
+				if vote.len() == 1 {
+					consensus.insert_vote(vote[0].clone())
+				}
 			}
+
+			Ok(consensus.check_consensus(&Threshold {
+				threshold: success_threshold_from_share_count(num_authorities),
+			})
+			.map(|result| {
+				let mut headers = VecDeque::new();
+				headers.push_back(result);
+				headers
+			}))
+
+		} else {
+			// This is the actual consensus finding, once the engine is running
+
+			let mut consensus: StagedConsensus<SupermajorityConsensus<Self::Consensus>, usize> =
+				StagedConsensus::new();
+
+			for mut vote in consensus_votes.active_votes() {
+				// we count a given vote as multiple votes for all nonempty subchains
+				while vote.len() > 0 {
+					consensus.insert_vote((vote.len(), vote.clone()));
+					vote.pop_back();
+				}
+			}
+
+			Ok(consensus.check_consensus(&Threshold {
+				threshold: success_threshold_from_share_count(num_authorities),
+			}))
+
 		}
 
-		Ok(consensus.check_consensus(&Threshold {
-			threshold: success_threshold_from_share_count(num_authorities),
-		}))
+
 	}
 }
