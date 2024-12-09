@@ -19,6 +19,7 @@ use state_chain_runtime::{
 use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,
 	elections::voter_api::{CompositeVoter, VoterApi},
+	retrier::RetryLimit,
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
@@ -55,9 +56,9 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 			// TODO: these queries should not be infinite
 			// let block_hash = self.client.block_hash(block).await;
 
-			let latest_hash = self.client.best_block_header().await.hash;
+			let latest_hash = self.client.best_block_header().await?.hash;
 
-			let block = self.client.block(latest_hash).await;
+			let block = self.client.block(latest_hash).await?;
 			txs.extend(block.txdata);
 		}
 
@@ -91,8 +92,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 		anyhow::Error,
 	> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
-		// TODO: this query should not be infinite
-		let rpc_header = self.client.best_block_header().await;
+		let rpc_header = self.client.best_block_header().await?;
 
 		let mut headers = VecDeque::new();
 
@@ -104,7 +104,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 			hash,
 			parent_hash: rpc_header
 				.previous_block_hash
-				.expect("TODO: return error")
+				.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
 				.to_byte_array()
 				.into(),
 		});
