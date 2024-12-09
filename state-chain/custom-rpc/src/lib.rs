@@ -1678,17 +1678,12 @@ where
 	) {
 		self.new_subscription(
 			NotificationBehaviour::Finalized, /* only_finalized */
-			false, /* only_on_changes */
-			true,  /* end_on_error */
+			false,                            /* only_on_changes */
+			true,                             /* end_on_error */
 			pending_sink,
-			move |client, hash| {
-				Ok(
-					(*client.runtime_api())
-						.cf_transaction_screening_events(hash)?
-				)
-			},
+			move |client, hash| Ok((*client.runtime_api()).cf_transaction_screening_events(hash)?),
 		)
-			.await;
+		.await;
 	}
 
 	async fn cf_subscribe_scheduled_swaps(
