@@ -236,11 +236,11 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 		let encoded_transaction = BASE64_STANDARD.encode(&transaction.serialized_transaction);
 		let config = RpcSendTransactionConfig {
 			skip_preflight: transaction.skip_preflight,
-			// 'Confirmed' for preflight commitment is enough, no need for 'Finalised'
-			// when broadcasting.
 			preflight_commitment: if transaction.skip_preflight {
 				None
 			} else {
+				// 'Confirmed' for preflight commitment is enough, no need for
+				// 'Finalised' when broadcasting.
 				Some(CommitmentLevel::Confirmed)
 			},
 			encoding: Some(UiTransactionEncoding::Base64),
