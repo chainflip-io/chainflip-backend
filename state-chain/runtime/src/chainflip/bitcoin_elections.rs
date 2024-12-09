@@ -9,11 +9,13 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
-		block_height_tracking::{self, BlockHeightTracking}, block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData}, composite::{
+		block_height_tracking::{self, BlockHeightTracking},
+		block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData},
+		composite::{
 			// tuple_1_impls::{DerivedElectoralAccess, Hooks},
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
-		}
+		},
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
@@ -24,7 +26,7 @@ use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
-	(BitcoinDepositChannelWitnessing,BitcoinBlockHeightTracking),
+	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing),
 	<Runtime as Chainflip>::ValidatorId,
 	RunnerStorageAccess<Runtime, BitcoinInstance>,
 	BitcoinElectionHooks,
@@ -45,13 +47,8 @@ pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 	BitcoinDepositChannelWitnessingGenerator,
 >;
 
-pub type BitcoinBlockHeightTracking = BlockHeightTracking<
-	6,
-	btc::BlockNumber,
-	btc::Hash,
-	(),
-	<Runtime as Chainflip>::ValidatorId
->;
+pub type BitcoinBlockHeightTracking =
+	BlockHeightTracking<6, btc::BlockNumber, btc::Hash, (), <Runtime as Chainflip>::ValidatorId>;
 
 pub struct BitcoinDepositChannelWitnessingGenerator;
 
@@ -110,33 +107,42 @@ impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 
 pub struct BitcoinElectionHooks;
 
-impl Hooks<BitcoinDepositChannelWitnessing, BitcoinBlockHeightTracking> for BitcoinElectionHooks {
+impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for BitcoinElectionHooks {
 	fn on_finalize(
-		(deposit_channel_witnessing_identifiers,block_height_tracking_identifiers): (
-			Vec<
-				ElectionIdentifier<
-					<BitcoinDepositChannelWitnessing as ElectoralSystem>::ElectionIdentifierExtra,
-				>,
-			>,
+		(block_height_tracking_identifiers, deposit_channel_witnessing_identifiers): (
 			Vec<
 				ElectionIdentifier<
 					<BitcoinBlockHeightTracking as ElectoralSystem>::ElectionIdentifierExtra,
 				>,
 			>,
+			Vec<
+				ElectionIdentifier<
+					<BitcoinDepositChannelWitnessing as ElectoralSystem>::ElectionIdentifierExtra,
+				>,
+			>,
 		),
 	) -> Result<(), CorruptStorageError> {
-		log::info!(
-			"BitcoinElectionHooks::on_finalize: {:?}",
-			deposit_channel_witnessing_identifiers
-		);
-		// Block number to be provided by block height tracker
-		BitcoinDepositChannelWitnessing::on_finalize::<
+		log::info!("BitcoinElectionHooks::called");
+		let height = BitcoinBlockHeightTracking::on_finalize::<
 			DerivedElectoralAccess<
 				_,
-				BitcoinDepositChannelWitnessing,
+				BitcoinBlockHeightTracking,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(deposit_channel_witnessing_identifiers, &0)
+		>(block_height_tracking_identifiers, &())?;
+
+		if let Some(height) = height {
+			log::info!("BitcoinElectionHooks::on_finalize: {:?}", height);
+			BitcoinDepositChannelWitnessing::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinDepositChannelWitnessing,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(deposit_channel_witnessing_identifiers, &height)?;
+		}
+
+		Ok(())
 	}
 }
 
