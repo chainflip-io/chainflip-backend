@@ -62,6 +62,11 @@ pub trait BtcRetryRpcApi: Clone {
 	async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
 
 	async fn best_block_header(&self) -> anyhow::Result<BlockHeader>;
+
+	async fn block_header(
+		&self,
+		block_number: cf_chains::btc::BlockNumber,
+	) -> anyhow::Result<BlockHeader>;
 }
 
 #[async_trait::async_trait]
@@ -148,11 +153,28 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 						Ok(header)
 					})
 				}),
-				// TODO: Set this to, this is to work around a localnet startup issue when
-				// the bitcoin node is not yet ready, which isn't a problem when using the
-				// elections based witnessing, since a particular vote is allowed to fail in
-				// elections based witnessing.
-				10000,
+				2,
+			)
+			.await
+	}
+
+	async fn block_header(
+		&self,
+		block_number: cf_chains::btc::BlockNumber,
+	) -> anyhow::Result<BlockHeader> {
+		self.retry_client
+			.request_with_limit(
+				RequestLog::new("block_header".to_string(), Some(block_number.to_string())),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						let block_hash = client.block_hash(block_number).await?;
+						let header = client.block_header(block_hash).await?;
+						assert_eq!(header.hash, block_hash);
+						Ok(header)
+					})
+				}),
+				2,
 			)
 			.await
 	}
@@ -217,6 +239,11 @@ pub mod mocks {
 			async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
 
 			async fn best_block_header(&self) -> anyhow::Result<BlockHeader>;
+
+			async fn block_header(
+				&self,
+				block_number: cf_chains::btc::BlockNumber,
+			) -> anyhow::Result<BlockHeader>;
 		}
 	}
 }
