@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.4] - 2024-12-09
+
+### Fixes
+
+- Return correct exit code on engine error ([#5470](https://github.com/chainflip-io/chainflip-backend/issues/5470))
+- Allow insecure subxt clients ([#5478](https://github.com/chainflip-io/chainflip-backend/issues/5478))
+
 ## [1.7.3] - 2024-11-26
 
 ### Features
