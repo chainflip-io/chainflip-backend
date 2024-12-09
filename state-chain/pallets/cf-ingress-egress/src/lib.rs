@@ -137,6 +137,10 @@ pub enum DepositFailedReason {
 	NotEnoughToPayFees,
 	TransactionRejectedByBroker,
 	DepositWitnessRejected,
+	InvalidDestinationAddress,
+	InvalidBrokerFees,
+	InvalidRefundParameters,
+	InvalidDcaParameters,
 	CcmUnsupportedForTargetChain,
 	CcmInvalidMetadata,
 }
@@ -2341,28 +2345,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let boost_status =
 			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
 
-		let destination_address_internal =
-			match T::AddressConverter::decode_and_validate_address_for_asset(
-				destination_address.clone(),
-				destination_asset,
-			) {
-				Ok(address) => address,
-				Err(err) => {
-					log::warn!("Failed to process vault swap due to invalid destination address. Tx id: {tx_id:?}. Error: {err:?}");
-					return;
-				},
-			};
-
-		let deposit_origin = DepositOrigin::vault(tx_id.clone());
-
-		let broker = broker_fee.account.clone();
-		let broker_fees = Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone());
-
-		if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
-			log::warn!("Failed to process vault swap due to invalid broker fees. Tx id: {tx_id:?}. Error: {err:?}");
-			return;
-		}
-
 		let emit_deposit_failed_event = |reason: DepositFailedReason| {
 			Self::deposit_event(Event::<T, I>::DepositFailed {
 				reason,
@@ -2374,11 +2356,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						deposit_amount,
 						deposit_details: deposit_details.clone(),
 						output_asset: destination_asset,
-						destination_address,
+						destination_address: destination_address.clone(),
 						deposit_metadata: deposit_metadata.clone(),
 						tx_id: tx_id.clone(),
-						broker_fee,
-						affiliate_fees,
+						broker_fee: broker_fee.clone(),
+						affiliate_fees: affiliate_fees.clone(),
 						refund_params: refund_params.clone(),
 						dca_params: dca_params.clone(),
 						boost_fee,
@@ -2386,6 +2368,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			});
 		};
+
+		let destination_address_internal =
+			match T::AddressConverter::decode_and_validate_address_for_asset(
+				destination_address.clone(),
+				destination_asset,
+			) {
+				Ok(address) => address,
+				Err(_) => {
+					emit_deposit_failed_event(DepositFailedReason::InvalidDestinationAddress);
+					return;
+				},
+			};
+
+		let deposit_origin = DepositOrigin::vault(tx_id.clone());
+
+		let broker = broker_fee.account.clone();
+		let broker_fees = Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone());
+
+		if T::SwapLimitsProvider::validate_broker_fees(&broker_fees).is_err() {
+			emit_deposit_failed_event(DepositFailedReason::InvalidBrokerFees);
+			return;
+		}
 
 		let (channel_metadata, source_address) = if let Some(metadata) = deposit_metadata.clone() {
 			if T::CcmValidityChecker::check_and_decode(
@@ -2409,16 +2413,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(None, None)
 		};
 
-		if let Err(err) =
-			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
+		if T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration).is_err()
 		{
-			log::warn!("Failed to process vault swap due to invalid refund params. Tx id: {tx_id:?}. Error: {err:?}");
+			emit_deposit_failed_event(DepositFailedReason::InvalidRefundParameters);
 			return;
 		}
 
 		if let Some(params) = &dca_params {
-			if let Err(err) = T::SwapLimitsProvider::validate_dca_params(params) {
-				log::warn!("Failed to process vault swap due to invalid dca params. Tx id: {tx_id:?}. Error: {err:?}");
+			if T::SwapLimitsProvider::validate_dca_params(params).is_err() {
+				emit_deposit_failed_event(DepositFailedReason::InvalidDcaParameters);
 				return;
 			}
 		}
