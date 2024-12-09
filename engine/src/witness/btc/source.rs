@@ -45,7 +45,10 @@ where
 					loop {
 						tick.tick().await;
 
-						let best_block_header = client.best_block_header().await;
+						let best_block_header = client
+							.best_block_header()
+							.await
+							.expect("TODO: This whole source will be deleted ");
 						if last_block_hash_yielded != Some(best_block_header.hash) {
 							return Some((
 								Header {
