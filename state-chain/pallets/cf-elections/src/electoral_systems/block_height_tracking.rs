@@ -1,4 +1,4 @@
-use core::ops::{Add, AddAssign, Range, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Range, RangeInclusive, Sub, SubAssign};
 
 use crate::{
 	electoral_system::{
@@ -60,9 +60,19 @@ pub enum ChainBlocksMergeResult<N> {
 	FailedMissing { range: Range<N> },
 }
 
-struct MergeInfo<H, N> {
+pub struct MergeInfo<H, N> {
 	removed: VecDeque<Header<H, N>>,
 	added: VecDeque<Header<H, N>>,
+}
+
+impl<H, N: Copy> MergeInfo<H, N> {
+	pub fn get_added_block_heights(&self) -> Option<RangeInclusive<N>> {
+		if let (Some(first), Some(last)) = (self.added.front(), self.added.back()) {
+			Some(first.block_height..=last.block_height)
+		} else {
+			None
+		}
+	}
 }
 
 enum MergeFailure<H, N> {
@@ -140,12 +150,8 @@ impl<
 		Ok(())
 	}
 
-	// There are two cases we want to deal with:
 	//
-	//      1. [aaaaaaa] [bbbbbbb]
-	//      2. [aaaaaaa] [bbbbb]
-	//
-	// This means we have the following assumptions:
+	// We have the following assumptions:
 	//
 	// Assumptions:
 	//   1. `other`: a. is well-formed (contains incrementing heights) b. is nonempty
@@ -362,8 +368,8 @@ impl<
 	type Consensus = VecDeque<Header<ChainBlockHash, ChainBlockNumber>>;
 	type OnFinalizeContext = ();
 
-	// Latest safe index
-	type OnFinalizeReturn = Option<ChainBlockNumber>;
+	// new block to query for the block witnesser
+	type OnFinalizeReturn = Option<RangeInclusive<ChainBlockNumber>>;
 
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
@@ -390,8 +396,8 @@ impl<
 			if let Some(new_headers) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
 
-				let (last_safe_index, next_index) = ElectoralAccess::mutate_unsynchronised_state(
-					|unsynchronised_state| {
+				let (block_witnesser_range, next_index) =
+					ElectoralAccess::mutate_unsynchronised_state(|unsynchronised_state| {
 						match unsynchronised_state.headers.merge(new_headers) {
 							Ok(merge_info) => {
 								log::info!(
@@ -413,30 +419,21 @@ impl<
 									safe_headers.len()
 								);
 
-								// we only return a new safe index if it actually increased
-								if safe_headers.len() > 0 {
-									Ok((
-										Some(unsynchronised_state.last_safe_index),
-										unsynchronised_state.headers.next_height,
-									))
-								} else {
-									Ok((None, unsynchronised_state.headers.next_height))
-								}
+								Ok((
+									merge_info.get_added_block_heights(),
+									unsynchronised_state.headers.next_height,
+								))
 							},
 							Err(MergeFailure::ReorgWithUnknownRoot {
 								new_block,
 								existing_wrong_parent,
 							}) => {
 								log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
-								Ok((
-									Some(unsynchronised_state.last_safe_index),
-									unsynchronised_state.last_safe_index,
-								))
+								Ok((None, unsynchronised_state.headers.next_height))
 							},
 							Err(MergeFailure::InternalError) => Err(CorruptStorageError {}),
 						}
-					},
-				)?;
+					})?;
 
 				let properties = BlockHeightTrackingProperties { witness_from_index: next_index };
 
@@ -444,7 +441,7 @@ impl<
 
 				ElectoralAccess::new_election((), properties, ())?;
 
-				Ok(last_safe_index)
+				Ok(block_witnesser_range)
 			} else {
 				Ok(None)
 			}
