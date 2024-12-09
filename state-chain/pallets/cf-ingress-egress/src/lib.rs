@@ -750,7 +750,6 @@ pub mod pallet {
 		DepositChannelLifetimeSet {
 			lifetime: TargetChainBlockNumber<T, I>,
 		},
-		/// The deposits was rejected because the amount was below the minimum allowed.
 		DepositFailed {
 			reason: DepositFailedReason,
 			details: DepositFailedDetails<T, I>,
