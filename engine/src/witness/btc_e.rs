@@ -1,11 +1,15 @@
 //! For BTC Elections
 
 use bitcoin::hashes::Hash;
-use cf_chains::witness_period::BlockWitnessRange;
+use cf_chains::{
+	btc::{self, BlockNumber},
+	witness_period::BlockWitnessRange,
+};
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
-	electoral_system::ElectoralSystem, electoral_systems::block_height_tracking::Header,
+	electoral_system::ElectoralSystem,
+	electoral_systems::block_height_tracking::{BlockHeightTrackingProperties, Header},
 	vote_storage::VoteStorage,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
@@ -17,7 +21,7 @@ use state_chain_runtime::{
 };
 
 use crate::{
-	btc::retry_rpc::BtcRetryRpcApi,
+	btc::{retry_rpc::BtcRetryRpcApi, rpc::BlockHeader},
 	elections::voter_api::{CompositeVoter, VoterApi},
 	retrier::RetryLimit,
 	state_chain_observer::client::{
@@ -85,30 +89,69 @@ pub struct BitcoinBlockHeightTrackingVoter {
 impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 	async fn vote(
 		&self,
-		settings: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectoralSettings,
+		_settings: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectoralSettings,
+		// We could use 0 as a special case (to avoid requiring an Option)
 		properties: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectionProperties,
 	) -> std::result::Result<
 		<<BitcoinBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
-		let rpc_header = self.client.best_block_header().await?;
+		let BlockHeightTrackingProperties { witness_from_index } = properties;
 
 		let mut headers = VecDeque::new();
 
-		let hash = rpc_header.hash.to_byte_array().into();
+		let header_from_btc_header =
+			|header: BlockHeader| -> anyhow::Result<Header<btc::Hash, btc::BlockNumber>> {
+				Ok(Header {
+					block_height: header.height,
+					hash: header.hash.to_byte_array().into(),
+					parent_hash: header
+						.previous_block_hash
+						.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
+						.to_byte_array()
+						.into(),
+				})
+			};
 
-		tracing::info!("Voting for block height tracking: {:?}", rpc_header.height);
-		headers.push_front(Header {
-			block_height: rpc_header.height,
-			hash,
-			parent_hash: rpc_header
-				.previous_block_hash
-				.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
-				.to_byte_array()
-				.into(),
-		});
-		Ok(headers)
+		let get_header = |index: BlockNumber| {
+			async move {
+				let header = self.client.block_header(index).await?;
+				tracing::info!("Voting for block height tracking: {:?}", header.height);
+				// Order from lowest to highest block index.
+				Ok::<
+					pallet_cf_elections::electoral_systems::block_height_tracking::Header<
+						sp_core::H256,
+						u64,
+					>,
+					anyhow::Error,
+				>(header_from_btc_header(header)?)
+			}
+		};
+
+		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
+
+		if witness_from_index == 0 {
+			headers.push_back(best_block_header);
+			Ok(headers)
+		} else {
+			// fetch the headers we haven't got yet
+			for index in witness_from_index..best_block_header.block_height {
+				let header = self.client.block_header(index).await?;
+				tracing::info!("Voting for block height tracking: {:?}", header.height);
+				// Order from lowest to highest block index.
+				headers.push_back(get_header(index).await?);
+			}
+
+			headers.push_back(best_block_header);
+
+			// We should have a chain of hashees.
+			if headers.iter().zip(headers.iter().skip(1)).all(|(a, b)| a.hash == b.parent_hash) {
+				Ok(headers)
+			} else {
+				Err(anyhow::anyhow!("Headers do not form a chain"))
+			}
+		}
 	}
 }
 
