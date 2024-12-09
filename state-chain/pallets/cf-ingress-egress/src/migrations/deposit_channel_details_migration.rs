@@ -1,4 +1,4 @@
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::UncheckedOnRuntimeUpgrade;
 
 use crate::{Config, DepositChannelDetails};
 
@@ -66,7 +66,7 @@ pub mod old {
 
 pub struct DepositChannelDetailsMigration<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
 
-impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for DepositChannelDetailsMigration<T, I> {
+impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for DepositChannelDetailsMigration<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		Ok((old::DepositChannelLookup::<T, I>::iter_keys().count() as u64).encode())
@@ -134,13 +134,5 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for DepositChannelDetailsMigrati
 
 		assert_eq!(pre_deposit_channel_lookup_count, post_deposit_channel_lookup_count);
 		Ok(())
-	}
-}
-
-pub struct NoopUpgrade;
-
-impl OnRuntimeUpgrade for NoopUpgrade {
-	fn on_runtime_upgrade() -> Weight {
-		Weight::zero()
 	}
 }
