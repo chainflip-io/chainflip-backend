@@ -161,6 +161,7 @@ pub struct LiquidityProviderInfo {
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
+	pub affiliates: Vec<(AffiliateShortId, AccountId32)>,
 }
 
 /// Struct that represents the estimated output of a Swap.

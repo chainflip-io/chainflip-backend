@@ -1862,7 +1862,9 @@ impl_runtime_apis! {
 				(asset, AssetBalances::get_balance(&account_id, asset))
 			).collect();
 
-			BrokerInfo { earned_fees }
+			let affiliates = pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&account_id).collect();
+
+			BrokerInfo { earned_fees, affiliates }
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {

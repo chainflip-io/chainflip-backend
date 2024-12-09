@@ -14,9 +14,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId,
-	SwapRequestId,
+	AccountId, AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
+	BlockNumber, BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
+	SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -252,6 +252,7 @@ pub enum RpcAccountInfo {
 	Broker {
 		flip_balance: NumberOrHex,
 		earned_fees: any::AssetMap<NumberOrHex>,
+		affiliates: Vec<(AffiliateShortId, AccountId)>,
 	},
 	LiquidityProvider {
 		balances: any::AssetMap<NumberOrHex>,
@@ -291,6 +292,7 @@ impl RpcAccountInfo {
 					.iter()
 					.map(|(asset, balance)| (*asset, (*balance).into())),
 			),
+			affiliates: broker_info.affiliates,
 		}
 	}
 
@@ -2061,7 +2063,8 @@ mod test {
 					(Asset::ArbUsdc, 0),
 					(Asset::Sol, 0),
 					(Asset::SolUsdc, 0),
-				]
+				],
+				affiliates: vec![(cf_primitives::AffiliateShortId(1), AccountId32::new([1; 32]))],
 			}
 		))
 		.unwrap());
