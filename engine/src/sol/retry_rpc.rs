@@ -4,7 +4,7 @@ use crate::{
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{
-	sol::{SolAddress, SolHash, SolSignature},
+	sol::{SolAddress, SolHash, SolSignature, SolanaTransactionData},
 	Solana,
 };
 use cf_utilities::{make_periodic_tick, task_scope::Scope};
@@ -88,8 +88,10 @@ pub trait SolRetryRpcApi: Clone {
 		config: RpcTransactionConfig,
 	) -> EncodedConfirmedTransactionWithStatusMeta;
 
-	async fn broadcast_transaction(&self, raw_transaction: Vec<u8>)
-		-> anyhow::Result<SolSignature>;
+	async fn broadcast_transaction(
+		&self,
+		transaction: SolanaTransactionData,
+	) -> anyhow::Result<SolSignature>;
 }
 
 #[async_trait::async_trait]
@@ -227,10 +229,13 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			)
 			.await
 	}
-	async fn broadcast_transaction(&self, transaction: Vec<u8>) -> anyhow::Result<SolSignature> {
-		let encoded_transaction = BASE64_STANDARD.encode(&transaction);
+	async fn broadcast_transaction(
+		&self,
+		transaction: SolanaTransactionData,
+	) -> anyhow::Result<SolSignature> {
+		let encoded_transaction = BASE64_STANDARD.encode(&transaction.serialized_transaction);
 		let config = RpcSendTransactionConfig {
-			skip_preflight: true,
+			skip_preflight: transaction.skip_preflight,
 			preflight_commitment: None,
 			encoding: Some(UiTransactionEncoding::Base64),
 			max_retries: None,
@@ -241,7 +246,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			.request_with_limit(
 				RequestLog::new(
 					"sendTransaction".to_string(),
-					Some(format!("{:?}, {:?}", transaction, config)),
+					Some(format!("{:?}, {:?}", transaction.serialized_transaction, config)),
 				),
 				Box::pin(move |client| {
 					let encoded_transaction = encoded_transaction.clone();
@@ -342,7 +347,7 @@ pub mod mocks {
 				config: RpcTransactionConfig,
 			) -> EncodedConfirmedTransactionWithStatusMeta;
 
-			async fn broadcast_transaction(&self, transaction: Vec<u8>)
+			async fn broadcast_transaction(&self, transaction: SolanaTransactionData)
 				-> anyhow::Result<SolSignature>;
 		}
 	}
@@ -483,7 +488,7 @@ mod tests {
 
 				// Checking that encoding and sending the transaction works.
 				let tx_signature = retry_client
-				.broadcast_transaction(signed_and_serialized_tx).await.unwrap();
+				.broadcast_transaction(SolanaTransactionData {serialized_transaction: signed_and_serialized_tx, skip_preflight: true}).await.unwrap();
 
 				println!("tx_signature: {:?}", tx_signature);
 
