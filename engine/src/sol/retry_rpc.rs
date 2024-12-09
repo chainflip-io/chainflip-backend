@@ -15,7 +15,7 @@ use anyhow::{anyhow, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
 
 use super::{
-	commitment_config::CommitmentConfig,
+	commitment_config::{CommitmentConfig, CommitmentLevel},
 	rpc::{SolRpcApi, SolRpcClient},
 	rpc_client_api::*,
 };
@@ -236,7 +236,13 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 		let encoded_transaction = BASE64_STANDARD.encode(&transaction.serialized_transaction);
 		let config = RpcSendTransactionConfig {
 			skip_preflight: transaction.skip_preflight,
-			preflight_commitment: None,
+			// 'Confirmed' for preflight commitment is enough, no need for 'Finalised'
+			// when broadcasting.
+			preflight_commitment: if transaction.skip_preflight {
+				None
+			} else {
+				Some(CommitmentLevel::Confirmed)
+			},
 			encoding: Some(UiTransactionEncoding::Base64),
 			max_retries: None,
 			min_context_slot: None,
