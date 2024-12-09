@@ -1,31 +1,11 @@
-import { assethubSigningMutex, sleep, amountToFineAmount, assetDecimals } from './utils';
+import { assethubSigningMutex, sleep, amountToFineAmount, assetDecimals, HubAsset, getHubAssetId } from './utils';
 import { aliceKeyringPair } from './polkadot_keyring';
 import { getAssethubApi } from './utils/substrate';
 
-type HubAsset = 'HubUsdc' | 'HubUsdt';
-function parseHubAsset(asset: String) : HubAsset {
-  switch (asset) {
-    case 'HubUsdc':
-      return "HubUsdc";
-    case 'HubUsdt':
-      return "HubUsdt";
-    default:
-      throw new Error()
-  }
-}
 
-function getHubAssetId(asset: HubAsset) {
-  switch (asset) {
-    case 'HubUsdc':
-      return 1337;
-    case 'HubUsdt':
-      return 1984;
-  }
-}
 
-export async function sendHubAsset(asset: string, address: string, amount: string) {
-  const hubAsset = parseHubAsset(asset);
-  const planckAmount = amountToFineAmount(amount, assetDecimals(hubAsset));
+export async function sendHubAsset(asset: HubAsset, address: string, amount: string) {
+  const planckAmount = amountToFineAmount(amount, assetDecimals(asset));
   const alice = await aliceKeyringPair();
   await using assethub = await getAssethubApi();
 
@@ -48,7 +28,7 @@ export async function sendHubAsset(asset: string, address: string, amount: strin
   // waiting for block confirmation can still be done concurrently)
   await assethubSigningMutex.runExclusive(async () => {
     await assethub.tx.assets
-      .transferKeepAlive(getHubAssetId(hubAsset), address, parseInt(planckAmount))
+      .transferKeepAlive(getHubAssetId(asset), address, parseInt(planckAmount))
       .signAndSend(alice, { nonce: -1 }, ({ status, dispatchError }) => {
         if (dispatchError !== undefined) {
           if (dispatchError.isModule) {
