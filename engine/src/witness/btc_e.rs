@@ -1,11 +1,18 @@
 //! For BTC Elections
 
+use bitcoin::hashes::Hash;
 use cf_chains::witness_period::BlockWitnessRange;
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
-use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
+use pallet_cf_elections::{
+	electoral_system::ElectoralSystem, electoral_systems::block_height_tracking::Header,
+	vote_storage::VoteStorage,
+};
+use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
-	chainflip::bitcoin_elections::{BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner},
+	chainflip::bitcoin_elections::{
+		BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner,
+	},
 	BitcoinInstance,
 };
 
@@ -68,25 +75,42 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 	}
 }
 
-
 #[derive(Clone)]
 pub struct BitcoinBlockHeightTrackingVoter {
 	client: BtcRetryRpcClient,
 }
 
-
 #[async_trait::async_trait]
 impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 	async fn vote(
-			&self,
-			settings: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectoralSettings,
-			properties: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectionProperties,
-		) -> std::result::Result<<<BitcoinBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error> {
-		todo!()
+		&self,
+		settings: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectoralSettings,
+		properties: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectionProperties,
+	) -> std::result::Result<
+		<<BitcoinBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
+		anyhow::Error,
+	> {
+		tracing::info!("Block height tracking called properties: {:?}", properties);
+		// TODO: this query should not be infinite
+		let rpc_header = self.client.best_block_header().await;
+
+		let mut headers = VecDeque::new();
+
+		let hash = rpc_header.hash.to_byte_array().into();
+
+		tracing::info!("Voting for block height tracking: {:?}", rpc_header.height);
+		headers.push_front(Header {
+			block_height: rpc_header.height,
+			hash,
+			parent_hash: rpc_header
+				.previous_block_hash
+				.expect("TODO: return error")
+				.to_byte_array()
+				.into(),
+		});
+		Ok(headers)
 	}
 }
-
-
 
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
@@ -110,8 +134,8 @@ where
 					scope,
 					state_chain_client,
 					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
-						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
-						BitcoinBlockHeightTrackingVoter { client }
+						BitcoinBlockHeightTrackingVoter { client: client.clone() },
+						BitcoinDepositChannelWitnessingVoter { client },
 					)),
 				)
 				.continuously_vote()

@@ -200,7 +200,7 @@ where
 
 				tracing::info!("{}: Unfinalised next, getting electoral_data", Chain::NAME);
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
-					tracing::info!("{}: Unfinalised next, got some electoral_data", Chain::NAME);
+					tracing::info!("{}: Unfinalised next, got some electoral_data: {:?}", Chain::NAME, electoral_data);
 					if electoral_data.contributing {
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
@@ -209,7 +209,7 @@ where
 									vote_tasks.insert(
 										election_identifier,
 										Box::pin(self.voter.request_with_limit(
-											RequestLog::new("vote".to_string(), Some(format!("{}: {election_identifier:?}", Chain::NAME))), // Add some identifier for `Instance`.
+											RequestLog::new("vote".to_string(), Some(format!("{}: {election_identifier:?}", Chain::NAME))),
 											Box::pin(move |client| {
 												let election_data = election_data.clone();
 												#[allow(clippy::redundant_async_block)]
