@@ -1,18 +1,16 @@
-use crate::{
-	sol::{
-		commitment_config::CommitmentConfig,
-		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
-		rpc_client_api::{RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding},
-	},
-	witness::common::cf_parameters::{
-		CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
-	},
+use crate::sol::{
+	commitment_config::CommitmentConfig,
+	retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
+	rpc_client_api::{RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding},
 };
 use anyhow::{anyhow, bail, ensure, Context};
 use base64::Engine;
 use cf_chains::{
 	address::EncodedAddress,
 	assets::sol::Asset as SolAsset,
+	cf_parameters::{
+		CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
+	},
 	sol::{
 		api::VaultSwapAccountAndSender,
 		sol_tx_core::program_instructions::{

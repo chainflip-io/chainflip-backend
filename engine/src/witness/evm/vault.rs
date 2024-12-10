@@ -6,7 +6,6 @@ use std::collections::HashMap;
 
 use super::{
 	super::common::{
-		cf_parameters::*,
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
@@ -17,6 +16,7 @@ use futures_core::Future;
 use anyhow::{anyhow, Result};
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
+	cf_parameters::*,
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain,
