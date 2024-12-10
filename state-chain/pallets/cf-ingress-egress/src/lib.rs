@@ -714,6 +714,7 @@ pub mod pallet {
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
 			// a non-gas asset.
 			ingress_fee: TargetChainAmount<T, I>,
+			max_boost_fee_bps: BasisPoints,
 			action: DepositAction<T::AccountId>,
 			channel_id: Option<ChannelId>,
 			origin_type: DepositOriginType,
@@ -801,6 +802,7 @@ pub mod pallet {
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
 			// a non-gas asset. The ingress fee is taken *after* the boost fee.
 			ingress_fee: TargetChainAmount<T, I>,
+			max_boost_fee_bps: BasisPoints,
 			// Total fee the user paid for their deposit to be boosted.
 			boost_fee: TargetChainAmount<T, I>,
 			action: DepositAction<T::AccountId>,
@@ -1952,6 +1954,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				None, // source address is unknown
 				&deposit_channel_details.owner,
 				deposit_channel_details.boost_status,
+				deposit_channel_details.boost_fee,
 				Some(channel_id),
 				deposit_channel_details.action,
 				block_height,
@@ -2089,6 +2092,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						channel_id,
 						deposit_details: deposit_details.clone(),
 						ingress_fee,
+						max_boost_fee_bps: boost_fee,
 						boost_fee: boost_fee_amount,
 						action,
 						origin_type: origin.into(),
@@ -2206,6 +2210,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_address: Option<ForeignChainAddress>,
 		broker: &T::AccountId,
 		boost_status: BoostStatus<TargetChainAmount<T, I>>,
+		max_boost_fee_bps: BasisPoints,
 		channel_id: Option<u64>,
 		action: ChannelAction<T::AccountId>,
 		block_height: TargetChainBlockNumber<T, I>,
@@ -2323,6 +2328,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_details,
 				// no ingress fee as it was already charged at the time of boosting
 				ingress_fee: 0u32.into(),
+				max_boost_fee_bps,
 				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
 				channel_id,
 				origin_type: origin.into(),
@@ -2359,6 +2365,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					block_height,
 					deposit_details,
 					ingress_fee: fees_withheld,
+					max_boost_fee_bps,
 					action,
 					channel_id,
 					origin_type: origin.into(),
@@ -2385,8 +2392,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			affiliate_fees,
 			refund_params,
 			dca_params,
-			// Boost fee is only relevant for prewitnessing
-			boost_fee: _,
+			boost_fee,
 		}: VaultDepositWitness<T, I>,
 	) {
 		let boost_status =
@@ -2486,6 +2492,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				source_address,
 				&broker,
 				boost_status,
+				boost_fee,
 				channel_id,
 				action,
 				block_height,

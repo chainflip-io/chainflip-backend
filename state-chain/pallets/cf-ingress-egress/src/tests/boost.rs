@@ -199,7 +199,9 @@ fn basic_passive_boosting() {
 
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
 		assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE);
-		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 30);
+		const MAX_BOOST_FEE_BPS: u16 = 30;
+		let (channel_id, deposit_address) =
+			request_deposit_address_eth(LP_ACCOUNT, MAX_BOOST_FEE_BPS);
 		let prewitnessed_deposit_id = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 		// All of BOOSTER_AMOUNT_1 should be used:
 		const POOL_1_FEE: AssetAmount =
@@ -225,6 +227,7 @@ fn basic_passive_boosting() {
 				prewitnessed_deposit_id,
 				deposit_details: Default::default(),
 				ingress_fee: INGRESS_FEE,
+				max_boost_fee_bps: MAX_BOOST_FEE_BPS,
 				boost_fee: POOL_1_FEE + POOL_2_FEE,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
 				origin_type: DepositOriginType::DepositChannel,
@@ -253,6 +256,7 @@ fn basic_passive_boosting() {
 				block_height: Default::default(),
 				deposit_details: Default::default(),
 				ingress_fee: 0,
+				max_boost_fee_bps: MAX_BOOST_FEE_BPS,
 				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
 				channel_id: Some(channel_id),
 				origin_type: DepositOriginType::DepositChannel,

@@ -11,8 +11,8 @@ use cf_traits::SafeMode;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 
 use crate::{
-	mock::*, BitcoinAvailableUtxos, ConsolidationParameters, RuntimeSafeMode, SafeModeUpdate,
-	SolanaAvailableNonceAccounts, SolanaUnavailableNonceAccounts,
+	mock::*, BitcoinAvailableUtxos, ConsolidationParameters, Event, RuntimeSafeMode,
+	SafeModeUpdate, SolanaAvailableNonceAccounts, SolanaUnavailableNonceAccounts,
 };
 
 fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
@@ -112,7 +112,7 @@ fn updating_consolidation_parameters() {
 		assert_ok!(Environment::update_consolidation_parameters(OriginTrait::root(), valid_param,));
 
 		System::assert_last_event(RuntimeEvent::Environment(
-			crate::Event::<Test>::UtxoConsolidationParametersUpdated { params: valid_param },
+			Event::UtxoConsolidationParametersUpdated { params: valid_param },
 		));
 
 		// Should fail with invalid parameters
@@ -134,15 +134,15 @@ fn update_safe_mode() {
 		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_GREEN);
 		assert_ok!(Environment::update_safe_mode(OriginTrait::root(), SafeModeUpdate::CodeRed));
 		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_RED);
-		System::assert_last_event(RuntimeEvent::Environment(
-			crate::Event::<Test>::RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate::CodeRed },
-		));
+		System::assert_last_event(RuntimeEvent::Environment(Event::RuntimeSafeModeUpdated {
+			safe_mode: SafeModeUpdate::CodeRed,
+		}));
 
 		assert_ok!(Environment::update_safe_mode(OriginTrait::root(), SafeModeUpdate::CodeGreen,));
 		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_GREEN);
-		System::assert_last_event(RuntimeEvent::Environment(
-			crate::Event::<Test>::RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate::CodeGreen },
-		));
+		System::assert_last_event(RuntimeEvent::Environment(Event::RuntimeSafeModeUpdated {
+			safe_mode: SafeModeUpdate::CodeGreen,
+		}));
 		let mock_code_amber =
 			MockRuntimeSafeMode { mock: MockPalletSafeMode { flag1: true, flag2: false } };
 		assert_ok!(Environment::update_safe_mode(
@@ -150,11 +150,9 @@ fn update_safe_mode() {
 			SafeModeUpdate::CodeAmber(mock_code_amber.clone())
 		));
 		assert_eq!(RuntimeSafeMode::<Test>::get(), mock_code_amber);
-		System::assert_last_event(RuntimeEvent::Environment(
-			crate::Event::<Test>::RuntimeSafeModeUpdated {
-				safe_mode: SafeModeUpdate::CodeAmber(mock_code_amber),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Environment(Event::RuntimeSafeModeUpdated {
+			safe_mode: SafeModeUpdate::CodeAmber(mock_code_amber),
+		}));
 	});
 }
 
@@ -195,7 +193,7 @@ fn can_discard_stale_utxos() {
 			vec![utxo_with_key(epoch_2)]
 		);
 
-		System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxosDiscarded {
+		System::assert_has_event(RuntimeEvent::Environment(Event::StaleUtxosDiscarded {
 			utxos: vec![utxo_with_key(epoch_1), utxo_with_key(epoch_1)],
 		}));
 
@@ -211,7 +209,7 @@ fn can_discard_stale_utxos() {
 			vec![utxo_with_key(epoch_3)]
 		);
 
-		System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxosDiscarded {
+		System::assert_has_event(RuntimeEvent::Environment(Event::StaleUtxosDiscarded {
 			utxos: vec![utxo_with_key(epoch_1)],
 		}));
 	});
