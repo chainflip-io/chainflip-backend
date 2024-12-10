@@ -21,6 +21,7 @@ import {
   VaultSwapParams,
   TransactionOriginId,
   TransactionOrigin,
+  isPolkadotAsset,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
@@ -31,7 +32,7 @@ import { executeSolVaultSwap } from './sol_vault_swap';
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
 
-  if (destAddress && (destAsset === 'Dot' || destAsset === 'HubDot' || destAsset === 'HubUsdc' || destAsset == 'HubUsdt')) {
+  if (destAddress && isPolkadotAsset(destAsset)) {
     destAddress = encodeAddress(destAddress);
   } else if (shortChainFromAsset(destAsset) === 'Sol') {
     destAddress = getEncodedSolAddress(destAddress);

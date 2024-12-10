@@ -1,8 +1,13 @@
-import { assethubSigningMutex, sleep, amountToFineAmount, assetDecimals, HubAsset, getHubAssetId } from './utils';
+import {
+  assethubSigningMutex,
+  sleep,
+  amountToFineAmount,
+  assetDecimals,
+  HubAsset,
+  getHubAssetId,
+} from './utils';
 import { aliceKeyringPair } from './polkadot_keyring';
 import { getAssethubApi } from './utils/substrate';
-
-
 
 export async function sendHubAsset(asset: HubAsset, address: string, amount: string) {
   const planckAmount = amountToFineAmount(amount, assetDecimals(asset));

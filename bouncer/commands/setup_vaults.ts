@@ -24,7 +24,12 @@ import {
   initializeSolanaPrograms,
   initializeAssethubChain,
 } from '../shared/initialize_new_chains';
-import { getPolkadotApi, getAssethubApi, observeEvent, DisposableApiPromise } from '../shared/utils/substrate';
+import {
+  getPolkadotApi,
+  getAssethubApi,
+  observeEvent,
+  DisposableApiPromise,
+} from '../shared/utils/substrate';
 
 async function createPolkadotVault(api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
@@ -52,7 +57,7 @@ async function createPolkadotVault(api: DisposableApiPromise) {
     });
 
   return promise;
-};
+}
 
 async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, key: AddressOrPair) {
   const { promise, resolve } = deferredPromise<void>();
@@ -92,7 +97,7 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
     });
 
   await promise;
-};
+}
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
@@ -130,11 +135,11 @@ async function main(): Promise<void> {
 
   // Step 4
   console.log('Requesting Polkadot Vault creation');
-  const { vaultAddress: dotVaultAddress, vaultExtrinsicIndex: dotVaultExtrinsicIndex } = await createPolkadotVault(polkadot);
+  const { vaultAddress: dotVaultAddress } = await createPolkadotVault(polkadot);
   const dotProxyAdded = observeEvent('proxy:ProxyAdded', { chain: 'polkadot' }).event;
 
   console.log('Requesting Assethub Vault creation');
-  const { vaultAddress: hubVaultAddress, vaultExtrinsicIndex: hubVaultExtrinsicIndex } = await createPolkadotVault(assethub);
+  const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
   const hubProxyAdded = observeEvent('proxy:ProxyAdded', { chain: 'assethub' }).event;
 
   // Step 5
@@ -185,14 +190,22 @@ async function main(): Promise<void> {
 
   // Step 8
   console.log('Creating USDC and USDT tokens on Assethub');
-  let create_usdc = assethub.tx.assets.forceCreate(1337, alice.address, true, 10000);
-  let create_usdt = assethub.tx.assets.forceCreate(1984, alice.address, true, 10000);
-  await assethub.tx.sudo.sudo(create_usdc).signAndSend(alice, {nonce: -1});
-  await assethub.tx.sudo.sudo(create_usdt).signAndSend(alice, {nonce: -1});
-  await assethub.tx.assets.setMetadata(1337, "USD Coin", "USDC", 6).signAndSend(alice, {nonce: -1});
-  await assethub.tx.assets.setMetadata(1984, "Tether USD", "USDT", 6).signAndSend(alice, {nonce: -1});
-  await assethub.tx.assets.mint(1337, alice.address, 100000000000000).signAndSend(alice, {nonce: -1});
-  await assethub.tx.assets.mint(1984, alice.address, 100000000000000).signAndSend(alice, {nonce: -1});
+  const createUsdc = assethub.tx.assets.forceCreate(1337, alice.address, true, 10000);
+  const createUsdt = assethub.tx.assets.forceCreate(1984, alice.address, true, 10000);
+  await assethub.tx.sudo.sudo(createUsdc).signAndSend(alice, { nonce: -1 });
+  await assethub.tx.sudo.sudo(createUsdt).signAndSend(alice, { nonce: -1 });
+  await assethub.tx.assets
+    .setMetadata(1337, 'USD Coin', 'USDC', 6)
+    .signAndSend(alice, { nonce: -1 });
+  await assethub.tx.assets
+    .setMetadata(1984, 'Tether USD', 'USDT', 6)
+    .signAndSend(alice, { nonce: -1 });
+  await assethub.tx.assets
+    .mint(1337, alice.address, 100000000000000)
+    .signAndSend(alice, { nonce: -1 });
+  await assethub.tx.assets
+    .mint(1984, alice.address, 100000000000000)
+    .signAndSend(alice, { nonce: -1 });
 
   // Confirmation
   console.log('Waiting for new epoch...');

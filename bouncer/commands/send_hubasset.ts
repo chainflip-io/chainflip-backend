@@ -12,14 +12,14 @@
 import { sendHubAsset } from '../shared/send_hubasset';
 import { HubAsset, runWithTimeoutAndExit } from '../shared/utils';
 
-function parseHubAsset(asset: String) : HubAsset {
+function parseHubAsset(asset: string): HubAsset {
   switch (asset) {
     case 'HubUsdc':
-      return "HubUsdc";
+      return 'HubUsdc';
     case 'HubUsdt':
-      return "HubUsdt";
+      return 'HubUsdt';
     default:
-      throw new Error()
+      throw new Error();
   }
 }
 

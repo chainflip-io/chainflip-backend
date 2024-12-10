@@ -15,13 +15,11 @@ export async function getHubAssetBalance(asset: HubAsset, address: string): Prom
   const reply = await assethub.query.assets.account(getHubAssetId(asset), address);
 
   if (reply.isEmpty) {
-    return "0";
+    return '0';
   }
 
   const fineAmountBalance = // eslint-disable-next-line @typescript-eslint/no-explicit-any
     JSON.parse(reply as any).balance;
-    console.log("Got balance response: " + fineAmountBalance);
+  console.log('Got balance response: ' + fineAmountBalance);
   return fineAmountToAmount(fineAmountBalance, assetDecimals(asset));
 }
-
-

@@ -16,6 +16,7 @@ import {
   runWithTimeoutAndExit,
   assetPriceToInternalAssetPrice,
   decodeDotAddressForContract,
+  isPolkadotAsset,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
@@ -96,10 +97,9 @@ async function newSwapCommand() {
     args.refundAddress !== undefined && args.minPrice !== undefined
       ? {
           retryDurationBlocks: args.refundDuration,
-          refundAddress:
-            args.sourceAsset === 'Dot' || args.sourceAsset === 'HubDot' || args.sourceAsset == 'HubUsdc' || args.sourceAsset == 'HubUsdt'
-              ? decodeDotAddressForContract(args.refundAddress)
-              : args.refundAddress,
+          refundAddress: isPolkadotAsset(args.sourceAsset)
+            ? decodeDotAddressForContract(args.refundAddress)
+            : args.refundAddress,
           minPriceX128: assetPriceToInternalAssetPrice(
             args.sourceAsset as InternalAsset,
             args.destAsset as InternalAsset,

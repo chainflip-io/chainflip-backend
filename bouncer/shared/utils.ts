@@ -60,7 +60,11 @@ export type VaultSwapParams = {
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
-export type HubAsset = 'HubUsdc' | 'HubUsdt'
+export type HubAsset = 'HubUsdc' | 'HubUsdt';
+
+export function isPolkadotAsset(asset: string): boolean {
+  return asset === 'Dot' || asset === 'HubDot' || asset === 'HubUsdc' || asset === 'HubUsdt';
+}
 
 export function getHubAssetId(asset: HubAsset) {
   switch (asset) {
@@ -68,6 +72,8 @@ export function getHubAssetId(asset: HubAsset) {
       return 1337;
     case 'HubUsdt':
       return 1984;
+    default:
+      throw new Error(`Unsupported Assethub asset: ${asset}`);
   }
 }
 
@@ -635,7 +641,7 @@ export async function newAddress(
 
 export function chainFromAsset(asset: Asset): Chain {
   if (isSDKAsset(asset)) return assetConstants[asset].chain;
-  else if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
+  if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
   throw new Error(`Unsupported asset: ${asset}`);
 }
 

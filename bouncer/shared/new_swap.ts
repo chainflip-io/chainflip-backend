@@ -1,5 +1,10 @@
 import { InternalAsset as Asset, Chain, Asset as SCAsset, broker } from '@chainflip/cli';
-import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset } from './utils';
+import {
+  decodeDotAddressForContract,
+  chainFromAsset,
+  stateChainAssetFromAsset,
+  isPolkadotAsset,
+} from './utils';
 
 const defaultCommissionBps = 100; // 1%
 
@@ -19,8 +24,9 @@ export async function newSwap(
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
 ): Promise<void> {
-  const destinationAddress =
-    (destAsset === 'Dot' || destAsset === 'HubDot' || destAsset === 'HubUsdc' || destAsset === 'HubUsdt') ? decodeDotAddressForContract(destAddress) : destAddress;
+  const destinationAddress = isPolkadotAsset(destAsset)
+    ? decodeDotAddressForContract(destAddress)
+    : destAddress;
   const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
 
   // If the dry_run of the extrinsic fails on the broker-api then it won't retry. So we retry here to
