@@ -2153,7 +2153,6 @@ pub mod pallet {
 				dca_params
 			});
 
-			// MAXIM: explose: broker/affiliate fees, boost_fee_bps
 			Self::deposit_event(Event::<T>::SwapRequested {
 				swap_request_id: request_id,
 				input_asset,
