@@ -196,6 +196,7 @@ impl From<SimulatedSwapInformation!["1.0.0"]> for SimulatedSwapInformation {
 #[derive(Debug, Decode, Encode, TypeInfo)]
 pub enum DispatchErrorWithMessage {
 	Module(Vec<u8>),
+	AdHoc(Vec<u8>),
 	Other(DispatchError),
 }
 impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
@@ -203,6 +204,8 @@ impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
 		match error.into() {
 			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) =>
 				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
+			DispatchError::Other(message) =>
+				DispatchErrorWithMessage::AdHoc(message.as_bytes().to_vec()),
 			error => DispatchErrorWithMessage::Other(error),
 		}
 	}
@@ -212,7 +215,8 @@ impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
 impl core::fmt::Display for DispatchErrorWithMessage {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
 		match self {
-			DispatchErrorWithMessage::Module(message) => write!(
+			DispatchErrorWithMessage::Module(message) |
+			DispatchErrorWithMessage::AdHoc(message) => write!(
 				f,
 				"{}",
 				str::from_utf8(message).unwrap_or("<Error message is not valid UTF-8>")
