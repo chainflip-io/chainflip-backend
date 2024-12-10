@@ -1308,6 +1308,34 @@ type MigrationsForV1_8 = (
 		pallet_cf_chain_tracking::Pallet<Runtime, ArbitrumInstance>,
 		DbWeight,
 	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, EthereumInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, BitcoinInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, PolkadotInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]

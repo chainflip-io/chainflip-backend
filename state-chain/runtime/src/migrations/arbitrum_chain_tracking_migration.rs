@@ -104,3 +104,10 @@ impl UncheckedOnRuntimeUpgrade for ArbitrumChainTrackingMigration {
 		Ok(())
 	}
 }
+
+pub struct NoOpMigration;
+impl UncheckedOnRuntimeUpgrade for NoOpMigration {
+	fn on_runtime_upgrade() -> Weight {
+		Default::default()
+	}
+}
