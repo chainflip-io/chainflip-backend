@@ -123,7 +123,7 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 		),
 	) -> Result<(), CorruptStorageError> {
 		log::info!("BitcoinElectionHooks::called");
-		let new_block_range = BitcoinBlockHeightTracking::on_finalize::<
+		let chain_progress = BitcoinBlockHeightTracking::on_finalize::<
 			DerivedElectoralAccess<
 				_,
 				BitcoinBlockHeightTracking,
@@ -131,16 +131,14 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 			>,
 		>(block_height_tracking_identifiers, &())?;
 
-		if let Some(new_block_range) = new_block_range {
-			log::info!("BitcoinElectionHooks::on_finalize: {:?}", new_block_range);
-			BitcoinDepositChannelWitnessing::on_finalize::<
-				DerivedElectoralAccess<
-					_,
-					BitcoinDepositChannelWitnessing,
-					RunnerStorageAccess<Runtime, BitcoinInstance>,
-				>,
-			>(deposit_channel_witnessing_identifiers, &new_block_range)?;
-		}
+		log::info!("BitcoinElectionHooks::on_finalize: {:?}", chain_progress);
+		BitcoinDepositChannelWitnessing::on_finalize::<
+			DerivedElectoralAccess<
+				_,
+				BitcoinDepositChannelWitnessing,
+				RunnerStorageAccess<Runtime, BitcoinInstance>,
+			>,
+		>(deposit_channel_witnessing_identifiers, &chain_progress)?;
 
 		Ok(())
 	}

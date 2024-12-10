@@ -10,7 +10,7 @@ use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
-	electoral_systems::block_height_tracking::{BlockHeightTrackingProperties, Header},
+	electoral_systems::block_height_tracking::{primitives::Header, BlockHeightTrackingProperties},
 	vote_storage::VoteStorage,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
@@ -120,13 +120,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 				let header = self.client.block_header(index).await?;
 				tracing::info!("Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.
-				Ok::<
-					pallet_cf_elections::electoral_systems::block_height_tracking::Header<
-						sp_core::H256,
-						u64,
-					>,
-					anyhow::Error,
-				>(header_from_btc_header(header)?)
+				Ok::<Header<sp_core::H256, u64>, anyhow::Error>(header_from_btc_header(header)?)
 			}
 		};
 
