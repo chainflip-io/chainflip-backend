@@ -23,6 +23,11 @@ jobs:
     secrets: inherit
     with:
       profile: "release"
+  build-m2:
+    uses: ./.github/workflows/_21_build_m2.yml
+    secrets: inherit
+    with:
+      profile: "release"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     uses: ./.github/workflows/_20_build.yml
@@ -51,3 +56,9 @@ jobs:
       version: ci/${{ github.sha }}/
       environment: "development"
     secrets: inherit
+  upload-versioned-build-artifacts:
+    needs: [build, build-m2]
+    uses: ./.github/workflows/_61_upload_versioned_build_artifacts.yml
+    secrets: inherit
+    with:
+      is_release: false
