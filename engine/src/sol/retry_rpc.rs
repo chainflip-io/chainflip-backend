@@ -252,7 +252,11 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			.request_with_limit(
 				RequestLog::new(
 					"sendTransaction".to_string(),
-					Some(format!("{:?}, {:?}", transaction.serialized_transaction, config)),
+					Some(format!(
+						"0x{}, {:?}",
+						hex::encode(&transaction.serialized_transaction),
+						config
+					)),
 				),
 				Box::pin(move |client| {
 					let encoded_transaction = encoded_transaction.clone();
