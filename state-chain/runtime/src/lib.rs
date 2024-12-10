@@ -18,6 +18,7 @@ use crate::{
 		},
 		Offence,
 	},
+	migrations::solana_transaction_data_migration::NoopUpgrade,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
 		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, OpenDepositChannels,
@@ -1293,13 +1294,58 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_8 = VersionedMigration<
-	2,
-	3,
-	migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
-	pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-	DbWeight,
->;
+type MigrationsForV1_8 = (
+	VersionedMigration<
+		2,
+		3,
+		migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+	// Only the Solana Transaction type has changed
+	VersionedMigration<
+		10,
+		11,
+		migrations::solana_transaction_data_migration::SolanaTransactionDataMigration,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
+		DbWeight,
+	>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
