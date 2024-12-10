@@ -36,7 +36,7 @@ get-workflow() {
     echo "❓ Do you want to start ingress-egress-tracker? (Type y or leave empty)"
     read -p "(default: NO) " START_TRACKER
     echo
-    export START_TRACKER=${START_TRACKER}
+    export START_TRACKER=${START_TRACKER:-"NO"}
 
   fi
 }
@@ -47,6 +47,7 @@ main() {
         npm install -g wscat
     fi
     if [ -z $CI ]; then
+      export START_TRACKER="y"
       get-workflow
     fi
 

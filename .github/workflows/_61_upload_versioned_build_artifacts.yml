@@ -3,7 +3,7 @@ on:
     inputs:
       is_release:
         type: boolean
-        default: false
+        default: true
 
 permissions:
   id-token: write
