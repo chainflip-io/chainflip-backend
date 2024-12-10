@@ -21,6 +21,8 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
+use super::block_height_tracking::ChainProgress;
+
 // Rather than push processing outside, we could provide an evaluation function that is called
 // to determine whether to process or not. This keeps things encapsulated a little better.
 
@@ -148,7 +150,7 @@ impl<
 	type Consensus = BlockData;
 
 	// TODO: Use a specialised range type that accounts for the witness period?
-	type OnFinalizeContext = RangeInclusive<<Chain as cf_chains::Chain>::ChainBlockNumber>;
+	type OnFinalizeContext = ChainProgress<<Chain as cf_chains::Chain>::ChainBlockNumber>;
 	type OnFinalizeReturn = ();
 
 	fn generate_vote_properties(
@@ -168,8 +170,16 @@ impl<
 
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
-		witness_range: &Self::OnFinalizeContext,
+		chain_progress: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
+		let witness_range = match chain_progress {
+			ChainProgress::Reorg(range_inclusive) => range_inclusive,
+			ChainProgress::Continuous(range_inclusive) => range_inclusive,
+			ChainProgress::None(_) => return Ok(()), /* TODO actually we have to do something
+			                                           * here... */
+			ChainProgress::WaitingForFirstConsensus => return Ok(()),
+		};
+
 		ensure!(
 			<Chain as cf_chains::Chain>::is_block_witness_root(*witness_range.start()) &&
 				<Chain as cf_chains::Chain>::is_block_witness_root(*witness_range.end()),
