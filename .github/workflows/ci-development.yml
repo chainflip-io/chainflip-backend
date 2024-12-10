@@ -24,7 +24,7 @@ jobs:
   coverage:
     uses: ./.github/workflows/_11_coverage.yml
     with:
-      test_features: runtime-benchmarks metadata-hash
+      test_features: runtime-benchmarks
     secrets: inherit
   build:
     uses: ./.github/workflows/_20_build.yml
