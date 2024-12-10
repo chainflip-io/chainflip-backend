@@ -288,6 +288,18 @@ async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortS
   sub.unsubscribe();
 }
 
+// Get the total weight of the latest block in percentage
+async function getBlockWeight(api: DisposableApiPromise): Promise<number> {
+  const maxWeight = 2_000_000_000_000;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const blockWeightInfo = (await api.query.system.blockWeight()) as any;
+  const totalWeight =
+    Number(blockWeightInfo.normal.refTime) +
+    Number(blockWeightInfo.operational.refTime) +
+    Number(blockWeightInfo.mandatory.refTime);
+  return Math.round((totalWeight / maxWeight) * 100);
+}
+
 const subscribeHeads = getCachedDisposable(
   async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
     // prepare a stack for cleanup
@@ -304,6 +316,18 @@ const subscribeHeads = getCachedDisposable(
 
     const unsubscribe = await subscribe(async (header) => {
       const historicApi = await api.at(header.hash);
+
+      // Log block weight to help with debugging
+      if (chain === 'chainflip') {
+        const weightPercent = await getBlockWeight(historicApi as DisposableApiPromise);
+        const message = `Block weight (${header.number}${finalized ? '' : '*'}): ${weightPercent}%`;
+        if (weightPercent < 90) {
+          console.log(message);
+        } else {
+          console.warn(message);
+        }
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
       const mappedEvents = mapEvents(rawEvents, header.number.toNumber());
