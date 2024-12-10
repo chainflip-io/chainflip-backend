@@ -12,7 +12,10 @@ use crate::sol::sol_tx_core::{
 	signer::{signers::Signers, SignerError},
 	transaction::TransactionError,
 };
-use crate::sol::{SolAddress, SolHash, SolSignature};
+use crate::{
+	address::EncodedAddress,
+	sol::{SolAddress, SolHash, SolSignature},
+};
 use sol_prim::consts::BPF_LOADER_UPGRADEABLE_ID;
 
 pub mod address_derivation;
@@ -264,7 +267,7 @@ impl From<Transaction> for RawTransaction {
 /// Programs may require signatures from some accounts, in which case they
 /// should be specified as signers during `Instruction` construction. The
 /// program must still validate during execution that the account is a signer.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
 pub struct Instruction {
 	/// Pubkey of the program that executes this instruction.
 	pub program_id: Pubkey,
@@ -318,7 +321,9 @@ impl Instruction {
 /// a minor hazard: use [`AccountMeta::new_readonly`] to specify that an account
 /// is not writable.
 #[repr(C)]
-#[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(
+	Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo,
+)]
 pub struct AccountMeta {
 	/// An account's public key.
 	pub pubkey: Pubkey,
@@ -707,6 +712,17 @@ impl TryFrom<Vec<u8>> for Pubkey {
 	type Error = Vec<u8>;
 	fn try_from(pubkey: Vec<u8>) -> Result<Self, Self::Error> {
 		<[u8; 32]>::try_from(pubkey).map(Self::from)
+	}
+}
+
+impl TryFrom<EncodedAddress> for Pubkey {
+	type Error = ();
+	fn try_from(value: EncodedAddress) -> Result<Self, Self::Error> {
+		if let EncodedAddress::Sol(bytes) = value {
+			Ok(Pubkey(bytes))
+		} else {
+			Err(())
+		}
 	}
 }
 

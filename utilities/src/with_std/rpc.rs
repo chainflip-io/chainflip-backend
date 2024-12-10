@@ -47,7 +47,7 @@ macro_rules! impl_safe_hex {
 		$(
 			impl From<$int> for NumberOrHex {
 				fn from(value: $int) -> Self {
-          Self::Hex(value.into())
+          			Self::Hex(value.into())
 				}
 			}
 		)+
