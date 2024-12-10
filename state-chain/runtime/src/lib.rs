@@ -55,7 +55,8 @@ use cf_chains::{
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
+	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, ForeignChainAddress, Polkadot, Solana,
+	TransactionBuilder,
 };
 use cf_primitives::{
 	AffiliateAndFee, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
@@ -1858,11 +1859,18 @@ impl_runtime_apis! {
 		fn cf_broker_info(
 			account_id: AccountId,
 		) -> BrokerInfo {
-			let earned_fees = Asset::all().map(|asset|
+			let earned_fees: Vec<_> = Asset::all().map(|asset|
 				(asset, AssetBalances::get_balance(&account_id, asset))
 			).collect();
-
-			BrokerInfo { earned_fees }
+			pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&account_id).and_then(|id| {
+				pallet_cf_ingress_egress::DepositChannelPool::<Runtime, BitcoinInstance>::get(id).map(|details| BrokerInfo {
+					earned_fees: earned_fees.clone(),
+					channel_address: Some(ForeignChainAddress::Btc(details.address))
+				})
+			}).unwrap_or(BrokerInfo {
+				earned_fees,
+				channel_address: None
+			})
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {

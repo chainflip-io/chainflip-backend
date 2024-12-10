@@ -252,6 +252,7 @@ pub enum RpcAccountInfo {
 	Broker {
 		flip_balance: NumberOrHex,
 		earned_fees: any::AssetMap<NumberOrHex>,
+		channel_address: Option<ForeignChainAddressHumanreadable>,
 	},
 	LiquidityProvider {
 		balances: any::AssetMap<NumberOrHex>,
@@ -282,9 +283,10 @@ impl RpcAccountInfo {
 		Self::Unregistered { flip_balance: balance.into() }
 	}
 
-	fn broker(balance: u128, broker_info: BrokerInfo) -> Self {
+	fn broker(broker_info: BrokerInfo, network: NetworkEnvironment, balance: u128) -> Self {
 		Self::Broker {
 			flip_balance: balance.into(),
+			channel_address: broker_info.channel_address.map(|a| a.to_humanreadable(network)),
 			earned_fees: cf_chains::assets::any::AssetMap::from_iter_or_default(
 				broker_info
 					.earned_fees
@@ -1371,7 +1373,7 @@ where
 					AccountRole::Broker => {
 						let info = api.cf_broker_info(hash, account_id)?;
 
-						RpcAccountInfo::broker(balance, info)
+						RpcAccountInfo::broker(info, api.cf_network_environment(hash)?, balance)
 					},
 					AccountRole::LiquidityProvider => {
 						let info = api.cf_liquidity_provider_info(hash, account_id)?;
@@ -2047,8 +2049,7 @@ mod test {
 
 	#[test]
 	fn test_broker_serialization() {
-		insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::broker(
-			0,
+		let broker = RpcAccountInfo::broker(
 			BrokerInfo {
 				earned_fees: vec![
 					(Asset::Eth, 0),
@@ -2061,10 +2062,14 @@ mod test {
 					(Asset::ArbUsdc, 0),
 					(Asset::Sol, 0),
 					(Asset::SolUsdc, 0),
-				]
-			}
-		))
-		.unwrap());
+				],
+				channel_address: None,
+			},
+			cf_primitives::NetworkEnvironment::Mainnet,
+			0,
+		);
+
+		insta::assert_snapshot!(serde_json::to_value(broker).unwrap());
 	}
 
 	#[test]
