@@ -168,7 +168,9 @@ impl<
 		// assumption (1b)
 		let other_head = other.front().ok_or(MergeFailure::InternalError)?;
 
-		if self.next_height == other_head.block_height || (self.next_height == 0u32.into() && self.headers.len() == 0) {
+		if self.next_height == other_head.block_height ||
+			(self.next_height == 0u32.into() && self.headers.len() == 0)
+		{
 			// this is "assumption (3): case 1"
 			//
 			// This means that our new blocks start exactly after the ones we already have,
@@ -431,7 +433,7 @@ impl<
 								log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
 								Ok((None, unsynchronised_state.headers.next_height))
 							},
-							Err(MergeFailure::InternalError) => Err(CorruptStorageError {}),
+							Err(MergeFailure::InternalError) => Err(CorruptStorageError::new()),
 						}
 					})?;
 
@@ -480,15 +482,15 @@ impl<
 				}
 			}
 
-			Ok(consensus.check_consensus(&Threshold {
-				threshold: success_threshold_from_share_count(num_authorities),
-			})
-			.map(|result| {
-				let mut headers = VecDeque::new();
-				headers.push_back(result);
-				headers
-			}))
-
+			Ok(consensus
+				.check_consensus(&Threshold {
+					threshold: success_threshold_from_share_count(num_authorities),
+				})
+				.map(|result| {
+					let mut headers = VecDeque::new();
+					headers.push_back(result);
+					headers
+				}))
 		} else {
 			// This is the actual consensus finding, once the engine is running
 
@@ -506,9 +508,6 @@ impl<
 			Ok(consensus.check_consensus(&Threshold {
 				threshold: success_threshold_from_share_count(num_authorities),
 			}))
-
 		}
-
-
 	}
 }
