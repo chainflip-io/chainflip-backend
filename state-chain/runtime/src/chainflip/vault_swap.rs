@@ -206,13 +206,12 @@ pub fn solana_vault_swap(
 					refund_parameters,
 				},
 			) => {
-				// TODO: double check to see if this is correct.
 				let token_supported_account =
-					cf_chains::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+					cf_chains::sol::sol_tx_core::address_derivation::derive_token_supported_account(
 						api_environment.vault_program,
 						api_environment.usdc_token_mint_pubkey,
 					)
-					.map_err(|_| DispatchErrorWithMessage::Other("Failed to derive Solana Vault ATA".into()))?;
+					.map_err(|_| DispatchErrorWithMessage::Other("Failed to derive supported token account".into()))?;
 
 				Ok(SolanaInstructionBuilder::x_swap_usdc(
 					api_environment,
