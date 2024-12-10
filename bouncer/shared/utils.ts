@@ -479,18 +479,14 @@ export async function observeSwapEvents(
   return broadcastId;
 }
 
-// TODO: To import from the SDK once it's exported
 export enum SwapType {
   Swap = 'Swap',
-  CcmPrincipal = 'CcmPrincipal',
-  CcmGas = 'CcmGas',
   NetworkFee = 'NetworkFee',
   IngressEgressFee = 'IngressEgressFee',
 }
 
 export enum SwapRequestType {
   Regular = 'Regular',
-  Ccm = 'Ccm',
   NetworkFee = 'NetworkFee',
   IngressEgressFee = 'IngressEgressFee',
 }

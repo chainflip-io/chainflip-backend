@@ -12,10 +12,7 @@ use crate::{
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{
-	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint, Word,
-};
+pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
 use evm::api::EvmReplayProtection;
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
@@ -83,6 +80,33 @@ impl EthereumTrackedData {
 			.saturating_mul_int(self.base_fee)
 			.saturating_add(self.priority_fee)
 	}
+
+	pub fn calculate_ccm_gas_limit(
+		&self,
+		is_native_asset: bool,
+		gas_budget: GasAmount,
+		message_length: usize,
+	) -> GasAmount {
+		use crate::eth::fees::*;
+		// Adding one extra gas unit per message's length (byte) for the extra gas overhead of
+		// passing the message through the Vault. The extra gas per message's calldata byte
+		// should be included in the user's gas budget.
+		(gas_budget
+			.saturating_add(if is_native_asset {
+				CCM_VAULT_NATIVE_GAS_OVERHEAD
+			} else {
+				CCM_VAULT_TOKEN_GAS_OVERHEAD
+			})
+			.saturating_add(message_length as u128))
+		.min(MAX_GAS_LIMIT)
+	}
+
+	pub fn calculate_transaction_fee(
+		&self,
+		gas_limit: GasAmount,
+	) -> <Ethereum as crate::Chain>::ChainAmount {
+		(self.base_fee + self.priority_fee).saturating_mul(gas_limit)
+	}
 }
 
 pub mod fees {
@@ -90,6 +114,9 @@ pub mod fees {
 	pub const GAS_COST_PER_FETCH: u128 = 30_000;
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+	pub const MAX_GAS_LIMIT: u128 = 10_000_000;
+	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 90_000;
+	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 120_000;
 }
 
 impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
@@ -108,7 +135,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 					GAS_COST_PER_FETCH,
 			};
 
-		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_fetch)
+		self.calculate_transaction_fee(gas_cost_per_fetch)
 	}
 
 	fn estimate_egress_fee(
@@ -124,7 +151,21 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 					GAS_COST_PER_TRANSFER_TOKEN,
 			};
 
-		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_transfer)
+		self.calculate_transaction_fee(gas_cost_per_transfer)
+	}
+
+	fn estimate_ccm_fee(
+		&self,
+		asset: <Ethereum as Chain>::ChainAsset,
+		gas_budget: GasAmount,
+		message_length: usize,
+	) -> Option<<Ethereum as Chain>::ChainAmount> {
+		let gas_limit = self.calculate_ccm_gas_limit(
+			asset == <Ethereum as Chain>::GAS_ASSET,
+			gas_budget,
+			message_length,
+		);
+		Some(self.calculate_transaction_fee(gas_limit))
 	}
 }
 

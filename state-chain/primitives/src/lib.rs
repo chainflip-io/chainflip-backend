@@ -89,6 +89,8 @@ pub type EthAmount = u128;
 
 pub type AssetAmount = u128;
 
+pub type GasAmount = u128;
+
 pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;

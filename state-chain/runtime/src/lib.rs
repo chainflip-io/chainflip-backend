@@ -25,7 +25,7 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
+		BoostPoolDetails, BrokerInfo, CcmData, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvents,
 		ValidatorInfo, VaultSwapDetails,
@@ -1293,13 +1293,50 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_8 = VersionedMigration<
-	2,
-	3,
-	migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
-	pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-	DbWeight,
->;
+type MigrationsForV1_8 = (
+	VersionedMigration<
+		2,
+		3,
+		migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::ArbitrumChainTrackingMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, ArbitrumInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, EthereumInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, BitcoinInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, PolkadotInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -1525,6 +1562,7 @@ impl_runtime_apis! {
 			input_amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
+			ccm_data: Option<CcmData>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
@@ -1648,7 +1686,17 @@ impl_runtime_apis! {
 				)
 			};
 
-			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, output_asset, output);
+			let egress = match ccm_data {
+				Some(CcmData { gas_budget, message_length}) => {
+					IngressOrEgress::EgressCcm {
+						gas_budget,
+						message_length: message_length as usize,
+					}
+				},
+				None => IngressOrEgress::Egress,
+			};
+
+			let (output, egress_fee) = remove_fees(egress, output_asset, output);
 
 			Ok(SimulatedSwapInformation {
 				intermediary,
@@ -1904,14 +1952,12 @@ impl_runtime_apis! {
 					let channel_asset: Asset = details.deposit_channel.asset.into();
 
 					match details.action {
-						ChannelAction::Swap { destination_asset, .. }
-							if destination_asset == to && channel_asset == from =>
+						ChannelAction::Swap { destination_asset, channel_metadata, .. }
+							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
+							if destination_asset == to && channel_asset == from && channel_metadata.is_none() =>
 						{
 							filtered_swaps.push(deposit.amount.into());
 						},
-						ChannelAction::CcmTransfer { .. } => {
-							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
-						}
 						_ => {
 							// ignore other deposit actions
 						}

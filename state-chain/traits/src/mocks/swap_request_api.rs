@@ -64,13 +64,12 @@ where
 		});
 
 		match swap_type {
-			SwapRequestType::Regular { output_address } |
-			SwapRequestType::Ccm { output_address, .. } => {
+			SwapRequestType::Regular { output_address, ccm_deposit_metadata } => {
 				let _ = E::schedule_egress(
 					output_asset.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 					input_amount.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 					output_address.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
-					None,
+					ccm_deposit_metadata,
 				);
 			},
 			_ => { /* do nothing */ },

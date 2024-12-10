@@ -8,10 +8,7 @@ import {
   newAddress,
   chainFromAsset,
   getContractAddress,
-  amountToFineAmount,
-  defaultAssetAmounts,
   ccmSupportedChains,
-  assetDecimals,
   solCcmAdditionalDataCodec,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
@@ -142,25 +139,46 @@ function newCcmMessage(destAsset: Asset): string {
   }
 }
 
+const EVM_GAS_PER_BYTE = 16;
+const EVM_GAS_PER_EVENT_BYTE = 8;
+
+// Minimum overhead to ensure simple CCM transactions succeed
+const OVERHEAD_GAS = 10000;
+const OVERHEAD_COMPUTE_UNITS = 10000;
+
 export function newCcmMetadata(
-  sourceAsset: Asset,
   destAsset: Asset,
   ccmMessage?: string,
-  gasBudgetFraction?: number,
+  gasBudget?: number,
   cfParamsArray?: string,
 ): CcmDepositMetadata {
   const message = ccmMessage ?? newCcmMessage(destAsset);
   const ccmAdditionalData = cfParamsArray ?? newCcmAdditionalData(destAsset, message);
-  const gasDiv = gasBudgetFraction ?? 2;
+  const destChain = chainFromAsset(destAsset);
 
-  const gasBudget = Math.floor(
-    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
-      gasDiv,
-  ).toString();
+  if (gasBudget !== undefined) {
+    return {
+      message,
+      gasBudget: gasBudget.toString(),
+      ccmAdditionalData,
+    };
+  }
+
+  let userLogicGasBudget;
+  if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
+    userLogicGasBudget = (
+      OVERHEAD_GAS +
+      (EVM_GAS_PER_BYTE + EVM_GAS_PER_EVENT_BYTE) * (message.slice(2).length / 2)
+    ).toString();
+  } else if (destChain === 'Solana') {
+    userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
+  } else {
+    throw new Error(`Unsupported chain: ${destChain}`);
+  }
 
   return {
     message,
-    gasBudget,
+    gasBudget: userLogicGasBudget,
     ccmAdditionalData,
   };
 }

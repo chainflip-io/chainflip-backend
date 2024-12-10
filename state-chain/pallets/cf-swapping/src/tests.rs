@@ -42,7 +42,7 @@ use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
 use sp_std::iter;
 
-const GAS_BUDGET: AssetAmount = 1_000u128;
+const GAS_BUDGET: AssetAmount = 100_000u128;
 const INPUT_AMOUNT: AssetAmount = 40_000;
 const SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(1);
 const INIT_BLOCK: u64 = 1;
@@ -131,7 +131,7 @@ fn create_test_swap(
 			state: SwapRequestState::UserSwap {
 				output_address: ForeignChainAddress::Eth(H160::zero()),
 				dca_state: DcaState::create_with_first_chunk(amount, dca_params).0,
-				ccm: None,
+				ccm_deposit_metadata: None,
 				broker_fees: Default::default(),
 			},
 		},
@@ -188,19 +188,11 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 
 fn insert_swaps(swaps: &[TestSwapParams]) {
 	for (broker_id, swap) in swaps.iter().enumerate() {
-		let request_type = if swap.is_ccm {
-			SwapRequestType::Ccm {
-				output_address: swap.output_address.clone(),
-				ccm_swap_metadata: CcmDepositMetadata {
-					source_chain: ForeignChain::Ethereum,
-					source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-					channel_metadata: generate_ccm_channel(),
-				}
-				.into_swap_metadata(swap.input_amount, swap.input_asset, swap.output_asset)
-				.unwrap(),
-			}
-		} else {
-			SwapRequestType::Regular { output_address: swap.output_address.clone() }
+		let ccm_deposit_metadata = if swap.is_ccm { Some(generate_ccm_deposit()) } else { None };
+
+		let request_type = SwapRequestType::Regular {
+			output_address: swap.output_address.clone(),
+			ccm_deposit_metadata,
 		};
 
 		Swapping::init_swap_request(
@@ -251,7 +243,10 @@ fn swap_with_custom_broker_fee(
 		from,
 		amount,
 		to,
-		SwapRequestType::Regular { output_address: ForeignChainAddress::Eth(Default::default()) },
+		SwapRequestType::Regular {
+			output_address: ForeignChainAddress::Eth(Default::default()),
+			ccm_deposit_metadata: None,
+		},
 		broker_fees,
 		None,
 		None,
@@ -332,7 +327,10 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			Asset::Eth,
 			10,
 			Asset::Dot,
-			SwapRequestType::Regular { output_address: ForeignChainAddress::Eth([2; 20].into()) },
+			SwapRequestType::Regular {
+				output_address: ForeignChainAddress::Eth([2; 20].into()),
+				ccm_deposit_metadata: None,
+			},
 			Default::default(),
 			None,
 			None,
@@ -505,6 +503,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					SwapRequestType::Regular {
 						output_address: ForeignChainAddress::Eth([1; 20].into()),
+						ccm_deposit_metadata: None,
 					},
 					Default::default(),
 					None,
@@ -621,7 +620,6 @@ fn process_all_into_stable_swaps_first() {
 #[test]
 fn can_handle_ccm_with_zero_swap_outputs() {
 	const PRINCIPAL_SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const GAS_SWAP_BLOCK: u64 = PRINCIPAL_SWAP_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	const PRINCIPAL_AMOUNT: AssetAmount = 9000;
 
@@ -635,17 +633,10 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 
 			Swapping::init_swap_request(
 				INPUT_ASSET,
-				PRINCIPAL_AMOUNT + GAS_BUDGET,
+				PRINCIPAL_AMOUNT,
 				OUTPUT_ASSET,
-				SwapRequestType::Ccm {
-					ccm_swap_metadata: ccm
-						.clone()
-						.into_swap_metadata(
-							PRINCIPAL_AMOUNT + GAS_BUDGET,
-							INPUT_ASSET,
-							OUTPUT_ASSET,
-						)
-						.unwrap(),
+				SwapRequestType::Regular {
+					ccm_deposit_metadata: Some(ccm.clone()),
 					output_address: eth_address,
 				},
 				Default::default(),
@@ -676,23 +667,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				}),
 			);
 		})
-		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
 		.then_execute_with(|_| {
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					swap_request_id: SwapRequestId(1),
-					swap_id: SwapId(2),
-					network_fee: 0,
-					broker_fee: 0,
-					input_amount: GAS_BUDGET,
-					input_asset: Asset::Usdc,
-					output_asset: Asset::Eth,
-					output_amount: ZERO_AMOUNT,
-					intermediate_amount: None,
-				}),
-			);
-
 			// CCM are processed and egressed even if principal output is zero.
 			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
 			assert_swaps_queue_is_empty();
@@ -1310,6 +1285,7 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					to,
 					SwapRequestType::Regular {
 						output_address: ForeignChainAddress::Eth(H160::zero()),
+						ccm_deposit_metadata: None,
 					},
 					Default::default(),
 					None,
