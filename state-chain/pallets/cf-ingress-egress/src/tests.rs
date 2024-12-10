@@ -856,6 +856,7 @@ fn deposits_below_minimum_are_rejected() {
 				block_height: Default::default(),
 				deposit_details: Default::default(),
 				ingress_fee: 0,
+				max_boost_fee_bps: 0,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
 				channel_id: Some(channel_id),
 				origin_type: DepositOriginType::DepositChannel,

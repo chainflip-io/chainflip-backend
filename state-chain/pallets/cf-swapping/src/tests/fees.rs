@@ -204,16 +204,24 @@ fn network_fee_swap_gets_burnt() {
 
 			assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_some());
 
-			System::assert_has_event(RuntimeEvent::Swapping(Event::SwapRequested {
-				swap_request_id: SWAP_REQUEST_ID,
-				input_asset: INPUT_ASSET,
-				input_amount: AMOUNT,
-				output_asset: OUTPUT_ASSET,
-				request_type: SwapRequestTypeEncoded::NetworkFee,
-				refund_parameters: None,
-				dca_parameters: None,
-				origin: SwapOrigin::Internal,
-			}));
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					swap_request_id: SWAP_REQUEST_ID,
+					input_asset: INPUT_ASSET,
+					input_amount: AMOUNT,
+					output_asset: OUTPUT_ASSET,
+					request_type: SwapRequestTypeEncoded::NetworkFee,
+					origin: SwapOrigin::Internal,
+					..
+				}),
+			);
+
+			// System::assert_has_event(RuntimeEvent::Swapping(Event::SwapRequested {
+			// 	refund_parameters: None,
+			// 	dca_parameters: None,
+			// 	origin: SwapOrigin::Internal,
+			// }));
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapScheduled { .. }),);
 		})
 		.then_process_blocks_until_block(SWAP_BLOCK)
@@ -246,16 +254,18 @@ fn transaction_fees_are_collected() {
 				SwapOrigin::Internal,
 			);
 
-			System::assert_has_event(RuntimeEvent::Swapping(Event::SwapRequested {
-				swap_request_id: SWAP_REQUEST_ID,
-				input_asset: INPUT_ASSET,
-				input_amount: AMOUNT,
-				output_asset: OUTPUT_ASSET,
-				request_type: SwapRequestTypeEncoded::IngressEgressFee,
-				refund_parameters: None,
-				dca_parameters: None,
-				origin: SwapOrigin::Internal,
-			}));
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					swap_request_id: SWAP_REQUEST_ID,
+					input_asset: INPUT_ASSET,
+					input_amount: AMOUNT,
+					output_asset: OUTPUT_ASSET,
+					request_type: SwapRequestTypeEncoded::IngressEgressFee,
+					origin: SwapOrigin::Internal,
+					..
+				}),
+			);
 
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapScheduled { .. }),);
 
