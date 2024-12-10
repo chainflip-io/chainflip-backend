@@ -26,7 +26,7 @@ use crate::{
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvents,
 		ValidatorInfo, VaultSwapDetails,
 	},
@@ -1563,6 +1563,7 @@ impl_runtime_apis! {
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			ccm_data: Option<CcmData>,
+			exclude_fees: Option<Vec<FeeTypes>>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
@@ -1636,12 +1637,55 @@ impl_runtime_apis! {
 				}
 			}
 
-			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, input_asset, input_amount);
+			let (mut exclude_ingress_fees, mut exclude_egress_fees, mut exclude_broker_fees, mut exclude_network_fees) = (false, false, false, false);
+
+			if let Some(exclude_fees_vec) = exclude_fees.as_ref() {
+				for fee in exclude_fees_vec {
+					match fee {
+						FeeTypes::Ingress => {
+							exclude_ingress_fees = true;
+						},
+						FeeTypes::Egress => {
+							exclude_egress_fees = true;
+						},
+						FeeTypes::Broker => {
+							exclude_broker_fees = true;
+						},
+						FeeTypes::Network => {
+							exclude_network_fees = true;
+						},
+					}
+				}
+			}
+
+			let (amount_to_swap, ingress_fee) = if exclude_ingress_fees {
+				(input_amount, 0u128)
+			} else {
+				remove_fees(IngressOrEgress::Ingress, input_asset, input_amount)
+			};
+
 
 			// Estimate swap result for a chunk, then extrapolate the result.
 			// If no DCA parameter is given, swap the entire amount with 1 chunk.
 			let number_of_chunks: u128 = dca_parameters.map(|dca|dca.number_of_chunks).unwrap_or(1u32).into();
 			let amount_per_chunk = amount_to_swap / number_of_chunks;
+
+			let mut fees_vec = vec![];
+
+			if !exclude_network_fees {
+				fees_vec.push(FeeType::NetworkFee);
+			}
+
+			if !exclude_broker_fees {
+				fees_vec.push(FeeType::BrokerFee(
+					vec![Beneficiary {
+						account: AccountId::new([0xbb; 32]),
+						bps: broker_commission,
+					}]
+					.try_into()
+					.expect("Beneficiary with a length of 1 must be within length bound.")
+				));
+			}
 
 			let swap_output_per_chunk = Swapping::try_execute_without_violations(
 				vec![
@@ -1652,17 +1696,7 @@ impl_runtime_apis! {
 						output_asset,
 						amount_per_chunk,
 						None,
-						vec![
-							FeeType::NetworkFee,
-							FeeType::BrokerFee(
-								vec![Beneficiary {
-									account: AccountId::new([0xbb; 32]),
-									bps: broker_commission,
-								}]
-								.try_into()
-								.expect("Beneficiary with a length of 1 must be within length bound.")
-							)
-						],
+						fees_vec,
 					)
 				],
 			).map_err(|e| DispatchErrorWithMessage::Other(match e {
@@ -1686,17 +1720,21 @@ impl_runtime_apis! {
 				)
 			};
 
-			let egress = match ccm_data {
-				Some(CcmData { gas_budget, message_length}) => {
-					IngressOrEgress::EgressCcm {
-						gas_budget,
-						message_length: message_length as usize,
-					}
-				},
-				None => IngressOrEgress::Egress,
+			let (output, egress_fee) = if !exclude_egress_fees {
+				let egress = match ccm_data {
+					Some(CcmData { gas_budget, message_length}) => {
+						IngressOrEgress::EgressCcm {
+							gas_budget,
+							message_length: message_length as usize,
+						}
+					},
+					None => IngressOrEgress::Egress,
+				};
+				remove_fees(egress, output_asset, output)
+			} else {
+				(output, 0u128)
 			};
 
-			let (output, egress_fee) = remove_fees(egress, output_asset, output);
 
 			Ok(SimulatedSwapInformation {
 				intermediary,
