@@ -174,14 +174,17 @@ pub struct SimulatedSwapInformationV2 {
 #[derive(Debug, Decode, Encode, TypeInfo)]
 pub enum DispatchErrorWithMessage {
 	Module(Vec<u8>),
+	AdHoc(Vec<u8>),
 	Other(DispatchError),
 }
 impl From<DispatchError> for DispatchErrorWithMessage {
-	fn from(value: DispatchError) -> Self {
-		match value {
+	fn from(error: DispatchError) -> Self {
+		match error {
 			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) =>
 				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
-			value => DispatchErrorWithMessage::Other(value),
+			DispatchError::Other(message) =>
+				DispatchErrorWithMessage::AdHoc(message.as_bytes().to_vec()),
+			error => DispatchErrorWithMessage::Other(error),
 		}
 	}
 }
@@ -189,7 +192,8 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 impl core::fmt::Display for DispatchErrorWithMessage {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
 		match self {
-			DispatchErrorWithMessage::Module(message) => write!(
+			DispatchErrorWithMessage::Module(message) |
+			DispatchErrorWithMessage::AdHoc(message) => write!(
 				f,
 				"{}",
 				str::from_utf8(message).unwrap_or("<Error message is not valid UTF-8>")

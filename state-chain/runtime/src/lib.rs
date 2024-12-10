@@ -206,7 +206,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 174,
+	spec_version: 175,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -1635,11 +1635,11 @@ impl_runtime_apis! {
 						],
 					)
 				],
-			).map_err(|e| DispatchErrorWithMessage::Other(match e {
+			).map_err(|e| match e {
 				BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
 				BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
 				BatchExecutionError::DispatchError { error } => error,
-			}))?;
+			})?;
 
 			let (
 				network_fee,
