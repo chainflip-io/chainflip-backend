@@ -302,12 +302,10 @@ impl FlipOperation {
 					return false
 				}
 				if expected_slash > 0 {
-					System::assert_last_event(RuntimeEvent::Flip(
-						crate::Event::<Test>::SlashingPerformed {
-							who: *account_id,
-							amount: expected_slash,
-						},
-					));
+					System::assert_last_event(RuntimeEvent::Flip(Event::SlashingPerformed {
+						who: *account_id,
+						amount: expected_slash,
+					}));
 				}
 			},
 			// Account to account transfer

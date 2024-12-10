@@ -57,27 +57,25 @@ fn can_update_all_config_items() {
 		// Check that the events were emitted
 		assert_events_eq!(
 			Test,
-			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
+			RuntimeEvent::Swapping(Event::MaximumSwapAmountSet {
 				asset: Asset::Btc,
 				amount: NEW_MAX_SWAP_AMOUNT_BTC,
 			}),
-			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
+			RuntimeEvent::Swapping(Event::MaximumSwapAmountSet {
 				asset: Asset::Dot,
 				amount: NEW_MAX_SWAP_AMOUNT_DOT,
 			}),
-			RuntimeEvent::Swapping(crate::Event::SwapRetryDelaySet {
+			RuntimeEvent::Swapping(Event::SwapRetryDelaySet {
 				swap_retry_delay: new_swap_retry_delay
 			}),
-			RuntimeEvent::Swapping(crate::Event::BuyIntervalSet {
-				buy_interval: new_flip_buy_interval
-			}),
-			RuntimeEvent::Swapping(crate::Event::MaxSwapRetryDurationSet {
+			RuntimeEvent::Swapping(Event::BuyIntervalSet { buy_interval: new_flip_buy_interval }),
+			RuntimeEvent::Swapping(Event::MaxSwapRetryDurationSet {
 				blocks: NEW_MAX_SWAP_RETRY_DURATION
 			}),
-			RuntimeEvent::Swapping(crate::Event::MaxSwapRequestDurationSet {
+			RuntimeEvent::Swapping(Event::MaxSwapRequestDurationSet {
 				blocks: MAX_SWAP_REQUEST_DURATION
 			}),
-			RuntimeEvent::Swapping(crate::Event::MinimumChunkSizeSet {
+			RuntimeEvent::Swapping(Event::MinimumChunkSizeSet {
 				asset: Asset::Eth,
 				amount: NEW_MINIMUM_CHUNK_SIZE
 			}),

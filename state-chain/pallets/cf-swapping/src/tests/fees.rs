@@ -217,11 +217,6 @@ fn network_fee_swap_gets_burnt() {
 				}),
 			);
 
-			// System::assert_has_event(RuntimeEvent::Swapping(Event::SwapRequested {
-			// 	refund_parameters: None,
-			// 	dca_parameters: None,
-			// 	origin: SwapOrigin::Internal,
-			// }));
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapScheduled { .. }),);
 		})
 		.then_process_blocks_until_block(SWAP_BLOCK)
