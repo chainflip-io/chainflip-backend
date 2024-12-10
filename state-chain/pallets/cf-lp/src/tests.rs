@@ -1,4 +1,4 @@
-use crate::{mock::*, Error, LiquidityRefundAddress};
+use crate::{mock::*, Error, Event, LiquidityRefundAddress};
 
 use cf_chains::{address::EncodedAddress, ForeignChainAddress};
 use cf_primitives::{AccountId, Asset, AssetAmount, ForeignChain};
@@ -95,14 +95,12 @@ fn liquidity_providers_can_move_assets_internally() {
 			AccountId::from(LP_ACCOUNT_2),
 		));
 
-		System::assert_last_event(RuntimeEvent::LiquidityProvider(
-			crate::Event::AssetTransferred {
-				from: AccountId::from(LP_ACCOUNT),
-				to: AccountId::from(LP_ACCOUNT_2),
-				asset: Asset::Eth,
-				amount: TRANSFER_AMOUNT,
-			},
-		));
+		System::assert_last_event(RuntimeEvent::LiquidityProvider(Event::AssetTransferred {
+			from: AccountId::from(LP_ACCOUNT),
+			to: AccountId::from(LP_ACCOUNT_2),
+			asset: Asset::Eth,
+			amount: TRANSFER_AMOUNT,
+		}));
 	});
 }
 
@@ -180,7 +178,7 @@ fn can_register_and_deregister_liquidity_refund_address() {
 		assert!(LiquidityRefundAddress::<Test>::get(&account_id, ForeignChain::Bitcoin).is_none());
 
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
-			crate::Event::<Test>::LiquidityRefundAddressRegistered {
+			Event::<Test>::LiquidityRefundAddressRegistered {
 				account_id: account_id.clone(),
 				chain: ForeignChain::Ethereum,
 				address: decoded_address,
@@ -200,7 +198,7 @@ fn can_register_and_deregister_liquidity_refund_address() {
 			Some(decoded_address.clone()),
 		);
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
-			crate::Event::<Test>::LiquidityRefundAddressRegistered {
+			Event::<Test>::LiquidityRefundAddressRegistered {
 				account_id,
 				chain: ForeignChain::Ethereum,
 				address: decoded_address,
@@ -212,11 +210,14 @@ fn can_register_and_deregister_liquidity_refund_address() {
 #[test]
 fn cannot_request_deposit_address_without_registering_liquidity_refund_address() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
-			Asset::Eth,
-			0,
-		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
+		assert_noop!(
+			LiquidityProvider::request_liquidity_deposit_address(
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				Asset::Eth,
+				0,
+			),
+			crate::Error::<Test>::NoLiquidityRefundAddressRegistered
+		);
 
 		// Register EWA
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
@@ -240,26 +241,32 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 			Asset::Usdc,
 			0,
 		));
-		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(Event::LiquidityDepositAddressReady {
 			..
 		}) => (),
-		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+		RuntimeEvent::LiquidityProvider(Event::LiquidityDepositAddressReady {
 			..
 		}) => (),
-		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+		RuntimeEvent::LiquidityProvider(Event::LiquidityDepositAddressReady {
 			..
 		}) => ());
 		// Requesting deposit address for other chains will fail.
-		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
-			Asset::Btc,
-			0,
-		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
-		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
-			Asset::Dot,
-			0,
-		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
+		assert_noop!(
+			LiquidityProvider::request_liquidity_deposit_address(
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				Asset::Btc,
+				0,
+			),
+			crate::Error::<Test>::NoLiquidityRefundAddressRegistered
+		);
+		assert_noop!(
+			LiquidityProvider::request_liquidity_deposit_address(
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				Asset::Dot,
+				0,
+			),
+			crate::Error::<Test>::NoLiquidityRefundAddressRegistered
+		);
 	});
 }
 
@@ -290,15 +297,15 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 			Asset::Usdc,
 			BOOST_FEE3,
 		));
-		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(Event::LiquidityDepositAddressReady {
 			boost_fee: BOOST_FEE1,
 			..
 		}) => (),
-		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+		RuntimeEvent::LiquidityProvider(Event::LiquidityDepositAddressReady {
 			boost_fee: BOOST_FEE2,
 			..
 		}) => (),
-		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+		RuntimeEvent::LiquidityProvider(Event::LiquidityDepositAddressReady {
 			boost_fee: BOOST_FEE3,
 			..
 		}) => ());

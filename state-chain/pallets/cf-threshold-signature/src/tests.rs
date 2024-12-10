@@ -3,10 +3,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
 	mock::*, AttemptCount, AuthorityCount, CeremonyContext, CeremonyId, CurrentEpochIndex, Error,
-	Event as PalletEvent, KeyHandoverResolutionPendingSince, KeyRotationStatus,
-	KeygenFailureVoters, KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenResponseTimeout,
-	KeygenSlashAmount, KeygenSuccessVoters, PalletConfigUpdate, PalletOffence, PendingKeyRotation,
-	RequestContext, RequestId, ThresholdSignatureResponseTimeout,
+	Event, KeyHandoverResolutionPendingSince, KeyRotationStatus, KeygenFailureVoters,
+	KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSlashAmount,
+	KeygenSuccessVoters, PalletConfigUpdate, PalletOffence, PendingKeyRotation, RequestContext,
+	RequestId, ThresholdSignatureResponseTimeout,
 };
 
 use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto};
@@ -781,7 +781,7 @@ fn keygen_request_emitted() {
 		);
 		assert_eq!(
 			last_event::<Test>(),
-			PalletEvent::<Test, _>::KeygenRequest {
+			Event::KeygenRequest {
 				ceremony_id: current_ceremony_id(),
 				participants: btree_candidates.clone(),
 				epoch_index: rotation_epoch,
@@ -828,7 +828,7 @@ fn keygen_handover_request_emitted() {
 		);
 		assert_eq!(
 			last_event::<Test>(),
-			PalletEvent::<Test, _>::KeyHandoverRequest {
+			Event::KeyHandoverRequest {
 				// It should be incremented when the request is made.
 				ceremony_id: ceremony_id + 1,
 				from_epoch: current_epoch,
@@ -925,10 +925,10 @@ fn keygen_failure(
 
 	EvmThresholdSigner::terminate_rotation(
 		bad_candidates.clone(),
-		PalletEvent::KeygenFailure(ceremony_id),
+		Event::KeygenFailure(ceremony_id),
 	);
 
-	assert_eq!(last_event::<Test>(), PalletEvent::KeygenFailure(ceremony_id).into());
+	assert_eq!(last_event::<Test>(), Event::KeygenFailure(ceremony_id).into());
 
 	assert_eq!(
 		EvmThresholdSigner::status(),
@@ -964,7 +964,7 @@ fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 
 		assert_eq!(
 			last_event::<Test>(),
-			PalletEvent::KeygenRequest {
+			Event::KeygenRequest {
 				ceremony_id: current_ceremony_id(),
 				participants: ALL_CANDIDATES.iter().cloned().collect(),
 				epoch_index: rotation_epoch,
@@ -1010,9 +1010,9 @@ fn keygen_verification_failure() {
 
 			println!("{:?}", System::events());
 			assert_last_events!(
-				PalletEvent::ThresholdSignatureFailed { .. },
-				PalletEvent::ThresholdDispatchComplete { .. },
-				PalletEvent::KeygenVerificationFailure { .. }
+				Event::ThresholdSignatureFailed { .. },
+				Event::ThresholdDispatchComplete { .. },
+				Event::KeygenVerificationFailure { .. }
 			);
 			MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed.clone());
 			assert_eq!(
@@ -1353,10 +1353,7 @@ fn do_full_key_rotation() {
 	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 	assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
-	assert_last_events!(
-		crate::Event::ThresholdSignatureRequest { .. },
-		crate::Event::KeyHandoverSuccess { .. }
-	);
+	assert_last_events!(Event::ThresholdSignatureRequest { .. }, Event::KeyHandoverSuccess { .. });
 
 	assert!(matches!(
 		PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -1371,8 +1368,8 @@ fn do_full_key_rotation() {
 	);
 
 	assert_last_events!(
-		crate::Event::ThresholdDispatchComplete { .. },
-		crate::Event::KeyHandoverVerificationSuccess { .. }
+		Event::ThresholdDispatchComplete { .. },
+		Event::KeyHandoverVerificationSuccess { .. }
 	);
 
 	assert!(matches!(
@@ -1394,7 +1391,7 @@ fn do_full_key_rotation() {
 	);
 	MockVaultActivator::set_activation_completed();
 
-	assert_last_events!(crate::Event::KeyRotationCompleted);
+	assert_last_events!(Event::KeyRotationCompleted);
 	assert_eq!(PendingKeyRotation::<Test, _>::get(), Some(KeyRotationStatus::Complete));
 	assert_eq!(
 		EvmThresholdSigner::status(),
@@ -1462,7 +1459,7 @@ fn keygen_report_failure() {
 
 		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, vec![CHARLIE]);
 
-		assert_last_events!(crate::Event::KeygenFailure(..));
+		assert_last_events!(Event::KeygenFailure(..));
 
 		// Voting has been cleared.
 		assert!(KeygenSuccessVoters::<Test, _>::iter_keys().next().is_none());
@@ -1613,7 +1610,7 @@ mod key_rotation {
 
 			// Status is complete.
 			assert_eq!(PendingKeyRotation::<Test, _>::get(), Some(KeyRotationStatus::Complete));
-			assert_last_events!(crate::Event::KeyRotationCompleted { .. });
+			assert_last_events!(Event::KeyRotationCompleted { .. });
 		});
 	}
 
@@ -1691,7 +1688,7 @@ mod key_rotation {
 	#[test]
 	fn key_handover_fails_on_key_mismatch() {
 		setup(Ok(BAD_AGG_KEY_POST_HANDOVER)).execute_with(|| {
-			assert_last_events!(crate::Event::KeyHandoverFailure { .. });
+			assert_last_events!(Event::KeyHandoverFailure { .. });
 			assert!(matches!(
 				PendingKeyRotation::<Test, _>::get(),
 				Some(KeyRotationStatus::KeyHandoverFailed { .. })
@@ -1719,9 +1716,9 @@ mod key_rotation {
 			);
 
 			assert_last_events!(
-				PalletEvent::ThresholdSignatureFailed { .. },
-				PalletEvent::ThresholdDispatchComplete { .. },
-				PalletEvent::KeyHandoverVerificationFailure { .. }
+				Event::ThresholdSignatureFailed { .. },
+				Event::ThresholdDispatchComplete { .. },
+				Event::KeyHandoverVerificationFailure { .. }
 			);
 
 			MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, offenders.clone());
@@ -1976,7 +1973,7 @@ fn can_update_all_config_items() {
 			));
 			// Check that the events were emitted
 			System::assert_has_event(RuntimeEvent::EvmThresholdSigner(
-				crate::Event::PalletConfigUpdated { update },
+				Event::PalletConfigUpdated { update },
 			));
 		}
 

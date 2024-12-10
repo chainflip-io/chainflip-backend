@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, ActiveProposals, Error, ExecutionMode, ExecutionPipeline, ExpiryTime, Members,
+	mock::*, ActiveProposals, Error, Event, ExecutionMode, ExecutionPipeline, ExpiryTime, Members,
 	PreAuthorisedGovCalls, ProposalIdCounter,
 };
 use cf_primitives::SemVer;
@@ -67,7 +67,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			));
 			assert_eq!(
 				last_event::<Test>(),
-				crate::mock::RuntimeEvent::Governance(crate::Event::Approved(1)),
+				crate::mock::RuntimeEvent::Governance(Event::Approved(1)),
 			);
 			// Make sure only a governance member can approve
 			assert_noop!(
@@ -81,7 +81,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			// Expect the Executed event was fired
 			assert_eq!(
 				last_event::<Test>(),
-				crate::mock::RuntimeEvent::Governance(crate::Event::Executed(1)),
+				crate::mock::RuntimeEvent::Governance(Event::Executed(1)),
 			);
 			// Check the new governance set
 			let genesis_members = Members::<Test>::get();
@@ -103,10 +103,7 @@ fn already_executed() {
 			ExecutionMode::Automatic,
 		));
 		// Assert the proposed event was fired
-		assert_eq!(
-			last_event::<Test>(),
-			crate::mock::RuntimeEvent::Governance(crate::Event::Approved(1)),
-		);
+		assert_eq!(last_event::<Test>(), crate::mock::RuntimeEvent::Governance(Event::Approved(1)),);
 		// Do the second approval to reach majority
 		assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
 		// The third attempt in this block has to fail because the
@@ -154,7 +151,7 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 			// Expect the Expired event to be fired
 			assert_eq!(
 				last_event::<Test>(),
-				crate::mock::RuntimeEvent::Governance(crate::Event::Expired(1)),
+				crate::mock::RuntimeEvent::Governance(Event::Expired(1)),
 			);
 			assert_eq!(ActiveProposals::<Test>::get().len(), 0);
 		});
@@ -185,19 +182,13 @@ fn several_open_proposals() {
 			mock_extrinsic(),
 			ExecutionMode::Automatic,
 		));
-		assert_eq!(
-			last_event::<Test>(),
-			crate::mock::RuntimeEvent::Governance(crate::Event::Approved(1)),
-		);
+		assert_eq!(last_event::<Test>(), crate::mock::RuntimeEvent::Governance(Event::Approved(1)),);
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(BOB),
 			mock_extrinsic(),
 			ExecutionMode::Automatic,
 		));
-		assert_eq!(
-			last_event::<Test>(),
-			crate::mock::RuntimeEvent::Governance(crate::Event::Approved(2)),
-		);
+		assert_eq!(last_event::<Test>(), crate::mock::RuntimeEvent::Governance(Event::Approved(2)),);
 		assert_eq!(ProposalIdCounter::<Test>::get(), 2);
 	});
 }
@@ -227,7 +218,7 @@ fn sudo_extrinsic() {
 			));
 			assert_eq!(
 				last_event::<Test>(),
-				crate::mock::RuntimeEvent::Governance(crate::Event::Approved(1)),
+				crate::mock::RuntimeEvent::Governance(Event::Approved(1)),
 			);
 			// Do the second necessary approval
 			assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
@@ -236,7 +227,7 @@ fn sudo_extrinsic() {
 			// Expect the sudo extrinsic to be executed successfully
 			assert_eq!(
 				last_event::<Test>(),
-				crate::mock::RuntimeEvent::Governance(crate::Event::Executed(1)),
+				crate::mock::RuntimeEvent::Governance(Event::Executed(1)),
 			);
 		});
 }

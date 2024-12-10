@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, pallet, BoundExecutorAddress, Error, EthereumAddress, PendingRedemptions,
+	mock::*, pallet, BoundExecutorAddress, Error, EthereumAddress, Event, PendingRedemptions,
 	RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
 };
 use cf_primitives::FlipBalance;
@@ -100,20 +100,20 @@ fn funded_amount_is_added_and_subtracted() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::Funded {
+			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				funds_added: AMOUNT_A1,
 				total_balance: AMOUNT_A1
 			}),
-			RuntimeEvent::Funding(crate::Event::Funded {
+			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				funds_added: AMOUNT_A2,
 				total_balance: TOTAL_A,
 			}),
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: BOB }),
-			RuntimeEvent::Funding(crate::Event::Funded {
+			RuntimeEvent::Funding(Event::Funded {
 				account_id: BOB,
 				tx_hash: TX_HASH,
 				funds_added: AMOUNT_B,
@@ -180,7 +180,7 @@ fn redeeming_unredeemable_is_err() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::Funded {
+			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				funds_added: AMOUNT,
@@ -294,20 +294,20 @@ fn redemption_cannot_occur_without_funding_first() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::Funded {
+			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				funds_added: FUNDING_AMOUNT,
 				total_balance: FUNDING_AMOUNT
 			}),
-			RuntimeEvent::Funding(crate::Event::RedemptionRequested {
+			RuntimeEvent::Funding(Event::RedemptionRequested {
 				account_id: ALICE,
 				amount: REDEEMED_AMOUNT,
 				broadcast_id: 1,
 				expiry_time: 10,
 			}),
 			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::RedemptionSettled(ALICE, REDEEMED_AMOUNT))
+			RuntimeEvent::Funding(Event::RedemptionSettled(ALICE, REDEEMED_AMOUNT))
 		);
 	});
 }
@@ -455,7 +455,7 @@ fn test_redeem_all() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::Funded {
+			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				funds_added: AMOUNT,
@@ -671,9 +671,9 @@ fn can_update_redemption_tax() {
 		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount + 1));
 		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount));
 		assert_eq!(RedemptionTax::<Test>::get(), amount);
-		System::assert_last_event(RuntimeEvent::Funding(
-			crate::Event::<Test>::RedemptionTaxAmountUpdated { amount },
-		));
+		System::assert_last_event(RuntimeEvent::Funding(Event::RedemptionTaxAmountUpdated {
+			amount,
+		}));
 	});
 }
 
@@ -1072,7 +1072,7 @@ mod test_restricted_balances {
 						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
 					assert!(matches!(
 						cf_test_utilities::last_event::<Test>(),
-						RuntimeEvent::Funding(crate::Event::RedemptionRequested {
+						RuntimeEvent::Funding(Event::RedemptionRequested {
 							account_id,
 							amount,
 							..
@@ -1382,7 +1382,7 @@ fn can_bind_redeem_address() {
 		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS));
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Funding(crate::Event::BoundRedeemAddress {
+			RuntimeEvent::Funding(Event::BoundRedeemAddress {
 				account_id: ALICE,
 				address,
 			}) if address == REDEEM_ADDRESS,
@@ -1448,7 +1448,7 @@ fn max_redemption_is_net_exact_is_gross() {
 			assert!(
 				matches!(
 					cf_test_utilities::last_event::<Test>(),
-					RuntimeEvent::Funding(crate::Event::RedemptionRequested {
+					RuntimeEvent::Funding(Event::RedemptionRequested {
 						account_id: ALICE,
 						amount,
 						..
@@ -1537,8 +1537,8 @@ fn skip_redemption_of_zero_flip() {
 			assert_event_sequence! {
 				Test,
 				_,
-				RuntimeEvent::Funding(crate::Event::Funded {..}),
-				RuntimeEvent::Funding(crate::Event::RedemptionAmountZero {..}),
+				RuntimeEvent::Funding(Event::Funded {..}),
+				RuntimeEvent::Funding(Event::RedemptionAmountZero {..}),
 			};
 		});
 	}
@@ -1585,7 +1585,7 @@ fn bind_executor_address() {
 		assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(ALICE), EXECUTOR_ADDRESS));
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Funding(crate::Event::BoundExecutorAddress {
+			RuntimeEvent::Funding(Event::BoundExecutorAddress {
 				account_id: ALICE,
 				address,
 			}) if address == EXECUTOR_ADDRESS,

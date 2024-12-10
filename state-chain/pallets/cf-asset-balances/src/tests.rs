@@ -4,7 +4,7 @@ use cf_traits::{
 	mocks::egress_handler::MockEgressParameter, AssetWithholding, LiabilityTracker, SetSafeMode,
 };
 
-use crate::FreeBalances;
+use crate::{Event, FreeBalances};
 use cf_chains::AnyChain;
 use cf_test_utilities::assert_has_event;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, BalanceApi, SafeMode};
@@ -86,12 +86,12 @@ pub fn not_enough_withheld_fees() {
 
 		Pallet::<Test>::trigger_reconciliation();
 
-		System::assert_has_event(RuntimeEvent::AssetBalances(crate::Event::VaultDeficitDetected {
+		System::assert_has_event(RuntimeEvent::AssetBalances(Event::VaultDeficitDetected {
 			chain: ForeignChain::Bitcoin,
 			amount_owed: BTC_OWED,
 			available: BTC_AVAILABLE,
 		}));
-		System::assert_has_event(RuntimeEvent::AssetBalances(crate::Event::VaultDeficitDetected {
+		System::assert_has_event(RuntimeEvent::AssetBalances(Event::VaultDeficitDetected {
 			chain: ForeignChain::Ethereum,
 			amount_owed: ETH_OWED,
 			available: ETH_AVAILABLE,
@@ -123,7 +123,7 @@ pub fn do_not_refund_if_amount_is_too_low() {
 		Pallet::<Test>::trigger_reconciliation();
 
 		assert_has_event::<Test>(
-			crate::Event::RefundSkipped {
+			Event::RefundSkipped {
 				reason: crate::Error::<Test>::RefundAmountTooLow.into(),
 				chain: ForeignChain::Ethereum,
 				address: ETH_ADDR_1,
@@ -290,7 +290,7 @@ pub mod balance_api {
 			const DELTA: u128 = 10;
 			Pallet::<Test>::credit_account(&alice, ForeignChain::Ethereum.gas_asset(), AMOUNT);
 			assert_has_event::<Test>(
-				crate::Event::AccountCredited {
+				Event::AccountCredited {
 					account_id: alice.clone(),
 					asset: ForeignChain::Ethereum.gas_asset(),
 					amount_credited: AMOUNT,
@@ -323,7 +323,7 @@ pub mod balance_api {
 				DELTA
 			);
 			assert_has_event::<Test>(
-				crate::Event::AccountDebited {
+				Event::AccountDebited {
 					account_id: alice.clone(),
 					asset: ForeignChain::Ethereum.gas_asset(),
 					amount_debited: AMOUNT - DELTA,

@@ -37,6 +37,7 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 		},
 		dca_parameters: None,
 		refund_parameters: None,
+		broker_fees: Default::default(),
 		origin,
 	}));
 }

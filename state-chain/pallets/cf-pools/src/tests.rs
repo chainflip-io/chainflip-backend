@@ -672,7 +672,7 @@ fn can_execute_scheduled_limit_order() {
 		));
 		assert_eq!(
 			last_event::<Test>(),
-			RuntimeEvent::LiquidityPools(crate::Event::LimitOrderSetOrUpdateScheduled {
+			RuntimeEvent::LiquidityPools(Event::LimitOrderSetOrUpdateScheduled {
 				lp: ALICE,
 				order_id,
 				dispatch_at: 6,
@@ -687,7 +687,7 @@ fn can_execute_scheduled_limit_order() {
 		);
 		assert_eq!(
 			last_event::<Test>(),
-			RuntimeEvent::LiquidityPools(crate::Event::ScheduledLimitOrderUpdateDispatchSuccess {
+			RuntimeEvent::LiquidityPools(Event::ScheduledLimitOrderUpdateDispatchSuccess {
 				lp: ALICE,
 				order_id,
 			})
@@ -965,12 +965,10 @@ fn test_maximum_slippage_limits() {
 			RuntimeOrigin::root(),
 			bounded_vec![(OTHER_ASSET, Some(1))],
 		));
-		System::assert_last_event(RuntimeEvent::LiquidityPools(
-			crate::Event::<Test>::PriceImpactLimitSet {
-				asset_pair: AssetPair::new(OTHER_ASSET, STABLE_ASSET).unwrap(),
-				limit: Some(1),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(Event::PriceImpactLimitSet {
+			asset_pair: AssetPair::new(OTHER_ASSET, STABLE_ASSET).unwrap(),
+			limit: Some(1),
+		}));
 
 		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
 			for (size, expected_output) in [

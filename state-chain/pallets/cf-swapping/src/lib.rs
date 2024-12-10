@@ -564,6 +564,7 @@ pub mod pallet {
 			output_asset: Asset,
 			origin: SwapOrigin,
 			request_type: SwapRequestTypeEncoded,
+			broker_fees: Beneficiaries<T::AccountId>,
 			refund_parameters: Option<ChannelRefundParametersEncoded>,
 			dca_parameters: Option<DcaParameters>,
 		},
@@ -2152,6 +2153,7 @@ pub mod pallet {
 				dca_params
 			});
 
+			// MAXIM: explose: broker/affiliate fees, boost_fee_bps
 			Self::deposit_event(Event::<T>::SwapRequested {
 				swap_request_id: request_id,
 				input_asset,
@@ -2177,6 +2179,7 @@ pub mod pallet {
 						},
 				},
 				origin: origin.clone(),
+				broker_fees: broker_fees.clone(),
 				refund_parameters: refund_params
 					.clone()
 					.map(|params| params.map_address(T::AddressConverter::to_encoded_address)),
