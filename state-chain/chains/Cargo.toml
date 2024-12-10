@@ -56,6 +56,7 @@ hex = { workspace = true, features = ["serde"] }
 hex-literal = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 serde_bytes = { workspace = true }
+serde-big-array = { workspace = true }
 log = { workspace = true }
 itertools = { workspace = true }
 arrayref = { workspace = true }
