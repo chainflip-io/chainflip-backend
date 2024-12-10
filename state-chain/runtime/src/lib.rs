@@ -2102,7 +2102,7 @@ impl_runtime_apis! {
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
 			extra_parameters: VaultSwapExtraParametersEncoded,
-			_channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
@@ -2143,7 +2143,18 @@ impl_runtime_apis! {
 				} else {
 					Err(DispatchErrorWithMessage::Other("Extra parameter is not valid for Btc vault swap.".into()))
 				},
-				ForeignChain::Solana => unimplemented!(),
+				ForeignChain::Solana => crate::chainflip::vault_swap::solana_vault_swap(
+					broker_id,
+					source_asset,
+					destination_asset,
+					destination_address,
+					broker_commission,
+					extra_parameters,
+					channel_metadata,
+					boost_fee,
+					affiliate_fees,
+					dca_parameters,
+				),
 				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
 			}
 		}
