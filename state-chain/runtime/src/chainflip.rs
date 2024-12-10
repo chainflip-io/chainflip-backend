@@ -11,6 +11,7 @@ mod offences;
 pub mod pending_rotation_broadcasts;
 mod signer_nomination;
 pub mod solana_elections;
+pub mod vault_swap;
 
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
