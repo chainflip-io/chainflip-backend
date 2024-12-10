@@ -252,7 +252,7 @@ pub enum RpcAccountInfo {
 	Broker {
 		flip_balance: NumberOrHex,
 		earned_fees: any::AssetMap<NumberOrHex>,
-		channel_address: Option<ForeignChainAddressHumanreadable>,
+		channel_address: Option<String>,
 	},
 	LiquidityProvider {
 		balances: any::AssetMap<NumberOrHex>,
@@ -283,10 +283,10 @@ impl RpcAccountInfo {
 		Self::Unregistered { flip_balance: balance.into() }
 	}
 
-	fn broker(broker_info: BrokerInfo, network: NetworkEnvironment, balance: u128) -> Self {
+	fn broker(broker_info: BrokerInfo, balance: u128) -> Self {
 		Self::Broker {
 			flip_balance: balance.into(),
-			channel_address: broker_info.channel_address.map(|a| a.to_humanreadable(network)),
+			channel_address: broker_info.channel_address,
 			earned_fees: cf_chains::assets::any::AssetMap::from_iter_or_default(
 				broker_info
 					.earned_fees
@@ -1373,7 +1373,7 @@ where
 					AccountRole::Broker => {
 						let info = api.cf_broker_info(hash, account_id)?;
 
-						RpcAccountInfo::broker(info, api.cf_network_environment(hash)?, balance)
+						RpcAccountInfo::broker(info, balance)
 					},
 					AccountRole::LiquidityProvider => {
 						let info = api.cf_liquidity_provider_info(hash, account_id)?;
@@ -2024,7 +2024,7 @@ mod test {
 	use std::collections::BTreeSet;
 
 	use super::*;
-	use cf_chains::assets::sol;
+	use cf_chains::{assets::sol, btc::ScriptPubkey};
 	use cf_primitives::{
 		chains::assets::{any, arb, btc, dot, eth},
 		FLIPPERINOS_PER_FLIP,
@@ -2049,6 +2049,7 @@ mod test {
 
 	#[test]
 	fn test_broker_serialization() {
+		use cf_chains::btc::BitcoinNetwork;
 		let broker = RpcAccountInfo::broker(
 			BrokerInfo {
 				earned_fees: vec![
@@ -2063,9 +2064,10 @@ mod test {
 					(Asset::Sol, 0),
 					(Asset::SolUsdc, 0),
 				],
-				channel_address: None,
+				channel_address: Some(
+					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
+				),
 			},
-			cf_primitives::NetworkEnvironment::Mainnet,
 			0,
 		);
 

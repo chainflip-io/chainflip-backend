@@ -46,6 +46,7 @@ use cf_chains::{
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{
 		api::BitcoinApi,
+		deposit_address::DepositAddress,
 		vault_swap_encoding::{
 			encode_swap_params_in_nulldata_payload, SharedCfParameters, UtxoEncodedData,
 		},
@@ -55,8 +56,7 @@ use cf_chains::{
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, ForeignChainAddress, Polkadot, Solana,
-	TransactionBuilder,
+	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	AffiliateAndFee, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
@@ -1862,15 +1862,29 @@ impl_runtime_apis! {
 			let earned_fees: Vec<_> = Asset::all().map(|asset|
 				(asset, AssetBalances::get_balance(&account_id, asset))
 			).collect();
-			pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&account_id).and_then(|id| {
-				pallet_cf_ingress_egress::DepositChannelPool::<Runtime, BitcoinInstance>::get(id).map(|details| BrokerInfo {
-					earned_fees: earned_fees.clone(),
-					channel_address: Some(ForeignChainAddress::Btc(details.address))
-				})
-			}).unwrap_or(BrokerInfo {
-				earned_fees,
-				channel_address: None
-			})
+			if let Some(channel_id) = pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&account_id) {
+				let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key().expect("We should always have a key for the current epoch.");
+				BrokerInfo {
+					earned_fees,
+					channel_address: if let Ok(salt) = channel_id.try_into() {
+						let channel_address = DepositAddress::new(
+							key.current,
+							salt,
+						)
+						.script_pubkey()
+						.to_address(&Environment::network_environment().into());
+						Some(channel_address)
+					} else {
+						log::error!("Private channel id out of bounds.");
+						None
+					},
+				}
+			} else {
+				BrokerInfo {
+					earned_fees,
+					channel_address: None
+				}
+			}
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
