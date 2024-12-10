@@ -50,7 +50,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
@@ -240,7 +240,7 @@ impl<T: Config> From<DispatchError> for BatchExecutionError<T> {
 }
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Encode, Decode, TypeInfo)]
-enum DcaStatus {
+pub enum DcaStatus {
 	ChunkToBeScheduled,
 	ChunkScheduled(SwapId),
 	AwaitingRefund,
@@ -248,7 +248,7 @@ enum DcaStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-struct DcaState {
+pub struct DcaState {
 	status: DcaStatus,
 	remaining_input_amount: AssetAmount,
 	remaining_chunks: u32,
