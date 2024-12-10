@@ -168,13 +168,12 @@ impl<
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
 		current_chain_block_number: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
-
 		ensure!(<Chain as cf_chains::Chain>::is_block_witness_root(*current_chain_block_number), {
 			log::error!(
 				"Block number must be a block witness root: {:?}",
 				*current_chain_block_number
 			);
-			CorruptStorageError {}
+			CorruptStorageError::new()
 		});
 
 		let BlockWitnesserState {

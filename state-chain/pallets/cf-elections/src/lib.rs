@@ -270,7 +270,10 @@ pub mod pallet {
 		/// specifically in Solana's chain/fee tracking trait impls as those traits do not allow
 		/// errors to be returned, this is ok, but should be avoided in future.
 		#[derive(Debug, PartialEq, Eq)]
-		pub struct CorruptStorageError {}
+		pub struct CorruptStorageError {
+			// force usage of new() to log
+			_no_construct: (),
+		}
 		impl CorruptStorageError {
 			/// We use this function to create this error type (and make the struct impossible to
 			/// create without it) so it is easier to find all locations we create the error, and so
@@ -282,7 +285,7 @@ pub mod pallet {
 					"Election pallet CorruptStorageError at '{}'.",
 					core::panic::Location::caller()
 				);
-				Self {}
+				Self { _no_construct: () }
 			}
 		}
 	}
