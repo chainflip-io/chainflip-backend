@@ -146,7 +146,9 @@ impl<
 	type ElectionState = ();
 	type Vote = vote_storage::bitmap::Bitmap<BlockData>;
 	type Consensus = BlockData;
-	type OnFinalizeContext = <Chain as cf_chains::Chain>::ChainBlockNumber;
+
+	// TODO: Use a specialised range type that accounts for the witness period?
+	type OnFinalizeContext = RangeInclusive<<Chain as cf_chains::Chain>::ChainBlockNumber>;
 	type OnFinalizeReturn = ();
 
 	fn generate_vote_properties(
@@ -166,15 +168,21 @@ impl<
 
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
-		current_chain_block_number: &Self::OnFinalizeContext,
+		witness_range: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
-		ensure!(<Chain as cf_chains::Chain>::is_block_witness_root(*current_chain_block_number), {
-			log::error!(
-				"Block number must be a block witness root: {:?}",
-				*current_chain_block_number
-			);
-			CorruptStorageError::new()
-		});
+		ensure!(
+			<Chain as cf_chains::Chain>::is_block_witness_root(*witness_range.start()) &&
+				<Chain as cf_chains::Chain>::is_block_witness_root(*witness_range.end()),
+			{
+				log::error!(
+					"Start and end of range must be block witness roots: {:?}",
+					*witness_range.start()
+				);
+				CorruptStorageError::new()
+			}
+		);
+
+		// if the start of the range is
 
 		let BlockWitnesserState {
 			mut last_block_election_emitted_for,
@@ -183,9 +191,15 @@ impl<
 			mut unprocessed_data,
 		} = ElectoralAccess::unsynchronised_state()?;
 
-		let (last_block_election_emitted_for, open_elections) = if *current_chain_block_number <
-			last_block_received
-		{
+		// e.g. the last block received is 20, we now have a range 19..21. This means, 19 and 20 are
+		// reorg'd.
+		log::info!("Last block received: {:?}", last_block_received);
+		log::info!("Witness range is: {:?}", witness_range);
+
+		// How do we handle the case where there's a reorg on the same block. We receive 4 and then
+		// we get 4 again.
+		if *witness_range.start() <= last_block_received {
+			log::info!("Reoooooorg");
 			// All ongoing elections are now invalid, we will recreate the elections, once the block
 			// height witnesser passes throught those block heights again, so the engines will
 			// revote.
@@ -193,21 +207,28 @@ impl<
 				ElectoralAccess::election_mut(election_identifier).delete();
 			});
 
-			ElectoralAccess::new_election(
-				(),
-				(
-					Chain::block_witness_range(*current_chain_block_number).into(),
-					ElectionGenerator::generate_election_properties(*current_chain_block_number),
-				),
-				(),
-			)?;
+			// Create a new election for each one in the range?
+
+			for root in
+				witness_range.clone().step_by(Into::<u64>::into(Chain::WITNESS_PERIOD) as usize)
+			{
+				log::info!("New election for root: {:?}", root);
+				ElectoralAccess::new_election(
+					(),
+					(
+						Chain::block_witness_range(root).into(),
+						ElectionGenerator::generate_election_properties(root),
+					),
+					(),
+				)?;
+				last_block_election_emitted_for = root;
+				open_elections = open_elections.saturating_add(1);
+			}
 
 			// NB: We do not clear any of the unprocessed data here. This is because we need to
 			// prevent double dispatches. By keeping the state, if we have a reorg we can check
 			// against the state in the process_block_data hook to ensure we don't double
 			// dispatch.
-
-			(*current_chain_block_number, 1)
 		} else {
 			// ==== No reorg case ====
 
@@ -228,10 +249,8 @@ impl<
 			// If we haven't done any new elections, since the last run, there's not really any
 			// reason to run this again, so we could probably optimise this.
 
-			unprocessed_data = BlockDataProcessor::process_block_data(
-				*current_chain_block_number,
-				unprocessed_data,
-			);
+			unprocessed_data =
+				BlockDataProcessor::process_block_data(*witness_range.end(), unprocessed_data);
 
 			debug_assert!(
 				<Chain as cf_chains::Chain>::is_block_witness_root(last_block_election_emitted_for),
@@ -241,8 +260,7 @@ impl<
 			let settings = ElectoralAccess::unsynchronised_settings()?;
 
 			for range_root in (last_block_election_emitted_for
-				.saturating_add(Chain::WITNESS_PERIOD)..=
-				*current_chain_block_number)
+				.saturating_add(Chain::WITNESS_PERIOD)..=*witness_range.end())
 				.step_by(Into::<u64>::into(Chain::WITNESS_PERIOD) as usize)
 				.take(settings.max_concurrent_elections.saturating_sub(open_elections) as usize)
 			{
@@ -257,11 +275,10 @@ impl<
 				last_block_election_emitted_for = range_root;
 				open_elections = open_elections.saturating_add(1);
 			}
-			(last_block_election_emitted_for, open_elections)
 		};
 
 		ElectoralAccess::set_unsynchronised_state(BlockWitnesserState {
-			last_block_received: *current_chain_block_number,
+			last_block_received: *witness_range.end(),
 			open_elections,
 			last_block_election_emitted_for,
 			unprocessed_data,

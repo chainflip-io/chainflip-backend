@@ -45,6 +45,10 @@ struct MockGenerateElectionHook<ChainBlockNumber, Properties> {
 	_phantom: core::marker::PhantomData<(ChainBlockNumber, Properties)>,
 }
 
+fn range_n(n: u64) -> std::ops::RangeInclusive<u64> {
+	n..=n
+}
+
 pub type Properties = BTreeSet<u16>;
 
 impl BlockElectionPropertiesGenerator<ChainBlockNumber, Properties>
@@ -207,7 +211,7 @@ fn no_block_data_success() {
 		})
 		.build()
 		.test_on_finalize(
-			&(INIT_LAST_BLOCK_RECEIVED + 1),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + 1),
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
@@ -235,8 +239,8 @@ fn creates_multiple_elections_below_maximum_when_required() {
 		})
 		.build()
 		.test_on_finalize(
-			// Process multiple elections, but still elss than the maximum concurrent
-			&(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64)),
+			// Process multiple elections, but still less than the maximum concurrent
+			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64)),
 			|pre_state| {
 				assert_eq!(pre_state.unsynchronised_state.open_elections, 0);
 			},
@@ -262,7 +266,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 			// no progress on external chain but on finalize called again
 		])
 		.test_on_finalize(
-			&(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64)),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64)),
 			|pre_state| {
 				assert_eq!(pre_state.unsynchronised_state.open_elections, NUMBER_OF_ELECTIONS);
 			},
@@ -301,7 +305,7 @@ fn creates_multiple_elections_limited_by_maximum() {
 		.build()
 		.test_on_finalize(
 			// Process multiple elections, but still elss than the maximum concurrent
-			&(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS_REQUIRED as u64)),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS_REQUIRED as u64)),
 			|pre_state| {
 				assert_eq!(pre_state.unsynchronised_state.open_elections, 0);
 			},
@@ -318,7 +322,7 @@ fn creates_multiple_elections_limited_by_maximum() {
 		// we now have space to start new elections.
 		.expect_consensus_multi(consensus_resolutions)
 		.test_on_finalize(
-			&(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS_REQUIRED as u64)),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS_REQUIRED as u64)),
 			|pre_state| {
 				assert_eq!(pre_state.unsynchronised_state.open_elections, MAX_CONCURRENT_ELECTIONS);
 			},
@@ -367,7 +371,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 		})
 		.build()
 		.test_on_finalize(
-			&NEXT_BLOCK_NUMBER,
+			&range_n(NEXT_BLOCK_NUMBER),
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
@@ -384,7 +388,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 		.expect_consensus_multi(all_votes)
 		// Process votes as normal, storing the state
 		.test_on_finalize(
-			&(NEXT_BLOCK_NUMBER + 1),
+			&range_n(NEXT_BLOCK_NUMBER + 1),
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
@@ -399,7 +403,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 		)
 		// Reorg occurs
 		.test_on_finalize(
-			&(NEXT_BLOCK_NUMBER - REORG_LENGTH),
+			&range_n(NEXT_BLOCK_NUMBER - REORG_LENGTH),
 			|_| {},
 			// We remove the actives ones and open one for the first block that we detected a
 			// reorg for.
@@ -418,7 +422,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 		)
 		.expect_consensus_multi(vec![create_votes_expectation(vec![5, 6, 77])])
 		.test_on_finalize(
-			&((NEXT_BLOCK_NUMBER - REORG_LENGTH) + 1),
+			&range_n((NEXT_BLOCK_NUMBER - REORG_LENGTH) + 1),
 			|_| {},
 			// We remove the actives ones and open one for the first block that we detected a
 			// reorg for.
@@ -455,7 +459,7 @@ fn partially_processed_block_data_processed_next_on_finalize() {
 		})
 		.build()
 		.test_on_finalize(
-			&(INIT_LAST_BLOCK_RECEIVED + 1),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + 1),
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
@@ -474,7 +478,7 @@ fn partially_processed_block_data_processed_next_on_finalize() {
 			)]);
 		})
 		.test_on_finalize(
-			&(INIT_LAST_BLOCK_RECEIVED + 2),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + 2),
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(2),
@@ -493,7 +497,7 @@ fn partially_processed_block_data_processed_next_on_finalize() {
 		// No progress on external chain, so state should be the same as above, except that we
 		// processed one of the items last time.
 		.test_on_finalize(
-			&(INIT_LAST_BLOCK_RECEIVED + 2),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + 2),
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(2),
@@ -525,7 +529,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 		.build()
 		.test_on_finalize(
 			// Process multiple elections, but still elss than the maximum concurrent
-			&(INIT_LAST_BLOCK_RECEIVED + 2),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + 2),
 			|pre_state| {
 				assert_eq!(pre_state.unsynchronised_state.open_elections, 0);
 			},
@@ -556,7 +560,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 		// no progress on external chain but on finalize called again
 		// TODO: Check the new elections have kicked off correct
 		.test_on_finalize(
-			&(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 1),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 1),
 			|pre_state| {
 				assert_eq!(pre_state.unsynchronised_state.open_elections, NUMBER_OF_ELECTIONS);
 			},
@@ -584,7 +588,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 			Some(vec![9, 1, 2]),
 		)])
 		.test_on_finalize(
-			&(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 2),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 2),
 			|pre_state| {
 				assert_eq!(
 					pre_state.unsynchronised_state.open_elections, 2,
@@ -629,7 +633,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 		])
 		// external chain doesn't move forward
 		.test_on_finalize(
-			&(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 2),
+			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 2),
 			|pre_state| {
 				assert_eq!(
 					pre_state.unsynchronised_state.open_elections, 2,

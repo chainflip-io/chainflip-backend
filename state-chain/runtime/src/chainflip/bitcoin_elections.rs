@@ -139,7 +139,7 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 					BitcoinDepositChannelWitnessing,
 					RunnerStorageAccess<Runtime, BitcoinInstance>,
 				>,
-			>(deposit_channel_witnessing_identifiers, &new_block_range.start())?;
+			>(deposit_channel_witnessing_identifiers, &new_block_range)?;
 		}
 
 		Ok(())
