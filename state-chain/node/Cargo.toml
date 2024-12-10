@@ -66,6 +66,7 @@ sp-inherents = { workspace = true, default-features = true }
 sp-keyring = { workspace = true, default-features = true }
 frame-system = { workspace = true, default-features = true }
 pallet-transaction-payment = { workspace = true, default-features = true }
+frame-metadata-hash-extension = { workspace = true }
 
 # These dependencies are used for the node template"s RPCs
 jsonrpsee = { workspace = true, features = ["full"] }
