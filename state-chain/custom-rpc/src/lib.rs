@@ -10,7 +10,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
-	Chain,
+	Chain, MAX_CCM_MSG_LENGTH,
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
@@ -54,7 +54,7 @@ use state_chain_runtime::{
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
-		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, ChainAccounts,
+		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
@@ -778,6 +778,7 @@ pub trait CustomApi {
 		amount: U256,
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
+		ccm_data: Option<CcmData>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
@@ -1438,6 +1439,7 @@ where
 			amount,
 			Default::default(),
 			None,
+			None,
 			additional_orders,
 			at,
 		)
@@ -1451,6 +1453,7 @@ where
 		amount: U256,
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
+		ccm_data: Option<CcmData>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
@@ -1465,6 +1468,17 @@ where
 				}
 			})
 			.map_err(|s| ErrorObject::owned(ErrorCode::InvalidParams.code(), s, None::<()>))?;
+
+		if let Some(CcmData { message_length, .. }) = ccm_data {
+			if message_length > MAX_CCM_MSG_LENGTH {
+				return Err(CfApiError::ErrorObject(ErrorObject::owned(
+					ErrorCode::InvalidParams.code(),
+					"CCM message size too large.",
+					None::<()>,
+				)));
+			}
+		}
+
 		let additional_orders = additional_orders.map(|additional_orders| {
 			additional_orders
 				.into_iter()
@@ -1507,6 +1521,7 @@ where
 						amount,
 						broker_commission,
 						dca_parameters,
+						ccm_data,
 						additional_orders,
 					)?
 					.map(|simulated_swap_info_v2| {

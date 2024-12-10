@@ -9,7 +9,7 @@ use evm::api::{all_batch, set_agg_key_with_agg_key};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
-use self::evm::{api::transfer_fallback, EvmCrypto};
+use self::evm::{api::transfer_fallback, Address, EvmCrypto};
 
 /// Chainflip api calls available on Arbitrum.
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
@@ -68,7 +68,7 @@ where
 		transfer_param: TransferAssetParams<Arbitrum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Arbitrum as Chain>::ChainAmount,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -214,7 +214,7 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 }
 
 impl<E> ArbitrumApi<E> {
-	pub fn gas_budget(&self) -> Option<<Arbitrum as Chain>::ChainAmount> {
-		map_over_api_variants!(self, call, call.gas_budget())
+	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+		map_over_api_variants!(self, call, call.ccm_transfer_data())
 	}
 }

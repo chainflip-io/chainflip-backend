@@ -192,7 +192,7 @@ where
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Ethereum as Chain>::ChainAmount,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -358,8 +358,8 @@ impl<E: ReplayProtectionProvider<Ethereum> + EvmEnvironmentProvider<Ethereum>> A
 }
 
 impl<E> EthereumApi<E> {
-	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
-		map_over_api_variants!(self, call, call.gas_budget())
+	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+		map_over_api_variants!(self, call, call.ccm_transfer_data())
 	}
 }
 
