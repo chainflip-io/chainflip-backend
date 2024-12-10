@@ -61,6 +61,6 @@ jobs:
           aws s3 sync ./artifacts/ s3://artifacts.chainflip.io/${{ env.s3_prefix }}/
 
       - name: Upload runtime S3 (main Alias) 🚀
-        if: !inputs.is_release
+        if: inputs.is_release == false
         run: |
           aws s3 cp ./artifacts/ s3://artifacts.chainflip.io/main/ --recursive
