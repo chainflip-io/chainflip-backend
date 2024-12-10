@@ -10,7 +10,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
-	CcmChannelMetadata, Chain, VaultSwapExtraParameters, RefundParameters,
+	CcmChannelMetadata, Chain, VaultSwapExtraParameters,
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
@@ -1865,8 +1865,18 @@ where
 					destination_asset,
 					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
 					broker_commission,
-					extra_parameters,
-					channel_metadata
+					extra_parameters
+						.try_map_address(|a| {
+							a.try_parse_to_encoded_address(source_asset.into())
+								.map_err(|_| "Cannot convert decode address".into())
+						})
+						.map_err(DispatchErrorWithMessage::Other)?
+						.try_map_numbers(|n| {
+							u128::try_from(n)
+								.map_err(|_| "Cannot convert number input into u128".into())
+						})
+						.map_err(DispatchErrorWithMessage::Other)?,
+					channel_metadata,
 					boost_fee.unwrap_or_default(),
 					affiliate_fees.unwrap_or_default(),
 					dca_parameters,

@@ -1,4 +1,5 @@
 use crate::evm::retry_rpc::EvmRetryRpcApi;
+use codec::Decode;
 use ethers::types::Bloom;
 use sp_core::H256;
 use std::collections::HashMap;
@@ -15,9 +16,10 @@ use futures_core::Future;
 use anyhow::{anyhow, Result};
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
+	cf_parameters::*,
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain, cf_parameters::*,
+	CcmChannelMetadata, CcmDepositMetadata, Chain,
 };
 use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
 use ethers::prelude::*;

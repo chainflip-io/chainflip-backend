@@ -858,10 +858,7 @@ pub mod swap_endpoints {
 
 	impl From<crate::CcmChannelMetadata> for types::CcmParams {
 		fn from(ccm: crate::CcmChannelMetadata) -> Self {
-			types::CcmParams {
-				message: ccm.message.to_vec(),
-				gas_amount: ccm.gas_budget as u64,
-			}
+			types::CcmParams { message: ccm.message.to_vec(), gas_amount: ccm.gas_budget as u64 }
 		}
 	}
 

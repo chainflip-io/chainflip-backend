@@ -1,9 +1,7 @@
 use cf_chains::{RefundParameters, VaultSwapExtraParameters};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
-	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
-	try_parse_number_or_hex,
 };
 use chainflip_api::{
 	self,
@@ -11,13 +9,13 @@ use chainflip_api::{
 		state_chain_runtime::runtime_apis::{
 			ChainAccounts, TransactionScreeningEvents, VaultSwapDetails,
 		},
-		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber,
-		CcmChannelMetadata, DcaParameters,
+		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
+		DcaParameters,
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, ChannelId, DepositMonitorApi,
-	OperatorApi, SignedExtrinsicApi, StateChainApi, SwapDepositAddress,
-	TransactionInId, WithdrawFeesDetail,
+	OperatorApi, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
+	WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -111,11 +109,11 @@ pub trait Rpc {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
+		extra_parameters: VaultSwapExtraParameters,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
-		extra_parameters: Option<VaultSwapExtraParameters>,
 	) -> RpcResult<VaultSwapDetails<AddressString>>;
 
 	#[method(name = "mark_transaction_for_rejection", aliases = ["broker_MarkTransactionForRejection"])]

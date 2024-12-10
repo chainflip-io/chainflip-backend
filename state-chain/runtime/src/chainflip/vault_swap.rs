@@ -1,5 +1,5 @@
 use crate::{
-	chainflip::SolEnvironment,
+	chainflip::{AddressConverter, ChainAddressConverter, SolEnvironment},
 	runtime_apis::{DispatchErrorWithMessage, VaultSwapDetails},
 	AccountId, BitcoinThresholdSigner, BlockNumber, Environment, EpochKey, Runtime, Swapping,
 };
@@ -9,7 +9,7 @@ use cf_chains::{
 	btc::{
 		deposit_address::DepositAddress,
 		vault_swap_encoding::{
-			encode_swap_params_in_nulldata_utxo, SharedCfParameters, UtxoEncodedData,
+			encode_swap_params_in_nulldata_payload, SharedCfParameters, UtxoEncodedData,
 			MAX_AFFILIATES as BTC_MAX_AFFILIATES,
 		},
 	},
@@ -17,33 +17,42 @@ use cf_chains::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
 		DecodedCcmAdditionalData,
 	},
-	sol::api::SolanaEnvironment,
-	CcmChannelMetadata, VaultSwapExtraParameters, ChannelRefundParameters
+	sol::{
+		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder, SolAmount, SolPubkey,
+	},
+	CcmChannelMetadata, VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
-	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, DcaParameters, SWAP_DELAY_BLOCKS,
+	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, DcaParameters, MAX_AFFILIATES,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_traits::{AffiliateRegistry, KeyProvider};
 
-use frame_system::Account;
+use frame_support::pallet_prelude::{ConstU32, Get};
 use scale_info::prelude::string::String;
-use sp_std::{vec, vec::Vec};
 use sp_runtime::BoundedVec;
+use sp_std::{vec, vec::Vec};
 
-fn to_affiliate_and_fees<MaxAffiliates: Get<U32>>(affiliates: Affiliates<AccountId>) -> Result<BoundedVec<AffiliateAndFee, MaxAffiliates>, DispatchErrorWithMessage> { 
-	affiliates.into_iter()
+fn to_affiliate_and_fees<MaxAffiliates: Get<u32>>(
+	broker_id: AccountId,
+	affiliates: Affiliates<AccountId>,
+) -> Result<BoundedVec<AffiliateAndFee, MaxAffiliates>, DispatchErrorWithMessage> {
+	let affiliates_and_fees = affiliates
+		.into_iter()
 		.map(|beneficiary| {
 			Result::<AffiliateAndFee, DispatchErrorWithMessage>::Ok(AffiliateAndFee {
 				affiliate: Swapping::get_short_id(&broker_id, &beneficiary.account)
 					.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
-				fee: beneficiary.bps.try_into().map_err(|_| {
-					pallet_cf_swapping::Error::<Runtime>::AffiliateFeeTooHigh
-				})?,
+				fee: beneficiary
+					.bps
+					.try_into()
+					.map_err(|_| pallet_cf_swapping::Error::<Runtime>::AffiliateFeeTooHigh)?,
 			})
 		})
-		.collect::<Result<Vec<AffiliateAndFee>, _>>()?
-		.try_into()
-		.map_err(|_| pallet_cf_swapping::Error::<Runtime>::TooManyAffiliates)
+		.collect::<Result<Vec<AffiliateAndFee>, _>>()?;
+
+	<BoundedVec<AffiliateAndFee, MaxAffiliates>>::try_from(affiliates_and_fees)
+		.map_err(|_| DispatchErrorWithMessage::Other("Too many affiliates provided".into()))
 }
 
 pub fn bitcoin_vault_swap(
@@ -86,7 +95,10 @@ pub fn bitcoin_vault_swap(
 			broker_fee: broker_commission
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
-			affiliates: to_affiliate_and_fees::<ConstU32<BTC_MAX_AFFILIATES>>(affiliate_fees)?,
+			affiliates: to_affiliate_and_fees::<ConstU32<BTC_MAX_AFFILIATES>>(
+				broker_id,
+				affiliate_fees,
+			)?,
 		},
 	};
 
@@ -103,7 +115,7 @@ pub fn bitcoin_vault_swap(
 	.to_address(&Environment::network_environment().into());
 
 	Ok(VaultSwapDetails::Bitcoin {
-		nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw(),
+		nulldata_payload: encode_swap_params_in_nulldata_payload(params),
 		deposit_address,
 	})
 }
@@ -114,19 +126,16 @@ pub fn solana_vault_swap(
 	destination_asset: Asset,
 	destination_address: EncodedAddress,
 	broker_commission: BasisPoints,
-	min_output_amount: AssetAmount,
-	retry_duration: BlockNumber,
-	refund_parameters: ChannelRefundParameters,
+	extra_parameters: VaultSwapExtraParametersEncoded,
+	channel_metadata: Option<CcmChannelMetadata>,
 	boost_fee: BasisPoints,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
-	extra_parameters: Option<VaultSwapExtraParameters>,
-	ccm: Option<CcmChannelMetadata>,
 ) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
 	// Ensure CCM message is valid
-	if let Some(ccm) = ccm {
+	if let Some(ccm) = channel_metadata.as_ref() {
 		if let DecodedCcmAdditionalData::Solana(ccm_accounts) =
-			CcmValidityChecker::check_and_decode(&ccm, destination_asset)
+			CcmValidityChecker::check_and_decode(ccm, destination_asset)
 				.map_err(|e| DispatchErrorWithMessage::Other(e.into()))?
 		{
 			// Ensure the CCM parameters do not contain blacklisted accounts.
@@ -154,9 +163,61 @@ pub fn solana_vault_swap(
 		}?;
 	}
 
-	match source_asset {
-		Asset::Sol => todo!(),
-		Asset::SolUsdc => todo!(),
-		_ => unreachable!("This function will never be called for Non-Solana assets."),
-	}
+	let processed_affiliate_fees =
+		to_affiliate_and_fees::<ConstU32<MAX_AFFILIATES>>(broker_id.clone(), affiliate_fees)?;
+
+	Ok(VaultSwapDetails::Solana {
+		instruction: match (source_asset, extra_parameters) {
+			(
+				Asset::Sol,
+				VaultSwapExtraParametersEncoded::Sol {
+					from,
+					event_data_account,
+					input_amount,
+					refund_parameters,
+				},
+			) => SolanaInstructionBuilder::<SolEnvironment>::x_swap_native(
+				destination_asset,
+				destination_address,
+				broker_id,
+				broker_commission,
+				refund_parameters.try_map_address(|addr| {
+					ChainAddressConverter::try_from_encoded_address(addr)
+						.map_err(|_| "Invalid refund address".into())
+				})?,
+				boost_fee,
+				processed_affiliate_fees,
+				dca_parameters,
+				SolPubkey::try_from(from).map_err(|_| {
+					DispatchErrorWithMessage::Other("Invalid Solana Address: from".into())
+				})?,
+				SolPubkey::try_from(event_data_account).map_err(|_| {
+					DispatchErrorWithMessage::Other(
+						"Invalid Solana Address: event_data_account".into(),
+					)
+				})?,
+				SolAmount::try_from(input_amount).unwrap_or(SolAmount::MAX),
+				channel_metadata,
+			)
+			.map_err(|e| {
+				log::info!("Failed to build Solana Vault Swap instruction. Error: {:?}", e);
+				DispatchErrorWithMessage::Other(
+					"Failed to build Solana Vault Swap instruction. See logs for the error.".into(),
+				)
+			}),
+			// (
+			// 	Asset::SolUsdc,
+			// 	VaultSwapExtraParametersEncoded::SolUsdc {
+			// 		from,
+			// 		from_token_account,
+			// 		event_data_account,
+			// 		input_amount,
+			// 		refund_parameters,
+			// 	},
+			// ) => todo!(),
+			_ => Err(DispatchErrorWithMessage::Other(
+				"Extra parameters provided do not match the input asset".into(),
+			)),
+		}?,
+	})
 }

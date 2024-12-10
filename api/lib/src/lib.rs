@@ -2,7 +2,7 @@ use std::{fmt, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
-pub use cf_chains::address::AddressString;
+pub use cf_chains::{address::AddressString, RefundParameters};
 use cf_chains::{
 	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
 	ChannelRefundParametersGeneric, ForeignChain,

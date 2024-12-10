@@ -19,9 +19,9 @@ use super::{Chain, ChainCrypto};
 
 pub mod api;
 pub mod benchmarking;
+pub mod instruction_builder;
 pub mod sol_tx_core;
 pub mod transaction_builder;
-pub mod instruction_builder;
 
 pub use crate::assets::sol::Asset as SolAsset;
 use crate::benchmarking_value::BenchmarkValue;

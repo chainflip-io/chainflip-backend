@@ -50,7 +50,7 @@ use cf_chains::{
 	evm::EvmCrypto,
 	sol::{SolAddress, SolanaCrypto},
 	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
-	TransactionBuilder, VaultSwapExtraParameters, ChannelRefundParameters
+	TransactionBuilder, VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -2101,14 +2101,13 @@ impl_runtime_apis! {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
-			extra_parameters: VaultSwapExtraParameters,
+			extra_parameters: VaultSwapExtraParametersEncoded,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
 			// Validate params
-			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
 			}
@@ -2124,29 +2123,37 @@ impl_runtime_apis! {
 
 			// Encode swap
 			match ForeignChain::from(source_asset) {
-				ForeignChain::Bitcoin => crate::chainflip::vault_swap::bitcoin_vault_swap(
-					broker_id,
-					destination_asset,
-					destination_address,
-					broker_commission,
-					refund_parameters.min_output_amount(),
-					refund_parameters.retry_duration,
-					boost_fee,
-					affiliate_fees,
-					dca_parameters,
-				),
+				ForeignChain::Bitcoin =>
+					if let VaultSwapExtraParametersEncoded::Btc{
+						min_output_amount,
+						retry_duration,
+					} = extra_parameters {
+						pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
+						crate::chainflip::vault_swap::bitcoin_vault_swap(
+							broker_id,
+							destination_asset,
+							destination_address,
+							broker_commission,
+							min_output_amount,
+							retry_duration,
+							boost_fee,
+							affiliate_fees,
+							dca_parameters,
+						)
+				} else {
+					Err(DispatchErrorWithMessage::Other("Extra parameter is not valid for Btc vault swap.".into()))
+				},
 				ForeignChain::Solana => crate::chainflip::vault_swap::solana_vault_swap(
 					broker_id,
 					source_asset,
 					destination_asset,
 					destination_address,
 					broker_commission,
-					refund_parameters,
+					extra_parameters,
+					channel_metadata,
 					boost_fee,
 					affiliate_fees,
 					dca_parameters,
-					extra_parameters,
-					ccm,
 				),
 				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
 			}
