@@ -1658,10 +1658,10 @@ impl_runtime_apis! {
 				}
 			}
 
-			let (amount_to_swap, ingress_fee) = if exclude_ingress_fees {
-				(input_amount, 0u128)
-			} else {
+			let (amount_to_swap, ingress_fee) = if !exclude_ingress_fees {
 				remove_fees(IngressOrEgress::Ingress, input_asset, input_amount)
+			} else {
+				(input_amount, 0u128)
 			};
 
 
