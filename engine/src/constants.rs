@@ -49,6 +49,12 @@ pub const SOL_HTTP_ENDPOINT: &str = "SOL__RPC__HTTP_ENDPOINT";
 
 pub const SOL_BACKUP_HTTP_ENDPOINT: &str = "SOL__BACKUP_RPC__HTTP_ENDPOINT";
 
+pub const HUB_WS_ENDPOINT: &str = "HUB__RPC__WS_ENDPOINT";
+pub const HUB_HTTP_ENDPOINT: &str = "HUB__RPC__HTTP_ENDPOINT";
+
+pub const HUB_BACKUP_WS_ENDPOINT: &str = "HUB__BACKUP_RPC__WS_ENDPOINT";
+pub const HUB_BACKUP_HTTP_ENDPOINT: &str = "HUB__BACKUP_RPC__HTTP_ENDPOINT";
+
 /// IP Address and port on which we listen for incoming p2p connections
 pub const NODE_P2P_IP_ADDRESS: &str = "NODE_P2P__IP_ADDRESS";
 pub const NODE_P2P_PORT: &str = "NODE_P2P__PORT";

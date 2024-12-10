@@ -3,7 +3,7 @@ import { ExecutableTest } from '../shared/executable_test';
 import { SwapParams } from '../shared/perform_swap';
 import { newCcmMetadata, testSwap, testVaultSwap } from '../shared/swapping';
 import { btcAddressTypes } from '../shared/new_btc_address';
-import { ccmSupportedChains, chainFromAsset, VaultSwapParams } from '../shared/utils';
+import { ccmSupportedChains, chainFromAsset, sleep, VaultSwapParams } from '../shared/utils';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
@@ -41,10 +41,19 @@ async function main() {
     }
   }
 
+  function getRandomInt(min: number, max: number) {
+    const minCeiled = Math.ceil(min);
+    const maxFloored = Math.floor(max);
+    return Math.floor(Math.random() * (maxFloored - minCeiled) + minCeiled); // The maximum is exclusive and the minimum is inclusive
+  }
+
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets)
       .filter((destAsset) => sourceAsset !== destAsset)
-      .forEach((destAsset) => {
+      .forEach(async (destAsset) => {
+        // Note: This improves the test running time from ~230s to ~90s, probably because RPCs aren't overloaded.
+        await sleep(getRandomInt(0, 5000));
+
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 

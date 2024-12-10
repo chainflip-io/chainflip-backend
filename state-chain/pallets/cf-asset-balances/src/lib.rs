@@ -235,7 +235,7 @@ impl<T: Config> Pallet<T> {
 					0
 				},
 			},
-			ForeignChain::Polkadot => match owner {
+			ForeignChain::Polkadot | ForeignChain::Assethub => match owner {
 				ExternalOwner::AggKey => {
 					if let Some(active_key) = T::PolkadotKeyProvider::active_epoch_key() {
 						let refund_amount = core::cmp::min(*amount_owed, *available);
@@ -346,7 +346,7 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 		Liabilities::<T>::mutate(asset, |fees| {
 			fees.entry(match ForeignChain::from(asset) {
 				ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
-				ForeignChain::Polkadot => ExternalOwner::AggKey,
+				ForeignChain::Polkadot | ForeignChain::Assethub => ExternalOwner::AggKey,
 				ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 			})
 			.and_modify(|fee| fee.saturating_accrue(amount))
