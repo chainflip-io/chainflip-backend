@@ -4,6 +4,7 @@ use bitcoin::hashes::Hash;
 use cf_chains::{
 	btc::{self, BlockNumber},
 	witness_period::BlockWitnessRange,
+	Bitcoin,
 };
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
@@ -147,6 +148,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 
 			// We should have a chain of hashees.
 			if headers.iter().zip(headers.iter().skip(1)).all(|(a, b)| a.hash == b.parent_hash) {
+				tracing::info!("Submitting vote with {} headers", headers.len());
 				Ok(headers)
 			} else {
 				Err(anyhow::anyhow!("Headers do not form a chain"))
