@@ -1,4 +1,4 @@
-use cf_chains::{CcmAdditionalData, ChannelRefundParameters};
+use crate::{CcmAdditionalData, ChannelRefundParameters};
 use cf_primitives::{AccountId, AffiliateAndFee, Beneficiary, DcaParameters, MAX_AFFILIATES};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -31,7 +31,7 @@ pub struct VaultSwapParameters {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use cf_chains::{ChannelRefundParameters, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH};
+	use crate::{ChannelRefundParameters, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH};
 
 	const MAX_VAULT_SWAP_PARAMETERS_LENGTH: u32 = 1_000;
 	const MAX_CF_PARAM_LENGTH: u32 =
