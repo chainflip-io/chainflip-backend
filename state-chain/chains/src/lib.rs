@@ -20,9 +20,7 @@ use address::{
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
 use cf_amm_math::Price;
-use cf_primitives::{
-	Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId,
-};
+use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -745,14 +743,6 @@ impl BenchmarkValue for CcmChannelMetadata {
 			ccm_additional_data: BenchmarkValue::benchmark_value(),
 		}
 	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct CcmSwapAmounts {
-	pub principal_swap_amount: AssetAmount,
-	pub gas_budget: GasAmount,
-	// if the gas asset is different to the input asset, it will require a swap
-	pub other_gas_asset: Option<Asset>,
 }
 
 #[derive(
