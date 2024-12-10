@@ -87,9 +87,10 @@ pub trait MonitoringApi {
 	) -> RpcResult<Vec<RpcAccountInfoV2>>;
 }
 
-impl<C, B> MonitoringApiServer for CustomRpc<C, B>
+impl<C, B, BE> MonitoringApiServer for CustomRpc<C, B, BE>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	BE: Send + Sync + 'static,
 	C: sp_api::ProvideRuntimeApi<B>
 		+ Send
 		+ Sync
