@@ -12,5 +12,5 @@ pub type PalletMigration<T> = (
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<17, Pallet<T>>,
+	PlaceholderMigration<7, Pallet<T>>,
 );
