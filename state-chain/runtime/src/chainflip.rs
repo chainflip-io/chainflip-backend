@@ -341,12 +341,12 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	) -> <Solana as Chain>::Transaction {
 		SolanaTransactionData {
 			serialized_transaction: signed_call.chain_encoded(),
-			skip_preflight: match signed_call.call_type {
-				// skip_preflight when broadcasting ccm transfers to consume the nonce even if the
-				// transaction reverts
-				SolanaTransactionType::CcmTransfer { fallback: _ } => true,
-				_ => false,
-			},
+			// skip_preflight when broadcasting ccm transfers to consume the nonce even if the
+			// transaction reverts
+			skip_preflight: matches!(
+				signed_call.call_type,
+				SolanaTransactionType::CcmTransfer { .. }
+			),
 		}
 	}
 
