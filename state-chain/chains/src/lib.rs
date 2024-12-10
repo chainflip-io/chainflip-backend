@@ -71,7 +71,41 @@ pub mod mocks;
 pub mod witness_period {
 	use core::ops::{Rem, Sub};
 
+	use sp_std::ops::RangeInclusive;
+
+	use codec::{Decode, Encode};
 	use frame_support::sp_runtime::traits::{One, Saturating};
+	use scale_info::TypeInfo;
+	use serde::{Deserialize, Serialize};
+
+	// So we can store a range-like object in storage, since this has encode and decode.
+	#[derive(
+		Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+	)]
+	pub struct BlockWitnessRange<I> {
+		start: I,
+		end: I,
+	}
+
+	impl<I: Copy> From<RangeInclusive<I>> for BlockWitnessRange<I> {
+		fn from(range: RangeInclusive<I>) -> Self {
+			Self { start: *range.start(), end: *range.end() }
+		}
+	}
+
+	impl<I> BlockWitnessRange<I> {
+		pub fn into_range_inclusive(range: BlockWitnessRange<I>) -> RangeInclusive<I> {
+			range.start..=range.end
+		}
+
+		pub fn start(&self) -> &I {
+			&self.start
+		}
+
+		pub fn end(&self) -> &I {
+			&self.end
+		}
+	}
 
 	fn block_witness_floor<
 		I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One,

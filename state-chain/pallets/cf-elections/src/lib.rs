@@ -102,6 +102,7 @@
 //! or reconstructed from the others is also configured via that trait.
 
 #![feature(try_find)]
+#![feature(step_trait)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
@@ -1613,6 +1614,7 @@ pub mod pallet {
 								}
 							}
 
+							log::info!("calling on_finalize for ElectionSystemRunner");
 							T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
 
 							Ok(())
