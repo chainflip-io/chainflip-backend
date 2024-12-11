@@ -56,14 +56,14 @@ use state_chain_runtime::{
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Block, Hash, NetworkFee, SolanaInstance,
 };
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::{BTreeMap, BTreeSet, HashMap},
 	marker::PhantomData,
 	sync::Arc,
 };
@@ -779,6 +779,7 @@ pub trait CustomApi {
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
 		ccm_data: Option<CcmData>,
+		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
@@ -1440,6 +1441,7 @@ where
 			Default::default(),
 			None,
 			None,
+			None,
 			additional_orders,
 			at,
 		)
@@ -1454,6 +1456,7 @@ where
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
 		ccm_data: Option<CcmData>,
+		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
@@ -1522,6 +1525,7 @@ where
 						broker_commission,
 						dca_parameters,
 						ccm_data,
+						exclude_fees.unwrap_or_default(),
 						additional_orders,
 					)?
 					.map(|simulated_swap_info_v2| {

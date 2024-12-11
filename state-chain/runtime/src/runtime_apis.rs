@@ -169,6 +169,13 @@ pub struct CcmData {
 	pub message_length: u32,
 }
 
+#[derive(Encode, Decode, Eq, PartialEq, Ord, PartialOrd, TypeInfo, Serialize, Deserialize)]
+pub enum FeeTypes {
+	Network,
+	Ingress,
+	Egress,
+}
+
 /// Struct that represents the estimated output of a Swap.
 #[obake::versioned]
 #[obake(version("1.0.0"))]
@@ -340,6 +347,7 @@ decl_runtime_apis!(
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			ccm_data: Option<CcmData>,
+			exclude_fees: BTreeSet<FeeTypes>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(
