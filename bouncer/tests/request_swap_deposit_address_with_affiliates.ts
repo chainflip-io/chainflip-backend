@@ -20,7 +20,7 @@ type NewSwapRequest = Parameters<(typeof broker)['buildExtrinsicPayload']>[0];
 const numberSchema = z.string().transform((n) => Number(n.replace(/,/g, '')));
 const bigintSchema = z.string().transform((n) => BigInt(n.replace(/,/g, '')));
 
-const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol']);
+const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol', 'Hub']);
 
 const addressTransforms = {
   Btc: (address: string) => address,
@@ -29,6 +29,8 @@ const addressTransforms = {
   Dot: (address: string) =>
     isHex(address) ? ss58.encode({ data: address, ss58Format: 0 }) : address,
   Sol: (address: string) => (isHex(address) ? base58.encode(hexToBytes(address)) : address),
+  Hub: (address: string) =>
+    isHex(address) ? ss58.encode({ data: address, ss58Format: 0 }) : address,
 } as const;
 
 const eventSchema = z
@@ -125,6 +127,7 @@ const requestSwapDepositAddress = async (
   }
 
   if (params.affiliates) {
+    console.log("trying toSorted: " + JSON.stringify(params.affiliates) );
     assert.deepStrictEqual(
       params.affiliates
         .toSorted((a, b) => a.account.localeCompare(b.account))
@@ -157,6 +160,7 @@ const addresses = {
   Arbitrum: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
   Polkadot: ['1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo'],
   Solana: ['3yKDHJgzS2GbZB9qruoadRYtq8597HZifnRju7fHpdRC'],
+  Assethub: ['1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo'],
 } as const;
 
 const entries = Object.entries as <T>(o: T) => [keyof T, T[keyof T]][];
