@@ -11,9 +11,7 @@ use codec::{Decode, Encode};
 
 pub mod old {
 	use crate::BoostStatus;
-	use cf_chains::{
-		CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ForeignChainAddress,
-	};
+	use cf_chains::{ChannelRefundParameters, DepositChannel, ForeignChainAddress};
 	use cf_primitives::Beneficiaries;
 	use frame_support::{pallet_prelude::OptionQuery, Twox64Concat};
 
@@ -30,7 +28,13 @@ pub mod old {
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>>,
 	}
 
-	/// Determines the action to take when a deposit is made to a channel.
+	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+	pub struct CcmChannelMetadata {
+		pub message: CcmMessage,
+		pub gas_budget: AssetAmount,
+		pub ccm_additional_data: CcmAdditionalData,
+	}
+
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub enum ChannelAction<AccountId> {
 		Swap {
@@ -103,7 +107,11 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for DepositChannelDetai
 						destination_asset,
 						destination_address,
 						broker_fees,
-						channel_metadata: Some(channel_metadata),
+						channel_metadata: Some(crate::CcmChannelMetadata {
+							message: channel_metadata.message,
+							gas_budget: channel_metadata.gas_budget,
+							ccm_additional_data: channel_metadata.ccm_additional_data,
+						}),
 						refund_params,
 						dca_params,
 					},
