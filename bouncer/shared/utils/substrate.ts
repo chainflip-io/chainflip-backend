@@ -54,7 +54,7 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
   }) as F;
 };
 
-type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
+export type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
 
 // It is important to cache WS connections because nodes seem to have a
 // limit on how many can be opened at the same time (from the same IP presumably)
@@ -98,9 +98,14 @@ export const getPolkadotApi = getCachedSubstrateApi(
   process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9947',
 );
 
+export const getAssethubApi = getCachedSubstrateApi(
+  process.env.ASSETHUB_ENDPOINT ?? 'ws://127.0.0.1:9955',
+);
+
 const apiMap = {
   chainflip: getChainflipApi,
   polkadot: getPolkadotApi,
+  assethub: getAssethubApi,
 } as const;
 
 type SubstrateChain = keyof typeof apiMap;
@@ -224,9 +229,11 @@ class EventCache {
 
 const chainflipEventCache = new EventCache(100, 'chainflip');
 const polkadotEventCache = new EventCache(100, 'polkadot');
+const assethubEventCache = new EventCache(100, 'assethub');
 const eventCacheMap = {
   chainflip: chainflipEventCache,
   polkadot: polkadotEventCache,
+  assethub: assethubEventCache,
 } as const;
 
 async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortSignal) {

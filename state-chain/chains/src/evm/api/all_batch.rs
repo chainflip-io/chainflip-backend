@@ -210,14 +210,17 @@ mod test_all_batch {
 				FetchAssetParams {
 					deposit_fetch_id: EvmFetchId::Fetch(eth::Address::from_low_u64_be(CHANNEL_ID)),
 					asset: assets::eth::Asset::Usdc,
+					amount: 44,
 				},
 				FetchAssetParams {
 					deposit_fetch_id: EvmFetchId::DeployAndFetch(CHANNEL_ID),
 					asset: assets::eth::Asset::Eth,
+					amount: 55,
 				},
 				FetchAssetParams {
 					deposit_fetch_id: EvmFetchId::NotRequired,
 					asset: assets::eth::Asset::Eth,
+					amount: 66,
 				},
 			],
 			vec![],

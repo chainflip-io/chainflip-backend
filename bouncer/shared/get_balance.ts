@@ -5,6 +5,7 @@ import { getEvmNativeBalance } from './get_evm_native_balance';
 import { getErc20Balance } from './get_erc20_balance';
 import { getSolBalance } from './get_sol_balance';
 import { getSolUsdcBalance } from './get_solusdc_balance';
+import { getHubAssetBalance, getHubDotBalance } from './get_hub_balance';
 
 export async function getBalance(asset: Asset, address: string): Promise<string> {
   // eslint-disable-next-line no-param-reassign
@@ -44,6 +45,13 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
       break;
     case 'SolUsdc':
       result = await getSolUsdcBalance(address);
+      break;
+    case 'HubDot':
+      result = await getHubDotBalance(address);
+      break;
+    case 'HubUsdc':
+    case 'HubUsdt':
+      result = await getHubAssetBalance(asset, address);
       break;
     default:
       throw new Error(`Unexpected asset: ${asset}`);
