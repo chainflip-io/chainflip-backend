@@ -1366,7 +1366,6 @@ type MigrationsForV1_8 = (
 		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
 		DbWeight,
 	>,
-
 	VersionedMigration<
 		10,
 		11,
