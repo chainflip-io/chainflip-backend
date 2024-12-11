@@ -161,7 +161,7 @@ pub struct LiquidityProviderInfo {
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
-	pub deposit_address: Option<String>,
+	pub btc_vault_deposit_address: Option<String>,
 }
 
 /// Struct that represents the estimated output of a Swap.

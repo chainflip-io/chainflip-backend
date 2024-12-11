@@ -1866,14 +1866,14 @@ impl_runtime_apis! {
 				let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key().expect("We should always have a key for the current epoch.");
 				BrokerInfo {
 					earned_fees,
-					deposit_address: if let Ok(salt) = channel_id.try_into() {
-						let deposit_address = DepositAddress::new(
+					btc_vault_deposit_address: if let Ok(salt) = channel_id.try_into() {
+						let btc_vault_deposit_address = DepositAddress::new(
 							key.current,
 							salt,
 						)
 						.script_pubkey()
 						.to_address(&Environment::network_environment().into());
-						Some(deposit_address)
+						Some(btc_vault_deposit_address)
 					} else {
 						log::error!("Private channel id out of bounds.");
 						None
@@ -1882,7 +1882,7 @@ impl_runtime_apis! {
 			} else {
 				BrokerInfo {
 					earned_fees,
-					deposit_address: None
+					btc_vault_deposit_address: None
 				}
 			}
 		}
