@@ -79,7 +79,7 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::{BatchExecutionError, FeeType, Swap};
+use pallet_cf_swapping::{BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap};
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
@@ -1859,19 +1859,12 @@ impl_runtime_apis! {
 		fn cf_broker_info(
 			account_id: AccountId,
 		) -> BrokerInfo {
-			let earned_fees: Vec<_> = Asset::all().map(|asset|
-				(asset, AssetBalances::get_balance(&account_id, asset))
-			).collect();
-			if let Some(channel_id) = pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&account_id) {
-				BrokerInfo {
-					earned_fees,
-					btc_vault_deposit_address: Some(derive_btc_vault_deposit_address(channel_id))
-				}
-			} else {
-				BrokerInfo {
-					earned_fees,
-					btc_vault_deposit_address: None
-				}
+			BrokerInfo {
+				earned_fees: Asset::all().map(|asset|
+					(asset, AssetBalances::get_balance(&account_id, asset))
+				).collect(),
+				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
+					.map(derive_btc_vault_deposit_address),
 			}
 		}
 
