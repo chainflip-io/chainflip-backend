@@ -169,12 +169,11 @@ pub struct CcmData {
 	pub message_length: u32,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+#[derive(Encode, Decode, Eq, PartialEq, Ord, PartialOrd, TypeInfo, Serialize, Deserialize)]
 pub enum FeeTypes {
 	Network,
 	Ingress,
 	Egress,
-	Broker,
 }
 
 /// Struct that represents the estimated output of a Swap.
@@ -348,7 +347,7 @@ decl_runtime_apis!(
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			ccm_data: Option<CcmData>,
-			exclude_fees: Option<Vec<FeeTypes>>,
+			exclude_fees: BTreeSet<FeeTypes>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(

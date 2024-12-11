@@ -63,7 +63,7 @@ use state_chain_runtime::{
 	Block, Hash, NetworkFee, SolanaInstance,
 };
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::{BTreeMap, BTreeSet, HashMap},
 	marker::PhantomData,
 	sync::Arc,
 };
@@ -779,7 +779,7 @@ pub trait CustomApi {
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
 		ccm_data: Option<CcmData>,
-		exclude_fees: Option<Vec<FeeTypes>>,
+		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
@@ -1456,7 +1456,7 @@ where
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
 		ccm_data: Option<CcmData>,
-		exclude_fees: Option<Vec<FeeTypes>>,
+		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
@@ -1525,7 +1525,7 @@ where
 						broker_commission,
 						dca_parameters,
 						ccm_data,
-						exclude_fees,
+						exclude_fees.unwrap_or_default(),
 						additional_orders,
 					)?
 					.map(|simulated_swap_info_v2| {

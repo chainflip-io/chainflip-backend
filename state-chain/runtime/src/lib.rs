@@ -88,7 +88,7 @@ use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 pub use frame_support::{
 	debug, parameter_types,
@@ -1563,7 +1563,7 @@ impl_runtime_apis! {
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			ccm_data: Option<CcmData>,
-			exclude_fees: Option<Vec<FeeTypes>>,
+			exclude_fees: BTreeSet<FeeTypes>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
@@ -1637,33 +1637,13 @@ impl_runtime_apis! {
 				}
 			}
 
-			let (mut exclude_ingress_fees, mut exclude_egress_fees, mut exclude_broker_fees, mut exclude_network_fees) = (false, false, false, false);
+			let include_fee = |fee_type: FeeTypes| !exclude_fees.contains(&fee_type);
 
-			if let Some(exclude_fees_vec) = exclude_fees.as_ref() {
-				for fee in exclude_fees_vec {
-					match fee {
-						FeeTypes::Ingress => {
-							exclude_ingress_fees = true;
-						},
-						FeeTypes::Egress => {
-							exclude_egress_fees = true;
-						},
-						FeeTypes::Broker => {
-							exclude_broker_fees = true;
-						},
-						FeeTypes::Network => {
-							exclude_network_fees = true;
-						},
-					}
-				}
-			}
-
-			let (amount_to_swap, ingress_fee) = if !exclude_ingress_fees {
+			let (amount_to_swap, ingress_fee) = if include_fee(FeeTypes::Ingress) {
 				remove_fees(IngressOrEgress::Ingress, input_asset, input_amount)
 			} else {
 				(input_amount, 0u128)
 			};
-
 
 			// Estimate swap result for a chunk, then extrapolate the result.
 			// If no DCA parameter is given, swap the entire amount with 1 chunk.
@@ -1672,11 +1652,11 @@ impl_runtime_apis! {
 
 			let mut fees_vec = vec![];
 
-			if !exclude_network_fees {
+			if include_fee(FeeTypes::Network) {
 				fees_vec.push(FeeType::NetworkFee);
 			}
 
-			if !exclude_broker_fees {
+			if broker_commission > 0 {
 				fees_vec.push(FeeType::BrokerFee(
 					vec![Beneficiary {
 						account: AccountId::new([0xbb; 32]),
@@ -1720,7 +1700,7 @@ impl_runtime_apis! {
 				)
 			};
 
-			let (output, egress_fee) = if !exclude_egress_fees {
+			let (output, egress_fee) = if include_fee(FeeTypes::Egress) {
 				let egress = match ccm_data {
 					Some(CcmData { gas_budget, message_length}) => {
 						IngressOrEgress::EgressCcm {
