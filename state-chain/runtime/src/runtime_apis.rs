@@ -318,13 +318,6 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 		) -> Result<PoolPriceV2, DispatchErrorWithMessage>;
-		#[changed_in(2)]
-		fn cf_pool_simulate_swap(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation!["1.0.0"], DispatchErrorWithMessage>;
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
