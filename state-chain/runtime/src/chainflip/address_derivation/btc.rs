@@ -1,5 +1,5 @@
 use super::AddressDerivation;
-use crate::BitcoinThresholdSigner;
+use crate::{BitcoinThresholdSigner, Environment, EpochKey, String};
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
 	btc::deposit_address::DepositAddress,
@@ -42,6 +42,20 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 
 		Ok((channel_state.script_pubkey(), channel_state))
 	}
+}
+
+/// Derives the BTC vault deposit address from the private channel id.
+/// Note: This function will **panic** if the private channel id is out of bounds so use it with
+/// caution...
+pub(crate) fn derive_btc_vault_deposit_address(private_channel_id: u64) -> String {
+	let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
+		.expect("We should always have a key for the current epoch.");
+	DepositAddress::new(
+		key.current,
+		private_channel_id.try_into().expect("Private channel id out of bounds."),
+	)
+	.script_pubkey()
+	.to_address(&Environment::network_environment().into())
 }
 
 #[test]
