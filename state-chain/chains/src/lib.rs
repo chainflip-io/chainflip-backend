@@ -97,8 +97,8 @@ pub mod witness_period {
 	}
 
 	impl<I> BlockWitnessRange<I> {
-		pub fn into_range_inclusive(range: BlockWitnessRange<I>) -> RangeInclusive<I> {
-			range.start..=range.end
+		pub fn into_range_inclusive(self) -> RangeInclusive<I> {
+			self.start..=self.end
 		}
 
 		pub fn start(&self) -> &I {
