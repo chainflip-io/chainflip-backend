@@ -183,7 +183,7 @@ fn order_fills_for_pool<'a>(
 		))
 }
 
-pub fn order_fills_from_block_updates(
+fn order_fills_from_block_updates(
 	previous_pools: &BTreeMap<AssetPair, Pool<Runtime>>,
 	pools: &BTreeMap<AssetPair, Pool<Runtime>>,
 	events: Vec<pallet_cf_pools::Event<Runtime>>,
