@@ -179,7 +179,7 @@ impl<
 
 		let last_seen_root = match chain_progress {
 			ChainProgress::WaitingForFirstConsensus => return Ok(()),
-			ChainProgress::Reorg(reorg_range) => {
+			ChainProgress::Reorg{ removed: reorg_range, added: new_range } => {
 				// Delete any elections that are ongoing for any blocks in the reorg range.
 				for (i, election_identifier) in election_identifiers.into_iter().enumerate() {
 					let election = ElectoralAccess::election_mut(election_identifier);
@@ -193,7 +193,7 @@ impl<
 
 				// TODO: Wrap with safe mode, no new elections.
 				for root in
-					reorg_range.clone().step_by(Into::<u64>::into(Chain::WITNESS_PERIOD) as usize)
+					new_range.clone().step_by(Into::<u64>::into(Chain::WITNESS_PERIOD) as usize)
 				{
 					log::info!("New election for root: {:?}", root);
 					ElectoralAccess::new_election(
@@ -212,7 +212,7 @@ impl<
 				// prevent double dispatches. By keeping the state, if we have a reorg we can check
 				// against the state in the process_block_data hook to ensure we don't double
 				// dispatch.
-				*reorg_range.end()
+				*new_range.end()
 			},
 			ChainProgress::None(last_block_root_seen) => *last_block_root_seen,
 			ChainProgress::Continuous(witness_range) => *witness_range.start(),
