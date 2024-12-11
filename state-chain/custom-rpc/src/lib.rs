@@ -898,6 +898,9 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
 	async fn cf_subscribe_lp_order_fills(&self);
 
+	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
+	async fn cf_subscribe_transaction_screening_events(&self);
+
 	#[method(name = "scheduled_swaps")]
 	fn cf_scheduled_swaps(
 		&self,
@@ -1667,6 +1670,20 @@ where
 			},
 		)
 		.await
+	}
+
+	async fn cf_subscribe_transaction_screening_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+	) {
+		self.new_subscription(
+			NotificationBehaviour::Finalized, /* only_finalized */
+			false,                            /* only_on_changes */
+			true,                             /* end_on_error */
+			pending_sink,
+			move |client, hash| Ok((*client.runtime_api()).cf_transaction_screening_events(hash)?),
+		)
+		.await;
 	}
 
 	async fn cf_subscribe_scheduled_swaps(
