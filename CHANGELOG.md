@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.5] - 2024-12-11
+
+### Fixes
+
+- Expose error detail when swap simulation RPC fails ([#5485](https://github.com/chainflip-io/chainflip-backend/issues/5485))
+
 ## [1.7.4] - 2024-12-09
 
 ### Fixes
