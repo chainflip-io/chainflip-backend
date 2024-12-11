@@ -19,13 +19,10 @@ pub mod old {
 
 	use super::*;
 	use cf_chains::{
-		evm::{
-			api::{EvmReplayProtection, SigData},
-			AggKey,
-		},
+		evm::api::EvmTransactionBuilder,
 		Chain,
 	};
-	use codec::{Decode, Encode, MaxEncodedLen};
+	use codec::{Decode, Encode};
 	use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 	use scale_info::TypeInfo;
 	use sp_core::RuntimeDebug;
@@ -37,13 +34,6 @@ pub mod old {
 		pub source_address: Vec<u8>,
 		pub gas_budget: <Ethereum as Chain>::ChainAmount,
 		pub message: Vec<u8>,
-	}
-
-	#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
-	pub struct EvmTransactionBuilder<C> {
-		pub signer_and_sig_data: Option<(AggKey, SigData)>,
-		pub replay_protection: EvmReplayProtection,
-		pub call: C,
 	}
 
 	#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
@@ -77,7 +67,7 @@ pub mod old {
 	}
 }
 
-fn evm_tx_builder_fn<C>(evm_tx_builder: old::EvmTransactionBuilder<C>) -> EvmTransactionBuilder<C> {
+fn evm_tx_builder_fn<C>(evm_tx_builder: EvmTransactionBuilder<C>) -> EvmTransactionBuilder<C> {
 	EvmTransactionBuilder {
 		signer_and_sig_data: evm_tx_builder.signer_and_sig_data,
 		replay_protection: evm_tx_builder.replay_protection,
@@ -86,7 +76,7 @@ fn evm_tx_builder_fn<C>(evm_tx_builder: old::EvmTransactionBuilder<C>) -> EvmTra
 }
 
 fn evm_tx_builder_execute_x_swap(
-	evm_tx_builder: old::EvmTransactionBuilder<old::ExecutexSwapAndCall>,
+	evm_tx_builder: EvmTransactionBuilder<old::ExecutexSwapAndCall>,
 	is_arbitrum: bool,
 ) -> EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall> {
 	EvmTransactionBuilder {
@@ -110,7 +100,7 @@ pub struct EthApiCallsGasMigration;
 
 impl UncheckedOnRuntimeUpgrade for EthApiCallsGasMigration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance1>::translate(
+		pallet_cf_broadcast::PendingApiCalls::<Runtime, EthereumInstance>::translate(
 			|_broadcast_id, old_apicall: old::EthereumApi<EvmEnvironment>| {
 				Some(match old_apicall {
 					old::EthereumApi::SetAggKeyWithAggKey(evm_tx_builder) =>
@@ -145,29 +135,21 @@ pub struct ArbApiCallsGasMigration;
 
 impl UncheckedOnRuntimeUpgrade for ArbApiCallsGasMigration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance1>::translate(
-			|_broadcast_id, old_apicall: old::EthereumApi<EvmEnvironment>| {
+		pallet_cf_broadcast::PendingApiCalls::<Runtime, ArbitrumInstance>::translate(
+			|_broadcast_id, old_apicall: old::ArbitrumApi<EvmEnvironment>| {
 				Some(match old_apicall {
-					old::EthereumApi::SetAggKeyWithAggKey(evm_tx_builder) =>
-						EthereumApi::SetAggKeyWithAggKey(evm_tx_builder_fn(evm_tx_builder)),
-					old::EthereumApi::RegisterRedemption(evm_tx_builder) =>
-						EthereumApi::RegisterRedemption(evm_tx_builder_fn(evm_tx_builder)),
-					old::EthereumApi::UpdateFlipSupply(evm_tx_builder) =>
-						EthereumApi::UpdateFlipSupply(evm_tx_builder_fn(evm_tx_builder)),
-					old::EthereumApi::SetGovKeyWithAggKey(evm_tx_builder) =>
-						EthereumApi::SetGovKeyWithAggKey(evm_tx_builder_fn(evm_tx_builder)),
-					old::EthereumApi::SetCommKeyWithAggKey(evm_tx_builder) =>
-						EthereumApi::SetCommKeyWithAggKey(evm_tx_builder_fn(evm_tx_builder)),
-					old::EthereumApi::AllBatch(evm_tx_builder) =>
-						EthereumApi::AllBatch(evm_tx_builder_fn(evm_tx_builder)),
-					old::EthereumApi::ExecutexSwapAndCall(evm_tx_builder) =>
-						EthereumApi::ExecutexSwapAndCall(evm_tx_builder_execute_x_swap(
+					old::ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder) =>
+						ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder_fn(evm_tx_builder)),
+					old::ArbitrumApi::AllBatch(evm_tx_builder) =>
+						ArbitrumApi::AllBatch(evm_tx_builder_fn(evm_tx_builder)),
+					old::ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder) =>
+						ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder_execute_x_swap(
 							evm_tx_builder,
 							true,
 						)),
-					old::EthereumApi::TransferFallback(evm_tx_builder) =>
-						EthereumApi::TransferFallback(evm_tx_builder_fn(evm_tx_builder)),
-					old::EthereumApi::_Phantom(..) => unreachable!(),
+					old::ArbitrumApi::TransferFallback(evm_tx_builder) =>
+						ArbitrumApi::TransferFallback(evm_tx_builder_fn(evm_tx_builder)),
+					old::ArbitrumApi::_Phantom(..) => unreachable!(),
 				})
 			},
 		);
