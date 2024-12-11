@@ -846,6 +846,7 @@ fn deposits_below_minimum_are_rejected() {
 					},
 				},
 				reason: DepositFailedReason::BelowMinimumDeposit,
+				block_height: Default::default(),
 			},
 		));
 

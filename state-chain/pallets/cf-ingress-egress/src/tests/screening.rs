@@ -145,6 +145,7 @@ fn process_marked_transaction_and_expect_refund() {
 					},
 				},
 				reason: DepositFailedReason::TransactionRejectedByBroker,
+				block_height: _,
 			})
 		);
 
@@ -252,6 +253,7 @@ fn reject_tx_if_marked_before_prewitness() {
 					},
 				},
 				reason: DepositFailedReason::TransactionRejectedByBroker,
+				block_height: _,
 			})
 		);
 	});
@@ -446,6 +448,7 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 					},
 				},
 				reason: DepositFailedReason::TransactionRejectedByBroker,
+				block_height: _,
 			})
 		);
 	});

@@ -751,6 +751,7 @@ pub mod pallet {
 			lifetime: TargetChainBlockNumber<T, I>,
 		},
 		DepositFailed {
+			block_height: TargetChainBlockNumber<T, I>,
 			reason: DepositFailedReason,
 			details: DepositFailedDetails<T, I>,
 		},
@@ -1861,6 +1862,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::process_channel_deposit_full_witness_inner(&deposit_witness, block_height)
 			.unwrap_or_else(|e| {
 				Self::deposit_event(Event::<T, I>::DepositFailed {
+					block_height,
 					reason: DepositFailedReason::DepositWitnessRejected(e),
 					details: DepositFailedDetails::DepositChannel { deposit_witness },
 				});
@@ -1920,6 +1922,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 			Err(reason) => {
 				Self::deposit_event(Event::<T, I>::DepositFailed {
+					block_height,
 					reason,
 					details: DepositFailedDetails::DepositChannel {
 						deposit_witness: DepositWitness {
@@ -2348,6 +2351,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let emit_deposit_failed_event = move |reason: DepositFailedReason| {
 			Self::deposit_event(Event::<T, I>::DepositFailed {
+				block_height,
 				reason,
 				details: DepositFailedDetails::Vault {
 					vault_witness: Box::new(vault_deposit_witness),
