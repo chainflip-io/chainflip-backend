@@ -600,7 +600,7 @@ pub mod pallet {
 
 	/// Scheduled cross chain messages for the Ethereum chain.
 	#[pallet::storage]
-	pub(crate) type ScheduledEgressCcm<T: Config<I>, I: 'static = ()> =
+	pub type ScheduledEgressCcm<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<CrossChainMessage<T::TargetChain>>, ValueQuery>;
 
 	/// Stores the list of assets that are not allowed to be egressed.

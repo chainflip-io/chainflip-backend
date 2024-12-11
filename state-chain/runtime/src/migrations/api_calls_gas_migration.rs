@@ -18,10 +18,7 @@ use sp_std::{vec, vec::Vec};
 pub mod old {
 
 	use super::*;
-	use cf_chains::{
-		evm::api::EvmTransactionBuilder,
-		Chain,
-	};
+	use cf_chains::{evm::api::EvmTransactionBuilder, Chain};
 	use codec::{Decode, Encode};
 	use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 	use scale_info::TypeInfo;

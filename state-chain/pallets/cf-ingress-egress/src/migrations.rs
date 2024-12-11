@@ -3,6 +3,7 @@ use frame_support::migrations::VersionedMigration;
 
 use crate::Pallet;
 pub mod deposit_channel_details_migration;
+pub mod scheduled_egress_ccm_migration;
 
 pub type PalletMigration<T, I> = (
 	VersionedMigration<
@@ -12,5 +13,12 @@ pub type PalletMigration<T, I> = (
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<17, Pallet<T, I>>,
+	VersionedMigration<
+		17,
+		18,
+		scheduled_egress_ccm_migration::ScheduledEgressCcmMigration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<18, Pallet<T, I>>,
 );
