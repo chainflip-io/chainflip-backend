@@ -64,6 +64,9 @@ sp-io = { workspace = true, default-features = true }
 sp-timestamp = { workspace = true, default-features = true }
 sp-inherents = { workspace = true, default-features = true }
 sp-keyring = { workspace = true, default-features = true }
+
+# FRAME dependencies
+frame-metadata-hash-extension = { workspace = true }
 frame-system = { workspace = true, default-features = true }
 pallet-transaction-payment = { workspace = true, default-features = true }
 
