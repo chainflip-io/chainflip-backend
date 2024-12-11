@@ -44,9 +44,11 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	}
 }
 
+/// ONLY FOR USE IN RPC CALLS.
+///
 /// Derives the BTC vault deposit address from the private channel id.
-/// Note: This function will **panic** if the private channel id is out of bounds so use it with
-/// caution...
+/// Note: This function will **panic** if the private channel id is out of bounds or if there is
+/// no active epoch key for Bitcoin.
 pub(crate) fn derive_btc_vault_deposit_address(private_channel_id: u64) -> String {
 	let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
 		.expect("We should always have a key for the current epoch.");
