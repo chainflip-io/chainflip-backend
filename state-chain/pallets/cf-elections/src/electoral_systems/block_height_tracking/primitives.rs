@@ -46,11 +46,16 @@ pub struct MergeInfo<H, N> {
 
 impl<H, N: Copy> MergeInfo<H, N> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<N>> {
-		if let (Some(first), Some(last)) = (self.added.front(), self.added.back()) {
-			if self.removed.len() == 0 {
-				Some(ChainProgress::Continuous(first.block_height..=last.block_height))
+		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
+			if let (Some(first_removed), Some(last_removed)) =
+				(self.removed.front(), self.removed.back())
+			{
+				Some(ChainProgress::Reorg {
+					removed: first_removed.block_height..=first_removed.block_height,
+					added: first_added.block_height..=last_added.block_height,
+				})
 			} else {
-				Some(ChainProgress::Reorg(first.block_height..=last.block_height))
+				Some(ChainProgress::Continuous(first_added.block_height..=last_added.block_height))
 			}
 		} else {
 			None

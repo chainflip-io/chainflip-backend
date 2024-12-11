@@ -72,7 +72,7 @@ pub fn validate_vote<ChainBlockHash, ChainBlockNumber>(
 pub enum ChainProgress<ChainBlockNumber> {
 	// Block witnesser will discard any elections that were started for this range and start them
 	// again since we've detected a reorg
-	Reorg(RangeInclusive<ChainBlockNumber>),
+	Reorg { removed: RangeInclusive<ChainBlockNumber>, added: RangeInclusive<ChainBlockNumber> },
 	// the chain is just progressing as a normal chain of hashes
 	Continuous(RangeInclusive<ChainBlockNumber>),
 	// there was no update to the witnessed block headers
