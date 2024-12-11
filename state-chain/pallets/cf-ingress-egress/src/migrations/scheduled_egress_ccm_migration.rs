@@ -28,8 +28,11 @@ pub mod old {
 	}
 
 	#[frame_support::storage_alias]
-	pub type ScheduledEgressCcm<T: Config<I>, I: 'static> =
-		StorageValue<Pallet<T, I>, Vec<CrossChainMessage<T::TargetChain>>, ValueQuery>;
+	pub type ScheduledEgressCcm<T: Config<I>, I: 'static> = StorageValue<
+		Pallet<T, I>,
+		Vec<CrossChainMessage<<T as Config<I>>::TargetChain>>,
+		ValueQuery,
+	>;
 }
 
 pub struct ScheduledEgressCcmMigration<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
@@ -42,7 +45,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ScheduledEgressCcmM
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		crate::ScheduledEgressCcm::<T, I>::translate::<
+		let _ = crate::ScheduledEgressCcm::<T, I>::translate::<
 			Vec<old::CrossChainMessage<T::TargetChain>>,
 			_,
 		>(|old_cross_chain_messages| {
