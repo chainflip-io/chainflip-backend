@@ -127,7 +127,7 @@ const requestSwapDepositAddress = async (
   }
 
   if (params.affiliates) {
-    console.log("trying toSorted: " + JSON.stringify(params.affiliates) );
+    console.log('trying toSorted: ' + JSON.stringify(params.affiliates));
     assert.deepStrictEqual(
       params.affiliates
         .toSorted((a, b) => a.account.localeCompare(b.account))

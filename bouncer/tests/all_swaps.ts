@@ -10,6 +10,8 @@ export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
 
 async function main() {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
+  let finished: number = 0;
+  let total: number = 0;
 
   function appendSwap(
     sourceAsset: Asset,
@@ -20,22 +22,26 @@ async function main() {
     if (destAsset === 'Btc') {
       const btcAddressTypesArray = Object.values(btcAddressTypes);
       allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-          testAllSwaps.swapContext,
+        sleep(getRandomInt(0, 10000)).then(async (_) =>
+          functionCall(
+            sourceAsset,
+            destAsset,
+            btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
+            ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+            testAllSwaps.swapContext,
+          ),
         ),
       );
     } else {
       allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          undefined,
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-          testAllSwaps.swapContext,
+        sleep(getRandomInt(0, 10000)).then(async (_) =>
+          functionCall(
+            sourceAsset,
+            destAsset,
+            undefined,
+            ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+            testAllSwaps.swapContext,
+          ),
         ),
       );
     }
@@ -50,10 +56,7 @@ async function main() {
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets)
       .filter((destAsset) => sourceAsset !== destAsset)
-      .forEach(async (destAsset) => {
-        // Note: This improves the test running time from ~230s to ~90s, probably because RPCs aren't overloaded.
-        await sleep(getRandomInt(0, 5000));
-
+      .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
@@ -85,5 +88,15 @@ async function main() {
   appendSwap('SolUsdc', 'Eth', testVaultSwap);
   appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
 
-  await Promise.all(allSwaps);
+  total = allSwaps.length;
+
+  await Promise.all(
+    allSwaps.map((promise) =>
+      promise.then(async (result) => {
+        finished += 1;
+        console.log(`Finished ${finished} of ${total} swaps.`);
+        return result;
+      }),
+    ),
+  );
 }
