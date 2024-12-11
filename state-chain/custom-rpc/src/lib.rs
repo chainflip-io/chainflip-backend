@@ -901,6 +901,9 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn cf_subscribe_transaction_screening_events(&self);
 
+	#[method(name = "lp_get_order_fills")]
+	fn cf_lp_get_order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
+
 	#[method(name = "scheduled_swaps")]
 	fn cf_scheduled_swaps(
 		&self,
@@ -1818,6 +1821,33 @@ where
 			},
 		)
 		.await
+	}
+
+	fn cf_lp_get_order_fills(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BlockUpdate<OrderFills>> {
+		// Start from the current finalized block
+		let hash = at.unwrap_or_else(|| self.client.info().finalized_hash);
+		let header = self
+			.client
+			.header(hash)
+			.map_err(|e| call_error(e))?
+			.ok_or(call_error("cannot get finalized block header"))?;
+
+		let pools = StorageQueryApi::new(self.client.as_ref())
+			.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(hash)?;
+
+		let prev_pools = StorageQueryApi::new(self.client.as_ref())
+			.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(header.parent_hash)?;
+
+		let lp_events = self.client.runtime_api().cf_lp_events(hash)?;
+
+		Ok(BlockUpdate::<OrderFills> {
+			block_hash: hash,
+			block_number: header.number,
+			data: order_fills::order_fills_from_block_updates(&prev_pools, &pools, lp_events),
+		})
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
