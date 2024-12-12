@@ -179,7 +179,12 @@ impl<
 									unsynchronised_state
 										.headers
 										.current_state_as_no_chain_progress(),
-									unsynchronised_state.headers.next_height,
+									unsynchronised_state
+										.headers
+										.first_height()
+										.unwrap_or(0u32.into()), /* If we have no first height
+									                           * recorded, we have to restart
+									                           * the election?! */
 								))
 							},
 							Err(MergeFailure::InternalError(reason)) => {
