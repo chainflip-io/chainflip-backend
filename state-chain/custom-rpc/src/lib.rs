@@ -903,6 +903,9 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn cf_subscribe_transaction_screening_events(&self);
 
+	#[method(name = "lp_get_order_fills")]
+	fn cf_lp_get_order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
+
 	#[method(name = "scheduled_swaps")]
 	fn cf_scheduled_swaps(
 		&self,
@@ -1794,32 +1797,24 @@ where
 	}
 
 	async fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
-		self.new_subscription_with_state(
-			Default::default(), /* notification_behaviour */
-			false,              /* only_on_changes */
-			true,               /* end_on_error */
+		self.new_subscription(
+			NotificationBehaviour::Finalized,
+			false,
+			true,
 			sink,
-			|client, hash, prev_pools| {
-				let pools = StorageQueryApi::new(client)
-					.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(hash)?;
-
-				let fills = prev_pools
-					.map(|prev_pools| {
-						let pools_events = client.runtime_api().cf_lp_events(hash)?;
-
-						RpcResult::Ok(order_fills::order_fills_from_block_updates(
-							prev_pools,
-							&pools,
-							pools_events,
-						))
-					})
-					.transpose()?
-					.unwrap_or_default();
-
-				RpcResult::Ok((fills, pools))
-			},
+			move |client, hash| order_fills::order_fills_for_block(client, hash),
 		)
 		.await
+	}
+
+	fn cf_lp_get_order_fills(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BlockUpdate<OrderFills>> {
+		order_fills::order_fills_for_block(
+			self.client.as_ref(),
+			at.unwrap_or_else(|| self.client.info().finalized_hash),
+		)
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
