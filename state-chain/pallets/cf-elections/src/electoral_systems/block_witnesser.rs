@@ -179,7 +179,7 @@ impl<
 
 		let last_seen_root = match chain_progress {
 			ChainProgress::WaitingForFirstConsensus => return Ok(()),
-			ChainProgress::Reorg{ removed: reorg_range, added: new_range } => {
+			ChainProgress::Reorg { removed: reorg_range, added: new_range } => {
 				// Delete any elections that are ongoing for any blocks in the reorg range.
 				for (i, election_identifier) in election_identifiers.into_iter().enumerate() {
 					let election = ElectoralAccess::election_mut(election_identifier);
@@ -215,7 +215,7 @@ impl<
 				*new_range.end()
 			},
 			ChainProgress::None(last_block_root_seen) => *last_block_root_seen,
-			ChainProgress::Continuous(witness_range) => *witness_range.start(),
+			ChainProgress::Continuous(witness_range) => *witness_range.end(),
 		};
 
 		ensure!(Chain::is_block_witness_root(last_seen_root), {
