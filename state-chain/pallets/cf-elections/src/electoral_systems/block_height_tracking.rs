@@ -22,16 +22,19 @@ use frame_support::{
 	Parameter,
 };
 use itertools::Itertools;
-use primitives::{trim_to_length, validate_vote_and_height, ChainBlocks, Header, MergeFailure};
+use primitives::{trim_to_length, validate_vote_and_height, ChainBlocks, Header, MergeFailure, VoteValidationError};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
 	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
 	vec::Vec,
 };
+use state_machine::{dependent_state_machine, Fibered, Validate};
 
 pub mod consensus;
 pub mod primitives;
+pub mod state_machine;
+pub mod state_machine_es;
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -343,4 +346,145 @@ impl<
 				}))
 		}
 	}
+}
+
+//-------- implementation of block height tracking as a state machine --------------
+
+trait BlockHeightTrait : PartialEq
+		+ Ord
+		+ From<u32>
+		+ Add<Self, Output = Self>
+		+ Sub<Self, Output = Self>
+		+ SubAssign<Self>
+		+ AddAssign<Self>
+		+ Copy {}
+
+impl<A> BlockHeightTrait for A
+	where A : PartialEq
+		+ Ord
+		+ From<u32>
+		+ Add<Self, Output = Self>
+		+ Sub<Self, Output = Self>
+		+ SubAssign<Self>
+		+ AddAssign<Self>
+		+ Copy 
+		{}
+
+
+pub struct BlockHeightTrackingConsensus<
+	ChainBlockNumber,
+	ChainBlockHash,
+> {
+	votes: Vec<Header<ChainBlockHash, ChainBlockNumber>>
+}
+
+
+impl<
+	ChainBlockNumber,
+	ChainBlockHash,
+> Default for BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash> {
+    fn default() -> Self {
+        Self {
+			votes: Default::default()
+		}
+    }
+}
+
+impl<
+	ChainBlockNumber,
+	ChainBlockHash,
+> Consensus for BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash> {
+    type Vote = VecDeque<Header<ChainBlockHash, ChainBlockNumber>>;
+    type Result = VecDeque<Header<ChainBlockHash, ChainBlockNumber>>;
+    type Settings = (Threshold, ChainBlockNumber);
+
+    fn insert_vote(&mut self, vote: Self::Vote) {
+        todo!()
+    }
+
+    fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
+        todo!()
+    }
+}
+
+
+
+
+pub struct InputHeaders<H,N>(VecDeque<Header<H,N>>);
+
+impl<H,N: From<u32> + Copy> Fibered for InputHeaders<H,N> {
+    type Base = N;
+
+    fn base(&self) -> Self::Base {
+		match self.0.front() {
+			Some(first) => first.block_height,
+			None => 0u32.into()
+		}
+    }
+}
+
+impl<H: PartialEq + Clone,N: BlockHeightTrait> Validate for InputHeaders<H,N>
+{
+	type Error = VoteValidationError;
+    fn is_valid(&self) -> Result<(), Self::Error> {
+		ChainBlocks {
+			headers: self.0.clone(),
+			next_height: 0.into()
+		}.is_valid()
+	}
+}
+
+
+impl<H,N: BlockHeightTrait> Validate for BlockHeightTrackingState<H,N>
+where 
+	H: PartialEq + Clone,
+{
+	type Error = VoteValidationError;
+    fn is_valid(&self) -> Result<(), Self::Error> {
+		self.headers.is_valid()
+	}
+}
+
+impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A,B> {
+    type Error = B;
+
+    fn is_valid(&self) -> Result<(), Self::Error> {
+        match self {
+            Ok(_) => Ok(()),
+            Err(err) => Err(err.clone()),
+        }
+    }
+}
+
+
+pub struct BlockHeightTrackingDSM<
+	const SAFETY_MARGIN: usize,
+	ChainBlockNumber,
+	ChainBlockHash,
+> {
+	_phantom: core::marker::PhantomData<(ChainBlockNumber, ChainBlockHash)>,
+}
+
+impl<
+	const SAFETY_MARGIN: usize,
+	H: PartialEq + Clone + 'static,
+	N: BlockHeightTrait + 'static,
+> dependent_state_machine::Trait for BlockHeightTrackingDSM<SAFETY_MARGIN, N, H> 
+{
+    type State = BlockHeightTrackingState<H,N>;
+    type DisplayState = ChainProgress<N>;
+    type Input = InputHeaders<H,N>;
+    type Output = Result<ChainProgress<N>, &'static str>;
+
+    fn request(s: &Self::State) -> <Self::Input as state_machine::Fibered>::Base {
+        todo!()
+    }
+
+    fn step(s: &mut Self::State, i: Self::Input) -> Self::Output {
+        todo!()
+    }
+
+    fn get(s: &Self::State) -> Self::DisplayState {
+        todo!()
+    }
 }

@@ -29,7 +29,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-use super::ChainProgress;
+use super::{state_machine::Validate, ChainProgress};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -169,11 +169,11 @@ impl<H, N: Copy> ChainBlocks<H, N> {
 	}
 }
 
-pub fn validate_continous_headers<H: PartialEq + Clone, N: PartialEq>(
-	headers: &VecDeque<Header<H, N>>,
-) -> Result<(), VoteValidationError>
-where
-	N: Ord
+impl<H,N> Validate for ChainBlocks<H,N>
+where 
+	H: PartialEq + Clone,
+	N: PartialEq
+		+ Ord
 		+ From<u32>
 		+ Add<N, Output = N>
 		+ Sub<N, Output = N>
@@ -181,25 +181,61 @@ where
 		+ AddAssign<N>
 		+ Copy,
 {
-	let mut required_block_height = headers.back().unwrap().block_height;
-	let mut required_hash = None;
+    type Error = VoteValidationError;
 
-	for header in headers.iter().rev() {
-		ensure!(
-			header.block_height == required_block_height,
-			VoteValidationError::BlockHeightsNotContinuous
-		);
-		ensure!(
-			Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
-			VoteValidationError::ParentHashMismatch
-		);
+    fn is_valid(&self) -> Result<(), Self::Error> {
+		let mut required_block_height = self.headers.back().unwrap().block_height;
+		let mut required_hash = None;
 
-		required_block_height -= 1u32.into();
-		required_hash = Some(header.parent_hash.clone());
-	}
+		for header in self.headers.iter().rev() {
+			ensure!(
+				header.block_height == required_block_height,
+				VoteValidationError::BlockHeightsNotContinuous
+			);
+			ensure!(
+				Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
+				VoteValidationError::ParentHashMismatch
+			);
 
-	Ok(())
+			required_block_height -= 1u32.into();
+			required_hash = Some(header.parent_hash.clone());
+		}
+
+		Ok(())
+    }
 }
+
+// pub fn validate_continous_headers<H: PartialEq + Clone, N: PartialEq>(
+// 	headers: &VecDeque<Header<H, N>>,
+// ) -> Result<(), VoteValidationError>
+// where
+// 	N: Ord
+// 		+ From<u32>
+// 		+ Add<N, Output = N>
+// 		+ Sub<N, Output = N>
+// 		+ SubAssign<N>
+// 		+ AddAssign<N>
+// 		+ Copy,
+// {
+// 	let mut required_block_height = headers.back().unwrap().block_height;
+// 	let mut required_hash = None;
+
+// 	for header in headers.iter().rev() {
+// 		ensure!(
+// 			header.block_height == required_block_height,
+// 			VoteValidationError::BlockHeightsNotContinuous
+// 		);
+// 		ensure!(
+// 			Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
+// 			VoteValidationError::ParentHashMismatch
+// 		);
+
+// 		required_block_height -= 1u32.into();
+// 		required_hash = Some(header.parent_hash.clone());
+// 	}
+
+// 	Ok(())
+// }
 
 pub fn validate_vote_and_height<H: PartialEq + Clone, N: PartialEq>(
 	next_height: N,
@@ -232,7 +268,10 @@ where
 	// }
 
 	// a vote has to be continous
-	validate_continous_headers(other)
+	ChainBlocks {
+		headers: other.clone(),
+		next_height: 0.into() // TODO remove next_height at all
+	}.is_valid() // validate_continous_headers(other)
 }
 
 pub enum ChainBlocksMergeResult<N> {
