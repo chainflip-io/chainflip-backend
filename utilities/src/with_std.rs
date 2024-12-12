@@ -109,6 +109,10 @@ pub fn make_periodic_tick(duration: Duration, yield_immediately: bool) -> tokio:
 	interval
 }
 
+pub fn bs58_address<const S: usize>(b: [u8; S]) -> String {
+	bs58::encode(b).into_string()
+}
+
 #[cfg(test)]
 mod tests_make_periodic_tick {
 	use crate::{assert_err, assert_ok};
