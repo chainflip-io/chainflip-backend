@@ -162,6 +162,7 @@ pub struct LiquidityProviderInfo {
 pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 	pub btc_vault_deposit_address: Option<String>,
+	pub affiliates: Vec<(AffiliateShortId, AccountId32)>,
 }
 
 /// Struct that represents the estimated output of a Swap.

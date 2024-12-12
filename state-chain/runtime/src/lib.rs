@@ -1912,6 +1912,7 @@ impl_runtime_apis! {
 				).collect(),
 				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
 					.map(derive_btc_vault_deposit_address),
+                affiliates: pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&account_id).collect(),
 			}
 		}
 
