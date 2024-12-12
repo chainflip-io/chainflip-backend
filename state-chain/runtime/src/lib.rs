@@ -2100,6 +2100,8 @@ impl_runtime_apis! {
 			fn boost_pools_details<I: 'static>(asset: TargetChainAsset::<Runtime, I>) -> BTreeMap<u16, BoostPoolDetails>
 				where Runtime: pallet_cf_ingress_egress::Config<I> {
 
+				let network_fee_deduction_percents = pallet_cf_ingress_egress::NetworkFeeDeductionFromBoostPercents::<Runtime, I>::get();
+
 				pallet_cf_ingress_egress::BoostPools::<Runtime, I>::iter_prefix(asset).map(|(tier, pool)| {
 					(
 						tier,
@@ -2112,6 +2114,7 @@ impl_runtime_apis! {
 								)
 							}).collect(),
 							pending_withdrawals: pool.get_pending_withdrawals().clone(),
+							network_fee_deduction_percents,
 						}
 					)
 				}).collect()

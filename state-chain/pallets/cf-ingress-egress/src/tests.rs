@@ -6,8 +6,8 @@ use crate::{
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, Event, FailedForeignChainCall,
-	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
-	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
+	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, NetworkFeeDeductionFromBoostPercents,
+	Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer, VaultDepositWitness,
 };
 use cf_chains::{
@@ -48,7 +48,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::{bounded_vec, H160};
-use sp_runtime::{DispatchError, DispatchResult};
+use sp_runtime::{DispatchError, DispatchResult, Percent};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -1456,6 +1456,7 @@ fn can_update_all_config_items() {
 		const NEW_MIN_DEPOSIT_FLIP: u128 = 100;
 		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
 		const NEW_DEPOSIT_CHANNEL_LIFETIME: u64 = 99;
+		const NETWORK_FEE_DEDUCTION: Percent = Percent::from_parts(50);
 
 		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
@@ -1478,6 +1479,9 @@ fn can_update_all_config_items() {
 				},
 				PalletConfigUpdate::SetDepositChannelLifetime {
 					lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
+				},
+				PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
+					deduction_percents: NETWORK_FEE_DEDUCTION
 				}
 			]
 			.try_into()
@@ -1489,6 +1493,7 @@ fn can_update_all_config_items() {
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Flip), NEW_MIN_DEPOSIT_FLIP);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Eth), NEW_MIN_DEPOSIT_ETH);
 		assert_eq!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
+		assert_eq!(NetworkFeeDeductionFromBoostPercents::<Test, _>::get(), NETWORK_FEE_DEDUCTION);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -1504,6 +1509,9 @@ fn can_update_all_config_items() {
 			}),
 			RuntimeEvent::IngressEgress(Event::DepositChannelLifetimeSet {
 				lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
+			}),
+			RuntimeEvent::IngressEgress(Event::NetworkFeeDeductionFromBoostSet {
+				deduction_percents: NETWORK_FEE_DEDUCTION
 			}),
 		);
 
