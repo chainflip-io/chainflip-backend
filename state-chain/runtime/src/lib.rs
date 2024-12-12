@@ -730,7 +730,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 	type UpgradeCondition = (
 		pallet_cf_validator::NotDuringRotation<Runtime>,
-		(pallet_cf_swapping::NoPendingSwaps<Runtime>, pallet_cf_environment::NoUsedNonce<Runtime>),
+		pallet_cf_environment::NoUsedNonce<Runtime>,
 	);
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 	type CompatibleCfeVersions = Environment;
