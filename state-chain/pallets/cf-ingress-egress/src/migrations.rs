@@ -7,18 +7,18 @@ pub mod scheduled_egress_ccm_migration;
 
 pub type PalletMigration<T, I> = (
 	VersionedMigration<
-		16,
 		17,
+		18,
 		deposit_channel_details_migration::DepositChannelDetailsMigration<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
 	VersionedMigration<
-		17,
 		18,
+		19,
 		scheduled_egress_ccm_migration::ScheduledEgressCcmMigration<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<18, Pallet<T, I>>,
+	PlaceholderMigration<19, Pallet<T, I>>,
 );
