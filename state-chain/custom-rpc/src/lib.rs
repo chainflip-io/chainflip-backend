@@ -2192,7 +2192,7 @@ mod test {
 				btc_vault_deposit_address: Some(
 					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 				),
-                affiliates: vec![(cf_primitives::AffiliateShortId(1), AccountId32::new([1; 32]))],
+				affiliates: vec![(cf_primitives::AffiliateShortId(1), AccountId32::new([1; 32]))],
 			},
 			0,
 		);
