@@ -11,6 +11,7 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::{
+		address_derivation::btc::derive_btc_vault_deposit_address,
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -79,7 +80,7 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::{BatchExecutionError, FeeType, Swap};
+use pallet_cf_swapping::{BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap};
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
@@ -1905,11 +1906,13 @@ impl_runtime_apis! {
 		fn cf_broker_info(
 			account_id: AccountId,
 		) -> BrokerInfo {
-			let earned_fees = Asset::all().map(|asset|
-				(asset, AssetBalances::get_balance(&account_id, asset))
-			).collect();
-
-			BrokerInfo { earned_fees }
+			BrokerInfo {
+				earned_fees: Asset::all().map(|asset|
+					(asset, AssetBalances::get_balance(&account_id, asset))
+				).collect(),
+				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
+					.map(derive_btc_vault_deposit_address),
+			}
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
@@ -2177,8 +2180,6 @@ impl_runtime_apis! {
 			// Encode swap
 			match ForeignChain::from(source_asset) {
 				ForeignChain::Bitcoin => {
-					use cf_chains::btc::deposit_address::DepositAddress;
-
 					let private_channel_id =
 						pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
 							.ok_or(
@@ -2221,25 +2222,9 @@ impl_runtime_apis! {
 							},
 						};
 
-					let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
-						.expect("We should always have a key for the current epoch.");
-					let deposit_address = DepositAddress::new(
-						key.current,
-						private_channel_id.try_into().map_err(
-							// TODO: Ensure this can't happen.
-							|_| {
-								DispatchErrorWithMessage::Other(
-									"Private channel id out of bounds.".into(),
-								)
-							},
-						)?,
-					)
-					.script_pubkey()
-					.to_address(&Environment::network_environment().into());
-
 					Ok(VaultSwapDetails::Bitcoin {
 						nulldata_payload: encode_swap_params_in_nulldata_payload(params),
-						deposit_address,
+						deposit_address: derive_btc_vault_deposit_address(private_channel_id),
 					})
 				},
 				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),

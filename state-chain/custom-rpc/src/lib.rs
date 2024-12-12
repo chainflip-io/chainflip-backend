@@ -259,6 +259,7 @@ pub enum RpcAccountInfo {
 	Broker {
 		flip_balance: NumberOrHex,
 		earned_fees: any::AssetMap<NumberOrHex>,
+		btc_vault_deposit_address: Option<String>,
 	},
 	LiquidityProvider {
 		balances: any::AssetMap<NumberOrHex>,
@@ -289,9 +290,10 @@ impl RpcAccountInfo {
 		Self::Unregistered { flip_balance: balance.into() }
 	}
 
-	fn broker(balance: u128, broker_info: BrokerInfo) -> Self {
+	fn broker(broker_info: BrokerInfo, balance: u128) -> Self {
 		Self::Broker {
 			flip_balance: balance.into(),
+			btc_vault_deposit_address: broker_info.btc_vault_deposit_address,
 			earned_fees: cf_chains::assets::any::AssetMap::from_iter_or_default(
 				broker_info
 					.earned_fees
@@ -1388,7 +1390,7 @@ where
 					AccountRole::Broker => {
 						let info = api.cf_broker_info(hash, account_id)?;
 
-						RpcAccountInfo::broker(balance, info)
+						RpcAccountInfo::broker(info, balance)
 					},
 					AccountRole::LiquidityProvider => {
 						let info = api.cf_liquidity_provider_info(hash, account_id)?;
@@ -2145,7 +2147,7 @@ mod test {
 	use std::collections::BTreeSet;
 
 	use super::*;
-	use cf_chains::assets::sol;
+	use cf_chains::{assets::sol, btc::ScriptPubkey};
 	use cf_primitives::{
 		chains::assets::{any, arb, btc, dot, eth},
 		FLIPPERINOS_PER_FLIP,
@@ -2170,8 +2172,8 @@ mod test {
 
 	#[test]
 	fn test_broker_serialization() {
-		insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::broker(
-			0,
+		use cf_chains::btc::BitcoinNetwork;
+		let broker = RpcAccountInfo::broker(
 			BrokerInfo {
 				earned_fees: vec![
 					(Asset::Eth, 0),
@@ -2184,10 +2186,15 @@ mod test {
 					(Asset::ArbUsdc, 0),
 					(Asset::Sol, 0),
 					(Asset::SolUsdc, 0),
-				]
-			}
-		))
-		.unwrap());
+				],
+				btc_vault_deposit_address: Some(
+					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
+				),
+			},
+			0,
+		);
+
+		insta::assert_snapshot!(serde_json::to_value(broker).unwrap());
 	}
 
 	#[test]
