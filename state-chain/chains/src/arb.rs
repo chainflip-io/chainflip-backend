@@ -275,7 +275,6 @@ mod test {
 			l1_base_fee_estimate: 26_920_712_879u128,
 		};
 
-		// loop over bool
 		for is_native_asset in [true, false].iter() {
 			let mut gas_limit =
 				arb_tracked_data.calculate_ccm_gas_limit(*is_native_asset, GAS_BUDGET, 1);
