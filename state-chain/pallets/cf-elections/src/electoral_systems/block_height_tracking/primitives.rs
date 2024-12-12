@@ -134,6 +134,10 @@ impl<H, N: Copy> ChainBlocks<H, N> {
 			ChainProgress::WaitingForFirstConsensus
 		}
 	}
+
+	pub fn first_height(&self) -> Option<N> {
+		self.headers.front().map(|h| h.block_height)
+	}
 }
 
 pub fn validate_continous_headers<H: PartialEq + Clone, N: PartialEq>(

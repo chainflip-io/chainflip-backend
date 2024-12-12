@@ -31,7 +31,7 @@ use crate::{
 	},
 	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use std::sync::Arc;
 
@@ -118,7 +118,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 		let get_header = |index: BlockNumber| {
 			async move {
 				let header = self.client.block_header(index).await?;
-				tracing::info!("Voting for block height tracking: {:?}", header.height);
+				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.
 				Ok::<Header<sp_core::H256, u64>, anyhow::Error>(header_from_btc_header(header)?)
 			}
@@ -126,26 +126,35 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 
 		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
 
-		if witness_from_index == 0 {
+		if best_block_header.block_height <= witness_from_index {
+			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={witness_from_index}", best_block_header.block_height))
+		} else if witness_from_index == 0 {
 			headers.push_back(best_block_header);
 			Ok(headers)
 		} else {
 			// fetch the headers we haven't got yet
 			for index in witness_from_index..best_block_header.block_height {
-				let header = self.client.block_header(index).await?;
-				tracing::info!("Voting for block height tracking: {:?}", header.height);
+				// let header = self.client.block_header(index).await?;
+				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.
 				headers.push_back(get_header(index).await?);
 			}
 
 			headers.push_back(best_block_header);
+			tracing::info!(
+				"bht: Voting for block height tracking: {:?}",
+				headers.iter().map(|h| h.block_height)
+			);
 
 			// We should have a chain of hashees.
 			if headers.iter().zip(headers.iter().skip(1)).all(|(a, b)| a.hash == b.parent_hash) {
-				tracing::info!("Submitting vote with {} headers", headers.len());
+				tracing::info!(
+					"bht: Submitting vote for (witness_from={witness_from_index})with {} headers",
+					headers.len()
+				);
 				Ok(headers)
 			} else {
-				Err(anyhow::anyhow!("Headers do not form a chain"))
+				Err(anyhow::anyhow!("bht: Headers do not form a chain"))
 			}
 		}
 	}
