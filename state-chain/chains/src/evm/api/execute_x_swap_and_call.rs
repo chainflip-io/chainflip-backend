@@ -12,15 +12,15 @@ use sp_std::{vec, vec::Vec};
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct ExecutexSwapAndCall {
 	/// A single transfer that need to be made to given addresses.
-	transfer_param: EncodableTransferAssetParams,
+	pub transfer_param: EncodableTransferAssetParams,
 	/// The source chain of the transfer.
-	source_chain: u32,
+	pub source_chain: u32,
 	/// The source address of the transfer.
-	source_address: Vec<u8>,
+	pub source_address: Vec<u8>,
 	/// Gas units that can be used by this call on the target chain.
-	gas_budget: GasAmount,
+	pub gas_budget: GasAmount,
 	/// Message that needs to be passed through.
-	message: Vec<u8>,
+	pub message: Vec<u8>,
 }
 
 impl ExecutexSwapAndCall {

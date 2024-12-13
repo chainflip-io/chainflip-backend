@@ -49,6 +49,10 @@ mod old {
 		pub block_height: <Arbitrum as Chain>::ChainBlockNumber,
 		pub tracked_data: ArbitrumTrackedData,
 	}
+
+	#[frame_support::storage_alias]
+	pub type CurrentChainState<T: pallet_cf_chain_tracking::Config<ArbitrumInstance>> =
+		StorageValue<pallet_cf_chain_tracking::Pallet<T, ArbitrumInstance>, ChainState>;
 }
 
 pub struct ArbitrumChainTrackingMigration;
@@ -79,8 +83,7 @@ impl UncheckedOnRuntimeUpgrade for ArbitrumChainTrackingMigration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		// Pre-checks to ensure the migration is needed
-		if pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get().is_none()
-		{
+		if old::CurrentChainState::<Runtime>::get().is_none() {
 			return Err(DispatchError::Other(
 				"CurrentChainState for ArbitrumInstance does not exist",
 			));

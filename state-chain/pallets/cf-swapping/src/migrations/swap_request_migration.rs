@@ -33,7 +33,7 @@ pub mod old {
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub enum SwapRequestState<T: Config> {
 		UserSwap {
-			ccm_deposit_metadata: Option<CcmState>,
+			ccm: Option<CcmState>,
 			output_address: ForeignChainAddress,
 			dca_state: DcaState,
 			broker_fees: Beneficiaries<T::AccountId>,
@@ -73,12 +73,12 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for SwapRequestMigration<T> {
 				refund_params: old_swap_requests.refund_params,
 				state: match old_swap_requests.state {
 					old::SwapRequestState::UserSwap {
-						ccm_deposit_metadata,
+						ccm,
 						output_address,
 						dca_state,
 						broker_fees,
 					} => SwapRequestState::UserSwap {
-						ccm_deposit_metadata: ccm_deposit_metadata
+						ccm_deposit_metadata: ccm
 							.map(|old_ccm_state| old_ccm_state.ccm_deposit_metadata),
 						output_address,
 						dca_state,

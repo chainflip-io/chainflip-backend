@@ -230,7 +230,7 @@ pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 
 /// Cross-chain messaging requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub(crate) struct CrossChainMessage<C: Chain> {
+pub struct CrossChainMessage<C: Chain> {
 	pub egress_id: EgressId,
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
@@ -250,7 +250,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(17);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(19);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -600,7 +600,7 @@ pub mod pallet {
 
 	/// Scheduled cross chain messages for the Ethereum chain.
 	#[pallet::storage]
-	pub(crate) type ScheduledEgressCcm<T: Config<I>, I: 'static = ()> =
+	pub type ScheduledEgressCcm<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<CrossChainMessage<T::TargetChain>>, ValueQuery>;
 
 	/// Stores the list of assets that are not allowed to be egressed.
