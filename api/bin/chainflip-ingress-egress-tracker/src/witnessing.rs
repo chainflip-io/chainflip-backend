@@ -5,7 +5,6 @@ pub mod state_chain;
 
 use self::state_chain::handle_call;
 use crate::{settings::DepositTrackerSettings, store::RedisStore};
-use anyhow::anyhow;
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::{chains::assets::eth::Asset, NetworkEnvironment};
 use cf_utilities::task_scope;
@@ -18,8 +17,10 @@ use chainflip_engine::{
 	},
 	witness::common::epoch_source::EpochSource,
 };
+
+use anyhow::anyhow;
 use sp_core::H160;
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub(super) struct EnvironmentParameters {
@@ -129,10 +130,13 @@ pub(super) async fn start(
 		let state_chain_client = state_chain_client.clone();
 		move |call: state_chain_runtime::RuntimeCall, _epoch_index| {
 			let mut store = store.clone();
-			let state_chain_client = state_chain_client.clone();
+
+			let tracker_state_chain_client = state_chain::TrackerStateChainClient {
+				state_chain_client: state_chain_client.clone(),
+			};
 
 			async move {
-				handle_call(call, &mut store, chainflip_network, state_chain_client.deref())
+				handle_call(call, &mut store, chainflip_network, &tracker_state_chain_client)
 					.await
 					.map_err(|err| anyhow!("failed to handle call: {err:?}"))
 					.unwrap()
