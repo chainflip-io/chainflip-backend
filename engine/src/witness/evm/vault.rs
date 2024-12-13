@@ -11,6 +11,9 @@ use super::{
 	},
 	contract_common::{events_at_block, Event},
 };
+use cf_chains::cf_parameters::{
+	CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
+};
 use futures_core::Future;
 
 use anyhow::{anyhow, Result};
