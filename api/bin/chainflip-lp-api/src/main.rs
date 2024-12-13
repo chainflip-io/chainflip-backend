@@ -1,3 +1,4 @@
+use crate::rpc_types::CloseOrderJson;
 use anyhow::anyhow;
 use cf_primitives::{BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
@@ -44,16 +45,15 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::log;
-use crate::rpc_types::CloseOrderJson;
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
 	use super::*;
 	use anyhow::anyhow;
+	use cf_primitives::chains::assets::any;
 	use cf_utilities::rpc::NumberOrHex;
 	use chainflip_api::{lp::PoolPairsMap, queries::SwapChannelInfo};
 	use serde::{Deserialize, Serialize};
-	use cf_primitives::chains::assets::any;
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 	pub struct OrderIdJson(NumberOrHex);
@@ -111,17 +111,10 @@ pub mod rpc_types {
 
 		fn try_from(value: CloseOrderJson) -> Result<Self, Self::Error> {
 			Ok(match value {
-				CloseOrderJson::Limit{base_asset, quote_asset, side, id} => CloseOrder::Limit{
-					base_asset,
-					quote_asset,
-					side,
-					id: id.try_into()?
-				},
-				CloseOrderJson::Range{base_asset, quote_asset, id} => CloseOrder::Range{
-					base_asset,
-					quote_asset,
-					id: id.try_into()?
-				},
+				CloseOrderJson::Limit { base_asset, quote_asset, side, id } =>
+					CloseOrder::Limit { base_asset, quote_asset, side, id: id.try_into()? },
+				CloseOrderJson::Range { base_asset, quote_asset, id } =>
+					CloseOrder::Range { base_asset, quote_asset, id: id.try_into()? },
 			})
 		}
 	}
@@ -632,10 +625,17 @@ impl RpcServer for RpcServerImpl {
 		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
+		let mut final_orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>> =
+			BoundedVec::new();
+		for order in orders {
+			final_orders
+				.try_push(order.try_into()?)
+				.expect("Impossible to fail, given the same MAX_ORDERS_DELETE");
+		}
 		Ok(self
 			.api
 			.lp_api()
-			.cancel_orders_batch(orders, wait_for.unwrap_or_default())
+			.cancel_orders_batch(final_orders, wait_for.unwrap_or_default())
 			.await?)
 	}
 }
