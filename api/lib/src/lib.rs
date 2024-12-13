@@ -2,10 +2,10 @@ use std::{fmt, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
-pub use cf_chains::{address::AddressString, RefundParameters};
+pub use cf_chains::{address::AddressString, RefundParametersRpc};
 use cf_chains::{
-	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
-	ChannelRefundParametersGeneric, ForeignChain,
+	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParameters,
+	ChannelRefundParametersEncoded, ForeignChain,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{AffiliateShortId, DcaParameters};
@@ -316,7 +316,7 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<RefundParameters>,
+	pub refund_parameters: Option<RefundParametersRpc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -373,7 +373,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters>,
+		refund_parameters: Option<RefundParametersRpc>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
 		let destination_address = destination_address
@@ -390,7 +390,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees: affiliate_fees.unwrap_or_default(),
 					refund_parameters: refund_parameters
-						.map(|rpc_params: ChannelRefundParametersGeneric<AddressString>| {
+						.map(|rpc_params: ChannelRefundParameters<AddressString>| {
 							Ok::<_, anyhow::Error>(ChannelRefundParametersEncoded {
 								retry_duration: rpc_params.retry_duration,
 								refund_address: rpc_params

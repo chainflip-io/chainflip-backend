@@ -56,9 +56,9 @@ use cf_chains::{
 		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
-	ChainEnvironment, ChainState, ChannelRefundParameters, ForeignChain, ReplayProtectionProvider,
-	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
-	TransactionBuilder,
+	ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
+	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
+	Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
@@ -692,7 +692,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints,
-				refund_parameters: Option<ChannelRefundParameters>,
+				refund_parameters: Option<ChannelRefundParametersDecoded>,
 				dca_parameters: Option<DcaParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
@@ -945,7 +945,7 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 	}
 
 	fn maybe_ccm_limit() -> Option<usize> {
-		// Substract extra nonces from the limit to make sure CCMs won't block regular batches.
+		// Subtract extra nonces from the limit to make sure CCMs won't block regular batches.
 		Some(Self::maybe_transfers_limit()?.saturating_sub(4))
 	}
 

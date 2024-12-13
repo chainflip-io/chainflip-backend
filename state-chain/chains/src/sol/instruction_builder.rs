@@ -18,7 +18,7 @@ use crate::{
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolInstruction, SolPubkey,
 	},
-	CcmChannelMetadata, ChannelRefundParameters,
+	CcmChannelMetadata, ChannelRefundParametersDecoded,
 };
 use cf_primitives::{
 	chains::assets::any::Asset, AccountId, AffiliateAndFee, BasisPoints, Beneficiary,
@@ -45,7 +45,7 @@ impl SolanaInstructionBuilder {
 		destination_address: EncodedAddress,
 		broker_id: AccountId,
 		broker_commission: BasisPoints,
-		refund_parameters: ChannelRefundParameters,
+		refund_parameters: ChannelRefundParametersDecoded,
 		boost_fee: BasisPoints,
 		affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
 		dca_parameters: Option<DcaParameters>,
@@ -88,7 +88,7 @@ impl SolanaInstructionBuilder {
 		destination_address: EncodedAddress,
 		broker_id: AccountId,
 		broker_commission: BasisPoints,
-		refund_parameters: ChannelRefundParameters,
+		refund_parameters: ChannelRefundParametersDecoded,
 		boost_fee: BasisPoints,
 		affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
 		dca_parameters: Option<DcaParameters>,
@@ -134,7 +134,7 @@ impl SolanaInstructionBuilder {
 
 	/// Builds the cf_parameter. The logic is shared between Sol and Usdc vault swap instruction.
 	fn build_cf_parameters(
-		refund_parameters: ChannelRefundParameters,
+		refund_parameters: ChannelRefundParametersDecoded,
 		dca_parameters: Option<DcaParameters>,
 		boost_fee: BasisPoints,
 		broker_id: AccountId,
@@ -226,8 +226,8 @@ mod test {
 		))
 	}
 
-	fn channel_refund_parameters() -> ChannelRefundParameters {
-		ChannelRefundParameters {
+	fn channel_refund_parameters() -> ChannelRefundParametersDecoded {
+		ChannelRefundParametersDecoded {
 			min_price: sp_core::U256::default(),
 			refund_address: ForeignChainAddress::Sol(DESTINATION_ADDRESS_SOL),
 			retry_duration: 10u32,

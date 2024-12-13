@@ -2124,7 +2124,7 @@ impl_runtime_apis! {
 			// Encode swap
 			match ForeignChain::from(source_asset) {
 				ForeignChain::Bitcoin =>
-					if let VaultSwapExtraParametersEncoded::Btc{
+					if let VaultSwapExtraParametersEncoded::Bitcoin{
 						min_output_amount,
 						retry_duration,
 					} = extra_parameters {

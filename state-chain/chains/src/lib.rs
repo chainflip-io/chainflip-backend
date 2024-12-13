@@ -926,14 +926,14 @@ pub struct SwapRefundParameters {
 	PartialOrd,
 	Ord,
 )]
-pub struct ChannelRefundParametersGeneric<A> {
+pub struct ChannelRefundParameters<A> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
+impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
 	fn benchmark_value() -> Self {
 		Self {
 			retry_duration: BenchmarkValue::benchmark_value(),
@@ -943,13 +943,13 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
 	}
 }
 #[cfg(feature = "std")]
-pub type RefundParameters = ChannelRefundParametersGeneric<crate::address::AddressString>;
-pub type ChannelRefundParameters = ChannelRefundParametersGeneric<ForeignChainAddress>;
-pub type ChannelRefundParametersEncoded = ChannelRefundParametersGeneric<EncodedAddress>;
+pub type RefundParametersRpc = ChannelRefundParameters<crate::address::AddressString>;
+pub type ChannelRefundParametersDecoded = ChannelRefundParameters<ForeignChainAddress>;
+pub type ChannelRefundParametersEncoded = ChannelRefundParameters<EncodedAddress>;
 
-impl<A: Clone> ChannelRefundParametersGeneric<A> {
-	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParametersGeneric<B> {
-		ChannelRefundParametersGeneric {
+impl<A: Clone> ChannelRefundParameters<A> {
+	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParameters<B> {
+		ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone()),
 			min_price: self.min_price,
@@ -958,8 +958,8 @@ impl<A: Clone> ChannelRefundParametersGeneric<A> {
 	pub fn try_map_address<B, F: FnOnce(A) -> Result<B, DispatchError>>(
 		&self,
 		f: F,
-	) -> Result<ChannelRefundParametersGeneric<B>, DispatchError> {
-		Ok(ChannelRefundParametersGeneric {
+	) -> Result<ChannelRefundParameters<B>, DispatchError> {
+		Ok(ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone())?,
 			min_price: self.min_price,
@@ -986,63 +986,44 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 #[derive(
 	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
 )]
-pub enum GenericVaultSwapExtraParameters<Address, Number> {
-	Btc {
+pub enum VaultSwapExtraParameters<Address, Number> {
+	Bitcoin {
 		min_output_amount: Number,
 		retry_duration: BlockNumber,
 	},
-	Sol {
+	Solana {
 		from: Address,
 		event_data_account: Address,
 		input_amount: Number,
-		refund_parameters: ChannelRefundParametersGeneric<Address>,
-	},
-	SolUsdc {
-		from: Address,
-		from_token_account: Address,
-		event_data_account: Address,
-		input_amount: Number,
-		refund_parameters: ChannelRefundParametersGeneric<Address>,
+		refund_parameters: ChannelRefundParameters<Address>,
+		from_token_account: Option<Address>,
 	},
 }
 
-impl<Address: Clone, Number> GenericVaultSwapExtraParameters<Address, Number> {
+impl<Address: Clone, Number> VaultSwapExtraParameters<Address, Number> {
 	/// Try map address type parameters into another type.
 	/// Typically used to convert RPC supported types into internal types.
 	pub fn try_map_address<AddressOther>(
 		self,
 		f: impl Fn(Address) -> Result<AddressOther, DispatchError>,
-	) -> Result<GenericVaultSwapExtraParameters<AddressOther, Number>, DispatchError> {
+	) -> Result<VaultSwapExtraParameters<AddressOther, Number>, DispatchError> {
 		Ok(match self {
-			GenericVaultSwapExtraParameters::Btc { min_output_amount, retry_duration } =>
-				GenericVaultSwapExtraParameters::Btc { min_output_amount, retry_duration },
-			GenericVaultSwapExtraParameters::Sol {
+			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
+				VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration },
+			VaultSwapExtraParameters::Solana {
 				from,
 				event_data_account,
 				input_amount,
 				refund_parameters,
-			} => GenericVaultSwapExtraParameters::Sol {
-				from: f(from)?,
-				event_data_account: f(event_data_account)?,
-				input_amount,
-				refund_parameters: refund_parameters.try_map_address(|a| {
-					f(a).map_err(|_| "Failed to convert address in refund parameters".into())
-				})?,
-			},
-			GenericVaultSwapExtraParameters::SolUsdc {
-				from,
 				from_token_account,
-				event_data_account,
-				input_amount,
-				refund_parameters,
-			} => GenericVaultSwapExtraParameters::SolUsdc {
+			} => VaultSwapExtraParameters::Solana {
 				from: f(from)?,
-				from_token_account: f(from_token_account)?,
 				event_data_account: f(event_data_account)?,
 				input_amount,
 				refund_parameters: refund_parameters.try_map_address(|a| {
 					f(a).map_err(|_| "Failed to convert address in refund parameters".into())
 				})?,
+				from_token_account: from_token_account.map(f).transpose()?,
 			},
 		})
 	}
@@ -1052,36 +1033,25 @@ impl<Address: Clone, Number> GenericVaultSwapExtraParameters<Address, Number> {
 	pub fn try_map_numbers<NumberOther>(
 		self,
 		f: impl Fn(Number) -> Result<NumberOther, DispatchError>,
-	) -> Result<GenericVaultSwapExtraParameters<Address, NumberOther>, DispatchError> {
+	) -> Result<VaultSwapExtraParameters<Address, NumberOther>, DispatchError> {
 		Ok(match self {
-			GenericVaultSwapExtraParameters::Btc { min_output_amount, retry_duration } =>
-				GenericVaultSwapExtraParameters::Btc {
+			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
+				VaultSwapExtraParameters::Bitcoin {
 					min_output_amount: f(min_output_amount)?,
 					retry_duration,
 				},
-			GenericVaultSwapExtraParameters::Sol {
+			VaultSwapExtraParameters::Solana {
 				from,
 				event_data_account,
 				input_amount,
 				refund_parameters,
-			} => GenericVaultSwapExtraParameters::Sol {
+				from_token_account,
+			} => VaultSwapExtraParameters::Solana {
 				from,
 				event_data_account,
 				input_amount: f(input_amount)?,
 				refund_parameters,
-			},
-			GenericVaultSwapExtraParameters::SolUsdc {
-				from,
 				from_token_account,
-				event_data_account,
-				input_amount,
-				refund_parameters,
-			} => GenericVaultSwapExtraParameters::SolUsdc {
-				from,
-				from_token_account,
-				event_data_account,
-				input_amount: f(input_amount)?,
-				refund_parameters,
 			},
 		})
 	}
@@ -1089,9 +1059,8 @@ impl<Address: Clone, Number> GenericVaultSwapExtraParameters<Address, Number> {
 
 /// Type intended for RPC calls
 #[cfg(feature = "std")]
-pub type VaultSwapExtraParameters =
-	GenericVaultSwapExtraParameters<crate::address::AddressString, cf_utilities::rpc::NumberOrHex>;
+pub type VaultSwapExtraParametersRpc =
+	VaultSwapExtraParameters<crate::address::AddressString, cf_utilities::rpc::NumberOrHex>;
 
 /// Type used internally within the State chain.
-pub type VaultSwapExtraParametersEncoded =
-	GenericVaultSwapExtraParameters<EncodedAddress, AssetAmount>;
+pub type VaultSwapExtraParametersEncoded = VaultSwapExtraParameters<EncodedAddress, AssetAmount>;
