@@ -169,6 +169,18 @@ pub fn solana_vault_swap(
 		from_token_account,
 	} = extra_parameters
 	{
+		let from = SolPubkey::try_from(from)
+			.map_err(|_| DispatchErrorWithMessage::Other("Invalid Solana Address: from".into()))?;
+		let refund_parameters = refund_parameters.try_map_address(|addr| {
+			ChainAddressConverter::try_from_encoded_address(addr)
+				.map_err(|_| "Invalid refund address".into())
+		})?;
+		let event_data_account = SolPubkey::try_from(event_data_account).map_err(|_| {
+			DispatchErrorWithMessage::Other("Invalid Solana Address: event_data_account".into())
+		})?;
+		let input_amount = SolAmount::try_from(input_amount)
+			.map_err(|_| DispatchErrorWithMessage::Other("Input amount exceeded MAX".into()))?;
+
 		Ok(VaultSwapDetails::Solana {
 			instruction: match source_asset {
 				Asset::Sol => SolanaInstructionBuilder::x_swap_native(
@@ -178,22 +190,13 @@ pub fn solana_vault_swap(
 					destination_address,
 					broker_id,
 					broker_commission,
-					refund_parameters.try_map_address(|addr| {
-						ChainAddressConverter::try_from_encoded_address(addr)
-							.map_err(|_| "Invalid refund address".into())
-					})?,
+					refund_parameters,
 					boost_fee,
 					processed_affiliate_fees,
 					dca_parameters,
-					SolPubkey::try_from(from).map_err(|_| {
-						DispatchErrorWithMessage::Other("Invalid Solana Address: from".into())
-					})?,
-					SolPubkey::try_from(event_data_account).map_err(|_| {
-						DispatchErrorWithMessage::Other(
-							"Invalid Solana Address: event_data_account".into(),
-						)
-					})?,
-					SolAmount::try_from(input_amount).unwrap_or(SolAmount::MAX),
+					from,
+					event_data_account,
+					input_amount,
 					channel_metadata,
 				),
 				Asset::SolUsdc => {
@@ -203,38 +206,31 @@ pub fn solana_vault_swap(
 							api_environment.usdc_token_mint_pubkey,
 						)
 						.map_err(|_| DispatchErrorWithMessage::Other("Failed to derive supported token account".into()))?;
-					let from_token_account =
-						from_token_account.ok_or(DispatchErrorWithMessage::Other(
+					let from_token_account = SolPubkey::try_from(from_token_account.ok_or(
+						DispatchErrorWithMessage::Other(
 							"From token account is required for SolUsdc swaps".into(),
-						))?;
+						),
+					)?)
+					.map_err(|_| {
+						DispatchErrorWithMessage::Other(
+							"Invalid Solana Address: from_token_account".into(),
+						)
+					})?;
 					SolanaInstructionBuilder::x_swap_usdc(
 						api_environment,
 						destination_asset,
 						destination_address,
 						broker_id,
 						broker_commission,
-						refund_parameters.try_map_address(|addr| {
-							ChainAddressConverter::try_from_encoded_address(addr)
-								.map_err(|_| "Invalid refund address".into())
-						})?,
+						refund_parameters,
 						boost_fee,
 						processed_affiliate_fees,
 						dca_parameters,
-						SolPubkey::try_from(from).map_err(|_| {
-							DispatchErrorWithMessage::Other("Invalid Solana Address: from".into())
-						})?,
-						SolPubkey::try_from(from_token_account).map_err(|_| {
-							DispatchErrorWithMessage::Other(
-								"Invalid Solana Address: from_token_account".into(),
-							)
-						})?,
-						SolPubkey::try_from(event_data_account).map_err(|_| {
-							DispatchErrorWithMessage::Other(
-								"Invalid Solana Address: event_data_account".into(),
-							)
-						})?,
+						from,
+						from_token_account,
+						event_data_account,
 						token_supported_account.address.into(),
-						SolAmount::try_from(input_amount).unwrap_or(SolAmount::MAX),
+						input_amount,
 						channel_metadata,
 					)
 				},

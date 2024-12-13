@@ -109,7 +109,7 @@ pub fn make_periodic_tick(duration: Duration, yield_immediately: bool) -> tokio:
 	interval
 }
 
-pub fn bs58_address<const S: usize>(b: [u8; S]) -> String {
+pub fn bs58_string<const S: usize>(b: [u8; S]) -> String {
 	bs58::encode(b).into_string()
 }
 

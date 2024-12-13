@@ -366,7 +366,7 @@ pub mod signing_key {
 		pub fn print_pub_and_private_keys(&self) {
 			println!(
 				"Pubkey: {:?} \nhex: {:?} \nraw bytes: {:?}",
-				cf_utilities::bs58_address(self.pubkey().0),
+				cf_utilities::bs58_string(self.pubkey().0),
 				hex::encode(self.to_bytes()),
 				self.to_bytes()
 			);
