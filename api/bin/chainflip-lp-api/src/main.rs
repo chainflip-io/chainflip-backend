@@ -44,6 +44,7 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::log;
+use crate::rpc_types::CloseOrderJson;
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
@@ -52,6 +53,7 @@ pub mod rpc_types {
 	use cf_utilities::rpc::NumberOrHex;
 	use chainflip_api::{lp::PoolPairsMap, queries::SwapChannelInfo};
 	use serde::{Deserialize, Serialize};
+	use cf_primitives::chains::assets::any;
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 	pub struct OrderIdJson(NumberOrHex);
@@ -96,6 +98,32 @@ pub mod rpc_types {
 		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
 		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
 		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
+	}
+
+	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+	pub enum CloseOrderJson {
+		Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderIdJson },
+		Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderIdJson },
+	}
+
+	impl TryFrom<CloseOrderJson> for CloseOrder {
+		type Error = anyhow::Error;
+
+		fn try_from(value: CloseOrderJson) -> Result<Self, Self::Error> {
+			Ok(match value {
+				CloseOrderJson::Limit{base_asset, quote_asset, side, id} => CloseOrder::Limit{
+					base_asset,
+					quote_asset,
+					side,
+					id: id.try_into()?
+				},
+				CloseOrderJson::Range{base_asset, quote_asset, id} => CloseOrder::Range{
+					base_asset,
+					quote_asset,
+					id: id.try_into()?
+				},
+			})
+		}
 	}
 }
 
@@ -213,7 +241,7 @@ pub trait Rpc {
 	#[method(name = "cancel_orders_batch")]
 	async fn cancel_orders_batch(
 		&self,
-		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 }
@@ -601,7 +629,7 @@ impl RpcServer for RpcServerImpl {
 
 	async fn cancel_orders_batch(
 		&self,
-		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
 		Ok(self
