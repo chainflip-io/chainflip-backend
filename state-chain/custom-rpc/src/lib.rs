@@ -1182,7 +1182,7 @@ impl From<CfApiError> for ErrorObjectOwned {
 			},
 			CfApiError::DispatchError(dispatch_error) => match dispatch_error {
 				DispatchErrorWithMessage::Module(message) |
-				DispatchErrorWithMessage::AdHoc(message) => match std::str::from_utf8(&message) {
+				DispatchErrorWithMessage::RawMessage(message) => match std::str::from_utf8(&message) {
 					Ok(message) => call_error(std::format!("DispatchError: {message}")),
 					Err(error) =>
 						internal_error(format!("Unable to decode Module Error Message: {error}")),
