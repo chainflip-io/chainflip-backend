@@ -10,7 +10,7 @@ use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
-	electoral_systems::block_height_tracking::{primitives::Header, BlockHeightTrackingProperties},
+	electoral_systems::block_height_tracking::{primitives::Header, BlockHeightTrackingProperties, InputHeaders},
 	vote_storage::VoteStorage,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
@@ -98,7 +98,8 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 		anyhow::Error,
 	> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
-		let BlockHeightTrackingProperties { witness_from_index } = properties;
+		// let BlockHeightTrackingProperties { witness_from_index } = properties;
+		let witness_from_index = properties;
 
 		let mut headers = VecDeque::new();
 
@@ -130,7 +131,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={witness_from_index}", best_block_header.block_height))
 		} else if witness_from_index == 0 {
 			headers.push_back(best_block_header);
-			Ok(headers)
+			Ok(InputHeaders(headers))
 		} else {
 			// fetch the headers we haven't got yet
 			for index in witness_from_index..best_block_header.block_height {
@@ -152,7 +153,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 					"bht: Submitting vote for (witness_from={witness_from_index})with {} headers",
 					headers.len()
 				);
-				Ok(headers)
+				Ok(InputHeaders(headers))
 			} else {
 				Err(anyhow::anyhow!("bht: Headers do not form a chain"))
 			}

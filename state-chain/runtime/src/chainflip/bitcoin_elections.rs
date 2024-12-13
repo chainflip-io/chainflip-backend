@@ -9,7 +9,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
-		block_height_tracking::{self, BlockHeightTracking},
+		block_height_tracking::{self, state_machine_es::{ESWrapper, Either}, BlockHeightTracking, BlockHeightTrackingConsensus, BlockHeightTrackingDSM},
 		block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData},
 		composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
@@ -46,8 +46,12 @@ pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 	BitcoinDepositChannelWitnessingGenerator,
 >;
 
-pub type BitcoinBlockHeightTracking =
+pub type BitcoinBlockHeightTracking2 =
 	BlockHeightTracking<6, btc::BlockNumber, btc::Hash, (), <Runtime as Chainflip>::ValidatorId>;
+
+pub type BitcoinBlockHeightTracking =
+	ESWrapper<BlockHeightTrackingDSM<6, btc::BlockNumber, btc::Hash>, <Runtime as Chainflip>::ValidatorId, (), BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>>;
+	// BlockHeightTracking<6, btc::BlockNumber, btc::Hash, (), <Runtime as Chainflip>::ValidatorId>;
 
 pub struct BitcoinDepositChannelWitnessingGenerator;
 
@@ -129,6 +133,11 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
 		>(block_height_tracking_identifiers, &())?;
+
+		let chain_progress = match chain_progress {
+			Either::Left(x) => x,
+			Either::Right(x) => x,
+		};
 
 		log::info!("BitcoinElectionHooks::on_finalize: {:?}", chain_progress);
 		BitcoinDepositChannelWitnessing::on_finalize::<

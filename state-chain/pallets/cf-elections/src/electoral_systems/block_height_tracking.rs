@@ -17,7 +17,7 @@ use codec::{Decode, Encode};
 use consensus::{Consensus, StagedConsensus, SupermajorityConsensus, Threshold};
 use frame_support::{
 	ensure,
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	pallet_prelude::{MaybeSerializeDeserialize, Member, MaxEncodedLen},
 	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating},
 	Parameter,
 };
@@ -394,8 +394,8 @@ impl<
 	ChainBlockNumber,
 	ChainBlockHash,
 > Consensus for BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash> {
-    type Vote = VecDeque<Header<ChainBlockHash, ChainBlockNumber>>;
-    type Result = VecDeque<Header<ChainBlockHash, ChainBlockNumber>>;
+    type Vote = InputHeaders<ChainBlockHash, ChainBlockNumber>;
+    type Result = InputHeaders<ChainBlockHash, ChainBlockNumber>;
     type Settings = (Threshold, ChainBlockNumber);
 
     fn insert_vote(&mut self, vote: Self::Vote) {
@@ -410,7 +410,8 @@ impl<
 
 
 
-pub struct InputHeaders<H,N>(VecDeque<Header<H,N>>);
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct InputHeaders<H,N>(pub VecDeque<Header<H,N>>);
 
 impl<H,N: From<u32> + Copy> Fibered for InputHeaders<H,N> {
     type Base = N;

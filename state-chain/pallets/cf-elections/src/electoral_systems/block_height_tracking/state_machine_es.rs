@@ -3,13 +3,14 @@ use cf_utilities::success_threshold_from_share_count;
 use frame_support::{pallet_prelude::{MaybeSerializeDeserialize, Member}, Parameter};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use sp_std::vec::Vec;
 
 use crate::{electoral_system::{ElectionWriteAccess, ElectoralSystem}, vote_storage, CorruptStorageError};
 
 use super::{consensus::{Consensus, Threshold}, state_machine::{dependent_state_machine, DependentStateMachine, Fibered, Pointed}};
 
 
-struct ESWrapper
+pub struct ESWrapper
     <
         Type,
         ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
@@ -20,13 +21,28 @@ struct ESWrapper
         _phantom: core::marker::PhantomData<(Type, ValidatorId, Settings, Consensus)>
     }
 
-enum Either<A,B>
+pub enum Either<A,B>
 {
     Left(A),
     Right(B)
 }
 
 use Either::{Left, Right};
+
+pub trait IntoResult {
+    type Ok;
+    type Err;
+
+    fn into_result(self) -> Result<Self::Ok, Self::Err>;
+}
+
+impl<A,B> IntoResult for Result<A,B> {
+    type Ok = A;
+    type Err = B;
+    fn into_result(self) -> Result<A, B> {
+        self
+    }
+}
 
 
 // -- deriving an electoral system from a statemachine
@@ -40,8 +56,9 @@ impl<
     where 
     <DSM::Input as Fibered>::Base : Clone + Member + Parameter,
     DSM::State: MaybeSerializeDeserialize + Member + Parameter + Eq,
-    DSM::Input: Fibered + Clone + Member + Parameter + Pointed,
-    DSM::Output: sp_std::fmt::Debug
+    DSM::Input: Fibered + Clone + Member + Parameter,
+    DSM::Output: IntoResult,
+    <DSM::Output as IntoResult>::Err : sp_std::fmt::Debug
     {
 
 	type ValidatorId = ValidatorId;
@@ -60,7 +77,7 @@ impl<
 
 	// we return either the state if no input was processed,
     // or the output produced by the state machine
-	type OnFinalizeReturn = Either<DSM::DisplayState, DSM::Output>;
+	type OnFinalizeReturn = Either<DSM::DisplayState, <DSM::Output as IntoResult>::Ok>;
 
 fn generate_vote_properties(
 		    _election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
@@ -88,12 +105,14 @@ fn on_finalize<ElectoralAccess: crate::electoral_system::ElectoralWriteAccess<El
 
                     let output = DSM::step(state, input);
 
-                    if output.base() == false {
-                        log::error!("Electoral system moved into a bad state: {output:?}");
-                        return Err(CorruptStorageError::new());
-                    } 
+                    match output.into_result() {
+                        Ok(output) => Ok((DSM::request(state), output)),
+                        Err(err) => {
+                            log::error!("Electoral system moved into a bad state: {err:?}");
+                            Err(CorruptStorageError::new())
+                        },
+                    }
 
-                    Ok((DSM::request(state), output))
                 })?;
 
                 // delete the old election and create a new one with the new input request
