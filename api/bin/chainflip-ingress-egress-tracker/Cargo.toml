@@ -36,6 +36,8 @@ pallet-cf-ingress-egress = { workspace = true, default-features = true }
 pallet-cf-broadcast = { workspace = true, default-features = true }
 state-chain-runtime = { workspace = true, default-features = true }
 cf-chains = { workspace = true, default-features = true }
+custom-rpc = { workspace = true }
+chainflip-api = { workspace = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }
