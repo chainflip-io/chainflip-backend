@@ -10,7 +10,9 @@ use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
-	electoral_systems::block_height_tracking::{primitives::Header, BlockHeightTrackingProperties, InputHeaders},
+	electoral_systems::block_height_tracking::{
+		primitives::Header, BlockHeightTrackingProperties, InputHeaders,
+	},
 	vote_storage::VoteStorage,
 };
 use sp_core::bounded::alloc::collections::VecDeque;

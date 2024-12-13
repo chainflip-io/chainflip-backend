@@ -169,8 +169,8 @@ impl<H, N: Copy> ChainBlocks<H, N> {
 	}
 }
 
-impl<H,N> Validate for ChainBlocks<H,N>
-where 
+impl<H, N> Validate for ChainBlocks<H, N>
+where
 	H: PartialEq + Clone,
 	N: PartialEq
 		+ Ord
@@ -181,9 +181,9 @@ where
 		+ AddAssign<N>
 		+ Copy,
 {
-    type Error = VoteValidationError;
+	type Error = VoteValidationError;
 
-    fn is_valid(&self) -> Result<(), Self::Error> {
+	fn is_valid(&self) -> Result<(), Self::Error> {
 		let mut required_block_height = self.headers.back().unwrap().block_height;
 		let mut required_hash = None;
 
@@ -202,40 +202,8 @@ where
 		}
 
 		Ok(())
-    }
+	}
 }
-
-// pub fn validate_continous_headers<H: PartialEq + Clone, N: PartialEq>(
-// 	headers: &VecDeque<Header<H, N>>,
-// ) -> Result<(), VoteValidationError>
-// where
-// 	N: Ord
-// 		+ From<u32>
-// 		+ Add<N, Output = N>
-// 		+ Sub<N, Output = N>
-// 		+ SubAssign<N>
-// 		+ AddAssign<N>
-// 		+ Copy,
-// {
-// 	let mut required_block_height = headers.back().unwrap().block_height;
-// 	let mut required_hash = None;
-
-// 	for header in headers.iter().rev() {
-// 		ensure!(
-// 			header.block_height == required_block_height,
-// 			VoteValidationError::BlockHeightsNotContinuous
-// 		);
-// 		ensure!(
-// 			Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
-// 			VoteValidationError::ParentHashMismatch
-// 		);
-
-// 		required_block_height -= 1u32.into();
-// 		required_hash = Some(header.parent_hash.clone());
-// 	}
-
-// 	Ok(())
-// }
 
 pub fn validate_vote_and_height<H: PartialEq + Clone, N: PartialEq>(
 	next_height: N,
@@ -270,8 +238,9 @@ where
 	// a vote has to be continous
 	ChainBlocks {
 		headers: other.clone(),
-		next_height: 0.into() // TODO remove next_height at all
-	}.is_valid() // validate_continous_headers(other)
+		next_height: 0.into(), // TODO remove next_height at all
+	}
+	.is_valid() // validate_continous_headers(other)
 }
 
 pub enum ChainBlocksMergeResult<N> {
@@ -354,8 +323,9 @@ impl<
 
 		let self_next_height = self.headers.back().unwrap().block_height + 1u32.into();
 
-		if self_next_height == other_head.block_height // ||
-			// (self.next_height == 0u32.into() && self.headers.len() == 0)
+		if self_next_height == other_head.block_height
+		// ||
+		// (self.next_height == 0u32.into() && self.headers.len() == 0)
 		{
 			// this is "assumption (3): case 1"
 			//
@@ -405,5 +375,3 @@ impl<
 		}
 	}
 }
-
-

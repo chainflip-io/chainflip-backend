@@ -9,7 +9,11 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
-		block_height_tracking::{self, state_machine_es::{ESWrapper, Either}, BlockHeightTracking, BlockHeightTrackingConsensus, BlockHeightTrackingDSM},
+		block_height_tracking::{
+			self,
+			state_machine_es::{DsmElectoralSystem, Either},
+			BlockHeightTrackingConsensus, BlockHeightTrackingDSM,
+		},
 		block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData},
 		composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
@@ -46,12 +50,12 @@ pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 	BitcoinDepositChannelWitnessingGenerator,
 >;
 
-pub type BitcoinBlockHeightTracking2 =
-	BlockHeightTracking<6, btc::BlockNumber, btc::Hash, (), <Runtime as Chainflip>::ValidatorId>;
-
-pub type BitcoinBlockHeightTracking =
-	ESWrapper<BlockHeightTrackingDSM<6, btc::BlockNumber, btc::Hash>, <Runtime as Chainflip>::ValidatorId, (), BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>>;
-	// BlockHeightTracking<6, btc::BlockNumber, btc::Hash, (), <Runtime as Chainflip>::ValidatorId>;
+pub type BitcoinBlockHeightTracking = DsmElectoralSystem<
+	BlockHeightTrackingDSM<6, btc::BlockNumber, btc::Hash>,
+	<Runtime as Chainflip>::ValidatorId,
+	(),
+	BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>,
+>;
 
 pub struct BitcoinDepositChannelWitnessingGenerator;
 
