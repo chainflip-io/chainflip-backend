@@ -352,8 +352,10 @@ impl<
 			.front()
 			.ok_or(MergeFailure::InternalError("expected other to not be empty!".into()))?;
 
-		if self.next_height == other_head.block_height ||
-			(self.next_height == 0u32.into() && self.headers.len() == 0)
+		let self_next_height = self.headers.back().unwrap().block_height + 1u32.into();
+
+		if self_next_height == other_head.block_height // ||
+			// (self.next_height == 0u32.into() && self.headers.len() == 0)
 		{
 			// this is "assumption (3): case 1"
 			//
@@ -365,7 +367,7 @@ impl<
 				None => true,
 				Some(h) => other_head.parent_hash == h.hash,
 			} {
-				self.next_height = other.back().unwrap().block_height + 1u32.into();
+				// self.next_height = other.back().unwrap().block_height + 1u32.into();
 				self.headers.append(&mut other.clone());
 				Ok(MergeInfo { removed: VecDeque::new(), added: other })
 			} else {
@@ -394,7 +396,7 @@ impl<
 				// set headers to `common_headers` + `other_headers`
 				self.headers = common_headers;
 				self.headers.append(&mut other_headers.clone());
-				self.next_height = self_head.block_height + (self.headers.len() as u32).into();
+				// self.next_height = self_head.block_height + (self.headers.len() as u32).into();
 
 				Ok(MergeInfo { removed: self_headers, added: other_headers })
 			} else {
@@ -403,3 +405,5 @@ impl<
 		}
 	}
 }
+
+

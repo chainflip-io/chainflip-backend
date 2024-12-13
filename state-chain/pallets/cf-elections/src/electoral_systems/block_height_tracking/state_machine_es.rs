@@ -54,8 +54,8 @@ impl<
     > ElectoralSystem for
     ESWrapper<DSM, ValidatorId, Settings, C>
     where 
-    <DSM::Input as Fibered>::Base : Clone + Member + Parameter,
-    DSM::State: MaybeSerializeDeserialize + Member + Parameter + Eq,
+    <DSM::Input as Fibered>::Base : Clone + Member + Parameter + sp_std::fmt::Debug,
+    DSM::State: MaybeSerializeDeserialize + Member + Parameter + Eq + sp_std::fmt::Debug,
     DSM::Input: Fibered + Clone + Member + Parameter,
     DSM::Output: IntoResult,
     <DSM::Output as IntoResult>::Err : sp_std::fmt::Debug
@@ -121,6 +121,7 @@ fn on_finalize<ElectoralAccess: crate::electoral_system::ElectoralWriteAccess<El
 
                 Ok(Right(output))
             } else {
+			    log::info!("No consensus could be reached!");
 
                 Ok(Left(DSM::get(&ElectoralAccess::unsynchronised_state()?)))
             }
@@ -151,8 +152,11 @@ fn check_consensus<ElectionAccess: crate::electoral_system::ElectionReadAccess<E
         for vote in consensus_votes.active_votes() {
 
             // insert vote if it is valid for the given properties
-            if vote.base() == properties {
+            if vote.is_in_fiber(&properties) {
+                log::info!("inserting vote {vote:?}");
                 consensus.insert_vote(vote);
+            } else {
+                log::warn!("Received invalid vote: expected base {properties:?} but vote was not in fiber ({:?})", vote);
             }
         }
 

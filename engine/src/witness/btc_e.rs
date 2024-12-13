@@ -97,7 +97,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 		<<BitcoinBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		tracing::info!("Block height tracking called properties: {:?}", properties);
+		tracing::info!("Block height tracking called properties, witness_from = {:?}", properties);
 		// let BlockHeightTrackingProperties { witness_from_index } = properties;
 		let witness_from_index = properties;
 
@@ -118,14 +118,18 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 
 		let get_header = |index: BlockNumber| {
 			async move {
+				tracing::info!("getting btc header for index {index}!");
 				let header = self.client.block_header(index).await?;
+				tracing::info!("got btc header for index {index}!");
 				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.
 				Ok::<Header<sp_core::H256, u64>, anyhow::Error>(header_from_btc_header(header)?)
 			}
 		};
 
+		tracing::info!("getting best btc header!");
 		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
+		tracing::info!("got best btc header!");
 
 		if best_block_header.block_height <= witness_from_index {
 			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={witness_from_index}", best_block_header.block_height))

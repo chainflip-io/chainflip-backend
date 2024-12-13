@@ -6,7 +6,7 @@ use crate::electoral_system::ElectoralSystem;
 
 pub trait Fibered {
     type Base;
-    fn base(&self) -> Self::Base;
+    fn is_in_fiber(&self, base: &Self::Base) -> bool;
 }
 
 pub trait Pointed {

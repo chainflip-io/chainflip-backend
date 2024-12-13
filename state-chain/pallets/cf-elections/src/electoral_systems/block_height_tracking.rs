@@ -375,7 +375,7 @@ pub struct BlockHeightTrackingConsensus<
 	ChainBlockNumber,
 	ChainBlockHash,
 > {
-	votes: Vec<Header<ChainBlockHash, ChainBlockNumber>>
+	votes: Vec<InputHeaders<ChainBlockHash, ChainBlockNumber>>
 }
 
 
@@ -391,37 +391,102 @@ impl<
 }
 
 impl<
-	ChainBlockNumber,
-	ChainBlockHash,
+	ChainBlockNumber : BlockHeightTrait + sp_std::fmt::Debug,
+	ChainBlockHash : Clone + PartialEq + Ord + sp_std::fmt::Debug,
 > Consensus for BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash> {
     type Vote = InputHeaders<ChainBlockHash, ChainBlockNumber>;
     type Result = InputHeaders<ChainBlockHash, ChainBlockNumber>;
     type Settings = (Threshold, ChainBlockNumber);
 
     fn insert_vote(&mut self, vote: Self::Vote) {
-        todo!()
+        self.votes.push(vote);
     }
 
     fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-        todo!()
+
+		// let num_authorities = consensus_votes.num_authorities();
+
+		let (threshold, witness_from_index) = settings;
+
+		if *witness_from_index == 0u32.into() {
+			// This is the case for finding an appropriate block number to start witnessing from
+
+			let mut consensus: SupermajorityConsensus<_> = SupermajorityConsensus::default();
+
+			for vote in &self.votes {
+				// we currently only count votes consisting of a single block height
+				// there has to be a supermajority voting for the exact same header
+				if vote.0.len() == 1 {
+					consensus.insert_vote(vote.0[0].clone())
+				}
+			}
+
+			consensus
+				.check_consensus(&threshold)
+				.map(|result| {
+					let mut headers = VecDeque::new();
+					headers.push_back(result);
+					InputHeaders(headers)
+				})
+				.map(|result| {
+					log::info!("block_height: initial consensus: {result:?}");
+					result
+				})
+		} else {
+			// This is the actual consensus finding, once the engine is running
+
+			let mut consensus: StagedConsensus<SupermajorityConsensus<Self::Vote>, usize> =
+				StagedConsensus::new();
+
+			for mut vote in self.votes.clone() {
+				// ensure that the vote is valid
+				if let Err(err) = validate_vote_and_height(*witness_from_index, &vote.0) {
+					log::warn!("received invalid vote: {err:?} ");
+					continue;
+				}
+
+				// we count a given vote as multiple votes for all nonempty subchains
+				while vote.0.len() > 0 {
+					consensus.insert_vote((vote.0.len(), vote.clone()));
+					vote.0.pop_back();
+				}
+			}
+
+			consensus
+				.check_consensus(&threshold)
+				.map(|result| {
+					log::info!(
+						"(witness_from: {:?}): successful consensus for ranges: {:?}..={:?}",
+						witness_from_index,
+						result.0.front(),
+						result.0.back()
+					);
+					result
+				})
+		}
     }
 }
 
 
 
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct InputHeaders<H,N>(pub VecDeque<Header<H,N>>);
 
-impl<H,N: From<u32> + Copy> Fibered for InputHeaders<H,N> {
+impl<H,N: From<u32> + Copy + PartialEq> Fibered for InputHeaders<H,N> {
     type Base = N;
 
-    fn base(&self) -> Self::Base {
-		match self.0.front() {
-			Some(first) => first.block_height,
-			None => 0u32.into()
+	fn is_in_fiber(&self, base: &Self::Base) -> bool {
+		if *base == 0.into() {
+			true
+		} else {
+			match self.0.front() {
+				Some(first) => first.block_height == *base,
+				None => false
+			}
 		}
-    }
+		
+	}
 }
 
 impl<H: PartialEq + Clone,N: BlockHeightTrait> Validate for InputHeaders<H,N>
@@ -458,6 +523,33 @@ impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A,B> {
 }
 
 
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub enum BHWState<H,N> {
+	Starting,
+	Running{headers: VecDeque<Header<H,N>>, witness_from: N}
+}
+
+impl<H,N> Default for BHWState<H,N> {
+	fn default() -> Self {
+		Self::Starting
+	}
+}
+
+impl<H,N> Validate for BHWState<H,N> {
+    type Error = &'static str;
+
+    fn is_valid(&self) -> Result<(), Self::Error> {
+        match self {
+            BHWState::Starting => Ok(()),
+
+			// TODO also check that headers are continuous
+            BHWState::Running { headers, witness_from: _ } => if headers.len() > 0 { Ok(()) } else { Err("Block height tracking state should always be non-empty after start-up.") },
+        }
+    }
+}
+
 pub struct BlockHeightTrackingDSM<
 	const SAFETY_MARGIN: usize,
 	ChainBlockNumber,
@@ -468,24 +560,90 @@ pub struct BlockHeightTrackingDSM<
 
 impl<
 	const SAFETY_MARGIN: usize,
-	H: PartialEq + Clone + 'static,
-	N: BlockHeightTrait + 'static,
+	H: PartialEq + Eq + Clone + sp_std::fmt::Debug + 'static,
+	N: BlockHeightTrait + sp_std::fmt::Debug + 'static,
 > dependent_state_machine::Trait for BlockHeightTrackingDSM<SAFETY_MARGIN, N, H> 
 {
-    type State = BlockHeightTrackingState<H,N>;
+    type State = BHWState<H,N>;
     type DisplayState = ChainProgress<N>;
     type Input = InputHeaders<H,N>;
     type Output = Result<ChainProgress<N>, &'static str>;
 
     fn request(s: &Self::State) -> <Self::Input as state_machine::Fibered>::Base {
-        todo!()
+        match s {
+            BHWState::Starting => 0.into(),
+            BHWState::Running { headers: _, witness_from } => witness_from.clone(),
+        }
     }
 
-    fn step(s: &mut Self::State, i: Self::Input) -> Self::Output {
-        todo!()
+    fn step(s: &mut Self::State, new_headers: Self::Input) -> Self::Output {
+
+		match s {
+			BHWState::Starting => {
+				let first = new_headers.0.front().unwrap().block_height;
+				let last  = new_headers.0.back().unwrap().block_height;
+				*s = BHWState::Running { headers: new_headers.0.clone() , witness_from: last + 1.into()  };
+				Ok(ChainProgress::Continuous(  first..=last ))
+			},
+
+			BHWState::Running { headers, witness_from } => {
+
+				let mut chainblocks = ChainBlocks {
+					headers: headers.clone(),
+					next_height: headers.back().unwrap().block_height,
+				};
+
+				match chainblocks.merge(new_headers.0) {
+					Ok(merge_info) => {
+						log::info!(
+							"added new blocks: {:?}, replacing these blocks: {:?}",
+							merge_info.added,
+							merge_info.removed
+						);
+
+						let safe_headers = trim_to_length(
+							&mut chainblocks.headers,
+							SAFETY_MARGIN,
+						);
+
+						*headers = chainblocks.headers;
+						*witness_from = headers.back().unwrap().block_height + 1.into();
+
+						// unsynchronised_state.last_safe_index +=
+						// 	(safe_headers.len() as u32).into();
+
+						// log::info!(
+						// 	"the latest safe block height is {:?} (advanced by {})",
+						// 	unsynchronised_state.last_safe_index,
+						// 	safe_headers.len()
+						// );
+
+						Ok(merge_info.into_chain_progress().unwrap())
+					},
+					Err(MergeFailure::ReorgWithUnknownRoot {
+						new_block,
+						existing_wrong_parent,
+					}) => {
+						log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
+						*witness_from = headers.front().unwrap().block_height; 
+						Ok(chainblocks.current_state_as_no_chain_progress())
+					},
+
+					Err(MergeFailure::InternalError(reason)) => {
+						log::error!("internal error in block height tracker: {reason}");
+						Err("internal error in block height tracker")
+					},
+				}
+
+
+			},
+		}
     }
 
     fn get(s: &Self::State) -> Self::DisplayState {
-        todo!()
+        match s {
+            BHWState::Starting => ChainProgress::WaitingForFirstConsensus,
+            BHWState::Running { headers, witness_from: _ } => ChainProgress::None( headers.back().unwrap().block_height ),
+        }
     }
 }
