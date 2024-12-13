@@ -14,9 +14,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId,
-	SwapRequestId,
+	AccountId, AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
+	BlockNumber, BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
+	SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -259,6 +259,7 @@ pub enum RpcAccountInfo {
 	Broker {
 		flip_balance: NumberOrHex,
 		earned_fees: any::AssetMap<NumberOrHex>,
+		affiliates: Vec<(AffiliateShortId, AccountId)>,
 		btc_vault_deposit_address: Option<String>,
 	},
 	LiquidityProvider {
@@ -300,6 +301,7 @@ impl RpcAccountInfo {
 					.iter()
 					.map(|(asset, balance)| (*asset, (*balance).into())),
 			),
+			affiliates: broker_info.affiliates,
 		}
 	}
 
@@ -2185,10 +2187,10 @@ mod test {
 				btc_vault_deposit_address: Some(
 					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 				),
+				affiliates: vec![(cf_primitives::AffiliateShortId(1), AccountId32::new([1; 32]))],
 			},
 			0,
 		);
-
 		insta::assert_snapshot!(serde_json::to_value(broker).unwrap());
 	}
 
