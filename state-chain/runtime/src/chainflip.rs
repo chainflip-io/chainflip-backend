@@ -70,7 +70,7 @@ use cf_traits::{
 	ScheduledEgressDetails,
 };
 
-use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance};
+use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -327,7 +327,15 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	fn build_transaction(
 		signed_call: &SolanaApi<SolEnvironment>,
 	) -> <Solana as Chain>::Transaction {
-		SolanaTransactionData { serialized_transaction: signed_call.chain_encoded() }
+		SolanaTransactionData {
+			serialized_transaction: signed_call.chain_encoded(),
+			// skip_preflight when broadcasting ccm transfers to consume the nonce even if the
+			// transaction reverts
+			skip_preflight: matches!(
+				signed_call.call_type,
+				SolanaTransactionType::CcmTransfer { .. }
+			),
+		}
 	}
 
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {

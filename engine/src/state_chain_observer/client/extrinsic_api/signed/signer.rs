@@ -58,6 +58,9 @@ where
 			// This is the tx fee tip. Normally this determines transaction priority. We currently
 			// ignore this in the runtime but it needs to be set to some default value.
 			state_chain_runtime::ChargeTransactionPayment::from(0),
+			frame_metadata_hash_extension::CheckMetadataHash::<state_chain_runtime::Runtime>::new(
+				false,
+			),
 		);
 		let additional_signed = (
 			(),
@@ -68,6 +71,7 @@ where
 			(),
 			(),
 			(),
+			None,
 		);
 
 		let signed_payload = state_chain_runtime::SignedPayload::from_raw(

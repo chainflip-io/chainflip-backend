@@ -21,7 +21,7 @@ fn submit_and_pass_proposal(proposal: Proposal) {
 	));
 	assert_eq!(
 		last_event::<Test>(),
-		mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalSubmitted {
+		mock::RuntimeEvent::TokenholderGovernance(Event::ProposalSubmitted {
 			proposal: proposal.clone()
 		}),
 	);
@@ -41,7 +41,7 @@ fn submit_and_pass_proposal(proposal: Proposal) {
 	assert!(!Proposals::<Test>::contains_key(proposal_decision_block));
 	assert_eq!(
 		last_event::<Test>(),
-		mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalPassed {
+		mock::RuntimeEvent::TokenholderGovernance(Event::ProposalPassed {
 			proposal: proposal.clone()
 		}),
 	);
@@ -66,7 +66,7 @@ fn update_gov_key_via_onchain_proposal() {
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		assert_eq!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalEnacted { proposal }),
+			mock::RuntimeEvent::TokenholderGovernance(Event::ProposalEnacted { proposal }),
 		);
 
 		// The key should now be set
@@ -88,7 +88,7 @@ fn update_community_key_via_onchain_proposal() {
 		assert!(CommKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		assert_eq!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalEnacted { proposal }),
+			mock::RuntimeEvent::TokenholderGovernance(Event::ProposalEnacted { proposal }),
 		);
 	});
 }
@@ -180,7 +180,7 @@ fn not_enough_backed_liquidity_for_proposal_enactment() {
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		assert_eq!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalRejected { proposal }),
+			mock::RuntimeEvent::TokenholderGovernance(Event::ProposalRejected { proposal }),
 		);
 	});
 }

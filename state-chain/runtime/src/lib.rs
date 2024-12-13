@@ -11,6 +11,7 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::{
+		address_derivation::btc::derive_btc_vault_deposit_address,
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -18,6 +19,7 @@ use crate::{
 		},
 		Offence,
 	},
+	migrations::solana_transaction_data_migration::NoopUpgrade,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
 		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, OpenDepositChannels,
@@ -47,7 +49,7 @@ use cf_chains::{
 	btc::{
 		api::BitcoinApi,
 		vault_swap_encoding::{
-			encode_swap_params_in_nulldata_utxo, SharedCfParameters, UtxoEncodedData,
+			encode_swap_params_in_nulldata_payload, SharedCfParameters, UtxoEncodedData,
 		},
 		BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey,
 	},
@@ -78,7 +80,7 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::{BatchExecutionError, FeeType, Swap};
+use pallet_cf_swapping::{BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap};
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
@@ -212,7 +214,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_version: 180,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 12,
+	transaction_version: 13,
 	state_version: 1,
 };
 
@@ -1158,6 +1160,7 @@ pub type SignedExtra = (
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+	frame_metadata_hash_extension::CheckMetadataHash<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
@@ -1299,6 +1302,49 @@ type MigrationsForV1_8 = (
 		3,
 		migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
 		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+	// Only the Solana Transaction type has changed
+	VersionedMigration<
+		10,
+		11,
+		migrations::solana_transaction_data_migration::SolanaTransactionDataMigration,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		10,
+		11,
+		NoopUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
 		DbWeight,
 	>,
 	VersionedMigration<
@@ -1961,11 +2007,14 @@ impl_runtime_apis! {
 		fn cf_broker_info(
 			account_id: AccountId,
 		) -> BrokerInfo {
-			let earned_fees = Asset::all().map(|asset|
-				(asset, AssetBalances::get_balance(&account_id, asset))
-			).collect();
-
-			BrokerInfo { earned_fees }
+			BrokerInfo {
+				earned_fees: Asset::all().map(|asset|
+					(asset, AssetBalances::get_balance(&account_id, asset))
+				).collect(),
+				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
+					.map(derive_btc_vault_deposit_address),
+				affiliates: pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&account_id).collect(),
+			}
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
@@ -2231,8 +2280,6 @@ impl_runtime_apis! {
 			// Encode swap
 			match ForeignChain::from(source_asset) {
 				ForeignChain::Bitcoin => {
-					use cf_chains::btc::deposit_address::DepositAddress;
-
 					let private_channel_id =
 						pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
 							.ok_or(
@@ -2275,25 +2322,9 @@ impl_runtime_apis! {
 							},
 						};
 
-					let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
-						.expect("We should always have a key for the current epoch.");
-					let deposit_address = DepositAddress::new(
-						key.current,
-						private_channel_id.try_into().map_err(
-							// TODO: Ensure this can't happen.
-							|_| {
-								DispatchErrorWithMessage::Other(
-									"Private channel id out of bounds.".into(),
-								)
-							},
-						)?,
-					)
-					.script_pubkey()
-					.to_address(&Environment::network_environment().into());
-
 					Ok(VaultSwapDetails::Bitcoin {
-						nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw(),
-						deposit_address,
+						nulldata_payload: encode_swap_params_in_nulldata_payload(params),
+						deposit_address: derive_btc_vault_deposit_address(private_channel_id),
 					})
 				},
 				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),

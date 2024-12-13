@@ -1,6 +1,8 @@
 #![cfg(test)]
 
-use crate::{mock::*, PendingVaultActivation, VaultActivationStatus, VaultStartBlockNumbers};
+use crate::{
+	mock::*, Event, PendingVaultActivation, VaultActivationStatus, VaultStartBlockNumbers,
+};
 use cf_chains::mocks::{MockAggKey, MockEthereum};
 use cf_test_utilities::last_event;
 use cf_traits::{
@@ -28,7 +30,7 @@ fn key_unavailable_on_activate_returns_governance_event() {
 	new_test_ext_no_key().execute_with(|| {
 		VaultsPallet::start_key_activation(NEW_AGG_PUBKEY, None);
 
-		assert_last_event!(crate::Event::AwaitingGovernanceActivation { .. });
+		assert_last_event!(Event::AwaitingGovernanceActivation { .. });
 
 		// we're awaiting the governance action, so we are pending from
 		// perspective of an outside observer (e.g. the validator pallet)
@@ -68,7 +70,7 @@ fn vault_start_block_number_is_set_correctly() {
 			PendingVaultActivation::<Test, _>::get().unwrap(),
 			VaultActivationStatus::Complete
 		));
-		assert_last_event!(crate::Event::VaultActivationCompleted);
+		assert_last_event!(Event::VaultActivationCompleted);
 	});
 }
 

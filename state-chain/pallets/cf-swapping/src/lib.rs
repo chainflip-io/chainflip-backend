@@ -551,6 +551,7 @@ pub mod pallet {
 			output_asset: Asset,
 			origin: SwapOrigin,
 			request_type: SwapRequestTypeEncoded,
+			broker_fees: Beneficiaries<T::AccountId>,
 			refund_parameters: Option<ChannelRefundParametersEncoded>,
 			dca_parameters: Option<DcaParameters>,
 		},
@@ -744,8 +745,6 @@ pub mod pallet {
 		AffiliateNotRegistered,
 		/// Bitcoin vault swaps only support up to 2 affiliates.
 		TooManyAffiliates,
-		/// No empty affiliate short id available.
-		NoEmptyAffiliateShortId,
 		/// The Bonder does not have enough Funds to cover the bond.
 		InsufficientFunds,
 	}
@@ -1944,6 +1943,7 @@ pub mod pallet {
 						},
 				},
 				origin: origin.clone(),
+				broker_fees: broker_fees.clone(),
 				refund_parameters: refund_params
 					.clone()
 					.map(|params| params.map_address(T::AddressConverter::to_encoded_address)),
@@ -2161,7 +2161,6 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 		AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
 	}
 
-	/// This function iterates over a storage map. Only for use in rpc methods.
 	/// This function iterates over a storage map. Only for use in rpc methods.
 	fn get_short_id(
 		broker_id: &Self::AccountId,

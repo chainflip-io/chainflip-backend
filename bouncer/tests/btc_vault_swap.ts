@@ -22,7 +22,7 @@ const commissionBps = 100;
 
 interface VaultSwapDetails {
   chain: string;
-  nulldata_utxo: string;
+  nulldata_payload: string;
   deposit_address: string;
 }
 
@@ -64,11 +64,11 @@ async function buildAndSendBtcVaultSwap(
   )) as unknown as VaultSwapDetails;
 
   assert.strictEqual(vaultSwapDetails.chain, 'Bitcoin');
-  testBtcVaultSwap.debugLog('nulldata_utxo:', vaultSwapDetails.nulldata_utxo);
+  testBtcVaultSwap.debugLog('nulldata_payload:', vaultSwapDetails.nulldata_payload);
   testBtcVaultSwap.debugLog('deposit_address:', vaultSwapDetails.deposit_address);
 
   const txid = await sendVaultTransaction(
-    vaultSwapDetails.nulldata_utxo,
+    vaultSwapDetails.nulldata_payload,
     depositAmountBtc,
     vaultSwapDetails.deposit_address,
     refundAddress,

@@ -37,6 +37,47 @@ pub enum OrderFilled {
 	},
 }
 
+pub(crate) fn order_fills_for_block<C, B, BE>(
+	client: &C,
+	hash: Hash,
+) -> RpcResult<BlockUpdate<OrderFills>>
+where
+	B: BlockT<Hash = Hash, Header = state_chain_runtime::Header>,
+	B::Header: Unpin,
+	BE: Send + Sync + 'static + Backend<B>,
+	C: sp_api::ProvideRuntimeApi<B>
+		+ Send
+		+ Sync
+		+ 'static
+		+ BlockBackend<B>
+		+ ExecutorProvider<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
+		+ BlockchainEvents<B>
+		+ CallApiAt<B>
+		+ StorageProvider<B, BE>,
+	C::Api: CustomRuntimeApi<B>,
+{
+	let header = client
+		.header(hash)
+		.map_err(|e| call_error(e))?
+		.ok_or(internal_error(format!("Could not fetch block header for block {:?}", hash)))?;
+
+	let pools = StorageQueryApi::new(client)
+		.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(hash)?;
+
+	let prev_pools = StorageQueryApi::new(client)
+		.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(header.parent_hash)?;
+
+	let lp_events = client.runtime_api().cf_lp_events(hash)?;
+
+	Ok(BlockUpdate::<OrderFills> {
+		block_hash: hash,
+		block_number: header.number,
+		data: order_fills_from_block_updates(&prev_pools, &pools, lp_events),
+	})
+}
+
 fn order_fills_for_pool<'a>(
 	asset_pair: &'a AssetPair,
 	pool: &'a Pool<Runtime>,
@@ -142,7 +183,7 @@ fn order_fills_for_pool<'a>(
 		))
 }
 
-pub fn order_fills_from_block_updates(
+fn order_fills_from_block_updates(
 	previous_pools: &BTreeMap<AssetPair, Pool<Runtime>>,
 	pools: &BTreeMap<AssetPair, Pool<Runtime>>,
 	events: Vec<pallet_cf_pools::Event<Runtime>>,

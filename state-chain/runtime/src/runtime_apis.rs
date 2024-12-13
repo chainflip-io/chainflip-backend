@@ -41,7 +41,7 @@ type VanityName = Vec<u8>;
 pub enum VaultSwapDetails<BtcAddress> {
 	Bitcoin {
 		#[serde(with = "sp_core::bytes")]
-		nulldata_utxo: Vec<u8>,
+		nulldata_payload: Vec<u8>,
 		deposit_address: BtcAddress,
 	},
 }
@@ -52,8 +52,8 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 		F: FnOnce(BtcAddress) -> T,
 	{
 		match self {
-			VaultSwapDetails::Bitcoin { nulldata_utxo, deposit_address } =>
-				VaultSwapDetails::Bitcoin { nulldata_utxo, deposit_address: f(deposit_address) },
+			VaultSwapDetails::Bitcoin { nulldata_payload, deposit_address } =>
+				VaultSwapDetails::Bitcoin { nulldata_payload, deposit_address: f(deposit_address) },
 		}
 	}
 }
@@ -161,6 +161,8 @@ pub struct LiquidityProviderInfo {
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
+	pub btc_vault_deposit_address: Option<String>,
+	pub affiliates: Vec<(AffiliateShortId, AccountId32)>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]

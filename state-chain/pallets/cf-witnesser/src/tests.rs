@@ -3,7 +3,7 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	weights::WeightInfo,
-	CallHash, CallHashExecuted, Config, EpochsToCull, Error, ExtraCallData, PalletOffence,
+	CallHash, CallHashExecuted, Config, EpochsToCull, Error, Event, ExtraCallData, PalletOffence,
 	PalletSafeMode, VoteMask, Votes, WitnessDeadline, WitnessedCallsScheduledForDispatch,
 };
 use cf_test_utilities::assert_event_sequence;
@@ -549,9 +549,7 @@ fn can_punish_failed_witnesser() {
 
 			assert!(CallHashExecuted::<Test>::contains_key(epoch, call_hash));
 			assert_eq!(WitnessDeadline::<Test>::get(target), vec![(epoch, call_hash)]);
-			System::assert_has_event(RuntimeEvent::Witnesser(
-				crate::Event::<Test>::CallDispatched { call_hash },
-			));
+			System::assert_has_event(RuntimeEvent::Witnesser(Event::CallDispatched { call_hash }));
 
 			// Before the deadline is set, no one has been reported.
 			OffenceReporter::assert_reported(PalletOffence::FailedToWitnessInTime, vec![]);
@@ -565,13 +563,11 @@ fn can_punish_failed_witnesser() {
 				success_threshold..100u64,
 			);
 
-			System::assert_has_event(RuntimeEvent::Witnesser(
-				crate::Event::<Test>::ReportedWitnessingFailures {
-					call_hash,
-					block_number: System::block_number() - GracePeriod::get(),
-					accounts: (success_threshold..100u64).collect(),
-				},
-			));
+			System::assert_has_event(RuntimeEvent::Witnesser(Event::ReportedWitnessingFailures {
+				call_hash,
+				block_number: System::block_number() - GracePeriod::get(),
+				accounts: (success_threshold..100u64).collect(),
+			}));
 
 			// storage is cleaned up.
 			assert_eq!(WitnessDeadline::<Test>::decode_len(target), None);

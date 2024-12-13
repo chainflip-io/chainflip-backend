@@ -44,6 +44,7 @@ impl BenchmarkValue for SolanaTransactionData {
 			serialized_transaction: SolTransaction::benchmark_value()
 				.finalize_and_serialize()
 				.expect("Failed to serialize payload"),
+			skip_preflight: false,
 		}
 	}
 }

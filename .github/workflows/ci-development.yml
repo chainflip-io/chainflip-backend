@@ -24,11 +24,6 @@ jobs:
     secrets: inherit
     with:
       profile: "release"
-  build-m2:
-    uses: ./.github/workflows/_21_build_m2.yml
-    secrets: inherit
-    with:
-      profile: "release"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     uses: ./.github/workflows/_20_build.yml

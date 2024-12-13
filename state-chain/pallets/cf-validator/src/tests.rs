@@ -107,9 +107,7 @@ fn changing_epoch_block_size() {
 		assert_ok!(ValidatorPallet::update_pallet_config(RuntimeOrigin::root(), UPDATE));
 		assert_eq!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PalletConfigUpdated {
-				update: UPDATE
-			}),
+			mock::RuntimeEvent::ValidatorPallet(Event::PalletConfigUpdated { update: UPDATE }),
 		);
 	});
 }
@@ -249,7 +247,7 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::CFEVersionUpdated {
+			mock::RuntimeEvent::ValidatorPallet(Event::CFEVersionUpdated {
 				account_id: authority,
 				old_version: SemVer::default(),
 				new_version: version,
@@ -269,7 +267,7 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::CFEVersionUpdated {
+			mock::RuntimeEvent::ValidatorPallet(Event::CFEVersionUpdated {
 				account_id: authority,
 				old_version: version,
 				new_version,
@@ -725,7 +723,7 @@ fn auction_params_must_be_valid_when_set() {
 		// Confirm we have an event
 		assert!(matches!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PalletConfigUpdated { .. }),
+			mock::RuntimeEvent::ValidatorPallet(Event::PalletConfigUpdated { .. }),
 		));
 	});
 }
@@ -1336,8 +1334,8 @@ fn test_start_and_stop_bidding() {
 
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::ValidatorPallet(crate::Event::StartedBidding { account_id: ALICE }),
-			RuntimeEvent::ValidatorPallet(crate::Event::StoppedBidding { account_id: ALICE })
+			RuntimeEvent::ValidatorPallet(Event::StartedBidding { account_id: ALICE }),
+			RuntimeEvent::ValidatorPallet(Event::StoppedBidding { account_id: ALICE })
 		);
 	});
 }
@@ -1482,9 +1480,9 @@ fn can_update_all_config_items() {
 		for update in updates {
 			assert_ok!(ValidatorPallet::update_pallet_config(OriginTrait::root(), update.clone()));
 			// Check that the events were emitted
-			System::assert_has_event(RuntimeEvent::ValidatorPallet(
-				crate::Event::PalletConfigUpdated { update },
-			));
+			System::assert_has_event(RuntimeEvent::ValidatorPallet(Event::PalletConfigUpdated {
+				update,
+			}));
 		}
 
 		// Check that the new values were set
