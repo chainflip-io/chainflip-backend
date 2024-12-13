@@ -1,20 +1,24 @@
-use core::ops::{Add, AddAssign, Range, RangeInclusive, Sub, SubAssign};
+use core::{
+	iter::Step,
+	ops::{Add, AddAssign, Range, RangeInclusive, Rem, Sub, SubAssign},
+};
 
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
 		ElectoralWriteAccess, VotePropertiesOf,
 	},
+	electoral_systems::block_height_tracking::RangeOfBlockWitnessRanges,
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_chains::btc::BlockNumber;
+use cf_chains::{btc::BlockNumber, witness_period::BlockWitnessRange};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	sp_runtime::traits::AtLeast32BitUnsigned,
+	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating},
 	Parameter,
 };
 use itertools::Itertools;
@@ -44,18 +48,43 @@ pub struct MergeInfo<H, N> {
 	pub added: VecDeque<Header<H, N>>,
 }
 
-impl<H, N: Copy> MergeInfo<H, N> {
+impl<
+		H,
+		N: Copy
+			+ Saturating
+			+ Sub<N, Output = N>
+			+ Rem<N, Output = N>
+			+ Eq
+			+ One
+			+ PartialOrd
+			+ Step
+			+ Into<u64>,
+	> MergeInfo<H, N>
+{
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<N>> {
 		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
 			if let (Some(first_removed), Some(last_removed)) =
 				(self.removed.front(), self.removed.back())
 			{
-				Some(ChainProgress::Reorg {
-					removed: first_removed.block_height..=first_removed.block_height,
-					added: first_added.block_height..=last_added.block_height,
-				})
+				todo!("resolve this");
+				// Some(ChainProgress::Reorg {
+				// 	removed: first_removed.block_height..=first_removed.block_height,
+				// 	added: first_added.block_height..=last_added.block_height,
+				// })
 			} else {
-				Some(ChainProgress::Continuous(first_added.block_height..=last_added.block_height))
+				// Some(ChainProgress::Continuous(first_added.block_height..=last_added.
+				// block_height))
+
+				// TODO: pass through witness period
+				Some(ChainProgress::Continuous(
+					RangeOfBlockWitnessRanges::try_new(
+						first_added.block_height,
+						last_added.block_height,
+						// TODO: Get the actual witness root
+						N::one(),
+					)
+					.ok()?,
+				))
 			}
 		} else {
 			None
