@@ -179,43 +179,44 @@ impl<
 
 		let last_seen_root = match chain_progress {
 			ChainProgress::WaitingForFirstConsensus => return Ok(()),
-			ChainProgress::Reorg { removed: reorg_range, added: new_range } => {
+			ChainProgress::Reorg(reorg_range) => {
 				// Delete any elections that are ongoing for any blocks in the reorg range.
+
+				let block_witness_ranges =
+					reorg_range.block_witness_ranges().map_err(|()| CorruptStorageError::new())?;
 				for (i, election_identifier) in election_identifiers.into_iter().enumerate() {
 					let election = ElectoralAccess::election_mut(election_identifier);
-					let properties = election.properties()?;
-					if properties.0.into_range_inclusive() == *reorg_range {
+
+					if block_witness_ranges.contains(&election.properties()?.0) {
 						election.delete();
 						open_elections = open_elections.saturating_sub(1);
 						remaining_election_identifiers.remove(i);
 					}
 				}
 
-				// TODO: Wrap with safe mode, no new elections.
-				for root in
-					new_range.clone().step_by(Into::<u64>::into(Chain::WITNESS_PERIOD) as usize)
-				{
+				// TODO: Limit this to maximum number of elections we can start at once (and write a
+				// test for this case where the range of the reorg is >
+				// max_concurrent_elections). TODO: Wrap with safe mode, no new elections.
+				for range in block_witness_ranges.clone() {
+					let root = *range.root();
 					log::info!("New election for root: {:?}", root);
 					ElectoralAccess::new_election(
 						(),
-						(
-							Chain::block_witness_range(root).into(),
-							ElectionGenerator::generate_election_properties(root),
-						),
+						(range, ElectionGenerator::generate_election_properties(root)),
 						(),
 					)?;
 					last_block_election_emitted_for = root;
 					open_elections = open_elections.saturating_add(1);
 				}
 
-				// NB: We do not clear any of the unprocessed data here. This is because we need to
-				// prevent double dispatches. By keeping the state, if we have a reorg we can check
-				// against the state in the process_block_data hook to ensure we don't double
-				// dispatch.
-				*new_range.end()
+				//  NB: We do not clear any of the unprocessed data here. This is because we need
+				// to prevent double dispatches. By keeping the state, if we have a reorg we
+				// can check against the state in the process_block_data hook to ensure we
+				// don't double dispatch.
+				reorg_range.witness_to_root()
 			},
 			ChainProgress::None(last_block_root_seen) => *last_block_root_seen,
-			ChainProgress::Continuous(witness_range) => *witness_range.end(),
+			ChainProgress::Continuous(witness_range) => witness_range.witness_to_root(),
 		};
 
 		ensure!(Chain::is_block_witness_root(last_seen_root), {
@@ -227,22 +228,10 @@ impl<
 		// TODO: Wrap in safe mode
 		let settings = ElectoralAccess::unsynchronised_settings()?;
 
-		for range_root in (last_block_election_emitted_for.saturating_add(Chain::WITNESS_PERIOD)..=
-			last_seen_root)
-			.step_by(Into::<u64>::into(Chain::WITNESS_PERIOD) as usize)
-			.take(settings.max_concurrent_elections.saturating_sub(open_elections) as usize)
-		{
-			ElectoralAccess::new_election(
-				(),
-				(
-					Chain::block_witness_range(range_root).into(),
-					ElectionGenerator::generate_election_properties(range_root),
-				),
-				(),
-			)?;
-			last_block_election_emitted_for = range_root;
-			open_elections = open_elections.saturating_add(1);
-		}
+		// println!(
+		// 	"open elections: {}, last_block_election_emitted_for: {}",
+		// 	open_elections, last_block_election_emitted_for
+		// );
 
 		// We always want to check with remaining elections we can resolve, note the ones we just
 		// initiated won't be included here, which is intention, they can't have come to consensus
@@ -255,8 +244,34 @@ impl<
 				election_access.delete();
 
 				open_elections = open_elections.saturating_sub(1);
-				unprocessed_data.push((*root_block_number.start(), block_data));
+				unprocessed_data.push((*root_block_number.root(), block_data));
 			}
+		}
+
+		// println!(
+		// 	"after resolving: open elections: {}, last_block_election_emitted_for: {}",
+		// 	open_elections, last_block_election_emitted_for
+		// );
+
+		for range_root in (last_block_election_emitted_for.saturating_add(Chain::WITNESS_PERIOD)..=
+			last_seen_root)
+			.step_by(Into::<u64>::into(Chain::WITNESS_PERIOD) as usize)
+			.take(settings.max_concurrent_elections.saturating_sub(open_elections) as usize)
+		{
+			// println!("New election for root not reorg: {:?}", range_root);
+			ElectoralAccess::new_election(
+				(),
+				(
+					BlockWitnessRange::try_new(range_root, Chain::WITNESS_PERIOD).map_err(|e| {
+						log::error!("Failed to create block witness range {e:?}");
+						CorruptStorageError::new()
+					})?,
+					ElectionGenerator::generate_election_properties(range_root),
+				),
+				(),
+			)?;
+			last_block_election_emitted_for = range_root;
+			open_elections = open_elections.saturating_add(1);
 		}
 
 		unprocessed_data = BlockDataProcessor::process_block_data(last_seen_root, unprocessed_data);
