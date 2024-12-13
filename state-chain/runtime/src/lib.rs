@@ -2141,7 +2141,7 @@ impl_runtime_apis! {
 							dca_parameters,
 						)
 				} else {
-					Err(DispatchErrorWithMessage::Other("Extra parameter is not valid for Btc vault swap.".into()))
+					Err("Extra parameter is not valid for Btc vault swap.".into())
 				},
 				ForeignChain::Solana => crate::chainflip::vault_swap::solana_vault_swap(
 					broker_id,

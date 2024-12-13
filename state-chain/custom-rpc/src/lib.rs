@@ -1871,12 +1871,12 @@ where
 							a.try_parse_to_encoded_address(source_asset.into())
 								.map_err(|_| "Cannot convert decode address".into())
 						})
-						.map_err(DispatchErrorWithMessage::Other)?
+						.map_err(DispatchErrorWithMessage::from)?
 						.try_map_numbers(|n| {
 							u128::try_from(n)
 								.map_err(|_| "Cannot convert number input into u128".into())
 						})
-						.map_err(DispatchErrorWithMessage::Other)?,
+						.map_err(DispatchErrorWithMessage::from)?,
 					channel_metadata,
 					boost_fee.unwrap_or_default(),
 					affiliate_fees.unwrap_or_default(),
