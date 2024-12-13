@@ -124,7 +124,10 @@ use sp_runtime::{
 	BoundedVec,
 };
 
-use frame_support::genesis_builder_helper::build_state;
+use frame_support::{
+	genesis_builder_helper::build_state,
+	traits::{EstimateNextSessionRotation, Time},
+};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -2241,6 +2244,14 @@ impl_runtime_apis! {
 				})
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
 
+			// Remaining blocks for current session
+			let current_block = System::block_number();
+			let rotation_duration = Validator::blocks_per_epoch();
+			let (Some(next_rotation_block), _) = Validator::estimate_next_session_rotation(current_block) else {
+				Err(pallet_cf_validator::Error::<Runtime>::InvalidEpochDuration)?
+			};
+			let blocks_until_next_rotation = next_rotation_block.saturating_sub(current_block);
+
 			// Encode swap
 			match ForeignChain::from(source_asset) {
 				ForeignChain::Bitcoin => {
@@ -2286,9 +2297,15 @@ impl_runtime_apis! {
 							},
 						};
 
+					// Bitcoin vault address expires after 2 rotations.
+					// Adjust the expiry time by constant to have some sort of buffer
+					let expires_in = (blocks_until_next_rotation + rotation_duration) as u64 *
+					SLOT_DURATION * VAULT_SWAP_DETAILS_EXPIRY_TIME_PERCENTAGE as u64 / 100;
+
 					Ok(VaultSwapDetails::Bitcoin {
 						nulldata_payload: encode_swap_params_in_nulldata_payload(params),
 						deposit_address: derive_btc_vault_deposit_address(private_channel_id),
+						expires_at: Timestamp::now() + expires_in
 					})
 				},
 				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),

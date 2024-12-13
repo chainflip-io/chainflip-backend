@@ -72,6 +72,10 @@ pub mod common {
 	pub const BLOCKS_PER_MINUTE_ARBITRUM: u64 = 60000 / MILLISECONDS_PER_BLOCK_ARBITRUM;
 	pub const BLOCKS_PER_MINUTE_SOLANA: u64 = 60000 / MILLISECONDS_PER_BLOCK_SOLANA;
 
+	/// Defines a multiplier that is used to adjust the expiry time of the returned vault swap
+	/// payload details.
+	pub const VAULT_SWAP_DETAILS_EXPIRY_TIME_PERCENTAGE: u8 = 50;
+
 	/// Percent of the epoch we are allowed to redeem
 	pub const REDEMPTION_PERIOD_AS_PERCENTAGE: u8 = 50;
 

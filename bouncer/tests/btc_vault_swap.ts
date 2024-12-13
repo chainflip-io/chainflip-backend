@@ -24,6 +24,7 @@ interface VaultSwapDetails {
   chain: string;
   nulldata_payload: string;
   deposit_address: string;
+  expires_at: number;
 }
 
 interface Beneficiary {
@@ -66,6 +67,8 @@ async function buildAndSendBtcVaultSwap(
   assert.strictEqual(vaultSwapDetails.chain, 'Bitcoin');
   testBtcVaultSwap.debugLog('nulldata_payload:', vaultSwapDetails.nulldata_payload);
   testBtcVaultSwap.debugLog('deposit_address:', vaultSwapDetails.deposit_address);
+  testBtcVaultSwap.debugLog('expires_at:', vaultSwapDetails.expires_at);
+  console.log("vaultSwapDetails", vaultSwapDetails);
 
   const txid = await sendVaultTransaction(
     vaultSwapDetails.nulldata_payload,
