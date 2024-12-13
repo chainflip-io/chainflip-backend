@@ -1,8 +1,8 @@
 use crate::{
 	mock_btc::*,
 	tests::{ALICE, BROKER},
-	BoostPoolId, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness, Event,
-	ReportExpiresAt, ScheduledTxForReject, TransactionPrewitnessedStatus,
+	BoostPoolId, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness,
+	Event, ReportExpiresAt, ScheduledTxForReject, TransactionPrewitnessedStatus,
 	TransactionRejectionDetails, TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
 };
 

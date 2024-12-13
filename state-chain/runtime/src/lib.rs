@@ -1383,15 +1383,15 @@ type MigrationsForV1_8 = (
 		DbWeight,
 	>,
 	VersionedMigration<
-		10,
 		11,
+		12,
 		migrations::api_calls_gas_migration::EthApiCallsGasMigration,
 		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
 		DbWeight,
 	>,
 	VersionedMigration<
-		10,
 		11,
+		12,
 		migrations::api_calls_gas_migration::ArbApiCallsGasMigration,
 		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
 		DbWeight,
@@ -1399,22 +1399,22 @@ type MigrationsForV1_8 = (
 	// API call migration only needed for Ethereum and Arbitrum as it's
 	// the only ones storing the gas_budget as part of the api call.
 	VersionedMigration<
-		10,
 		11,
+		12,
 		migrations::api_calls_gas_migration::NoOpMigration,
 		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
 		DbWeight,
 	>,
 	VersionedMigration<
-		10,
 		11,
+		12,
 		migrations::api_calls_gas_migration::NoOpMigration,
 		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
 		DbWeight,
 	>,
 	VersionedMigration<
-		10,
 		11,
+		12,
 		migrations::api_calls_gas_migration::NoOpMigration,
 		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
 		DbWeight,

@@ -682,7 +682,8 @@ fn multi_use_deposit_address_different_blocks() {
 		})
 		.then_process_events(|_, event| match event {
 			RuntimeEvent::IngressEgress(Event::DepositFailed {
-				details: DepositFailedDetails::DepositChannel { deposit_witness }, ..
+				details: DepositFailedDetails::DepositChannel { deposit_witness },
+				..
 			}) => Some(deposit_witness.deposit_address),
 			_ => None,
 		})
@@ -836,16 +837,16 @@ fn deposits_below_minimum_are_rejected() {
 		// Observe that eth deposit gets rejected.
 		let (_channel_id, deposit_address) = request_address_and_deposit(0, eth);
 		System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositFailed {
-				details: DepositFailedDetails::DepositChannel {
+			details: DepositFailedDetails::DepositChannel {
 				deposit_witness: DepositWitness {
-						deposit_address,
+					deposit_address,
 					asset: eth,
 					amount: default_deposit_amount,
 					deposit_details: Default::default(),
-					},
 				},
+			},
 			reason: DepositFailedReason::BelowMinimumDeposit,
-				block_height: Default::default(),
+			block_height: Default::default(),
 		}));
 
 		const LP_ACCOUNT: u64 = 0;

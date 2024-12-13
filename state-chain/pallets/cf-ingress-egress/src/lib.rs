@@ -1909,7 +1909,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			None, // source address is unknown
 			&deposit_channel_details.owner,
 			deposit_channel_details.boost_status,
-				deposit_channel_details.boost_fee,
+			deposit_channel_details.boost_fee,
 			Some(channel_id),
 			deposit_channel_details.action,
 			block_height,
@@ -2349,8 +2349,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			affiliate_fees,
 			refund_params,
 			dca_params,
-			// Boost fee is only relevant for prewitnessing
-			boost_fee: _,
+			boost_fee,
 		} = vault_deposit_witness.clone();
 
 		let boost_status =
