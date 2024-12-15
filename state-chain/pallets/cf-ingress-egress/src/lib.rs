@@ -28,10 +28,11 @@ use cf_chains::{
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
 	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata,
-	CcmFailReason, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
-	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
-	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain,
-	RejectCall, SwapOrigin, TransferAssetParams,
+	CcmFailReason, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks,
+	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
+	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -381,7 +382,7 @@ pub mod pallet {
 		pub tx_id: TransactionInIdFor<T, I>,
 		pub broker_fee: Beneficiary<T::AccountId>,
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
-		pub refund_params: ChannelRefundParameters,
+		pub refund_params: ChannelRefundParametersDecoded,
 		pub dca_params: Option<DcaParameters>,
 		pub boost_fee: BasisPoints,
 	}
@@ -423,7 +424,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParametersDecoded>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -435,7 +436,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParametersDecoded>,
 			dca_params: Option<DcaParameters>,
 		},
 	}
@@ -2925,7 +2926,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParametersDecoded>,
 		dca_params: Option<DcaParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),

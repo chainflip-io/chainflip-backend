@@ -5,7 +5,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
-	CcmChannelMetadata, CcmDepositMetadata, CcmSwapAmounts, ChannelRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, CcmSwapAmounts, ChannelRefundParametersDecoded,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
@@ -351,7 +351,7 @@ struct SwapRequest<T: Config> {
 	id: SwapRequestId,
 	input_asset: Asset,
 	output_asset: Asset,
-	refund_params: Option<ChannelRefundParameters>,
+	refund_params: Option<ChannelRefundParametersDecoded>,
 	state: SwapRequestState<T>,
 }
 
@@ -1927,7 +1927,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<&ChannelRefundParameters>,
+			refund_params: Option<&ChannelRefundParametersDecoded>,
 			swap_type: SwapType,
 			broker_fees: Beneficiaries<T::AccountId>,
 			swap_request_id: SwapRequestId,
@@ -2105,7 +2105,7 @@ pub mod pallet {
 			output_asset: Asset,
 			request_type: SwapRequestType,
 			broker_fees: Beneficiaries<Self::AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParametersDecoded>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin,
 		) -> SwapRequestId {
@@ -2546,7 +2546,7 @@ pub(crate) mod utilities {
 	}
 
 	pub(super) fn calculate_swap_refund_parameters(
-		params: &ChannelRefundParameters,
+		params: &ChannelRefundParametersDecoded,
 		execute_at_block: u32,
 		input_amount: AssetAmount,
 	) -> SwapRefundParameters {
