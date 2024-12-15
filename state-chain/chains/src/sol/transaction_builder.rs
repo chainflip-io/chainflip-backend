@@ -442,27 +442,20 @@ impl SolanaTransactionBuilder {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
 	use cf_primitives::ChannelId;
 	use frame_support::{assert_err, assert_ok};
 
 	use super::*;
 	use crate::{
 		sol::{
-			signing_key::SolSigningKey,
 			sol_tx_core::{address_derivation::derive_deposit_address, sol_test_values::*},
 			SolanaDepositFetchId,
 		},
 		TransferAssetParams,
 	};
 
-	use sol_prim::{
-		consts::{MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL},
-		PdaAndBump,
-	};
-
-	// Arbitrary number used for testing
-	const TEST_COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
+	use sol_prim::{consts::SOL_USDC_DECIMAL, PdaAndBump};
 
 	fn get_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -475,60 +468,6 @@ mod test {
 		crate::FetchAssetParams {
 			deposit_fetch_id: SolanaDepositFetchId { channel_id, address, bump },
 			asset,
-		}
-	}
-
-	fn durable_nonce() -> DurableNonceAndAccount {
-		(NONCE_ACCOUNTS[0], TEST_DURABLE_NONCE)
-	}
-
-	fn api_env() -> SolApiEnvironment {
-		SolApiEnvironment {
-			vault_program: VAULT_PROGRAM,
-			vault_program_data_account: VAULT_PROGRAM_DATA_ACCOUNT,
-			token_vault_pda_account: TOKEN_VAULT_PDA_ACCOUNT,
-			usdc_token_mint_pubkey: USDC_TOKEN_MINT_PUB_KEY,
-			usdc_token_vault_ata: USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
-			swap_endpoint_program: SWAP_ENDPOINT_PROGRAM,
-			swap_endpoint_program_data_account: SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
-		}
-	}
-
-	fn compute_price() -> SolAmount {
-		COMPUTE_UNIT_PRICE
-	}
-
-	fn nonce_accounts() -> Vec<SolAddress> {
-		NONCE_ACCOUNTS.to_vec()
-	}
-
-	#[track_caller]
-	fn test_constructed_transaction(
-		mut transaction: SolTransaction,
-		expected_serialized_tx: Vec<u8>,
-	) {
-		// Obtain required info from Chain Environment
-		let durable_nonce = durable_nonce();
-		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
-
-		// Construct the Transaction and sign it
-		transaction.sign(&[&agg_key_keypair], durable_nonce.1.into());
-
-		// println!("{:?}", tx);
-		let serialized_tx = transaction
-			.clone()
-			.finalize_and_serialize()
-			.expect("Transaction serialization must succeed");
-
-		// println!("Serialized tx length: {:?}", serialized_tx.len());
-		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH);
-
-		if serialized_tx != expected_serialized_tx {
-			panic!(
-				"Transaction mismatch. \nTx: {:?} \nSerialized: {:?}",
-				transaction,
-				hex::encode(serialized_tx.clone())
-			);
 		}
 	}
 

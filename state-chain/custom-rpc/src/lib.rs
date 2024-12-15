@@ -10,7 +10,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
-	CcmChannelMetadata, Chain, VaultSwapExtraParameters, MAX_CCM_MSG_LENGTH,
+	CcmChannelMetadata, Chain, VaultSwapExtraParametersRpc, MAX_CCM_MSG_LENGTH,
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
@@ -1018,7 +1018,7 @@ pub trait CustomApi {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		extra_parameters: VaultSwapExtraParameters,
+		extra_parameters: VaultSwapExtraParametersRpc,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
@@ -1894,7 +1894,7 @@ where
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		extra_parameters: VaultSwapExtraParameters,
+		extra_parameters: VaultSwapExtraParametersRpc,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
@@ -1915,12 +1915,12 @@ where
 							a.try_parse_to_encoded_address(source_asset.into())
 								.map_err(|_| "Cannot convert decode address".into())
 						})
-						.map_err(DispatchErrorWithMessage::Other)?
+						.map_err(DispatchErrorWithMessage::from)?
 						.try_map_numbers(|n| {
 							u128::try_from(n)
 								.map_err(|_| "Cannot convert number input into u128".into())
 						})
-						.map_err(DispatchErrorWithMessage::Other)?,
+						.map_err(DispatchErrorWithMessage::from)?,
 					channel_metadata,
 					boost_fee.unwrap_or_default(),
 					affiliate_fees.unwrap_or_default(),

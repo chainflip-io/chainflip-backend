@@ -7,9 +7,9 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
-#[cfg(test)]
+#[cfg(any(test, feature = "runtime-integration-tests"))]
 use crate::sol::sol_tx_core::{
-	signer::{signers::Signers, SignerError},
+	signer::{Signer, SignerError, TestSigners},
 	transaction::TransactionError,
 };
 use crate::{
@@ -88,26 +88,26 @@ impl Transaction {
 		}
 	}
 
-	#[cfg(test)]
+	#[cfg(any(test, feature = "runtime-integration-tests"))]
 	pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
 		let message = Message::new(instructions, payer);
 		Self::new_unsigned(message)
 	}
 
-	#[cfg(test)]
-	pub fn sign<T: Signers + ?Sized>(&mut self, keypairs: &T, recent_blockhash: Hash) {
-		if let Err(e) = self.try_sign(keypairs, recent_blockhash) {
+	#[cfg(any(test, feature = "runtime-integration-tests"))]
+	pub fn sign<S: Signer>(&mut self, signers: TestSigners<S>, recent_blockhash: Hash) {
+		if let Err(e) = self.try_sign(signers, recent_blockhash) {
 			panic!("Transaction::sign failed with error {e:?}");
 		}
 	}
 
-	#[cfg(test)]
-	pub fn try_sign<T: Signers + ?Sized>(
+	#[cfg(any(test, feature = "runtime-integration-tests"))]
+	pub fn try_sign<S: Signer>(
 		&mut self,
-		keypairs: &T,
+		signers: TestSigners<S>,
 		recent_blockhash: Hash,
 	) -> Result<(), SignerError> {
-		self.try_partial_sign(keypairs, recent_blockhash)?;
+		self.try_partial_sign(signers, recent_blockhash)?;
 
 		if !self.is_signed() {
 			Err(SignerError::NotEnoughSigners)
@@ -116,24 +116,24 @@ impl Transaction {
 		}
 	}
 
-	#[cfg(test)]
-	pub fn try_partial_sign<T: Signers + ?Sized>(
+	#[cfg(any(test, feature = "runtime-integration-tests"))]
+	pub fn try_partial_sign<S: Signer>(
 		&mut self,
-		keypairs: &T,
+		signers: TestSigners<S>,
 		recent_blockhash: Hash,
 	) -> Result<(), SignerError> {
-		let positions = self.get_signing_keypair_positions(&keypairs.pubkeys())?;
+		let positions = self.get_signing_keypair_positions(signers.pubkeys())?;
 		if positions.iter().any(|pos| pos.is_none()) {
 			return Err(SignerError::KeypairPubkeyMismatch)
 		}
 		let positions: Vec<usize> = positions.iter().map(|pos| pos.unwrap()).collect();
-		self.try_partial_sign_unchecked(keypairs, positions, recent_blockhash)
+		self.try_partial_sign_unchecked(signers, positions, recent_blockhash)
 	}
 
-	#[cfg(test)]
-	pub fn try_partial_sign_unchecked<T: Signers + ?Sized>(
+	#[cfg(any(test, feature = "runtime-integration-tests"))]
+	pub fn try_partial_sign_unchecked<S: Signer>(
 		&mut self,
-		keypairs: &T,
+		signers: TestSigners<S>,
 		positions: Vec<usize>,
 		recent_blockhash: Hash,
 	) -> Result<(), SignerError> {
@@ -145,17 +145,17 @@ impl Transaction {
 				.for_each(|signature| *signature = SolSignature::default());
 		}
 
-		let signatures = keypairs.try_sign_message(&self.message_data())?;
+		let signatures = signers.try_sign_message(&self.message_data())?;
 		for i in 0..positions.len() {
 			self.signatures[positions[i]] = signatures[i];
 		}
 		Ok(())
 	}
 
-	#[cfg(test)]
+	#[cfg(any(test, feature = "runtime-integration-tests"))]
 	pub fn get_signing_keypair_positions(
 		&self,
-		pubkeys: &[Pubkey],
+		pubkeys: Vec<Pubkey>,
 	) -> Result<Vec<Option<usize>>, TransactionError> {
 		if self.message.account_keys.len() < self.message.header.num_required_signatures as usize {
 			return Err(TransactionError::InvalidAccountIndex)
@@ -842,7 +842,6 @@ fn ccm_extra_accounts_encoding() {
 	};
 
 	let encoded = Encode::encode(&extra_accounts);
-	// println!("{:?}", hex::encode(encoded));
 
 	// Scale encoding format:
 	// cf_receiver(32 bytes, bool),
@@ -891,9 +890,11 @@ impl FromStr for Hash {
 pub mod sol_test_values {
 	use crate::{
 		sol::{
-			api::VaultSwapAccountAndSender, signing_key::SolSigningKey,
-			sol_tx_core::signer::Signer, SolAddress, SolAmount, SolAsset, SolCcmAccounts,
-			SolCcmAddress, SolComputeLimit, SolHash,
+			api::{DurableNonceAndAccount, VaultSwapAccountAndSender},
+			signing_key::SolSigningKey,
+			sol_tx_core::signer::{Signer, TestSigners},
+			SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts, SolCcmAddress,
+			SolComputeLimit, SolHash,
 		},
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
@@ -999,6 +1000,33 @@ pub mod sol_test_values {
 	pub const SOL: SolAsset = SolAsset::Sol;
 	pub const USDC: SolAsset = SolAsset::SolUsdc;
 
+	// Arbitrary number used for testing
+	pub const TEST_COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
+
+	pub fn durable_nonce() -> DurableNonceAndAccount {
+		(NONCE_ACCOUNTS[0], TEST_DURABLE_NONCE)
+	}
+
+	pub fn api_env() -> SolApiEnvironment {
+		SolApiEnvironment {
+			vault_program: VAULT_PROGRAM,
+			vault_program_data_account: VAULT_PROGRAM_DATA_ACCOUNT,
+			token_vault_pda_account: TOKEN_VAULT_PDA_ACCOUNT,
+			usdc_token_mint_pubkey: USDC_TOKEN_MINT_PUB_KEY,
+			usdc_token_vault_ata: USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+			swap_endpoint_program: SWAP_ENDPOINT_PROGRAM,
+			swap_endpoint_program_data_account: SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
+		}
+	}
+
+	pub fn compute_price() -> SolAmount {
+		COMPUTE_UNIT_PRICE
+	}
+
+	pub fn nonce_accounts() -> Vec<SolAddress> {
+		NONCE_ACCOUNTS.to_vec()
+	}
+
 	pub fn ccm_accounts() -> SolCcmAccounts {
 		SolCcmAccounts {
 			cf_receiver: SolCcmAddress {
@@ -1029,6 +1057,48 @@ pub mod sol_test_values {
 
 	pub fn agg_key() -> SolAddress {
 		SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap().pubkey().into()
+	}
+
+	#[track_caller]
+	pub fn test_constructed_transaction_with_signer<S: Signer>(
+		mut transaction: crate::sol::SolTransaction,
+		expected_serialized_tx: Vec<u8>,
+		signers: TestSigners<S>,
+		blockhash: super::Hash,
+	) {
+		// Sign the transaction with the given singers and blockhash.
+		transaction.sign(signers, blockhash);
+
+		let serialized_tx = transaction
+			.clone()
+			.finalize_and_serialize()
+			.expect("Transaction serialization must succeed");
+
+		assert!(serialized_tx.len() <= sol_prim::consts::MAX_TRANSACTION_LENGTH);
+
+		if serialized_tx != expected_serialized_tx {
+			panic!(
+				"Transaction mismatch. \nTx: {:?} \nSerialized: {:?}",
+				transaction,
+				hex::encode(serialized_tx.clone())
+			);
+		}
+	}
+
+	#[track_caller]
+	pub fn test_constructed_transaction(
+		transaction: crate::sol::SolTransaction,
+		expected_serialized_tx: Vec<u8>,
+	) {
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let durable_nonce = durable_nonce().1.into();
+
+		test_constructed_transaction_with_signer(
+			transaction,
+			expected_serialized_tx,
+			vec![agg_key_keypair].into(),
+			durable_nonce,
+		);
 	}
 }
 
@@ -1072,20 +1142,14 @@ mod tests {
 
 	#[test]
 	fn create_simple_tx() {
-		fn send_initialize_tx(program_id: Pubkey, payer: &SolSigningKey) -> Result<(), ()> {
-			let bank_instruction = BankInstruction::Initialize;
-
-			let instruction = Instruction::new_with_borsh(program_id, &bank_instruction, vec![]);
-
-			let mut tx = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-			tx.sign(&[payer], Default::default());
-			Ok(())
-		}
-
-		// let client = RpcClient::new(String::new());
 		let program_id = Pubkey([0u8; 32]);
 		let payer = SolSigningKey::new();
-		let _ = send_initialize_tx(program_id, &payer);
+		let bank_instruction = BankInstruction::Initialize;
+
+		let instruction = Instruction::new_with_borsh(program_id, &bank_instruction, vec![]);
+
+		let mut tx = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+		tx.sign(vec![payer].into(), Default::default());
 	}
 
 	#[test]
@@ -1106,12 +1170,10 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01345c86d1be2bcdf2c93c75b6054b6232e5b1e7f2fe7b3ca241d48c8a5f993af3e474bf581b2e9a1543af13104b3f3a53530d849731cc403418da313743a57e0401000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400030200020c0200000000ca9a3b00000000").to_vec();
-
-		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1137,7 +1199,7 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = hex_literal::hex!("017036ecc82313548a7f1ef280b9d7c53f9747e23abcb4e76d86c8df6aa87e82d460ad7cea2e8d972a833d3e1802341448a99be200ad4648c454b9d5a5e2d5020d01000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000012c57218f6315b83818802f3522fe7e04c596ae4fe08841e7940bc2f958aaaea04030301050004040000000400090340420f000000000004000502e0930400030200020c0200000040420f0000000000").to_vec();
@@ -1178,16 +1240,13 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println!("{:?}", tx);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx =
 			tx.finalize_and_serialize().expect("Transaction serialization should succeed");
 
 		// With compute unit price and limit
 		let expected_serialized_tx = hex_literal::hex!("01f18817b1a85d96d5084c5534866d5638ab4298e458c169464ecd11081d7b4c4091ac3ff41d9c1582a7d9f2f6f8bebb9cdaec0e1090d9842f5d80196882cb660f01000509f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921be0fac7f9583cfe14f5c09dd7653c597f93168e946760abaad3e3c2cc101f5233306d43f017cdb7b1a324afdc62c79317d5b93e2e63b870143344134db9c60000000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004040301060004040000000500090340420f000000000005000502e093040008050700030204158e24658f6c59298c080000000b0c0d3700000000ff").to_vec();
-
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1239,16 +1298,13 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println!("{:?}", tx);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx =
 			tx.finalize_and_serialize().expect("Transaction serialization should succeed");
 
 		// With compute unit price and limit
 		let expected_serialized_tx = hex_literal::hex!("01b7fdd98ccb9f9656a15deee41677b35054b8ae500e6f87e618eccda73eccecc053eff8a30e106d81415ec128438247495993c52d9d2b95ae34ac15a5006839000100050bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19238861d2f0bf5cd80031b701a6c25d13b4c812dd92f9d6301fafd9a58fb9e438646cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a708d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870b5b9d633289c8fd72fb05f33349bf4cc44e82add5d865311ae346d7c9a67b7dd00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005060301080004040000000700090340420f000000000007000502e09304000a050900030206158e24658f6c59298c080000000000000000000000ff0a050900040506158e24658f6c59298c080000000100000000000000ff").to_vec();
-
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1320,12 +1376,10 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01e365eba1f7a74950e7de854a21f978496bc7ae715cbb3cc7f521b8fb724b122146e0fe31b987418b50769a60513fd34ea9c7a15e732120c5639751f05ec19a040100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19242ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d910ae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21fe91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050301070004040000000600090340420f000000000006000502e09304000c0909000b02040a08030516494710642cb0c646080000000000000000000000ff06").to_vec();
-
-		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1402,12 +1456,10 @@ mod tests {
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01b83f6669762c6f6987f1750aaab985da08a5ae70ad98ac525c19ee02d2909961bde19968c1e6cc80070f6c18bcd9bfc75b3541b0789bb38b83b2b7fd8e9e250e01000912f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921ad0968d57ee79348476716f9b2cd44ec4284b8f52c36648d560949e41589a5540de1c0451cccb6edd1fda9b4a48c282b279350b55a7a9716800cc0132b6f0b042ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d910a140fd3d05766f0087d57bf99df05731e894392ffcc8e8d7e960ba73c09824aaae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21fb4baefcd4965beb1c71311a2ffe76419d4b8f8d35fbc4cf514b1bd02da2df2e3e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060903010b0004040000000a00090340420f00000000000a000502e093040010090d000f04080e0c060916494710642cb0c646080000000000000000000000ff0610090d001102080e0c030916494710642cb0c646080000000100000000000000ff0610050d00050709158e24658f6c59298c080000000200000000000000ff").to_vec();
-
-		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1451,12 +1503,10 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = hex_literal::hex!("014b3dcc9d694f8f0175546e0c8b0cedbe4c1a371cac7108d5029b625ced6dee9d38a97458a3dfa3efbc0d26545fec4f7fa199b41317b219b6ff6c93070d8dd10501000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859ab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301060004040000000500090340420f000000000005000502e09304000c0600020a09040701010b0708000d030209071136b4eeaf4a557ebc00ca9a3b0000000006").to_vec();
-
-		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1497,12 +1547,10 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = hex_literal::hex!("017663fd8be6c54a3ce492a4aac1f50ed8a1589f8aa091d04b52e6fa8a43f22d359906e21630ca3dd93179e989bc1fdccbae8f9a30f6470ef9d5c17a7625f0050a01000411f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0917eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1926744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900448541f57201f277c5f3ffb631d0212e26e7f47749c26c4808718174a0ab2a09a18cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adbcd644e45426a41a7cb8369b8a0c1c89bb3f86cf278fdd9cc38b0f69784ad5667e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864e5e1869817a4fd88ddf7ab7a5f7252d7c345b39721769888608592912e8ca9acf0f13460b3fd04b7d53d7421fc874ec00eec769cf36480895e1a407bf1249475f2b2e24122be016983be9369965246cc45e1f621d40fba300c56c7ac50c3874df4f83bd213a59c9785110cf83c718f9486c3484f918593bce20c61dc6a96036afecc89e3b031824af6363174d19bbec12d3a13c4a173e5aeb349b63042bc138f00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000e0d03020f0004040000000e00090340420f00000000000e000502e093040010040100030d094e518fabdda5d68b000d02020024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020b0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02090024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020a0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02070024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02060024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02040024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020c0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02080024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02050024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
-
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1544,11 +1592,10 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = hex_literal::hex!("019934f0927bb3344080fc333956498280e7ff8959d7ad93e9f894cab5df74223752c3e6fc3607fec8b0a266d36a10b85bf3b9e4ab97f8204924130407c991690c0100070bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd47417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed4800000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301070004040000000500090340420f000000000005000502e0930400040200020c0200000000ca9a3b0000000009070800020304060a347d050be38042e0b20100000014000000ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
-		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1608,13 +1655,10 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println!("{:?}", tx);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01b129476ffae4b80e116ceb457e9da19236c663373bc52d4e7cb5973429fb6157f74ac71e3168a286d7df90a1e259872cb64db6ee84fd6b44d504f529a5e8ea0c01000c11f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec46167417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed48e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5ab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890006050301080004040000000600090340420f000000000006000502e09304000e0600020c0b050901010d070a001004020b091136b4eeaf4a557ebc00ca9a3b00000000060d080a000203090b070f346cb8a27b9fdeaa230100000014000000ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
-
-		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1648,7 +1692,7 @@ mod tests {
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01eb287ff9329fbaf83592ec56709d52d3d7f7edcab7ab53fc8371acff871016c51dfadde692630545a91d6534095bb5697b5fb9ee17dc292552eabf9ab6e3390601000609f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192ca03f3e6d6fd79aaf8ebd4ce053492a34f22d0edafbfa88a380848d9a4735150000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c944220f1b83220b1108ea0e171b5391e6c0157370c8353516b74e962f855be6d787038c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f85921b22d7dfc8cdeba6027384563948d038a11eba06289de51a15c3d649d1f7e2c020303010400040400000008060002060703050101").to_vec();
@@ -1680,7 +1724,7 @@ mod tests {
 			Instruction::new_with_bincode(program_id, &(1u8, 2u8, 3u8), account_metas);
 		let message = Message::new(&[instruction], Some(&keypair.pubkey()));
 		let mut tx: Transaction = Transaction::new_unsigned(message);
-		tx.sign(&[&keypair], Hash::default());
+		tx.sign(vec![keypair].into(), Hash::default());
 		tx
 	}
 

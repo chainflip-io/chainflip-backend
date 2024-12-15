@@ -1,5 +1,5 @@
 use crate::{swapping::SwapRequestType, EgressApi, SwapRequestHandler};
-use cf_chains::{Chain, ChannelRefundParameters, SwapOrigin};
+use cf_chains::{Chain, ChannelRefundParametersDecoded, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -45,7 +45,7 @@ where
 		output_asset: Asset,
 		swap_type: SwapRequestType,
 		broker_fees: Beneficiaries<Self::AccountId>,
-		_refund_params: Option<ChannelRefundParameters>,
+		_refund_params: Option<ChannelRefundParametersDecoded>,
 		_dca_params: Option<DcaParameters>,
 		origin: SwapOrigin,
 	) -> SwapRequestId {

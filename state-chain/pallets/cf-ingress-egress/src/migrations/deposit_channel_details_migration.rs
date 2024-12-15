@@ -11,7 +11,7 @@ use codec::{Decode, Encode};
 
 pub mod old {
 	use crate::BoostStatus;
-	use cf_chains::{ChannelRefundParameters, DepositChannel, ForeignChainAddress};
+	use cf_chains::{ChannelRefundParametersDecoded, DepositChannel, ForeignChainAddress};
 	use cf_primitives::Beneficiaries;
 	use frame_support::{pallet_prelude::OptionQuery, Twox64Concat};
 
@@ -41,7 +41,7 @@ pub mod old {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParametersDecoded>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -53,7 +53,7 @@ pub mod old {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParametersDecoded>,
 			dca_params: Option<DcaParameters>,
 		},
 	}
