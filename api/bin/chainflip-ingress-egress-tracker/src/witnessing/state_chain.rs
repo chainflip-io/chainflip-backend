@@ -550,15 +550,12 @@ where
 			.into_witness_information(block_height, network, state_chain_client)
 			.await
 		{
-			Ok(witness) => {
-				let _result = witness.save_to_store(store).await.map_err(|e| {
+			Ok(witness) =>
+				if let Err(e) = witness.save_to_store(store).await {
 					tracing::error!("Failed to save deposit witness: {:?}", e);
-					e
-				});
-			},
+				},
 			Err(e) => {
-				// Log error and continue operation
-				tracing::error!("Failed to save deposit witness: {:?}", e);
+				tracing::error!("Failed to convert witness into witness information: {:?}", e);
 			},
 		};
 	}
