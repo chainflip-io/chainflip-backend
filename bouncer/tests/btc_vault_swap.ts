@@ -68,7 +68,17 @@ async function buildAndSendBtcVaultSwap(
   testBtcVaultSwap.debugLog('nulldata_payload:', vaultSwapDetails.nulldata_payload);
   testBtcVaultSwap.debugLog('deposit_address:', vaultSwapDetails.deposit_address);
   testBtcVaultSwap.debugLog('expires_at:', vaultSwapDetails.expires_at);
-  console.log("vaultSwapDetails", vaultSwapDetails);
+
+  // Calculate expiry time assuming block time is 6 secs, vault address expires in 2 rotations adjusted by factor of 2
+  const epochDuration = await chainflip.rpc(`cf_epoch_duration`) as number;
+  const epochStartedAt = await chainflip.rpc(`cf_current_epoch_started_at`) as number;
+  const currentBlockNumber = (await chainflip.rpc.chain.getHeader()).number.toNumber();
+  const blocksUntilNextRotation = epochDuration + epochStartedAt - currentBlockNumber
+  const expectedExpiresAt = Date.now() + ((blocksUntilNextRotation + epochDuration) * 6000 / 2);
+  // Check that expires_at field is correct (within 20 secs drift)
+  assert(Math.abs(expectedExpiresAt - vaultSwapDetails.expires_at) <= 20 * 1000,
+      `VaultSwapDetails expiry timestamp is not within a 1 minute drift of the expected expiry time.
+      expectedExpiresAt = ${expectedExpiresAt} and estimatedExpiresAt = ${vaultSwapDetails.expires_at}` );
 
   const txid = await sendVaultTransaction(
     vaultSwapDetails.nulldata_payload,
