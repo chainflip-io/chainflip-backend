@@ -15,10 +15,11 @@ use cf_chains::{
 	ForeignChainAddress, IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters,
-	ForeignChain, NetworkEnvironment,
+	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, ForeignChain,
+	NetworkEnvironment,
 };
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
+use chainflip_api::TrackerApi;
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
@@ -29,50 +30,6 @@ use sp_core::{bounded::alloc::sync::Arc, crypto::AccountId32};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use serde::{Serialize, Serializer};
-
-// A wrapper for the statechain client that allows mocking of RPC calls
-pub(super) struct TrackerStateChainClient {
-	pub state_chain_client:
-		Arc<chainflip_engine::state_chain_observer::client::StateChainClient<()>>,
-}
-
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub(crate) trait TrackerStateChainApi<StateChain>
-where
-	StateChain: StorageApi + ChainApi + 'static + Send + Sync,
-{
-	fn storage_api(&self) -> Arc<StateChain>;
-	async fn get_affiliates(
-		&self,
-		broker: AccountId32,
-	) -> anyhow::Result<Vec<(AffiliateShortId, AccountId32)>>;
-}
-
-#[async_trait]
-impl TrackerStateChainApi<chainflip_engine::state_chain_observer::client::StateChainClient<()>>
-	for TrackerStateChainClient
-{
-	fn storage_api(
-		&self,
-	) -> Arc<chainflip_engine::state_chain_observer::client::StateChainClient<()>> {
-		self.state_chain_client.clone()
-	}
-
-	async fn get_affiliates(
-		&self,
-		broker: AccountId32,
-	) -> anyhow::Result<Vec<(AffiliateShortId, AccountId32)>> {
-		use custom_rpc::CustomApiClient;
-
-		self.state_chain_client
-			.base_rpc_client
-			.raw_rpc_client
-			.cf_get_affiliates(broker, None)
-			.await
-			.map_err(|e| anyhow!("Failed to get registered affiliates: {:?}", e))
-	}
-}
 
 /// A wrapper type for bitcoin hashes that serializes the hash in reverse.
 #[derive(Debug)]
@@ -255,15 +212,14 @@ impl IntoDepositDetailsAnyChain for Vec<H256> {
 }
 #[async_trait]
 trait DepositIntoWitnessInformation<C: Chain> {
-	async fn into_witness_information<StateChainApi, StateChainClient>(
+	async fn into_witness_information<StateChainClient>(
 		self,
 		height: <C as Chain>::ChainBlockNumber,
 		network: NetworkEnvironment,
-		state_chain_client: &StateChainApi,
+		state_chain_client: Arc<StateChainClient>,
 	) -> anyhow::Result<WitnessInformation>
 	where
-		StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-		StateChainClient: StorageApi + ChainApi + 'static + Send + Sync;
+		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync;
 }
 
 trait BroadcastIntoWitnessInformation {
@@ -272,15 +228,14 @@ trait BroadcastIntoWitnessInformation {
 
 #[async_trait]
 impl DepositIntoWitnessInformation<Ethereum> for DepositWitness<Ethereum> {
-	async fn into_witness_information<StateChainApi, StateChainClient>(
+	async fn into_witness_information<StateChainClient>(
 		self,
 		height: <Ethereum as Chain>::ChainBlockNumber,
 		_network: NetworkEnvironment,
-		_state_chain_client: &StateChainApi,
+		_state_chain_client: Arc<StateChainClient>,
 	) -> anyhow::Result<WitnessInformation>
 	where
-		StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-		StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+		StateChainClient: StorageApi + TrackerApi + ChainApi + 'static + Send + Sync,
 	{
 		Ok(WitnessInformation::Deposit {
 			deposit_chain_block_height: height,
@@ -294,15 +249,14 @@ impl DepositIntoWitnessInformation<Ethereum> for DepositWitness<Ethereum> {
 
 #[async_trait]
 impl DepositIntoWitnessInformation<Bitcoin> for DepositWitness<Bitcoin> {
-	async fn into_witness_information<StateChainApi, StateChainClient>(
+	async fn into_witness_information<StateChainClient>(
 		self,
 		height: <Bitcoin as Chain>::ChainBlockNumber,
 		network: NetworkEnvironment,
-		_state_chain_client: &StateChainApi,
+		_state_chain_client: Arc<StateChainClient>,
 	) -> anyhow::Result<WitnessInformation>
 	where
-		StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-		StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+		StateChainClient: StorageApi + TrackerApi + ChainApi + 'static + Send + Sync,
 	{
 		Ok(WitnessInformation::Deposit {
 			deposit_chain_block_height: height,
@@ -316,15 +270,14 @@ impl DepositIntoWitnessInformation<Bitcoin> for DepositWitness<Bitcoin> {
 
 #[async_trait]
 impl DepositIntoWitnessInformation<Polkadot> for DepositWitness<Polkadot> {
-	async fn into_witness_information<StateChainApi, StateChainClient>(
+	async fn into_witness_information<StateChainClient>(
 		self,
 		height: <Polkadot as Chain>::ChainBlockNumber,
 		_network: NetworkEnvironment,
-		_state_chain_client: &StateChainApi,
+		_state_chain_client: Arc<StateChainClient>,
 	) -> anyhow::Result<WitnessInformation>
 	where
-		StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-		StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
 	{
 		Ok(WitnessInformation::Deposit {
 			deposit_chain_block_height: height as u64,
@@ -338,15 +291,14 @@ impl DepositIntoWitnessInformation<Polkadot> for DepositWitness<Polkadot> {
 
 #[async_trait]
 impl DepositIntoWitnessInformation<Arbitrum> for DepositWitness<Arbitrum> {
-	async fn into_witness_information<StateChainApi, StateChainClient>(
+	async fn into_witness_information<StateChainClient>(
 		self,
 		height: <Arbitrum as Chain>::ChainBlockNumber,
 		_network: NetworkEnvironment,
-		_state_chain_client: &StateChainApi,
+		_state_chain_client: Arc<StateChainClient>,
 	) -> anyhow::Result<WitnessInformation>
 	where
-		StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-		StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
 	{
 		Ok(WitnessInformation::Deposit {
 			deposit_chain_block_height: height,
@@ -362,15 +314,14 @@ impl DepositIntoWitnessInformation<Arbitrum> for DepositWitness<Arbitrum> {
 impl DepositIntoWitnessInformation<Ethereum>
 	for Box<VaultDepositWitness<state_chain_runtime::Runtime, ChainInstanceFor<Ethereum>>>
 {
-	async fn into_witness_information<StateChainApi, StateChainClient>(
+	async fn into_witness_information<StateChainClient>(
 		self,
 		height: <Ethereum as Chain>::ChainBlockNumber,
 		network: NetworkEnvironment,
-		state_chain_client: &StateChainApi,
+		state_chain_client: Arc<StateChainClient>,
 	) -> anyhow::Result<WitnessInformation>
 	where
-		StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-		StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+		StateChainClient: StorageApi + TrackerApi + ChainApi + 'static + Send + Sync,
 	{
 		Ok(WitnessInformation::VaultDeposit {
 			tx_id: <H256 as IntoTransactionInIdForAnyChain<EvmCrypto>>::into_transaction_in_id_for_any_chain(self.tx_id),
@@ -394,15 +345,14 @@ impl DepositIntoWitnessInformation<Ethereum>
 impl DepositIntoWitnessInformation<Bitcoin>
 	for Box<VaultDepositWitness<state_chain_runtime::Runtime, ChainInstanceFor<Bitcoin>>>
 {
-	async fn into_witness_information<StateChainApi, StateChainClient>(
+	async fn into_witness_information<StateChainClient>(
 		self,
 		height: <Bitcoin as Chain>::ChainBlockNumber,
 		network: NetworkEnvironment,
-		state_chain_client: &StateChainApi,
+		state_chain_client: Arc<StateChainClient>,
 	) -> anyhow::Result<WitnessInformation>
 	where
-		StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-		StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
 	{
 		Ok(WitnessInformation::VaultDeposit {
 			tx_id: <H256 as IntoTransactionInIdForAnyChain<BitcoinCrypto>>::into_transaction_in_id_for_any_chain(self.tx_id),
@@ -426,15 +376,14 @@ impl DepositIntoWitnessInformation<Bitcoin>
 impl DepositIntoWitnessInformation<Polkadot>
 	for Box<VaultDepositWitness<state_chain_runtime::Runtime, ChainInstanceFor<Polkadot>>>
 {
-	async fn into_witness_information<StateChainApi, StateChainClient>(
+	async fn into_witness_information<StateChainClient>(
 		self,
 		height: <Polkadot as Chain>::ChainBlockNumber,
 		network: NetworkEnvironment,
-		state_chain_client: &StateChainApi,
+		state_chain_client: Arc<StateChainClient>,
 	) -> anyhow::Result<WitnessInformation>
 	where
-		StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-		StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
 	{
 		Ok(WitnessInformation::VaultDeposit {
 			tx_id: <cf_primitives::TxId as IntoTransactionInIdForAnyChain<PolkadotCrypto>>::into_transaction_in_id_for_any_chain(self.tx_id),
@@ -458,15 +407,14 @@ impl DepositIntoWitnessInformation<Polkadot>
 impl DepositIntoWitnessInformation<Arbitrum>
 	for Box<VaultDepositWitness<state_chain_runtime::Runtime, ChainInstanceFor<Arbitrum>>>
 {
-	async fn into_witness_information<StateChainApi, StateChainClient>(
+	async fn into_witness_information<StateChainClient>(
 		self,
 		height: <Arbitrum as Chain>::ChainBlockNumber,
 		network: NetworkEnvironment,
-		state_chain_client: &StateChainApi,
+		state_chain_client: Arc<StateChainClient>,
 	) -> anyhow::Result<WitnessInformation>
 	where
-		StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-		StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
 	{
 		Ok(WitnessInformation::VaultDeposit {
 			tx_id: <H256 as IntoTransactionInIdForAnyChain<EvmCrypto>>::into_transaction_in_id_for_any_chain(self.tx_id),
@@ -532,22 +480,20 @@ async fn save_deposit_witnesses<
 	S: Store,
 	Witness: DepositIntoWitnessInformation<C>,
 	C: Chain,
-	StateChainApi,
 	StateChainClient,
 >(
 	store: &mut S,
 	deposit_witnesses: Vec<Witness>,
 	block_height: C::ChainBlockNumber,
 	network: NetworkEnvironment,
-	state_chain_client: &StateChainApi,
+	state_chain_client: Arc<StateChainClient>,
 ) -> anyhow::Result<()>
 where
-	StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-	StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
 {
 	for witness in deposit_witnesses {
 		match witness
-			.into_witness_information(block_height, network, state_chain_client)
+			.into_witness_information(block_height, network, state_chain_client.clone())
 			.await
 		{
 			Ok(witness) =>
@@ -562,21 +508,20 @@ where
 	Ok(())
 }
 
-async fn save_broadcast_witness<S: Store, StateChainApi, StateChainClient, I>(
+async fn save_broadcast_witness<S: Store, StateChainClient, I>(
 	store: &mut S,
 	tx_out_id: TransactionOutIdFor<state_chain_runtime::Runtime, ChainInstanceFor<I>>,
 	tx_ref: I::TransactionRef,
-	state_chain_client: &StateChainApi,
+	state_chain_client: Arc<StateChainClient>,
 ) -> anyhow::Result<()>
 where
 	I: cf_chains::instances::ChainInstanceAlias + Chain + 'static,
-	StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
 	StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_broadcast::Config<ChainInstanceFor<I>>,
 	BroadcastDetails<I>: BroadcastIntoWitnessInformation,
 {
 	if let Some(broadcast_details) =
-		get_broadcast_id::<I, StateChainClient>(&state_chain_client.storage_api(), &tx_out_id)
+		get_broadcast_id::<I, StateChainClient>(state_chain_client, &tx_out_id)
 			.await
 			.map(|broadcast_id| BroadcastDetails::<I> { broadcast_id, tx_out_id, tx_ref })
 	{
@@ -596,16 +541,15 @@ where
 	Ok(())
 }
 
-pub async fn handle_call<S, StateChainApi, StateChainClient>(
+pub async fn handle_call<S, StateChainClient>(
 	call: state_chain_runtime::RuntimeCall,
 	store: &mut S,
 	chainflip_network: NetworkEnvironment,
-	state_chain_client: &StateChainApi,
+	state_chain_client: Arc<StateChainClient>,
 ) -> anyhow::Result<()>
 where
 	S: Store,
-	StateChainApi: TrackerStateChainApi<StateChainClient> + Send + Sync,
-	StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
 {
 	use pallet_cf_broadcast::Call as BroadcastCall;
 	use pallet_cf_ingress_egress::Call as IngressEgressCall;
@@ -709,7 +653,7 @@ where
 			transaction_ref,
 			..
 		}) => {
-			save_broadcast_witness::<_, _, _, Ethereum>(
+			save_broadcast_witness::<_, _, Ethereum>(
 				store,
 				tx_out_id,
 				transaction_ref,
@@ -722,7 +666,7 @@ where
 			transaction_ref,
 			..
 		}) => {
-			save_broadcast_witness::<_, _, _, Bitcoin>(
+			save_broadcast_witness::<_, _, Bitcoin>(
 				store,
 				tx_out_id,
 				transaction_ref,
@@ -735,7 +679,7 @@ where
 			transaction_ref,
 			..
 		}) => {
-			save_broadcast_witness::<_, _, _, Polkadot>(
+			save_broadcast_witness::<_, _, Polkadot>(
 				store,
 				tx_out_id,
 				transaction_ref,
@@ -748,7 +692,7 @@ where
 			transaction_ref,
 			..
 		}) => {
-			save_broadcast_witness::<_, _, _, Arbitrum>(
+			save_broadcast_witness::<_, _, Arbitrum>(
 				store,
 				tx_out_id,
 				transaction_ref,
@@ -822,6 +766,7 @@ mod tests {
 	};
 	use cf_primitives::{BroadcastId, NetworkEnvironment};
 	use cf_utilities::assert_ok;
+	use chainflip_api::primitives::AffiliateShortId;
 	use chainflip_engine::state_chain_observer::client::{
 		chain_api::ChainApi,
 		storage_api,
@@ -889,6 +834,14 @@ mod tests {
 		}
 
 		#[async_trait]
+		impl TrackerApi for StateChainClient {
+			async fn get_affiliates(
+				&self,
+				broker: AccountId32,
+			) -> anyhow::Result<Vec<(AffiliateShortId, AccountId32)>>;
+		}
+
+		#[async_trait]
 		impl StorageApi for StateChainClient {
 			async fn storage_item<
 				Value: codec::FullCodec + 'static,
@@ -940,13 +893,12 @@ mod tests {
 	#[allow(clippy::type_complexity)]
 	fn create_client<C: Chain>(
 		result: Option<(BroadcastId, C::ChainBlockNumber)>,
-	) -> MockTrackerStateChainApi<MockStateChainClient>
+	) -> MockStateChainClient
 	where
 		state_chain_runtime::Runtime:
 			pallet_cf_broadcast::Config<ChainInstanceFor<C>, TargetChain = C>,
 	{
 		let mut state_chain_client = MockStateChainClient::new();
-		let mut client = MockTrackerStateChainApi::<MockStateChainClient>::new();
 
 		state_chain_client
 			.expect_storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
@@ -961,10 +913,7 @@ mod tests {
 			number: 1,
 		});
 
-		let state_chain_client = Arc::new(state_chain_client);
-		client.expect_storage_api().once().returning(move || state_chain_client.clone());
-
-		client
+		state_chain_client
 	}
 
 	fn parse_eth_address(address: &str) -> (H160, &str) {
@@ -983,7 +932,7 @@ mod tests {
 		let (eth_address2, eth_address_str2) =
 			parse_eth_address("0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF");
 
-		let client = MockTrackerStateChainApi::<MockStateChainClient>::new();
+		let client = Arc::new(MockStateChainClient::new());
 
 		let mut store = MockStore::default();
 		assert_ok!(
@@ -1001,7 +950,7 @@ mod tests {
 				),
 				&mut store,
 				NetworkEnvironment::Testnet,
-				&client,
+				client.clone(),
 			)
 			.await
 		);
@@ -1021,7 +970,7 @@ mod tests {
 				),
 				&mut store,
 				NetworkEnvironment::Testnet,
-				&client,
+				client.clone(),
 			)
 			.await
 		);
@@ -1041,7 +990,7 @@ mod tests {
 				),
 				&mut store,
 				NetworkEnvironment::Testnet,
-				&client,
+				client.clone(),
 			)
 			.await
 		);
@@ -1079,7 +1028,7 @@ mod tests {
 				),
 				&mut store,
 				NetworkEnvironment::Testnet,
-				&client,
+				client,
 			)
 			.await
 		);
@@ -1096,7 +1045,7 @@ mod tests {
 
 		let tx_out_id = SchnorrVerificationComponents { s: [0; 32], k_times_g_address: [0; 20] };
 
-		let client = create_client::<Ethereum>(Some((1, 2)));
+		let client = Arc::new(create_client::<Ethereum>(Some((1, 2))));
 		let mut store = MockStore::default();
 		assert_ok!(
 			handle_call(
@@ -1116,7 +1065,7 @@ mod tests {
 				),
 				&mut store,
 				NetworkEnvironment::Testnet,
-				&client,
+				client,
 			)
 			.await
 		);
@@ -1136,12 +1085,14 @@ mod tests {
 				.unwrap(),
 		);
 
-		let mut client = MockTrackerStateChainApi::<MockStateChainClient>::new();
+		let mut client = MockStateChainClient::new();
 
 		// We expect the affiliates to be mapped from short id's to account id's
 		client
 			.expect_get_affiliates()
 			.returning(move |_| Ok(vec![(affiliate_short_id, AccountId32::new([1; 32]))]));
+
+		let client = Arc::new(client);
 
 		let mut store = MockStore::default();
 		assert_ok!(
@@ -1182,7 +1133,7 @@ mod tests {
 				),
 				&mut store,
 				NetworkEnvironment::Testnet,
-				&client,
+				client,
 			)
 			.await
 		);
