@@ -243,7 +243,7 @@ mod tests {
 
 	use crate::electoral_systems::block_height_tracking::state_machine::{Indexed, Validate};
 	use proptest::{
-		prelude::{any, Arbitrary, Just, Strategy},
+		prelude::{any, Arbitrary, Just, Strategy, prop},
 		prop_oneof, proptest,
 	};
 
@@ -252,16 +252,29 @@ mod tests {
 		InputHeaders,
 	};
 
-	pub fn arb_input_headers<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static>(
+	pub fn arb_input_headers<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static + sp_std::ops::Add<N, Output = N> + From<u32>>(
 		witness_from: N,
 	) -> impl Strategy<Value = InputHeaders<H, N>> {
-		(any::<H>(), any::<H>()).prop_map(move |(h, p)| {
-			InputHeaders::<H, N>(VecDeque::from(vec![Header {
-				block_height: witness_from.clone(),
-				hash: h,
-				parent_hash: p,
-			}]))
-		})
+		prop::collection::vec(any::<H>(), 2..10)
+			.prop_map(move |data| {
+				let headers = data.iter().zip(data.iter().skip(1))
+					.enumerate()
+					.map(|(ix, (h0, h1))| 
+						Header { 
+							block_height: N::from(ix as u32) + witness_from.clone(),
+							hash: h1.clone(),
+							parent_hash: h0.clone()
+						});
+				InputHeaders::<H, N>(headers.collect())
+			})
+
+		// (any::<H>(), any::<H>()).prop_map(move |(h, p)| {
+		// 	InputHeaders::<H, N>(VecDeque::from(vec![Header {
+		// 		block_height: witness_from.clone(),
+		// 		hash: h,
+		// 		parent_hash: p,
+		// 	}]))
+		// })
 		// (any::<N>(), any::<H>(), any::<H>()).prop_map(move |(n, h, p)|
 		// InputHeaders::<H,N>(VecDeque::from(vec![ Header { block_height: n, hash: h, parent_hash:
 		// p }])))
@@ -273,16 +286,16 @@ mod tests {
 	>() -> impl Strategy<Value = BHWState<H, N>> {
 		prop_oneof![
 			Just(BHWState::Starting),
-			(any::<H>(), any::<H>(), any::<N>()).prop_map(move |(h, p, n1)| {
-				BHWState::Running {
-					headers: VecDeque::from(vec![Header {
-						block_height: n1.clone(),
-						hash: h,
-						parent_hash: p,
-					}]),
-					witness_from: n1 + 1.into(),
-				}
-			})
+			(any::<N>(), any::<bool>()).prop_flat_map(move |(n, b)| {
+				arb_input_headers(n).prop_map(move |headers| {
+					let witness_from = if b { headers.0.front().unwrap().block_height.clone() } else { headers.0.back().unwrap().block_height.clone() + 1.into()};
+					BHWState::Running {
+						headers: headers.0,
+						witness_from,
+					}
+				})
+
+			}),
 		]
 	}
 
@@ -341,17 +354,16 @@ impl<H, N> Default for BHWState<H, N> {
 	}
 }
 
-impl<H, N> Validate for BHWState<H, N> {
+impl<H : Clone + PartialEq, N : BlockHeightTrait> Validate for BHWState<H, N> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		match self {
 			BHWState::Starting => Ok(()),
 
-			// TODO also check that headers are continuous
 			BHWState::Running { headers, witness_from: _ } =>
 				if headers.len() > 0 {
-					Ok(())
+					InputHeaders(headers.clone()).is_valid().map_err(|_| "blocks should be continuous")
 				} else {
 					Err("Block height tracking state should always be non-empty after start-up.")
 				},
@@ -457,6 +469,7 @@ impl<
 						// );
 
 						println!("merge info: {merge_info:?}");
+						println!("new state: {s:?}");
 
 						// if we merge after a reorg, and the blocks we got are the same
 						// as the ones we previously had, then `into_chain_progress` might

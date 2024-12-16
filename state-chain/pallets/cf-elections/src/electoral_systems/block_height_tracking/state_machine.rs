@@ -44,12 +44,6 @@ pub trait DependentStateMachine: 'static {
 		Self::Input: sp_std::fmt::Debug + Clone,
 	{
 		let mut runner = TestRunner::default();
-		// runner
-		// 	.run(&states, |state| {
-		// 		assert!(state.is_valid().is_ok());
-		// 		Ok(())
-		// 	})
-		// 	.unwrap();
 
 		runner
 			.run(

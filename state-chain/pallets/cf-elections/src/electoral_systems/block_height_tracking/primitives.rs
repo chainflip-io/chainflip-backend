@@ -116,7 +116,7 @@ pub fn extract_common_prefix<A: Eq>(a: &mut VecDeque<A>, b: &mut VecDeque<A>) ->
 	let mut prefix = VecDeque::new();
 
 	while a.front().is_some() && (a.front() == b.front()) {
-		prefix.push_front(a.pop_front().unwrap());
+		prefix.push_back(a.pop_front().unwrap());
 		b.pop_front();
 	}
 
