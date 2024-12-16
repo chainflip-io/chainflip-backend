@@ -53,7 +53,7 @@ function newCcmArbitraryBytes(maxLength: number): string {
 }
 
 // Protocol limits
-const MAX_CCM_MSG_LENGTH = 9_000;
+const MAX_CCM_MSG_LENGTH = 15_000;
 const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
 // Solana transactions have a length of 1232. Cappig it to some reasonable values
 // that when construction the call the Solana length is not exceeded.
