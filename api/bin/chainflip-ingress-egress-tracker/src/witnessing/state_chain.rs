@@ -225,91 +225,51 @@ trait BroadcastIntoWitnessInformation {
 	fn into_witness_information(self) -> anyhow::Result<WitnessInformation>;
 }
 
-#[async_trait]
-impl DepositIntoWitnessInformation<Ethereum> for DepositWitness<Ethereum> {
-	async fn into_witness_information<StateChainClient>(
-		self,
-		height: <Ethereum as Chain>::ChainBlockNumber,
-		_network: NetworkEnvironment,
-		_state_chain_client: Arc<StateChainClient>,
-	) -> anyhow::Result<WitnessInformation>
-	where
-		StateChainClient: StorageApi + TrackerApi + ChainApi + 'static + Send + Sync,
-	{
-		Ok(WitnessInformation::Deposit {
-			deposit_chain_block_height: height,
-			deposit_address: hex_encode_bytes(self.deposit_address.as_bytes()),
-			amount: self.amount.into(),
-			asset: self.asset.into(),
-			deposit_details: self.deposit_details.into_any_chain(),
-		})
-	}
-}
-
-#[async_trait]
-impl DepositIntoWitnessInformation<Bitcoin> for DepositWitness<Bitcoin> {
-	async fn into_witness_information<StateChainClient>(
-		self,
-		height: <Bitcoin as Chain>::ChainBlockNumber,
-		network: NetworkEnvironment,
-		_state_chain_client: Arc<StateChainClient>,
-	) -> anyhow::Result<WitnessInformation>
-	where
-		StateChainClient: StorageApi + TrackerApi + ChainApi + 'static + Send + Sync,
-	{
-		Ok(WitnessInformation::Deposit {
-			deposit_chain_block_height: height,
-			deposit_address: self.deposit_address.to_humanreadable(network),
-			amount: self.amount.into(),
-			asset: self.asset.into(),
-			deposit_details: self.deposit_details.into_any_chain(),
-		})
-	}
-}
-
-#[async_trait]
-impl DepositIntoWitnessInformation<Polkadot> for DepositWitness<Polkadot> {
-	async fn into_witness_information<StateChainClient>(
-		self,
-		height: <Polkadot as Chain>::ChainBlockNumber,
-		_network: NetworkEnvironment,
-		_state_chain_client: Arc<StateChainClient>,
-	) -> anyhow::Result<WitnessInformation>
-	where
-		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
-	{
-		Ok(WitnessInformation::Deposit {
-			deposit_chain_block_height: height as u64,
-			deposit_address: hex_encode_bytes(self.deposit_address.aliased_ref()),
-			amount: self.amount.into(),
-			asset: self.asset.into(),
-			deposit_details: self.deposit_details.into_any_chain(),
-		})
-	}
-}
-
-#[async_trait]
-impl DepositIntoWitnessInformation<Arbitrum> for DepositWitness<Arbitrum> {
-	async fn into_witness_information<StateChainClient>(
-		self,
-		height: <Arbitrum as Chain>::ChainBlockNumber,
-		_network: NetworkEnvironment,
-		_state_chain_client: Arc<StateChainClient>,
-	) -> anyhow::Result<WitnessInformation>
-	where
-		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
-	{
-		Ok(WitnessInformation::Deposit {
-			deposit_chain_block_height: height,
-			deposit_address: hex_encode_bytes(self.deposit_address.as_bytes()),
-			amount: self.amount.into(),
-			asset: self.asset.into(),
-			deposit_details: self.deposit_details.into_any_chain(),
-		})
-	}
-}
-
 macro_rules! impl_deposit_into_witness_information {
+	($chain:ty, $encode_address:expr) => {
+		#[async_trait]
+		impl DepositIntoWitnessInformation<$chain> for DepositWitness<$chain> {
+			async fn into_witness_information<StateChainClient>(
+				self,
+				height: <$chain as Chain>::ChainBlockNumber,
+				network: NetworkEnvironment,
+				_state_chain_client: Arc<StateChainClient>,
+			) -> anyhow::Result<WitnessInformation>
+			where
+				StateChainClient: StorageApi + TrackerApi + ChainApi + 'static + Send + Sync,
+			{
+				Ok(WitnessInformation::Deposit {
+					deposit_chain_block_height: height.into(),
+					deposit_address: $encode_address(self.deposit_address, network),
+					amount: self.amount.into(),
+					asset: self.asset.into(),
+					deposit_details: self.deposit_details.into_any_chain(),
+				})
+			}
+		}
+	};
+}
+
+impl_deposit_into_witness_information!(Ethereum, {
+	|address: <Ethereum as cf_chains::Chain>::ChainAccount, _| hex_encode_bytes(address.as_bytes())
+});
+impl_deposit_into_witness_information!(Arbitrum, {
+	|address: <Arbitrum as cf_chains::Chain>::ChainAccount, _| hex_encode_bytes(address.as_bytes())
+});
+
+impl_deposit_into_witness_information!(Bitcoin, {
+	|address: <Bitcoin as cf_chains::Chain>::ChainAccount, network| {
+		address.to_humanreadable(network)
+	}
+});
+
+impl_deposit_into_witness_information!(Polkadot, {
+	|address: <Polkadot as cf_chains::Chain>::ChainAccount, _| {
+		hex_encode_bytes(address.aliased_ref())
+	}
+});
+
+macro_rules! impl_vault_deposit_into_witness_information {
 	($chain:ty) => {
 		#[async_trait]
 		impl DepositIntoWitnessInformation<$chain>
@@ -354,10 +314,10 @@ macro_rules! impl_deposit_into_witness_information {
 	};
 }
 
-impl_deposit_into_witness_information!(Ethereum);
-impl_deposit_into_witness_information!(Bitcoin);
-impl_deposit_into_witness_information!(Polkadot);
-impl_deposit_into_witness_information!(Arbitrum);
+impl_vault_deposit_into_witness_information!(Ethereum);
+impl_vault_deposit_into_witness_information!(Bitcoin);
+impl_vault_deposit_into_witness_information!(Polkadot);
+impl_vault_deposit_into_witness_information!(Arbitrum);
 
 impl BroadcastIntoWitnessInformation for BroadcastDetails<Ethereum> {
 	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
