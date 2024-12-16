@@ -2217,10 +2217,10 @@ impl_runtime_apis! {
 							Environment::key_manager_address(),
 						)
 					}else {
-						Err(DispatchErrorWithMessage::Other("Extra parameter is not valid for Evm vault swap.".into()))
+						Err(DispatchErrorWithMessage::from("Extra parameter is not valid for Evm vault swap."))
 					}
 				},
-								ForeignChain::Solana => crate::chainflip::vault_swap::solana_vault_swap(
+				ForeignChain::Solana => crate::chainflip::vault_swap::solana_vault_swap(
 					broker_id,
 					source_asset,
 					destination_asset,

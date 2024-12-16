@@ -1,9 +1,9 @@
 use crate::{
 	chainflip::{
-		address_derivation::btc::derive_btc_vault_deposit_address, AddressConverter,
-		ChainAddressConverter, SolEnvironment,
+		address_derivation::btc::derive_btc_vault_deposit_address, ChainAddressConverter,
+		SolEnvironment, U256,
 	},
-	runtime_apis::{DispatchErrorWithMessage, VaultSwapDetails},
+	runtime_apis::{DispatchErrorWithMessage, EvmVaultSwapDetails, VaultSwapDetails},
 	AccountId, BlockNumber, Runtime, Swapping,
 };
 
@@ -17,17 +17,17 @@ use cf_chains::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
 		DecodedCcmAdditionalData,
 	},
+	cf_parameters,
+	evm::api::EvmCall,
 	sol::{
 		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder, SolAmount, SolPubkey,
 	},
-	CcmChannelMetadata, VaultSwapExtraParametersEncoded,
-	cf_parameters,
-	evm::api::EvmCall,
-	ChannelRefundParametersEncoded, ForeignChain,
+	CcmChannelMetadata, ChannelRefundParametersEncoded, ForeignChain,
+	VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
-	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, DcaParameters, MAX_AFFILIATES,
-	SWAP_DELAY_BLOCKS,
+	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters,
+	MAX_AFFILIATES, SWAP_DELAY_BLOCKS,
 };
 use cf_traits::AffiliateRegistry;
 
@@ -35,8 +35,6 @@ use frame_support::pallet_prelude::{ConstU32, Get};
 use scale_info::prelude::string::String;
 use sp_runtime::{BoundedVec, DispatchError};
 use sp_std::{vec, vec::Vec};
-
-use super::ChainAddressConverter;
 
 fn to_affiliate_and_fees<MaxAffiliates: Get<u32>>(
 	broker_id: AccountId,
@@ -266,11 +264,10 @@ pub fn ethereum_vault_swap(
 			vault_swap_parameters: cf_parameters::VaultSwapParameters {
 				refund_params,
 				dca_params: dca_parameters,
-				boost_fee: boost_fee.try_into().unwrap(),
-				broker_fee: Beneficiary {
-					account: broker_id.clone(),
-					bps: broker_commission.try_into().unwrap(),
-				},
+				boost_fee: boost_fee
+					.try_into()
+					.map_err(|_| DispatchErrorWithMessage::from("Boost fee too high"))?,
+				broker_fee: Beneficiary { account: broker_id.clone(), bps: broker_commission },
 				affiliate_fees: to_affiliate_and_fees::<ConstU32<MAX_AFFILIATES>>(
 					broker_id,
 					affiliate_fees,

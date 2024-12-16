@@ -993,9 +993,9 @@ pub enum VaultSwapExtraParameters<Address, Number> {
 	},
 	Evm {
 		input_amount: Number,
-		refund_parameters: ChannelRefundParametersGeneric<Address>,
+		refund_parameters: ChannelRefundParameters<Address>,
 	},
-	Sol {
+	Solana {
 		from: Address,
 		event_data_account: Address,
 		input_amount: Number,
@@ -1014,15 +1014,14 @@ impl<Address: Clone, Number> VaultSwapExtraParameters<Address, Number> {
 		Ok(match self {
 			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
 				VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration },
-			VaultSwapExtraParameters::Solana {
-			GenericVaultSwapExtraParameters::Evm { input_amount, refund_parameters } =>
-				GenericVaultSwapExtraParameters::Evm {
+			VaultSwapExtraParameters::Evm { input_amount, refund_parameters } =>
+				VaultSwapExtraParameters::Evm {
 					input_amount,
 					refund_parameters: refund_parameters.try_map_address(|a| {
 						f(a).map_err(|_| "Failed to convert address in refund parameters".into())
 					})?,
 				},
-			GenericVaultSwapExtraParameters::Sol {
+			VaultSwapExtraParameters::Solana {
 				from,
 				event_data_account,
 				input_amount,
@@ -1052,12 +1051,9 @@ impl<Address: Clone, Number> VaultSwapExtraParameters<Address, Number> {
 					min_output_amount: f(min_output_amount)?,
 					retry_duration,
 				},
-			GenericVaultSwapExtraParameters::Evm { input_amount, refund_parameters } =>
-				GenericVaultSwapExtraParameters::Evm {
-					input_amount: f(input_amount)?,
-					refund_parameters,
-				},
-			GenericVaultSwapExtraParameters::Solana {
+			VaultSwapExtraParameters::Evm { input_amount, refund_parameters } =>
+				VaultSwapExtraParameters::Evm { input_amount: f(input_amount)?, refund_parameters },
+			VaultSwapExtraParameters::Solana {
 				from,
 				event_data_account,
 				input_amount,
