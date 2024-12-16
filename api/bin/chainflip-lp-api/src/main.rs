@@ -101,6 +101,7 @@ pub mod rpc_types {
 	}
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+	#[serde(untagged)]
 	pub enum CloseOrderJson {
 		Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderIdJson },
 		Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderIdJson },
@@ -625,17 +626,18 @@ impl RpcServer for RpcServerImpl {
 		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
-		let mut final_orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>> =
-			BoundedVec::new();
-		for order in orders {
-			final_orders
-				.try_push(order.try_into()?)
-				.expect("Impossible to fail, given the same MAX_ORDERS_DELETE");
-		}
 		Ok(self
 			.api
 			.lp_api()
-			.cancel_orders_batch(final_orders, wait_for.unwrap_or_default())
+			.cancel_orders_batch(
+				orders
+					.into_iter()
+					.map(TryInto::try_into)
+					.collect::<Result<Vec<_>, _>>()?
+					.try_into()
+					.expect("Impossible to fail, given the same MAX_ORDERS_DELETE"),
+				wait_for.unwrap_or_default(),
+			)
 			.await?)
 	}
 }
