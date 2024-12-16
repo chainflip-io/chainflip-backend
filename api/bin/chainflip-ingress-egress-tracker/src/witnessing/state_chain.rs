@@ -992,7 +992,7 @@ mod tests {
 							deposit_amount: 100u128,
 							input_asset: cf_chains::assets::eth::Asset::Eth,
 							output_asset: cf_primitives::Asset::Flip,
-							destination_address: cf_chains::address::EncodedAddress::Eth([0; 20]),
+							destination_address: cf_chains::address::EncodedAddress::Dot([0; 32]),
 							deposit_metadata: None,
 							deposit_details: Default::default(),
 							broker_fee: Beneficiary { account: AccountId32::new([0; 32]), bps: 10 },
