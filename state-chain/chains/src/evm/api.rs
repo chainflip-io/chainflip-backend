@@ -20,6 +20,8 @@ pub mod set_agg_key_with_agg_key;
 pub mod set_comm_key_with_agg_key;
 pub mod set_gov_key_with_agg_key;
 pub mod transfer_fallback;
+pub mod x_swap_native;
+pub mod x_swap_token;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EvmReplayProtection {
@@ -109,7 +111,7 @@ pub trait EvmCall {
 
 	/// The function names and parameters, not including sigData.
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)>;
-	/// The function values to be used as call parameters, no including sigData.
+	/// The function values to be used as call parameters, not including sigData.
 	fn function_call_args(&self) -> Vec<Token>;
 
 	fn get_function() -> ethabi::Function {
@@ -139,6 +141,16 @@ pub trait EvmCall {
 					Therefore, as long as the tests pass, it can't fail at runtime.
 				"#,
 			)
+	}
+	/// Encode the call without the signature into EVM Abi format. For use with vault swaps.
+	fn abi_encoded_payload(&self) -> Vec<u8> {
+		// TODO JAMIE: Is this correct? Ask albert.
+		Self::get_function().encode_input(&self.function_call_args()).expect(
+			r#"
+					This can only fail if the parameter types don't match the function signature.
+					Therefore, as long as the tests pass, it can't fail at runtime.
+				"#,
+		)
 	}
 	/// Generates the message hash for this call.
 	fn msg_hash(&self) -> <Keccak256 as Hash>::Output {

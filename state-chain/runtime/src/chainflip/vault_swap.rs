@@ -8,7 +8,7 @@ use crate::{
 };
 
 use cf_chains::{
-	address::EncodedAddress,
+	address::{AddressConverter, EncodedAddress},
 	btc::vault_swap_encoding::{
 		encode_swap_params_in_nulldata_payload, SharedCfParameters, UtxoEncodedData,
 		MAX_AFFILIATES as BTC_MAX_AFFILIATES,
@@ -21,6 +21,9 @@ use cf_chains::{
 		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder, SolAmount, SolPubkey,
 	},
 	CcmChannelMetadata, VaultSwapExtraParametersEncoded,
+	cf_parameters,
+	evm::api::EvmCall,
+	ChannelRefundParametersEncoded, ForeignChain,
 };
 use cf_primitives::{
 	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, DcaParameters, MAX_AFFILIATES,
@@ -32,6 +35,8 @@ use frame_support::pallet_prelude::{ConstU32, Get};
 use scale_info::prelude::string::String;
 use sp_runtime::{BoundedVec, DispatchError};
 use sp_std::{vec, vec::Vec};
+
+use super::ChainAddressConverter;
 
 fn to_affiliate_and_fees<MaxAffiliates: Get<u32>>(
 	broker_id: AccountId,
@@ -229,4 +234,55 @@ pub fn solana_vault_swap(
 			"Extra parameters provided do not match the input asset",
 		))
 	}
+}
+
+pub fn ethereum_vault_swap(
+	broker_id: AccountId,
+	destination_asset: Asset,
+	destination_address: EncodedAddress,
+	broker_commission: BasisPoints,
+	refund_params: ChannelRefundParametersEncoded,
+	boost_fee: BasisPoints,
+	affiliate_fees: Affiliates<AccountId>,
+	dca_parameters: Option<DcaParameters>,
+	channel_metadata: Option<cf_chains::CcmChannelMetadata>,
+	amount: AssetAmount,
+	vault_address: sp_core::H160,
+) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
+	if channel_metadata.is_some() {
+		return Err(DispatchErrorWithMessage::Other("CCM not supported for Ethereum".into()));
+	}
+	let refund_params = refund_params.try_map_address(|addr| {
+		ChainAddressConverter::try_from_encoded_address(addr)
+			.map_err(|_| "Invalid refund address".into())
+	})?;
+
+	let call = cf_chains::evm::api::x_swap_native::XSwapNative::new(
+		ForeignChain::from(destination_asset),
+		destination_address,
+		destination_asset,
+		cf_parameters::VersionedCfParameters::V0(cf_parameters::CfParameters {
+			ccm_additional_data: (),
+			vault_swap_parameters: cf_parameters::VaultSwapParameters {
+				refund_params,
+				dca_params: dca_parameters,
+				boost_fee: boost_fee.try_into().unwrap(),
+				broker_fee: Beneficiary {
+					account: broker_id.clone(),
+					bps: broker_commission.try_into().unwrap(),
+				},
+				affiliate_fees: to_affiliate_and_fees::<ConstU32<MAX_AFFILIATES>>(
+					broker_id,
+					affiliate_fees,
+				)
+				.unwrap(),
+			},
+		}),
+	);
+
+	Ok(VaultSwapDetails::Ethereum(EvmVaultSwapDetails {
+		calldata: call.abi_encoded_payload(),
+		value: U256::from(amount),
+		to: vault_address,
+	}))
 }
