@@ -2305,7 +2305,7 @@ impl_runtime_apis! {
 					Ok(VaultSwapDetails::Bitcoin {
 						nulldata_payload: encode_swap_params_in_nulldata_payload(params),
 						deposit_address: derive_btc_vault_deposit_address(private_channel_id),
-						expires_at: Timestamp::now() + expires_in
+						estimated_expires_at: Timestamp::now() + expires_in
 					})
 				},
 				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
