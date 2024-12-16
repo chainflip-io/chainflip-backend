@@ -1271,6 +1271,7 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -1296,6 +1297,38 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
+macro_rules! instanced_migrations {
+	(
+		module: $module:ident,
+		migration: $migration:ty,
+		from: $from:literal,
+		to: $to:literal,
+		include_instances: [$( $include:ident ),+ $(,)?],
+		exclude_instances: [$( $exclude:ident ),+ $(,)?] $(,)?
+	) => {
+		(
+			$(
+				VersionedMigration<
+					$from,
+					$to,
+					$migration,
+					$module::Pallet<Runtime, $include>,
+					DbWeight,
+				>,
+			)+
+			$(
+				VersionedMigration<
+					$from,
+					$to,
+					NoopUpgrade,
+					$module::Pallet<Runtime, $exclude>,
+					DbWeight,
+				>,
+			)+
+		)
+	}
+}
+
 type MigrationsForV1_8 = (
 	VersionedMigration<
 		2,
@@ -1305,120 +1338,51 @@ type MigrationsForV1_8 = (
 		DbWeight,
 	>,
 	// Only the Solana Transaction type has changed
-	VersionedMigration<
-		10,
-		11,
-		migrations::solana_transaction_data_migration::SolanaTransactionDataMigration,
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		3,
-		4,
-		migrations::arbitrum_chain_tracking_migration::ArbitrumChainTrackingMigration,
-		pallet_cf_chain_tracking::Pallet<Runtime, ArbitrumInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		3,
-		4,
-		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
-		pallet_cf_chain_tracking::Pallet<Runtime, EthereumInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		3,
-		4,
-		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
-		pallet_cf_chain_tracking::Pallet<Runtime, BitcoinInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		3,
-		4,
-		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
-		pallet_cf_chain_tracking::Pallet<Runtime, PolkadotInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		3,
-		4,
-		migrations::arbitrum_chain_tracking_migration::NoOpMigration,
-		pallet_cf_chain_tracking::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		11,
-		12,
-		migrations::api_calls_gas_migration::EthApiCallsGasMigration,
-		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		11,
-		12,
-		migrations::api_calls_gas_migration::ArbApiCallsGasMigration,
-		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
-		DbWeight,
-	>,
-	// API call migration only needed for Ethereum and Arbitrum as it's
-	// the only ones storing the gas_budget as part of the api call.
-	VersionedMigration<
-		11,
-		12,
-		migrations::api_calls_gas_migration::NoOpMigration,
-		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		11,
-		12,
-		migrations::api_calls_gas_migration::NoOpMigration,
-		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		11,
-		12,
-		migrations::api_calls_gas_migration::NoOpMigration,
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
+	instanced_migrations! {
+		module: pallet_cf_broadcast,
+		migration: migrations::solana_transaction_data_migration::SolanaTransactionDataMigration,
+		from: 10,
+		to: 11,
+		include_instances: [
+			SolanaInstance
+		],
+		exclude_instances: [
+			EthereumInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+			ArbitrumInstance,
+		],
+	},
+	instanced_migrations! {
+		module: pallet_cf_chain_tracking,
+		migration: migrations::arbitrum_chain_tracking_migration::ArbitrumChainTrackingMigration,
+		from: 3,
+		to: 4,
+		include_instances: [
+			ArbitrumInstance
+		],
+		exclude_instances: [
+			EthereumInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+			SolanaInstance,
+		],
+	},
+	instanced_migrations! {
+		module: pallet_cf_broadcast,
+		migration: migrations::api_calls_gas_migration::EthApiCallsGasMigration,
+		from: 11,
+		to: 12,
+		include_instances: [
+			EthereumInstance,
+			ArbitrumInstance
+		],
+		exclude_instances: [
+			PolkadotInstance,
+			BitcoinInstance,
+			SolanaInstance,
+		],
+	},
 );
 
 #[cfg(feature = "runtime-benchmarks")]
