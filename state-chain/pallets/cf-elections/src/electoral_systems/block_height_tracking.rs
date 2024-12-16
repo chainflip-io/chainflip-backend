@@ -14,7 +14,7 @@ use crate::{
 use cf_chains::{assets::arb::Chain, btc::BlockNumber, witness_period::BlockWitnessRange};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
-use consensus::{Consensus, StagedConsensus, SupermajorityConsensus, Threshold};
+use consensus::{ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold};
 use frame_support::{
 	ensure,
 	pallet_prelude::{MaxEncodedLen, MaybeSerializeDeserialize, Member},
@@ -32,7 +32,7 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
 	vec::Vec,
 };
-use state_machine::{DependentStateMachine, Indexed, Validate};
+use state_machine::{Indexed, StateMachine, Validate};
 
 pub mod consensus;
 pub mod primitives;
@@ -160,7 +160,7 @@ impl<ChainBlockNumber, ChainBlockHash> Default
 impl<
 		ChainBlockNumber: BlockHeightTrait + sp_std::fmt::Debug,
 		ChainBlockHash: Clone + PartialEq + Ord + sp_std::fmt::Debug,
-	> Consensus for BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash>
+	> ConsensusMechanism for BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash>
 {
 	type Vote = InputHeaders<ChainBlockHash, ChainBlockNumber>;
 	type Result = InputHeaders<ChainBlockHash, ChainBlockNumber>;
@@ -243,30 +243,30 @@ mod tests {
 
 	use crate::electoral_systems::block_height_tracking::state_machine::{Indexed, Validate};
 	use proptest::{
-		prelude::{any, Arbitrary, Just, Strategy, prop},
+		prelude::{any, prop, Arbitrary, Just, Strategy},
 		prop_oneof, proptest,
 	};
 
 	use super::{
-		primitives::Header, state_machine::DependentStateMachine, BHWState, BlockHeightTrackingDSM,
+		primitives::Header, state_machine::StateMachine, BHWState, BlockHeightTrackingDSM,
 		InputHeaders,
 	};
 
-	pub fn arb_input_headers<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static + sp_std::ops::Add<N, Output = N> + From<u32>>(
+	pub fn arb_input_headers<
+		H: Arbitrary + Clone,
+		N: Arbitrary + Clone + 'static + sp_std::ops::Add<N, Output = N> + From<u32>,
+	>(
 		witness_from: N,
 	) -> impl Strategy<Value = InputHeaders<H, N>> {
-		prop::collection::vec(any::<H>(), 2..10)
-			.prop_map(move |data| {
-				let headers = data.iter().zip(data.iter().skip(1))
-					.enumerate()
-					.map(|(ix, (h0, h1))| 
-						Header { 
-							block_height: N::from(ix as u32) + witness_from.clone(),
-							hash: h1.clone(),
-							parent_hash: h0.clone()
-						});
-				InputHeaders::<H, N>(headers.collect())
-			})
+		prop::collection::vec(any::<H>(), 2..10).prop_map(move |data| {
+			let headers =
+				data.iter().zip(data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
+					block_height: N::from(ix as u32) + witness_from.clone(),
+					hash: h1.clone(),
+					parent_hash: h0.clone(),
+				});
+			InputHeaders::<H, N>(headers.collect())
+		})
 
 		// (any::<H>(), any::<H>()).prop_map(move |(h, p)| {
 		// 	InputHeaders::<H, N>(VecDeque::from(vec![Header {
@@ -288,13 +288,13 @@ mod tests {
 			Just(BHWState::Starting),
 			(any::<N>(), any::<bool>()).prop_flat_map(move |(n, b)| {
 				arb_input_headers(n).prop_map(move |headers| {
-					let witness_from = if b { headers.0.front().unwrap().block_height.clone() } else { headers.0.back().unwrap().block_height.clone() + 1.into()};
-					BHWState::Running {
-						headers: headers.0,
-						witness_from,
-					}
+					let witness_from = if b {
+						headers.0.front().unwrap().block_height.clone()
+					} else {
+						headers.0.back().unwrap().block_height.clone() + 1.into()
+					};
+					BHWState::Running { headers: headers.0, witness_from }
 				})
-
 			}),
 		]
 	}
@@ -354,7 +354,7 @@ impl<H, N> Default for BHWState<H, N> {
 	}
 }
 
-impl<H : Clone + PartialEq, N : BlockHeightTrait> Validate for BHWState<H, N> {
+impl<H: Clone + PartialEq, N: BlockHeightTrait> Validate for BHWState<H, N> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -363,7 +363,9 @@ impl<H : Clone + PartialEq, N : BlockHeightTrait> Validate for BHWState<H, N> {
 
 			BHWState::Running { headers, witness_from: _ } =>
 				if headers.len() > 0 {
-					InputHeaders(headers.clone()).is_valid().map_err(|_| "blocks should be continuous")
+					InputHeaders(headers.clone())
+						.is_valid()
+						.map_err(|_| "blocks should be continuous")
 				} else {
 					Err("Block height tracking state should always be non-empty after start-up.")
 				},
@@ -392,7 +394,7 @@ impl<
 		const SAFETY_MARGIN: usize,
 		H: PartialEq + Eq + Clone + sp_std::fmt::Debug + 'static,
 		N: BlockHeightTrait + sp_std::fmt::Debug + 'static,
-	> DependentStateMachine for BlockHeightTrackingDSM<SAFETY_MARGIN, N, H>
+	> StateMachine for BlockHeightTrackingDSM<SAFETY_MARGIN, N, H>
 {
 	type State = BHWState<H, N>;
 	type DisplayState = ChainProgress<N>;
@@ -407,6 +409,7 @@ impl<
 	}
 
 	// specification for step function
+	#[cfg(test)]
 	fn step_specification(before: &Self::State, input: &Self::Input, after: &Self::State) -> bool {
 		match after {
 			// the starting case should only ever be in the beginning
@@ -458,15 +461,6 @@ impl<
 
 						*headers = chainblocks.headers;
 						*witness_from = headers.back().unwrap().block_height + 1.into();
-
-						// unsynchronised_state.last_safe_index +=
-						// 	(safe_headers.len() as u32).into();
-
-						// log::info!(
-						// 	"the latest safe block height is {:?} (advanced by {})",
-						// 	unsynchronised_state.last_safe_index,
-						// 	safe_headers.len()
-						// );
 
 						println!("merge info: {merge_info:?}");
 						println!("new state: {s:?}");

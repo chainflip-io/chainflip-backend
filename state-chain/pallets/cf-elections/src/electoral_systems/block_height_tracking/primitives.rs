@@ -250,13 +250,6 @@ where
 		return Err(VoteValidationError::BlockHeightsNotContinuous)
 	}
 
-	// a vote's parent hash has to be our last parent hash, if it exists
-	// if let Some(my_last) = self.headers.back() {
-	//     if other.front().unwrap().parent_hash != my_last.hash {
-	//         return Err(VoteValidationError::ParentHashMismatch)
-	//     }
-	// }
-
 	// a vote has to be continous
 	ChainBlocks {
 		headers: other.clone(),
@@ -281,28 +274,6 @@ impl<
 			+ Copy,
 	> ChainBlocks<H, N>
 {
-	// fn validate_vote(&self, other: VecDeque<Header<H, N>>) -> Result<(), VoteValidationError> {
-	//     // a vote has to be nonempty
-	//     if other.len() == 0 {
-	//         return Err(VoteValidationError::EmptyVote)
-	//     }
-
-	//     // a vote has to start with the next block we expect
-	//     if other.front().unwrap().block_height != self.next_height {
-	//         return Err(VoteValidationError::BlockHeightsNotContinuous)
-	//     }
-
-	//     // a vote's parent hash has to be our last parent hash, if it exists
-	//     if let Some(my_last) = self.headers.back() {
-	//         if other.front().unwrap().parent_hash != my_last.hash {
-	//             return Err(VoteValidationError::ParentHashMismatch)
-	//         }
-	//     }
-
-	//     // a vote has to be continous
-	//     validate_continous_headers(other)
-	// }
-
 	fn validate(&self) -> Result<(), VoteValidationError> {
 		let mut required_block_height = self.next_height - 1u32.into();
 		let mut required_hash = None;

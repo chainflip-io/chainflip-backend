@@ -3,8 +3,7 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use itertools::{Either, Itertools};
 use sp_std::vec::Vec;
 
 use crate::{
@@ -13,25 +12,9 @@ use crate::{
 };
 
 use super::{
-	consensus::{Consensus, Threshold},
-	state_machine::{DependentStateMachine, Indexed, Validate},
+	consensus::{ConsensusMechanism, Threshold},
+	state_machine::{Indexed, StateMachine, Validate},
 };
-
-pub struct DsmElectoralSystem<
-	Type,
-	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	Settings,
-	Consensus,
-> {
-	_phantom: core::marker::PhantomData<(Type, ValidatorId, Settings, Consensus)>,
-}
-
-pub enum Either<A, B> {
-	Left(A),
-	Right(B),
-}
-
-use Either::{Left, Right};
 
 pub trait IntoResult {
 	type Ok;
@@ -48,41 +31,51 @@ impl<A, B> IntoResult for Result<A, B> {
 	}
 }
 
-// -- deriving an electoral system from a statemachine
-impl<DSM, ValidatorId, Settings, C> ElectoralSystem
-	for DsmElectoralSystem<DSM, ValidatorId, Settings, C>
+/// Creates an Electoral System from a given state machine
+/// and a given consensus mechanism.
+pub struct DsmElectoralSystem<
+	Type,
+	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	Settings,
+	Consensus,
+> {
+	_phantom: core::marker::PhantomData<(Type, ValidatorId, Settings, Consensus)>,
+}
+
+impl<SM, ValidatorId, Settings, C> ElectoralSystem
+	for DsmElectoralSystem<SM, ValidatorId, Settings, C>
 where
-	DSM: DependentStateMachine,
+	SM: StateMachine,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-	C: Consensus<
-			Vote = DSM::Input,
-			Result = DSM::Input,
-			Settings = (Threshold, <DSM::Input as Indexed>::Index),
+	C: ConsensusMechanism<
+			Vote = SM::Input,
+			Result = SM::Input,
+			Settings = (Threshold, <SM::Input as Indexed>::Index),
 		> + 'static,
-	<DSM::Input as Indexed>::Index: Clone + Member + Parameter + sp_std::fmt::Debug,
-	DSM::State: MaybeSerializeDeserialize + Member + Parameter + Eq + sp_std::fmt::Debug,
-	DSM::Input: Indexed + Clone + Member + Parameter,
-	DSM::Output: IntoResult,
-	<DSM::Output as IntoResult>::Err: sp_std::fmt::Debug,
+	<SM::Input as Indexed>::Index: Clone + Member + Parameter + sp_std::fmt::Debug,
+	SM::State: MaybeSerializeDeserialize + Member + Parameter + Eq + sp_std::fmt::Debug,
+	SM::Input: Indexed + Clone + Member + Parameter,
+	SM::Output: IntoResult,
+	<SM::Output as IntoResult>::Err: sp_std::fmt::Debug,
 {
 	type ValidatorId = ValidatorId;
-	type ElectoralUnsynchronisedState = DSM::State;
+	type ElectoralUnsynchronisedState = SM::State;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
 
 	type ElectoralUnsynchronisedSettings = ();
 	type ElectoralSettings = Settings;
 	type ElectionIdentifierExtra = ();
-	type ElectionProperties = <DSM::Input as Indexed>::Index;
+	type ElectionProperties = <SM::Input as Indexed>::Index;
 	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<DSM::Input>;
-	type Consensus = DSM::Input;
+	type Vote = vote_storage::bitmap::Bitmap<SM::Input>;
+	type Consensus = SM::Input;
 	type OnFinalizeContext = ();
 
 	// we return either the state if no input was processed,
 	// or the output produced by the state machine
-	type OnFinalizeReturn = Either<DSM::DisplayState, <DSM::Output as IntoResult>::Ok>;
+	type OnFinalizeReturn = Either<SM::DisplayState, <SM::Output as IntoResult>::Ok>;
 
 	fn generate_vote_properties(
 		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
@@ -108,13 +101,16 @@ where
 		{
 			let election_access = ElectoralAccess::election_mut(election_identifier);
 
+			// if we have consensus, we can pass it to the state machine's step function
 			if let Some(input) = election_access.check_consensus()?.has_consensus() {
-				let (input_request, output) =
+				let (next_input_index, output) =
 					ElectoralAccess::mutate_unsynchronised_state(|state| {
-						let output = DSM::step(state, input);
+						// call the state machine
+						let output = SM::step(state, input);
 
+						// if we have been successful, get the input index of the new state
 						match output.into_result() {
-							Ok(output) => Ok((DSM::input_index(state), output)),
+							Ok(output) => Ok((SM::input_index(state), output)),
 							Err(err) => {
 								log::error!("Electoral system moved into a bad state: {err:?}");
 								Err(CorruptStorageError::new())
@@ -122,23 +118,27 @@ where
 						}
 					})?;
 
-				// delete the old election and create a new one with the new input request
+				// delete the old election and create a new one with the new input index
 				election_access.delete();
-				ElectoralAccess::new_election((), input_request, ())?;
+				ElectoralAccess::new_election((), next_input_index, ())?;
 
-				Ok(Right(output))
+				Ok(Either::Right(output))
 			} else {
-				log::info!("No consensus could be reached!");
+				// if there is no consensus, simply get the current `DisplayState` of the SM.
 
-				Ok(Left(DSM::get(&ElectoralAccess::unsynchronised_state()?)))
+				log::info!("No consensus could be reached!");
+				Ok(Either::Left(SM::get(&ElectoralAccess::unsynchronised_state()?)))
 			}
 		} else {
-			log::info!("Starting new election with initial value because no elections exist");
+			// if there is no election going on, we create an election corresponding to the
+			// current state.
+
+			log::info!("Starting new election with value because no elections exist");
 
 			let state = ElectoralAccess::unsynchronised_state()?;
 
-			ElectoralAccess::new_election((), DSM::input_index(&state), ())?;
-			Ok(Left(DSM::get(&state)))
+			ElectoralAccess::new_election((), SM::input_index(&state), ())?;
+			Ok(Either::Left(SM::get(&state)))
 		}
 	}
 
