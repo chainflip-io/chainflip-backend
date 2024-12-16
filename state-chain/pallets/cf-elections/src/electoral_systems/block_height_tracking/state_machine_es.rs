@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
 	consensus::{Consensus, Threshold},
-	state_machine::{dependent_state_machine, DependentStateMachine, Fibered, Pointed},
+	state_machine::{DependentStateMachine, Indexed, Validate},
 };
 
 pub struct DsmElectoralSystem<
@@ -48,50 +48,21 @@ impl<A, B> IntoResult for Result<A, B> {
 	}
 }
 
-//
-// define!{
-// [ DsmElectoralSystem DSM Val Set C
-// |   DSM : DependentStateMachine
-// |   | Input : ...
-// |   | | Base : ...
-// |   | State : ...
-// |   | Output : IntoResult ...
-// |   | | Err : Debug
-// ]
-// }
-//
-// impl DsmElectoralSystem DSM Val Set C for
-//   DSM : DependentStateMachine { }
-//
-//
-// define!
-// {
-//   trait IntoResult where
-//     Ok Err : type
-//     into_result (self) : Result .Ok .Err
-//
-//   impl IntoResult for Result A B where
-//     Ok = A
-//     Err = B
-//     into_result (self) : Result .Ok .Err = self
-//
-// }
-
 // -- deriving an electoral system from a statemachine
 impl<DSM, ValidatorId, Settings, C> ElectoralSystem
 	for DsmElectoralSystem<DSM, ValidatorId, Settings, C>
 where
-	DSM: dependent_state_machine::Trait,
+	DSM: DependentStateMachine,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 	C: Consensus<
 			Vote = DSM::Input,
 			Result = DSM::Input,
-			Settings = (Threshold, <DSM::Input as Fibered>::Base),
+			Settings = (Threshold, <DSM::Input as Indexed>::Index),
 		> + 'static,
-	<DSM::Input as Fibered>::Base: Clone + Member + Parameter + sp_std::fmt::Debug,
+	<DSM::Input as Indexed>::Index: Clone + Member + Parameter + sp_std::fmt::Debug,
 	DSM::State: MaybeSerializeDeserialize + Member + Parameter + Eq + sp_std::fmt::Debug,
-	DSM::Input: Fibered + Clone + Member + Parameter,
+	DSM::Input: Indexed + Clone + Member + Parameter,
 	DSM::Output: IntoResult,
 	<DSM::Output as IntoResult>::Err: sp_std::fmt::Debug,
 {
@@ -103,7 +74,7 @@ where
 	type ElectoralUnsynchronisedSettings = ();
 	type ElectoralSettings = Settings;
 	type ElectionIdentifierExtra = ();
-	type ElectionProperties = <DSM::Input as Fibered>::Base;
+	type ElectionProperties = <DSM::Input as Indexed>::Index;
 	type ElectionState = ();
 	type Vote = vote_storage::bitmap::Bitmap<DSM::Input>;
 	type Consensus = DSM::Input;
@@ -143,7 +114,7 @@ where
 						let output = DSM::step(state, input);
 
 						match output.into_result() {
-							Ok(output) => Ok((DSM::request(state), output)),
+							Ok(output) => Ok((DSM::input_index(state), output)),
 							Err(err) => {
 								log::error!("Electoral system moved into a bad state: {err:?}");
 								Err(CorruptStorageError::new())
@@ -166,7 +137,7 @@ where
 
 			let state = ElectoralAccess::unsynchronised_state()?;
 
-			ElectoralAccess::new_election((), DSM::request(&state), ())?;
+			ElectoralAccess::new_election((), DSM::input_index(&state), ())?;
 			Ok(Left(DSM::get(&state)))
 		}
 	}
@@ -187,7 +158,7 @@ where
 
 		for vote in consensus_votes.active_votes() {
 			// insert vote if it is valid for the given properties
-			if vote.is_in_fiber(&properties) {
+			if vote.is_valid().is_ok() && vote.has_index(&properties) {
 				log::info!("inserting vote {vote:?}");
 				consensus.insert_vote(vote);
 			} else {

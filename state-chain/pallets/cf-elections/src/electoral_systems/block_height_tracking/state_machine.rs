@@ -1,9 +1,16 @@
 use crate::electoral_system::ElectoralSystem;
 
-pub trait Fibered {
-	type Base;
-	fn is_in_fiber(&self, base: &Self::Base) -> bool;
+#[cfg(test)]
+use proptest::prelude::{BoxedStrategy, Just, Strategy};
+#[cfg(test)]
+use proptest::test_runner::TestRunner;
+
+pub trait Indexed {
+	type Index;
+	fn has_index(&self, base: &Self::Index) -> bool;
 }
+
+pub type IndexOf<Ixd> = <Ixd as Indexed>::Index;
 
 pub trait Pointed {
 	fn pt() -> Self;
@@ -14,44 +21,66 @@ pub trait Validate {
 	fn is_valid(&self) -> Result<(), Self::Error>;
 }
 
-pub mod dependent_state_machine {
-	use super::{Fibered, Validate};
+pub trait DependentStateMachine: 'static {
+	type Input: Validate + Indexed;
+	type Output: Validate;
+	type State: Validate;
+	type DisplayState;
 
-	pub trait Parameter: 'static {
-		type State: Fibered<Base = bool>;
-		type Input: Fibered;
-		type Output;
+	fn input_index(s: &Self::State) -> IndexOf<Self::Input>;
+	fn step(s: &mut Self::State, i: Self::Input) -> Self::Output;
+	fn get(s: &Self::State) -> Self::DisplayState;
+
+	fn step_specification(before: &Self::State, input: &Self::Input, after: &Self::State) -> bool {
+		true
 	}
 
-	pub struct Phantom<P: Parameter> {
-		_phantom: core::marker::PhantomData<P>,
+	#[cfg(test)]
+	fn test(
+		states: impl Strategy<Value = Self::State>,
+		inputs: impl Fn(IndexOf<Self::Input>) -> BoxedStrategy<Self::Input>,
+	) where
+		Self::State: sp_std::fmt::Debug + Clone,
+		Self::Input: sp_std::fmt::Debug + Clone,
+	{
+		let mut runner = TestRunner::default();
+		// runner
+		// 	.run(&states, |state| {
+		// 		assert!(state.is_valid().is_ok());
+		// 		Ok(())
+		// 	})
+		// 	.unwrap();
+
+		runner
+			.run(
+				&(states.prop_flat_map(|state| {
+					(Just(state.clone()), inputs(Self::input_index(&state)))
+				})),
+				|(mut state, input)| {
+					// ensure that inputs are well formed
+					assert!(state.is_valid().is_ok(), "input state not valid");
+					assert!(input.is_valid().is_ok(), "input not valid");
+					assert!(input.has_index(&Self::input_index(&state)), "input has wrong index");
+
+					// backup state
+					let prev_state = state.clone();
+
+					// run step function and ensure that output is valid
+					assert!(
+						Self::step(&mut state, input.clone()).is_valid().is_ok(),
+						"step function failed"
+					);
+
+					// ensure that state is still well formed
+					assert!(state.is_valid().is_ok(), "state after step function is not valid");
+					assert!(
+						Self::step_specification(&prev_state, &input, &state),
+						"step function does not fulfill spec"
+					);
+
+					Ok(())
+				},
+			)
+			.unwrap();
 	}
-
-	pub trait Trait: 'static {
-		type Input: Validate + Fibered;
-		type Output: Validate;
-		type State: Validate;
-		type DisplayState;
-
-		fn request(s: &Self::State) -> <Self::Input as Fibered>::Base;
-		fn step(s: &mut Self::State, i: Self::Input) -> Self::Output;
-		fn get(s: &Self::State) -> Self::DisplayState;
-	}
-}
-
-pub trait DependentStateMachineTrait {
-	type State: Fibered<Base = bool>;
-	type Input: Fibered;
-	type Output;
-
-	fn input(s: Self::State) -> <Self::Input as Fibered>::Base;
-	fn step(s: Self::State, i: Self::Input) -> (Self::State, Self::Output);
-}
-
-pub trait DependentStateMachineParams {}
-
-pub struct DependentStateMachine<'a, State, Input: Fibered + Pointed, Output> {
-	pub initial: &'a fn() -> State,
-	pub request: &'a fn(State) -> Input::Base,
-	pub step: &'a fn(State, Input) -> (State, Output),
 }

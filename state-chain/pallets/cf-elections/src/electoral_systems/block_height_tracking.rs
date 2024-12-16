@@ -32,7 +32,7 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
 	vec::Vec,
 };
-use state_machine::{dependent_state_machine, Fibered, Validate};
+use state_machine::{DependentStateMachine, Indexed, Validate};
 
 pub mod consensus;
 pub mod primitives;
@@ -232,13 +232,72 @@ impl<
 	}
 }
 
+//------------------------ input headers ---------------------------
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct InputHeaders<H, N>(pub VecDeque<Header<H, N>>);
 
-impl<H, N: From<u32> + Copy + PartialEq> Fibered for InputHeaders<H, N> {
-	type Base = N;
+#[cfg(test)]
+mod tests {
 
-	fn is_in_fiber(&self, base: &Self::Base) -> bool {
+	use sp_std::collections::vec_deque::VecDeque;
+
+	use crate::electoral_systems::block_height_tracking::state_machine::{Indexed, Validate};
+	use proptest::{
+		prelude::{any, Arbitrary, Just, Strategy},
+		prop_oneof, proptest,
+	};
+
+	use super::{
+		primitives::Header, state_machine::DependentStateMachine, BHWState, BlockHeightTrackingDSM,
+		InputHeaders,
+	};
+
+	pub fn arb_input_headers<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static>(
+		witness_from: N,
+	) -> impl Strategy<Value = InputHeaders<H, N>> {
+		(any::<H>(), any::<H>()).prop_map(move |(h, p)| {
+			InputHeaders::<H, N>(VecDeque::from(vec![Header {
+				block_height: witness_from.clone(),
+				hash: h,
+				parent_hash: p,
+			}]))
+		})
+		// (any::<N>(), any::<H>(), any::<H>()).prop_map(move |(n, h, p)|
+		// InputHeaders::<H,N>(VecDeque::from(vec![ Header { block_height: n, hash: h, parent_hash:
+		// p }])))
+	}
+
+	pub fn arb_state<
+		H: Arbitrary + Clone,
+		N: Arbitrary + Clone + 'static + sp_std::ops::Add<N, Output = N> + From<u32>,
+	>() -> impl Strategy<Value = BHWState<H, N>> {
+		prop_oneof![
+			Just(BHWState::Starting),
+			(any::<H>(), any::<H>(), any::<N>()).prop_map(move |(h, p, n1)| {
+				BHWState::Running {
+					headers: VecDeque::from(vec![Header {
+						block_height: n1.clone(),
+						hash: h,
+						parent_hash: p,
+					}]),
+					witness_from: n1 + 1.into(),
+				}
+			})
+		]
+	}
+
+	#[test]
+	pub fn test_dsm() {
+		BlockHeightTrackingDSM::<6, u32, bool>::test(arb_state(), |index| {
+			arb_input_headers(index).boxed()
+		});
+	}
+}
+
+impl<H, N: From<u32> + Copy + PartialEq> Indexed for InputHeaders<H, N> {
+	type Index = N;
+
+	fn has_index(&self, base: &Self::Index) -> bool {
 		if *base == 0.into() {
 			true
 		} else {
@@ -257,6 +316,7 @@ impl<H: PartialEq + Clone, N: BlockHeightTrait> Validate for InputHeaders<H, N> 
 	}
 }
 
+//------------------------ state ---------------------------
 impl<H, N: BlockHeightTrait> Validate for BlockHeightTrackingState<H, N>
 where
 	H: PartialEq + Clone,
@@ -264,17 +324,6 @@ where
 	type Error = VoteValidationError;
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		self.headers.is_valid()
-	}
-}
-
-impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
-	type Error = B;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		match self {
-			Ok(_) => Ok(()),
-			Err(err) => Err(err.clone()),
-		}
 	}
 }
 
@@ -310,6 +359,19 @@ impl<H, N> Validate for BHWState<H, N> {
 	}
 }
 
+//------------------------ output ---------------------------
+impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
+	type Error = B;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		match self {
+			Ok(_) => Ok(()),
+			Err(err) => Err(err.clone()),
+		}
+	}
+}
+
+//------------------------ state machine ---------------------------
 pub struct BlockHeightTrackingDSM<const SAFETY_MARGIN: usize, ChainBlockNumber, ChainBlockHash> {
 	_phantom: core::marker::PhantomData<(ChainBlockNumber, ChainBlockHash)>,
 }
@@ -318,17 +380,36 @@ impl<
 		const SAFETY_MARGIN: usize,
 		H: PartialEq + Eq + Clone + sp_std::fmt::Debug + 'static,
 		N: BlockHeightTrait + sp_std::fmt::Debug + 'static,
-	> dependent_state_machine::Trait for BlockHeightTrackingDSM<SAFETY_MARGIN, N, H>
+	> DependentStateMachine for BlockHeightTrackingDSM<SAFETY_MARGIN, N, H>
 {
 	type State = BHWState<H, N>;
 	type DisplayState = ChainProgress<N>;
 	type Input = InputHeaders<H, N>;
 	type Output = Result<ChainProgress<N>, &'static str>;
 
-	fn request(s: &Self::State) -> <Self::Input as state_machine::Fibered>::Base {
+	fn input_index(s: &Self::State) -> <Self::Input as state_machine::Indexed>::Index {
 		match s {
 			BHWState::Starting => 0.into(),
 			BHWState::Running { headers: _, witness_from } => witness_from.clone(),
+		}
+	}
+
+	// specification for step function
+	fn step_specification(before: &Self::State, input: &Self::Input, after: &Self::State) -> bool {
+		match after {
+			// the starting case should only ever be in the beginning
+			BHWState::Starting => false,
+
+			// otherwise we know that the after state will be running
+			BHWState::Running { headers, witness_from } => match before {
+				BHWState::Starting => true,
+				BHWState::Running {
+					headers: before_headers,
+					witness_from: before_witness_from,
+				} =>
+					(*witness_from == before_headers.front().unwrap().block_height) ||
+						(*witness_from == headers.back().unwrap().block_height + 1.into()),
+			},
 		}
 	}
 
@@ -361,6 +442,8 @@ impl<
 
 						let safe_headers = trim_to_length(&mut chainblocks.headers, SAFETY_MARGIN);
 
+						let current_state = chainblocks.current_state_as_no_chain_progress();
+
 						*headers = chainblocks.headers;
 						*witness_from = headers.back().unwrap().block_height + 1.into();
 
@@ -373,7 +456,12 @@ impl<
 						// 	safe_headers.len()
 						// );
 
-						Ok(merge_info.into_chain_progress().unwrap())
+						println!("merge info: {merge_info:?}");
+
+						// if we merge after a reorg, and the blocks we got are the same
+						// as the ones we previously had, then `into_chain_progress` might
+						// return `None`. In that case we return our current state.
+						Ok(merge_info.into_chain_progress().unwrap_or(current_state))
 					},
 					Err(MergeFailure::ReorgWithUnknownRoot {
 						new_block,

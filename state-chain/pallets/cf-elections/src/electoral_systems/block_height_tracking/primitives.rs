@@ -184,22 +184,44 @@ where
 	type Error = VoteValidationError;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		let mut required_block_height = self.headers.back().unwrap().block_height;
-		let mut required_hash = None;
+		// let mut required_block_height = self.headers.back().unwrap().block_height;
+		// let mut required_hash = None;
 
-		for header in self.headers.iter().rev() {
-			ensure!(
-				header.block_height == required_block_height,
-				VoteValidationError::BlockHeightsNotContinuous
-			);
-			ensure!(
-				Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
-				VoteValidationError::ParentHashMismatch
-			);
-
-			required_block_height -= 1u32.into();
-			required_hash = Some(header.parent_hash.clone());
+		if self
+			.headers
+			.iter()
+			.zip(self.headers.iter().skip(1))
+			.all(|(a, b)| a.hash == b.parent_hash)
+		{
+			()
+		} else {
+			return Err(VoteValidationError::ParentHashMismatch);
 		}
+
+		if self
+			.headers
+			.iter()
+			.zip(self.headers.iter().skip(1))
+			.all(|(a, b)| a.block_height + 1.into() == b.block_height)
+		{
+			()
+		} else {
+			return Err(VoteValidationError::BlockHeightsNotContinuous);
+		}
+
+		// for header in self.headers.iter().rev() {
+		// 	ensure!(
+		// 		header.block_height == required_block_height,
+		// 		VoteValidationError::BlockHeightsNotContinuous
+		// 	);
+		// 	ensure!(
+		// 		Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
+		// 		VoteValidationError::ParentHashMismatch
+		// 	);
+
+		// 	required_block_height -= 1u32.into();
+		// 	required_hash = Some(header.parent_hash.clone());
+		// }
 
 		Ok(())
 	}
