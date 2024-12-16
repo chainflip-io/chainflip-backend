@@ -1,6 +1,5 @@
 ---
 source: api/bin/chainflip-ingress-egress-tracker/src/witnessing/state_chain.rs
 expression: "store.storage.get(\"vault_deposit:Ethereum:b5c8bd9430b6cc87a0e2fe110ece6bf527fa4f170a4bc8cd032f768fc5219838\").unwrap()"
-snapshot_kind: text
 ---
-{"affiliate_fees":[{"account":"cFHtoB6DrnqUVY4DwMHCVCtgCLsiHvv98oGw8k66tazF2ToFv","bps":10}],"amount":"0x64","boost_fee":5,"broker_fee":{"account":"cFHsUq1uK5opJudRDczhdPVj6LGoVTqYsfj71tbHfKsTAzkJJ","bps":10},"ccm_deposit_metadata":null,"dca_params":{"chunk_interval":100,"number_of_chunks":5},"deposit_chain_block_height":1,"deposit_details":null,"destination_address":{"Eth":"0x0000000000000000000000000000000000000000"},"input_asset":{"asset":"ETH","chain":"Ethereum"},"output_asset":{"asset":"FLIP","chain":"Ethereum"},"refund_params":{"min_price":"0x0","refund_address":{"Eth":"0x541f563237a309b3a61e33bdf07a8930bdba8d99"},"retry_duration":0}}
+{"affiliate_fees":[{"account":"cFHtoB6DrnqUVY4DwMHCVCtgCLsiHvv98oGw8k66tazF2ToFv","bps":10}],"amount":"0x64","boost_fee":5,"broker_fee":{"account":"cFHsUq1uK5opJudRDczhdPVj6LGoVTqYsfj71tbHfKsTAzkJJ","bps":10},"ccm_deposit_metadata":null,"dca_params":{"chunk_interval":100,"number_of_chunks":5},"deposit_chain_block_height":1,"deposit_details":null,"destination_address":{"Dot":"111111111111111111111111111111111HC1"},"input_asset":{"asset":"ETH","chain":"Ethereum"},"output_asset":{"asset":"FLIP","chain":"Ethereum"},"refund_params":{"min_price":"0x0","refund_address":{"Eth":"0x541f563237a309b3a61e33bdf07a8930bdba8d99"},"retry_duration":0}}
