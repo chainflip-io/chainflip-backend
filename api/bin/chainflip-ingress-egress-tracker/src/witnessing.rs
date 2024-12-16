@@ -113,7 +113,7 @@ pub(super) async fn start(
 	store: RedisStore,
 ) -> anyhow::Result<()> {
 	let (state_chain_stream, unfinalized_chain_stream, state_chain_client) = {
-		state_chain_observer::client::StateChainClient::connect_without_account(
+		state_chain_observer::client::StateChainClient::<(), _>::connect_without_account(
 			scope,
 			&settings.state_chain_ws_endpoint,
 		)
@@ -130,13 +130,10 @@ pub(super) async fn start(
 		let state_chain_client = state_chain_client.clone();
 		move |call: state_chain_runtime::RuntimeCall, _epoch_index| {
 			let mut store = store.clone();
-
-			let tracker_state_chain_client = state_chain::TrackerStateChainClient {
-				state_chain_client: state_chain_client.clone(),
-			};
+			let state_chain_client = state_chain_client.clone();
 
 			async move {
-				handle_call(call, &mut store, chainflip_network, &tracker_state_chain_client)
+				handle_call(call, &mut store, chainflip_network, state_chain_client)
 					.await
 					.map_err(|err| anyhow!("failed to handle call: {err:?}"))
 					.unwrap()
