@@ -7,9 +7,8 @@ use crate::{
 };
 use cf_chains::{
 	address::ToHumanreadableAddress,
-	btc::BitcoinCrypto,
-	dot::{PolkadotCrypto, PolkadotExtrinsicIndex, PolkadotTransactionId},
-	evm::{EvmCrypto, SchnorrVerificationComponents, H256},
+	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
+	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
 	AnyChain, Arbitrum, Bitcoin, CcmDepositMetadata, Chain, ChannelRefundParameters, Ethereum,
 	ForeignChainAddress, IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
@@ -310,129 +309,55 @@ impl DepositIntoWitnessInformation<Arbitrum> for DepositWitness<Arbitrum> {
 	}
 }
 
-#[async_trait]
-impl DepositIntoWitnessInformation<Ethereum>
-	for Box<VaultDepositWitness<state_chain_runtime::Runtime, ChainInstanceFor<Ethereum>>>
-{
-	async fn into_witness_information<StateChainClient>(
-		self,
-		height: <Ethereum as Chain>::ChainBlockNumber,
-		network: NetworkEnvironment,
-		state_chain_client: Arc<StateChainClient>,
-	) -> anyhow::Result<WitnessInformation>
-	where
-		StateChainClient: StorageApi + TrackerApi + ChainApi + 'static + Send + Sync,
-	{
-		Ok(WitnessInformation::VaultDeposit {
-			tx_id: <H256 as IntoTransactionInIdForAnyChain<EvmCrypto>>::into_transaction_in_id_for_any_chain(self.tx_id),
-			deposit_chain_block_height: height,
-			input_asset: self.input_asset.into(),
-			output_asset: self.output_asset,
-			amount: self.deposit_amount.into(),
-			destination_address: destination_address_from_encoded_address(self.destination_address,  network)?,
-			ccm_deposit_metadata: self.deposit_metadata,
-			deposit_details: self.deposit_details.into_any_chain(),
-			broker_fee: self.broker_fee.clone(),
-			affiliate_fees: map_affiliates(state_chain_client,self.affiliate_fees, self.broker_fee.account).await,
-			refund_params: self.refund_params,
-			dca_params: self.dca_params,
-			boost_fee: self.boost_fee,
-		})
-	}
+macro_rules! impl_deposit_into_witness_information {
+	($chain:ty) => {
+		#[async_trait]
+		impl DepositIntoWitnessInformation<$chain>
+			for Box<VaultDepositWitness<state_chain_runtime::Runtime, ChainInstanceFor<$chain>>>
+		{
+			async fn into_witness_information<StateChainClient>(
+				self,
+				height: <$chain as Chain>::ChainBlockNumber,
+				network: NetworkEnvironment,
+				state_chain_client: Arc<StateChainClient>,
+			) -> anyhow::Result<WitnessInformation>
+			where
+				StateChainClient: StorageApi + TrackerApi + ChainApi + 'static + Send + Sync,
+			{
+				Ok(WitnessInformation::VaultDeposit {
+					tx_id: <<<$chain as cf_chains::Chain>::ChainCrypto as cf_chains::ChainCrypto>::TransactionInId as IntoTransactionInIdForAnyChain<
+						<$chain as cf_chains::Chain>::ChainCrypto,
+					>>::into_transaction_in_id_for_any_chain(self.tx_id),
+					deposit_chain_block_height: height.into(),
+					input_asset: self.input_asset.into(),
+					output_asset: self.output_asset,
+					amount: self.deposit_amount.into(),
+					destination_address: destination_address_from_encoded_address(
+						self.destination_address,
+						network,
+					)?,
+					ccm_deposit_metadata: self.deposit_metadata,
+					deposit_details: self.deposit_details.into_any_chain(),
+					broker_fee: self.broker_fee.clone(),
+					affiliate_fees: map_affiliates(
+						state_chain_client,
+						self.affiliate_fees,
+						self.broker_fee.account,
+					)
+					.await,
+					refund_params: self.refund_params,
+					dca_params: self.dca_params,
+					boost_fee: self.boost_fee,
+				})
+			}
+		}
+	};
 }
 
-#[async_trait]
-impl DepositIntoWitnessInformation<Bitcoin>
-	for Box<VaultDepositWitness<state_chain_runtime::Runtime, ChainInstanceFor<Bitcoin>>>
-{
-	async fn into_witness_information<StateChainClient>(
-		self,
-		height: <Bitcoin as Chain>::ChainBlockNumber,
-		network: NetworkEnvironment,
-		state_chain_client: Arc<StateChainClient>,
-	) -> anyhow::Result<WitnessInformation>
-	where
-		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
-	{
-		Ok(WitnessInformation::VaultDeposit {
-			tx_id: <H256 as IntoTransactionInIdForAnyChain<BitcoinCrypto>>::into_transaction_in_id_for_any_chain(self.tx_id),
-			deposit_chain_block_height: height,
-			input_asset: self.input_asset.into(),
-			output_asset: self.output_asset,
-			amount: self.deposit_amount.into(),
-			destination_address: destination_address_from_encoded_address(self.destination_address,  network)?,
-			ccm_deposit_metadata: self.deposit_metadata,
-			deposit_details: self.deposit_details.into_any_chain(),
-			broker_fee: self.broker_fee.clone(),
-			affiliate_fees: map_affiliates(state_chain_client,self.affiliate_fees, self.broker_fee.account).await,
-			refund_params: self.refund_params,
-			dca_params: self.dca_params,
-			boost_fee: self.boost_fee,
-		})
-	}
-}
-
-#[async_trait]
-impl DepositIntoWitnessInformation<Polkadot>
-	for Box<VaultDepositWitness<state_chain_runtime::Runtime, ChainInstanceFor<Polkadot>>>
-{
-	async fn into_witness_information<StateChainClient>(
-		self,
-		height: <Polkadot as Chain>::ChainBlockNumber,
-		network: NetworkEnvironment,
-		state_chain_client: Arc<StateChainClient>,
-	) -> anyhow::Result<WitnessInformation>
-	where
-		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
-	{
-		Ok(WitnessInformation::VaultDeposit {
-			tx_id: <cf_primitives::TxId as IntoTransactionInIdForAnyChain<PolkadotCrypto>>::into_transaction_in_id_for_any_chain(self.tx_id),
-			deposit_chain_block_height: height as u64,
-			input_asset: self.input_asset.into(),
-			output_asset: self.output_asset,
-			amount: self.deposit_amount.into(),
-			destination_address: destination_address_from_encoded_address(self.destination_address,  network)?,
-			ccm_deposit_metadata: self.deposit_metadata,
-			deposit_details: self.deposit_details.into_any_chain(),
-			broker_fee: self.broker_fee.clone(),
-			affiliate_fees: map_affiliates(state_chain_client,self.affiliate_fees, self.broker_fee.account).await,
-			refund_params: self.refund_params,
-			dca_params: self.dca_params,
-			boost_fee: self.boost_fee,
-		})
-	}
-}
-
-#[async_trait]
-impl DepositIntoWitnessInformation<Arbitrum>
-	for Box<VaultDepositWitness<state_chain_runtime::Runtime, ChainInstanceFor<Arbitrum>>>
-{
-	async fn into_witness_information<StateChainClient>(
-		self,
-		height: <Arbitrum as Chain>::ChainBlockNumber,
-		network: NetworkEnvironment,
-		state_chain_client: Arc<StateChainClient>,
-	) -> anyhow::Result<WitnessInformation>
-	where
-		StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
-	{
-		Ok(WitnessInformation::VaultDeposit {
-			tx_id: <H256 as IntoTransactionInIdForAnyChain<EvmCrypto>>::into_transaction_in_id_for_any_chain(self.tx_id),
-			deposit_chain_block_height: height,
-			input_asset: self.input_asset.into(),
-			output_asset: self.output_asset,
-			amount: self.deposit_amount.into(),
-			destination_address: destination_address_from_encoded_address(self.destination_address,  network)?,
-			ccm_deposit_metadata: self.deposit_metadata,
-			deposit_details: self.deposit_details.into_any_chain(),
-			broker_fee: self.broker_fee.clone(),
-			affiliate_fees: map_affiliates(state_chain_client,self.affiliate_fees, self.broker_fee.account).await,
-			refund_params: self.refund_params,
-			dca_params: self.dca_params,
-			boost_fee: self.boost_fee,
-		})
-	}
-}
+impl_deposit_into_witness_information!(Ethereum);
+impl_deposit_into_witness_information!(Bitcoin);
+impl_deposit_into_witness_information!(Polkadot);
+impl_deposit_into_witness_information!(Arbitrum);
 
 impl BroadcastIntoWitnessInformation for BroadcastDetails<Ethereum> {
 	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
@@ -440,6 +365,16 @@ impl BroadcastIntoWitnessInformation for BroadcastDetails<Ethereum> {
 			broadcast_id: self.broadcast_id,
 			tx_out_id: TransactionId::Ethereum { signature: self.tx_out_id },
 			tx_ref: TransactionRef::Ethereum { hash: self.tx_ref },
+		})
+	}
+}
+
+impl BroadcastIntoWitnessInformation for BroadcastDetails<Arbitrum> {
+	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
+		Ok(WitnessInformation::Broadcast {
+			broadcast_id: self.broadcast_id,
+			tx_out_id: TransactionId::Arbitrum { signature: self.tx_out_id },
+			tx_ref: TransactionRef::Arbitrum { hash: self.tx_ref },
 		})
 	}
 }
@@ -462,16 +397,6 @@ impl BroadcastIntoWitnessInformation for BroadcastDetails<Polkadot> {
 				signature: DotSignature(*self.tx_out_id.aliased_ref()),
 			},
 			tx_ref: TransactionRef::Polkadot { transaction_id: self.tx_ref },
-		})
-	}
-}
-
-impl BroadcastIntoWitnessInformation for BroadcastDetails<Arbitrum> {
-	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
-		Ok(WitnessInformation::Broadcast {
-			broadcast_id: self.broadcast_id,
-			tx_out_id: TransactionId::Arbitrum { signature: self.tx_out_id },
-			tx_ref: TransactionRef::Arbitrum { hash: self.tx_ref },
 		})
 	}
 }
@@ -1112,10 +1037,7 @@ mod tests {
 							deposit_details: Default::default(),
 							broker_fee: Beneficiary { account: AccountId32::new([0; 32]), bps: 10 },
 							affiliate_fees: frame_support::BoundedVec::try_from(vec![
-								Beneficiary {
-									account: AffiliateShortId::from(affiliate_short_id),
-									bps: 10
-								}
+								Beneficiary { account: affiliate_short_id, bps: 10 }
 							])
 							.unwrap(),
 							refund_params: ChannelRefundParameters {

@@ -78,7 +78,7 @@ where
 	affiliates
 		.into_iter()
 		.map(|affiliate| {
-			Beneficiary { account: registered_affiliates.get(&affiliate.account).map(|a| a.clone())
+			Beneficiary { account: registered_affiliates.get(&affiliate.account).cloned()
 				.unwrap_or_else(|| {
 					log::warn!(
 						"Affiliate not found for short id {} on broker {}",
