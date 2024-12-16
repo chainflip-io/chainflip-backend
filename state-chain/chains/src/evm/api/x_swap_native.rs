@@ -47,9 +47,9 @@ impl EvmCall for XSwapNative {
 
 	fn function_call_args(&self) -> Vec<Token> {
 		vec![
-			self.destination_chain.clone().tokenize(),
+			self.destination_chain.tokenize(),
 			self.destination_address.clone().tokenize(),
-			self.destination_token.clone().tokenize(),
+			self.destination_token.tokenize(),
 			self.cf_parameters.clone().tokenize(),
 		]
 	}

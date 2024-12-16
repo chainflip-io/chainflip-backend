@@ -55,11 +55,11 @@ impl EvmCall for XSwapToken {
 
 	fn function_call_args(&self) -> Vec<Token> {
 		vec![
-			self.destination_chain.clone().tokenize(),
+			self.destination_chain.tokenize(),
 			self.destination_address.clone().tokenize(),
-			self.destination_token.clone().tokenize(),
+			self.destination_token.tokenize(),
 			self.source_token.clone().tokenize(),
-			self.amount.clone().tokenize(),
+			self.amount.tokenize(),
 			self.cf_parameters.clone().tokenize(),
 		]
 	}
