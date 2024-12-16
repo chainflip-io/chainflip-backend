@@ -2257,12 +2257,34 @@ impl_runtime_apis! {
 						)
 				},
 				(
-					ForeignChain::Solana,
-					VaultSwapExtraParameters::Solana {
+					ForeignChain::Ethereum,
+					VaultSwapExtraParameters::Evm {
 						input_amount,
 						refund_parameters,
+					}
+				) => {
+					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(refund_parameters.retry_duration)?;
+					crate::chainflip::vault_swap::ethereum_vault_swap(
+						broker_id,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						refund_parameters,
+						boost_fee,
+						affiliate_fees,
+						dca_parameters,
+						channel_metadata,
+						input_amount,
+						Environment::key_manager_address(),
+					)
+				},
+				(
+					ForeignChain::Solana,
+					VaultSwapExtraParameters::Solana {
 						from,
 						event_data_account,
+						input_amount,
+						refund_parameters,
 						from_token_account,
 					}
 				) => crate::chainflip::vault_swap::solana_vault_swap(
