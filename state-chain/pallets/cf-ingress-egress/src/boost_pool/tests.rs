@@ -193,11 +193,9 @@ fn boosting_with_max_network_fee_deduction() {
 
 	check_pool(&pool, [(BOOSTER_1, INIT_BOOSTER_AMOUNT)]);
 
-	const PROVIDED_AMOUNT: u128 = 1000;
-	const FULL_BOOST_FEE: u128 =
-		(PROVIDED_AMOUNT * BOOST_FEE_BPS as u128) / MAX_BASIS_POINTS as u128;
-
-	const DEPOSIT_AMOUNT: u128 = PROVIDED_AMOUNT + FULL_BOOST_FEE;
+	const DEPOSIT_AMOUNT: u128 = 2000;
+	const FULL_BOOST_FEE: u128 = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / MAX_BASIS_POINTS as u128;
+	const PROVIDED_AMOUNT: u128 = DEPOSIT_AMOUNT - FULL_BOOST_FEE;
 
 	// NOTE: Full 1% boost fee is charged from the deposit
 	assert_eq!(
@@ -210,12 +208,12 @@ fn boosting_with_max_network_fee_deduction() {
 	);
 
 	// Booster's contribution is recorded, but they earn 0 fees:
-	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 1000, 0)])]);
+	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, PROVIDED_AMOUNT, 0)])]);
 
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
 		DepositFinalisationOutcomeForPool {
-			amount_credited_to_boosters: 0,
+			amount_credited_to_boosters: PROVIDED_AMOUNT,
 			unlocked_funds: vec![]
 		}
 	);
