@@ -1675,11 +1675,11 @@ impl_runtime_apis! {
 						],
 					)
 				],
-			).map_err(|e| DispatchErrorWithMessage::Other(match e {
+			).map_err(|e| match e {
 				BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
 				BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
 				BatchExecutionError::DispatchError { error } => error,
-			}))?;
+			})?;
 
 			let (
 				network_fee,
