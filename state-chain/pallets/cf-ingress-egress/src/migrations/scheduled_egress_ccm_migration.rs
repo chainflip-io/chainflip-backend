@@ -55,6 +55,8 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ScheduledEgressCcmM
 					let mut new_cross_chain_messages =
 						Vec::with_capacity(old_cross_chain_messages.len());
 					for old_cross_chain_message in old_cross_chain_messages {
+						let destination_chain: ForeignChain =
+							(old_cross_chain_message.asset).into();
 						new_cross_chain_messages.push(CrossChainMessage {
 							egress_id: old_cross_chain_message.egress_id,
 							asset: old_cross_chain_message.asset,
@@ -64,14 +66,15 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ScheduledEgressCcmM
 							source_chain: old_cross_chain_message.source_chain,
 							source_address: old_cross_chain_message.source_address,
 							ccm_additional_data: old_cross_chain_message.ccm_additional_data,
-							// gas_budget: match T::TargetChain as Chain {
-							// 	Chain::Ethereum => 300_000.into(),
-							// 	Chain::Arbitrum => 1_500_000.into(),
-							// 	Chain::Solana => 600_000.into(),
-							// 	_ => 0.into(),
-							// },
-							// TODO: What gas_budget should we put here?
-							gas_budget: old_cross_chain_message.gas_budget.into(),
+							// Using reasonable values for gas budget egress. We can't just
+							// use the ingress gas budget because it's has a different meaning.
+							gas_budget: match destination_chain {
+								cf_chains::ForeignChain::Ethereum => 500_000_u128,
+								cf_chains::ForeignChain::Arbitrum => 1_500_000_u128,
+								cf_chains::ForeignChain::Solana => 600_000_u128,
+								// This should not be possible but no need to error out.
+								_ => 0_u128,
+							},
 						});
 					}
 					Some(new_cross_chain_messages)
