@@ -1,8 +1,7 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
-import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
-import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
+import { randomAsHex } from '../polkadot/util-crypto';
 import { performSwap, performVaultSwap } from '../shared/perform_swap';
 import {
   newAddress,
@@ -18,55 +17,7 @@ import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 
-enum SolidityType {
-  Uint256 = 'uint256',
-  String = 'string',
-  Bytes = 'bytes',
-  Address = 'address',
-}
-
 let swapCount = 1;
-
-function newAbiEncodedMessage(types?: SolidityType[]): string {
-  const web3 = new Web3();
-
-  let typesArray: SolidityType[] = [];
-  if (types === undefined) {
-    const numElements = Math.floor(Math.random() * (Object.keys(SolidityType).length / 2)) + 1;
-    for (let i = 0; i < numElements; i++) {
-      typesArray.push(
-        Object.values(SolidityType)[
-          Math.floor(Math.random() * (Object.keys(SolidityType).length / 2))
-        ],
-      );
-    }
-  } else {
-    typesArray = types;
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const variables: any[] = [];
-
-  for (let i = 0; i < typesArray.length; i++) {
-    switch (typesArray[i]) {
-      case SolidityType.Uint256:
-        variables.push(randomAsNumber());
-        break;
-      case SolidityType.String:
-        variables.push(Math.random().toString(36).substring(2));
-        break;
-      case SolidityType.Bytes:
-        variables.push(randomAsHex(Math.floor(Math.random() * 100) + 1));
-        break;
-      case SolidityType.Address:
-        variables.push(randomAsHex(20));
-        break;
-      // Add more cases for other Solidity types as needed
-      default:
-        throw new Error(`Unsupported Solidity type: ${typesArray[i]}`);
-    }
-  }
-  return web3.eth.abi.encodeParameters(typesArray, variables);
-}
 
 export function newSolanaCcmAdditionalData(maxAccounts: number) {
   const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
@@ -95,30 +46,45 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
   return u8aToHex(solCcmAdditionalDataCodec.enc(cfParameters));
 }
 
-// Solana CCM-related parameters. These are values in the protocol.
-const maxCcmBytesSol = 705;
-const maxCcmBytesUsdc = 492;
-const bytesPerAccount = 33;
-
 // Generate random bytes. Setting a minimum length of 10 because very short messages can end up
 // with the SC returning an ASCII character in SwapDepositAddressReady.
 function newCcmArbitraryBytes(maxLength: number): string {
   return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
 }
 
-function newCcmAdditionalData(destAsset: Asset, message?: string): string {
+// Protocol limits
+const MAX_CCM_MSG_LENGTH = 9_000;
+const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
+// Solana transactions have a length of 1232. Cappig it to some reasonable values
+// that when construction the call the Solana length is not exceeded.
+// TODO: Revisit these values once cfParameters is encoded in the SDK for SolVaultSwaps.
+const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 500;
+const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 1000;
+
+// Solana CCM-related parameters. These are limits in the protocol.
+const MAX_CCM_BYTES_SOL = 705;
+const MAX_CCM_BYTES_USDC = 492;
+const bytesPerAccount = 33;
+
+function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: number): string {
   const destChain = chainFromAsset(destAsset);
+  let length: number;
+
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
-      // Cf Parameters should be ignored by the protocol for any chain other than Solana
-      return newCcmArbitraryBytes(100);
+      length = MAX_CCM_ADDITIONAL_DATA_LENGTH;
+      if (maxLength !== undefined) {
+        length = Math.min(length, maxLength);
+      }
+      return newCcmArbitraryBytes(length);
     case 'Solana': {
       const messageLength = (message!.length - 2) / 2;
-      const maxAccounts = Math.floor(
-        ((destAsset === 'Sol' ? maxCcmBytesSol : maxCcmBytesUsdc) - messageLength) /
-          bytesPerAccount,
-      );
+      length = (destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC) - messageLength;
+      if (maxLength !== undefined) {
+        length = Math.min(length, maxLength);
+      }
+      const maxAccounts = Math.floor(length / bytesPerAccount);
 
       // The maximum number of extra accounts that can be passed is limited by the tx size
       // and therefore also depends on the message length.
@@ -129,17 +95,27 @@ function newCcmAdditionalData(destAsset: Asset, message?: string): string {
   }
 }
 
-function newCcmMessage(destAsset: Asset): string {
+function newCcmMessage(destAsset: Asset, maxLength?: number): string {
   const destChain = chainFromAsset(destAsset);
+  let length: number;
+
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
-      return newAbiEncodedMessage();
+      length = MAX_CCM_MSG_LENGTH;
+      break;
     case 'Solana':
-      return newCcmArbitraryBytes(destAsset === 'Sol' ? maxCcmBytesSol : maxCcmBytesUsdc);
+      length = destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC;
+      break;
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
   }
+
+  if (maxLength !== undefined) {
+    length = Math.min(length, maxLength);
+  }
+
+  return newCcmArbitraryBytes(length);
 }
 
 export function newCcmMetadata(
@@ -147,10 +123,10 @@ export function newCcmMetadata(
   destAsset: Asset,
   ccmMessage?: string,
   gasBudgetFraction?: number,
-  cfParamsArray?: string,
+  ccmAdditionalDataArray?: string,
 ): CcmDepositMetadata {
   const message = ccmMessage ?? newCcmMessage(destAsset);
-  const ccmAdditionalData = cfParamsArray ?? newCcmAdditionalData(destAsset, message);
+  const ccmAdditionalData = ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message);
   const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
@@ -163,6 +139,40 @@ export function newCcmMetadata(
     gasBudget,
     ccmAdditionalData,
   };
+}
+
+// Vault swaps have some limitations depending on the source chain
+export function newVaultSwapCcmMetadata(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  ccmMessage?: string,
+  gasBudgetFraction?: number,
+  ccmAdditionalDataArray?: string,
+): CcmDepositMetadata {
+  const sourceChain = chainFromAsset(sourceAsset);
+  let messageMaxLength;
+  let metadataMaxLength;
+
+  // Solana has restrictions on transaction length
+  if (sourceChain === 'Solana') {
+    messageMaxLength = MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH;
+    metadataMaxLength = MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH;
+    if (ccmMessage && ccmMessage.length / 2 > messageMaxLength) {
+      throw new Error(
+        `Message length for Solana vault swap must be less than ${messageMaxLength} bytes`,
+      );
+    }
+    if (ccmAdditionalDataArray && ccmAdditionalDataArray.length / 2 > metadataMaxLength) {
+      throw new Error(
+        `Additional data length for Solana vault swap must be less than ${metadataMaxLength} bytes`,
+      );
+    }
+  }
+
+  const message = ccmMessage ?? newCcmMessage(destAsset, messageMaxLength);
+  const ccmAdditionalData =
+    ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message, metadataMaxLength);
+  return newCcmMetadata(sourceAsset, destAsset, message, gasBudgetFraction, ccmAdditionalData);
 }
 
 export async function prepareSwap(

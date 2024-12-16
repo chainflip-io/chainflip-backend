@@ -75,7 +75,7 @@ export async function executeEvmVaultSwap(
   } as const;
   const txOptions = {
     // This is run with fresh addresses to prevent nonce issues. Will be 1 for ERC20s.
-    gasLimit: srcChain === Chains.Arbitrum ? 10000000n : 200000n,
+    gasLimit: srcChain === Chains.Arbitrum ? 50000000n : 1000000n,
   } as const;
 
   const receipt = await executeSwap(

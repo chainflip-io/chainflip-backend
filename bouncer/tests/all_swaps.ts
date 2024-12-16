@@ -1,7 +1,12 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
 import { SwapParams } from '../shared/perform_swap';
-import { newCcmMetadata, testSwap, testVaultSwap } from '../shared/swapping';
+import {
+  newCcmMetadata,
+  newVaultSwapCcmMetadata,
+  testSwap,
+  testVaultSwap,
+} from '../shared/swapping';
 import { btcAddressTypes } from '../shared/new_btc_address';
 import { ccmSupportedChains, chainFromAsset, VaultSwapParams } from '../shared/utils';
 
@@ -17,6 +22,14 @@ async function main() {
     functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
+    let ccmSwapMetadata;
+    if (ccmSwap) {
+      ccmSwapMetadata =
+        functionCall === testSwap
+          ? newCcmMetadata(sourceAsset, destAsset)
+          : newVaultSwapCcmMetadata(sourceAsset, destAsset);
+    }
+
     if (destAsset === 'Btc') {
       const btcAddressTypesArray = Object.values(btcAddressTypes);
       allSwaps.push(
@@ -24,19 +37,13 @@ async function main() {
           sourceAsset,
           destAsset,
           btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+          ccmSwapMetadata,
           testAllSwaps.swapContext,
         ),
       );
     } else {
       allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          undefined,
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-          testAllSwaps.swapContext,
-        ),
+        functionCall(sourceAsset, destAsset, undefined, ccmSwapMetadata, testAllSwaps.swapContext),
       );
     }
   }
