@@ -8,7 +8,7 @@ use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
 use pallet_cf_broadcast::TransactionOutIdFor;
-use sp_core::crypto::AccountId32;
+use sp_core::{bounded::alloc::collections::BTreeMap, crypto::AccountId32};
 
 use anyhow::anyhow;
 use tracing::log;
@@ -67,18 +67,17 @@ where
 		return Affiliates::default();
 	}
 
-	let registered_affiliates = state_chain_client
+	let registered_affiliates: BTreeMap<_, _> = state_chain_client
 		.get_affiliates(broker_id.clone())
 		.await
-		.expect(STATE_CHAIN_CONNECTION);
+		.expect(STATE_CHAIN_CONNECTION)
+		.into_iter()
+		.collect();
 
 	affiliates
 		.into_iter()
 		.map(|affiliate| {
-			let account_id = registered_affiliates
-				.iter()
-				.find(|(short_id, _)| short_id == &affiliate.account)
-				.map(|(_, account_id)| account_id.clone())
+			Beneficiary { account: registered_affiliates.get(&affiliate.account).map(|a| a.clone())
 				.unwrap_or_else(|| {
 					log::warn!(
 						"Affiliate not found for short id {} on broker {}",
@@ -86,10 +85,9 @@ where
 						broker_id
 					);
 					AccountId32::from([0; 32])
-				});
-			Beneficiary { account: account_id, bps: affiliate.bps }
+				}), bps: affiliate.bps }
 		})
 		.collect::<Vec<Beneficiary<AccountId32>>>()
 		.try_into()
-		.expect("Number of affiliates should always fit")
+		.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same.")
 }
