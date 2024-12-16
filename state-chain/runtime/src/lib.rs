@@ -2197,7 +2197,30 @@ impl_runtime_apis! {
 				} else {
 					Err("Extra parameter is not valid for Btc vault swap.".into())
 				},
-				ForeignChain::Solana => crate::chainflip::vault_swap::solana_vault_swap(
+				ForeignChain::Ethereum => {
+					if let VaultSwapExtraParametersEncoded::Evm{
+						input_amount,
+						refund_parameters,
+					} = extra_parameters {
+						pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(refund_parameters.retry_duration)?;
+						crate::chainflip::vault_swap::ethereum_vault_swap(
+							broker_id,
+							destination_asset,
+							destination_address,
+							broker_commission,
+							refund_parameters,
+							boost_fee,
+							affiliate_fees,
+							dca_parameters,
+							channel_metadata,
+							input_amount,
+							Environment::key_manager_address(),
+						)
+					}else {
+						Err(DispatchErrorWithMessage::Other("Extra parameter is not valid for Evm vault swap.".into()))
+					}
+				},
+								ForeignChain::Solana => crate::chainflip::vault_swap::solana_vault_swap(
 					broker_id,
 					source_asset,
 					destination_asset,
