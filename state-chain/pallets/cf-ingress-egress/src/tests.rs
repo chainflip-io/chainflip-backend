@@ -6,7 +6,7 @@ use crate::{
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, Event, FailedForeignChainCall,
-	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, NetworkFeeDeductionFromBoostPercents,
+	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, NetworkFeeDeductionFromBoostPercent,
 	Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer, VaultDepositWitness,
 };
@@ -1481,7 +1481,7 @@ fn can_update_all_config_items() {
 					lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
 				},
 				PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
-					deduction_percents: NETWORK_FEE_DEDUCTION
+					deduction_percent: NETWORK_FEE_DEDUCTION
 				}
 			]
 			.try_into()
@@ -1493,7 +1493,7 @@ fn can_update_all_config_items() {
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Flip), NEW_MIN_DEPOSIT_FLIP);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Eth), NEW_MIN_DEPOSIT_ETH);
 		assert_eq!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
-		assert_eq!(NetworkFeeDeductionFromBoostPercents::<Test, _>::get(), NETWORK_FEE_DEDUCTION);
+		assert_eq!(NetworkFeeDeductionFromBoostPercent::<Test, _>::get(), NETWORK_FEE_DEDUCTION);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -1511,7 +1511,7 @@ fn can_update_all_config_items() {
 				lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
 			}),
 			RuntimeEvent::IngressEgress(Event::NetworkFeeDeductionFromBoostSet {
-				deduction_percents: NETWORK_FEE_DEDUCTION
+				deduction_percent: NETWORK_FEE_DEDUCTION
 			}),
 		);
 

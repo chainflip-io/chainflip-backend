@@ -1055,7 +1055,7 @@ fn taking_network_fee_from_boost_fee() {
 	// we get a non-zero amount of the input asset, and we schedule a swap to FLIP as
 	// network fee.
 
-	use crate::NetworkFeeDeductionFromBoostPercents;
+	use crate::NetworkFeeDeductionFromBoostPercent;
 
 	new_test_ext().execute_with(|| {
 		const ASSET: EthAsset = EthAsset::Eth;
@@ -1077,7 +1077,7 @@ fn taking_network_fee_from_boost_fee() {
 		// First check that with a zero network fee portion, no network fee is collected:
 		{
 			assert_eq!(
-				NetworkFeeDeductionFromBoostPercents::<Test, ()>::get(),
+				NetworkFeeDeductionFromBoostPercent::<Test, ()>::get(),
 				Percent::from_percent(0)
 			);
 			let _ = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
@@ -1108,11 +1108,11 @@ fn taking_network_fee_from_boost_fee() {
 			assert_ok!(Pallet::<Test, ()>::update_pallet_config(
 				RuntimeOrigin::root(),
 				bounded_vec![PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
-					deduction_percents: Percent::from_percent(20)
+					deduction_percent: Percent::from_percent(20)
 				}]
 			));
 			assert_eq!(
-				NetworkFeeDeductionFromBoostPercents::<Test, ()>::get(),
+				NetworkFeeDeductionFromBoostPercent::<Test, ()>::get(),
 				Percent::from_percent(20)
 			);
 			let _ = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);

@@ -1,6 +1,6 @@
 use super::*;
 use cf_chains::Ethereum;
-use cf_primitives::{AssetAmount, EthAmount, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{AssetAmount, EthAmount, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS};
 
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -172,17 +172,64 @@ fn boosting_with_fees() {
 
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
-		DepositFinalisationOutcomeForPool { amount_credited: 1010, unlocked_funds: vec![] }
+		DepositFinalisationOutcomeForPool {
+			amount_credited_to_boosters: 1010,
+			unlocked_funds: vec![]
+		}
 	);
 
 	check_pool(&pool, [(BOOSTER_1, 1003), (BOOSTER_2, 2006)]);
 }
 
 #[test]
+fn boosting_with_max_network_fee_deduction() {
+	const BOOST_FEE_BPS: u16 = 100;
+	const INIT_BOOSTER_AMOUNT: u128 = 2000;
+	const NETWORK_FEE_PORTION_PERCENT: u8 = 100;
+
+	let mut pool = TestPool::new(BOOST_FEE_BPS);
+
+	pool.add_funds(BOOSTER_1, INIT_BOOSTER_AMOUNT);
+
+	check_pool(&pool, [(BOOSTER_1, INIT_BOOSTER_AMOUNT)]);
+
+	const PROVIDED_AMOUNT: u128 = 1000;
+	const FULL_BOOST_FEE: u128 =
+		(PROVIDED_AMOUNT * BOOST_FEE_BPS as u128) / MAX_BASIS_POINTS as u128;
+
+	const DEPOSIT_AMOUNT: u128 = PROVIDED_AMOUNT + FULL_BOOST_FEE;
+
+	// NOTE: Full 1% boost fee is charged from the deposit
+	assert_eq!(
+		pool.provide_funds_for_boosting(
+			BOOST_1,
+			DEPOSIT_AMOUNT,
+			Percent::from_percent(NETWORK_FEE_PORTION_PERCENT)
+		),
+		Ok((DEPOSIT_AMOUNT, FULL_BOOST_FEE))
+	);
+
+	// Booster's contribution is recorded, but they earn 0 fees:
+	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 1000, 0)])]);
+
+	assert_eq!(
+		pool.process_deposit_as_finalised(BOOST_1),
+		DepositFinalisationOutcomeForPool {
+			amount_credited_to_boosters: 0,
+			unlocked_funds: vec![]
+		}
+	);
+
+	// No change in the boost pool after deposit is finalised:
+	check_pool(&pool, [(BOOSTER_1, INIT_BOOSTER_AMOUNT)]);
+}
+
+#[test]
 fn boosting_with_fees_including_network_fee_portion() {
 	const NETWORK_FEE_PORTION_PERCENT: u8 = 30;
+	const BOOST_FEE_BPS: u16 = 100;
 
-	let mut pool = TestPool::new(100); // 1%
+	let mut pool = TestPool::new(BOOST_FEE_BPS);
 
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 2000);
@@ -190,7 +237,8 @@ fn boosting_with_fees_including_network_fee_portion() {
 	check_pool(&pool, [(BOOSTER_1, 1000), (BOOSTER_2, 2000)]);
 
 	const PROVIDED_AMOUNT: u128 = 1000;
-	const FULL_BOOST_FEE: u128 = 10;
+	const FULL_BOOST_FEE: u128 =
+		(PROVIDED_AMOUNT * BOOST_FEE_BPS as u128) / MAX_BASIS_POINTS as u128;
 
 	const DEPOSIT_AMOUNT: u128 = PROVIDED_AMOUNT + FULL_BOOST_FEE;
 
@@ -211,8 +259,9 @@ fn boosting_with_fees_including_network_fee_portion() {
 
 	const NETWORK_FEE_FROM_BOOST: u128 = FULL_BOOST_FEE * NETWORK_FEE_PORTION_PERCENT as u128 / 100;
 
-	// NOTE: we subtract 1 to account for a rounding "error" (in real code any remaining fee will be
-	// used as network fee, so all atomic units will be accounted for)
+	// Sanity check: network fee and boosters fee should make up the full boost fee.
+	// Note that we subtract 1 to account for a rounding "error" (in real code any
+	// remaining fee will be used as network fee, so all atomic units will be accounted for).
 	assert_eq!(TOTAL_BOOSTERS_FEE, FULL_BOOST_FEE - NETWORK_FEE_FROM_BOOST - 1);
 
 	// The recorded amounts include fees
@@ -230,7 +279,7 @@ fn boosting_with_fees_including_network_fee_portion() {
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
 		DepositFinalisationOutcomeForPool {
-			amount_credited: PROVIDED_AMOUNT + TOTAL_BOOSTERS_FEE,
+			amount_credited_to_boosters: PROVIDED_AMOUNT + TOTAL_BOOSTERS_FEE,
 			unlocked_funds: vec![]
 		}
 	);
@@ -273,7 +322,7 @@ fn adding_funds_during_pending_withdrawal_from_same_booster() {
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
 		DepositFinalisationOutcomeForPool {
-			amount_credited: DEPOSIT_AMOUNT,
+			amount_credited_to_boosters: DEPOSIT_AMOUNT,
 			unlocked_funds: vec![]
 		}
 	);
@@ -296,7 +345,7 @@ fn withdrawing_funds_before_finalisation() {
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
 		DepositFinalisationOutcomeForPool {
-			amount_credited: 1000,
+			amount_credited_to_boosters: 1000,
 			unlocked_funds: vec![(BOOSTER_1, 500)]
 		}
 	);
@@ -323,7 +372,7 @@ fn adding_funds_with_pending_withdrawals() {
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
 		DepositFinalisationOutcomeForPool {
-			amount_credited: 1000,
+			amount_credited_to_boosters: 1000,
 			unlocked_funds: vec![(BOOSTER_1, 500)]
 		}
 	);
@@ -393,7 +442,7 @@ fn partially_losing_pending_withdrawals() {
 		assert_eq!(
 			pool.process_deposit_as_finalised(BOOST_1),
 			DepositFinalisationOutcomeForPool {
-				amount_credited: 500,
+				amount_credited_to_boosters: 500,
 				unlocked_funds: vec![(BOOSTER_1, 250)]
 			}
 		);
@@ -436,7 +485,7 @@ fn booster_joins_then_funds_lost() {
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
 		DepositFinalisationOutcomeForPool {
-			amount_credited: 500,
+			amount_credited_to_boosters: 500,
 			unlocked_funds: vec![(BOOSTER_1, 250)]
 		}
 	);
@@ -484,7 +533,7 @@ fn booster_joins_between_boosts() {
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
 		DepositFinalisationOutcomeForPool {
-			amount_credited: 500,
+			amount_credited_to_boosters: 500,
 			unlocked_funds: vec![(BOOSTER_1, 250)]
 		},
 	);
@@ -506,7 +555,10 @@ fn booster_joins_between_boosts() {
 		let mut pool = pool.clone();
 		assert_eq!(
 			pool.process_deposit_as_finalised(BOOST_2),
-			DepositFinalisationOutcomeForPool { amount_credited: 1000, unlocked_funds: vec![] }
+			DepositFinalisationOutcomeForPool {
+				amount_credited_to_boosters: 1000,
+				unlocked_funds: vec![]
+			}
 		);
 		check_pool(&pool, [(BOOSTER_2, 1010), (BOOSTER_3, 2014)]);
 		check_pending_boosts(&pool, []);
@@ -531,7 +583,7 @@ fn small_rewards_accumulate() {
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
 		DepositFinalisationOutcomeForPool {
-			amount_credited: SMALL_DEPOSIT,
+			amount_credited_to_boosters: SMALL_DEPOSIT,
 			unlocked_funds: vec![]
 		}
 	);
@@ -549,7 +601,7 @@ fn small_rewards_accumulate() {
 		assert_eq!(
 			pool.process_deposit_as_finalised(prewitnessed_deposit_id),
 			DepositFinalisationOutcomeForPool {
-				amount_credited: SMALL_DEPOSIT,
+				amount_credited_to_boosters: SMALL_DEPOSIT,
 				unlocked_funds: vec![]
 			}
 		);
@@ -580,7 +632,10 @@ fn use_max_available_amount() {
 
 	assert_eq!(
 		pool.process_deposit_as_finalised(BOOST_1),
-		DepositFinalisationOutcomeForPool { amount_credited: 1_010_101, unlocked_funds: vec![] }
+		DepositFinalisationOutcomeForPool {
+			amount_credited_to_boosters: 1_010_101,
+			unlocked_funds: vec![]
+		}
 	);
 
 	check_pool(&pool, [(BOOSTER_1, 1_010_301)]);

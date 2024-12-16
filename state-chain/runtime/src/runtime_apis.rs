@@ -123,7 +123,7 @@ pub struct BoostPoolDetails {
 	pub pending_boosts:
 		BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, OwedAmount<AssetAmount>>>,
 	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<PrewitnessedDepositId>>,
-	pub network_fee_deduction_percents: Percent,
+	pub network_fee_deduction_percent: Percent,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]

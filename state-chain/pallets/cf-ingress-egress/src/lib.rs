@@ -285,7 +285,7 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 		lifetime: TargetChainBlockNumber<T, I>,
 	},
 	SetNetworkFeeDeductionFromBoost {
-		deduction_percents: Percent,
+		deduction_percent: Percent,
 	},
 }
 
@@ -726,7 +726,7 @@ pub mod pallet {
 
 	/// The fraction of the network fee that is deducted from the boost fee.
 	#[pallet::storage]
-	pub type NetworkFeeDeductionFromBoostPercents<T: Config<I>, I: 'static = ()> =
+	pub type NetworkFeeDeductionFromBoostPercent<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Percent, ValueQuery>;
 
 	#[pallet::event]
@@ -898,7 +898,7 @@ pub mod pallet {
 			short_affiliate_id: AffiliateShortId,
 		},
 		NetworkFeeDeductionFromBoostSet {
-			deduction_percents: Percent,
+			deduction_percent: Percent,
 		},
 	}
 
@@ -1309,11 +1309,11 @@ pub mod pallet {
 						DepositChannelLifetime::<T, I>::set(lifetime);
 						Self::deposit_event(Event::<T, I>::DepositChannelLifetimeSet { lifetime });
 					},
-					PalletConfigUpdate::SetNetworkFeeDeductionFromBoost { deduction_percents } => {
-						NetworkFeeDeductionFromBoostPercents::<T, I>::set(deduction_percents);
+					PalletConfigUpdate::SetNetworkFeeDeductionFromBoost { deduction_percent } => {
+						NetworkFeeDeductionFromBoostPercent::<T, I>::set(deduction_percent);
 
 						Self::deposit_event(Event::<T, I>::NetworkFeeDeductionFromBoostSet {
-							deduction_percents,
+							deduction_percent,
 						});
 					},
 				}
@@ -1781,7 +1781,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			"Boost tiers should be in ascending order"
 		);
 
-		let network_fee_portion = NetworkFeeDeductionFromBoostPercents::<T, I>::get();
+		let network_fee_portion = NetworkFeeDeductionFromBoostPercent::<T, I>::get();
 
 		for boost_tier in sorted_boost_tiers {
 			if boost_tier > max_boost_fee_bps {
@@ -2345,16 +2345,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		if let Some((prewitnessed_deposit_id, used_pools)) = maybe_boost_to_process {
-			let mut total_amount_credited: TargetChainAmount<T, I> = 0u32.into();
+			let mut total_amount_credited_to_boosters: TargetChainAmount<T, I> = 0u32.into();
 			// Note that ingress fee is not payed here, as it has already been payed at the time
 			// of boosting
 			for boost_tier in used_pools {
 				BoostPools::<T, I>::mutate(asset, boost_tier, |maybe_pool| {
 					if let Some(pool) = maybe_pool {
-						let DepositFinalisationOutcomeForPool { unlocked_funds, amount_credited } =
-							pool.process_deposit_as_finalised(prewitnessed_deposit_id);
+						let DepositFinalisationOutcomeForPool {
+							unlocked_funds,
+							amount_credited_to_boosters,
+						} = pool.process_deposit_as_finalised(prewitnessed_deposit_id);
 
-						total_amount_credited += amount_credited;
+						total_amount_credited_to_boosters
+							.saturating_accrue(amount_credited_to_boosters);
 
 						for (booster_id, finalised_withdrawn_amount) in unlocked_funds {
 							T::Balance::credit_account(
@@ -2368,7 +2371,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 
 			// Any excess amount is charged as network fee:
-			let network_fee_from_boost = deposit_amount.saturating_sub(total_amount_credited);
+			let network_fee_from_boost =
+				deposit_amount.saturating_sub(total_amount_credited_to_boosters);
 
 			let network_fee_swap_request_id = if network_fee_from_boost > 0u32.into() {
 				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work, and

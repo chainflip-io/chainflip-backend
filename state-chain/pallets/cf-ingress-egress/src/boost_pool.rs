@@ -152,7 +152,7 @@ where
 	AccountId: PartialEq + core::fmt::Debug,
 {
 	pub unlocked_funds: Vec<(AccountId, C::ChainAmount)>,
-	pub amount_credited: C::ChainAmount,
+	pub amount_credited_to_boosters: C::ChainAmount,
 }
 
 impl<AccountId, C: Chain> BoostPool<AccountId, C>
@@ -250,8 +250,8 @@ where
 			(provided_amount, fee)
 		};
 
-		// NOTE: only a portion of the boost fee goes to the boost pool,
-		// the rest is charged as network fee:
+		// NOTE: before the boost fee is credited to the boost pool, a portion
+		// of it is deducted as network fee:
 		let network_fee = network_fee_deduction * u128::from(fee_amount);
 		let boost_pool_fee = fee_amount.saturating_sub(ScaledAmount::from(network_fee));
 
@@ -393,7 +393,7 @@ where
 
 		DepositFinalisationOutcomeForPool {
 			unlocked_funds,
-			amount_credited: amount_credited.into_chain_amount(),
+			amount_credited_to_boosters: amount_credited.into_chain_amount(),
 		}
 	}
 

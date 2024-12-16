@@ -565,7 +565,7 @@ mod boost_pool_rpc {
 		available_amounts: Vec<AccountAndAmount>,
 		deposits_pending_finalization: Vec<PendingBoost>,
 		pending_withdrawals: Vec<PendingWithdrawal>,
-		network_fee_deduction_percents: Percent,
+		network_fee_deduction_percent: Percent,
 	}
 
 	impl BoostPoolDetailsRpc {
@@ -603,7 +603,7 @@ mod boost_pool_rpc {
 						pending_deposits,
 					})
 					.collect(),
-				network_fee_deduction_percents: details.network_fee_deduction_percents,
+				network_fee_deduction_percent: details.network_fee_deduction_percent,
 			}
 		}
 	}
@@ -2424,7 +2424,7 @@ mod test {
 				(1, BTreeMap::from([(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 })])),
 			]),
 			pending_withdrawals: Default::default(),
-			network_fee_deduction_percents: Percent::from_percent(40),
+			network_fee_deduction_percent: Percent::from_percent(40),
 		}
 	}
 
@@ -2442,7 +2442,7 @@ mod test {
 				(ID_1.clone(), BTreeSet::from([0])),
 				(ID_2.clone(), BTreeSet::from([0])),
 			]),
-			network_fee_deduction_percents: Percent::from_percent(0),
+			network_fee_deduction_percent: Percent::from_percent(0),
 		}
 	}
 
