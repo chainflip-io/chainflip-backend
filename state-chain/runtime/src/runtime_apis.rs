@@ -28,7 +28,7 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, Percent};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
@@ -123,6 +123,7 @@ pub struct BoostPoolDetails {
 	pub pending_boosts:
 		BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, OwedAmount<AssetAmount>>>,
 	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<PrewitnessedDepositId>>,
+	pub network_fee_deduction_percent: Percent,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
