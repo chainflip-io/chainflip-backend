@@ -235,19 +235,19 @@ impl SwapDirection for QuoteToBase {
 /// point number. If the result is larger than the maximum U384 this function will panic.
 ///
 /// The result will be equal or less than the true value.
-fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> U512 {
+fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> Option<U256> {
 	let x = U512::from(x);
 	let mut result = U512::from(1) << 128;
 	for bit_idx in (0..(32 - n.leading_zeros())).rev() {
 		let bit = (n & (0x1 << bit_idx)) >> bit_idx;
 
-		result = (result * result) >> 128;
+		result = result.checked_mul(result)? >> 128;
 		if bit == 0x1 {
-			result = (result * x) >> 128;
+			result = result.checked_mul(x)? >> 128;
 		}
 	}
 
-	result
+	U256::try_from(result).ok()
 }
 
 pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
@@ -262,21 +262,52 @@ pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
 	let x = U512::from(x) << 128;
 
 	for _ in 0..128 {
-		let f = fixed_point_to_power_as_fixed_point(root, n);
+		let f: U512 = fixed_point_to_power_as_fixed_point(root, n).unwrap_or(U256::MAX).into();
 		let diff = f.abs_diff(x);
 		if diff <= f >> 20 {
 			break
 		} else {
 			let delta = mul_div_floor(
-				U256::try_from(diff).unwrap(),
+				U256::try_from(diff).unwrap_or(U256::MAX),
 				(U256::one() << 128) / U256::from(n),
-				fixed_point_to_power_as_fixed_point(root, n - 1),
+				fixed_point_to_power_as_fixed_point(root, n - 1).unwrap_or(U256::MAX),
 			);
 			root = if f >= x { root - delta } else { root + delta };
 		}
 	}
 
 	root
+}
+
+#[cfg(test)]
+mod fast_tests {
+
+	use super::*;
+
+	#[test]
+	fn test_fixed_point_to_power_as_fixed_point() {
+		for n in 0..9u32 {
+			for e in 0..9u32 {
+				assert_eq!(
+					Some(U256::from(n.pow(e)) << 128),
+					fixed_point_to_power_as_fixed_point(U256::from(n) << 128, e)
+				);
+			}
+		}
+
+		assert_eq!(
+			U256::from(57),
+			fixed_point_to_power_as_fixed_point(U256::from(3) << 127, 10).unwrap() >> 128
+		);
+
+		assert_eq!(
+			U256::from(1) << 127,
+			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 127).unwrap() >> 128
+		);
+
+		// Expected to overflow
+		assert_eq!(fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 128), None);
+	}
 }
 
 #[cfg(all(test, feature = "slow-tests"))]
@@ -315,31 +346,6 @@ mod test {
 
 		inner::<BaseToQuote>();
 		inner::<QuoteToBase>();
-	}
-
-	#[test]
-	fn test_fixed_point_to_power_as_fixed_point() {
-		for n in 0..9u32 {
-			for e in 0..9u32 {
-				assert_eq!(
-					U512::from(n.pow(e)) << 128,
-					fixed_point_to_power_as_fixed_point(U256::from(n) << 128, e)
-				);
-			}
-		}
-
-		assert_eq!(
-			U512::from(57),
-			fixed_point_to_power_as_fixed_point(U256::from(3) << 127, 10) >> 128
-		);
-		assert_eq!(
-			U512::from(1) << 128,
-			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 128) >> 128
-		);
-		assert_eq!(
-			U512::from(1) << 255,
-			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 255) >> 128
-		);
 	}
 
 	#[test]
