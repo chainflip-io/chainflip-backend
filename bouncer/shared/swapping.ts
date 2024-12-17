@@ -55,6 +55,12 @@ function newCcmArbitraryBytes(maxLength: number): string {
 // Protocol limits
 const MAX_CCM_MSG_LENGTH = 15_000;
 const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
+
+// In Arbitrum's localnet extremely large messages end up with large gas estimations
+// of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
+// gas limit (32M). We cap it to a lower value than Ethereum to work around that.
+const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 4;
+
 // Solana transactions have a length of 1232. Cappig it to some reasonable values
 // that when construction the call the Solana length is not exceeded.
 // TODO: Revisit these values once cfParameters is encoded in the SDK for SolVaultSwaps.
@@ -104,10 +110,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
       length = MAX_CCM_MSG_LENGTH;
       break;
     case 'Arbitrum':
-      // In Arbitrum's localnet extremely large messages end up with large gas estimations
-      // of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
-      // gas limit (32M). We cap it to a lower value than Ethereum to work around that.
-      length = MAX_CCM_MSG_LENGTH / 4;
+      length = ARB_MAX_CCM_MSG_LENGTH;
       break;
     case 'Solana':
       length = destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC;
@@ -170,6 +173,13 @@ export function newVaultSwapCcmMetadata(
     if (ccmAdditionalDataArray && ccmAdditionalDataArray.length / 2 > metadataMaxLength) {
       throw new Error(
         `Additional data length for Solana vault swap must be less than ${metadataMaxLength} bytes`,
+      );
+    }
+  } else if (sourceChain === 'Arbitrum') {
+    messageMaxLength = ARB_MAX_CCM_MSG_LENGTH;
+    if (ccmMessage && ccmMessage.length / 2 > messageMaxLength) {
+      throw new Error(
+        `Message length for Solana vault swap must be less than ${messageMaxLength} bytes`,
       );
     }
   }
