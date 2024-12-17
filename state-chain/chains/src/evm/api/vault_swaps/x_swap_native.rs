@@ -1,5 +1,8 @@
-use super::*;
-use crate::cf_parameters::VersionedCfParameters;
+use crate::{
+	address::EncodedAddress,
+	cf_parameters::VersionedCfParameters,
+	evm::{api::EvmCall, tokenizable::Tokenizable},
+};
 use cf_primitives::Asset;
 use codec::{Decode, Encode};
 use ethabi::Token;
@@ -63,9 +66,9 @@ mod test {
 	use super::*;
 	use crate::{
 		eth::api::abi::load_abi,
-		evm::api::{common::test_utils::*, EvmTransactionBuilder},
+		evm::api::{vault_swaps::test_utils::*, EvmTransactionBuilder},
 	};
-	use cf_primitives::Asset;
+	use cf_primitives::ForeignChain;
 
 	#[test]
 	fn test_payload() {
