@@ -59,7 +59,7 @@ const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
 // In Arbitrum's localnet extremely large messages end up with large gas estimations
 // of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
 // gas limit (32M). We cap it to a lower value than Ethereum to work around that.
-const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 4;
+const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
 
 // Solana transactions have a length of 1232. Cappig it to some reasonable values
 // that when construction the call the Solana length is not exceeded.
