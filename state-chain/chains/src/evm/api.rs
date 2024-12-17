@@ -114,22 +114,31 @@ pub trait EvmCall {
 	/// The function values to be used as call parameters, not including sigData.
 	fn function_call_args(&self) -> Vec<Token>;
 
-	fn get_function() -> ethabi::Function {
+	fn get_function(with_sig_data: bool) -> ethabi::Function {
+		let inputs = if with_sig_data {
+			let mut params = vec![("sigData", SigData::param_type())];
+			params.extend(Self::function_params());
+			params
+		} else {
+			Self::function_params()
+		}
+		.into_iter()
+		.map(|(n, t)| ethabi_param(n, t))
+		.collect();
+
 		#[allow(deprecated)]
 		ethabi::Function {
 			name: Self::FUNCTION_NAME.into(),
-			inputs: core::iter::once(("sigData", SigData::param_type()))
-				.chain(Self::function_params())
-				.map(|(n, t)| ethabi_param(n, t))
-				.collect(),
+			inputs,
 			outputs: vec![],
 			constant: None,
 			state_mutability: ethabi::StateMutability::NonPayable,
 		}
 	}
+
 	/// Encodes the call and signature into EVM Abi format.
 	fn abi_encoded(&self, sig_data: &SigData) -> Vec<u8> {
-		Self::get_function()
+		Self::get_function(true)
 			.encode_input(
 				&core::iter::once(sig_data.tokenize())
 					.chain(self.function_call_args())
@@ -145,7 +154,7 @@ pub trait EvmCall {
 	/// Encode the call without the signature into EVM Abi format. For use with vault swaps.
 	fn abi_encoded_payload(&self) -> Vec<u8> {
 		// TODO JAMIE: Is this correct? Ask albert.
-		Self::get_function().encode_input(&self.function_call_args()).expect(
+		Self::get_function(false).encode_input(&self.function_call_args()).expect(
 			r#"
 					This can only fail if the parameter types don't match the function signature.
 					Therefore, as long as the tests pass, it can't fail at runtime.
@@ -155,7 +164,7 @@ pub trait EvmCall {
 	/// Generates the message hash for this call.
 	fn msg_hash(&self) -> <Keccak256 as Hash>::Output {
 		Keccak256::hash(&ethabi::encode(
-			&core::iter::once(Self::get_function().tokenize())
+			&core::iter::once(Self::get_function(true).tokenize())
 				.chain(self.function_call_args())
 				.collect::<Vec<_>>(),
 		))
@@ -222,6 +231,10 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		self.call.abi_encoded(
 			&self.expect_sig_data_defensive("`chain_encoded` is only called on signed api calls."),
 		)
+	}
+
+	pub fn chain_encoded_payload(&self) -> Vec<u8> {
+		self.call.abi_encoded_payload()
 	}
 
 	pub fn is_signed(&self) -> bool {

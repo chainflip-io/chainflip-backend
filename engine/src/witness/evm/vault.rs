@@ -13,6 +13,7 @@ use super::{
 	},
 	contract_common::{events_at_block, Event},
 };
+
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	cf_parameters::{

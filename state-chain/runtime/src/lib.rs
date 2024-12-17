@@ -2175,6 +2175,13 @@ impl_runtime_apis! {
 				})
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
 
+			// Ensure the refund duration is valid.
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
+				cf_chains::VaultSwapExtraParameters::Bitcoin { retry_duration, .. } => *retry_duration,
+				cf_chains::VaultSwapExtraParameters::Evm { refund_parameters, .. } => refund_parameters.retry_duration,
+				cf_chains::VaultSwapExtraParameters::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
+			})?;
+
 			// Encode swap
 			match ForeignChain::from(source_asset) {
 				ForeignChain::Bitcoin =>
@@ -2182,7 +2189,6 @@ impl_runtime_apis! {
 						min_output_amount,
 						retry_duration,
 					} = extra_parameters {
-						pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
 						crate::chainflip::vault_swap::bitcoin_vault_swap(
 							broker_id,
 							destination_asset,
@@ -2197,14 +2203,15 @@ impl_runtime_apis! {
 				} else {
 					Err("Extra parameter is not valid for Btc vault swap.".into())
 				},
-				ForeignChain::Ethereum => {
+				ForeignChain::Ethereum | ForeignChain::Arbitrum => {
 					if let VaultSwapExtraParametersEncoded::Evm{
 						input_amount,
 						refund_parameters,
 					} = extra_parameters {
-						pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(refund_parameters.retry_duration)?;
 						crate::chainflip::vault_swap::ethereum_vault_swap(
 							broker_id,
+							source_asset,
+							input_amount,
 							destination_asset,
 							destination_address,
 							broker_commission,
@@ -2213,8 +2220,6 @@ impl_runtime_apis! {
 							affiliate_fees,
 							dca_parameters,
 							channel_metadata,
-							input_amount,
-							Environment::key_manager_address(),
 						)
 					}else {
 						Err(DispatchErrorWithMessage::from("Extra parameter is not valid for Evm vault swap."))
