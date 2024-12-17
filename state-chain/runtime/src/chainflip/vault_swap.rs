@@ -4,7 +4,7 @@ use crate::{
 		ChainAddressConverter, SolEnvironment,
 	},
 	runtime_apis::{DispatchErrorWithMessage, EvmVaultSwapDetails, VaultSwapDetails},
-	AccountId, BlockNumber, Runtime, Swapping,
+	AccountId, BlockNumber, Environment, Runtime, Swapping,
 };
 
 use cf_chains::{
@@ -16,7 +16,7 @@ use cf_chains::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
 		DecodedCcmAdditionalData,
 	},
-	cf_parameters,
+	cf_parameters::{CfParameters, VaultSwapParameters, VersionedCfParameters},
 	evm::api::EvmCall,
 	sol::{
 		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder, SolAmount, SolPubkey,
@@ -104,6 +104,71 @@ pub fn bitcoin_vault_swap(
 		nulldata_payload: encode_swap_params_in_nulldata_payload(params),
 		deposit_address: derive_btc_vault_deposit_address(private_channel_id),
 	})
+}
+
+pub fn evm_vault_swap<A>(
+	broker_id: AccountId,
+	source_asset: Asset,
+	amount: AssetAmount,
+	destination_asset: Asset,
+	destination_address: EncodedAddress,
+	broker_commission: BasisPoints,
+	refund_params: ChannelRefundParametersEncoded,
+	boost_fee: BasisPoints,
+	affiliate_fees: Affiliates<AccountId>,
+	dca_parameters: Option<DcaParameters>,
+	channel_metadata: Option<cf_chains::CcmChannelMetadata>,
+) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
+	let refund_params = refund_params.try_map_address(|addr| {
+		ChainAddressConverter::try_from_encoded_address(addr)
+			.map_err(|_| "Invalid refund address".into())
+	})?;
+
+	let cf_parameters = VersionedCfParameters::V0(CfParameters {
+		ccm_additional_data: (),
+		vault_swap_parameters: VaultSwapParameters {
+			refund_params,
+			dca_params: dca_parameters,
+			boost_fee: boost_fee
+				.try_into()
+				.map_err(|_| DispatchErrorWithMessage::from("Boost fee cannot exceed 2.55%"))?,
+			broker_fee: Beneficiary { account: broker_id.clone(), bps: broker_commission },
+			affiliate_fees: to_affiliate_and_fees(broker_id, affiliate_fees)?
+				.try_into()
+				.map_err(|_| "Too many affiliates.")?,
+		},
+	});
+
+	let call = match (source_asset, channel_metadata) {
+		(Asset::Eth | Asset::ArbEth, None) =>
+			Ok(cf_chains::evm::api::x_swap_native::XSwapNative::new(
+				destination_address,
+				destination_asset,
+				cf_parameters,
+			)),
+		(Asset::Eth | Asset::ArbEth, Some(_ccm)) => unimplemented!(), // XCallNative
+		(Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::ArbUsdc, None) => unimplemented!(), /* XSwapToken, */
+		(Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::ArbUsdc, Some(_ccm)) => unimplemented!(), /* XCallToken, */
+		_ => Err(DispatchErrorWithMessage::from(
+			"Only EVM chains should execute this branch of logic. This error should never happen",
+		)),
+	}?;
+
+	match source_asset.into() {
+		ForeignChain::Ethereum => Ok(VaultSwapDetails::Ethereum(EvmVaultSwapDetails {
+			calldata: call.abi_encoded_payload(),
+			value: U256::from(amount),
+			to: Environment::key_manager_address(),
+		})),
+		ForeignChain::Arbitrum => Ok(VaultSwapDetails::Arbitrum(EvmVaultSwapDetails {
+			calldata: call.abi_encoded_payload(),
+			value: U256::from(amount),
+			to: Environment::arb_key_manager_address(),
+		})),
+		_ => Err(DispatchErrorWithMessage::from(
+			"Only EVM chains should execute this branch of logic. This error should never happen",
+		)),
+	}
 }
 
 pub fn solana_vault_swap<A>(
@@ -217,50 +282,4 @@ pub fn solana_vault_swap<A>(
 		}
 		.into(),
 	})
-}
-
-pub fn ethereum_vault_swap(
-	broker_id: AccountId,
-	destination_asset: Asset,
-	destination_address: EncodedAddress,
-	broker_commission: BasisPoints,
-	refund_params: ChannelRefundParametersEncoded,
-	boost_fee: BasisPoints,
-	affiliate_fees: Affiliates<AccountId>,
-	dca_parameters: Option<DcaParameters>,
-	channel_metadata: Option<cf_chains::CcmChannelMetadata>,
-	amount: AssetAmount,
-	vault_address: sp_core::H160,
-) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
-	if channel_metadata.is_some() {
-		return Err(DispatchErrorWithMessage::Other("CCM not supported for Ethereum".into()));
-	}
-	let refund_params = refund_params.try_map_address(|addr| {
-		ChainAddressConverter::try_from_encoded_address(addr)
-			.map_err(|_| "Invalid refund address".into())
-	})?;
-
-	let call = cf_chains::evm::api::x_swap_native::XSwapNative::new(
-		ForeignChain::from(destination_asset),
-		destination_address,
-		destination_asset,
-		cf_parameters::VersionedCfParameters::V0(cf_parameters::CfParameters {
-			ccm_additional_data: (),
-			vault_swap_parameters: cf_parameters::VaultSwapParameters {
-				refund_params,
-				dca_params: dca_parameters,
-				boost_fee: boost_fee.try_into().unwrap(),
-				broker_fee: Beneficiary { account: broker_id.clone(), bps: broker_commission },
-				affiliate_fees: to_affiliate_and_fees(broker_id, affiliate_fees)?
-					.try_into()
-					.map_err(|_| "Too many affiliates")?,
-			},
-		}),
-	);
-
-	Ok(VaultSwapDetails::Ethereum(EvmVaultSwapDetails {
-		calldata: call.abi_encoded_payload(),
-		value: U256::from(amount),
-		to: vault_address,
-	}))
 }
