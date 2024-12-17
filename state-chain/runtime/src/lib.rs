@@ -2234,6 +2234,13 @@ impl_runtime_apis! {
 				"Destination address and asset are on different chains."
 			);
 
+			// Ensure the refund duration is valid.
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
+				cf_chains::VaultSwapExtraParameters::Bitcoin { retry_duration, .. } => *retry_duration,
+				cf_chains::VaultSwapExtraParameters::Evm { refund_parameters, .. } => refund_parameters.retry_duration,
+				cf_chains::VaultSwapExtraParameters::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
+			})?;
+
 			// Encode swap
 			match (ForeignChain::from(source_asset), extra_parameters) {
 				(
@@ -2266,6 +2273,8 @@ impl_runtime_apis! {
 					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(refund_parameters.retry_duration)?;
 					crate::chainflip::vault_swap::ethereum_vault_swap(
 						broker_id,
+						source_asset,
+						input_amount,
 						destination_asset,
 						destination_address,
 						broker_commission,
@@ -2274,8 +2283,6 @@ impl_runtime_apis! {
 						affiliate_fees,
 						dca_parameters,
 						channel_metadata,
-						input_amount,
-						Environment::key_manager_address(),
 					)
 				},
 				(
