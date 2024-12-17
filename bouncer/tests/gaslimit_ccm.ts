@@ -240,18 +240,18 @@ async function testGasLimitSwapToEvm(
     undefined, // Get the default minimum gas budget
   );
 
-  // Adding gas buffers on both ends
+  // Adding buffers on both ends to avoid flakiness
   if (abortTest) {
+    // CF might overestimate, especially for Arbitrum, so we use a 50% buffer
     ccmMetadata.gasBudget = (
-      Number(ccmMetadata.gasBudget) + Math.round(gasConsumption * 0.75)
+      Number(ccmMetadata.gasBudget) + Math.round(gasConsumption / 2)
     ).toString();
   } else {
+    // A very tight buffer should work (10%) as CF should be overestimate not underestimate
     ccmMetadata.gasBudget = (
       Number(ccmMetadata.gasBudget) + Math.round(gasConsumption * 1.1)
     ).toString();
   }
-
-  console.log('ccmMetadata.gasBudget', ccmMetadata.gasBudget, 'gasConsumption', gasConsumption);
 
   const testTag = abortTest ? `InsufficientGas` : '';
 
