@@ -249,7 +249,7 @@ async function testGasLimitSwapToEvm(
       Math.round(gasConsumption * (destChain !== 'Arbitrum' ? 0.75 : 0.1))
     ).toString();
   } else {
-    // A very tight buffer should work (10%) as CF should be overestimate not underestimate
+    // A small buffer should work (10%) as CF should be overestimate not underestimate
     ccmMetadata.gasBudget = (
       Number(ccmMetadata.gasBudget) + Math.round(gasConsumption * 1.1)
     ).toString();
