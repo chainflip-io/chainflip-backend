@@ -754,11 +754,3 @@ impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 		Self::network_environment()
 	}
 }
-
-pub struct NoUsedNonce<T: Config>(PhantomData<T>);
-
-impl<T: Config> ExecutionCondition for NoUsedNonce<T> {
-	fn is_satisfied() -> bool {
-		SolanaUnavailableNonceAccounts::<T>::iter().next().is_none()
-	}
-}

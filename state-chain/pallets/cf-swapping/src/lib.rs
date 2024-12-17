@@ -2484,14 +2484,6 @@ impl<T: Config> SwapLimitsProvider for Pallet<T> {
 	}
 }
 
-pub struct NoPendingSwaps<T: Config>(PhantomData<T>);
-
-impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
-	fn is_satisfied() -> bool {
-		SwapQueue::<T>::iter().all(|(_, swaps)| swaps.is_empty())
-	}
-}
-
 impl<T: Config> AffiliateRegistry for Pallet<T> {
 	type AccountId = T::AccountId;
 
