@@ -235,28 +235,19 @@ impl SwapDirection for QuoteToBase {
 /// point number. If the result is larger than the maximum U384 this function will panic.
 ///
 /// The result will be equal or less than the true value.
-pub(super) fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> U512 {
+fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> U512 {
 	let x = U512::from(x);
+	let mut result = U512::from(1) << 128;
+	for bit_idx in (0..(32 - n.leading_zeros())).rev() {
+		let bit = (n & (0x1 << bit_idx)) >> bit_idx;
 
-	(0..(32 - n.leading_zeros()))
-		.zip(
-			// This is zipped second and therefore it is not polled if there are no more bits, so
-			// we don't calculate x * x one more time than we need, as it may overflow.
-			sp_std::iter::once(x).chain(sp_std::iter::repeat_with({
-				let mut x = x;
-				move || {
-					x = (x * x) >> 128;
-					x
-				}
-			})),
-		)
-		.fold(U512::one() << 128, |total, (i, expo)| {
-			if 0x1 << i == (n & 0x1 << i) {
-				(total * expo) >> 128
-			} else {
-				total
-			}
-		})
+		result = (result * result) >> 128;
+		if bit == 0x1 {
+			result = (result * x) >> 128;
+		}
+	}
+
+	result
 }
 
 pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
