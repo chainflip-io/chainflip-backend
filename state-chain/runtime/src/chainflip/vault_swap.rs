@@ -1,7 +1,7 @@
 use crate::{
 	chainflip::{
 		address_derivation::btc::derive_btc_vault_deposit_address, ChainAddressConverter,
-		SolEnvironment, U256,
+		EvmEnvironment, SolEnvironment, U256,
 	},
 	runtime_apis::{DispatchErrorWithMessage, EvmVaultSwapDetails, VaultSwapDetails},
 	AccountId, BlockNumber, Environment, Runtime, Swapping,
@@ -18,11 +18,11 @@ use cf_chains::{
 		DecodedCcmAdditionalData,
 	},
 	cf_parameters::{CfParameters, VaultSwapParameters, VersionedCfParameters},
-	evm::api::EvmCall,
+	evm::api::{EvmCall, EvmEnvironmentProvider},
 	sol::{
 		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder, SolAmount, SolPubkey,
 	},
-	CcmChannelMetadata, ChannelRefundParametersEncoded, ForeignChain,
+	Arbitrum, CcmChannelMetadata, ChannelRefundParametersEncoded, Ethereum, ForeignChain,
 	VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
@@ -146,16 +146,46 @@ pub fn ethereum_vault_swap(
 		},
 	});
 
-	let call = match (source_asset, channel_metadata) {
-		(Asset::Eth | Asset::ArbEth, None) =>
-			Ok(cf_chains::evm::api::x_swap_native::XSwapNative::new(
-				destination_address,
-				destination_asset,
-				cf_parameters,
-			)),
-		(Asset::Eth | Asset::ArbEth, Some(_ccm)) => unimplemented!(), // XCallNative
-		(Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::ArbUsdc, None) => unimplemented!(), /* XSwapToken, */
-		(Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::ArbUsdc, Some(_ccm)) => unimplemented!(), /* XCallToken, */
+	let calldata = match source_asset {
+		Asset::Eth | Asset::ArbEth =>
+			if let Some(_ccm) = channel_metadata {
+				unimplemented!()
+			} else {
+				Ok(cf_chains::evm::api::x_swap_native::XSwapNative::new(
+					destination_address,
+					destination_asset,
+					cf_parameters,
+				)
+				.abi_encoded_payload())
+			},
+		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::ArbUsdc => {
+			// Lookup Token addresses depending on the Chain
+			let source_token_address = match source_asset {
+				Asset::Flip | Asset::Usdc | Asset::Usdt =>
+					<EvmEnvironment as EvmEnvironmentProvider<Ethereum>>::token_address(
+						source_asset.try_into().expect("Only Ethereum asset is processed here"),
+					),
+				Asset::ArbUsdc =>
+					<EvmEnvironment as EvmEnvironmentProvider<Arbitrum>>::token_address(
+						cf_chains::assets::arb::Asset::ArbUsdc,
+					),
+				_ => unreachable!("Unreachable for non-Ethereum/Arbitrum assets"),
+			}
+			.ok_or(DispatchErrorWithMessage::from("Failed to look up EVM token address"))?;
+
+			if let Some(_ccm) = channel_metadata {
+				unimplemented!() // XCallNative
+			} else {
+				Ok(cf_chains::evm::api::x_swap_token::XSwapToken::new(
+					destination_address,
+					destination_asset,
+					source_token_address,
+					amount,
+					cf_parameters,
+				)
+				.abi_encoded_payload())
+			}
+		},
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",
 		)),
@@ -163,12 +193,12 @@ pub fn ethereum_vault_swap(
 
 	match source_asset.into() {
 		ForeignChain::Ethereum => Ok(VaultSwapDetails::Ethereum(EvmVaultSwapDetails {
-			calldata: call.abi_encoded_payload(),
+			calldata,
 			value: U256::from(amount),
 			to: Environment::key_manager_address(),
 		})),
 		ForeignChain::Arbitrum => Ok(VaultSwapDetails::Arbitrum(EvmVaultSwapDetails {
-			calldata: call.abi_encoded_payload(),
+			calldata,
 			value: U256::from(amount),
 			to: Environment::arb_key_manager_address(),
 		})),

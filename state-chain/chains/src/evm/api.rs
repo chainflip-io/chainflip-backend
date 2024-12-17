@@ -20,8 +20,8 @@ pub mod set_agg_key_with_agg_key;
 pub mod set_comm_key_with_agg_key;
 pub mod set_gov_key_with_agg_key;
 pub mod transfer_fallback;
-pub mod x_swap_native;
-pub mod x_swap_token;
+pub mod vault_swaps;
+pub use vault_swaps::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EvmReplayProtection {
@@ -153,7 +153,6 @@ pub trait EvmCall {
 	}
 	/// Encode the call without the signature into EVM Abi format. For use with vault swaps.
 	fn abi_encoded_payload(&self) -> Vec<u8> {
-		// TODO JAMIE: Is this correct? Ask albert.
 		Self::get_function(false).encode_input(&self.function_call_args()).expect(
 			r#"
 					This can only fail if the parameter types don't match the function signature.
