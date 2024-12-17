@@ -453,9 +453,19 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 	}
 }
 
+/// A string that can be parsed into a valid address for a given chain.
+///
+/// Must be decodable to a valid address for the given chain.
+/// Ethereum addresses should be encoded as hex.
+/// Polkadot addresses can be encoded as 32-byte hex or using the ss58 format.
+/// Bitcoin addresses can be encoded using either bech32 or base58 standards.
+/// Solana addresses should be encoded using base58.
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "std", schemars(example = &"0x826180541412D574cf1336d22c0C0a287822678A"))]
+#[cfg_attr(feature = "std", schemars(example = &"1vPFMZJqjwZTEbmv8fVAFuKDVTz3E8MqjGMEASg2sqjLL3X"))]
+#[cfg_attr(feature = "std", schemars(example = &"bc1qkt8tvmnqynw57q4pjcgypj5wx04vk3hxlv5vu9"))]
 pub struct AddressString(String);
 
 #[cfg(feature = "std")]
