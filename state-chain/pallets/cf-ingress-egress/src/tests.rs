@@ -2225,6 +2225,6 @@ fn assembling_broker_fees() {
 			Beneficiary { account: 50, bps: 5 },
 		];
 
-		assert_eq!(IngressEgress::assemble_broker_fees(broker_fee, affiliate_fees), expected);
+		assert_eq!(IngressEgress::assemble_broker_fees(broker_fee, affiliate_fees), Ok(expected));
 	});
 }
