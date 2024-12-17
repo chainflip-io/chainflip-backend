@@ -45,7 +45,7 @@ use sc_rpc_spec_v2::chain_head::{
 	api::ChainHeadApiServer, ChainHead, ChainHeadConfig, FollowEvent,
 };
 use serde::{Deserialize, Serialize};
-use sp_api::{ApiError, ApiExt, CallApiAt};
+use sp_api::{ApiError, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
@@ -67,7 +67,7 @@ use state_chain_runtime::{
 		SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Block, Hash, NetworkFee, SolanaInstance,
+	Hash, NetworkFee, SolanaInstance,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -1514,33 +1514,20 @@ where
 				.collect()
 		});
 		self.with_runtime_api(at, |api, hash| {
-			if api.api_version::<dyn CustomRuntimeApi<Block>>(hash).unwrap().unwrap() < 2 {
-				let old_result = api.cf_pool_simulate_swap_before_version_2(
+			Ok::<_, CfApiError>(
+				api.cf_pool_simulate_swap(
 					hash,
 					from_asset,
 					to_asset,
 					amount,
+					broker_commission,
+					dca_parameters,
 					additional_orders,
-				)?;
-				Ok(old_result.map(|old_version| {
-					into_rpc_swap_output(old_version.into(), from_asset, to_asset)
-				})?)
-			} else {
-				Ok::<_, CfApiError>(
-					api.cf_pool_simulate_swap(
-						hash,
-						from_asset,
-						to_asset,
-						amount,
-						broker_commission,
-						dca_parameters,
-						additional_orders,
-					)?
-					.map(|simulated_swap_info_v2| {
-						into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
-					})?,
-				)
-			}
+				)?
+				.map(|simulated_swap_info_v2| {
+					into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
+				})?,
+			)
 		})
 	}
 
