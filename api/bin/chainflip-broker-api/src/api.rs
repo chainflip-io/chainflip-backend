@@ -14,7 +14,6 @@ api_json_schema::impl_schema_endpoint! {
 	RegisterAccount: register_account::Endpoint,
 	RequestSwapParameterEncoding: request_swap_parameter_encoding::Endpoint,
 	WithdrawFees: withdraw_fees::Endpoint,
-	Schema: schema::Endpoint,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
