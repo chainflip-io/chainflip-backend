@@ -20,8 +20,8 @@ use cf_primitives::{
 	NetworkEnvironment, SemVer,
 };
 use cf_traits::{
-	CompatibleCfeVersions, ExecutionCondition, GetBitcoinFeeInfo, KeyProvider,
-	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
+	CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
+	SolanaNonceWatch,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;

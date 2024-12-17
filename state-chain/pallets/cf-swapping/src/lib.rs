@@ -17,8 +17,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
-	ExecutionCondition, FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
