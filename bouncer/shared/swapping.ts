@@ -127,7 +127,9 @@ export function newCcmMetadata(
 ): CcmDepositMetadata {
   const message = ccmMessage ?? newCcmMessage(destAsset);
   const ccmAdditionalData = ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message);
-  const gasDiv = gasBudgetFraction ?? 2;
+  // TODO: Update this after PR #5462 is merged. This has been changed because with longer CCM
+  // messages, up to 15k, the gas budget was not enough to cover the fees.
+  const gasDiv = gasBudgetFraction ?? 4 / 3;
 
   const gasBudget = Math.floor(
     Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
