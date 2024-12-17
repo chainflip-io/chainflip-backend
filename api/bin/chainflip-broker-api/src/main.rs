@@ -428,7 +428,10 @@ impl RpcServer for MockServerImpl {
 #[derive(Parser, Debug, Clone, Copy)]
 
 enum SubCommand {
-	Schema,
+	Schema {
+		#[clap(long = "inline-defs", default_value = "false")]
+		inline_defs: bool,
+	},
 	Mock,
 }
 
@@ -483,8 +486,12 @@ async fn main() -> anyhow::Result<()> {
 	task_scope(|scope| {
 		async move {
 			match opts.subcommand {
-				Some(SubCommand::Schema) => {
-					let schemas = api_json_schema::respond(SchemaApi, Default::default()).await?;
+				Some(SubCommand::Schema { inline_defs }) => {
+					let schemas = api_json_schema::respond(
+						SchemaApi,
+						schema::SchemaRequest { inline_defs, ..Default::default() },
+					)
+					.await?;
 					println!("{}", serde_json::to_string(&schemas)?);
 					Ok(())
 				},

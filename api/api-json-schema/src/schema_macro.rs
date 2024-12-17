@@ -169,6 +169,7 @@ macro_rules! impl_schema_endpoint {
 				$(
 					$method_name,
 				)+
+				Schema,
 			}
 
 			impl JsonSchema for Method {
@@ -190,6 +191,14 @@ macro_rules! impl_schema_endpoint {
 						$(
 							Method::$method_name,
 						)+
+						Method::Schema,
+					]
+				}
+				const fn all_except_schema() -> &'static [Self] {
+					&[
+						$(
+							Method::$method_name,
+						)+
 					]
 				}
 			}
@@ -198,7 +207,10 @@ macro_rules! impl_schema_endpoint {
 			pub struct SchemaRequest {
 				#[serde(skip_serializing_if = "Vec::is_empty")]
 				#[serde(default)]
-				methods: Vec<Method>,
+				pub methods: Vec<Method>,
+				#[serde(default)]
+
+				pub inline_defs: bool,
 			}
 
 			impl core::fmt::Display for Method {
@@ -207,6 +219,7 @@ macro_rules! impl_schema_endpoint {
 						$(
 							Method::$method_name => AsLowerCamelCase(stringify!($method_name)),
 						)+
+						Method::Schema => AsLowerCamelCase("Schema"),
 					})
 				}
 			}
@@ -227,6 +240,12 @@ macro_rules! impl_schema_endpoint {
 							return Ok(Method::$method_name)
 						}
 					)+
+					if [
+						"schema",
+						"Schema",
+					].contains(&method.as_str()) {
+						return Ok(Method::Schema)
+					}
 
 					Err(format!("Unknown method: {}", method))
 				}
@@ -235,6 +254,9 @@ macro_rules! impl_schema_endpoint {
 			#[derive(Debug, PartialEq, Clone, JsonSchema, Serialize, Deserialize)]
 			pub struct Response {
 				pub methods: Vec<EndpointSchema>,
+				#[serde(skip_serializing_if = "SchemaDefs::is_empty")]
+				#[serde(rename = "$defs")]
+				pub defs: SchemaDefs,
 			}
 
 			#[derive(Debug, PartialEq, Clone, JsonSchema, Serialize, Deserialize)]
@@ -248,6 +270,12 @@ macro_rules! impl_schema_endpoint {
 			pub struct SchemaDefs {
 				pub request: serde_json::Map<String, serde_json::Value>,
 				pub response: serde_json::Map<String, serde_json::Value>,
+			}
+
+			impl SchemaDefs {
+				pub fn is_empty(&self) -> bool {
+					self.request.is_empty() && self.response.is_empty()
+				}
 			}
 
 			impl $crate::Endpoint for Endpoint {
@@ -267,20 +295,30 @@ macro_rules! impl_schema_endpoint {
 					let mut ser_generator = SchemaSettings::default()
 						.with(|settings| {
 							settings.option_add_null_type = false;
-							settings.inline_subschemas = true;
+							if request.inline_defs {
+								settings.inline_subschemas = true;
+							} else {
+								settings.inline_subschemas = false;
+								settings.definitions_path = "$defs/request".into();
+							}
 						})
 						.for_serialize()
 						.into_generator();
 					let mut de_generator = SchemaSettings::default()
 						.with(|settings| {
 							settings.option_add_null_type = false;
-							settings.inline_subschemas = true;
+							if request.inline_defs {
+								settings.inline_subschemas = true;
+							} else {
+								settings.inline_subschemas = false;
+								settings.definitions_path = "$defs/response".into();
+							}
 						})
 						.for_deserialize()
 						.into_generator();
 
 					let methods = if request.methods.is_empty() {
-							Method::all().to_vec()
+							Method::all_except_schema().to_vec()
 						} else {
 							request.methods
 						}
@@ -296,25 +334,34 @@ macro_rules! impl_schema_endpoint {
 											.subschema_for::<$crate::EndpointResponse<$endpoint>>(),
 									},
 								)+
+								Method::Schema => EndpointSchema {
+									method,
+									request: ser_generator.subschema_for::<SchemaRequest>(),
+									response: de_generator.subschema_for::<Response>(),
+								},
 							}
 						})
 						.collect::<Vec<_>>();
 
 					Ok(Response {
 						methods,
+						defs: SchemaDefs {
+							request: ser_generator.take_definitions(),
+							response: de_generator.take_definitions(),
+						},
 					})
 				}
 			}
 
 			impl jsonrpsee_flatten::types::ArrayParam for SchemaRequest {
-				type ArrayTuple = (Vec<Method>,);
+				type ArrayTuple = (Vec<Method>, bool);
 
 				fn into_array_tuple(self) -> Self::ArrayTuple {
-					(self.methods.clone(),)
+					(self.methods.clone(), self.inline_defs)
 				}
 
-				fn from_array_tuple((methods,): Self::ArrayTuple) -> Self {
-					Self { methods }
+				fn from_array_tuple((methods, inline_defs): Self::ArrayTuple) -> Self {
+					Self { methods, inline_defs }
 				}
 			}
 		}
