@@ -769,6 +769,12 @@ pub mod pallet {
 	pub type NetworkFeeDeductionFromBoostPercent<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Percent, ValueQuery>;
 
+	/// Stores the tx_id of an aborted vault transaction. At the moment we consider a vault
+	/// transaction as aborted if
+	#[pallet::storage]
+	pub(crate) type AbortedVaultTransaction<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, TransactionInIdFor<T, I>, ()>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -2469,6 +2475,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		} = vault_deposit_witness.clone();
 
+		if let Some(_) = AbortedVaultTransaction::<T, I>::take(&tx_id) {
+			log::info!("Ignoring deposit since transcation was aborted.");
+			return;
+		}
 		let boost_status =
 			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
 
