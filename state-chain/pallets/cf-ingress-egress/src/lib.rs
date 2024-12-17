@@ -702,6 +702,12 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Stores the tx_id of an aborted vault transaction. At the moment we consider a vault
+	/// transaction as aborted if
+	#[pallet::storage]
+	pub(crate) type AbortedVaultTransaction<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, TransactionInIdFor<T, I>, ()>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -1974,11 +1980,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn assemble_broker_fees(
 		broker_fee: Beneficiary<T::AccountId>,
 		affiliate_fees: Affiliates<AffiliateShortId>,
-	) -> Beneficiaries<T::AccountId> {
+	) -> Result<Beneficiaries<T::AccountId>, ()> {
 		let primary_broker = broker_fee.account.clone();
 
 		if T::AccountRoleRegistry::has_account_role(&primary_broker, AccountRole::Broker) {
-			[broker_fee]
+			Ok([broker_fee]
 				.into_iter()
 				.chain(affiliate_fees.into_iter().filter_map(
 					|Beneficiary { account: short_affiliate_id, bps }| {
@@ -2003,10 +2009,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.try_into()
 				.expect(
 					"must fit since affiliates are limited to 1 fewer element than beneficiaries",
-				)
+				))
 		} else {
 			Self::deposit_event(Event::<T, I>::UnknownBroker { broker_id: primary_broker });
-			Default::default()
+			Err(())
 		}
 	}
 
@@ -2152,53 +2158,68 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let broker = broker_fee.account.clone();
 
-		let broker_fees = Self::assemble_broker_fees(broker_fee, affiliate_fees);
+		// let broker_fees = Self::assemble_broker_fees(broker_fee, affiliate_fees);
 
-		let (action, source_address) = if let Some(deposit_metadata) = deposit_metadata {
-			(
-				ChannelAction::CcmTransfer {
-					destination_asset: output_asset,
-					destination_address: destination_address_internal,
-					broker_fees,
-					refund_params: Some(refund_params),
-					dca_params,
-					channel_metadata: deposit_metadata.channel_metadata,
-				},
-				deposit_metadata.source_address,
-			)
+		if let Ok(broker_fees) = Self::assemble_broker_fees(broker_fee, affiliate_fees) {
+			let (action, source_address) = if let Some(deposit_metadata) = deposit_metadata {
+				(
+					ChannelAction::CcmTransfer {
+						destination_asset: output_asset,
+						destination_address: destination_address_internal,
+						broker_fees,
+						refund_params: Some(refund_params),
+						dca_params,
+						channel_metadata: deposit_metadata.channel_metadata,
+					},
+					deposit_metadata.source_address,
+				)
+			} else {
+				(
+					ChannelAction::Swap {
+						destination_asset: output_asset,
+						destination_address: destination_address_internal,
+						broker_fees,
+						refund_params: Some(refund_params),
+						dca_params,
+					},
+					None,
+				)
+			};
+
+			let boost_status =
+				BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
+
+			let origin = DepositOrigin::vault(tx_id.clone());
+
+			if let Some(new_boost_status) = Self::process_prewitness_deposit_inner(
+				amount,
+				asset,
+				deposit_details,
+				deposit_address,
+				source_address,
+				action,
+				&broker,
+				boost_fee,
+				boost_status,
+				channel_id,
+				block_height,
+				origin,
+			) {
+				BoostedVaultTransactions::<T, I>::insert(&tx_id, new_boost_status);
+			}
 		} else {
-			(
-				ChannelAction::Swap {
-					destination_asset: output_asset,
-					destination_address: destination_address_internal,
-					broker_fees,
-					refund_params: Some(refund_params),
-					dca_params,
-				},
-				None,
-			)
-		};
-
-		let boost_status =
-			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
-
-		let origin = DepositOrigin::vault(tx_id.clone());
-
-		if let Some(new_boost_status) = Self::process_prewitness_deposit_inner(
-			amount,
-			asset,
-			deposit_details,
-			deposit_address,
-			source_address,
-			action,
-			&broker,
-			boost_fee,
-			boost_status,
-			channel_id,
-			block_height,
-			origin,
-		) {
-			BoostedVaultTransactions::<T, I>::insert(&tx_id, new_boost_status);
+			// Refund, abort and mark the tx as aborted
+			if let Ok(refund_address) =
+				TargetChainAccount::<T, I>::try_from(refund_params.refund_address)
+			{
+				match Self::schedule_egress(asset, amount, refund_address, None) {
+					Ok(egress_details) => {
+						log::info!("Refund egress has beend scheduled!");
+						AbortedVaultTransaction::<T, I>::insert(tx_id, ());
+					},
+					Err(_) => todo!("handle error case"),
+				}
+			}
 		}
 	}
 
@@ -2395,6 +2416,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		}: VaultDepositWitness<T, I>,
 	) {
+		if let Some(_) = AbortedVaultTransaction::<T, I>::take(&tx_id) {
+			log::info!("Ignoring deposit since transcation was aborted.");
+			return;
+		}
+
 		let boost_status =
 			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
 
@@ -2451,55 +2477,68 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		let broker = broker_fee.account.clone();
-		let broker_fees = Self::assemble_broker_fees(broker_fee, affiliate_fees);
 
-		if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
-			log::warn!("Failed to process vault swap due to invalid broker fees. Tx id: {tx_id:?}. Error: {err:?}");
-			return;
-		}
+		if let Ok(broker_fees) = Self::assemble_broker_fees(broker_fee, affiliate_fees) {
+			if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
+				log::warn!("Failed to process vault swap due to invalid broker fees. Tx id: {tx_id:?}. Error: {err:?}");
+				return;
+			}
 
-		let (action, source_address) = if let Some(deposit_metadata) = deposit_metadata {
-			(
-				ChannelAction::CcmTransfer {
-					destination_asset,
-					destination_address: destination_address_internal,
-					broker_fees,
-					refund_params: Some(refund_params),
-					dca_params,
-					channel_metadata: deposit_metadata.channel_metadata,
-				},
-				deposit_metadata.source_address,
-			)
+			let (action, source_address) = if let Some(deposit_metadata) = deposit_metadata {
+				(
+					ChannelAction::CcmTransfer {
+						destination_asset,
+						destination_address: destination_address_internal,
+						broker_fees,
+						refund_params: Some(refund_params),
+						dca_params,
+						channel_metadata: deposit_metadata.channel_metadata,
+					},
+					deposit_metadata.source_address,
+				)
+			} else {
+				(
+					ChannelAction::Swap {
+						destination_asset,
+						destination_address: destination_address_internal,
+						broker_fees,
+						refund_params: Some(refund_params),
+						dca_params,
+					},
+					None,
+				)
+			};
+
+			if let Ok(FullWitnessDepositOutcome::BoostFinalised) =
+				Self::process_full_witness_deposit_inner(
+					deposit_address.clone(),
+					source_asset,
+					deposit_amount,
+					deposit_details,
+					source_address,
+					&broker,
+					boost_status,
+					boost_fee,
+					channel_id,
+					action,
+					block_height,
+					deposit_origin,
+				) {
+				// Clean up a record that's no longer needed:
+				BoostedVaultTransactions::<T, I>::remove(&tx_id);
+			}
 		} else {
-			(
-				ChannelAction::Swap {
-					destination_asset,
-					destination_address: destination_address_internal,
-					broker_fees,
-					refund_params: Some(refund_params),
-					dca_params,
-				},
-				None,
-			)
-		};
-
-		if let Ok(FullWitnessDepositOutcome::BoostFinalised) =
-			Self::process_full_witness_deposit_inner(
-				deposit_address.clone(),
-				source_asset,
-				deposit_amount,
-				deposit_details,
-				source_address,
-				&broker,
-				boost_status,
-				boost_fee,
-				channel_id,
-				action,
-				block_height,
-				deposit_origin,
-			) {
-			// Clean up a record that's no longer needed:
-			BoostedVaultTransactions::<T, I>::remove(&tx_id);
+			// Refund, abort and mark the tx as aborted
+			if let Ok(refund_address) =
+				TargetChainAccount::<T, I>::try_from(refund_params.refund_address)
+			{
+				match Self::schedule_egress(source_asset, deposit_amount, refund_address, None) {
+					Ok(egress_details) => {
+						log::info!("Refund egress has beend scheduled!");
+					},
+					Err(_) => todo!("handle error case"),
+				}
+			}
 		}
 	}
 
