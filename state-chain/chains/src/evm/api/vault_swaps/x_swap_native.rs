@@ -1,11 +1,15 @@
-use super::*;
-use address::EncodedAddress;
-use cf_parameters::VersionedCfParameters;
+use crate::{
+	address::EncodedAddress,
+	cf_parameters::VersionedCfParameters,
+	evm::{api::EvmCall, tokenizable::Tokenizable},
+};
 use codec::{Decode, Encode};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
+
+use cf_primitives::Asset;
 
 /// Represents all the arguments required to build the call to Vault's 'ExecutexSwapAndCall'
 /// function.
@@ -63,9 +67,9 @@ mod test {
 	use super::*;
 	use crate::{
 		eth::api::abi::load_abi,
-		evm::api::{common::test_utils::*, EvmTransactionBuilder},
+		evm::api::{vault_swaps::test_utils::*, EvmTransactionBuilder},
 	};
-	use cf_primitives::Asset;
+	use cf_primitives::ForeignChain;
 
 	#[test]
 	fn test_payload() {
