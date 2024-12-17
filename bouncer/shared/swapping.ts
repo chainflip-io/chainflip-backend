@@ -64,7 +64,7 @@ const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 1000;
 // Solana CCM-related parameters. These are limits in the protocol.
 const MAX_CCM_BYTES_SOL = 705;
 const MAX_CCM_BYTES_USDC = 492;
-const bytesPerAccount = 33;
+const SOLANA_BYTES_PER_ACCOUNT = 33;
 
 function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: number): string {
   const destChain = chainFromAsset(destAsset);
@@ -84,7 +84,7 @@ function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: nu
       if (maxLength !== undefined) {
         length = Math.min(length, maxLength);
       }
-      const maxAccounts = Math.floor(length / bytesPerAccount);
+      const maxAccounts = Math.floor(length / SOLANA_BYTES_PER_ACCOUNT);
 
       // The maximum number of extra accounts that can be passed is limited by the tx size
       // and therefore also depends on the message length.
@@ -101,8 +101,13 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
 
   switch (destChain) {
     case 'Ethereum':
-    case 'Arbitrum':
       length = MAX_CCM_MSG_LENGTH;
+      break;
+    case 'Arbitrum':
+      // In Arbitrum's localnet extremely large messages end up with large gas estimations
+      // of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
+      // gas limit (32M). We cap it to a lower value than Ethereum to work around that.
+      length = MAX_CCM_MSG_LENGTH / 4;
       break;
     case 'Solana':
       length = destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC;
@@ -127,9 +132,7 @@ export function newCcmMetadata(
 ): CcmDepositMetadata {
   const message = ccmMessage ?? newCcmMessage(destAsset);
   const ccmAdditionalData = ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message);
-  // TODO: Update this after PR #5462 is merged. This has been changed because with longer CCM
-  // messages, up to 15k, the gas budget was not enough to cover the fees.
-  const gasDiv = gasBudgetFraction ?? 4 / 3;
+  const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
     Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
