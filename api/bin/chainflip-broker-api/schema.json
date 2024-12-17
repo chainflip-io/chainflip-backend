@@ -1,0 +1,857 @@
+{
+  "methods": [
+    {
+      "method": "broker_requestSwapDepositAddress",
+      "request": {
+        "$ref": "#$defs/request/Request_for_AddressString"
+      },
+      "response": {
+        "$ref": "#$defs/response/SwapDepositAddress"
+      }
+    },
+    {
+      "method": "broker_registerAccount",
+      "request": {
+        "$ref": "#$defs/request/Empty"
+      },
+      "response": {
+        "$ref": "#$defs/response/RegistrationSuccess"
+      }
+    },
+    {
+      "method": "broker_requestSwapParameterEncoding",
+      "request": {
+        "$ref": "#$defs/request/Request_for_AddressString2"
+      },
+      "response": {
+        "$ref": "#$defs/response/VaultSwapDetails_for_AddressString"
+      }
+    },
+    {
+      "method": "broker_withdrawFees",
+      "request": {
+        "$ref": "#$defs/request/Request"
+      },
+      "response": {
+        "$ref": "#$defs/response/WithdrawFeesDetail"
+      }
+    }
+  ],
+  "$defs": {
+    "request": {
+      "AddressString": {
+        "description": "A string that can be parsed into a valid address for a given chain.\n\n Must be decodable to a valid address for the given chain.\n Ethereum addresses should be encoded as hex.\n Polkadot addresses can be encoded as 32-byte hex or using the ss58 format.\n Bitcoin addresses can be encoded using either bech32 or base58 standards.\n Solana addresses should be encoded using base58.",
+        "examples": [
+          "0x826180541412D574cf1336d22c0C0a287822678A",
+          "1vPFMZJqjwZTEbmv8fVAFuKDVTz3E8MqjGMEASg2sqjLL3X",
+          "bc1qkt8tvmnqynw57q4pjcgypj5wx04vk3hxlv5vu9"
+        ],
+        "type": "string"
+      },
+      "Asset": {
+        "oneOf": [
+          {
+            "properties": {
+              "asset": {
+                "$ref": "#$defs/request/eth::Asset"
+              },
+              "chain": {
+                "const": "Ethereum",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain",
+              "asset"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "asset": {
+                "$ref": "#$defs/request/dot::Asset"
+              },
+              "chain": {
+                "const": "Polkadot",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain",
+              "asset"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "asset": {
+                "$ref": "#$defs/request/btc::Asset"
+              },
+              "chain": {
+                "const": "Bitcoin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain",
+              "asset"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "asset": {
+                "$ref": "#$defs/request/arb::Asset"
+              },
+              "chain": {
+                "const": "Arbitrum",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain",
+              "asset"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "asset": {
+                "$ref": "#$defs/request/sol::Asset"
+              },
+              "chain": {
+                "const": "Solana",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain",
+              "asset"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Beneficiary_for_string": {
+        "properties": {
+          "account": {
+            "type": "string"
+          },
+          "bps": {
+            "format": "uint16",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "account",
+          "bps"
+        ],
+        "type": "object"
+      },
+      "CcmChannelMetadata": {
+        "description": "Deposit channel Metadata for Cross-Chain-Message.",
+        "properties": {
+          "ccm_additional_data": {
+            "description": "Additional parameters for the cross chain message.",
+            "maxLength": 2002,
+            "minLength": 2002,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          },
+          "gas_budget": {
+            "description": "User funds designated to be used for gas.",
+            "oneOf": [
+              {
+                "description": "A number represented a `0x`-prefixed hex-encoded string.",
+                "maxLength": 66,
+                "pattern": "^0x[0-9a-fA-F]+$",
+                "type": "string"
+              },
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            ]
+          },
+          "message": {
+            "description": "Call data used after the message is egressed.",
+            "maxLength": 30002,
+            "minLength": 30002,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "gas_budget"
+        ],
+        "type": "object"
+      },
+      "ChannelRefundParameters_for_AddressString": {
+        "properties": {
+          "min_price": {
+            "description": "The minimum price the user is willing to accept in order to sell their assets.",
+            "maxLength": 66,
+            "minLength": 66,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          },
+          "refund_address": {
+            "$ref": "#$defs/request/AddressString",
+            "description": "Where to send any deposited funds that fail to execute at the desired minimum price."
+          },
+          "retry_duration": {
+            "description": "How long to keep retrying each swap chunk before cancelling and refunding. Measured in\n 6-second block numbers.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "retry_duration",
+          "refund_address",
+          "min_price"
+        ],
+        "type": "object"
+      },
+      "DcaParameters": {
+        "properties": {
+          "chunk_interval": {
+            "description": "The interval in blocks between each swap.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "number_of_chunks": {
+            "description": "The number of individual swaps to be executed",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "number_of_chunks",
+          "chunk_interval"
+        ],
+        "type": "object"
+      },
+      "Empty": {
+        "oneOf": [
+          {
+            "const": "[]",
+            "description": "The empty Array `[]`.",
+            "type": "array"
+          },
+          {
+            "const": "{}",
+            "description": "The empty object `{}`.",
+            "type": "object"
+          }
+        ]
+      },
+      "EvmVaultSwapExtraParameters_for_AddressString_and_number_or_hex": {
+        "properties": {
+          "input_amount": {
+            "$ref": "#$defs/request/number_or_hex"
+          },
+          "refund_parameters": {
+            "$ref": "#$defs/request/ChannelRefundParameters_for_AddressString"
+          }
+        },
+        "required": [
+          "input_amount",
+          "refund_parameters"
+        ],
+        "type": "object"
+      },
+      "Request": {
+        "properties": {
+          "asset": {
+            "$ref": "#$defs/request/Asset"
+          },
+          "destination_address": {
+            "$ref": "#$defs/request/AddressString"
+          }
+        },
+        "required": [
+          "asset",
+          "destination_address"
+        ],
+        "type": "object"
+      },
+      "Request_for_AddressString": {
+        "description": "A Request to open a swap deposit channel.",
+        "properties": {
+          "affiliate_fees": {
+            "description": "Optional Affiliate fees.",
+            "items": {
+              "$ref": "#$defs/request/Beneficiary_for_string"
+            },
+            "type": "array"
+          },
+          "boost_fee": {
+            "description": "Optional Boost fee, measured in basis points.",
+            "format": "uint16",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "broker_commission": {
+            "description": "Broker commission to be charged, measured in basis points. Each basis point is 0.01%.",
+            "format": "uint16",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "channel_metadata": {
+            "$ref": "#$defs/request/CcmChannelMetadata",
+            "description": "Optional CCM channel metadata."
+          },
+          "dca_parameters": {
+            "$ref": "#$defs/request/DcaParameters",
+            "description": "Optional DCA Parameters."
+          },
+          "destination_address": {
+            "$ref": "#$defs/request/AddressString",
+            "description": "The address that the swap output should be sent to."
+          },
+          "destination_asset": {
+            "$ref": "#$defs/request/Asset",
+            "description": "The asset that the users wants to receive."
+          },
+          "refund_parameters": {
+            "$ref": "#$defs/request/ChannelRefundParameters_for_AddressString",
+            "description": "Optional Refund Parameters."
+          },
+          "source_asset": {
+            "$ref": "#$defs/request/Asset",
+            "description": "The asset that the user wants to send."
+          }
+        },
+        "required": [
+          "source_asset",
+          "destination_asset",
+          "destination_address",
+          "broker_commission"
+        ],
+        "type": "object"
+      },
+      "Request_for_AddressString2": {
+        "description": "A Request to open a swap deposit channel.",
+        "oneOf": [
+          {
+            "properties": {
+              "chain": {
+                "const": "Bitcoin",
+                "type": "string"
+              },
+              "min_output_amount": {
+                "$ref": "#$defs/request/number_or_hex"
+              },
+              "retry_duration": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "chain",
+              "min_output_amount",
+              "retry_duration"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#$defs/request/EvmVaultSwapExtraParameters_for_AddressString_and_number_or_hex",
+            "properties": {
+              "chain": {
+                "const": "Ethereum",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#$defs/request/EvmVaultSwapExtraParameters_for_AddressString_and_number_or_hex",
+            "properties": {
+              "chain": {
+                "const": "Arbitrum",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "chain": {
+                "const": "Solana",
+                "type": "string"
+              },
+              "event_data_account": {
+                "$ref": "#$defs/request/AddressString"
+              },
+              "from": {
+                "$ref": "#$defs/request/AddressString"
+              },
+              "from_token_account": {
+                "$ref": "#$defs/request/AddressString"
+              },
+              "input_amount": {
+                "$ref": "#$defs/request/number_or_hex"
+              },
+              "refund_parameters": {
+                "$ref": "#$defs/request/ChannelRefundParameters_for_AddressString"
+              }
+            },
+            "required": [
+              "chain",
+              "from",
+              "event_data_account",
+              "input_amount",
+              "refund_parameters",
+              "from_token_account"
+            ],
+            "type": "object"
+          }
+        ],
+        "properties": {
+          "affiliate_fees": {
+            "description": "Optional Affiliate fees.",
+            "items": {
+              "$ref": "#$defs/request/Beneficiary_for_string"
+            },
+            "type": "array"
+          },
+          "boost_fee": {
+            "description": "Optional Boost fee, measured in basis points.",
+            "format": "uint16",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "broker_commission": {
+            "description": "Broker commission to be charged, measured in basis points. Each basis point is 0.01%.",
+            "format": "uint16",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "channel_metadata": {
+            "$ref": "#$defs/request/CcmChannelMetadata",
+            "description": "Optional CCM channel metadata."
+          },
+          "dca_parameters": {
+            "$ref": "#$defs/request/DcaParameters",
+            "description": "Optional DCA Parameters."
+          },
+          "destination_address": {
+            "$ref": "#$defs/request/AddressString",
+            "description": "The address that the swap output should be sent to."
+          },
+          "destination_asset": {
+            "$ref": "#$defs/request/Asset",
+            "description": "The asset that the users wants to receive."
+          },
+          "refund_parameters": {
+            "$ref": "#$defs/request/ChannelRefundParameters_for_AddressString",
+            "description": "Optional Refund Parameters."
+          },
+          "source_asset": {
+            "$ref": "#$defs/request/Asset",
+            "description": "The asset that the user wants to send."
+          }
+        },
+        "required": [
+          "source_asset",
+          "destination_asset",
+          "destination_address",
+          "broker_commission"
+        ],
+        "type": "object"
+      },
+      "arb::Asset": {
+        "enum": [
+          "ETH",
+          "USDC"
+        ],
+        "type": "string"
+      },
+      "btc::Asset": {
+        "enum": [
+          "BTC"
+        ],
+        "type": "string"
+      },
+      "dot::Asset": {
+        "enum": [
+          "DOT"
+        ],
+        "type": "string"
+      },
+      "eth::Asset": {
+        "enum": [
+          "ETH",
+          "FLIP",
+          "USDC",
+          "USDT"
+        ],
+        "type": "string"
+      },
+      "number_or_hex": {
+        "description": "A number represented as a JSON number or a `0x`-prefixed hex-encoded string.",
+        "oneOf": [
+          {
+            "description": "A number represented a `0x`-prefixed hex-encoded string.",
+            "maxLength": 66,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          },
+          {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        ]
+      },
+      "sol::Asset": {
+        "enum": [
+          "SOL",
+          "USDC"
+        ],
+        "type": "string"
+      }
+    },
+    "response": {
+      "AccountMeta_for_Address": {
+        "description": "Describes a single account read or written by a program during instruction\n execution.\n\n When constructing an [`Instruction`], a list of all accounts that may be\n read or written during the execution of that instruction must be supplied.\n Any account that may be mutated by the program during execution, either its\n data or metadata such as held lamports, must be writable.\n\n Note that because the Solana runtime schedules parallel transaction\n execution around which accounts are writable, care should be taken that only\n accounts which actually may be mutated are specified as writable. As the\n default [`AccountMeta::new`] constructor creates writable accounts, this is\n a minor hazard: use [`AccountMeta::new_readonly`] to specify that an account\n is not writable.",
+        "properties": {
+          "is_signer": {
+            "description": "True if an `Instruction` requires a `Transaction` signature matching `pubkey`.",
+            "type": "boolean"
+          },
+          "is_writable": {
+            "description": "True if the account data or metadata may be mutated during program execution.",
+            "type": "boolean"
+          },
+          "pubkey": {
+            "$ref": "#$defs/response/Address",
+            "description": "An account's public key."
+          }
+        },
+        "required": [
+          "pubkey",
+          "is_signer",
+          "is_writable"
+        ],
+        "type": "object"
+      },
+      "Address": {
+        "description": "A sequence of exactly 32 base58-encoded bytes (44 characters).",
+        "pattern": "^[1-9A-HJ-NP-Za-km-z]+$",
+        "type": "string"
+      },
+      "AddressString": {
+        "description": "A string that can be parsed into a valid address for a given chain.\n\n Must be decodable to a valid address for the given chain.\n Ethereum addresses should be encoded as hex.\n Polkadot addresses can be encoded as 32-byte hex or using the ss58 format.\n Bitcoin addresses can be encoded using either bech32 or base58 standards.\n Solana addresses should be encoded using base58.",
+        "examples": [
+          "0x826180541412D574cf1336d22c0C0a287822678A",
+          "1vPFMZJqjwZTEbmv8fVAFuKDVTz3E8MqjGMEASg2sqjLL3X",
+          "bc1qkt8tvmnqynw57q4pjcgypj5wx04vk3hxlv5vu9"
+        ],
+        "type": "string"
+      },
+      "ChannelRefundParameters_for_AddressString": {
+        "properties": {
+          "min_price": {
+            "description": "The minimum price the user is willing to accept in order to sell their assets.",
+            "maxLength": 66,
+            "minLength": 66,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          },
+          "refund_address": {
+            "$ref": "#$defs/response/AddressString",
+            "description": "Where to send any deposited funds that fail to execute at the desired minimum price."
+          },
+          "retry_duration": {
+            "description": "How long to keep retrying each swap chunk before cancelling and refunding. Measured in\n 6-second block numbers.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "retry_duration",
+          "refund_address",
+          "min_price"
+        ],
+        "type": "object"
+      },
+      "ForeignChain": {
+        "enum": [
+          "Ethereum",
+          "Polkadot",
+          "Bitcoin",
+          "Arbitrum",
+          "Solana"
+        ],
+        "type": "string"
+      },
+      "RegistrationSuccess": {
+        "description": "Account registration success.",
+        "properties": {
+          "transaction_hash": {
+            "description": "A 32-byte hash encoded as a `0x`-prefixed hex string.",
+            "maxLength": 66,
+            "minLength": 66,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transaction_hash"
+        ],
+        "type": "object"
+      },
+      "SwapDepositAddress": {
+        "properties": {
+          "address": {
+            "$ref": "#$defs/response/AddressString"
+          },
+          "channel_id": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "channel_opening_fee": {
+            "description": "A sequence of 32 bytes encoded as a `0x`-prefixed hex string.",
+            "maxLength": 66,
+            "minLength": 66,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          },
+          "issued_block": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "refund_parameters": {
+            "$ref": "#$defs/response/ChannelRefundParameters_for_AddressString"
+          },
+          "source_chain_expiry_block": {
+            "$ref": "#$defs/response/number_or_hex"
+          }
+        },
+        "required": [
+          "address",
+          "issued_block",
+          "channel_id",
+          "source_chain_expiry_block",
+          "channel_opening_fee"
+        ],
+        "type": "object"
+      },
+      "VaultSwapDetails_for_AddressString": {
+        "oneOf": [
+          {
+            "properties": {
+              "chain": {
+                "const": "Bitcoin",
+                "type": "string"
+              },
+              "deposit_address": {
+                "$ref": "#$defs/response/AddressString"
+              },
+              "expires_at": {
+                "description": "Payload expiry time, expressed as timestamp since the UNIX_EPOCH in milliseconds",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "nulldata_payload": {
+                "description": "A vector of bytes encoded as a `0x`-prefixed hex string.",
+                "pattern": "^0x[0-9a-fA-F]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain",
+              "nulldata_payload",
+              "deposit_address",
+              "expires_at"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "Parameters required for construction of a Vault Swap on EVM chains.",
+            "properties": {
+              "calldata": {
+                "description": "The bytes to put in the `calldata` field of the transaction.",
+                "pattern": "^0x[0-9a-fA-F]+$",
+                "type": "string"
+              },
+              "chain": {
+                "const": "Ethereum",
+                "type": "string"
+              },
+              "to": {
+                "description": "The Chainflip Vault address. This should be entered in the `to` field of the transaction.",
+                "maxLength": 66,
+                "minLength": 66,
+                "pattern": "^0x[0-9a-fA-F]+$",
+                "type": "string"
+              },
+              "value": {
+                "description": "The amount to put in the `value` field of the transaction.",
+                "maxLength": 66,
+                "pattern": "^0x[0-9a-fA-F]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain",
+              "calldata",
+              "value",
+              "to"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "Parameters required for construction of a Vault Swap on EVM chains.",
+            "properties": {
+              "calldata": {
+                "description": "The bytes to put in the `calldata` field of the transaction.",
+                "pattern": "^0x[0-9a-fA-F]+$",
+                "type": "string"
+              },
+              "chain": {
+                "const": "Arbitrum",
+                "type": "string"
+              },
+              "to": {
+                "description": "The Chainflip Vault address. This should be entered in the `to` field of the transaction.",
+                "maxLength": 66,
+                "minLength": 66,
+                "pattern": "^0x[0-9a-fA-F]+$",
+                "type": "string"
+              },
+              "value": {
+                "description": "The amount to put in the `value` field of the transaction.",
+                "maxLength": 66,
+                "pattern": "^0x[0-9a-fA-F]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "chain",
+              "calldata",
+              "value",
+              "to"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "Represents a Solana Instruction for inclusion in a Transaction.",
+            "properties": {
+              "accounts": {
+                "items": {
+                  "$ref": "#$defs/response/AccountMeta_for_Address"
+                },
+                "type": "array"
+              },
+              "chain": {
+                "const": "Solana",
+                "type": "string"
+              },
+              "data": {
+                "description": "A vector of bytes encoded as a `0x`-prefixed hex string.",
+                "pattern": "^0x[0-9a-fA-F]+$",
+                "type": "string"
+              },
+              "program_id": {
+                "$ref": "#$defs/response/Address"
+              }
+            },
+            "required": [
+              "chain",
+              "program_id",
+              "accounts",
+              "data"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "WithdrawFeesDetail": {
+        "properties": {
+          "destination_address": {
+            "$ref": "#$defs/response/AddressString"
+          },
+          "egress_amount": {
+            "description": "A sequence of 32 bytes encoded as a `0x`-prefixed hex string.",
+            "maxLength": 66,
+            "minLength": 66,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          },
+          "egress_fee": {
+            "description": "A sequence of 32 bytes encoded as a `0x`-prefixed hex string.",
+            "maxLength": 66,
+            "minLength": 66,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          },
+          "egress_id": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#$defs/response/ForeignChain"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "tx_hash": {
+            "description": "A sequence of 32 bytes encoded as a `0x`-prefixed hex string.",
+            "maxLength": 66,
+            "minLength": 66,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tx_hash",
+          "egress_id",
+          "egress_amount",
+          "egress_fee",
+          "destination_address"
+        ],
+        "type": "object"
+      },
+      "number_or_hex": {
+        "description": "A number represented as a JSON number or a `0x`-prefixed hex-encoded string.",
+        "oneOf": [
+          {
+            "description": "A number represented a `0x`-prefixed hex-encoded string.",
+            "maxLength": 66,
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "type": "string"
+          },
+          {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -413,13 +413,19 @@ impl RpcServer for MockServerImpl {
 	}
 }
 
-#[derive(Parser, Debug, Clone, Copy)]
+#[derive(Parser, Debug, Clone, Copy, Default)]
 
 enum SubCommand {
+	/// Starts the API server. This is the default command.
+	#[default]
+	Serve,
+	/// Outputs the API's JSON schema to stdout.
 	Schema {
+		/// Whether or not to inline all json definitions. Defaults to false.
 		#[clap(long = "inline-defs", default_value = "false")]
 		inline_defs: bool,
 	},
+	/// Serves a mock implementation of the API.
 	Mock,
 }
 
@@ -439,6 +445,7 @@ struct ConnectionOptions {
 	pub signing_key_file: PathBuf,
 }
 
+/// The main entry point for the Chainflip Broker API.
 #[derive(Parser, Debug, Clone, Default)]
 #[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 struct BrokerOptions {
@@ -473,8 +480,8 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			match opts.subcommand {
-				Some(SubCommand::Schema { inline_defs }) => {
+			match opts.subcommand.unwrap_or_default() {
+				SubCommand::Schema { inline_defs } => {
 					let schemas = api_json_schema::respond(
 						SchemaApi,
 						schema::SchemaRequest { inline_defs, ..Default::default() },
@@ -497,15 +504,17 @@ async fn main() -> anyhow::Result<()> {
 						.max_connections(opts.max_connections)
 						.build(format!("0.0.0.0:{}", opts.port))
 						.await?;
-					let server_addr = server.local_addr()?;
 
-					let server = if let Some(SubCommand::Mock) = subcommand {
-						server.start(MockServerImpl.into_rpc())
-					} else {
-						server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())
+					log::info!("🎀 Binding Server to address {}...", server.local_addr()?);
+
+					let server = match subcommand {
+						SubCommand::Mock => server.start(MockServerImpl.into_rpc()),
+						SubCommand::Serve =>
+							server.start(RpcServerImpl::new(scope, opts).await?.into_rpc()),
+						SubCommand::Schema { .. } => unreachable!(),
 					};
 
-					log::info!("🎙 Server is listening on {server_addr}.");
+					log::info!("🎙 Server is ready.");
 
 					// notify healthcheck completed
 					has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
