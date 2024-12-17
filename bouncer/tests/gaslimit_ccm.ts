@@ -25,8 +25,12 @@ import { ExecutableTest } from '../shared/executable_test';
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testGasLimitCcmSwaps = new ExecutableTest('Gas-Limit-Ccm-Swaps', main, 1800);
 
-// Arbitrary default gas consumption values for testing.
-const TEST_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 260000, Arbitrum: 3000000 };
+// Minimum and maximum gas consumption values to be in a useful range for testing.
+const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> = {
+  Ethereum: { min: 50000, max: 1000000 },
+  Arbitrum: { min: 1000000, max: 4000000 },
+};
+
 const LOOP_TIMEOUT = 15;
 
 // After the swap is complete, we search for the expected swap event in this many past blocks.
@@ -153,12 +157,7 @@ async function executeAndTrackCcmSwap(
   return { tag, destAddress, broadcastId, txPayload };
 }
 
-async function testGasLimitSwapToSolana(
-  sourceAsset: Asset,
-  destAsset: Asset,
-  gasBudget?: number,
-  testTag?: string,
-) {
+async function testGasLimitSwapToSolana(sourceAsset: Asset, destAsset: Asset) {
   const connection = getSolConnection();
   const destChain = chainFromAsset(destAsset);
 
@@ -166,14 +165,9 @@ async function testGasLimitSwapToSolana(
     throw new Error(`Destination chain ${destChain} is not Solana`);
   }
 
-  const ccmMetadata = newCcmMetadata(destAsset, undefined, gasBudget);
+  const ccmMetadata = newCcmMetadata(destAsset);
 
-  const { tag, destAddress } = await executeAndTrackCcmSwap(
-    sourceAsset,
-    destAsset,
-    ccmMetadata,
-    testTag,
-  );
+  const { tag, destAddress } = await executeAndTrackCcmSwap(sourceAsset, destAsset, ccmMetadata);
 
   testGasLimitCcmSwaps.log(`${tag} Finished tracking events`);
 
@@ -214,18 +208,23 @@ async function testGasLimitSwapToSolana(
 // Using unique gas consumption amount since the CCM message is used as unique identifier
 // when observing the CCM event on the destination chain.
 const usedGasConsumptionAmount = new Set<number>();
-// Minimum and maximum gas consumption values to be in a useful range for testing.
-const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> = {
-  Ethereum: { min: 50000, max: 1000000 },
-  Arbitrum: { min: 500000, max: 4000000 },
-};
 
 async function testGasLimitSwapToEvm(
   sourceAsset: Asset,
   destAsset: Asset,
-  gasToConsume?: number,
-  gasBudgetTopUp?: number,
+  abortTest: boolean = false,
 ) {
+  function getRandomGasConsumption(chain: string): number {
+    const { min, max } = RANGE_TEST_GAS_CONSUMPTION[chain];
+    const range = max - min + 1;
+    let randomInt = Math.floor(Math.random() * range) + min;
+    while (usedGasConsumptionAmount.has(randomInt)) {
+      randomInt = Math.floor(Math.random() * range) + min;
+    }
+    usedGasConsumptionAmount.add(randomInt);
+    return randomInt;
+  }
+
   const destChain = chainFromAsset(destAsset);
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
 
@@ -233,8 +232,7 @@ async function testGasLimitSwapToEvm(
     throw new Error(`Destination chain ${destChain} is not Ethereum nor Arbitrum`);
   }
 
-  // Increase the gas consumption to make sure all the messages are unique
-  const gasConsumption = gasToConsume ?? TEST_GAS_CONSUMPTION[destChain.toString()]++;
+  const gasConsumption = getRandomGasConsumption(chainFromAsset(destAsset));
 
   const ccmMetadata = newCcmMetadata(
     destAsset,
@@ -242,9 +240,20 @@ async function testGasLimitSwapToEvm(
     undefined, // Get the default minimum gas budget
   );
 
-  ccmMetadata.gasBudget = (Number(ccmMetadata.gasBudget) + (gasBudgetTopUp ?? 0)).toString();
-  const expectAbort = ccmMetadata.gasBudget < gasConsumption.toString();
-  const testTag = expectAbort ? `InsufficientGas` : '';
+  // Adding gas buffers on both ends
+  if (abortTest) {
+    ccmMetadata.gasBudget = (
+      Number(ccmMetadata.gasBudget) + Math.round(gasConsumption * 0.75)
+    ).toString();
+  } else {
+    ccmMetadata.gasBudget = (
+      Number(ccmMetadata.gasBudget) + Math.round(gasConsumption * 1.1)
+    ).toString();
+  }
+
+  console.log('ccmMetadata.gasBudget', ccmMetadata.gasBudget, 'gasConsumption', gasConsumption);
+
+  const testTag = abortTest ? `InsufficientGas` : '';
 
   const { tag, destAddress, broadcastId, txPayload } = await executeAndTrackCcmSwap(
     sourceAsset,
@@ -257,7 +266,11 @@ async function testGasLimitSwapToEvm(
   const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
   const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
 
-  if (expectAbort) {
+  testGasLimitCcmSwaps.log(
+    `${tag} ccmMetadata.gasBudget ${ccmMetadata.gasBudget} gasConsumption ${gasConsumption}`,
+  );
+
+  if (abortTest) {
     testGasLimitCcmSwaps.log(
       `${tag} Gas budget is too low. Expecting BroadcastAborted event. Ensuring CCM event is not emitted`,
     );
@@ -353,22 +366,7 @@ async function testGasLimitSwapToEvm(
 }
 
 async function testEvmInsufficientGas(sourceAsset: Asset, destAsset: Asset) {
-  function getRandomGasConsumption(chain: string): number {
-    const { min, max } = RANGE_TEST_GAS_CONSUMPTION[chain];
-    const range = max - min + 1;
-    let randomInt = Math.floor(Math.random() * range) + min;
-    while (usedGasConsumptionAmount.has(randomInt)) {
-      randomInt = Math.floor(Math.random() * range) + min;
-    }
-    usedGasConsumptionAmount.add(randomInt);
-    return randomInt;
-  }
-
-  await testGasLimitSwapToEvm(
-    sourceAsset,
-    destAsset,
-    getRandomGasConsumption(chainFromAsset(destAsset)),
-  );
+  await testGasLimitSwapToEvm(sourceAsset, destAsset, true);
 }
 
 // Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee (~7 wei)
