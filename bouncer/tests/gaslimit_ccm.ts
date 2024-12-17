@@ -242,9 +242,11 @@ async function testGasLimitSwapToEvm(
 
   // Adding buffers on both ends to avoid flakiness
   if (abortTest) {
-    // CF might overestimate, especially for Arbitrum, so we use a 50% buffer
+    // CF might overestimate so we use a 25% buffer. Extra large buffer for Arbitrum
+    // where gas estimations are extremely unreliable in localnet.
     ccmMetadata.gasBudget = (
-      Number(ccmMetadata.gasBudget) + Math.round(gasConsumption / 2)
+      Number(ccmMetadata.gasBudget) +
+      Math.round(gasConsumption * (destChain !== 'Arbitrum' ? 0.75 : 0.1))
     ).toString();
   } else {
     // A very tight buffer should work (10%) as CF should be overestimate not underestimate
@@ -293,7 +295,7 @@ async function testGasLimitSwapToEvm(
     });
     // Expect Broadcast Aborted
     testGasLimitCcmSwaps.log(
-      `${tag} Gas budget of ${gasLimitBudget} is too low. Expecting BroadcastAborted event.`,
+      `${tag} Gas budget ${gasLimitBudget} is too low. Expecting BroadcastAborted event.`,
     );
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
       test: (event) => event.data.broadcastId === broadcastId,
@@ -315,7 +317,7 @@ async function testGasLimitSwapToEvm(
             throw new Error(
               `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${
                 event.data.broadcastId
-              }. Gas budget: ${gasLimitBudget} while limit is!`,
+              }. Gas budget: ${gasLimitBudget}`,
             );
           }
           return aborted;
