@@ -1726,11 +1726,11 @@ impl_runtime_apis! {
 						fees_vec,
 					)
 				],
-			).map_err(|e| DispatchErrorWithMessage::Other(match e {
+			).map_err(|e| match e {
 				BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
 				BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
 				BatchExecutionError::DispatchError { error } => error,
-			}))?;
+			})?;
 
 			let (
 				network_fee,
@@ -2168,6 +2168,8 @@ impl_runtime_apis! {
 			fn boost_pools_details<I: 'static>(asset: TargetChainAsset::<Runtime, I>) -> BTreeMap<u16, BoostPoolDetails>
 				where Runtime: pallet_cf_ingress_egress::Config<I> {
 
+				let network_fee_deduction_percent = pallet_cf_ingress_egress::NetworkFeeDeductionFromBoostPercent::<Runtime, I>::get();
+
 				pallet_cf_ingress_egress::BoostPools::<Runtime, I>::iter_prefix(asset).map(|(tier, pool)| {
 					(
 						tier,
@@ -2180,6 +2182,7 @@ impl_runtime_apis! {
 								)
 							}).collect(),
 							pending_withdrawals: pool.get_pending_withdrawals().clone(),
+							network_fee_deduction_percent,
 						}
 					)
 				}).collect()

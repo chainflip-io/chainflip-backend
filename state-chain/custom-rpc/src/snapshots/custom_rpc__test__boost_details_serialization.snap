@@ -37,7 +37,8 @@ expression: val
         ]
       }
     ],
-    "pending_withdrawals": []
+    "pending_withdrawals": [],
+    "network_fee_deduction_percent": 40
   },
   {
     "fee_tier": 30,
@@ -72,6 +73,7 @@ expression: val
           0
         ]
       }
-    ]
+    ],
+    "network_fee_deduction_percent": 0
   }
 ]

@@ -60,7 +60,8 @@ WORKDIR /
 COPY rust-toolchain.toml .
 RUN rustup update \
     && cargo install cargo-deb \
-    && cargo install cargo-audit \
+    # Using a specific version rather than latest pending resolution of https://github.com/rustsec/rustsec/issues/1296
+    && cargo install --locked --version=^0.20 cargo-audit \
     && rm rust-toolchain.toml
 
 RUN rustc --version && \

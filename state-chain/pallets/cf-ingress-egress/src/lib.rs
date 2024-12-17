@@ -18,8 +18,8 @@ pub mod weights;
 
 mod boost_pool;
 
-use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
+use boost_pool::{BoostPool, DepositFinalisationOutcomeForPool};
 
 use cf_chains::{
 	address::{
@@ -59,7 +59,7 @@ use scale_info::{
 	build::{Fields, Variants},
 	Path, Type,
 };
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_runtime::{traits::UniqueSaturatedInto, Percent};
 use sp_std::{
 	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -277,12 +277,22 @@ pub struct FailedForeignChainCall {
 )]
 pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
-	ChannelOpeningFee { fee: T::Amount },
+	ChannelOpeningFee {
+		fee: T::Amount,
+	},
 	/// Set the minimum deposit allowed for a particular asset.
-	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
+	SetMinimumDeposit {
+		asset: TargetChainAsset<T, I>,
+		minimum_deposit: TargetChainAmount<T, I>,
+	},
 	/// Set the deposit channel lifetime. The time before the engines stop witnessing a channel.
 	/// This is configurable primarily to allow for unpredictable block times in testnets.
-	SetDepositChannelLifetime { lifetime: TargetChainBlockNumber<T, I> },
+	SetDepositChannelLifetime {
+		lifetime: TargetChainBlockNumber<T, I>,
+	},
+	SetNetworkFeeDeductionFromBoost {
+		deduction_percent: Percent,
+	},
 }
 
 macro_rules! append_chain_to_name {
@@ -335,7 +345,7 @@ pub mod pallet {
 	use core::marker::PhantomData;
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
-	use sp_runtime::SaturatedConversion;
+	use sp_runtime::{Percent, SaturatedConversion};
 	use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 	pub(crate) type ChannelRecycleQueue<T, I> =
@@ -439,11 +449,24 @@ pub mod pallet {
 
 	/// Contains identifying information about the particular actions that have occurred for a
 	/// particular deposit.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum DepositAction<AccountId> {
-		Swap { swap_request_id: SwapRequestId },
-		LiquidityProvision { lp_account: AccountId },
-		BoostersCredited { prewitnessed_deposit_id: PrewitnessedDepositId },
+	#[derive(CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
+	pub enum DepositAction<T: Config<I>, I: 'static> {
+		Swap {
+			swap_request_id: SwapRequestId,
+		},
+		LiquidityProvision {
+			lp_account: T::AccountId,
+		},
+		CcmTransfer {
+			swap_request_id: SwapRequestId,
+		},
+		BoostersCredited {
+			prewitnessed_deposit_id: PrewitnessedDepositId,
+			network_fee_from_boost: TargetChainAmount<T, I>,
+			// Optional since we only swap if the amount is non-zero
+			network_fee_swap_request_id: Option<SwapRequestId>,
+		},
 	}
 
 	#[pallet::genesis_config]
@@ -707,6 +730,11 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// The fraction of the network fee that is deducted from the boost fee.
+	#[pallet::storage]
+	pub type NetworkFeeDeductionFromBoostPercent<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Percent, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -720,7 +748,7 @@ pub mod pallet {
 			// a non-gas asset.
 			ingress_fee: TargetChainAmount<T, I>,
 			max_boost_fee_bps: BasisPoints,
-			action: DepositAction<T::AccountId>,
+			action: DepositAction<T, I>,
 			channel_id: Option<ChannelId>,
 			origin_type: DepositOriginType,
 		},
@@ -802,7 +830,7 @@ pub mod pallet {
 			max_boost_fee_bps: BasisPoints,
 			// Total fee the user paid for their deposit to be boosted.
 			boost_fee: TargetChainAmount<T, I>,
-			action: DepositAction<T::AccountId>,
+			action: DepositAction<T, I>,
 			origin_type: DepositOriginType,
 		},
 		BoostFundsAdded {
@@ -860,6 +888,9 @@ pub mod pallet {
 		UnknownAffiliate {
 			broker_id: T::AccountId,
 			short_affiliate_id: AffiliateShortId,
+		},
+		NetworkFeeDeductionFromBoostSet {
+			deduction_percent: Percent,
 		},
 	}
 
@@ -1269,6 +1300,13 @@ pub mod pallet {
 					PalletConfigUpdate::<T, I>::SetDepositChannelLifetime { lifetime } => {
 						DepositChannelLifetime::<T, I>::set(lifetime);
 						Self::deposit_event(Event::<T, I>::DepositChannelLifetimeSet { lifetime });
+					},
+					PalletConfigUpdate::SetNetworkFeeDeductionFromBoost { deduction_percent } => {
+						NetworkFeeDeductionFromBoostPercent::<T, I>::set(deduction_percent);
+
+						Self::deposit_event(Event::<T, I>::NetworkFeeDeductionFromBoostSet {
+							deduction_percent,
+						});
 					},
 				}
 			}
@@ -1735,6 +1773,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			"Boost tiers should be in ascending order"
 		);
 
+		let network_fee_portion = NetworkFeeDeductionFromBoostPercent::<T, I>::get();
+
 		for boost_tier in sorted_boost_tiers {
 			if boost_tier > max_boost_fee_bps {
 				break
@@ -1753,8 +1793,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Some(pool) => pool,
 				};
 
-				pool.provide_funds_for_boosting(prewitnessed_deposit_id, remaining_amount)
-					.map_err(Into::into)
+				pool.provide_funds_for_boosting(
+					prewitnessed_deposit_id,
+					remaining_amount,
+					network_fee_portion,
+				)
+				.map_err(Into::into)
 			})?;
 
 			if !boosted_amount.is_zero() {
@@ -1817,7 +1861,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_address: Option<ForeignChainAddress>,
 		amount_after_fees: TargetChainAmount<T, I>,
 		origin: DepositOrigin<T, I>,
-	) -> DepositAction<T::AccountId> {
+	) -> DepositAction<T, I> {
 		match action.clone() {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
 				T::Balance::credit_account(&lp_account, asset.into(), amount_after_fees.into());
@@ -2264,14 +2308,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		if let Some((prewitnessed_deposit_id, used_pools)) = maybe_boost_to_process {
+			let mut total_amount_credited_to_boosters: TargetChainAmount<T, I> = 0u32.into();
 			// Note that ingress fee is not payed here, as it has already been payed at the time
 			// of boosting
 			for boost_tier in used_pools {
 				BoostPools::<T, I>::mutate(asset, boost_tier, |maybe_pool| {
 					if let Some(pool) = maybe_pool {
-						for (booster_id, finalised_withdrawn_amount) in
-							pool.process_deposit_as_finalised(prewitnessed_deposit_id)
-						{
+						let DepositFinalisationOutcomeForPool {
+							unlocked_funds,
+							amount_credited_to_boosters,
+						} = pool.process_deposit_as_finalised(prewitnessed_deposit_id);
+
+						total_amount_credited_to_boosters
+							.saturating_accrue(amount_credited_to_boosters);
+
+						for (booster_id, finalised_withdrawn_amount) in unlocked_funds {
 							T::Balance::credit_account(
 								&booster_id,
 								asset.into(),
@@ -2282,6 +2333,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				});
 			}
 
+			// Any excess amount is charged as network fee:
+			let network_fee_from_boost =
+				deposit_amount.saturating_sub(total_amount_credited_to_boosters);
+
+			let network_fee_swap_request_id = if network_fee_from_boost > 0u32.into() {
+				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work, and
+				// it seems easiest to not write a special case (esp if we only support boost for
+				// BTC)
+				Some(T::SwapRequestHandler::init_swap_request(
+					asset.into(),
+					network_fee_from_boost.into(),
+					Asset::Flip,
+					SwapRequestType::NetworkFee,
+					Default::default(),
+					None,
+					None,
+					SwapOrigin::Internal,
+				))
+			} else {
+				None
+			};
+
 			Self::deposit_event(Event::DepositFinalised {
 				deposit_address,
 				asset,
@@ -2291,7 +2364,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// no ingress fee as it was already charged at the time of boosting
 				ingress_fee: 0u32.into(),
 				max_boost_fee_bps,
-				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
+				action: DepositAction::BoostersCredited {
+					prewitnessed_deposit_id,
+					network_fee_from_boost,
+					network_fee_swap_request_id,
+				},
 				channel_id,
 				origin_type: origin.into(),
 			});

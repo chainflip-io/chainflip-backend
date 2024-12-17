@@ -49,7 +49,7 @@ use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
-	Permill,
+	Percent, Permill,
 };
 use sp_state_machine::InspectState;
 use state_chain_runtime::{
@@ -569,6 +569,7 @@ mod boost_pool_rpc {
 		available_amounts: Vec<AccountAndAmount>,
 		deposits_pending_finalization: Vec<PendingBoost>,
 		pending_withdrawals: Vec<PendingWithdrawal>,
+		network_fee_deduction_percent: Percent,
 	}
 
 	impl BoostPoolDetailsRpc {
@@ -606,6 +607,7 @@ mod boost_pool_rpc {
 						pending_deposits,
 					})
 					.collect(),
+				network_fee_deduction_percent: details.network_fee_deduction_percent,
 			}
 		}
 	}
@@ -1183,10 +1185,11 @@ impl From<CfApiError> for ErrorObjectOwned {
 				other => internal_error(other),
 			},
 			CfApiError::DispatchError(dispatch_error) => match dispatch_error {
-				DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
+				DispatchErrorWithMessage::Module(message) |
+				DispatchErrorWithMessage::RawMessage(message) => match std::str::from_utf8(&message) {
 					Ok(message) => call_error(std::format!("DispatchError: {message}")),
 					Err(error) =>
-						internal_error(format!("Unable to decode DispatchError: {error}")),
+						internal_error(format!("Unable to decode Module Error Message: {error}")),
 				},
 				DispatchErrorWithMessage::Other(error) =>
 					internal_error(format!("Unable to decode DispatchError: {error:?}")),
@@ -2462,6 +2465,7 @@ mod test {
 				(1, BTreeMap::from([(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 })])),
 			]),
 			pending_withdrawals: Default::default(),
+			network_fee_deduction_percent: Percent::from_percent(40),
 		}
 	}
 
@@ -2479,6 +2483,7 @@ mod test {
 				(ID_1.clone(), BTreeSet::from([0])),
 				(ID_2.clone(), BTreeSet::from([0])),
 			]),
+			network_fee_deduction_percent: Percent::from_percent(0),
 		}
 	}
 

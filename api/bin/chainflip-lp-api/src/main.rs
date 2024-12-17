@@ -1,3 +1,4 @@
+use crate::rpc_types::CloseOrderJson;
 use anyhow::anyhow;
 use cf_primitives::{BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
@@ -44,6 +45,7 @@ use tracing::log;
 pub mod rpc_types {
 	use super::*;
 	use anyhow::anyhow;
+	use cf_primitives::chains::assets::any;
 	use cf_utilities::rpc::NumberOrHex;
 	use chainflip_api::{lp::PoolPairsMap, queries::SwapChannelInfo};
 	use serde::{Deserialize, Serialize};
@@ -91,6 +93,26 @@ pub mod rpc_types {
 		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
 		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
 		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
+	}
+
+	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+	#[serde(untagged)]
+	pub enum CloseOrderJson {
+		Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderIdJson },
+		Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderIdJson },
+	}
+
+	impl TryFrom<CloseOrderJson> for CloseOrder {
+		type Error = anyhow::Error;
+
+		fn try_from(value: CloseOrderJson) -> Result<Self, Self::Error> {
+			Ok(match value {
+				CloseOrderJson::Limit { base_asset, quote_asset, side, id } =>
+					CloseOrder::Limit { base_asset, quote_asset, side, id: id.try_into()? },
+				CloseOrderJson::Range { base_asset, quote_asset, id } =>
+					CloseOrder::Range { base_asset, quote_asset, id: id.try_into()? },
+			})
+		}
 	}
 }
 
@@ -208,7 +230,7 @@ pub trait Rpc {
 	#[method(name = "cancel_orders_batch")]
 	async fn cancel_orders_batch(
 		&self,
-		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 }
@@ -585,13 +607,21 @@ impl RpcServer for RpcServerImpl {
 
 	async fn cancel_orders_batch(
 		&self,
-		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
 		Ok(self
 			.api
 			.lp_api()
-			.cancel_orders_batch(orders, wait_for.unwrap_or_default())
+			.cancel_orders_batch(
+				orders
+					.into_iter()
+					.map(TryInto::try_into)
+					.collect::<Result<Vec<_>, _>>()?
+					.try_into()
+					.expect("Impossible to fail, given the same MAX_ORDERS_DELETE"),
+				wait_for.unwrap_or_default(),
+			)
 			.await?)
 	}
 }
