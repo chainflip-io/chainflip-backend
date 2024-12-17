@@ -25,9 +25,10 @@ import { ExecutableTest } from '../shared/executable_test';
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testGasLimitCcmSwaps = new ExecutableTest('Gas-Limit-Ccm-Swaps', main, 1800);
 
-// Minimum and maximum gas consumption values to be in a useful range for testing.
+// Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
+// to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
 const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> = {
-  Ethereum: { min: 50000, max: 1000000 },
+  Ethereum: { min: 150000, max: 1000000 },
   Arbitrum: { min: 1000000, max: 4000000 },
 };
 
