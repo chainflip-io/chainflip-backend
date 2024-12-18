@@ -235,7 +235,7 @@ impl SwapDirection for QuoteToBase {
 /// point number. If the result is larger than the maximum U384 this function will panic.
 ///
 /// The result will be equal or less than the true value.
-fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> Option<U256> {
+fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> Option<U512> {
 	let x = U512::from(x);
 	let mut result = U512::from(1) << 128;
 	for bit_idx in (0..(32 - n.leading_zeros())).rev() {
@@ -247,7 +247,7 @@ fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> Option<U256> {
 		}
 	}
 
-	U256::try_from(result).ok()
+	Some(result)
 }
 
 pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
@@ -263,14 +263,13 @@ pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
 		return x;
 	}
 
-	let x: U256 = x << 128;
+	let x = U512::from(x) << 128;
 
 	let mut root_min = U256::from(0);
 
 	// Compute upper bound as kth root of x where k is the closest power of 2 not exceeding n:
 	let mut root_max =
-		U256::try_from((0..n.ilog2()).fold(U512::from(x), |acc, _| (acc << 128).integer_sqrt()))
-			.unwrap();
+		U256::try_from((0..n.ilog2()).fold(x, |acc, _| (acc << 128).integer_sqrt())).unwrap();
 
 	// Upper bound is the root if n is a power of 2:
 	if n.is_power_of_two() {
@@ -283,7 +282,7 @@ pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
 	for _ in 0..128 {
 		mid = (root_max + root_min) / 2;
 
-		let f: U256 = fixed_point_to_power_as_fixed_point(mid, n).unwrap_or(U256::MAX);
+		let f: U512 = fixed_point_to_power_as_fixed_point(mid, n).unwrap_or(U512::MAX);
 
 		let diff = f.abs_diff(x);
 
@@ -319,19 +318,19 @@ mod fast_tests {
 		for n in 0..9u32 {
 			for e in 0..9u32 {
 				assert_eq!(
-					Some(U256::from(n.pow(e)) << 128),
+					Some(U512::from(n.pow(e)) << 128),
 					fixed_point_to_power_as_fixed_point(U256::from(n) << 128, e)
 				);
 			}
 		}
 
 		assert_eq!(
-			U256::from(57),
+			U512::from(57),
 			fixed_point_to_power_as_fixed_point(U256::from(3) << 127, 10).unwrap() >> 128
 		);
 
 		assert_eq!(
-			U256::from(1) << 127,
+			U512::from(1) << 127,
 			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 127).unwrap() >> 128
 		);
 
@@ -425,11 +424,11 @@ mod test {
 			nth_root_of_integer_as_fixed_point(U256::one() << 128, 128)
 		);
 		assert_eq!(
-			U256::from_dec_str("1198547750512063821665753418683415504682").unwrap(),
+			U256::from_dec_str("1198547684143787677818343298015649630110").unwrap(),
 			nth_root_of_integer_as_fixed_point(U256::from(83434), 9)
 		);
 		assert_eq!(
-			U256::from_dec_str("70594317847877622574934944024871574448634").unwrap(),
+			U256::from_dec_str("70594316175327588892648857471146691009115").unwrap(),
 			nth_root_of_integer_as_fixed_point(U256::from(384283294283u128), 5)
 		);
 
