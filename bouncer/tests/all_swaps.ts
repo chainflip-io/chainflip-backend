@@ -53,30 +53,37 @@ async function main() {
     return Math.floor(Math.random() * (maxFloored - minCeiled) + minCeiled); // The maximum is exclusive and the minimum is inclusive
   }
 
-  Object.values(Assets).forEach((sourceAsset) => {
-    Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset)
-      .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+  function randomElement<Value>(items: Value[]): Value {
+    return items[Math.floor(Math.random() * items.length)];
+  }
 
-        const sourceChain = chainFromAsset(sourceAsset);
-        const destChain = chainFromAsset(destAsset);
-        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
-          // Vault Swaps
-          appendSwap(sourceAsset, destAsset, testVaultSwap);
+  // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
+  // the test starts to randomly fail because the assethub node is overloaded.
 
-          if (ccmSupportedChains.includes(destChain)) {
-            // CCM Vault swaps
-            appendSwap(sourceAsset, destAsset, testVaultSwap, true);
-          }
-        }
+  const AssetsWithoutAssethub = Object.values(Assets).filter((id) => !id.startsWith('Hub'));
+
+  AssetsWithoutAssethub.forEach((sourceAsset) => {
+    AssetsWithoutAssethub.filter((destAsset) => sourceAsset !== destAsset).forEach((destAsset) => {
+      // Regular swaps
+      appendSwap(sourceAsset, destAsset, testSwap);
+
+      const sourceChain = chainFromAsset(sourceAsset);
+      const destChain = chainFromAsset(destAsset);
+      if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
+        // Vault Swaps
+        appendSwap(sourceAsset, destAsset, testVaultSwap);
 
         if (ccmSupportedChains.includes(destChain)) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, true);
+          // CCM Vault swaps
+          appendSwap(sourceAsset, destAsset, testVaultSwap, true);
         }
-      });
+      }
+
+      if (ccmSupportedChains.includes(destChain)) {
+        // CCM swaps
+        appendSwap(sourceAsset, destAsset, testSwap, true);
+      }
+    });
   });
 
   // Not doing BTC due to encoding complexity in vault_swap. Will be fixed once SDK supports it.
@@ -87,6 +94,17 @@ async function main() {
   appendSwap('Sol', 'Dot', testVaultSwap);
   appendSwap('SolUsdc', 'Eth', testVaultSwap);
   appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
+
+  // Swaps from/to assethub paired with random chains
+  const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
+  const assets = Object.values(Assets);
+  assethubAssets.forEach((hubAsset) => {
+    appendSwap(hubAsset, randomElement(assets), testSwap);
+    appendSwap(randomElement(assets), hubAsset, testSwap);
+  });
+  appendSwap('ArbEth', 'HubDot', testVaultSwap);
+  appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
+  appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
 
   total = allSwaps.length;
 
