@@ -10,14 +10,14 @@ use crate::{
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	btc::vault_swap_encoding::{
-		encode_swap_params_in_nulldata_payload, SharedCfParameters, UtxoEncodedData,
+		encode_swap_params_in_nulldata_payload, BtcCfParameters, UtxoEncodedData,
 		MAX_AFFILIATES as BTC_MAX_AFFILIATES,
 	},
 	ccm_checker::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
 		DecodedCcmAdditionalData,
 	},
-	cf_parameters::{CfParameters, VaultSwapParameters, VersionedCfParameters},
+	cf_parameters::build_cf_parameters,
 	evm::api::{EvmCall, EvmEnvironmentProvider},
 	sol::{
 		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder, SolAmount, SolPubkey,
@@ -26,8 +26,8 @@ use cf_chains::{
 	VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
-	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters,
-	MAX_AFFILIATES, SWAP_DELAY_BLOCKS,
+	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, DcaParameters, MAX_AFFILIATES,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_traits::AffiliateRegistry;
 
@@ -37,14 +37,14 @@ use sp_runtime::{BoundedVec, DispatchError};
 use sp_std::{vec, vec::Vec};
 
 fn to_affiliate_and_fees<MaxAffiliates: Get<u32>>(
-	broker_id: AccountId,
+	broker_id: &AccountId,
 	affiliates: Affiliates<AccountId>,
 ) -> Result<BoundedVec<AffiliateAndFee, MaxAffiliates>, DispatchErrorWithMessage> {
 	let affiliates_and_fees = affiliates
 		.into_iter()
 		.map(|beneficiary| {
 			Result::<AffiliateAndFee, DispatchErrorWithMessage>::Ok(AffiliateAndFee {
-				affiliate: Swapping::get_short_id(&broker_id, &beneficiary.account)
+				affiliate: Swapping::get_short_id(broker_id, &beneficiary.account)
 					.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
 				fee: beneficiary
 					.bps
@@ -65,7 +65,7 @@ pub fn bitcoin_vault_swap(
 	broker_commission: BasisPoints,
 	min_output_amount: AssetAmount,
 	retry_duration: BlockNumber,
-	boost_fee: BasisPoints,
+	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
 ) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
@@ -75,7 +75,7 @@ pub fn bitcoin_vault_swap(
 	let params = UtxoEncodedData {
 		output_asset: destination_asset,
 		output_address: destination_address,
-		parameters: SharedCfParameters {
+		parameters: BtcCfParameters {
 			retry_duration: retry_duration
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
@@ -92,14 +92,12 @@ pub fn bitcoin_vault_swap(
 				.unwrap_or(SWAP_DELAY_BLOCKS)
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-			boost_fee: boost_fee
-				.try_into()
-				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
+			boost_fee,
 			broker_fee: broker_commission
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
 			affiliates: to_affiliate_and_fees::<ConstU32<BTC_MAX_AFFILIATES>>(
-				broker_id,
+				&broker_id,
 				affiliate_fees,
 			)?,
 		},
@@ -119,7 +117,7 @@ pub fn ethereum_vault_swap(
 	destination_address: EncodedAddress,
 	broker_commission: BasisPoints,
 	refund_params: ChannelRefundParametersEncoded,
-	boost_fee: BasisPoints,
+	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
 	channel_metadata: Option<cf_chains::CcmChannelMetadata>,
@@ -128,28 +126,31 @@ pub fn ethereum_vault_swap(
 		ChainAddressConverter::try_from_encoded_address(addr)
 			.map_err(|_| "Invalid refund address".into())
 	})?;
+	let processed_affiliate_fees =
+		to_affiliate_and_fees::<ConstU32<MAX_AFFILIATES>>(&broker_id, affiliate_fees)?;
 
-	let cf_parameters = VersionedCfParameters::V0(CfParameters {
-		ccm_additional_data: (),
-		vault_swap_parameters: VaultSwapParameters {
-			refund_params,
-			dca_params: dca_parameters,
-			boost_fee: boost_fee
-				.try_into()
-				.map_err(|_| DispatchErrorWithMessage::from("Boost fee cannot exceed 2.55%"))?,
-			broker_fee: Beneficiary { account: broker_id.clone(), bps: broker_commission },
-			affiliate_fees: to_affiliate_and_fees::<ConstU32<MAX_AFFILIATES>>(
-				broker_id,
-				affiliate_fees,
-			)
-			.unwrap(),
-		},
-	});
+	// Build and encode the cf_parameters
+	let cf_parameters = build_cf_parameters(
+		refund_params,
+		dca_parameters,
+		boost_fee,
+		broker_id,
+		broker_commission,
+		processed_affiliate_fees,
+		channel_metadata.as_ref(),
+	);
 
 	let calldata = match source_asset {
 		Asset::Eth | Asset::ArbEth =>
-			if let Some(_ccm) = channel_metadata {
-				unimplemented!()
+			if let Some(ccm) = channel_metadata {
+				Ok(cf_chains::evm::api::x_call_native::XCallNative::new(
+					destination_address,
+					destination_asset,
+					ccm.message.to_vec(),
+					ccm.gas_budget,
+					cf_parameters,
+				)
+				.abi_encoded_payload())
 			} else {
 				Ok(cf_chains::evm::api::x_swap_native::XSwapNative::new(
 					destination_address,
@@ -173,8 +174,17 @@ pub fn ethereum_vault_swap(
 			}
 			.ok_or(DispatchErrorWithMessage::from("Failed to look up EVM token address"))?;
 
-			if let Some(_ccm) = channel_metadata {
-				unimplemented!() // XCallNative
+			if let Some(ccm) = channel_metadata {
+				Ok(cf_chains::evm::api::x_call_token::XCallToken::new(
+					destination_address,
+					destination_asset,
+					ccm.message.to_vec(),
+					ccm.gas_budget,
+					source_token_address,
+					amount,
+					cf_parameters,
+				)
+				.abi_encoded_payload())
 			} else {
 				Ok(cf_chains::evm::api::x_swap_token::XSwapToken::new(
 					destination_address,
@@ -216,7 +226,7 @@ pub fn solana_vault_swap(
 	broker_commission: BasisPoints,
 	extra_parameters: VaultSwapExtraParametersEncoded,
 	channel_metadata: Option<CcmChannelMetadata>,
-	boost_fee: BasisPoints,
+	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
 ) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
@@ -246,7 +256,7 @@ pub fn solana_vault_swap(
 	}
 
 	let processed_affiliate_fees =
-		to_affiliate_and_fees::<ConstU32<MAX_AFFILIATES>>(broker_id.clone(), affiliate_fees)?;
+		to_affiliate_and_fees::<ConstU32<MAX_AFFILIATES>>(&broker_id, affiliate_fees)?;
 
 	if let VaultSwapExtraParametersEncoded::Solana {
 		from,
@@ -275,15 +285,18 @@ pub fn solana_vault_swap(
 					agg_key,
 					destination_asset,
 					destination_address,
-					broker_id,
-					broker_commission,
-					refund_parameters,
-					boost_fee,
-					processed_affiliate_fees,
-					dca_parameters,
 					from,
 					event_data_account,
 					input_amount,
+					build_cf_parameters(
+						refund_parameters,
+						dca_parameters,
+						boost_fee,
+						broker_id,
+						broker_commission,
+						processed_affiliate_fees,
+						channel_metadata.as_ref(),
+					),
 					channel_metadata,
 				),
 				Asset::SolUsdc => {
@@ -307,17 +320,20 @@ pub fn solana_vault_swap(
 						api_environment,
 						destination_asset,
 						destination_address,
-						broker_id,
-						broker_commission,
-						refund_parameters,
-						boost_fee,
-						processed_affiliate_fees,
-						dca_parameters,
 						from,
 						from_token_account,
 						event_data_account,
 						token_supported_account.address.into(),
 						input_amount,
+						build_cf_parameters(
+							refund_parameters,
+							dca_parameters,
+							boost_fee,
+							broker_id,
+							broker_commission,
+							processed_affiliate_fees,
+							channel_metadata.as_ref(),
+						),
 						channel_metadata,
 					)
 				},

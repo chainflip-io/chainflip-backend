@@ -5,26 +5,19 @@
 //! Such Instruction can be signed and sent to the Program on Solana directly to invoke
 //! certain functions.
 
-use codec::Encode;
 use sol_prim::consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
-use sp_core::ConstU32;
 
 use crate::{
 	address::EncodedAddress,
-	cf_parameters::*,
 	sol::{
 		sol_tx_core::program_instructions::swap_endpoints::{
 			SwapEndpointProgram, SwapNativeParams, SwapTokenParams,
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolInstruction, SolPubkey,
 	},
-	CcmChannelMetadata, ChannelRefundParametersDecoded,
+	CcmChannelMetadata,
 };
-use cf_primitives::{
-	chains::assets::any::Asset, AccountId, AffiliateAndFee, BasisPoints, Beneficiary,
-	DcaParameters, MAX_AFFILIATES,
-};
-use sp_runtime::BoundedVec;
+use cf_primitives::chains::assets::any::Asset;
 use sp_std::vec::Vec;
 
 fn system_program_id() -> SolAddress {
@@ -43,27 +36,12 @@ impl SolanaInstructionBuilder {
 		agg_key: SolPubkey,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		broker_id: AccountId,
-		broker_commission: BasisPoints,
-		refund_parameters: ChannelRefundParametersDecoded,
-		boost_fee: BasisPoints,
-		affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
-		dca_parameters: Option<DcaParameters>,
 		from: SolPubkey,
 		event_data_account: SolPubkey,
 		input_amount: SolAmount,
+		cf_parameters: Vec<u8>,
 		ccm: Option<CcmChannelMetadata>,
 	) -> SolInstruction {
-		let cf_parameters = Self::build_cf_parameters(
-			refund_parameters,
-			dca_parameters,
-			boost_fee,
-			broker_id,
-			broker_commission,
-			affiliate_fees,
-			ccm.as_ref(),
-		);
-
 		SwapEndpointProgram::with_id(api_environment.swap_endpoint_program).x_swap_native(
 			SwapNativeParams {
 				amount: input_amount,
@@ -86,29 +64,14 @@ impl SolanaInstructionBuilder {
 		api_environment: SolApiEnvironment,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		broker_id: AccountId,
-		broker_commission: BasisPoints,
-		refund_parameters: ChannelRefundParametersDecoded,
-		boost_fee: BasisPoints,
-		affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
-		dca_parameters: Option<DcaParameters>,
 		from: SolPubkey,
 		from_token_account: SolPubkey,
 		event_data_account: SolPubkey,
 		token_supported_account: SolPubkey,
 		input_amount: SolAmount,
+		cf_parameters: Vec<u8>,
 		ccm: Option<CcmChannelMetadata>,
 	) -> SolInstruction {
-		let cf_parameters = Self::build_cf_parameters(
-			refund_parameters,
-			dca_parameters,
-			boost_fee,
-			broker_id,
-			broker_commission,
-			affiliate_fees,
-			ccm.as_ref(),
-		);
-
 		SwapEndpointProgram::with_id(api_environment.swap_endpoint_program).x_swap_token(
 			SwapTokenParams {
 				amount: input_amount,
@@ -131,52 +94,25 @@ impl SolanaInstructionBuilder {
 			system_program_id(),
 		)
 	}
-
-	/// Builds the cf_parameter. The logic is shared between Sol and Usdc vault swap instruction.
-	fn build_cf_parameters(
-		refund_parameters: ChannelRefundParametersDecoded,
-		dca_parameters: Option<DcaParameters>,
-		boost_fee: BasisPoints,
-		broker_id: AccountId,
-		broker_commission: BasisPoints,
-		affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
-		ccm: Option<&CcmChannelMetadata>,
-	) -> Vec<u8> {
-		let vault_swap_parameters = VaultSwapParameters {
-			refund_params: refund_parameters,
-			dca_params: dca_parameters,
-			boost_fee: boost_fee.try_into().unwrap_or(u8::MAX),
-			broker_fee: Beneficiary { account: broker_id, bps: broker_commission },
-			affiliate_fees,
-		};
-
-		match ccm {
-			Some(ccm) => VersionedCcmCfParameters::V0(CfParameters {
-				ccm_additional_data: ccm.ccm_additional_data.clone(),
-				vault_swap_parameters,
-			})
-			.encode(),
-			None => VersionedCfParameters::V0(CfParameters {
-				ccm_additional_data: (),
-				vault_swap_parameters,
-			})
-			.encode(),
-		}
-	}
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
 	use crate::{
+		cf_parameters::build_cf_parameters,
 		sol::{
 			signing_key::SolSigningKey, sol_tx_core::sol_test_values::*, SolAddress, SolHash,
 			SolMessage, SolTransaction,
 		},
-		ForeignChainAddress,
+		ChannelRefundParametersDecoded, ForeignChainAddress,
 	};
-	use cf_primitives::{AffiliateShortId, DcaParameters};
+	use cf_primitives::{
+		AccountId, AffiliateAndFee, AffiliateShortId, BasisPoints, DcaParameters, MAX_AFFILIATES,
+	};
 	use sol_prim::consts::{const_address, MAX_TRANSACTION_LENGTH};
+	use sp_core::ConstU32;
+	use sp_runtime::BoundedVec;
 
 	// private key: ead22312d80f573924a27595271bd2ec0aa20a270587c8a399136166561ea58c
 	const DESTINATION_ADDRESS_ETH: EncodedAddress =
@@ -214,7 +150,7 @@ mod test {
 		const_address("48vfkGMyVDUNq689aocfYQsoqubZjjme7cja21cbnMnK");
 
 	const BROKER_COMMISSION: BasisPoints = 1u16;
-	const BOOST_FEE: BasisPoints = 2u16;
+	const BOOST_FEE: u8 = 2u8;
 	const INPUT_AMOUNT: SolAmount = 1_234_567_890u64;
 
 	const BLOCKHASH: SolHash = SolHash([0x00; 32]);
@@ -247,6 +183,18 @@ mod test {
 		DcaParameters { number_of_chunks: 10u32, chunk_interval: 20u32 }
 	}
 
+	fn cf_parameter(with_ccm: bool) -> Vec<u8> {
+		build_cf_parameters(
+			channel_refund_parameters(),
+			Some(dca_parameters()),
+			BOOST_FEE,
+			broker_id(),
+			BROKER_COMMISSION,
+			affiliate_and_fees(),
+			with_ccm.then_some(&ccm_parameter().channel_metadata),
+		)
+	}
+
 	fn into_transaction(instructions: SolInstruction, payer: SolPubkey) -> SolTransaction {
 		// Build mock Transaction for testing.
 		let transaction =
@@ -273,15 +221,10 @@ mod test {
 				agg_key().into(),
 				Asset::Eth,
 				DESTINATION_ADDRESS_ETH,
-				broker_id(),
-				BROKER_COMMISSION,
-				channel_refund_parameters(),
-				BOOST_FEE,
-				affiliate_and_fees(),
-				Some(dca_parameters()),
 				FROM.into(),
 				EVENT_DATA_ACCOUNT.into(),
 				INPUT_AMOUNT,
+				cf_parameter(false),
 				None,
 			),
 			FROM.into(),
@@ -309,15 +252,10 @@ mod test {
 				agg_key().into(),
 				Asset::SolUsdc,
 				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
-				broker_id(),
-				BROKER_COMMISSION,
-				channel_refund_parameters(),
-				BOOST_FEE,
-				affiliate_and_fees(),
-				Some(dca_parameters()),
 				FROM.into(),
 				EVENT_DATA_ACCOUNT.into(),
 				INPUT_AMOUNT,
+				cf_parameter(true),
 				Some(ccm_parameter().channel_metadata),
 			),
 			FROM.into(),
@@ -353,17 +291,12 @@ mod test {
 				api_env(),
 				Asset::Eth,
 				DESTINATION_ADDRESS_ETH,
-				broker_id(),
-				BROKER_COMMISSION,
-				channel_refund_parameters(),
-				BOOST_FEE,
-				affiliate_and_fees(),
-				Some(dca_parameters()),
 				FROM.into(),
 				from_usdc_account,
 				EVENT_DATA_ACCOUNT.into(),
 				TOKEN_SUPPORTED_ACCOUNT.into(),
 				INPUT_AMOUNT,
+				cf_parameter(false),
 				None,
 			),
 			FROM.into(),
@@ -399,17 +332,12 @@ mod test {
 				api_env(),
 				Asset::Sol,
 				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
-				broker_id(),
-				BROKER_COMMISSION,
-				channel_refund_parameters(),
-				BOOST_FEE,
-				affiliate_and_fees(),
-				Some(dca_parameters()),
 				FROM.into(),
 				from_usdc_account,
 				EVENT_DATA_ACCOUNT.into(),
 				TOKEN_SUPPORTED_ACCOUNT.into(),
 				INPUT_AMOUNT,
+				cf_parameter(true),
 				Some(ccm_parameter().channel_metadata),
 			),
 			FROM.into(),

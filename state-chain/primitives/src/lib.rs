@@ -162,7 +162,7 @@ pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 51;
 // 2 bytes of flags to indicate a segwit transaction
 // between 1 and 9 bytes to count the number of inputs (we assume up to 3 bytes)
 // between 1 and 9 bytes to count the number of outputs (we assume up to 3 bytes)
-// 4 bytes for the locktime
+// 4 bytes for the lock time
 pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 16;
 
 /// This determines the average expected block time that we are targeting.

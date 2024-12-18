@@ -1956,7 +1956,7 @@ impl_runtime_apis! {
 							filtered_swaps.push(deposit.amount.into());
 						},
 						ChannelAction::CcmTransfer { .. } => {
-							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
+							// Ignoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
 						}
 						_ => {
 							// ignore other deposit actions
@@ -2161,10 +2161,11 @@ impl_runtime_apis! {
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
-			// Validate params
+			// Validate parameters
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
 			}
+
 			ChainAddressConverter::try_from_encoded_address(destination_address.clone())
 				.and_then(|address| {
 					if ForeignChain::from(destination_asset) != address.chain() {
@@ -2174,6 +2175,10 @@ impl_runtime_apis! {
 					}
 				})
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
+
+			let boost_fee: u8 = boost_fee
+				.try_into()
+				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
 
 			// Ensure the refund duration is valid.
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
@@ -2189,7 +2194,7 @@ impl_runtime_apis! {
 						min_output_amount,
 						retry_duration,
 					} = extra_parameters {
-						crate::chainflip::vault_swap::bitcoin_vault_swap(
+						crate::chainflip::vault_swaps::bitcoin_vault_swap(
 							broker_id,
 							destination_asset,
 							destination_address,
@@ -2208,7 +2213,7 @@ impl_runtime_apis! {
 						input_amount,
 						refund_parameters,
 					} = extra_parameters {
-						crate::chainflip::vault_swap::ethereum_vault_swap(
+						crate::chainflip::vault_swaps::ethereum_vault_swap(
 							broker_id,
 							source_asset,
 							input_amount,
@@ -2225,7 +2230,7 @@ impl_runtime_apis! {
 						Err(DispatchErrorWithMessage::from("Extra parameter is not valid for Evm vault swap."))
 					}
 				},
-				ForeignChain::Solana => crate::chainflip::vault_swap::solana_vault_swap(
+				ForeignChain::Solana => crate::chainflip::vault_swaps::solana_vault_swap(
 					broker_id,
 					source_asset,
 					destination_asset,
