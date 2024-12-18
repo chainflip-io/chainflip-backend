@@ -100,40 +100,46 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
 		let BlockHeightTrackingProperties { witness_from_index } = properties;
 
+		let witness_from_index = witness_from_index.root().clone();
+
 		let mut headers = VecDeque::new();
 
-		let header_from_btc_header =
-			|header: BlockHeader| -> anyhow::Result<Header<btc::Hash, btc::BlockNumber>> {
-				Ok(Header {
-					block_height: header.height,
-					hash: header.hash.to_byte_array().into(),
-					parent_hash: header
-						.previous_block_hash
-						.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
-						.to_byte_array()
-						.into(),
-				})
-			};
+		let header_from_btc_header = |header: BlockHeader| -> anyhow::Result<
+			Header<btc::Hash, BlockWitnessRange<btc::BlockNumber>>,
+		> {
+			Ok(Header {
+				block_height: BlockWitnessRange::try_new(header.height, 1)
+					.map_err(|_| anyhow!(""))?,
+				hash: header.hash.to_byte_array().into(),
+				parent_hash: header
+					.previous_block_hash
+					.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
+					.to_byte_array()
+					.into(),
+			})
+		};
 
 		let get_header = |index: BlockNumber| {
 			async move {
 				let header = self.client.block_header(index).await?;
 				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.
-				Ok::<Header<sp_core::H256, u64>, anyhow::Error>(header_from_btc_header(header)?)
+				Ok::<Header<sp_core::H256, BlockWitnessRange<u64>>, anyhow::Error>(
+					header_from_btc_header(header)?,
+				)
 			}
 		};
 
 		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
 
-		if best_block_header.block_height <= witness_from_index {
-			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={witness_from_index}", best_block_header.block_height))
+		if *best_block_header.block_height.root() <= witness_from_index {
+			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={witness_from_index}", best_block_header.block_height.root()))
 		} else if witness_from_index == 0 {
 			headers.push_back(best_block_header);
 			Ok(headers)
 		} else {
 			// fetch the headers we haven't got yet
-			for index in witness_from_index..best_block_header.block_height {
+			for index in witness_from_index..*best_block_header.block_height.root() {
 				// let header = self.client.block_header(index).await?;
 				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.

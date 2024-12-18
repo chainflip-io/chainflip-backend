@@ -11,14 +11,18 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_chains::{assets::arb::Chain, btc::BlockNumber, witness_period::BlockWitnessRange};
+use cf_chains::{
+	assets::arb::Chain,
+	btc::BlockNumber,
+	witness_period::{BlockWitnessRange, BlockZero},
+};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
 use consensus::{Consensus, StagedConsensus, SupermajorityConsensus, Threshold};
 use frame_support::{
 	ensure,
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating},
+	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating, Zero},
 	Parameter,
 };
 use itertools::Itertools;
@@ -58,10 +62,10 @@ pub struct BlockHeightTrackingState<BlockHash, BlockNumber> {
 	pub last_safe_index: BlockNumber,
 }
 
-impl<H, N: From<u32>> Default for BlockHeightTrackingState<H, N> {
+impl<H, N: BlockZero> Default for BlockHeightTrackingState<H, N> {
 	fn default() -> Self {
-		let headers = ChainBlocks { headers: Default::default(), next_height: 0u32.into() };
-		Self { headers, last_safe_index: 0u32.into() }
+		let headers = ChainBlocks { headers: Default::default(), next_height: N::zero() };
+		Self { headers, last_safe_index: N::zero() }
 	}
 }
 
@@ -75,9 +79,9 @@ pub fn validate_vote<ChainBlockHash, ChainBlockNumber>(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
 pub struct RangeOfBlockWitnessRanges<ChainBlockNumber> {
-	witness_from_root: ChainBlockNumber,
-	witness_to_root: ChainBlockNumber,
-	witness_period: ChainBlockNumber,
+	pub witness_from_root: ChainBlockNumber,
+	pub witness_to_root: ChainBlockNumber,
+	pub witness_period: ChainBlockNumber,
 }
 
 impl<
@@ -116,12 +120,25 @@ impl<
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ChainProgress<ChainBlockNumber> {
+pub enum OldChainProgress<ChainBlockNumber> {
 	// Block witnesser will discard any elections that were started for this range and start them
 	// again since we've detected a reorg
 	Reorg(RangeOfBlockWitnessRanges<ChainBlockNumber>),
 	// the chain is just progressing as a normal chain of hashes
 	Continuous(RangeOfBlockWitnessRanges<ChainBlockNumber>),
+	// there was no update to the witnessed block headers
+	None(ChainBlockNumber),
+	// We are starting up and don't have consensus on a block number yet
+	WaitingForFirstConsensus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub enum ChainProgress<ChainBlockNumber> {
+	// Block witnesser will discard any elections that were started for this range and start them
+	// again since we've detected a reorg
+	Reorg(RangeInclusive<ChainBlockNumber>),
+	// the chain is just progressing as a normal chain of hashes
+	Continuous(RangeInclusive<ChainBlockNumber>),
 	// there was no update to the witnessed block headers
 	None(ChainBlockNumber),
 	// We are starting up and don't have consensus on a block number yet
@@ -141,14 +158,7 @@ pub struct BlockHeightTracking<
 
 impl<
 		const SAFETY_MARGIN: usize,
-		ChainBlockNumber: MaybeSerializeDeserialize
-			+ Member
-			+ Parameter
-			+ Ord
-			+ Copy
-			+ AtLeast32BitUnsigned
-			+ Into<u64>
-			+ Step,
+		ChainBlockNumber: MaybeSerializeDeserialize + Member + Parameter + Ord + Copy + Step + BlockZero,
 		ChainBlockHash: MaybeSerializeDeserialize + Member + Parameter + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
@@ -210,8 +220,8 @@ impl<
 									&mut unsynchronised_state.headers.headers,
 									SAFETY_MARGIN,
 								);
-								unsynchronised_state.last_safe_index +=
-									(safe_headers.len() as u32).into();
+								// unsynchronised_state.last_safe_index +=
+								// 	(safe_headers.len() as u32).into();
 
 								log::info!(
 									"the latest safe block height is {:?} (advanced by {})",
@@ -236,9 +246,11 @@ impl<
 									unsynchronised_state
 										.headers
 										.first_height()
-										.unwrap_or(0u32.into()), /* If we have no first height
-									                           * recorded, we have to restart
-									                           * the election?! */
+										.unwrap_or(ChainBlockNumber::zero()), /* If we have no
+									                                        * first height
+									                                        * recorded, we have
+									                                        * to restart
+									                                        * the election?! */
 								))
 							},
 							Err(MergeFailure::InternalError(reason)) => {
@@ -267,7 +279,7 @@ impl<
 			// But we have to know which block we want to start witnessing from
 			let properties = BlockHeightTrackingProperties {
 				// TODO: this block height has to come from storage / governance?
-				witness_from_index: 0u32.into(),
+				witness_from_index: ChainBlockNumber::zero(),
 			};
 			ElectoralAccess::new_election((), properties, ())?;
 			Ok(ChainProgress::WaitingForFirstConsensus)
@@ -282,7 +294,7 @@ impl<
 		let num_authorities = consensus_votes.num_authorities();
 
 		let properties = election_access.properties()?;
-		if properties.witness_from_index == 0u32.into() {
+		if properties.witness_from_index.is_zero() {
 			// This is the case for finding an appropriate block number to start witnessing from
 
 			let mut consensus: SupermajorityConsensus<_> = SupermajorityConsensus::default();
