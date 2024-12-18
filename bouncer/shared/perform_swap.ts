@@ -139,7 +139,7 @@ export async function doPerformSwap(
     sourceAsset,
     destAsset,
     { type: TransactionOrigin.DepositChannel, channelId },
-    messageMetadata ? SwapRequestType.Ccm : SwapRequestType.Regular,
+    SwapRequestType.Regular,
   );
 
   const ccmEventEmitted = messageMetadata
@@ -339,12 +339,7 @@ export async function performVaultSwap(
     );
     swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapInitiated);
 
-    await observeSwapRequested(
-      sourceAsset,
-      destAsset,
-      transactionId,
-      messageMetadata ? SwapRequestType.Ccm : SwapRequestType.Regular,
-    );
+    await observeSwapRequested(sourceAsset, destAsset, transactionId, SwapRequestType.Regular);
 
     swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapScheduled);
 

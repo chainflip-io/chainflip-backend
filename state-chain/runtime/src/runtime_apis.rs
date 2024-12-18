@@ -10,8 +10,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
-	PrewitnessedDepositId, SemVer,
+	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount,
+	NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -28,7 +28,7 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, Percent};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
@@ -123,6 +123,7 @@ pub struct BoostPoolDetails {
 	pub pending_boosts:
 		BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, OwedAmount<AssetAmount>>>,
 	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<PrewitnessedDepositId>>,
+	pub network_fee_deduction_percent: Percent,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -162,12 +163,23 @@ pub struct LiquidityProviderInfo {
 pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 	pub btc_vault_deposit_address: Option<String>,
+	pub affiliates: Vec<(AffiliateShortId, AccountId32)>,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+pub struct CcmData {
+	pub gas_budget: GasAmount,
+	pub message_length: u32,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, Ord, PartialOrd, TypeInfo, Serialize, Deserialize)]
+pub enum FeeTypes {
+	Network,
+	Ingress,
+	Egress,
 }
 
 /// Struct that represents the estimated output of a Swap.
-#[obake::versioned]
-#[obake(version("1.0.0"))]
-#[obake(version("2.0.0"))]
 #[derive(Encode, Decode, TypeInfo)]
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
@@ -175,26 +187,13 @@ pub struct SimulatedSwapInformation {
 	pub network_fee: AssetAmount,
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
-	#[obake(cfg(">=2.0"))]
 	pub broker_fee: AssetAmount,
-}
-
-impl From<SimulatedSwapInformation!["1.0.0"]> for SimulatedSwapInformation {
-	fn from(value: SimulatedSwapInformation!["1.0.0"]) -> Self {
-		Self {
-			intermediary: value.intermediary,
-			output: value.output,
-			network_fee: value.network_fee,
-			ingress_fee: value.ingress_fee,
-			egress_fee: value.egress_fee,
-			broker_fee: Default::default(),
-		}
-	}
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
 pub enum DispatchErrorWithMessage {
 	Module(Vec<u8>),
+	RawMessage(Vec<u8>),
 	Other(DispatchError),
 }
 impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
@@ -202,6 +201,8 @@ impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
 		match error.into() {
 			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) =>
 				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
+			DispatchError::Other(message) =>
+				DispatchErrorWithMessage::RawMessage(message.as_bytes().to_vec()),
 			error => DispatchErrorWithMessage::Other(error),
 		}
 	}
@@ -211,7 +212,8 @@ impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
 impl core::fmt::Display for DispatchErrorWithMessage {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
 		match self {
-			DispatchErrorWithMessage::Module(message) => write!(
+			DispatchErrorWithMessage::Module(message) |
+			DispatchErrorWithMessage::RawMessage(message) => write!(
 				f,
 				"{}",
 				str::from_utf8(message).unwrap_or("<Error message is not valid UTF-8>")
@@ -278,7 +280,7 @@ pub struct TransactionScreeningEvents {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -312,19 +314,23 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 		) -> Result<PoolPriceV2, DispatchErrorWithMessage>;
-		#[changed_in(2)]
-		fn cf_pool_simulate_swap(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation!["1.0.0"], DispatchErrorWithMessage>;
+		#[changed_in(3)]
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
+			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			broker_commission: BasisPoints,
+			dca_parameters: Option<DcaParameters>,
+			ccm_data: Option<CcmData>,
+			exclude_fees: BTreeSet<FeeTypes>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(

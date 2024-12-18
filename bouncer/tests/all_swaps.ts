@@ -26,7 +26,7 @@ async function main() {
     if (ccmSwap) {
       ccmSwapMetadata =
         functionCall === testSwap
-          ? newCcmMetadata(sourceAsset, destAsset)
+          ? newCcmMetadata(destAsset)
           : newVaultSwapCcmMetadata(sourceAsset, destAsset);
     }
 

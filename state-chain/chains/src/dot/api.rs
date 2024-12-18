@@ -126,7 +126,7 @@ where
 		_transfer_param: TransferAssetParams<Polkadot>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
-		_gas_budget: <Polkadot as Chain>::ChainAmount,
+		_gas_budget: GasAmount,
 		_message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {

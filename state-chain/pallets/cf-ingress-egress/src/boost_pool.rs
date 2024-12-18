@@ -3,7 +3,7 @@ mod tests;
 
 use frame_support::DefaultNoBound;
 use sp_runtime::{
-	helpers_128bit::multiply_by_rational_with_rounding, Rounding, SaturatedConversion,
+	helpers_128bit::multiply_by_rational_with_rounding, Percent, Rounding, SaturatedConversion,
 };
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
@@ -146,6 +146,15 @@ pub struct BoostPool<AccountId, C: Chain> {
 	pending_withdrawals: BTreeMap<AccountId, BTreeSet<PrewitnessedDepositId>>,
 }
 
+#[derive(DefaultNoBound, DebugNoBound, PartialEqNoBound)]
+pub struct DepositFinalisationOutcomeForPool<AccountId, C: Chain>
+where
+	AccountId: PartialEq + core::fmt::Debug,
+{
+	pub unlocked_funds: Vec<(AccountId, C::ChainAmount)>,
+	pub amount_credited_to_boosters: C::ChainAmount,
+}
+
 impl<AccountId, C: Chain> BoostPool<AccountId, C>
 where
 	AccountId: PartialEq + Ord + Clone + core::fmt::Debug,
@@ -225,6 +234,7 @@ where
 		&mut self,
 		prewitnessed_deposit_id: PrewitnessedDepositId,
 		amount_to_boost: C::ChainAmount,
+		network_fee_deduction: Percent,
 	) -> Result<(C::ChainAmount, C::ChainAmount), &'static str> {
 		let amount_to_boost = ScaledAmount::<C>::from_chain_amount(amount_to_boost);
 		let full_amount_fee = fee_from_boosted_amount(amount_to_boost, self.fee_bps);
@@ -240,7 +250,12 @@ where
 			(provided_amount, fee)
 		};
 
-		self.use_funds_for_boosting(prewitnessed_deposit_id, provided_amount, fee_amount)?;
+		// NOTE: before the boost fee is credited to the boost pool, a portion
+		// of it is deducted as network fee:
+		let network_fee = network_fee_deduction * u128::from(fee_amount);
+		let boost_pool_fee = fee_amount.saturating_sub(ScaledAmount::from(network_fee));
+
+		self.use_funds_for_boosting(prewitnessed_deposit_id, provided_amount, boost_pool_fee)?;
 
 		Ok((
 			provided_amount.saturating_add(fee_amount).into_chain_amount(),
@@ -254,7 +269,7 @@ where
 		&mut self,
 		prewitnessed_deposit_id: PrewitnessedDepositId,
 		required_amount: ScaledAmount<C>,
-		boost_fee: ScaledAmount<C>,
+		boost_pool_fee: ScaledAmount<C>,
 	) -> Result<(), &'static str> {
 		let current_total_available_amount = self.available_amount;
 
@@ -266,7 +281,7 @@ where
 		let mut total_contributed = ScaledAmount::<C>::default();
 		let mut to_receive_recorded = ScaledAmount::default();
 
-		let amount_to_receive = required_amount.saturating_add(boost_fee);
+		let amount_to_receive = required_amount.saturating_add(boost_pool_fee);
 
 		let mut boosters_to_receive: BTreeMap<_, _> = self
 			.amounts
@@ -347,13 +362,14 @@ where
 	pub(crate) fn process_deposit_as_finalised(
 		&mut self,
 		prewitnessed_deposit_id: PrewitnessedDepositId,
-	) -> Vec<(AccountId, C::ChainAmount)> {
+	) -> DepositFinalisationOutcomeForPool<AccountId, C> {
 		let Some(boost_contributions) = self.pending_boosts.remove(&prewitnessed_deposit_id) else {
 			// The deposit hadn't been boosted
-			return vec![];
+			return Default::default();
 		};
 
 		let mut unlocked_funds = vec![];
+		let mut amount_credited: ScaledAmount<C> = 0.into();
 
 		for (booster_id, amount) in boost_contributions {
 			// Depending on whether the booster is withdrawing, add deposits to
@@ -371,9 +387,14 @@ where
 			} else {
 				self.add_funds_inner(booster_id, amount.total);
 			}
+
+			amount_credited = amount_credited.saturating_add(amount.total);
 		}
 
-		unlocked_funds
+		DepositFinalisationOutcomeForPool {
+			unlocked_funds,
+			amount_credited_to_boosters: amount_credited.into_chain_amount(),
+		}
 	}
 
 	// Returns the number of boosters affected

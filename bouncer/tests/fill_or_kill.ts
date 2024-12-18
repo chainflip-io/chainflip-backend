@@ -78,7 +78,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
     // Randomly use CCM to test different encodings
     let ccmMetadata: CcmDepositMetadata | undefined;
     if (Math.random() < 0.5) {
-      ccmMetadata = newCcmMetadata(inputAsset, destAsset, undefined, 100);
+      ccmMetadata = newCcmMetadata(destAsset, undefined, 100000);
       ccmMetadata.ccmAdditionalData =
         Math.random() < 0.5 ? ccmMetadata.ccmAdditionalData : undefined;
     }

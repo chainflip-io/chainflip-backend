@@ -161,7 +161,6 @@ web3 = { version = "0.19" }
 x25519-dalek = { version = "2.0" }
 zeroize = { version = "1.7.0" }
 zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1" }
-obake = { version = "1.0.5" }
 
 # PolkadotSdk Pallets
 pallet-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }

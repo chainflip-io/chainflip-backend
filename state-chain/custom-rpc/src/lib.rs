@@ -10,13 +10,13 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
-	Chain,
+	Chain, MAX_CCM_MSG_LENGTH,
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId,
-	SwapRequestId,
+	AccountId, AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
+	BlockNumber, BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
+	SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -45,11 +45,11 @@ use sc_rpc_spec_v2::chain_head::{
 	api::ChainHeadApiServer, ChainHead, ChainHeadConfig, FollowEvent,
 };
 use serde::{Deserialize, Serialize};
-use sp_api::{ApiError, ApiExt, CallApiAt};
+use sp_api::{ApiError, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
-	Permill,
+	Percent, Permill,
 };
 use sp_state_machine::InspectState;
 use state_chain_runtime::{
@@ -61,16 +61,16 @@ use state_chain_runtime::{
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
-		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, ChainAccounts,
+		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Block, Hash, NetworkFee, SolanaInstance,
+	Hash, NetworkFee, SolanaInstance,
 };
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::{BTreeMap, BTreeSet, HashMap},
 	marker::PhantomData,
 	sync::Arc,
 };
@@ -259,6 +259,7 @@ pub enum RpcAccountInfo {
 	Broker {
 		flip_balance: NumberOrHex,
 		earned_fees: any::AssetMap<NumberOrHex>,
+		affiliates: Vec<(AffiliateShortId, AccountId)>,
 		btc_vault_deposit_address: Option<String>,
 	},
 	LiquidityProvider {
@@ -300,6 +301,7 @@ impl RpcAccountInfo {
 					.iter()
 					.map(|(asset, balance)| (*asset, (*balance).into())),
 			),
+			affiliates: broker_info.affiliates,
 		}
 	}
 
@@ -567,6 +569,7 @@ mod boost_pool_rpc {
 		available_amounts: Vec<AccountAndAmount>,
 		deposits_pending_finalization: Vec<PendingBoost>,
 		pending_withdrawals: Vec<PendingWithdrawal>,
+		network_fee_deduction_percent: Percent,
 	}
 
 	impl BoostPoolDetailsRpc {
@@ -604,6 +607,7 @@ mod boost_pool_rpc {
 						pending_deposits,
 					})
 					.collect(),
+				network_fee_deduction_percent: details.network_fee_deduction_percent,
 			}
 		}
 	}
@@ -787,6 +791,8 @@ pub trait CustomApi {
 		amount: U256,
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
+		ccm_data: Option<CcmData>,
+		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
@@ -1179,10 +1185,11 @@ impl From<CfApiError> for ErrorObjectOwned {
 				other => internal_error(other),
 			},
 			CfApiError::DispatchError(dispatch_error) => match dispatch_error {
-				DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
+				DispatchErrorWithMessage::Module(message) |
+				DispatchErrorWithMessage::RawMessage(message) => match std::str::from_utf8(&message) {
 					Ok(message) => call_error(std::format!("DispatchError: {message}")),
 					Err(error) =>
-						internal_error(format!("Unable to decode DispatchError: {error}")),
+						internal_error(format!("Unable to decode Module Error Message: {error}")),
 				},
 				DispatchErrorWithMessage::Other(error) =>
 					internal_error(format!("Unable to decode DispatchError: {error:?}")),
@@ -1460,6 +1467,8 @@ where
 			amount,
 			Default::default(),
 			None,
+			None,
+			None,
 			additional_orders,
 			at,
 		)
@@ -1473,6 +1482,8 @@ where
 		amount: U256,
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
+		ccm_data: Option<CcmData>,
+		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
@@ -1487,6 +1498,17 @@ where
 				}
 			})
 			.map_err(|s| ErrorObject::owned(ErrorCode::InvalidParams.code(), s, None::<()>))?;
+
+		if let Some(CcmData { message_length, .. }) = ccm_data {
+			if message_length > MAX_CCM_MSG_LENGTH {
+				return Err(CfApiError::ErrorObject(ErrorObject::owned(
+					ErrorCode::InvalidParams.code(),
+					"CCM message size too large.",
+					None::<()>,
+				)));
+			}
+		}
+
 		let additional_orders = additional_orders.map(|additional_orders| {
 			additional_orders
 				.into_iter()
@@ -1509,33 +1531,22 @@ where
 				.collect()
 		});
 		self.with_runtime_api(at, |api, hash| {
-			if api.api_version::<dyn CustomRuntimeApi<Block>>(hash).unwrap().unwrap() < 2 {
-				let old_result = api.cf_pool_simulate_swap_before_version_2(
+			Ok::<_, CfApiError>(
+				api.cf_pool_simulate_swap(
 					hash,
 					from_asset,
 					to_asset,
 					amount,
+					broker_commission,
+					dca_parameters,
+					ccm_data,
+					exclude_fees.unwrap_or_default(),
 					additional_orders,
-				)?;
-				Ok(old_result.map(|old_version| {
-					into_rpc_swap_output(old_version.into(), from_asset, to_asset)
-				})?)
-			} else {
-				Ok::<_, CfApiError>(
-					api.cf_pool_simulate_swap(
-						hash,
-						from_asset,
-						to_asset,
-						amount,
-						broker_commission,
-						dca_parameters,
-						additional_orders,
-					)?
-					.map(|simulated_swap_info_v2| {
-						into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
-					})?,
-				)
-			}
+				)?
+				.map(|simulated_swap_info_v2| {
+					into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
+				})?,
+			)
 		})
 	}
 
@@ -2185,10 +2196,10 @@ mod test {
 				btc_vault_deposit_address: Some(
 					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 				),
+				affiliates: vec![(cf_primitives::AffiliateShortId(1), AccountId32::new([1; 32]))],
 			},
 			0,
 		);
-
 		insta::assert_snapshot!(serde_json::to_value(broker).unwrap());
 	}
 
@@ -2441,6 +2452,7 @@ mod test {
 				(1, BTreeMap::from([(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 })])),
 			]),
 			pending_withdrawals: Default::default(),
+			network_fee_deduction_percent: Percent::from_percent(40),
 		}
 	}
 
@@ -2458,6 +2470,7 @@ mod test {
 				(ID_1.clone(), BTreeSet::from([0])),
 				(ID_2.clone(), BTreeSet::from([0])),
 			]),
+			network_fee_deduction_percent: Percent::from_percent(0),
 		}
 	}
 

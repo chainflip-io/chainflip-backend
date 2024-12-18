@@ -259,7 +259,7 @@ impl ExtBuilder {
 					block_height: 0,
 					tracked_data: ArbitrumTrackedData {
 						base_fee: 100000u32.into(),
-						gas_limit_multiplier: 1.into(),
+						l1_base_fee_estimate: 1u128,
 					},
 				},
 			},
