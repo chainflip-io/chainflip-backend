@@ -20,7 +20,9 @@ use pallet_cf_elections::{
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
 
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use pallet_cf_ingress_egress::{
+	DepositChannelDetails, DepositWitness, ProcessedUpTo, WitnessSafetyMargin,
+};
 use scale_info::TypeInfo;
 
 use sp_std::vec::Vec;
@@ -73,35 +75,41 @@ impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 {
 	fn process_block_data(
 		current_block: btc::BlockNumber,
+		earliest_unprocessed_block: btc::BlockNumber,
 		witnesses: Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)>,
 	) -> Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)> {
-		let witnesses = witnesses
-			.into_iter()
-			.map(|(block_number, deposits)| {
-				log::info!(
-					"Processing block number: {}, got {} deposits",
-					block_number,
-					deposits.len()
-				);
-				// Check if the block number is the current block number
-				// If it is, then we can process the deposits
-				// If it is not, then we can store the deposits for later processing
-				(block_number, deposits)
-			})
-			.collect::<Vec<_>>();
+		ProcessedUpTo::<Runtime, BitcoinInstance>::put(
+			earliest_unprocessed_block.saturating_sub(1),
+		);
 
-		info!("Processing block number: {}, got {} deposits", current_block, witnesses.len());
+		// TODO: Handle reorgs, in particular when data is already processed.
+		// We need to ensure that we don't process the same data twice. We could use a wrapper for
+		// the BlockData type here that can include some extra status data in it.
 
+		for (deposit_block_number, deposits) in witnesses.clone() {
+			for deposit in deposits {
+				if deposit_block_number == current_block {
+					log::info!("Prewitness deposit submitted by election: {:?}", deposit);
+					let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(
+						deposit,
+						deposit_block_number,
+					);
+				} else if let Some(safety_margin) =
+					WitnessSafetyMargin::<Runtime, BitcoinInstance>::get()
+				{
+					if deposit_block_number <= (current_block - safety_margin) {
+						log::info!("deposit election submitted by election: {:?}", deposit);
+						BitcoinIngressEgress::process_channel_deposit_full_witness(
+							deposit,
+							deposit_block_number,
+						);
+					}
+				}
+			}
+		}
+
+		// Do we need to return anything here?
 		witnesses
-
-		// when is it safe to expire a channel? when the block number is beyond their expiry? but
-		// what if we're at block 40 it expires at block 39 and then we reorg back to block 36. It
-		// will already be expired.
-
-		// Channel expiry here should be viewed as, from what block should it be included in an
-		// election. The recycle height is the moment from which if we were to have reached it, a
-		// reorg back to before the expiry would cause a bug - let's assert on this assumption
-		// somewhere.
 	}
 }
 
