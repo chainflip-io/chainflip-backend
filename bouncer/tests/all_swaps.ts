@@ -3,7 +3,7 @@ import { ExecutableTest } from '../shared/executable_test';
 import { SwapParams } from '../shared/perform_swap';
 import { newCcmMetadata, testSwap, testVaultSwap } from '../shared/swapping';
 import { btcAddressTypes } from '../shared/new_btc_address';
-import { ccmSupportedChains, chainFromAsset, sleep, VaultSwapParams } from '../shared/utils';
+import { ccmSupportedChains, chainFromAsset, VaultSwapParams } from '../shared/utils';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
@@ -22,35 +22,25 @@ async function main() {
     if (destAsset === 'Btc') {
       const btcAddressTypesArray = Object.values(btcAddressTypes);
       allSwaps.push(
-        sleep(getRandomInt(0, 10000)).then(async (_) =>
-          functionCall(
-            sourceAsset,
-            destAsset,
-            btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
-            ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-            testAllSwaps.swapContext,
-          ),
+        functionCall(
+          sourceAsset,
+          destAsset,
+          btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
+          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+          testAllSwaps.swapContext,
         ),
       );
     } else {
       allSwaps.push(
-        sleep(getRandomInt(0, 10000)).then(async (_) =>
-          functionCall(
-            sourceAsset,
-            destAsset,
-            undefined,
-            ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-            testAllSwaps.swapContext,
-          ),
+        functionCall(
+          sourceAsset,
+          destAsset,
+          undefined,
+          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+          testAllSwaps.swapContext,
         ),
       );
     }
-  }
-
-  function getRandomInt(min: number, max: number) {
-    const minCeiled = Math.ceil(min);
-    const maxFloored = Math.floor(max);
-    return Math.floor(Math.random() * (maxFloored - minCeiled) + minCeiled); // The maximum is exclusive and the minimum is inclusive
   }
 
   function randomElement<Value>(items: Value[]): Value {
