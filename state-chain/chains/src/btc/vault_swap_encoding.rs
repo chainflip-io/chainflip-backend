@@ -14,7 +14,7 @@ const CURRENT_VERSION: u8 = 0;
 pub struct UtxoEncodedData {
 	pub output_asset: Asset,
 	pub output_address: EncodedAddress,
-	pub parameters: SharedCfParameters,
+	pub parameters: BtcCfParameters,
 }
 
 impl Encode for UtxoEncodedData {
@@ -62,7 +62,7 @@ impl Decode for UtxoEncodedData {
 			ForeignChain::Solana => EncodedAddress::Sol(Decode::decode(input)?),
 		};
 
-		let parameters = SharedCfParameters::decode(input)?;
+		let parameters = BtcCfParameters::decode(input)?;
 
 		Ok(UtxoEncodedData { output_asset, output_address, parameters })
 	}
@@ -74,7 +74,7 @@ const MAX_AFFILIATES: u32 = 2;
 
 // The encoding of these parameters is the same across chains
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct SharedCfParameters {
+pub struct BtcCfParameters {
 	// --- FoK fields (refund address is stored externally) ---
 	pub retry_duration: u16,
 	pub min_output_amount: AssetAmount,
@@ -106,7 +106,7 @@ mod tests {
 		let mock_swap_params = UtxoEncodedData {
 			output_asset: Asset::Dot,
 			output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
-			parameters: SharedCfParameters {
+			parameters: BtcCfParameters {
 				retry_duration: 5,
 				min_output_amount: u128::MAX,
 				number_of_chunks: 0x0ffff,

@@ -2221,7 +2221,7 @@ impl_runtime_apis! {
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
-			// Validate params
+			// Validate parameters
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
 			}
@@ -2233,6 +2233,10 @@ impl_runtime_apis! {
 				,
 				"Destination address and asset are on different chains."
 			);
+
+			let boost_fee: u8 = boost_fee
+				.try_into()
+				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
 
 			// Ensure the refund duration is valid.
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
@@ -2251,7 +2255,7 @@ impl_runtime_apis! {
 					}
 				) => {
 						pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
-						crate::chainflip::vault_swap::bitcoin_vault_swap(
+						crate::chainflip::vault_swaps::bitcoin_vault_swap(
 							broker_id,
 							destination_asset,
 							destination_address,
@@ -2271,7 +2275,7 @@ impl_runtime_apis! {
 					}
 				) => {
 					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(refund_parameters.retry_duration)?;
-					crate::chainflip::vault_swap::ethereum_vault_swap(
+					crate::chainflip::vault_swaps::ethereum_vault_swap(
 						broker_id,
 						source_asset,
 						input_amount,
@@ -2294,7 +2298,7 @@ impl_runtime_apis! {
 						refund_parameters,
 						from_token_account,
 					}
-				) => crate::chainflip::vault_swap::solana_vault_swap(
+				) => crate::chainflip::vault_swaps::solana_vault_swap(
 					broker_id,
 					input_amount,
 					source_asset,
