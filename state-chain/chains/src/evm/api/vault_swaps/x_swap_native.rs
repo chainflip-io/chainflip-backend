@@ -1,6 +1,5 @@
 use crate::{
 	address::EncodedAddress,
-	cf_parameters::VersionedCfParameters,
 	evm::{api::EvmCall, tokenizable::Tokenizable},
 };
 use cf_primitives::Asset;
@@ -28,13 +27,13 @@ impl XSwapNative {
 	pub fn new(
 		destination_address: EncodedAddress,
 		destination_asset: Asset,
-		cf_parameters: VersionedCfParameters,
+		cf_parameters: Vec<u8>,
 	) -> Self {
 		Self {
 			dst_chain: destination_address.chain() as u32,
 			dst_address: destination_address.inner_bytes().to_vec(),
 			dst_token: destination_asset as u32,
-			cf_parameters: cf_parameters.encode(),
+			cf_parameters,
 		}
 	}
 }
@@ -84,7 +83,7 @@ mod test {
 		// It is expected for vault swap calls to be unsigned.
 		let function_runtime = EvmTransactionBuilder::new_unsigned(
 			Default::default(),
-			super::XSwapNative::new(dest_address, dest_asset, dummy_cf_parameter_no_ccm()),
+			super::XSwapNative::new(dest_address, dest_asset, dummy_cf_parameter(false)),
 		);
 
 		let runtime_payload = function_runtime.chain_encoded_payload();
@@ -97,7 +96,7 @@ mod test {
 					dest_chain.tokenize(),
 					dest_address_bytes.tokenize(),
 					(dest_asset as u32).tokenize(),
-					dummy_cf_parameter_no_ccm().encode().tokenize(),
+					dummy_cf_parameter(false).tokenize(),
 				])
 				.unwrap()
 		);

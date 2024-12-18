@@ -11,7 +11,7 @@ mod offences;
 pub mod pending_rotation_broadcasts;
 mod signer_nomination;
 pub mod solana_elections;
-pub mod vault_swap;
+pub mod vault_swaps;
 
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
@@ -314,12 +314,12 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		_payload: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		_maybe_current_onchain_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
 	) -> RequiresSignatureRefresh<BitcoinCrypto, BitcoinApi<BtcEnvironment>> {
-		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
-		// checked here. We also dont need to check for the signature here because even if we are in
-		// the next epoch and the key has changed, the old signature for the btc tx is still valid
-		// since its based on those old input UTXOs. In fact, we never have to resign btc txs and
-		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
-		// to check anything here and just rebroadcast.
+		// The payload for a Bitcoin transaction will never change and so it doesn't need to be
+		// checked here. We also don't need to check for the signature here because even if we are
+		// in the next epoch and the key has changed, the old signature for the btc tx is still
+		// valid since its based on those old input UTXOs. In fact, we never have to resign btc
+		// txs and the btc tx is always valid as long as the input UTXOs are valid. Therefore, we
+		// don't have to check anything here and just rebroadcast.
 		RequiresSignatureRefresh::False
 	}
 }
