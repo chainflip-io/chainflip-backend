@@ -51,30 +51,6 @@ pub struct BlockHeightTrackingProperties<BlockNumber> {
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
-pub struct BlockHeightTrackingState<BlockHash, BlockNumber> {
-	/// The headers which the nodes have agreed on previously,
-	/// starting with `last_safe_index` + 1
-	// pub headers: VecDeque<Header<BlockHash, BlockNumber>>,
-	pub headers: ChainBlocks<BlockHash, BlockNumber>,
-
-	/// The last index which is past the `SAFETY_MARGIN`. This means
-	/// that reorderings concerning this block and lower should be extremely
-	/// rare. Does not mean that they don't happen though, so the code has to
-	/// take this into account.
-	pub last_safe_index: BlockNumber,
-}
-
-impl<H, N: From<u32>> Default for BlockHeightTrackingState<H, N> {
-	fn default() -> Self {
-		let headers = ChainBlocks { headers: Default::default(), next_height: 0u32.into() };
-		Self { headers, last_safe_index: 0u32.into() }
-	}
-}
-
-
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
 pub struct RangeOfBlockWitnessRanges<ChainBlockNumber> {
 	witness_from_root: ChainBlockNumber,
 	witness_to_root: ChainBlockNumber,
@@ -258,6 +234,8 @@ mod tests {
 	>(
 		witness_from: N,
 	) -> impl Strategy<Value = InputHeaders<H, N>> {
+		// TODO: handle the case where `witness_from` = 0.
+
 		prop::collection::vec(any::<H>(), 2..10).prop_map(move |data| {
 			let headers =
 				data.iter().zip(data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
@@ -286,9 +264,9 @@ mod tests {
 	>() -> impl Strategy<Value = BHWState<H, N>> {
 		prop_oneof![
 			Just(BHWState::Starting),
-			(any::<N>(), any::<bool>()).prop_flat_map(move |(n, b)| {
+			(any::<N>(), any::<bool>()).prop_flat_map(move |(n, is_reorg_without_known_root)| {
 				arb_input_headers(n).prop_map(move |headers| {
-					let witness_from = if b {
+					let witness_from = if is_reorg_without_known_root {
 						headers.0.front().unwrap().block_height.clone()
 					} else {
 						headers.0.back().unwrap().block_height.clone() + 1.into()
@@ -325,20 +303,15 @@ impl<H, N: From<u32> + Copy + PartialEq> Indexed for InputHeaders<H, N> {
 impl<H: PartialEq + Clone, N: BlockHeightTrait> Validate for InputHeaders<H, N> {
 	type Error = VoteValidationError;
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		ChainBlocks { headers: self.0.clone(), next_height: 0.into() }.is_valid()
+		if self.0.len() == 0 {
+			Err(VoteValidationError::EmptyVote)
+		} else {
+			ChainBlocks { headers: self.0.clone(), next_height: 0.into() }.is_valid()
+		}
 	}
 }
 
 //------------------------ state ---------------------------
-impl<H, N: BlockHeightTrait> Validate for BlockHeightTrackingState<H, N>
-where
-	H: PartialEq + Clone,
-{
-	type Error = VoteValidationError;
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.headers.is_valid()
-	}
-}
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -412,7 +385,7 @@ impl<
 	#[cfg(test)]
 	fn step_specification(before: &Self::State, input: &Self::Input, after: &Self::State) -> bool {
 		match after {
-			// the starting case should only ever be in the beginning
+			// the starting case should only ever be possible as the `before` state.
 			BHWState::Starting => false,
 
 			// otherwise we know that the after state will be running

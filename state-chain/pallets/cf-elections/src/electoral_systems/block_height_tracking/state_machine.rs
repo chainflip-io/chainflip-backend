@@ -41,7 +41,7 @@ pub trait Validate {
 /// The definition of the state machine requires a function `input_index(&State) -> Input::Index`
 /// which describes for a given state, which index we expect the next input to have (in other words,
 /// for which election properties we want to get a vote next). This means that creation of elections
-/// is handled indirectly: The state machine merely has to transit into a state with the correct
+/// is handled indirectly: The state machine merely has to transition into a state with the correct
 /// `input_index`, an election with these election properties is going to be created automatically.
 ///
 /// ## Idle results
