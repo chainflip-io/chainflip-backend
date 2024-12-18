@@ -12,7 +12,6 @@ use pallet_cf_elections::{
 		block_height_tracking::{self, BlockHeightTracking},
 		block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData},
 		composite::{
-			// tuple_1_impls::{DerivedElectoralAccess, Hooks},
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},

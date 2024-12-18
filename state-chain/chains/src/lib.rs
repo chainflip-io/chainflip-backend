@@ -71,39 +71,59 @@ pub mod mocks;
 pub mod witness_period {
 	use core::ops::{Rem, Sub};
 
+	use sp_runtime::traits::Block;
 	use sp_std::ops::RangeInclusive;
 
 	use codec::{Decode, Encode};
-	use frame_support::sp_runtime::traits::{One, Saturating};
+	use frame_support::{
+		ensure,
+		sp_runtime::traits::{One, Saturating},
+	};
 	use scale_info::TypeInfo;
 	use serde::{Deserialize, Serialize};
 
 	// So we can store a range-like object in storage, since this has encode and decode.
 	#[derive(
-		Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+		Debug,
+		Clone,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		Deserialize,
+		Serialize,
+		Default,
+		PartialOrd,
+		Ord,
 	)]
 	pub struct BlockWitnessRange<I> {
-		start: I,
-		end: I,
+		root: I,
+		period: I,
 	}
 
-	impl<I: Copy> From<RangeInclusive<I>> for BlockWitnessRange<I> {
-		fn from(range: RangeInclusive<I>) -> Self {
-			Self { start: *range.start(), end: *range.end() }
+	impl<
+			I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One + PartialOrd,
+		> BlockWitnessRange<I>
+	{
+		pub fn try_new(root: I, period: I) -> Result<Self, ()> {
+			ensure!(period >= I::one(), ());
+			ensure!(is_block_witness_root(period, root), ());
+			Ok(Self { root, period })
 		}
 	}
 
-	impl<I> BlockWitnessRange<I> {
+	impl<I: Saturating + One + Copy> BlockWitnessRange<I> {
 		pub fn into_range_inclusive(self) -> RangeInclusive<I> {
-			self.start..=self.end
+			self.root..=self.root.saturating_add(self.period.saturating_sub(I::one()))
 		}
 
-		pub fn start(&self) -> &I {
-			&self.start
+		pub fn root(&self) -> &I {
+			&self.root
 		}
 
-		pub fn end(&self) -> &I {
-			&self.end
+		pub fn period(&self) -> &I {
+			&self.period
 		}
 	}
 
