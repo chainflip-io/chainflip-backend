@@ -56,7 +56,7 @@ const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
 // In Arbitrum's localnet extremely large messages end up with large gas estimations
 // of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
 // gas limit (32M). We cap it to a lower value than Ethereum to work around that.
-const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 6;
+const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
 
 // Solana transactions have a length of 1232. Cappig it to some reasonable values
 // that when construction the call the Solana length is not exceeded.
@@ -123,8 +123,8 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
   return newCcmArbitraryBytes(length);
 }
 
-const EVM_GAS_PER_BYTE = 16;
-const EVM_GAS_PER_EVENT_BYTE = 8;
+const EVM_GAS_PER_BYTE = 17;
+const EVM_GAS_PER_EVENT_BYTE = 9;
 
 // Minimum overhead to ensure simple CCM transactions succeed
 const OVERHEAD_GAS = 10000;
@@ -152,7 +152,11 @@ export function newCcmMetadata(
   if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
     userLogicGasBudget = (
       OVERHEAD_GAS +
-      (EVM_GAS_PER_BYTE + EVM_GAS_PER_EVENT_BYTE) * (message.slice(2).length / 2)
+      (EVM_GAS_PER_BYTE + EVM_GAS_PER_EVENT_BYTE) * (message.slice(2).length / 2) +
+      // TODO: For payloads larger than like a few hundred bytes we are short ~1M
+      // on the gas. Either the user estimation needs to be larger or we need to
+      // revisit the SC gas estimation. Difficult to do in localnet.
+      (destChain === 'Arbitrum' ? 1000000 : 0)
     ).toString();
   } else if (destChain === 'Solana') {
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
