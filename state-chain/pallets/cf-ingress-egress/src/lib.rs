@@ -1865,7 +1865,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Err("Insufficient boost funds".into())
 	}
 
-	fn process_channel_deposit_prewitness(
+	pub fn process_channel_deposit_prewitness(
 		DepositWitness { deposit_address, asset, amount, deposit_details }: DepositWitness<
 			T::TargetChain,
 		>,
@@ -1950,7 +1950,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	// A wrapper around `process_channel_deposit_full_witness_inner` that catches any
 	// error and emits a rejection event
-	fn process_channel_deposit_full_witness(
+	pub fn process_channel_deposit_full_witness(
 		deposit_witness: DepositWitness<T::TargetChain>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) {

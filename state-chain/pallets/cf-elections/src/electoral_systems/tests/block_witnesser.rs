@@ -82,6 +82,7 @@ impl ProcessBlockData<ChainBlockNumber, BlockData>
 		// This isn't so important, in these tests, it's important for the implemenation of the
 		// hooks. e.g. to determine a safety margin.
 		_chain_block_number: ChainBlockNumber,
+		earliest_unprocessed_block: ChainBlockNumber,
 		block_data: Vec<(ChainBlockNumber, BlockData)>,
 	) -> Vec<(ChainBlockNumber, BlockData)> {
 		PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
@@ -130,7 +131,7 @@ register_checks! {
 			assert_eq!(GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "generate_election_properties should have been called {} times so far!", n);
 		},
 		number_of_open_elections_is(_pre, post, n: ElectionCount) {
-			assert_eq!(post.unsynchronised_state.open_elections, n, "Number of open elections should be {}", n);
+			assert_eq!(post.unsynchronised_state.elections_open_for.len(), n as usize, "Number of open elections should be {}", n);
 		},
 		process_block_data_called_n_times(_pre, _post, n: u8) {
 			assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "process_block_data should have been called {} times so far!", n);
@@ -253,7 +254,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 				INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64),
 			)),
 			|pre_state| {
-				assert_eq!(pre_state.unsynchronised_state.open_elections, 0);
+				assert_eq!(pre_state.unsynchronised_state.elections_open_for.len(), 0);
 			},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(4),
@@ -280,7 +281,10 @@ fn creates_multiple_elections_below_maximum_when_required() {
 			// same block again
 			&ChainProgress::None(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64)),
 			|pre_state| {
-				assert_eq!(pre_state.unsynchronised_state.open_elections, NUMBER_OF_ELECTIONS);
+				assert_eq!(
+					pre_state.unsynchronised_state.elections_open_for.len(),
+					NUMBER_OF_ELECTIONS as usize
+				);
 			},
 			vec![
 				// Still no extra elections created.
