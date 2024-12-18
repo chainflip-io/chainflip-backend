@@ -1228,7 +1228,10 @@ mod vault_swaps {
 						output_asset: OUTPUT_ASSET,
 						// Note that ingress fee is not charged:
 						input_amount: DEPOSIT_AMOUNT - BOOST_FEE,
-						swap_type: SwapRequestType::Regular { output_address },
+						swap_type: SwapRequestType::Regular {
+							output_address,
+							ccm_deposit_metadata: None
+						},
 						broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 5 }],
 						origin: SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(tx_id) },
 					},]

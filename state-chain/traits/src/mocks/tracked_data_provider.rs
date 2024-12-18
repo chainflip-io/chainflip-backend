@@ -31,4 +31,15 @@ impl<C: Chain> FeeEstimationApi<C> for TrackedDataProvider<C> {
 			.expect("TrackedData must be set explicitly in mocks")
 			.estimate_egress_fee(asset)
 	}
+
+	fn estimate_ccm_fee(
+		&self,
+		asset: <C as Chain>::ChainAsset,
+		gas_budget: cf_primitives::GasAmount,
+		message_length: usize,
+	) -> Option<<C as Chain>::ChainAmount> {
+		Self::get_value::<C::TrackedData>(TRACKED_DATA_KEY)
+			.expect("TrackedData must be set explicitly in mocks")
+			.estimate_ccm_fee(asset, gas_budget, message_length)
+	}
 }

@@ -27,8 +27,8 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		BoostPoolDetails, BrokerInfo, CcmData, DispatchErrorWithMessage, FailingWitnessValidators,
+		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvents,
 		ValidatorInfo, VaultSwapDetails,
 	},
@@ -90,7 +90,7 @@ use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 pub use frame_support::{
 	debug, parameter_types,
@@ -1271,6 +1271,7 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -1296,6 +1297,38 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
+macro_rules! instanced_migrations {
+	(
+		module: $module:ident,
+		migration: $migration:ty,
+		from: $from:literal,
+		to: $to:literal,
+		include_instances: [$( $include:ident ),+ $(,)?],
+		exclude_instances: [$( $exclude:ident ),+ $(,)?] $(,)?
+	) => {
+		(
+			$(
+				VersionedMigration<
+					$from,
+					$to,
+					$migration,
+					$module::Pallet<Runtime, $include>,
+					DbWeight,
+				>,
+			)+
+			$(
+				VersionedMigration<
+					$from,
+					$to,
+					NoopUpgrade,
+					$module::Pallet<Runtime, $exclude>,
+					DbWeight,
+				>,
+			)+
+		)
+	}
+}
+
 type MigrationsForV1_8 = (
 	VersionedMigration<
 		2,
@@ -1305,48 +1338,51 @@ type MigrationsForV1_8 = (
 		DbWeight,
 	>,
 	// Only the Solana Transaction type has changed
-	VersionedMigration<
-		10,
-		11,
-		migrations::solana_transaction_data_migration::SolanaTransactionDataMigration,
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		10,
-		11,
-		NoopUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
-		DbWeight,
-	>,
+	instanced_migrations! {
+		module: pallet_cf_broadcast,
+		migration: migrations::solana_transaction_data_migration::SolanaTransactionDataMigration,
+		from: 10,
+		to: 11,
+		include_instances: [
+			SolanaInstance
+		],
+		exclude_instances: [
+			EthereumInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+			ArbitrumInstance,
+		],
+	},
+	instanced_migrations! {
+		module: pallet_cf_chain_tracking,
+		migration: migrations::arbitrum_chain_tracking_migration::ArbitrumChainTrackingMigration,
+		from: 3,
+		to: 4,
+		include_instances: [
+			ArbitrumInstance
+		],
+		exclude_instances: [
+			EthereumInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+			SolanaInstance,
+		],
+	},
+	instanced_migrations! {
+		module: pallet_cf_broadcast,
+		migration: migrations::api_calls_gas_migration::EthApiCallsGasMigration,
+		from: 11,
+		to: 12,
+		include_instances: [
+			EthereumInstance,
+			ArbitrumInstance
+		],
+		exclude_instances: [
+			PolkadotInstance,
+			BitcoinInstance,
+			SolanaInstance,
+		],
+	},
 );
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1573,6 +1609,8 @@ impl_runtime_apis! {
 			input_amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
+			ccm_data: Option<CcmData>,
+			exclude_fees: BTreeSet<FeeTypes>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
@@ -1646,12 +1684,35 @@ impl_runtime_apis! {
 				}
 			}
 
-			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, input_asset, input_amount);
+			let include_fee = |fee_type: FeeTypes| !exclude_fees.contains(&fee_type);
+
+			let (amount_to_swap, ingress_fee) = if include_fee(FeeTypes::Ingress) {
+				remove_fees(IngressOrEgress::Ingress, input_asset, input_amount)
+			} else {
+				(input_amount, 0u128)
+			};
 
 			// Estimate swap result for a chunk, then extrapolate the result.
 			// If no DCA parameter is given, swap the entire amount with 1 chunk.
 			let number_of_chunks: u128 = dca_parameters.map(|dca|dca.number_of_chunks).unwrap_or(1u32).into();
 			let amount_per_chunk = amount_to_swap / number_of_chunks;
+
+			let mut fees_vec = vec![];
+
+			if include_fee(FeeTypes::Network) {
+				fees_vec.push(FeeType::NetworkFee);
+			}
+
+			if broker_commission > 0 {
+				fees_vec.push(FeeType::BrokerFee(
+					vec![Beneficiary {
+						account: AccountId::new([0xbb; 32]),
+						bps: broker_commission,
+					}]
+					.try_into()
+					.expect("Beneficiary with a length of 1 must be within length bound.")
+				));
+			}
 
 			let swap_output_per_chunk = Swapping::try_execute_without_violations(
 				vec![
@@ -1662,17 +1723,7 @@ impl_runtime_apis! {
 						output_asset,
 						amount_per_chunk,
 						None,
-						vec![
-							FeeType::NetworkFee,
-							FeeType::BrokerFee(
-								vec![Beneficiary {
-									account: AccountId::new([0xbb; 32]),
-									bps: broker_commission,
-								}]
-								.try_into()
-								.expect("Beneficiary with a length of 1 must be within length bound.")
-							)
-						],
+						fees_vec,
 					)
 				],
 			).map_err(|e| match e {
@@ -1696,7 +1747,21 @@ impl_runtime_apis! {
 				)
 			};
 
-			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, output_asset, output);
+			let (output, egress_fee) = if include_fee(FeeTypes::Egress) {
+				let egress = match ccm_data {
+					Some(CcmData { gas_budget, message_length}) => {
+						IngressOrEgress::EgressCcm {
+							gas_budget,
+							message_length: message_length as usize,
+						}
+					},
+					None => IngressOrEgress::Egress,
+				};
+				remove_fees(egress, output_asset, output)
+			} else {
+				(output, 0u128)
+			};
+
 
 			Ok(SimulatedSwapInformation {
 				intermediary,
@@ -1955,14 +2020,12 @@ impl_runtime_apis! {
 					let channel_asset: Asset = details.deposit_channel.asset.into();
 
 					match details.action {
-						ChannelAction::Swap { destination_asset, .. }
-							if destination_asset == to && channel_asset == from =>
+						ChannelAction::Swap { destination_asset, channel_metadata, .. }
+							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
+							if destination_asset == to && channel_asset == from && channel_metadata.is_none() =>
 						{
 							filtered_swaps.push(deposit.amount.into());
 						},
-						ChannelAction::CcmTransfer { .. } => {
-							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
-						}
 						_ => {
 							// ignore other deposit actions
 						}

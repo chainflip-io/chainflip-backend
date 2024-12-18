@@ -10,8 +10,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
-	PrewitnessedDepositId, SemVer,
+	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount,
+	NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -166,6 +166,19 @@ pub struct BrokerInfo {
 	pub affiliates: Vec<(AffiliateShortId, AccountId32)>,
 }
 
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+pub struct CcmData {
+	pub gas_budget: GasAmount,
+	pub message_length: u32,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, Ord, PartialOrd, TypeInfo, Serialize, Deserialize)]
+pub enum FeeTypes {
+	Network,
+	Ingress,
+	Egress,
+}
+
 /// Struct that represents the estimated output of a Swap.
 #[derive(Encode, Decode, TypeInfo)]
 pub struct SimulatedSwapInformation {
@@ -267,7 +280,7 @@ pub struct TransactionScreeningEvents {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -301,12 +314,23 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 		) -> Result<PoolPriceV2, DispatchErrorWithMessage>;
+		#[changed_in(3)]
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
+			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			broker_commission: BasisPoints,
+			dca_parameters: Option<DcaParameters>,
+			ccm_data: Option<CcmData>,
+			exclude_fees: BTreeSet<FeeTypes>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(

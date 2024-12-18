@@ -59,7 +59,7 @@ pub enum PalletConfigUpdate {
 	BroadcastTimeout { blocks: u32 },
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
 
 #[frame_support::pallet]
 pub mod pallet {

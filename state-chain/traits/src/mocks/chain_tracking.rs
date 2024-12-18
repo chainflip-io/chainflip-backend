@@ -36,4 +36,12 @@ impl<C: Chain> AdjustedFeeEstimationApi<C> for ChainTracker<C> {
 	fn estimate_egress_fee(_asset: C::ChainAsset) -> C::ChainAmount {
 		Self::get_value(TRACKED_FEE_KEY).unwrap_or_default()
 	}
+
+	fn estimate_ccm_fee(
+		_asset: C::ChainAsset,
+		_gas_budget: cf_primitives::GasAmount,
+		_message_length: usize,
+	) -> Option<C::ChainAmount> {
+		Self::get_value(TRACKED_FEE_KEY)
+	}
 }
