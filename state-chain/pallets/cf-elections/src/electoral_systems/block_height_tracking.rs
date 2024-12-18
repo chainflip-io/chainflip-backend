@@ -1,4 +1,7 @@
-use core::ops::{Add, AddAssign, Range, RangeInclusive, Sub, SubAssign};
+use core::{
+	iter::Step,
+	ops::{Add, AddAssign, Range, RangeInclusive, Rem, Sub, SubAssign},
+};
 
 use crate::{
 	electoral_system::{
@@ -8,14 +11,14 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_chains::btc::BlockNumber;
+use cf_chains::{assets::arb::Chain, btc::BlockNumber, witness_period::BlockWitnessRange};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
 use consensus::{Consensus, StagedConsensus, SupermajorityConsensus, Threshold};
 use frame_support::{
 	ensure,
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	sp_runtime::traits::AtLeast32BitUnsigned,
+	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating},
 	Parameter,
 };
 use itertools::Itertools;
@@ -68,13 +71,57 @@ pub fn validate_vote<ChainBlockHash, ChainBlockNumber>(
 ) {
 }
 
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub struct RangeOfBlockWitnessRanges<ChainBlockNumber> {
+	witness_from_root: ChainBlockNumber,
+	witness_to_root: ChainBlockNumber,
+	witness_period: ChainBlockNumber,
+}
+
+impl<
+		ChainBlockNumber: Saturating
+			+ One
+			+ Copy
+			+ PartialOrd
+			+ Step
+			+ Into<u64>
+			+ Sub<ChainBlockNumber, Output = ChainBlockNumber>
+			+ Rem<ChainBlockNumber, Output = ChainBlockNumber>
+			+ Saturating
+			+ Eq,
+	> RangeOfBlockWitnessRanges<ChainBlockNumber>
+{
+	pub fn try_new(
+		witness_from_root: ChainBlockNumber,
+		witness_to_root: ChainBlockNumber,
+		witness_period: ChainBlockNumber,
+	) -> Result<Self, CorruptStorageError> {
+		ensure!(witness_from_root <= witness_to_root, CorruptStorageError::new());
+
+		Ok(Self { witness_from_root, witness_to_root, witness_period })
+	}
+
+	pub fn block_witness_ranges(&self) -> Result<Vec<BlockWitnessRange<ChainBlockNumber>>, ()> {
+		(self.witness_from_root..=self.witness_to_root)
+			.step_by(Into::<u64>::into(self.witness_period) as usize)
+			.map(|root| BlockWitnessRange::try_new(root, self.witness_period))
+			.collect::<Result<Vec<_>, _>>()
+	}
+
+	pub fn witness_to_root(&self) -> ChainBlockNumber {
+		self.witness_to_root
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum ChainProgress<ChainBlockNumber> {
 	// Block witnesser will discard any elections that were started for this range and start them
 	// again since we've detected a reorg
-	Reorg { removed: RangeInclusive<ChainBlockNumber>, added: RangeInclusive<ChainBlockNumber> },
+	Reorg(RangeOfBlockWitnessRanges<ChainBlockNumber>),
 	// the chain is just progressing as a normal chain of hashes
-	Continuous(RangeInclusive<ChainBlockNumber>),
+	Continuous(RangeOfBlockWitnessRanges<ChainBlockNumber>),
 	// there was no update to the witnessed block headers
 	None(ChainBlockNumber),
 	// We are starting up and don't have consensus on a block number yet
@@ -94,7 +141,14 @@ pub struct BlockHeightTracking<
 
 impl<
 		const SAFETY_MARGIN: usize,
-		ChainBlockNumber: MaybeSerializeDeserialize + Member + Parameter + Ord + Copy + AtLeast32BitUnsigned,
+		ChainBlockNumber: MaybeSerializeDeserialize
+			+ Member
+			+ Parameter
+			+ Ord
+			+ Copy
+			+ AtLeast32BitUnsigned
+			+ Into<u64>
+			+ Step,
 		ChainBlockHash: MaybeSerializeDeserialize + Member + Parameter + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
