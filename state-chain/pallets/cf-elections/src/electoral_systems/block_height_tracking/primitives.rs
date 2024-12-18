@@ -12,7 +12,10 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_chains::{btc::BlockNumber, witness_period::BlockWitnessRange};
+use cf_chains::{
+	btc::BlockNumber,
+	witness_period::{BlockWitnessRange, BlockZero},
+};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
 use frame_support::{
@@ -48,43 +51,15 @@ pub struct MergeInfo<H, N> {
 	pub added: VecDeque<Header<H, N>>,
 }
 
-impl<
-		H,
-		N: Copy
-			+ Saturating
-			+ Sub<N, Output = N>
-			+ Rem<N, Output = N>
-			+ Eq
-			+ One
-			+ PartialOrd
-			+ Step
-			+ Into<u64>,
-	> MergeInfo<H, N>
-{
+impl<H, N: Copy + Eq + PartialOrd + Step> MergeInfo<H, N> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<N>> {
 		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
 			if let (Some(first_removed), Some(last_removed)) =
 				(self.removed.front(), self.removed.back())
 			{
-				todo!("resolve this");
-				// Some(ChainProgress::Reorg {
-				// 	removed: first_removed.block_height..=first_removed.block_height,
-				// 	added: first_added.block_height..=last_added.block_height,
-				// })
+				Some(ChainProgress::Reorg(first_added.block_height..=last_added.block_height))
 			} else {
-				// Some(ChainProgress::Continuous(first_added.block_height..=last_added.
-				// block_height))
-
-				// TODO: pass through witness period
-				Some(ChainProgress::Continuous(
-					RangeOfBlockWitnessRanges::try_new(
-						first_added.block_height,
-						last_added.block_height,
-						// TODO: Get the actual witness root
-						N::one(),
-					)
-					.ok()?,
-				))
+				Some(ChainProgress::Continuous(first_added.block_height..=last_added.block_height))
 			}
 		} else {
 			None
@@ -173,13 +148,7 @@ pub fn validate_continous_headers<H: PartialEq + Clone, N: PartialEq>(
 	headers: &VecDeque<Header<H, N>>,
 ) -> Result<(), VoteValidationError>
 where
-	N: Ord
-		+ From<u32>
-		+ Add<N, Output = N>
-		+ Sub<N, Output = N>
-		+ SubAssign<N>
-		+ AddAssign<N>
-		+ Copy,
+	N: Ord + Step + BlockZero + Copy,
 {
 	let mut required_block_height = headers.back().unwrap().block_height;
 	let mut required_hash = None;
@@ -194,7 +163,7 @@ where
 			VoteValidationError::ParentHashMismatch
 		);
 
-		required_block_height -= 1u32.into();
+		required_block_height = N::backward(required_block_height, 1);
 		required_hash = Some(header.parent_hash.clone());
 	}
 
@@ -206,13 +175,7 @@ pub fn validate_vote_and_height<H: PartialEq + Clone, N: PartialEq>(
 	other: &VecDeque<Header<H, N>>,
 ) -> Result<(), VoteValidationError>
 where
-	N: Ord
-		+ From<u32>
-		+ Add<N, Output = N>
-		+ Sub<N, Output = N>
-		+ SubAssign<N>
-		+ AddAssign<N>
-		+ Copy,
+	N: Ord + Step + BlockZero + Copy,
 {
 	// a vote has to be nonempty
 	if other.len() == 0 {
@@ -240,17 +203,7 @@ pub enum ChainBlocksMergeResult<N> {
 	FailedMissing { range: Range<N> },
 }
 
-impl<
-		H: Eq + Clone,
-		N: Ord
-			+ From<u32>
-			+ Add<N, Output = N>
-			+ Sub<N, Output = N>
-			+ SubAssign<N>
-			+ AddAssign<N>
-			+ Copy,
-	> ChainBlocks<H, N>
-{
+impl<H: Eq + Clone, N: Step + BlockZero + Copy + Eq> ChainBlocks<H, N> {
 	// fn validate_vote(&self, other: VecDeque<Header<H, N>>) -> Result<(), VoteValidationError> {
 	//     // a vote has to be nonempty
 	//     if other.len() == 0 {
@@ -274,7 +227,7 @@ impl<
 	// }
 
 	fn validate(&self) -> Result<(), VoteValidationError> {
-		let mut required_block_height = self.next_height - 1u32.into();
+		let mut required_block_height = N::backward(self.next_height, 1);
 		let mut required_hash = None;
 
 		for header in self.headers.iter().rev() {
@@ -287,7 +240,7 @@ impl<
 				VoteValidationError::ParentHashMismatch
 			);
 
-			required_block_height -= 1u32.into();
+			required_block_height = N::backward(required_block_height, 1);
 			required_hash = Some(header.parent_hash.clone());
 		}
 
@@ -314,7 +267,7 @@ impl<
 			.ok_or(MergeFailure::InternalError("expected other to not be empty!".into()))?;
 
 		if self.next_height == other_head.block_height ||
-			(self.next_height == 0u32.into() && self.headers.len() == 0)
+			(self.next_height.is_zero() && self.headers.len() == 0)
 		{
 			// this is "assumption (3): case 1"
 			//
@@ -326,7 +279,7 @@ impl<
 				None => true,
 				Some(h) => other_head.parent_hash == h.hash,
 			} {
-				self.next_height = other.back().unwrap().block_height + 1u32.into();
+				self.next_height = N::forward(other.back().unwrap().block_height, 1);
 				self.headers.append(&mut other.clone());
 				Ok(MergeInfo { removed: VecDeque::new(), added: other })
 			} else {
@@ -355,7 +308,7 @@ impl<
 				// set headers to `common_headers` + `other_headers`
 				self.headers = common_headers;
 				self.headers.append(&mut other_headers.clone());
-				self.next_height = self_head.block_height + (self.headers.len() as u32).into();
+				self.next_height = N::forward(self_head.block_height, self.headers.len());
 
 				Ok(MergeInfo { removed: self_headers, added: other_headers })
 			} else {
