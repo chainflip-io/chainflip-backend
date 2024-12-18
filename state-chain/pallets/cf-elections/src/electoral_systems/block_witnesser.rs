@@ -94,6 +94,7 @@ pub struct BlockWitnesserState<ChainBlockNumber: Ord + Default, BlockData> {
 	// what about a reorg??????
 	pub last_block_election_emitted_for: ChainBlockNumber,
 
+	// TODO: Ensure that even empty data is passed through here with a test.
 	// The block roots (of a block range) that we received non empty block data for, but still
 	// requires processing.
 	// NOTE: It is possible for block data to arrive and then be partially processed. In this case,
@@ -250,6 +251,8 @@ impl<
 		for election_identifier in remaining_election_identifiers {
 			let election_access = ElectoralAccess::election_mut(election_identifier);
 			if let Some(block_data) = election_access.check_consensus()?.has_consensus() {
+				println!("Got consensus on block data: {:?}", block_data);
+
 				let (root_block_number, _extra_properties) = election_access.properties()?;
 
 				election_access.delete();

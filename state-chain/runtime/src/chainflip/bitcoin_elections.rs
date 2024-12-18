@@ -1,6 +1,6 @@
 use crate::{BitcoinIngressEgress, Runtime};
 use cf_chains::{btc, Bitcoin};
-use cf_traits::Chainflip;
+use cf_traits::{Chainflip, IngressSource};
 use log::info;
 
 use cf_chains::instances::BitcoinInstance;

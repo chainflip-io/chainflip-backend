@@ -1257,7 +1257,7 @@ where
 		+ BlockchainEvents<B>
 		+ CallApiAt<B>
 		+ StorageProvider<B, BE>,
-	C::Api: CustomRuntimeApi<B> + ElectoralRuntimeApi<B, SolanaInstance>,
+	C::Api: CustomRuntimeApi<B> + ElectoralRuntimeApi<B>,
 {
 	pass_through! {
 		cf_is_auction_phase() -> bool,

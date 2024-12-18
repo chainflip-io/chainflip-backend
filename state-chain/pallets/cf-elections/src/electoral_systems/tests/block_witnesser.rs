@@ -200,18 +200,15 @@ const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 // We start an election for a block and there is nothing there. The base case.
 #[test]
 fn no_block_data_success() {
-	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
+	const NEXT_BLOCK_RECEIVED: ChainBlockNumber = 1;
 	TestSetup::<SimpleBlockWitnesser>::default()
-		.with_unsynchronised_state(BlockWitnesserState {
-			last_block_received: INIT_LAST_BLOCK_RECEIVED,
-			..BlockWitnesserState::default()
-		})
+		.with_unsynchronised_state(BlockWitnesserState::default())
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
 		})
 		.build()
 		.test_on_finalize(
-			&ChainProgress::Continuous(range_n(INIT_LAST_BLOCK_RECEIVED + 1)),
+			&ChainProgress::Continuous(range_n(NEXT_BLOCK_RECEIVED)),
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
@@ -222,6 +219,21 @@ fn no_block_data_success() {
 		.expect_consensus(
 			generate_votes((0..20).collect(), Default::default(), Default::default(), vec![]),
 			Some(vec![]),
+		)
+		.test_on_finalize(
+			&ChainProgress::Continuous(range_n(NEXT_BLOCK_RECEIVED)),
+			|_| {},
+			vec![
+				// No extra calls
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
+				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
+				// We should receive an empty block data, but still get the block number. This is
+				// necessary so we can track the last chain block we've processed.
+				Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
+					NEXT_BLOCK_RECEIVED,
+					vec![],
+				)]),
+			],
 		);
 }
 
@@ -230,10 +242,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
 	const NUMBER_OF_ELECTIONS: ElectionCount = MAX_CONCURRENT_ELECTIONS - 1;
 	TestSetup::<SimpleBlockWitnesser>::default()
-		.with_unsynchronised_state(BlockWitnesserState {
-			last_block_received: INIT_LAST_BLOCK_RECEIVED,
-			..BlockWitnesserState::default()
-		})
+		.with_unsynchronised_state(BlockWitnesserState::default())
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
 		})
