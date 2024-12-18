@@ -45,12 +45,10 @@ pub enum VaultSwapDetails<BtcAddress> {
 		nulldata_payload: Vec<u8>,
 		deposit_address: BtcAddress,
 	},
-	// TODO JAMIE: flatten these
-	//#[serde(flatten)]
 	Ethereum(EvmVaultSwapDetails),
-	//#[serde(flatten)]
 	Arbitrum(EvmVaultSwapDetails),
 	Solana {
+		#[serde(flatten)]
 		instruction: SolInstructionRpc,
 	},
 }
