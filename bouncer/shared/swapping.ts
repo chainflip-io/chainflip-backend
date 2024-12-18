@@ -156,7 +156,7 @@ export function newCcmMetadata(
       // TODO: For payloads larger than like a few hundred bytes we are short ~1M
       // on the gas. Either the user estimation needs to be larger or we need to
       // revisit the SC gas estimation. Difficult to do in localnet.
-      (destChain === 'Arbitrum' ? 1000000 : 0)
+      (destChain === 'Arbitrum' ? 1500000 : 0)
     ).toString();
   } else if (destChain === 'Solana') {
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
