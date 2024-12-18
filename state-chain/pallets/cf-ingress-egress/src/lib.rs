@@ -743,6 +743,12 @@ pub mod pallet {
 	pub type NetworkFeeDeductionFromBoostPercent<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Percent, ValueQuery>;
 
+	/// What the witnessing says we've processed up to. This allows us to expire channels safely. If
+	/// the witnessing has processed up to a block, then we can safely recycle the channels.
+	#[pallet::storage]
+	pub type ProcessedUpTo<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -986,7 +992,11 @@ pub mod pallet {
 							Self::take_recyclable_addresses(
 								recycle_queue,
 								maximum_addresses_to_recycle,
-								T::ChainTracking::get_block_height(),
+								if T::TargetChain::NAME == "Bitcoin" {
+									ProcessedUpTo::<T, I>::get()
+								} else {
+									T::ChainTracking::get_block_height()
+								},
 							)
 						}
 					});
