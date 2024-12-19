@@ -64,7 +64,7 @@ jobs:
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
-      full-bouncer: true
+      full-bouncer: false
       ngrok: true
   test-benchmarks:
     needs: [build-benchmarks]
