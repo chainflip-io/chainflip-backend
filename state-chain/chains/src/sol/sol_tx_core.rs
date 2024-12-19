@@ -268,13 +268,30 @@ impl From<Transaction> for RawTransaction {
 /// should be specified as signers during `Instruction` construction. The
 /// program must still validate during execution that the account is a signer.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
-pub struct Instruction {
+pub struct InstructionInternal<Address> {
 	/// Pubkey of the program that executes this instruction.
-	pub program_id: Pubkey,
+	pub program_id: Address,
 	/// Metadata describing accounts that should be passed to the program.
-	pub accounts: Vec<AccountMeta>,
+	pub accounts: Vec<AccountMetaInternal<Address>>,
 	/// Opaque data passed to the program for its own interpretation.
+	#[serde(with = "sp_core::bytes")]
 	pub data: Vec<u8>,
+}
+
+/// Instruction type used to encode a Solana Transaction.
+pub type Instruction = InstructionInternal<Pubkey>;
+/// Instruction type used when being presented to the end user.
+/// Serializes addresses into bs58 format.
+pub type InstructionRpc = InstructionInternal<SolAddress>;
+
+impl From<Instruction> for InstructionRpc {
+	fn from(value: Instruction) -> Self {
+		InstructionRpc {
+			program_id: value.program_id.into(),
+			accounts: value.accounts.into_iter().map(|a| a.into()).collect(),
+			data: value.data,
+		}
+	}
 }
 
 impl Instruction {
@@ -324,13 +341,28 @@ impl Instruction {
 #[derive(
 	Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo,
 )]
-pub struct AccountMeta {
+pub struct AccountMetaInternal<Address> {
 	/// An account's public key.
-	pub pubkey: Pubkey,
+	pub pubkey: Address,
 	/// True if an `Instruction` requires a `Transaction` signature matching `pubkey`.
 	pub is_signer: bool,
 	/// True if the account data or metadata may be mutated during program execution.
 	pub is_writable: bool,
+}
+
+/// Type used for building Solana Transactions.
+pub type AccountMeta = AccountMetaInternal<Pubkey>;
+/// Type used to be presented to the user. Serializes address into bs58 string.
+pub type AccountMetaRpc = AccountMetaInternal<SolAddress>;
+
+impl From<AccountMeta> for AccountMetaRpc {
+	fn from(value: AccountMeta) -> Self {
+		AccountMetaRpc {
+			pubkey: value.pubkey.into(),
+			is_signer: value.is_signer,
+			is_writable: value.is_writable,
+		}
+	}
 }
 
 impl AccountMeta {
@@ -827,56 +859,6 @@ pub struct CcmAccounts {
 impl CcmAccounts {
 	pub fn remaining_account_metas(self) -> Vec<AccountMeta> {
 		self.remaining_accounts.into_iter().map(|acc| acc.into()).collect::<Vec<_>>()
-	}
-}
-
-/// Provides alternative version of internal types that uses `Address` instead of Pubkey:
-///
-/// |----------------------|
-/// |Type    |   Serialized|
-/// |----------------------|
-/// |Pubkey  |   Byte Array|
-/// |Address |   bs58      |
-/// |----------------------|
-///
-/// When serialized, these types returns Solana addresses in human readable bs58 format.
-/// These are intended to be used for returning data via RPC calls only.
-pub mod rpc_types {
-	use super::*;
-
-	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
-	pub struct SolInstructionRpc {
-		pub program_id: SolAddress,
-		pub accounts: Vec<SolAccountMetaRpc>,
-		#[serde(with = "sp_core::bytes")]
-		pub data: Vec<u8>,
-	}
-
-	impl From<Instruction> for SolInstructionRpc {
-		fn from(value: Instruction) -> Self {
-			SolInstructionRpc {
-				program_id: value.program_id.into(),
-				accounts: value.accounts.into_iter().map(|a| a.into()).collect(),
-				data: value.data,
-			}
-		}
-	}
-
-	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
-	pub struct SolAccountMetaRpc {
-		pub address: SolAddress,
-		pub is_signer: bool,
-		pub is_writable: bool,
-	}
-
-	impl From<AccountMeta> for SolAccountMetaRpc {
-		fn from(value: AccountMeta) -> Self {
-			SolAccountMetaRpc {
-				address: value.pubkey.into(),
-				is_signer: value.is_signer,
-				is_writable: value.is_writable,
-			}
-		}
 	}
 }
 
