@@ -94,6 +94,8 @@ where
 		election_identifiers: Vec<crate::electoral_system::ElectionIdentifierOf<Self>>,
 		context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, crate::CorruptStorageError> {
+
+
 		if let Some(election_identifier) = election_identifiers
 			.into_iter()
 			.at_most_one()
@@ -120,7 +122,7 @@ where
 
 				// delete the old election and create a new one with the new input index
 				election_access.delete();
-				ElectoralAccess::new_election((), next_input_index, ())?;
+				ElectoralAccess::new_election((), next_input_index.into_iter().nth(0).unwrap(), ())?;
 
 				Ok(Either::Right(output))
 			} else {
@@ -137,7 +139,7 @@ where
 
 			let state = ElectoralAccess::unsynchronised_state()?;
 
-			ElectoralAccess::new_election((), SM::input_index(&state), ())?;
+			ElectoralAccess::new_election((), SM::input_index(&state).into_iter().nth(0).unwrap(), ())?;
 			Ok(Either::Left(SM::get(&state)))
 		}
 	}
@@ -158,12 +160,13 @@ where
 
 		for vote in consensus_votes.active_votes() {
 			// insert vote if it is valid for the given properties
-			if vote.is_valid().is_ok() && vote.has_index(&properties) {
-				log::info!("inserting vote {vote:?}");
-				consensus.insert_vote(vote);
-			} else {
-				log::warn!("Received invalid vote: expected base {properties:?} but vote was not in fiber ({:?})", vote);
-			}
+			todo!("fix this")
+			// if vote.is_valid().is_ok() && vote.has_index(&properties) {
+			// 	log::info!("inserting vote {vote:?}");
+			// 	consensus.insert_vote(vote);
+			// } else {
+			// 	log::warn!("Received invalid vote: expected base {properties:?} but vote was not in fiber ({:?})", vote);
+			// }
 		}
 
 		Ok(consensus.check_consensus(&(
