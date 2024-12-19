@@ -153,22 +153,7 @@ impl Storable for WitnessInformation {
 			Self::Deposit { deposit_address, .. } =>
 				Ok(format!("deposit:{chain}:{deposit_address}")),
 			Self::Broadcast { broadcast_id, .. } => Ok(format!("broadcast:{chain}:{broadcast_id}")),
-			Self::VaultDeposit { tx_id, .. } => {
-				let key = match tx_id {
-					TransactionInIdForAnyChain::Bitcoin(hash) => hex::encode(hash.as_bytes()),
-					TransactionInIdForAnyChain::Evm(hash) => hex::encode(hash.as_bytes()),
-					TransactionInIdForAnyChain::Polkadot(transaction_id) => format!(
-						"{}-{}",
-						transaction_id.block_number, transaction_id.extrinsic_index
-					),
-					TransactionInIdForAnyChain::Solana((address, id)) => format!("{address}-{id}",),
-					TransactionInIdForAnyChain::MockEthereum(_) |
-					TransactionInIdForAnyChain::None => {
-						return Err(anyhow!("Invalid transaction id: {tx_id:?}"));
-					},
-				};
-				Ok(format!("vault_deposit:{chain}:{key}"))
-			},
+			Self::VaultDeposit { tx_id, .. } => Ok(format!("vault_deposit:{chain}:{tx_id}")),
 		}
 	}
 
