@@ -1,6 +1,5 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
-import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
 import { randomAsHex } from '../polkadot/util-crypto';
 import { performSwap, performVaultSwap } from '../shared/perform_swap';
@@ -10,11 +9,11 @@ import {
   getContractAddress,
   ccmSupportedChains,
   solCcmAdditionalDataCodec,
-  getEvmEndpoint,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
+import { estimateCcmCfTesterGas } from './send_evm';
 
 let swapCount = 1;
 
@@ -124,7 +123,6 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
 
   return newCcmArbitraryBytes(length);
 }
-const EVM_BASE_GAS_LIMIT = 21000;
 // Minimum overhead to ensure simple CCM transactions succeed
 const OVERHEAD_COMPUTE_UNITS = 10000;
 
@@ -153,20 +151,7 @@ export async function newCcmMetadata(
     // required for execution is very complicated without using `eth_estimateGas` on the user's side.
     // This is what integrators are expected to do and it''ll give a good estimate of the gas
     // needed for the user logic.
-    const web3 = new Web3(getEvmEndpoint(destChain));
-    const cfTester = getContractAddress(destChain, 'CFTESTER');
-    const vault = getContractAddress(destChain, 'VAULT');
-    const messageLength = message.slice(2).length / 2;
-
-    // We use a dummy call to the CfTester contract appending the actual message.
-    const data =
-      '0x4904ac5f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000' +
-      web3.eth.abi.encodeParameters(['uint256'], [messageLength]).slice(2) +
-      message.slice(2);
-
-    // Estimate needs to be done using "from: vault" to prevent logic revertion
-    userLogicGasBudget =
-      (await web3.eth.estimateGas({ data, to: cfTester, from: vault })) - EVM_BASE_GAS_LIMIT;
+    userLogicGasBudget = estimateCcmCfTesterGas(destChain, message);
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();

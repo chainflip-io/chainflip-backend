@@ -15,7 +15,7 @@ import {
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
-import { spamEvm } from '../shared/send_evm';
+import { estimateCcmCfTesterGas, spamEvm } from '../shared/send_evm';
 import { observeEvent, observeBadEvent, getChainflipApi } from '../shared/utils/substrate';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { spamSolana } from '../shared/send_sol';
@@ -240,16 +240,19 @@ async function testGasLimitSwapToEvm(
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
   );
 
-  // Adding buffers on both ends to avoid flakiness
+  // Estimating gas separately. We can't rely on the default gas estimation in `newCcmMetadata()`
+  // because the CF tester gas consumption depends on the gas limit, making this a circular calculation.
+  // Instead, we get a base calculation with an empty message that doesn't run the gas consumption.
+  const baseCfTesterGas = await estimateCcmCfTesterGas(destChain, '0x');
+
+  // Adding buffers on both ends to avoid flakiness.
   if (abortTest) {
-    // newCcmMetadata's gasBudgetis the estimated gas required. Chainflip overestimates
-    // the overhead for safety so we use a 25% buffer to ensure the gas budget is too low.
-    ccmMetadata.gasBudget = Math.round(Number(ccmMetadata.gasBudget) * 0.75).toString();
+    // Chainflip overestimates the overhead for safety so we use a 25% buffer to ensure that
+    // the gas budget is too low.We also apply a 50% on the baseCfTesterGas since it's highly unreliable.
+    ccmMetadata.gasBudget = Math.round(gasConsumption * 0.75 + baseCfTesterGas * 0.5).toString();
   } else {
     // A small buffer should work (10%) as CF should be overestimate, not underestimate
-    ccmMetadata.gasBudget = (
-      Number(ccmMetadata.gasBudget) + Math.round(gasConsumption * 1.1)
-    ).toString();
+    ccmMetadata.gasBudget = (baseCfTesterGas + Math.round(gasConsumption * 1.1)).toString();
   }
 
   const testTag = abortTest ? `InsufficientGas` : '';
@@ -266,13 +269,11 @@ async function testGasLimitSwapToEvm(
   const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
 
   testGasLimitCcmSwaps.log(
-    `${tag} ccmMetadata.gasBudget ${ccmMetadata.gasBudget} gasConsumption ${gasConsumption}, txGasLimit ${gasLimitBudget}`,
+    `${tag} Expecting broadcast ${abortTest ? 'abort' : 'success'}. Broadcast gas budget: ${gasLimitBudget}, ccmMetadata.gasBudget ${ccmMetadata.gasBudget} gasConsumption ${gasConsumption}`,
   );
 
   if (abortTest) {
-    testGasLimitCcmSwaps.log(
-      `${tag} Gas budget is too low. Expecting BroadcastAborted event. Ensuring CCM event is not emitted`,
-    );
+    // Expect Broadcast Aborted
     let stopObservingCcmReceived = false;
 
     // We run this because we want to ensure that we *don't* get a CCM event.
@@ -290,20 +291,12 @@ async function testGasLimitSwapToEvm(
         throw new Error(`${tag} CCM event emitted. Transaction should not have been broadcasted!`);
       }
     });
-    // Expect Broadcast Aborted
-    testGasLimitCcmSwaps.log(
-      `${tag} Gas budget ${gasLimitBudget} is too low. Expecting BroadcastAborted event.`,
-    );
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
       test: (event) => event.data.broadcastId === broadcastId,
     }).event;
     stopObservingCcmReceived = true;
     testGasLimitCcmSwaps.log(`${tag} Broadcast Aborted found! broadcastId: ${broadcastId}`);
   } else {
-    testGasLimitCcmSwaps.log(
-      `${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`,
-    );
-
     // Check that broadcast is not aborted
     const observeBroadcastFailure = observeBadEvent(
       `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
