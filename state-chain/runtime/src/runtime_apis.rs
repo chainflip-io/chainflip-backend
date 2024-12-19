@@ -6,7 +6,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
-	sol::rpc_types::SolInstructionRpc, CcmChannelMetadata, Chain, ChainCrypto, ForeignChainAddress,
+	sol::SolInstructionRpc, CcmChannelMetadata, Chain, ChainCrypto, ForeignChainAddress,
 	VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
