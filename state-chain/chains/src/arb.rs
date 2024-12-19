@@ -244,7 +244,7 @@ mod test {
 		};
 
 		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(gas_limit, 2526102u128);
+		assert_eq!(gas_limit, 1858469u128);
 
 		let gas_budget_extra = 1_000_000u128;
 		let gas_limit_extra = arb_tracked_data.calculate_ccm_gas_limit(
