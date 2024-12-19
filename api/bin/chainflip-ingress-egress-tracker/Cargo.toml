@@ -30,7 +30,6 @@ codec = { workspace = true, default-features = true, features = ["derive", "full
 # Local dependencies
 chainflip-engine = { workspace = true }
 cf-utilities = { workspace = true, default-features = true }
-cf-primitives = { workspace = true, default-features = true }
 pallet-cf-environment = { workspace = true, default-features = true }
 pallet-cf-ingress-egress = { workspace = true, default-features = true }
 pallet-cf-broadcast = { workspace = true, default-features = true }
