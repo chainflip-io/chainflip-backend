@@ -381,7 +381,7 @@ pub mod pallet {
 		pub tx_id: TransactionInIdFor<T, I>,
 		pub broker_fee: Beneficiary<T::AccountId>,
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
-		pub refund_params: ChannelRefundParameters,
+		pub refund_params: Option<ChannelRefundParameters>,
 		pub dca_params: Option<DcaParameters>,
 		pub boost_fee: BasisPoints,
 	}
@@ -2203,7 +2203,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					destination_asset: output_asset,
 					destination_address: destination_address_internal,
 					broker_fees,
-					refund_params: Some(refund_params),
+					refund_params,
 					dca_params,
 					channel_metadata: deposit_metadata.channel_metadata,
 				},
@@ -2215,7 +2215,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					destination_asset: output_asset,
 					destination_address: destination_address_internal,
 					broker_fees,
-					refund_params: Some(refund_params),
+					refund_params,
 					dca_params,
 				},
 				None,
@@ -2512,11 +2512,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			};
 		}
 
-		if let Err(err) =
-			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
-		{
-			log::warn!("Failed to process vault swap due to invalid refund params. Tx id: {tx_id:?}. Error: {err:?}");
-			return;
+		if let Some(refund_params) = refund_params.clone() {
+			if let Err(err) =
+				T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
+			{
+				log::warn!("Failed to process vault swap due to invalid refund params. Tx id: {tx_id:?}. Error: {err:?}");
+				return;
+			}
+		} else {
+			log::warn!("No refund parameter provided for tx id: {tx_id:?}!");
 		}
 
 		if let Some(params) = &dca_params {
@@ -2540,7 +2544,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					destination_asset,
 					destination_address: destination_address_internal,
 					broker_fees,
-					refund_params: Some(refund_params),
+					refund_params,
 					dca_params,
 					channel_metadata: deposit_metadata.channel_metadata,
 				},
@@ -2552,7 +2556,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					destination_asset,
 					destination_address: destination_address_internal,
 					broker_fees,
-					refund_params: Some(refund_params),
+					refund_params,
 					dca_params,
 				},
 				None,
