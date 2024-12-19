@@ -380,7 +380,9 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 							Some(gas_limit) =>
 								if estimated_gas > gas_limit {
 									return Err(anyhow::anyhow!(
-										"Estimated gas is greater than the gas limit"
+										"Estimated gas ({}) is greater than the gas limit ({})",
+										estimated_gas,
+										gas_limit
 									))
 								} else {
 									gas_limit
