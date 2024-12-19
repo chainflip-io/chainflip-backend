@@ -11,7 +11,34 @@ import { btcAddressTypes } from '../shared/new_btc_address';
 import { ccmSupportedChains, chainFromAsset, VaultSwapParams } from '../shared/utils';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testAllSwaps = new ExecutableTest('All-Swaps', main, 900);
+export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
+
+export async function initiateSwap(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  functionCall: typeof testSwap | typeof testVaultSwap,
+  ccmSwap: boolean = false,
+): Promise<SwapParams | VaultSwapParams> {
+  let ccmSwapMetadata;
+  if (ccmSwap) {
+    ccmSwapMetadata =
+      functionCall === testSwap
+        ? await newCcmMetadata(destAsset)
+        : await newVaultSwapCcmMetadata(sourceAsset, destAsset);
+  }
+
+  if (destAsset === 'Btc') {
+    const btcAddressTypesArray = Object.values(btcAddressTypes);
+    return functionCall(
+      sourceAsset,
+      destAsset,
+      btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
+      ccmSwapMetadata,
+      testAllSwaps.swapContext,
+    );
+  }
+  return functionCall(sourceAsset, destAsset, undefined, ccmSwapMetadata, testAllSwaps.swapContext);
+}
 
 async function main() {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
@@ -22,30 +49,7 @@ async function main() {
     functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
-    let ccmSwapMetadata;
-    if (ccmSwap) {
-      ccmSwapMetadata =
-        functionCall === testSwap
-          ? newCcmMetadata(destAsset)
-          : newVaultSwapCcmMetadata(sourceAsset, destAsset);
-    }
-
-    if (destAsset === 'Btc') {
-      const btcAddressTypesArray = Object.values(btcAddressTypes);
-      allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
-          ccmSwapMetadata,
-          testAllSwaps.swapContext,
-        ),
-      );
-    } else {
-      allSwaps.push(
-        functionCall(sourceAsset, destAsset, undefined, ccmSwapMetadata, testAllSwaps.swapContext),
-      );
-    }
+    allSwaps.push(initiateSwap(sourceAsset, destAsset, functionCall, ccmSwap));
   }
 
   Object.values(Assets).forEach((sourceAsset) => {
@@ -82,6 +86,9 @@ async function main() {
   appendSwap('Sol', 'Dot', testVaultSwap);
   appendSwap('SolUsdc', 'Eth', testVaultSwap);
   appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
+
+  // await appendSwap('Sol', 'ArbEth', testSwap, true);
+  // await appendSwap('Sol', 'Eth', testSwap, true);
 
   await Promise.all(allSwaps);
 }

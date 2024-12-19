@@ -88,6 +88,11 @@ impl ArbitrumTrackedData {
 
 	// Estimating gas as described in Arbitrum's docs:
 	// https://docs.arbitrum.io/build-decentralized-apps/how-to-estimate-gas
+	//
+	// We assume the user's gas budget has been estimated via `eth.estimate_gas` and
+	// therefore covers the Arbitrum gas overhead so we just need to account for the
+	// extra gas from our Vault logic. That also covers the extra gas required that
+	// is dependant on the message's length.
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		is_native_asset: bool,
@@ -104,24 +109,22 @@ impl ArbitrumTrackedData {
 
 		// Adding one extra gas unit per message's length (byte) for the extra gas overhead of
 		// passing the message through the Vault. The extra l2 gas per message's calldata byte
-		// should be included in the user's gas budget.
-		let l2g = vault_gas_overhead
-			.saturating_add(message_length as u128)
-			.saturating_add(gas_budget);
+		// should be included in the user's gas budget together with the receiving logic's gas
+		// required.
+		let l2g = vault_gas_overhead.saturating_add(message_length as u128);
 		let l1p = self.l1_base_fee_estimate * L1_GAS_PER_BYTES;
 		let p = self.base_fee;
 
-		// We can't accurately know L1S without engine consensus so we do our best to estimate it.
-		let l1s = CCM_VAULT_BYTES_OVERHEAD +
-			CCM_BUFFER_BYTES_OVERHEAD +
-			CCM_ARBITRUM_BYTES_OVERHEAD +
-			message_length as u128;
+		// The user's estimation via `eth.estimate_gas` will already contain the fixed Arbitrum
+		// gas overhead of bytes according to the current Arbitrum documentation.
+		let l1s = CCM_VAULT_BYTES_OVERHEAD + CCM_BUFFER_BYTES_OVERHEAD;
+
 		let l1c = l1p.saturating_mul(l1s);
 
 		let b = l1c.div_ceil(p);
 
 		let gas_limit = l2g.saturating_add(b);
-		gas_limit.min(MAX_GAS_LIMIT)
+		gas_limit.saturating_add(gas_budget).min(MAX_GAS_LIMIT)
 	}
 
 	pub fn calculate_transaction_fee(
@@ -141,9 +144,8 @@ pub mod fees {
 	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 90_000;
 	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 120_000;
 	// Arbitrum specific ccm gas limit calculation constants
-	pub const CCM_ARBITRUM_BYTES_OVERHEAD: u128 = 140;
 	pub const CCM_VAULT_BYTES_OVERHEAD: u128 = 356;
-	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 50;
+	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 36; // ~10%
 	pub const L1_GAS_PER_BYTES: u128 = 16;
 }
 

@@ -166,7 +166,7 @@ async function testGasLimitSwapToSolana(sourceAsset: Asset, destAsset: Asset) {
     throw new Error(`Destination chain ${destChain} is not Solana`);
   }
 
-  const ccmMetadata = newCcmMetadata(destAsset);
+  const ccmMetadata = await newCcmMetadata(destAsset);
 
   const { tag, destAddress } = await executeAndTrackCcmSwap(sourceAsset, destAsset, ccmMetadata);
 
@@ -235,10 +235,9 @@ async function testGasLimitSwapToEvm(
 
   const gasConsumption = getRandomGasConsumption(chainFromAsset(destAsset));
 
-  const ccmMetadata = newCcmMetadata(
+  const ccmMetadata = await newCcmMetadata(
     destAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
-    undefined, // Get the default minimum gas budget
   );
 
   // Adding buffers on both ends to avoid flakiness

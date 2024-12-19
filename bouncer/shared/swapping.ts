@@ -1,5 +1,6 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
+import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
 import { randomAsHex } from '../polkadot/util-crypto';
 import { performSwap, performVaultSwap } from '../shared/perform_swap';
@@ -9,6 +10,7 @@ import {
   getContractAddress,
   ccmSupportedChains,
   solCcmAdditionalDataCodec,
+  getEvmEndpoint,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -53,7 +55,7 @@ function newCcmArbitraryBytes(maxLength: number): string {
 const MAX_CCM_MSG_LENGTH = 15_000;
 const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
 
-// In Arbitrum's localnet extremely large messages end up with large gas estimations
+// In Arbitrum's localnet large messages (~ >4k) end up with large gas estimations
 // of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
 // gas limit (32M). We cap it to a lower value than Ethereum to work around that.
 const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
@@ -122,20 +124,16 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
 
   return newCcmArbitraryBytes(length);
 }
-
-const EVM_GAS_PER_BYTE = 17;
-const EVM_GAS_PER_EVENT_BYTE = 9;
-
+const EVM_BASE_GAS_LIMIT = 21000;
 // Minimum overhead to ensure simple CCM transactions succeed
-const OVERHEAD_GAS = 10000;
 const OVERHEAD_COMPUTE_UNITS = 10000;
 
-export function newCcmMetadata(
+export async function newCcmMetadata(
   destAsset: Asset,
   ccmMessage?: string,
   gasBudget?: number,
   ccmAdditionalDataArray?: string,
-): CcmDepositMetadata {
+): Promise<CcmDepositMetadata> {
   const message = ccmMessage ?? newCcmMessage(destAsset);
   const ccmAdditionalData = ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message);
   const destChain = chainFromAsset(destAsset);
@@ -150,15 +148,27 @@ export function newCcmMetadata(
 
   let userLogicGasBudget;
   if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
-    userLogicGasBudget = (
-      OVERHEAD_GAS +
-      (EVM_GAS_PER_BYTE + EVM_GAS_PER_EVENT_BYTE) * (message.slice(2).length / 2) +
-      // TODO: For payloads larger than like a few hundred bytes we are short ~1M
-      // on the gas. Either the user estimation needs to be larger or we need to
-      // revisit the SC gas estimation. Difficult to do in localnet.
-      (destChain === 'Arbitrum' ? 1500000 : 0)
-    ).toString();
+    // Do the gas estimation of the call to the CF Tester contract. CF will then add the extra
+    // overhead on top. This is particularly relevant for Arbitrum where estimating the gas here
+    // required for execution is very complicated without using `eth_estimateGas` on the user's side.
+    // This is what integrators are expected to do and it''ll give a good estimate of the gas
+    // needed for the user logic.
+    const web3 = new Web3(getEvmEndpoint(destChain));
+    const cfTester = getContractAddress(destChain, 'CFTESTER');
+    const vault = getContractAddress(destChain, 'VAULT');
+    const messageLength = message.slice(2).length / 2;
+
+    // We use a dummy call to the CfTester contract appending the actual message.
+    const data =
+      '0x4904ac5f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000' +
+      web3.eth.abi.encodeParameters(['uint256'], [messageLength]).slice(2) +
+      message.slice(2);
+
+    // Estimate needs to be done using "from: vault" to prevent logic revertion
+    userLogicGasBudget =
+      (await web3.eth.estimateGas({ data, to: cfTester, from: vault })) - EVM_BASE_GAS_LIMIT;
   } else if (destChain === 'Solana') {
+    // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
   } else {
     throw new Error(`Unsupported chain: ${destChain}`);
@@ -166,19 +176,19 @@ export function newCcmMetadata(
 
   return {
     message,
-    gasBudget: userLogicGasBudget,
+    gasBudget: userLogicGasBudget?.toString(),
     ccmAdditionalData,
   };
 }
 
 // Vault swaps have some limitations depending on the source chain
-export function newVaultSwapCcmMetadata(
+export async function newVaultSwapCcmMetadata(
   sourceAsset: Asset,
   destAsset: Asset,
   ccmMessage?: string,
-  gasBudgetFraction?: number,
+  gasBudget?: number,
   ccmAdditionalDataArray?: string,
-): CcmDepositMetadata {
+): Promise<CcmDepositMetadata> {
   const sourceChain = chainFromAsset(sourceAsset);
   let messageMaxLength;
   let metadataMaxLength;
@@ -209,7 +219,7 @@ export function newVaultSwapCcmMetadata(
   const message = ccmMessage ?? newCcmMessage(destAsset, messageMaxLength);
   const ccmAdditionalData =
     ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message, metadataMaxLength);
-  return newCcmMetadata(destAsset, message, gasBudgetFraction, ccmAdditionalData);
+  return newCcmMetadata(destAsset, message, gasBudget, ccmAdditionalData);
 }
 
 export async function prepareSwap(
