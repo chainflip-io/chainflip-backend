@@ -1048,7 +1048,7 @@ impl<
 	}
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "client-mocks"))]
 pub mod mocks {
 	use super::RpcResult;
 	use crate::state_chain_observer::client::{
