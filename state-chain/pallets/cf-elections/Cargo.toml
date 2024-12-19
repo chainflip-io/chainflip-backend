@@ -45,6 +45,8 @@ sp-std = { workspace = true }
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
 rand = { workspace = true, features = ["std"] }
+proptest = { version = "1.6"}
+proptest-derive = { version = "0.5.1" }
 
 [features]
 default = ["std"]

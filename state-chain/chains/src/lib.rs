@@ -69,9 +69,66 @@ pub mod instances;
 pub mod mocks;
 
 pub mod witness_period {
-	use core::ops::{Rem, Sub};
+	use core::{
+		iter::Step,
+		ops::{Rem, Sub},
+	};
 
-	use frame_support::sp_runtime::traits::{One, Saturating};
+	use sp_runtime::traits::Block;
+	use sp_std::ops::RangeInclusive;
+
+	use codec::{Decode, Encode};
+	use frame_support::{
+		ensure,
+		sp_runtime::traits::{One, Saturating},
+	};
+	use scale_info::TypeInfo;
+	use serde::{Deserialize, Serialize};
+
+	// So we can store a range-like object in storage, since this has encode and decode.
+	#[derive(
+		Debug,
+		Clone,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		Deserialize,
+		Serialize,
+		Default,
+		PartialOrd,
+		Ord,
+	)]
+	pub struct BlockWitnessRange<I> {
+		root: I,
+		period: I,
+	}
+
+	impl<
+			I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One + PartialOrd,
+		> BlockWitnessRange<I>
+	{
+		pub fn try_new(root: I, period: I) -> Result<Self, ()> {
+			ensure!(period >= I::one(), ());
+			ensure!(is_block_witness_root(period, root), ());
+			Ok(Self { root, period })
+		}
+	}
+
+	impl<I: Saturating + One + Copy> BlockWitnessRange<I> {
+		pub fn into_range_inclusive(self) -> RangeInclusive<I> {
+			self.root..=self.root.saturating_add(self.period.saturating_sub(I::one()))
+		}
+
+		pub fn root(&self) -> &I {
+			&self.root
+		}
+
+		pub fn period(&self) -> &I {
+			&self.period
+		}
+	}
 
 	fn block_witness_floor<
 		I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One,
@@ -108,6 +165,63 @@ pub mod witness_period {
 	) -> core::ops::RangeInclusive<I> {
 		let floored_block_number = block_witness_floor(witness_period, block_number);
 		floored_block_number..=floored_block_number.saturating_add(witness_period - One::one())
+	}
+
+	impl<I: PartialOrd + Clone + Saturating> Step for BlockWitnessRange<I> {
+		fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
+			// assert_eq!(start.period, end.period);
+			todo!()
+		}
+
+		fn forward_checked(mut start: Self, count: usize) -> Option<Self> {
+			(0..count)
+				.for_each(|_| start.root = start.root.clone().saturating_add(start.period.clone()));
+			Some(start)
+		}
+
+		fn backward_checked(mut start: Self, count: usize) -> Option<Self> {
+			(0..count)
+				.for_each(|_| start.root = start.root.clone().saturating_sub(start.period.clone()));
+			Some(start)
+		}
+	}
+
+	pub trait BlockZero {
+		fn zero() -> Self;
+		fn is_zero(&self) -> bool;
+	}
+
+	impl<I: BlockZero + From<u32>> BlockZero for BlockWitnessRange<I> {
+		fn zero() -> Self {
+			Self {
+				root: I::zero(),
+				period: 1.into(), // NOTE: of course this is horribly wrong
+			}
+		}
+
+		fn is_zero(&self) -> bool {
+			self.root.is_zero()
+		}
+	}
+
+	impl BlockZero for u64 {
+		fn zero() -> Self {
+			0
+		}
+
+		fn is_zero(&self) -> bool {
+			*self == 0
+		}
+	}
+
+	impl BlockZero for u32 {
+		fn zero() -> Self {
+			0
+		}
+
+		fn is_zero(&self) -> bool {
+			*self == 0
+		}
 	}
 }
 
