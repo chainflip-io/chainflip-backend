@@ -24,15 +24,30 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
 	vec::Vec,
 };
-// -- abstract Consensus for computing solutions
-pub trait Consensus: Default {
+
+/// Abstract consensus mechanism.
+///
+/// This trait is an abstraction over simple consensus mechanisms,
+/// where there is the concept of incrementally adding votes,
+/// and checking if the votes result in consensus.
+pub trait ConsensusMechanism: Default {
+	/// type of votes.
 	type Vote;
+
+	/// result type of the consensus.
 	type Result;
+
+	/// additional information required to check consensus
 	type Settings;
+
 	fn insert_vote(&mut self, vote: Self::Vote);
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result>;
 }
 
+//-----------------------------------------------
+// majority consensus
+
+/// Simple implementation of a (super-)majority consensus
 pub struct SupermajorityConsensus<Vote: PartialEq> {
 	votes: BTreeMap<Vote, u32>,
 }
@@ -47,7 +62,7 @@ impl<Vote: PartialEq> Default for SupermajorityConsensus<Vote> {
 	}
 }
 
-impl<Vote: Ord + PartialEq + Clone> Consensus for SupermajorityConsensus<Vote> {
+impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensus<Vote> {
 	type Vote = Vote;
 	type Result = Vote;
 	type Settings = Threshold;
@@ -73,24 +88,34 @@ impl<Vote: Ord + PartialEq + Clone> Consensus for SupermajorityConsensus<Vote> {
 	}
 }
 
-// --
-pub struct StagedConsensus<Stage: Consensus, Index: Ord> {
+//-----------------------------------------------
+// staged consensus
+
+/// Staged consensus.
+///
+/// Votes are indexed by stages, and each stage is evaluated
+/// separately. Evaluation happens in reverse order of the stage index,
+/// i.e. the highest stage which achieves consensus determines the result.
+/// If no stage achieves consensus, the result is inconclusive.
+pub struct StagedConsensus<Stage: ConsensusMechanism, Index: Ord> {
 	stages: BTreeMap<Index, Stage>,
 }
 
-impl<Stage: Consensus, Index: Ord> StagedConsensus<Stage, Index> {
+impl<Stage: ConsensusMechanism, Index: Ord> StagedConsensus<Stage, Index> {
 	pub fn new() -> Self {
 		Self { stages: BTreeMap::new() }
 	}
 }
 
-impl<Stage: Consensus, Index: Ord> Default for StagedConsensus<Stage, Index> {
+impl<Stage: ConsensusMechanism, Index: Ord> Default for StagedConsensus<Stage, Index> {
 	fn default() -> Self {
 		Self { stages: Default::default() }
 	}
 }
 
-impl<Stage: Consensus, Index: Ord + Copy> Consensus for StagedConsensus<Stage, Index> {
+impl<Stage: ConsensusMechanism, Index: Ord + Copy> ConsensusMechanism
+	for StagedConsensus<Stage, Index>
+{
 	type Result = Stage::Result;
 	type Vote = (Index, Stage::Vote);
 	type Settings = Stage::Settings;

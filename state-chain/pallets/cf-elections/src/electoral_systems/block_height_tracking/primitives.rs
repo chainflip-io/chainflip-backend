@@ -29,7 +29,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-use super::ChainProgress;
+use super::{state_machine::Validate, ChainProgress};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -116,7 +116,7 @@ pub fn extract_common_prefix<A: Eq>(a: &mut VecDeque<A>, b: &mut VecDeque<A>) ->
 	let mut prefix = VecDeque::new();
 
 	while a.front().is_some() && (a.front() == b.front()) {
-		prefix.push_front(a.pop_front().unwrap());
+		prefix.push_back(a.pop_front().unwrap());
 		b.pop_front();
 	}
 
@@ -169,11 +169,11 @@ impl<H, N: Copy> ChainBlocks<H, N> {
 	}
 }
 
-pub fn validate_continous_headers<H: PartialEq + Clone, N: PartialEq>(
-	headers: &VecDeque<Header<H, N>>,
-) -> Result<(), VoteValidationError>
+impl<H, N> Validate for ChainBlocks<H, N>
 where
-	N: Ord
+	H: PartialEq + Clone,
+	N: PartialEq
+		+ Ord
 		+ From<u32>
 		+ Add<N, Output = N>
 		+ Sub<N, Output = N>
@@ -181,24 +181,50 @@ where
 		+ AddAssign<N>
 		+ Copy,
 {
-	let mut required_block_height = headers.back().unwrap().block_height;
-	let mut required_hash = None;
+	type Error = VoteValidationError;
 
-	for header in headers.iter().rev() {
-		ensure!(
-			header.block_height == required_block_height,
-			VoteValidationError::BlockHeightsNotContinuous
-		);
-		ensure!(
-			Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
-			VoteValidationError::ParentHashMismatch
-		);
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		// let mut required_block_height = self.headers.back().unwrap().block_height;
+		// let mut required_hash = None;
 
-		required_block_height -= 1u32.into();
-		required_hash = Some(header.parent_hash.clone());
+		if self
+			.headers
+			.iter()
+			.zip(self.headers.iter().skip(1))
+			.all(|(a, b)| a.hash == b.parent_hash)
+		{
+			()
+		} else {
+			return Err(VoteValidationError::ParentHashMismatch);
+		}
+
+		if self
+			.headers
+			.iter()
+			.zip(self.headers.iter().skip(1))
+			.all(|(a, b)| a.block_height + 1.into() == b.block_height)
+		{
+			()
+		} else {
+			return Err(VoteValidationError::BlockHeightsNotContinuous);
+		}
+
+		// for header in self.headers.iter().rev() {
+		// 	ensure!(
+		// 		header.block_height == required_block_height,
+		// 		VoteValidationError::BlockHeightsNotContinuous
+		// 	);
+		// 	ensure!(
+		// 		Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
+		// 		VoteValidationError::ParentHashMismatch
+		// 	);
+
+		// 	required_block_height -= 1u32.into();
+		// 	required_hash = Some(header.parent_hash.clone());
+		// }
+
+		Ok(())
 	}
-
-	Ok(())
 }
 
 pub fn validate_vote_and_height<H: PartialEq + Clone, N: PartialEq>(
@@ -224,15 +250,12 @@ where
 		return Err(VoteValidationError::BlockHeightsNotContinuous)
 	}
 
-	// a vote's parent hash has to be our last parent hash, if it exists
-	// if let Some(my_last) = self.headers.back() {
-	//     if other.front().unwrap().parent_hash != my_last.hash {
-	//         return Err(VoteValidationError::ParentHashMismatch)
-	//     }
-	// }
-
 	// a vote has to be continous
-	validate_continous_headers(other)
+	ChainBlocks {
+		headers: other.clone(),
+		next_height: 0.into(), // TODO remove next_height at all
+	}
+	.is_valid() // validate_continous_headers(other)
 }
 
 pub enum ChainBlocksMergeResult<N> {
@@ -251,28 +274,6 @@ impl<
 			+ Copy,
 	> ChainBlocks<H, N>
 {
-	// fn validate_vote(&self, other: VecDeque<Header<H, N>>) -> Result<(), VoteValidationError> {
-	//     // a vote has to be nonempty
-	//     if other.len() == 0 {
-	//         return Err(VoteValidationError::EmptyVote)
-	//     }
-
-	//     // a vote has to start with the next block we expect
-	//     if other.front().unwrap().block_height != self.next_height {
-	//         return Err(VoteValidationError::BlockHeightsNotContinuous)
-	//     }
-
-	//     // a vote's parent hash has to be our last parent hash, if it exists
-	//     if let Some(my_last) = self.headers.back() {
-	//         if other.front().unwrap().parent_hash != my_last.hash {
-	//             return Err(VoteValidationError::ParentHashMismatch)
-	//         }
-	//     }
-
-	//     // a vote has to be continous
-	//     validate_continous_headers(other)
-	// }
-
 	fn validate(&self) -> Result<(), VoteValidationError> {
 		let mut required_block_height = self.next_height - 1u32.into();
 		let mut required_hash = None;
@@ -313,8 +314,11 @@ impl<
 			.front()
 			.ok_or(MergeFailure::InternalError("expected other to not be empty!".into()))?;
 
-		if self.next_height == other_head.block_height ||
-			(self.next_height == 0u32.into() && self.headers.len() == 0)
+		let self_next_height = self.headers.back().unwrap().block_height + 1u32.into();
+
+		if self_next_height == other_head.block_height
+		// ||
+		// (self.next_height == 0u32.into() && self.headers.len() == 0)
 		{
 			// this is "assumption (3): case 1"
 			//
@@ -326,7 +330,7 @@ impl<
 				None => true,
 				Some(h) => other_head.parent_hash == h.hash,
 			} {
-				self.next_height = other.back().unwrap().block_height + 1u32.into();
+				// self.next_height = other.back().unwrap().block_height + 1u32.into();
 				self.headers.append(&mut other.clone());
 				Ok(MergeInfo { removed: VecDeque::new(), added: other })
 			} else {
@@ -355,7 +359,7 @@ impl<
 				// set headers to `common_headers` + `other_headers`
 				self.headers = common_headers;
 				self.headers.append(&mut other_headers.clone());
-				self.next_height = self_head.block_height + (self.headers.len() as u32).into();
+				// self.next_height = self_head.block_height + (self.headers.len() as u32).into();
 
 				Ok(MergeInfo { removed: self_headers, added: other_headers })
 			} else {

@@ -1,6 +1,6 @@
 use crate::{BitcoinIngressEgress, Runtime};
 use cf_chains::{btc, Bitcoin};
-use cf_traits::{Chainflip, IngressSource};
+use cf_traits::Chainflip;
 use log::info;
 
 use cf_chains::instances::BitcoinInstance;
@@ -9,11 +9,12 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
-		block_height_tracking::{self, BlockHeightTracking},
-		block_witnesser::{
-			BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings,
-			ProcessBlockData,
+		block_height_tracking::{
+			self,
+			state_machine_es::DsmElectoralSystem,
+			BlockHeightTrackingConsensus, BlockHeightTrackingDSM,
 		},
+		block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData},
 		composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
@@ -22,11 +23,10 @@ use pallet_cf_elections::{
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
 
-use pallet_cf_ingress_egress::{
-	DepositChannelDetails, DepositWitness, ProcessedUpTo, WitnessSafetyMargin,
-};
+use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness, ProcessedUpTo, WitnessSafetyMargin};
 use scale_info::TypeInfo;
 
+use sp_runtime::Either;
 use sp_std::vec::Vec;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
@@ -51,8 +51,12 @@ pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 	BitcoinDepositChannelWitnessingGenerator,
 >;
 
-pub type BitcoinBlockHeightTracking =
-	BlockHeightTracking<6, btc::BlockNumber, btc::Hash, (), <Runtime as Chainflip>::ValidatorId>;
+pub type BitcoinBlockHeightTracking = DsmElectoralSystem<
+	BlockHeightTrackingDSM<6, btc::BlockNumber, btc::Hash>,
+	<Runtime as Chainflip>::ValidatorId,
+	(),
+	BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>,
+>;
 
 pub struct BitcoinDepositChannelWitnessingGenerator;
 
@@ -80,6 +84,7 @@ impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 		earliest_unprocessed_block: btc::BlockNumber,
 		witnesses: Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)>,
 	) -> Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)> {
+
 		ProcessedUpTo::<Runtime, BitcoinInstance>::put(
 			earliest_unprocessed_block.saturating_sub(1),
 		);
@@ -145,6 +150,11 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
 		>(block_height_tracking_identifiers, &())?;
+
+		let chain_progress = match chain_progress {
+			Either::Left(x) => x,
+			Either::Right(x) => x,
+		};
 
 		log::info!("BitcoinElectionHooks::on_finalize: {:?}", chain_progress);
 		BitcoinDepositChannelWitnessing::on_finalize::<
