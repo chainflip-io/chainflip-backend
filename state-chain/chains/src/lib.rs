@@ -933,15 +933,44 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 #[derive(
 	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
 )]
+pub struct EvmVaultSwapExtraParameters<Address, Number> {
+	pub input_amount: Number,
+	pub refund_parameters: ChannelRefundParameters<Address>,
+}
+impl<Address: Clone, Number> EvmVaultSwapExtraParameters<Address, Number> {
+	pub fn try_map_address<AddressOther>(
+		self,
+		f: impl Fn(Address) -> Result<AddressOther, DispatchError>,
+	) -> Result<EvmVaultSwapExtraParameters<AddressOther, Number>, DispatchError> {
+		Ok(EvmVaultSwapExtraParameters {
+			input_amount: self.input_amount,
+			refund_parameters: self.refund_parameters.try_map_address(|a| {
+				f(a).map_err(|_| "Failed to convert address in refund parameters".into())
+			})?,
+		})
+	}
+
+	pub fn try_map_numbers<NumberOther>(
+		self,
+		f: impl Fn(Number) -> Result<NumberOther, DispatchError>,
+	) -> Result<EvmVaultSwapExtraParameters<Address, NumberOther>, DispatchError> {
+		Ok(EvmVaultSwapExtraParameters {
+			input_amount: f(self.input_amount)?,
+			refund_parameters: self.refund_parameters,
+		})
+	}
+}
+
+#[derive(
+	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
+)]
 pub enum VaultSwapExtraParameters<Address, Number> {
 	Bitcoin {
 		min_output_amount: Number,
 		retry_duration: BlockNumber,
 	},
-	Evm {
-		input_amount: Number,
-		refund_parameters: ChannelRefundParameters<Address>,
-	},
+	Ethereum(EvmVaultSwapExtraParameters<Address, Number>),
+	Arbitrum(EvmVaultSwapExtraParameters<Address, Number>),
 	Solana {
 		from: Address,
 		event_data_account: Address,
@@ -961,13 +990,10 @@ impl<Address: Clone, Number> VaultSwapExtraParameters<Address, Number> {
 		Ok(match self {
 			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
 				VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration },
-			VaultSwapExtraParameters::Evm { input_amount, refund_parameters } =>
-				VaultSwapExtraParameters::Evm {
-					input_amount,
-					refund_parameters: refund_parameters.try_map_address(|a| {
-						f(a).map_err(|_| "Failed to convert address in refund parameters".into())
-					})?,
-				},
+			VaultSwapExtraParameters::Ethereum(extra_parameter) =>
+				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_address(f)?),
+			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>
+				VaultSwapExtraParameters::Arbitrum(extra_parameter.try_map_address(f)?),
 			VaultSwapExtraParameters::Solana {
 				from,
 				event_data_account,
@@ -998,8 +1024,10 @@ impl<Address: Clone, Number> VaultSwapExtraParameters<Address, Number> {
 					min_output_amount: f(min_output_amount)?,
 					retry_duration,
 				},
-			VaultSwapExtraParameters::Evm { input_amount, refund_parameters } =>
-				VaultSwapExtraParameters::Evm { input_amount: f(input_amount)?, refund_parameters },
+			VaultSwapExtraParameters::Ethereum(extra_parameter) =>
+				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_numbers(f)?),
+			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>
+				VaultSwapExtraParameters::Arbitrum(extra_parameter.try_map_numbers(f)?),
 			VaultSwapExtraParameters::Solana {
 				from,
 				event_data_account,

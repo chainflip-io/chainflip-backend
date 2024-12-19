@@ -2242,9 +2242,10 @@ impl_runtime_apis! {
 
 			// Ensure the refund duration is valid.
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
-				cf_chains::VaultSwapExtraParameters::Bitcoin { retry_duration, .. } => *retry_duration,
-				cf_chains::VaultSwapExtraParameters::Evm { refund_parameters, .. } => refund_parameters.retry_duration,
-				cf_chains::VaultSwapExtraParameters::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
+				VaultSwapExtraParametersEncoded::Ethereum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
 			})?;
 
 			// Encode swap
@@ -2269,26 +2270,25 @@ impl_runtime_apis! {
 					Err("Extra parameter is not valid for Btc vault swap.".into())
 				},
 				ForeignChain::Ethereum | ForeignChain::Arbitrum => {
-					if let VaultSwapExtraParametersEncoded::Evm{
-						input_amount,
-						refund_parameters,
-					} = extra_parameters {
-						crate::chainflip::vault_swaps::ethereum_vault_swap(
-							broker_id,
-							source_asset,
-							input_amount,
-							destination_asset,
-							destination_address,
-							broker_commission,
-							refund_parameters,
-							boost_fee,
-							affiliate_fees,
-							dca_parameters,
-							channel_metadata,
-						)
-					}else {
-						Err(DispatchErrorWithMessage::from("Extra parameter is not valid for Evm vault swap."))
-					}
+					let extra_params = match extra_parameters {
+						VaultSwapExtraParametersEncoded::Ethereum(extra_params) => Ok(extra_params),
+						VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => Ok(extra_params),
+						_ => Err(DispatchErrorWithMessage::from("Extra parameter is not valid for Evm vault swap."))
+					}?;
+
+					crate::chainflip::vault_swaps::evm_vault_swap(
+						broker_id,
+						source_asset,
+						extra_params.input_amount,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						extra_params.refund_parameters,
+						boost_fee,
+						affiliate_fees,
+						dca_parameters,
+						channel_metadata,
+					)
 				},
 				ForeignChain::Solana => crate::chainflip::vault_swaps::solana_vault_swap(
 					broker_id,

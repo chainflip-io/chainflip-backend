@@ -109,7 +109,7 @@ pub fn bitcoin_vault_swap(
 	})
 }
 
-pub fn ethereum_vault_swap(
+pub fn evm_vault_swap(
 	broker_id: AccountId,
 	source_asset: Asset,
 	amount: AssetAmount,
