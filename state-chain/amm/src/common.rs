@@ -232,16 +232,19 @@ impl SwapDirection for QuoteToBase {
 }
 
 /// Takes a Q128 fixed point number and raises it to the nth power, and returns it as a Q128 fixed
-/// point number. If the result is larger than the maximum U384 this function will panic.
-///
-/// The result will be equal or less than the true value.
+/// point number. If the result is larger than the maximum U384 this function will return None.
 fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> Option<U512> {
 	let x = U512::from(x);
 	let mut result = U512::from(1) << 128;
+
+	// Iterate over bits of the exponent (n) from most to least significant
+	// (starting with the first non-zero bit):
 	for bit_idx in (0..(32 - n.leading_zeros())).rev() {
 		let bit = (n & (0x1 << bit_idx)) >> bit_idx;
 
+		// Square the intermediate result on each iteration:
 		result = result.checked_mul(result)? >> 128;
+		// Additionally multiply by `x` if the bit is set:
 		if bit == 0x1 {
 			result = result.checked_mul(x)? >> 128;
 		}
