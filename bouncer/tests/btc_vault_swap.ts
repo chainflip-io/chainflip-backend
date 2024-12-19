@@ -78,7 +78,7 @@ async function buildAndSendBtcVaultSwap(
   // Check that expires_at field is correct (within 20 secs drift)
   assert(
     Math.abs(expectedExpiresAt - vaultSwapDetails.expires_at) <= 20 * 1000,
-    `VaultSwapDetails expiry timestamp is not within a 1 minute drift of the expected expiry time.
+    `VaultSwapDetails expiry timestamp is not within a 20 secs drift of the expected expiry time.
       expectedExpiresAt = ${expectedExpiresAt} and actualExpiresAt = ${vaultSwapDetails.expires_at}`,
   );
 

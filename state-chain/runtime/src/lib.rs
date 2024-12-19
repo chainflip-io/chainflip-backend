@@ -2246,10 +2246,10 @@ impl_runtime_apis! {
 
 			// Payload expiry time is set to time left to next rotation.
 			// 	* For BTC: the actual expiry time is 2 rotations, but we deliberately set expires_at to be the time left to next
-			//    rotation to cater for the case when a forced rotation happens between when the payload was requested and before expires_at.
-			//    BTC funds can be lost in 3 cases:
-			// 		* If the user makes the vault transaction after expires_at, and it happens that we did a forced rotation in between
-			//      * User submits the vault transaction 3 days (1 epoch) after expires_at, and with forced rotations in between
+			//    rotation to cater for the case when a forced rotation happens between when the payload was requested and
+			//    before expires_at. BTC funds can be lost in 3 cases:
+			// 		* User makes the vault transaction after expires_at, and it happens that we did a forced rotation in between
+			//      * User submits the vault transaction 3 days (1 epoch) after expires_at, and with no forced rotations in between
 			//      * We do 2 forced rotations in between payload request and expires_at
 			//  * For SOLANA: The actual expiry time is indeed time left to next rotation. If a forced rotation
 			//    happens in between as explained before, it is actually not a problem as the user won't lose any funds.
