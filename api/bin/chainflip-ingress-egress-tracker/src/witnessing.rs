@@ -6,8 +6,10 @@ pub mod state_chain;
 use self::state_chain::handle_call;
 use crate::{settings::DepositTrackerSettings, store::RedisStore};
 use cf_chains::dot::PolkadotHash;
-use cf_primitives::{chains::assets::eth::Asset, NetworkEnvironment};
 use cf_utilities::task_scope;
+use chainflip_api::primitives::{
+	chains::assets::eth::Asset as EthAsset, Asset, NetworkEnvironment,
+};
 use chainflip_engine::{
 	state_chain_observer::{
 		self,
@@ -30,7 +32,7 @@ pub(super) struct EnvironmentParameters {
 	flip_contract_address: H160,
 	usdc_contract_address: H160,
 	usdt_contract_address: H160,
-	supported_erc20_tokens: HashMap<H160, cf_primitives::Asset>,
+	supported_erc20_tokens: HashMap<H160, Asset>,
 	dot_genesis_hash: PolkadotHash,
 	pub chainflip_network: NetworkEnvironment,
 }
@@ -67,15 +69,15 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		.expect("Failed to fetch Ethereum supported assets");
 
 	let flip_contract_address =
-		*supported_erc20_tokens.get(&Asset::Flip).expect("FLIP not supported");
+		*supported_erc20_tokens.get(&EthAsset::Flip).expect("FLIP not supported");
 
 	let usdc_contract_address =
-		*supported_erc20_tokens.get(&Asset::Usdc).expect("USDC not supported");
+		*supported_erc20_tokens.get(&EthAsset::Usdc).expect("USDC not supported");
 
 	let usdt_contract_address =
-		*supported_erc20_tokens.get(&Asset::Usdt).expect("USDT not supported");
+		*supported_erc20_tokens.get(&EthAsset::Usdt).expect("USDT not supported");
 
-	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
+	let supported_erc20_tokens: HashMap<H160, Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();

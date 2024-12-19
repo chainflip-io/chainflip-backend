@@ -1782,7 +1782,6 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "cf-chains",
- "cf-primitives",
  "chainflip-api",
  "chainflip-engine",
  "clap",
