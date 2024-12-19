@@ -11,7 +11,7 @@ use codec::{Decode, Encode};
 
 pub mod old {
 	use super::*;
-	use cf_chains::{CcmDepositMetadata, ChannelRefundParameters, ForeignChainAddress};
+	use cf_chains::{CcmDepositMetadata, ChannelRefundParametersDecoded, ForeignChainAddress};
 	use cf_primitives::{Asset, AssetAmount, Beneficiaries, SwapId};
 	use frame_support::Twox64Concat;
 
@@ -47,7 +47,7 @@ pub mod old {
 		pub id: SwapRequestId,
 		pub input_asset: Asset,
 		pub output_asset: Asset,
-		pub refund_params: Option<ChannelRefundParameters>,
+		pub refund_params: Option<ChannelRefundParametersDecoded>,
 		pub state: SwapRequestState<T>,
 	}
 
