@@ -222,7 +222,8 @@ pub fn solana_vault_swap(
 					)
 				},
 				_ => unreachable!("None-Solana assets should never use this branch of logic"),
-			},
+			}
+			.into(),
 		})
 	} else {
 		Err(DispatchErrorWithMessage::from(
