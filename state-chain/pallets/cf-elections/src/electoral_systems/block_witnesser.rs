@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::bounded::alloc::collections::BTreeSet;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-use super::block_height_tracking::ChainProgress;
+use super::block_height_tracking::OldChainProgress as ChainProgress;
 
 // Rather than push processing outside, we could provide an evaluation function that is called
 // to determine whether to process or not. This keeps things encapsulated a little better.

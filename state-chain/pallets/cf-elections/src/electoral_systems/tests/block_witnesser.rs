@@ -21,7 +21,7 @@ use super::{
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystem},
 	electoral_systems::{
-		block_height_tracking::{ChainProgress, RangeOfBlockWitnessRanges},
+		block_height_tracking::{OldChainProgress as ChainProgress, RangeOfBlockWitnessRanges},
 		block_witnesser::*,
 	},
 };

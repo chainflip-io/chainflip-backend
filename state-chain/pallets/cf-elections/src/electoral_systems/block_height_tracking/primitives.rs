@@ -29,7 +29,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-use super::{state_machine::Validate, ChainProgress};
+use super::{state_machine::Validate, BlockHeightTrait, ChainProgress};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -48,43 +48,15 @@ pub struct MergeInfo<H, N> {
 	pub added: VecDeque<Header<H, N>>,
 }
 
-impl<
-		H,
-		N: Copy
-			+ Saturating
-			+ Sub<N, Output = N>
-			+ Rem<N, Output = N>
-			+ Eq
-			+ One
-			+ PartialOrd
-			+ Step
-			+ Into<u64>,
-	> MergeInfo<H, N>
-{
+impl<H, N: Copy + Step> MergeInfo<H, N> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<N>> {
 		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
 			if let (Some(first_removed), Some(last_removed)) =
 				(self.removed.front(), self.removed.back())
 			{
-				todo!("resolve this");
-				// Some(ChainProgress::Reorg {
-				// 	removed: first_removed.block_height..=first_removed.block_height,
-				// 	added: first_added.block_height..=last_added.block_height,
-				// })
+				Some(ChainProgress::Reorg(first_added.block_height..=last_added.block_height))
 			} else {
-				// Some(ChainProgress::Continuous(first_added.block_height..=last_added.
-				// block_height))
-
-				// TODO: pass through witness period
-				Some(ChainProgress::Continuous(
-					RangeOfBlockWitnessRanges::try_new(
-						first_added.block_height,
-						last_added.block_height,
-						// TODO: Get the actual witness root
-						N::one(),
-					)
-					.ok()?,
-				))
+				Some(ChainProgress::Continuous(first_added.block_height..=last_added.block_height))
 			}
 		} else {
 			None
@@ -152,7 +124,6 @@ pub enum VoteValidationError {
 /// This should always be a continuous chain of block headers
 pub struct ChainBlocks<H, N> {
 	pub headers: VecDeque<Header<H, N>>,
-	pub next_height: N,
 }
 
 impl<H, N: Copy> ChainBlocks<H, N> {
@@ -172,58 +143,20 @@ impl<H, N: Copy> ChainBlocks<H, N> {
 impl<H, N> Validate for ChainBlocks<H, N>
 where
 	H: PartialEq + Clone,
-	N: PartialEq
-		+ Ord
-		+ From<u32>
-		+ Add<N, Output = N>
-		+ Sub<N, Output = N>
-		+ SubAssign<N>
-		+ AddAssign<N>
-		+ Copy,
+	N: PartialEq + Ord + Copy + BlockHeightTrait,
 {
 	type Error = VoteValidationError;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		// let mut required_block_height = self.headers.back().unwrap().block_height;
-		// let mut required_hash = None;
+		let mut pairs = self.headers.iter().zip(self.headers.iter().skip(1));
 
-		if self
-			.headers
-			.iter()
-			.zip(self.headers.iter().skip(1))
-			.all(|(a, b)| a.hash == b.parent_hash)
-		{
-			()
+		if !pairs.clone().all(|(a, b)| N::forward(a.block_height, 1) == b.block_height) {
+			Err(VoteValidationError::BlockHeightsNotContinuous)
+		} else if !pairs.all(|(a, b)| a.hash == b.parent_hash) {
+			Err(VoteValidationError::ParentHashMismatch)
 		} else {
-			return Err(VoteValidationError::ParentHashMismatch);
+			Ok(())
 		}
-
-		if self
-			.headers
-			.iter()
-			.zip(self.headers.iter().skip(1))
-			.all(|(a, b)| a.block_height + 1.into() == b.block_height)
-		{
-			()
-		} else {
-			return Err(VoteValidationError::BlockHeightsNotContinuous);
-		}
-
-		// for header in self.headers.iter().rev() {
-		// 	ensure!(
-		// 		header.block_height == required_block_height,
-		// 		VoteValidationError::BlockHeightsNotContinuous
-		// 	);
-		// 	ensure!(
-		// 		Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
-		// 		VoteValidationError::ParentHashMismatch
-		// 	);
-
-		// 	required_block_height -= 1u32.into();
-		// 	required_hash = Some(header.parent_hash.clone());
-		// }
-
-		Ok(())
 	}
 }
 
@@ -232,13 +165,7 @@ pub fn validate_vote_and_height<H: PartialEq + Clone, N: PartialEq>(
 	other: &VecDeque<Header<H, N>>,
 ) -> Result<(), VoteValidationError>
 where
-	N: Ord
-		+ From<u32>
-		+ Add<N, Output = N>
-		+ Sub<N, Output = N>
-		+ SubAssign<N>
-		+ AddAssign<N>
-		+ Copy,
+	N: Ord + Copy + BlockHeightTrait,
 {
 	// a vote has to be nonempty
 	if other.len() == 0 {
@@ -251,11 +178,7 @@ where
 	}
 
 	// a vote has to be continous
-	ChainBlocks {
-		headers: other.clone(),
-		next_height: 0.into(), // TODO remove next_height at all
-	}
-	.is_valid() // validate_continous_headers(other)
+	ChainBlocks { headers: other.clone() }.is_valid() // validate_continous_headers(other)
 }
 
 pub enum ChainBlocksMergeResult<N> {
@@ -263,38 +186,7 @@ pub enum ChainBlocksMergeResult<N> {
 	FailedMissing { range: Range<N> },
 }
 
-impl<
-		H: Eq + Clone,
-		N: Ord
-			+ From<u32>
-			+ Add<N, Output = N>
-			+ Sub<N, Output = N>
-			+ SubAssign<N>
-			+ AddAssign<N>
-			+ Copy,
-	> ChainBlocks<H, N>
-{
-	fn validate(&self) -> Result<(), VoteValidationError> {
-		let mut required_block_height = self.next_height - 1u32.into();
-		let mut required_hash = None;
-
-		for header in self.headers.iter().rev() {
-			ensure!(
-				header.block_height == required_block_height,
-				VoteValidationError::BlockHeightsNotContinuous
-			);
-			ensure!(
-				Some(&header.hash) == required_hash.as_ref().or(Some(&header.hash)),
-				VoteValidationError::ParentHashMismatch
-			);
-
-			required_block_height -= 1u32.into();
-			required_hash = Some(header.parent_hash.clone());
-		}
-
-		Ok(())
-	}
-
+impl<H: Eq + Clone, N: Ord + Copy + Step> ChainBlocks<H, N> {
 	//
 	// We have the following assumptions:
 	//
@@ -314,12 +206,9 @@ impl<
 			.front()
 			.ok_or(MergeFailure::InternalError("expected other to not be empty!".into()))?;
 
-		let self_next_height = self.headers.back().unwrap().block_height + 1u32.into();
+		let self_next_height = N::forward(self.headers.back().unwrap().block_height, 1);
 
-		if self_next_height == other_head.block_height
-		// ||
-		// (self.next_height == 0u32.into() && self.headers.len() == 0)
-		{
+		if self_next_height == other_head.block_height {
 			// this is "assumption (3): case 1"
 			//
 			// This means that our new blocks start exactly after the ones we already have,

@@ -11,7 +11,11 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_chains::{assets::arb::Chain, btc::BlockNumber, witness_period::BlockWitnessRange};
+use cf_chains::{
+	assets::arb::Chain,
+	btc::BlockNumber,
+	witness_period::{BlockWitnessRange, BlockZero},
+};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
 use consensus::{ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold};
@@ -56,9 +60,9 @@ pub struct BlockHeightTrackingProperties<BlockNumber> {
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
 pub struct RangeOfBlockWitnessRanges<ChainBlockNumber> {
-	witness_from_root: ChainBlockNumber,
-	witness_to_root: ChainBlockNumber,
-	witness_period: ChainBlockNumber,
+	pub witness_from_root: ChainBlockNumber,
+	pub witness_to_root: ChainBlockNumber,
+	pub witness_period: ChainBlockNumber,
 }
 
 impl<
@@ -97,7 +101,7 @@ impl<
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ChainProgress<ChainBlockNumber> {
+pub enum OldChainProgress<ChainBlockNumber> {
 	// Block witnesser will discard any elections that were started for this range and start them
 	// again since we've detected a reorg
 	Reorg(RangeOfBlockWitnessRanges<ChainBlockNumber>),
@@ -109,21 +113,22 @@ pub enum ChainProgress<ChainBlockNumber> {
 	WaitingForFirstConsensus,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub enum ChainProgress<ChainBlockNumber> {
+	// Block witnesser will discard any elections that were started for this range and start them
+	// again since we've detected a reorg
+	Reorg(RangeInclusive<ChainBlockNumber>),
+	// the chain is just progressing as a normal chain of hashes
+	Continuous(RangeInclusive<ChainBlockNumber>),
+	// there was no update to the witnessed block headers
+	None(ChainBlockNumber),
+	// We are starting up and don't have consensus on a block number yet
+	WaitingForFirstConsensus,
+}
+
 //-------- implementation of block height tracking as a state machine --------------
 
-trait BlockHeightTrait = PartialEq
-	+ Ord
-	+ From<u32>
-	+ Add<Self, Output = Self>
-	+ Sub<Self, Output = Self>
-	+ SubAssign<Self>
-	+ AddAssign<Self>
-	+ Copy
-	+ Saturating
-	+ Rem<Self, Output = Self>
-	+ Into<u64>
-	+ One
-	+ Step;
+trait BlockHeightTrait = PartialEq + Ord + Copy + Step + BlockZero;
 
 pub struct BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash> {
 	votes: Vec<InputHeaders<ChainBlockHash, ChainBlockNumber>>,
@@ -155,7 +160,7 @@ impl<
 
 		let (threshold, properties) = settings;
 
-		if properties.witness_from_index == 0u32.into() {
+		if properties.witness_from_index.is_zero() {
 			// This is the case for finding an appropriate block number to start witnessing from
 
 			let mut consensus: SupermajorityConsensus<_> = SupermajorityConsensus::default();
@@ -219,7 +224,7 @@ pub struct InputHeaders<H, N>(pub VecDeque<Header<H, N>>);
 #[cfg(test)]
 mod tests {
 
-	use sp_std::collections::vec_deque::VecDeque;
+	use core::iter::Step;
 
 	use crate::electoral_systems::block_height_tracking::state_machine::{Indexed, Validate};
 	use proptest::{
@@ -232,10 +237,7 @@ mod tests {
 		InputHeaders,
 	};
 
-	pub fn arb_input_headers<
-		H: Arbitrary + Clone,
-		N: Arbitrary + Clone + 'static + sp_std::ops::Add<N, Output = N> + From<u32>,
-	>(
+	pub fn arb_input_headers<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static + Step>(
 		witness_from: N,
 	) -> impl Strategy<Value = InputHeaders<H, N>> {
 		// TODO: handle the case where `witness_from` = 0.
@@ -243,29 +245,16 @@ mod tests {
 		prop::collection::vec(any::<H>(), 2..10).prop_map(move |data| {
 			let headers =
 				data.iter().zip(data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
-					block_height: N::from(ix as u32) + witness_from.clone(),
+					block_height: N::forward(witness_from.clone(), ix),
 					hash: h1.clone(),
 					parent_hash: h0.clone(),
 				});
 			InputHeaders::<H, N>(headers.collect())
 		})
-
-		// (any::<H>(), any::<H>()).prop_map(move |(h, p)| {
-		// 	InputHeaders::<H, N>(VecDeque::from(vec![Header {
-		// 		block_height: witness_from.clone(),
-		// 		hash: h,
-		// 		parent_hash: p,
-		// 	}]))
-		// })
-		// (any::<N>(), any::<H>(), any::<H>()).prop_map(move |(n, h, p)|
-		// InputHeaders::<H,N>(VecDeque::from(vec![ Header { block_height: n, hash: h, parent_hash:
-		// p }])))
 	}
 
-	pub fn arb_state<
-		H: Arbitrary + Clone,
-		N: Arbitrary + Clone + 'static + sp_std::ops::Add<N, Output = N> + From<u32>,
-	>() -> impl Strategy<Value = BHWState<H, N>> {
+	pub fn arb_state<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static + Step>(
+	) -> impl Strategy<Value = BHWState<H, N>> {
 		prop_oneof![
 			Just(BHWState::Starting),
 			(any::<N>(), any::<bool>()).prop_flat_map(move |(n, is_reorg_without_known_root)| {
@@ -273,7 +262,7 @@ mod tests {
 					let witness_from = if is_reorg_without_known_root {
 						headers.0.front().unwrap().block_height.clone()
 					} else {
-						headers.0.back().unwrap().block_height.clone() + 1.into()
+						N::forward(headers.0.back().unwrap().block_height.clone(), 1)
 					};
 					BHWState::Running { headers: headers.0, witness_from }
 				})
@@ -289,11 +278,11 @@ mod tests {
 	}
 }
 
-impl<H, N: From<u32> + Copy + PartialEq> Indexed for InputHeaders<H, N> {
+impl<H, N: BlockZero + Copy + PartialEq> Indexed for InputHeaders<H, N> {
 	type Index = BlockHeightTrackingProperties<N>;
 
 	fn has_index(&self, base: &Self::Index) -> bool {
-		if base.witness_from_index == 0.into() {
+		if base.witness_from_index.is_zero() {
 			true
 		} else {
 			match self.0.front() {
@@ -310,7 +299,7 @@ impl<H: PartialEq + Clone, N: BlockHeightTrait> Validate for InputHeaders<H, N> 
 		if self.0.len() == 0 {
 			Err(VoteValidationError::EmptyVote)
 		} else {
-			ChainBlocks { headers: self.0.clone(), next_height: 0.into() }.is_valid()
+			ChainBlocks { headers: self.0.clone() }.is_valid()
 		}
 	}
 }
@@ -380,12 +369,10 @@ impl<
 
 	fn input_index(s: &Self::State) -> <Self::Input as state_machine::Indexed>::Index {
 		let witness_from_index = match s {
-			BHWState::Starting => 0.into(),
+			BHWState::Starting => N::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from.clone(),
 		};
-		BlockHeightTrackingProperties {
-			witness_from_index
-		}
+		BlockHeightTrackingProperties { witness_from_index }
 	}
 
 	// specification for step function
@@ -403,7 +390,7 @@ impl<
 					witness_from: before_witness_from,
 				} =>
 					(*witness_from == before_headers.front().unwrap().block_height) ||
-						(*witness_from == headers.back().unwrap().block_height + 1.into()),
+						(*witness_from == N::forward(headers.back().unwrap().block_height, 1)),
 			},
 		}
 	}
@@ -415,17 +402,13 @@ impl<
 				let last = new_headers.0.back().unwrap().block_height;
 				*s = BHWState::Running {
 					headers: new_headers.0.clone(),
-					witness_from: last + 1.into(),
+					witness_from: N::forward(last, 1),
 				};
-				todo!()
-				// Ok(ChainProgress::Continuous(first..=last))
+				Ok(ChainProgress::Continuous(first..=last))
 			},
 
 			BHWState::Running { headers, witness_from } => {
-				let mut chainblocks = ChainBlocks {
-					headers: headers.clone(),
-					next_height: headers.back().unwrap().block_height,
-				};
+				let mut chainblocks = ChainBlocks { headers: headers.clone() };
 
 				match chainblocks.merge(new_headers.0) {
 					Ok(merge_info) => {
@@ -440,7 +423,7 @@ impl<
 						let current_state = chainblocks.current_state_as_no_chain_progress();
 
 						*headers = chainblocks.headers;
-						*witness_from = headers.back().unwrap().block_height + 1.into();
+						*witness_from = N::forward(headers.back().unwrap().block_height, 1);
 
 						// if we merge after a reorg, and the blocks we got are the same
 						// as the ones we previously had, then `into_chain_progress` might
