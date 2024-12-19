@@ -933,7 +933,7 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 #[derive(
 	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
 )]
-pub enum VaultSwapExtraParameters<Address, Number> {
+#[serde(tag = "chain")]
 	Bitcoin {
 		min_output_amount: Number,
 		retry_duration: BlockNumber,
