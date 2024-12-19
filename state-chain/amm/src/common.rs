@@ -333,12 +333,12 @@ mod fast_tests {
 		);
 
 		assert_eq!(
-			U512::from(1) << 127,
-			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 127).unwrap() >> 128
+			U512::from(1) << 128,
+			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 128).unwrap() >> 128
 		);
 
 		// Expected to overflow
-		assert_eq!(fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 128), None);
+		assert_eq!(fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 256), None);
 	}
 
 	#[test]
