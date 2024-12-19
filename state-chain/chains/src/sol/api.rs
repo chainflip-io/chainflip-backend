@@ -36,6 +36,8 @@ pub struct AllNonceAccounts;
 pub struct ApiEnvironment;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct CurrentAggKey;
+#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+pub struct CurrentOnChainKey;
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
 
@@ -63,6 +65,7 @@ pub struct VaultSwapAccountAndSender {
 pub trait SolanaEnvironment:
 	ChainEnvironment<ApiEnvironment, SolApiEnvironment>
 	+ ChainEnvironment<CurrentAggKey, SolAddress>
+	+ ChainEnvironment<CurrentOnChainKey, SolAddress>
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
@@ -83,6 +86,11 @@ pub trait SolanaEnvironment:
 
 	fn current_agg_key() -> Result<SolAddress, SolanaTransactionBuildingError> {
 		<Self as ChainEnvironment<CurrentAggKey, SolAddress>>::lookup(CurrentAggKey)
+			.ok_or(SolanaTransactionBuildingError::CannotLookupCurrentAggKey)
+	}
+
+	fn current_on_chain_key() -> Result<SolAddress, SolanaTransactionBuildingError> {
+		<Self as ChainEnvironment<CurrentOnChainKey, SolAddress>>::lookup(CurrentOnChainKey)
 			.ok_or(SolanaTransactionBuildingError::CannotLookupCurrentAggKey)
 	}
 

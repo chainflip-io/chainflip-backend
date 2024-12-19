@@ -126,6 +126,10 @@ pub fn solana_vault_swap<A>(
 		.map_err(|_| "Failed to load Solana Agg key")?
 		.into();
 
+	let on_chain_key = SolEnvironment::current_on_chain_key()
+		.map_err(|_| DispatchErrorWithMessage::from("Failed to load Solana On-chain key"))?
+		.into();
+
 	// Ensure CCM message is valid
 	if let Some(ccm) = channel_metadata.as_ref() {
 		if let DecodedCcmAdditionalData::Solana(ccm_accounts) =
@@ -134,7 +138,7 @@ pub fn solana_vault_swap<A>(
 			// Ensure the CCM parameters do not contain blacklisted accounts.
 			check_ccm_for_blacklisted_accounts(
 				&ccm_accounts,
-				vec![api_environment.token_vault_pda_account.into(), agg_key],
+				vec![api_environment.token_vault_pda_account.into(), agg_key, on_chain_key],
 			)
 			.map_err(DispatchError::from)?;
 		} else {
@@ -160,7 +164,7 @@ pub fn solana_vault_swap<A>(
 		instruction: match source_asset {
 			Asset::Sol => SolanaInstructionBuilder::x_swap_native(
 				api_environment,
-				agg_key,
+				on_chain_key,
 				destination_asset,
 				destination_address,
 				broker_id,
