@@ -10,7 +10,10 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
 		block_height_tracking::{self, BlockHeightTracking},
-		block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData},
+		block_witnesser::{
+			BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings,
+			ProcessBlockData,
+		},
 		composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
@@ -160,7 +163,11 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 	InitialState {
 		unsynchronised_state: (Default::default(), Default::default()),
-		unsynchronised_settings: (Default::default(), Default::default()),
+		unsynchronised_settings: (
+			Default::default(),
+			// TODO: Write a migration to set this too.
+			BlockWitnesserSettings { max_concurrent_elections: 5 },
+		),
 		settings: (Default::default(), Default::default()),
 	}
 }
