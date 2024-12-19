@@ -63,11 +63,11 @@ pub trait AddressDerivationApi<C: Chain> {
 	Deserialize,
 )]
 pub enum ForeignChainAddress {
-	Eth(EvmAddress),
-	Dot(PolkadotAccountId),
-	Btc(ScriptPubkey),
-	Arb(EvmAddress),
-	Sol(SolAddress),
+	Eth(<Ethereum as Chain>::ChainAccount),
+	Dot(<Polkadot as Chain>::ChainAccount),
+	Btc(<Bitcoin as Chain>::ChainAccount),
+	Arb(<Arbitrum as Chain>::ChainAccount),
+	Sol(<Solana as Chain>::ChainAccount),
 }
 
 impl ForeignChainAddress {
@@ -222,6 +222,15 @@ impl IntoForeignChainAddress<Solana> for SolAddress {
 }
 
 impl EncodedAddress {
+	pub fn inner_bytes(&self) -> &[u8] {
+		match self {
+			EncodedAddress::Eth(inner) => &inner[..],
+			EncodedAddress::Dot(inner) => &inner[..],
+			EncodedAddress::Btc(inner) => &inner[..],
+			EncodedAddress::Arb(inner) => &inner[..],
+			EncodedAddress::Sol(inner) => &inner[..],
+		}
+	}
 	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Result<Self, &'static str> {
 		match chain {
 			ForeignChain::Ethereum => {
