@@ -177,7 +177,8 @@ pub fn solana_vault_swap<A>(
 				event_data_account,
 				input_amount,
 				channel_metadata,
-			),
+			)
+			.into(),
 			Asset::SolUsdc => {
 				let token_supported_account =
 						cf_chains::sol::sol_tx_core::address_derivation::derive_token_supported_account(
@@ -208,7 +209,8 @@ pub fn solana_vault_swap<A>(
 					input_amount,
 					channel_metadata,
 				)
-			},
+			}
+			.into(),
 			_ => Err("Invalid source_asset: Not a Solana asset.")?,
 		}
 		.into(),
