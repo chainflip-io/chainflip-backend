@@ -11,28 +11,42 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_chains::{assets::arb::Chain, btc::BlockNumber, witness_period::BlockWitnessRange};
+use cf_chains::{
+	assets::arb::Chain,
+	btc::BlockNumber,
+	witness_period::{BlockWitnessRange, BlockZero},
+};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
-use consensus::{Consensus, StagedConsensus, SupermajorityConsensus, Threshold};
+use consensus::{ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold};
 use frame_support::{
 	ensure,
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	pallet_prelude::{MaxEncodedLen, MaybeSerializeDeserialize, Member},
 	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating},
 	Parameter,
 };
 use itertools::Itertools;
-use primitives::{trim_to_length, validate_vote_and_height, ChainBlocks, Header, MergeFailure};
+use primitives::{
+	trim_to_length, validate_vote_and_height, ChainBlocks, Header, MergeFailure,
+	VoteValidationError,
+};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
 	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
 	vec::Vec,
 };
+use state_machine::{Indexed, StateMachine, Validate};
+
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 
 pub mod consensus;
 pub mod primitives;
+pub mod state_machine;
+pub mod state_machine_es;
 
+#[cfg_attr(test, derive(Arbitrary))]
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
@@ -45,39 +59,10 @@ pub struct BlockHeightTrackingProperties<BlockNumber> {
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
-pub struct BlockHeightTrackingState<BlockHash, BlockNumber> {
-	/// The headers which the nodes have agreed on previously,
-	/// starting with `last_safe_index` + 1
-	// pub headers: VecDeque<Header<BlockHash, BlockNumber>>,
-	pub headers: ChainBlocks<BlockHash, BlockNumber>,
-
-	/// The last index which is past the `SAFETY_MARGIN`. This means
-	/// that reorderings concerning this block and lower should be extremely
-	/// rare. Does not mean that they don't happen though, so the code has to
-	/// take this into account.
-	pub last_safe_index: BlockNumber,
-}
-
-impl<H, N: From<u32>> Default for BlockHeightTrackingState<H, N> {
-	fn default() -> Self {
-		let headers = ChainBlocks { headers: Default::default(), next_height: 0u32.into() };
-		Self { headers, last_safe_index: 0u32.into() }
-	}
-}
-
-pub fn validate_vote<ChainBlockHash, ChainBlockNumber>(
-	properties: BlockHeightTrackingProperties<ChainBlockNumber>,
-	vote: Header<ChainBlockHash, ChainBlockNumber>,
-) {
-}
-
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
 pub struct RangeOfBlockWitnessRanges<ChainBlockNumber> {
-	witness_from_root: ChainBlockNumber,
-	witness_to_root: ChainBlockNumber,
-	witness_period: ChainBlockNumber,
+	pub witness_from_root: ChainBlockNumber,
+	pub witness_to_root: ChainBlockNumber,
+	pub witness_period: ChainBlockNumber,
 }
 
 impl<
@@ -116,7 +101,7 @@ impl<
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ChainProgress<ChainBlockNumber> {
+pub enum OldChainProgress<ChainBlockNumber> {
 	// Block witnesser will discard any elections that were started for this range and start them
 	// again since we've detected a reorg
 	Reorg(RangeOfBlockWitnessRanges<ChainBlockNumber>),
@@ -128,219 +113,346 @@ pub enum ChainProgress<ChainBlockNumber> {
 	WaitingForFirstConsensus,
 }
 
-// -- electoral system
-pub struct BlockHeightTracking<
-	const SAFETY_MARGIN: usize,
-	ChainBlockNumber,
-	ChainBlockHash,
-	Settings,
-	ValidatorId,
-> {
-	_phantom: core::marker::PhantomData<(ChainBlockNumber, ChainBlockHash, Settings, ValidatorId)>,
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub enum ChainProgress<ChainBlockNumber> {
+	// Block witnesser will discard any elections that were started for this range and start them
+	// again since we've detected a reorg
+	Reorg(RangeInclusive<ChainBlockNumber>),
+	// the chain is just progressing as a normal chain of hashes
+	Continuous(RangeInclusive<ChainBlockNumber>),
+	// there was no update to the witnessed block headers
+	None(ChainBlockNumber),
+	// We are starting up and don't have consensus on a block number yet
+	WaitingForFirstConsensus,
+}
+
+//-------- implementation of block height tracking as a state machine --------------
+
+trait BlockHeightTrait = PartialEq + Ord + Copy + Step + BlockZero;
+
+pub struct BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash> {
+	votes: Vec<InputHeaders<ChainBlockHash, ChainBlockNumber>>,
+}
+
+impl<ChainBlockNumber, ChainBlockHash> Default
+	for BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash>
+{
+	fn default() -> Self {
+		Self { votes: Default::default() }
+	}
 }
 
 impl<
-		const SAFETY_MARGIN: usize,
-		ChainBlockNumber: MaybeSerializeDeserialize
-			+ Member
-			+ Parameter
-			+ Ord
-			+ Copy
-			+ AtLeast32BitUnsigned
-			+ Into<u64>
-			+ Step,
-		ChainBlockHash: MaybeSerializeDeserialize + Member + Parameter + Ord,
-		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem
-	for BlockHeightTracking<SAFETY_MARGIN, ChainBlockNumber, ChainBlockHash, Settings, ValidatorId>
+		ChainBlockNumber: BlockHeightTrait + sp_std::fmt::Debug,
+		ChainBlockHash: Clone + PartialEq + Ord + sp_std::fmt::Debug,
+	> ConsensusMechanism for BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash>
 {
-	type ValidatorId = ValidatorId;
-	type ElectoralUnsynchronisedState = BlockHeightTrackingState<ChainBlockHash, ChainBlockNumber>;
-	type ElectoralUnsynchronisedStateMapKey = ();
-	type ElectoralUnsynchronisedStateMapValue = ();
+	type Vote = InputHeaders<ChainBlockHash, ChainBlockNumber>;
+	type Result = InputHeaders<ChainBlockHash, ChainBlockNumber>;
+	type Settings = (Threshold, BlockHeightTrackingProperties<ChainBlockNumber>);
 
-	type ElectoralUnsynchronisedSettings = ();
-	type ElectoralSettings = Settings;
-	type ElectionIdentifierExtra = ();
-	type ElectionProperties = BlockHeightTrackingProperties<ChainBlockNumber>;
-	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<VecDeque<Header<ChainBlockHash, ChainBlockNumber>>>;
-	type Consensus = VecDeque<Header<ChainBlockHash, ChainBlockNumber>>;
-	type OnFinalizeContext = ();
-
-	// new block to query for the block witnesser
-	type OnFinalizeReturn = ChainProgress<ChainBlockNumber>;
-
-	fn generate_vote_properties(
-		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
-		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
-	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
-		Ok(())
+	fn insert_vote(&mut self, vote: Self::Vote) {
+		self.votes.push(vote);
 	}
 
-	// Emits the range of blocks which should be witnessed next.
-	// If a reorg happened then the lower bound of the range is going
-	// to be <= a previously emitted (inclusive) upper bound.
-	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
-		election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
-		_context: &Self::OnFinalizeContext,
-	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
-		if let Some(election_identifier) = election_identifiers
-			.into_iter()
-			.at_most_one()
-			.map_err(|_| CorruptStorageError::new())?
-		{
-			let election_access = ElectoralAccess::election_mut(election_identifier);
-			if let Some(new_headers) = election_access.check_consensus()?.has_consensus() {
-				election_access.delete();
+	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
+		// let num_authorities = consensus_votes.num_authorities();
 
-				let (block_witnesser_range, next_index) =
-					ElectoralAccess::mutate_unsynchronised_state(|unsynchronised_state| {
-						match unsynchronised_state.headers.merge(new_headers) {
-							Ok(merge_info) => {
-								log::info!(
-									"added new blocks: {:?}, replacing these blocks: {:?}",
-									merge_info.added,
-									merge_info.removed
-								);
+		let (threshold, properties) = settings;
 
-								let safe_headers = trim_to_length(
-									&mut unsynchronised_state.headers.headers,
-									SAFETY_MARGIN,
-								);
-								unsynchronised_state.last_safe_index +=
-									(safe_headers.len() as u32).into();
-
-								log::info!(
-									"the latest safe block height is {:?} (advanced by {})",
-									unsynchronised_state.last_safe_index,
-									safe_headers.len()
-								);
-
-								Ok((
-									merge_info.into_chain_progress().unwrap(),
-									unsynchronised_state.headers.next_height,
-								))
-							},
-							Err(MergeFailure::ReorgWithUnknownRoot {
-								new_block,
-								existing_wrong_parent,
-							}) => {
-								log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
-								Ok((
-									unsynchronised_state
-										.headers
-										.current_state_as_no_chain_progress(),
-									unsynchronised_state
-										.headers
-										.first_height()
-										.unwrap_or(0u32.into()), /* If we have no first height
-									                           * recorded, we have to restart
-									                           * the election?! */
-								))
-							},
-							Err(MergeFailure::InternalError(reason)) => {
-								log::error!("internal error in block height tracker: {reason}");
-								Err(CorruptStorageError::new())
-							},
-						}
-					})?;
-
-				let properties = BlockHeightTrackingProperties { witness_from_index: next_index };
-
-				log::info!("Starting new election with properties: {:?}", properties);
-
-				ElectoralAccess::new_election((), properties, ())?;
-
-				Ok(block_witnesser_range)
-			} else {
-				Ok(ElectoralAccess::unsynchronised_state()?
-					.headers
-					.current_state_as_no_chain_progress())
-			}
-		} else {
-			log::info!("Starting new election with index 0 because no elections exist");
-
-			// If we have no elections to process we should start one to get an updated header.
-			// But we have to know which block we want to start witnessing from
-			let properties = BlockHeightTrackingProperties {
-				// TODO: this block height has to come from storage / governance?
-				witness_from_index: 0u32.into(),
-			};
-			ElectoralAccess::new_election((), properties, ())?;
-			Ok(ChainProgress::WaitingForFirstConsensus)
-		}
-	}
-
-	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		election_access: &ElectionAccess,
-		_previous_consensus: Option<&Self::Consensus>,
-		consensus_votes: ConsensusVotes<Self>,
-	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-		let num_authorities = consensus_votes.num_authorities();
-
-		let properties = election_access.properties()?;
-		if properties.witness_from_index == 0u32.into() {
+		if properties.witness_from_index.is_zero() {
 			// This is the case for finding an appropriate block number to start witnessing from
 
 			let mut consensus: SupermajorityConsensus<_> = SupermajorityConsensus::default();
 
-			for vote in consensus_votes.active_votes() {
+			for vote in &self.votes {
 				// we currently only count votes consisting of a single block height
 				// there has to be a supermajority voting for the exact same header
-				if vote.len() == 1 {
-					consensus.insert_vote(vote[0].clone())
+				if vote.0.len() == 1 {
+					consensus.insert_vote(vote.0[0].clone())
 				}
 			}
 
-			Ok(consensus
-				.check_consensus(&Threshold {
-					threshold: success_threshold_from_share_count(num_authorities),
-				})
+			consensus
+				.check_consensus(&threshold)
 				.map(|result| {
 					let mut headers = VecDeque::new();
 					headers.push_back(result);
-					headers
+					InputHeaders(headers)
 				})
 				.map(|result| {
 					log::info!("block_height: initial consensus: {result:?}");
 					result
-				}))
+				})
 		} else {
 			// This is the actual consensus finding, once the engine is running
 
-			let mut consensus: StagedConsensus<SupermajorityConsensus<Self::Consensus>, usize> =
+			let mut consensus: StagedConsensus<SupermajorityConsensus<Self::Vote>, usize> =
 				StagedConsensus::new();
 
-			for mut vote in consensus_votes.active_votes() {
+			for mut vote in self.votes.clone() {
 				// ensure that the vote is valid
-				if let Err(err) = validate_vote_and_height(properties.witness_from_index, &vote) {
+				if let Err(err) = validate_vote_and_height(properties.witness_from_index, &vote.0) {
 					log::warn!("received invalid vote: {err:?} ");
 					continue;
 				}
 
 				// we count a given vote as multiple votes for all nonempty subchains
-				while vote.len() > 0 {
-					consensus.insert_vote((vote.len(), vote.clone()));
-					vote.pop_back();
+				while vote.0.len() > 0 {
+					consensus.insert_vote((vote.0.len(), vote.clone()));
+					vote.0.pop_back();
 				}
 			}
 
-			Ok(consensus
-				.check_consensus(&Threshold {
-					threshold: success_threshold_from_share_count(num_authorities),
+			consensus.check_consensus(&threshold).map(|result| {
+				log::info!(
+					"(witness_from: {:?}): successful consensus for ranges: {:?}..={:?}",
+					properties,
+					result.0.front(),
+					result.0.back()
+				);
+				result
+			})
+		}
+	}
+}
+
+//------------------------ input headers ---------------------------
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct InputHeaders<H, N>(pub VecDeque<Header<H, N>>);
+
+#[cfg(test)]
+mod tests {
+
+	use core::iter::Step;
+
+	use crate::electoral_systems::block_height_tracking::state_machine::{Indexed, Validate};
+	use proptest::{
+		prelude::{any, prop, Arbitrary, Just, Strategy},
+		prop_oneof, proptest,
+	};
+
+	use super::{
+		primitives::Header, state_machine::StateMachine, BHWState, BlockHeightTrackingDSM,
+		InputHeaders,
+	};
+
+	pub fn arb_input_headers<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static + Step>(
+		witness_from: N,
+	) -> impl Strategy<Value = InputHeaders<H, N>> {
+		// TODO: handle the case where `witness_from` = 0.
+
+		prop::collection::vec(any::<H>(), 2..10).prop_map(move |data| {
+			let headers =
+				data.iter().zip(data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
+					block_height: N::forward(witness_from.clone(), ix),
+					hash: h1.clone(),
+					parent_hash: h0.clone(),
+				});
+			InputHeaders::<H, N>(headers.collect())
+		})
+	}
+
+	pub fn arb_state<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static + Step>(
+	) -> impl Strategy<Value = BHWState<H, N>> {
+		prop_oneof![
+			Just(BHWState::Starting),
+			(any::<N>(), any::<bool>()).prop_flat_map(move |(n, is_reorg_without_known_root)| {
+				arb_input_headers(n).prop_map(move |headers| {
+					let witness_from = if is_reorg_without_known_root {
+						headers.0.front().unwrap().block_height.clone()
+					} else {
+						N::forward(headers.0.back().unwrap().block_height.clone(), 1)
+					};
+					BHWState::Running { headers: headers.0, witness_from }
 				})
-				.map(|result| {
-					log::info!(
-						"(witness_from: {:?}): successful consensus for ranges: {:?}..={:?}",
-						properties.witness_from_index,
-						result.front(),
-						result.back()
-					);
-					result
-				}))
+			}),
+		]
+	}
+
+	#[test]
+	pub fn test_dsm() {
+		BlockHeightTrackingDSM::<6, u32, bool>::test(arb_state(), |index| {
+			arb_input_headers(index.witness_from_index).boxed()
+		});
+	}
+}
+
+impl<H, N: BlockZero + Copy + PartialEq> Indexed for InputHeaders<H, N> {
+	type Index = BlockHeightTrackingProperties<N>;
+
+	fn has_index(&self, base: &Self::Index) -> bool {
+		if base.witness_from_index.is_zero() {
+			true
+		} else {
+			match self.0.front() {
+				Some(first) => first.block_height == base.witness_from_index,
+				None => false,
+			}
+		}
+	}
+}
+
+impl<H: PartialEq + Clone, N: BlockHeightTrait> Validate for InputHeaders<H, N> {
+	type Error = VoteValidationError;
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		if self.0.len() == 0 {
+			Err(VoteValidationError::EmptyVote)
+		} else {
+			ChainBlocks { headers: self.0.clone() }.is_valid()
+		}
+	}
+}
+
+//------------------------ state ---------------------------
+
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub enum BHWState<H, N> {
+	Starting,
+	Running { headers: VecDeque<Header<H, N>>, witness_from: N },
+}
+
+impl<H, N> Default for BHWState<H, N> {
+	fn default() -> Self {
+		Self::Starting
+	}
+}
+
+impl<H: Clone + PartialEq, N: BlockHeightTrait> Validate for BHWState<H, N> {
+	type Error = &'static str;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		match self {
+			BHWState::Starting => Ok(()),
+
+			BHWState::Running { headers, witness_from: _ } =>
+				if headers.len() > 0 {
+					InputHeaders(headers.clone())
+						.is_valid()
+						.map_err(|_| "blocks should be continuous")
+				} else {
+					Err("Block height tracking state should always be non-empty after start-up.")
+				},
+		}
+	}
+}
+
+//------------------------ output ---------------------------
+impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
+	type Error = B;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		match self {
+			Ok(_) => Ok(()),
+			Err(err) => Err(err.clone()),
+		}
+	}
+}
+
+//------------------------ state machine ---------------------------
+pub struct BlockHeightTrackingDSM<const SAFETY_MARGIN: usize, ChainBlockNumber, ChainBlockHash> {
+	_phantom: core::marker::PhantomData<(ChainBlockNumber, ChainBlockHash)>,
+}
+
+impl<
+		const SAFETY_MARGIN: usize,
+		H: PartialEq + Eq + Clone + sp_std::fmt::Debug + 'static,
+		N: BlockHeightTrait + sp_std::fmt::Debug + 'static,
+	> StateMachine for BlockHeightTrackingDSM<SAFETY_MARGIN, N, H>
+{
+	type State = BHWState<H, N>;
+	type DisplayState = ChainProgress<N>;
+	type Input = InputHeaders<H, N>;
+	type Output = Result<ChainProgress<N>, &'static str>;
+
+	fn input_index(s: &Self::State) -> <Self::Input as state_machine::Indexed>::Index {
+		let witness_from_index = match s {
+			BHWState::Starting => N::zero(),
+			BHWState::Running { headers: _, witness_from } => witness_from.clone(),
+		};
+		BlockHeightTrackingProperties { witness_from_index }
+	}
+
+	// specification for step function
+	#[cfg(test)]
+	fn step_specification(before: &Self::State, input: &Self::Input, after: &Self::State) -> bool {
+		match after {
+			// the starting case should only ever be possible as the `before` state.
+			BHWState::Starting => false,
+
+			// otherwise we know that the after state will be running
+			BHWState::Running { headers, witness_from } => match before {
+				BHWState::Starting => true,
+				BHWState::Running {
+					headers: before_headers,
+					witness_from: before_witness_from,
+				} =>
+					(*witness_from == before_headers.front().unwrap().block_height) ||
+						(*witness_from == N::forward(headers.back().unwrap().block_height, 1)),
+			},
+		}
+	}
+
+	fn step(s: &mut Self::State, new_headers: Self::Input) -> Self::Output {
+		match s {
+			BHWState::Starting => {
+				let first = new_headers.0.front().unwrap().block_height;
+				let last = new_headers.0.back().unwrap().block_height;
+				*s = BHWState::Running {
+					headers: new_headers.0.clone(),
+					witness_from: N::forward(last, 1),
+				};
+				Ok(ChainProgress::Continuous(first..=last))
+			},
+
+			BHWState::Running { headers, witness_from } => {
+				let mut chainblocks = ChainBlocks { headers: headers.clone() };
+
+				match chainblocks.merge(new_headers.0) {
+					Ok(merge_info) => {
+						log::info!(
+							"added new blocks: {:?}, replacing these blocks: {:?}",
+							merge_info.added,
+							merge_info.removed
+						);
+
+						let safe_headers = trim_to_length(&mut chainblocks.headers, SAFETY_MARGIN);
+
+						let current_state = chainblocks.current_state_as_no_chain_progress();
+
+						*headers = chainblocks.headers;
+						*witness_from = N::forward(headers.back().unwrap().block_height, 1);
+
+						// if we merge after a reorg, and the blocks we got are the same
+						// as the ones we previously had, then `into_chain_progress` might
+						// return `None`. In that case we return our current state.
+						Ok(merge_info.into_chain_progress().unwrap_or(current_state))
+					},
+					Err(MergeFailure::ReorgWithUnknownRoot {
+						new_block,
+						existing_wrong_parent,
+					}) => {
+						log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
+						*witness_from = headers.front().unwrap().block_height;
+						Ok(chainblocks.current_state_as_no_chain_progress())
+					},
+
+					Err(MergeFailure::InternalError(reason)) => {
+						log::error!("internal error in block height tracker: {reason}");
+						Err("internal error in block height tracker")
+					},
+				}
+			},
+		}
+	}
+
+	fn get(s: &Self::State) -> Self::DisplayState {
+		match s {
+			BHWState::Starting => ChainProgress::WaitingForFirstConsensus,
+			BHWState::Running { headers, witness_from: _ } =>
+				ChainProgress::None(headers.back().unwrap().block_height),
 		}
 	}
 }
