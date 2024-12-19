@@ -50,8 +50,9 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
-			DurableNonceAndAccount, RecoverDurableNonce, SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
+			SolanaEnvironment,
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
 	},
@@ -553,6 +554,12 @@ impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
 	fn lookup(_s: CurrentAggKey) -> Option<SolAddress> {
 		let epoch = SolanaThresholdSigner::current_key_epoch()?;
 		SolanaThresholdSigner::keys(epoch)
+	}
+}
+
+impl ChainEnvironment<CurrentOnChainKey, SolAddress> for SolEnvironment {
+	fn lookup(_s: CurrentOnChainKey) -> Option<SolAddress> {
+		SolanaBroadcaster::current_on_chain_key()
 	}
 }
 
