@@ -242,14 +242,11 @@ async function testGasLimitSwapToEvm(
 
   // Adding buffers on both ends to avoid flakiness
   if (abortTest) {
-    // CF might overestimate so we use a 25% buffer. Extra large buffer for Arbitrum
-    // where gas estimations are extremely unreliable in localnet.
-    ccmMetadata.gasBudget = (
-      Number(ccmMetadata.gasBudget) +
-      Math.round(gasConsumption * (destChain !== 'Arbitrum' ? 0.75 : 0.1))
-    ).toString();
+    // newCcmMetadata's gasBudgetis the estimated gas required. Chainflip overestimates
+    // the overhead for safety so we use a 25% buffer to ensure the gas budget is too low.
+    ccmMetadata.gasBudget = (Math.round(Number(ccmMetadata.gasBudget) * 0.75)).toString();
   } else {
-    // A small buffer should work (10%) as CF should be overestimate not underestimate
+    // A small buffer should work (10%) as CF should be overestimate, not underestimate
     ccmMetadata.gasBudget = (
       Number(ccmMetadata.gasBudget) + Math.round(gasConsumption * 1.1)
     ).toString();
