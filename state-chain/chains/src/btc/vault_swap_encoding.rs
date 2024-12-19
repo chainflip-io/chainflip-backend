@@ -70,7 +70,7 @@ impl Decode for UtxoEncodedData {
 
 // We limit the number of affiliates in btc vault swaps to ensure that we
 // can always encode them inside a UTXO
-pub const MAX_AFFILIATES: u32 = 2;
+const MAX_AFFILIATES: u32 = 2;
 
 // The encoding of these parameters is the same across chains
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]

@@ -52,7 +52,7 @@ use cf_chains::{
 	evm::EvmCrypto,
 	sol::{SolAddress, SolanaCrypto},
 	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
-	TransactionBuilder, VaultSwapExtraParametersEncoded,
+	TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -2225,23 +2225,24 @@ impl_runtime_apis! {
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
 			}
-			ChainAddressConverter::try_from_encoded_address(destination_address.clone())
-				.and_then(|address| {
-					if ForeignChain::from(destination_asset) != address.chain() {
-						Err(())
-					} else {
-						Ok(())
-					}
-				})
-				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
+			// Conversion implicitly verifies address validity
+			frame_support::ensure!(
+				ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+					.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
+					.chain() == ForeignChain::from(destination_asset)
+				,
+				"Destination address and asset are on different chains."
+			);
 
 			// Encode swap
-			match ForeignChain::from(source_asset) {
-				ForeignChain::Bitcoin =>
-					if let VaultSwapExtraParametersEncoded::Bitcoin{
+			match (ForeignChain::from(source_asset), extra_parameters) {
+				(
+					ForeignChain::Bitcoin,
+					VaultSwapExtraParameters::Bitcoin {
 						min_output_amount,
 						retry_duration,
-					} = extra_parameters {
+					}
+				) => {
 						pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
 						crate::chainflip::vault_swap::bitcoin_vault_swap(
 							broker_id,
@@ -2254,22 +2255,35 @@ impl_runtime_apis! {
 							affiliate_fees,
 							dca_parameters,
 						)
-				} else {
-					Err("Extra parameter is not valid for Btc vault swap.".into())
 				},
-				ForeignChain::Solana => crate::chainflip::vault_swap::solana_vault_swap(
+				(
+					ForeignChain::Solana,
+					VaultSwapExtraParameters::Solana {
+						input_amount,
+						refund_parameters,
+						from,
+						event_data_account,
+						from_token_account,
+					}
+				) => crate::chainflip::vault_swap::solana_vault_swap(
 					broker_id,
+					input_amount,
 					source_asset,
 					destination_asset,
 					destination_address,
 					broker_commission,
-					extra_parameters,
+					refund_parameters,
 					channel_metadata,
 					boost_fee,
 					affiliate_fees,
 					dca_parameters,
+					from,
+					event_data_account,
+					from_token_account,
 				),
-				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
+				_ => Err(DispatchErrorWithMessage::from(
+					"Incompatible or unsupported source_asset and extra_parameters"
+				)),
 			}
 		}
 

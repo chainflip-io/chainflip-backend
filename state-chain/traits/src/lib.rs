@@ -42,7 +42,12 @@ use frame_support::{
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	iter::Sum,
+	marker::PhantomData,
+	prelude::*,
+};
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -1134,4 +1139,7 @@ pub trait AffiliateRegistry {
 		broker_id: &Self::AccountId,
 		affiliate_id: &Self::AccountId,
 	) -> Option<AffiliateShortId>;
+
+	/// Return the reverse mapping from account id to affiliate short id.
+	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
 }
