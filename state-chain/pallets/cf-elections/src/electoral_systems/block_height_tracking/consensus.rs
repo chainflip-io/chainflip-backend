@@ -1,0 +1,119 @@
+use core::ops::{Add, AddAssign, Range, RangeInclusive, Sub, SubAssign};
+
+use crate::{
+	electoral_system::{
+		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
+		ElectoralWriteAccess, VotePropertiesOf,
+	},
+	vote_storage::{self, VoteStorage},
+	CorruptStorageError, ElectionIdentifier,
+};
+use cf_chains::btc::BlockNumber;
+use cf_utilities::success_threshold_from_share_count;
+use codec::{Decode, Encode};
+use frame_support::{
+	ensure,
+	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	sp_runtime::traits::AtLeast32BitUnsigned,
+	Parameter,
+};
+use itertools::Itertools;
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_std::{
+	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+	vec::Vec,
+};
+// -- abstract Consensus for computing solutions
+pub trait Consensus: Default {
+	type Vote;
+	type Result;
+	type Settings;
+	fn insert_vote(&mut self, vote: Self::Vote);
+	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result>;
+}
+
+pub struct SupermajorityConsensus<Vote: PartialEq> {
+	votes: BTreeMap<Vote, u32>,
+}
+
+pub struct Threshold {
+	pub threshold: u32,
+}
+
+impl<Vote: PartialEq> Default for SupermajorityConsensus<Vote> {
+	fn default() -> Self {
+		Self { votes: Default::default() }
+	}
+}
+
+impl<Vote: Ord + PartialEq + Clone> Consensus for SupermajorityConsensus<Vote> {
+	type Vote = Vote;
+	type Result = Vote;
+	type Settings = Threshold;
+
+	fn insert_vote(&mut self, vote: Self::Vote) {
+		if let Some(count) = self.votes.get_mut(&vote) {
+			*count += 1;
+		} else {
+			self.votes.insert(vote, 1);
+		}
+	}
+
+	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
+		let best = self.votes.iter().last();
+
+		if let Some((best_vote, best_count)) = best {
+			if best_count >= &settings.threshold {
+				return Some(best_vote.clone());
+			}
+		}
+
+		return None;
+	}
+}
+
+// --
+pub struct StagedConsensus<Stage: Consensus, Index: Ord> {
+	stages: BTreeMap<Index, Stage>,
+}
+
+impl<Stage: Consensus, Index: Ord> StagedConsensus<Stage, Index> {
+	pub fn new() -> Self {
+		Self { stages: BTreeMap::new() }
+	}
+}
+
+impl<Stage: Consensus, Index: Ord> Default for StagedConsensus<Stage, Index> {
+	fn default() -> Self {
+		Self { stages: Default::default() }
+	}
+}
+
+impl<Stage: Consensus, Index: Ord + Copy> Consensus for StagedConsensus<Stage, Index> {
+	type Result = Stage::Result;
+	type Vote = (Index, Stage::Vote);
+	type Settings = Stage::Settings;
+
+	fn insert_vote(&mut self, (index, vote): Self::Vote) {
+		if let Some(stage) = self.stages.get_mut(&index) {
+			stage.insert_vote(vote)
+		} else {
+			let mut stage = Stage::default();
+			stage.insert_vote(vote);
+			self.stages.insert(index, stage);
+		}
+	}
+
+	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
+		// we check all stages starting with the highest index,
+		// the first one that has consensus wins
+		for (_, stage) in self.stages.iter().rev() {
+			if let Some(result) = stage.check_consensus(settings) {
+				return Some(result);
+			}
+		}
+
+		None
+	}
+}
