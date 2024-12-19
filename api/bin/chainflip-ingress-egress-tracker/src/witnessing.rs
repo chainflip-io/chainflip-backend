@@ -5,10 +5,11 @@ pub mod state_chain;
 
 use self::state_chain::handle_call;
 use crate::{settings::DepositTrackerSettings, store::RedisStore};
-use anyhow::anyhow;
 use cf_chains::dot::PolkadotHash;
-use cf_primitives::{chains::assets::eth::Asset, NetworkEnvironment};
 use cf_utilities::task_scope;
+use chainflip_api::primitives::{
+	chains::assets::eth::Asset as EthAsset, Asset, NetworkEnvironment,
+};
 use chainflip_engine::{
 	state_chain_observer::{
 		self,
@@ -18,8 +19,10 @@ use chainflip_engine::{
 	},
 	witness::common::epoch_source::EpochSource,
 };
+
+use anyhow::anyhow;
 use sp_core::H160;
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub(super) struct EnvironmentParameters {
@@ -29,7 +32,7 @@ pub(super) struct EnvironmentParameters {
 	flip_contract_address: H160,
 	usdc_contract_address: H160,
 	usdt_contract_address: H160,
-	supported_erc20_tokens: HashMap<H160, cf_primitives::Asset>,
+	supported_erc20_tokens: HashMap<H160, Asset>,
 	dot_genesis_hash: PolkadotHash,
 	pub chainflip_network: NetworkEnvironment,
 }
@@ -66,15 +69,15 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		.expect("Failed to fetch Ethereum supported assets");
 
 	let flip_contract_address =
-		*supported_erc20_tokens.get(&Asset::Flip).expect("FLIP not supported");
+		*supported_erc20_tokens.get(&EthAsset::Flip).expect("FLIP not supported");
 
 	let usdc_contract_address =
-		*supported_erc20_tokens.get(&Asset::Usdc).expect("USDC not supported");
+		*supported_erc20_tokens.get(&EthAsset::Usdc).expect("USDC not supported");
 
 	let usdt_contract_address =
-		*supported_erc20_tokens.get(&Asset::Usdt).expect("USDT not supported");
+		*supported_erc20_tokens.get(&EthAsset::Usdt).expect("USDT not supported");
 
-	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
+	let supported_erc20_tokens: HashMap<H160, Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
@@ -112,7 +115,7 @@ pub(super) async fn start(
 	store: RedisStore,
 ) -> anyhow::Result<()> {
 	let (state_chain_stream, unfinalized_chain_stream, state_chain_client) = {
-		state_chain_observer::client::StateChainClient::connect_without_account(
+		state_chain_observer::client::StateChainClient::<(), _>::connect_without_account(
 			scope,
 			&settings.state_chain_ws_endpoint,
 		)
@@ -132,7 +135,7 @@ pub(super) async fn start(
 			let state_chain_client = state_chain_client.clone();
 
 			async move {
-				handle_call(call, &mut store, chainflip_network, state_chain_client.deref())
+				handle_call(call, &mut store, chainflip_network, state_chain_client)
 					.await
 					.map_err(|err| anyhow!("failed to handle call: {err:?}"))
 					.unwrap()

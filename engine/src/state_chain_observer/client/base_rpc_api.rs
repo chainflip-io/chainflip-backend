@@ -24,9 +24,6 @@ use subxt::backend::rpc::RawRpcSubscription;
 
 use super::RpcResult;
 
-#[cfg(test)]
-use mockall::automock;
-
 use super::SUBSTRATE_BEHAVIOUR;
 
 pub trait RawRpcApi:
@@ -88,7 +85,7 @@ pub type WatchExtrinsicStream = Pin<
 /// For calls that use block_number instead we return an Option to indicate if the associated block
 /// exists or not and do not ever panic. As in some cases we make requests for block
 /// numbers the RPC has not previously provided.
-#[cfg_attr(test, automock)]
+#[cfg_attr(any(test, feature = "client-mocks"), mockall::automock(type InnerClient = jsonrpsee::ws_client::WsClient;))]
 #[async_trait]
 pub trait BaseRpcApi {
 	async fn health(&self) -> RpcResult<Health>;

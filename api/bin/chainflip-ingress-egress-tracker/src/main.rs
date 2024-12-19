@@ -29,6 +29,7 @@ async fn start(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+	chainflip_api::use_chainflip_account_id_encoding();
 	let settings = DepositTrackerSettings::load_settings_from_all_sources(
 		// Not using the config root or settings dir.
 		"".to_string(),
