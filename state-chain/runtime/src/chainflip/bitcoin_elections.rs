@@ -88,6 +88,11 @@ impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 		// We need to ensure that we don't process the same data twice. We could use a wrapper for
 		// the BlockData type here that can include some extra status data in it.
 
+		if witnesses.is_empty() {
+			log::info!("No witnesses to process for block: {:?}", current_block);
+		} else {
+			log::info!("Processing witnesses: {:?} for block {:?}", witnesses, current_block);
+		}
 		for (deposit_block_number, deposits) in witnesses.clone() {
 			for deposit in deposits {
 				if deposit_block_number == current_block {
