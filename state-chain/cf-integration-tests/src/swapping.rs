@@ -856,6 +856,7 @@ fn can_handle_failed_vault_transfer() {
 					amount,
 					destination_address,
 					broadcast_id,
+					egress_details: None,
 				},
 			));
 			testnet.move_forward_blocks(11);
