@@ -5,8 +5,6 @@ pub mod error_decoder;
 pub mod extrinsic_api;
 pub mod storage_api;
 pub mod stream_api;
-pub mod subxt_state_chain_config;
-
 use async_trait::async_trait;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -21,17 +19,9 @@ use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
 use subxt::{backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder, OnlineClient};
-use subxt_state_chain_config::StateChainConfig;
 use thiserror::Error;
 use tokio::sync::watch;
-use tracing::{info, warn};
-
-use cf_utilities::{
-	cached_stream::{CachedStream, MakeCachedStream},
-	loop_select, make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
-	task_scope::{Scope, UnwrapOrCancel},
-	try_cached_stream::{MakeTryCachedStream, TryCachedStream},
-};
+use tracing::{info, log, warn};
 
 use crate::{
 	constants::SIGNED_EXTRINSIC_LIFETIME,
@@ -39,6 +29,13 @@ use crate::{
 		base_rpc_api::SubxtInterface, storage_api::CheckBlockCompatibility,
 	},
 };
+use cf_utilities::{
+	cached_stream::{CachedStream, MakeCachedStream},
+	loop_select, make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
+	task_scope::{Scope, UnwrapOrCancel},
+	try_cached_stream::{MakeTryCachedStream, TryCachedStream},
+};
+use custom_rpc::subxt_state_chain_config::StateChainConfig;
 
 use self::{
 	base_rpc_api::BaseRpcClient,
@@ -721,6 +718,8 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					.map_err(|e| anyhow!("Failed to decode signing key: Wrong length. {e:?}"))
 			},
 		)?);
+
+		log::warn!("---- public-key = {:?}", pair.public());
 		let signer = signer::PairSigner::<sp_core::sr25519::Pair>::new(pair.clone());
 
 		let account_nonce = {
@@ -767,7 +766,6 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		};
 
 		if self.submit_cfe_version {
-			use crate::state_chain_observer::client::subxt_state_chain_config::StateChainConfig;
 			use subxt::tx::Signer;
 
 			let rpc_client = RpcClient::new(SubxtInterface(base_rpc_client.clone()));

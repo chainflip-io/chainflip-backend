@@ -75,8 +75,11 @@ use std::{
 	sync::Arc,
 };
 
+pub mod broker;
+pub mod crypto;
 pub mod monitoring;
 pub mod order_fills;
+pub mod subxt_state_chain_config;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochState {

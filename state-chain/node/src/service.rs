@@ -1,19 +1,23 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
-
+use custom_rpc::{
+	broker::{BrokerSignedApiServer, BrokerSignedRpc},
+	crypto::{broker_crypto, SubxtSignerInterface},
+	monitoring::MonitoringApiServer,
+	CustomApiServer, CustomRpc,
+};
 use futures::FutureExt;
 use jsonrpsee::RpcModule;
 use sc_client_api::{Backend, BlockBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 use sc_consensus_grandpa::SharedVoterState;
+use sc_keystore::Keystore;
 use sc_rpc_spec_v2::{chain_spec as chain_spec_rpc, chain_spec::ChainSpecApiServer};
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpSyncParams};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
-use std::{marker::PhantomData, sync::Arc, time::Duration};
-
-use custom_rpc::{monitoring::MonitoringApiServer, CustomApiServer, CustomRpc};
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 pub(crate) type FullClient = sc_service::TFullClient<
 	Block,
@@ -247,6 +251,24 @@ pub fn new_full<
 		let pool = transaction_pool.clone();
 		let executor = Arc::new(task_manager.spawn_handle());
 		let chain_spec = config.chain_spec.cloned_box();
+		let keystore = keystore_container.local_keystore().clone();
+
+		let mut keys = keystore.sr25519_public_keys(broker_crypto::BROKER_ID_KEY);
+		// Check if a broker key is found in the node keystore
+		let broker_pair = if keys.is_empty() {
+			None
+		} else if keys.len() > 1 {
+			log::warn!(
+				"Found more than one broker key in the node keystore. Disabling broker API ..."
+			);
+			None
+		} else {
+			let pub_key = broker_crypto::Public::from(keys.pop().unwrap());
+			log::warn!("borker_pub_key {:?}", pub_key);
+
+			let keypair: broker_crypto::Pair = keystore.key_pair(&pub_key)?.unwrap();
+			Some(keypair.into_inner())
+		};
 
 		Box::new(move |deny_unsafe, subscription_executor| {
 			let build = || {
@@ -301,6 +323,17 @@ pub fn new_full<
 					_phantom: PhantomData,
 					executor: executor.clone(),
 				}))?;
+
+				// Add broker RPCs if broker key was found
+				if let Some(pair) = broker_pair.clone() {
+					module.merge(BrokerSignedApiServer::into_rpc(BrokerSignedRpc {
+						client: client.clone(),
+						backend: backend.clone(),
+						_phantom: PhantomData,
+						executor: executor.clone(),
+						signer: SubxtSignerInterface::new(pair),
+					}))?;
+				}
 
 				Ok(module)
 			};
