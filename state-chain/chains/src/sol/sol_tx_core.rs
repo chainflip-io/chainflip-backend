@@ -830,6 +830,56 @@ impl CcmAccounts {
 	}
 }
 
+/// Provides alternative version of internal types that uses `Address` instead of Pubkey:
+///
+/// |----------------------|
+/// |Type    |   Serialized|
+/// |----------------------|
+/// |Pubkey  |   Byte Array|
+/// |Address |   bs58      |
+/// |----------------------|
+///
+/// When serialized, these types returns Solana addresses in human readable bs58 format.
+/// These are intended to be used for returning data via RPC calls only.
+pub mod rpc_types {
+	use super::*;
+
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+	pub struct SolInstructionRpc {
+		pub program_id: SolAddress,
+		pub accounts: Vec<SolAccountMetaRpc>,
+		#[serde(with = "sp_core::bytes")]
+		pub data: Vec<u8>,
+	}
+
+	impl From<Instruction> for SolInstructionRpc {
+		fn from(value: Instruction) -> Self {
+			SolInstructionRpc {
+				program_id: value.program_id.into(),
+				accounts: value.accounts.into_iter().map(|a| a.into()).collect(),
+				data: value.data,
+			}
+		}
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+	pub struct SolAccountMetaRpc {
+		pub address: SolAddress,
+		pub is_signer: bool,
+		pub is_writable: bool,
+	}
+
+	impl From<AccountMeta> for SolAccountMetaRpc {
+		fn from(value: AccountMeta) -> Self {
+			SolAccountMetaRpc {
+				address: value.pubkey.into(),
+				is_signer: value.is_signer,
+				is_writable: value.is_writable,
+			}
+		}
+	}
+}
+
 #[test]
 fn ccm_extra_accounts_encoding() {
 	let extra_accounts = CcmAccounts {

@@ -6,7 +6,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
-	sol::SolInstruction, CcmChannelMetadata, Chain, ChainCrypto, ForeignChainAddress,
+	sol::rpc_types::SolInstructionRpc, CcmChannelMetadata, Chain, ChainCrypto, ForeignChainAddress,
 	VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
@@ -46,7 +46,7 @@ pub enum VaultSwapDetails<BtcAddress> {
 		deposit_address: BtcAddress,
 	},
 	Solana {
-		instruction: SolInstruction,
+		instruction: SolInstructionRpc,
 	},
 }
 
