@@ -1,20 +1,11 @@
-use cf_chains::{
-	address::EncodedAddress,
-	instances::{ChainInstanceAlias, ChainInstanceFor},
-	ForeignChainAddress,
-};
-use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, BroadcastId, NetworkEnvironment};
-use chainflip_api::TrackerApi;
+use cf_chains::instances::{ChainInstanceAlias, ChainInstanceFor};
+use chainflip_api::primitives::BroadcastId;
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
 use pallet_cf_broadcast::TransactionOutIdFor;
-use sp_core::{
-	bounded::alloc::{collections::BTreeMap, sync::Arc},
-	crypto::AccountId32,
-};
+use sp_core::bounded::alloc::sync::Arc;
 
-use anyhow::anyhow;
 use tracing::log;
 
 pub fn hex_encode_bytes(bytes: &[u8]) -> String {
@@ -44,51 +35,4 @@ where
 	}
 
 	id
-}
-
-pub fn destination_address_from_encoded_address(
-	address: EncodedAddress,
-	network: NetworkEnvironment,
-) -> anyhow::Result<ForeignChainAddress> {
-	cf_chains::address::try_from_encoded_address(address, || network)
-		.map_err(|_| anyhow!("Invalid destination address"))
-}
-
-// Get a list of registered affiliates for the given broker and map the short ids to their account
-// ids
-pub async fn map_affiliates<StateChainClient>(
-	state_chain_client: Arc<StateChainClient>,
-	affiliates: Affiliates<AffiliateShortId>,
-	broker_id: AccountId32,
-) -> Affiliates<AccountId32>
-where
-	StateChainClient: StorageApi + ChainApi + TrackerApi + 'static + Send + Sync,
-{
-	if affiliates.is_empty() {
-		return Affiliates::default();
-	}
-
-	let registered_affiliates: BTreeMap<_, _> = state_chain_client
-		.get_affiliates(broker_id.clone())
-		.await
-		.expect(STATE_CHAIN_CONNECTION)
-		.into_iter()
-		.collect();
-
-	affiliates
-		.into_iter()
-		.map(|affiliate| {
-			Beneficiary { account: registered_affiliates.get(&affiliate.account).cloned()
-				.unwrap_or_else(|| {
-					log::warn!(
-						"Affiliate not found for short id {} on broker {}",
-						affiliate.account,
-						broker_id
-					);
-					AccountId32::from([0; 32])
-				}), bps: affiliate.bps }
-		})
-		.collect::<Vec<Beneficiary<AccountId32>>>()
-		.try_into()
-		.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same.")
 }
