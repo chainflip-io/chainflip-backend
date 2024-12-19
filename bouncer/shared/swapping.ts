@@ -129,20 +129,11 @@ const OVERHEAD_COMPUTE_UNITS = 10000;
 export async function newCcmMetadata(
   destAsset: Asset,
   ccmMessage?: string,
-  gasBudget?: number,
   ccmAdditionalDataArray?: string,
 ): Promise<CcmDepositMetadata> {
   const message = ccmMessage ?? newCcmMessage(destAsset);
   const ccmAdditionalData = ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message);
   const destChain = chainFromAsset(destAsset);
-
-  if (gasBudget !== undefined) {
-    return {
-      message,
-      gasBudget: gasBudget.toString(),
-      ccmAdditionalData,
-    };
-  }
 
   let userLogicGasBudget;
   if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
@@ -151,7 +142,7 @@ export async function newCcmMetadata(
     // required for execution is very complicated without using `eth_estimateGas` on the user's side.
     // This is what integrators are expected to do and it''ll give a good estimate of the gas
     // needed for the user logic.
-    userLogicGasBudget = estimateCcmCfTesterGas(destChain, message);
+    userLogicGasBudget = await estimateCcmCfTesterGas(destChain, message);
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
@@ -171,7 +162,6 @@ export async function newVaultSwapCcmMetadata(
   sourceAsset: Asset,
   destAsset: Asset,
   ccmMessage?: string,
-  gasBudget?: number,
   ccmAdditionalDataArray?: string,
 ): Promise<CcmDepositMetadata> {
   const sourceChain = chainFromAsset(sourceAsset);
@@ -204,7 +194,7 @@ export async function newVaultSwapCcmMetadata(
   const message = ccmMessage ?? newCcmMessage(destAsset, messageMaxLength);
   const ccmAdditionalData =
     ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message, metadataMaxLength);
-  return newCcmMetadata(destAsset, message, gasBudget, ccmAdditionalData);
+  return newCcmMetadata(destAsset, message, ccmAdditionalData);
 }
 
 export async function prepareSwap(

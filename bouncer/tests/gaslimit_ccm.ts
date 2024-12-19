@@ -269,7 +269,7 @@ async function testGasLimitSwapToEvm(
   const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
 
   testGasLimitCcmSwaps.log(
-    `${tag} Expecting broadcast ${abortTest ? 'abort' : 'success'}. Broadcast gas budget: ${gasLimitBudget}, ccmMetadata.gasBudget ${ccmMetadata.gasBudget} gasConsumption ${gasConsumption}`,
+    `${tag} Expecting broadcast ${abortTest ? 'abort' : 'success'}. Broadcast gas budget: ${gasLimitBudget}, user gasBudget ${ccmMetadata.gasBudget} cfTester gasConsumption ${gasConsumption}`,
   );
 
   if (abortTest) {
