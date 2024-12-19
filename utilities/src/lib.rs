@@ -100,7 +100,7 @@ impl<T, const N: usize> PartialArray<T, N> {
 	fn initialize(&mut self, t: T) {
 		assert!(self.initialized_length < N);
 		// This doesn't cause the previous T element to be dropped as if it was initialized, as the
-		// assigment of MaybeUninit<T>'s instead of T's
+		// assignment of MaybeUninit<T>'s instead of T's
 		self.array[self.initialized_length] = MaybeUninit::new(t);
 		self.initialized_length += 1;
 	}

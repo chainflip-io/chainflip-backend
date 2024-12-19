@@ -19,6 +19,7 @@ use super::{Chain, ChainCrypto};
 
 pub mod api;
 pub mod benchmarking;
+pub mod instruction_builder;
 pub mod sol_tx_core;
 pub mod transaction_builder;
 
@@ -41,7 +42,7 @@ pub use sol_tx_core::{
 	Transaction as SolTransaction,
 };
 
-// Due to transaction size limit in Solana, we have a limit on number of fetches in a solana hetch
+// Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch
 // tx. Batches of 5 fetches get to ~1000 bytes, max ~1090 for tokens.
 pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
@@ -391,6 +392,17 @@ pub mod signing_key {
 		/// Gets this `SolSigningKey`'s SecretKey
 		pub fn secret(&self) -> &ed25519_dalek::SigningKey {
 			&self.0
+		}
+
+		/// Utility for printing out pub and private keys for a keypair. Used to easily save
+		/// generate keypair.
+		pub fn print_pub_and_private_keys(&self) {
+			println!(
+				"Pubkey: {:?} \nhex: {:?} \nraw bytes: {:?}",
+				cf_utilities::bs58_string(self.pubkey().0),
+				hex::encode(self.to_bytes()),
+				self.to_bytes()
+			);
 		}
 	}
 

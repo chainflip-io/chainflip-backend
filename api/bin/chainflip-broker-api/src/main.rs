@@ -1,8 +1,7 @@
+use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
-	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
-	try_parse_number_or_hex,
 };
 use chainflip_api::{
 	self,
@@ -10,13 +9,12 @@ use chainflip_api::{
 		state_chain_runtime::runtime_apis::{
 			ChainAccounts, TransactionScreeningEvents, VaultSwapDetails,
 		},
-		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber,
-		CcmChannelMetadata, DcaParameters,
+		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
+		DcaParameters,
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, ChannelId, DepositMonitorApi, OperatorApi,
-	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
-	WithdrawFeesDetail,
+	SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -92,7 +90,7 @@ pub trait Rpc {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters>,
+		refund_parameters: Option<RefundParametersRpc>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress>;
 
@@ -110,8 +108,8 @@ pub trait Rpc {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		min_output_amount: NumberOrHex,
-		retry_duration: BlockNumber,
+		extra_parameters: VaultSwapExtraParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
@@ -182,7 +180,7 @@ impl RpcServer for RpcServerImpl {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters>,
+		refund_parameters: Option<RefundParametersRpc>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
 		Ok(self
@@ -216,8 +214,8 @@ impl RpcServer for RpcServerImpl {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		min_output_amount: NumberOrHex,
-		retry_duration: BlockNumber,
+		extra_parameters: VaultSwapExtraParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
@@ -231,8 +229,8 @@ impl RpcServer for RpcServerImpl {
 				destination_asset,
 				destination_address,
 				broker_commission,
-				try_parse_number_or_hex(min_output_amount)?,
-				retry_duration,
+				extra_parameters,
+				channel_metadata,
 				boost_fee,
 				affiliate_fees,
 				dca_parameters,
