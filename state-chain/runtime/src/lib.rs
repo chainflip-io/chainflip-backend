@@ -2240,9 +2240,10 @@ impl_runtime_apis! {
 
 			// Ensure the refund duration is valid.
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
-				cf_chains::VaultSwapExtraParameters::Bitcoin { retry_duration, .. } => *retry_duration,
-				cf_chains::VaultSwapExtraParameters::Evm { refund_parameters, .. } => refund_parameters.retry_duration,
-				cf_chains::VaultSwapExtraParameters::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
+				VaultSwapExtraParametersEncoded::Ethereum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
 			})?;
 
 			// Encode swap
@@ -2269,20 +2270,34 @@ impl_runtime_apis! {
 				},
 				(
 					ForeignChain::Ethereum,
-					VaultSwapExtraParameters::Evm {
-						input_amount,
-						refund_parameters,
-					}
+					VaultSwapExtraParametersEncoded::Ethereum(extra_params)
 				) => {
-					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(refund_parameters.retry_duration)?;
-					crate::chainflip::vault_swaps::ethereum_vault_swap(
+					crate::chainflip::vault_swaps::evm_vault_swap(
 						broker_id,
 						source_asset,
-						input_amount,
+						extra_params.input_amount,
 						destination_asset,
 						destination_address,
 						broker_commission,
-						refund_parameters,
+						extra_params.refund_parameters,
+						boost_fee,
+						affiliate_fees,
+						dca_parameters,
+						channel_metadata,
+					)
+				},
+				(
+					ForeignChain::Arbitrum,
+					VaultSwapExtraParametersEncoded::Arbitrum(extra_params)
+				) => {
+					crate::chainflip::vault_swaps::evm_vault_swap(
+						broker_id,
+						source_asset,
+						extra_params.input_amount,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						extra_params.refund_parameters,
 						boost_fee,
 						affiliate_fees,
 						dca_parameters,

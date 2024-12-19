@@ -10,7 +10,7 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_std::{vec, vec::Vec};
 
-/// Represents all the arguments required to build the call to Vault's 'ExecutexSwapAndCall'
+/// Represents all the arguments required to build the call to Vault's 'XCallNative'
 /// function.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct XCallNative {
