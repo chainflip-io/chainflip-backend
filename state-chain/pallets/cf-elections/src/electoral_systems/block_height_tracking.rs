@@ -33,7 +33,7 @@ use primitives::{
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
-	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
 	vec::Vec,
 };
 use state_machine::{Indexed, StateMachine, Validate};
@@ -221,6 +221,7 @@ impl<
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct InputHeaders<H, N>(pub VecDeque<Header<H, N>>);
 
+/*
 #[cfg(test)]
 mod tests {
 
@@ -277,20 +278,25 @@ mod tests {
 		});
 	}
 }
+ */
 
 impl<H, N: BlockZero + Copy + PartialEq> Indexed for InputHeaders<H, N> {
 	type Index = BlockHeightTrackingProperties<N>;
-
-	fn has_index(&self, base: &Self::Index) -> bool {
-		if base.witness_from_index.is_zero() {
-			true
-		} else {
-			match self.0.front() {
-				Some(first) => first.block_height == base.witness_from_index,
-				None => false,
-			}
+	
+	fn index(&self) -> Self::Index {
+			todo!()
 		}
-	}
+
+	// fn has_index(&self, base: &Self::Index) -> bool {
+	// 	if base.witness_from_index.is_zero() {
+	// 		true
+	// 	} else {
+	// 		match self.0.front() {
+	// 			Some(first) => first.block_height == base.witness_from_index,
+	// 			None => false,
+	// 		}
+	// 	}
+	// }
 }
 
 impl<H: PartialEq + Clone, N: BlockHeightTrait> Validate for InputHeaders<H, N> {
@@ -367,12 +373,13 @@ impl<
 	type Input = InputHeaders<H, N>;
 	type Output = Result<ChainProgress<N>, &'static str>;
 
-	fn input_index(s: &Self::State) -> <Self::Input as state_machine::Indexed>::Index {
-		let witness_from_index = match s {
-			BHWState::Starting => N::zero(),
-			BHWState::Running { headers: _, witness_from } => witness_from.clone(),
-		};
-		BlockHeightTrackingProperties { witness_from_index }
+	fn input_index(s: &Self::State) -> BTreeSet<<Self::Input as state_machine::Indexed>::Index> {
+		// let witness_from_index = match s {
+		// 	BHWState::Starting => N::zero(),
+		// 	BHWState::Running { headers: _, witness_from } => witness_from.clone(),
+		// };
+		// BlockHeightTrackingProperties { witness_from_index }
+		todo!()
 	}
 
 	// specification for step function
