@@ -37,8 +37,8 @@ pub use sol_prim::{
 	Signature as SolSignature, SlotNumber as SolBlockNumber,
 };
 pub use sol_tx_core::{
-	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
-	CcmAddress as SolCcmAddress, Hash as RawSolHash, Instruction as SolInstruction,
+	AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts, CcmAddress as SolCcmAddress,
+	Hash as RawSolHash, Instruction as SolInstruction, InstructionRpc as SolInstructionRpc,
 	Message as SolMessage, Pubkey as SolPubkey, Transaction as SolTransaction,
 };
 
