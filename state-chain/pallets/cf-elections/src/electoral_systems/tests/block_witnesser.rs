@@ -20,7 +20,10 @@ use super::{
 };
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystem},
-	electoral_systems::{block_height_tracking::ChainProgress, block_witnesser::*},
+	electoral_systems::{
+		block_height_tracking::{ChainProgress, RangeOfBlockWitnessRanges},
+		block_witnesser::*,
+	},
 };
 use cf_chains::{mocks::MockEthereum, Chain};
 use sp_std::collections::btree_set::BTreeSet;
@@ -45,8 +48,9 @@ struct MockGenerateElectionHook<ChainBlockNumber, Properties> {
 	_phantom: core::marker::PhantomData<(ChainBlockNumber, Properties)>,
 }
 
-fn range_n(n: u64) -> std::ops::RangeInclusive<u64> {
-	n..=n
+fn range_n(n: u64) -> RangeOfBlockWitnessRanges<u64> {
+	// TODO: Test with other witness ranges.
+	RangeOfBlockWitnessRanges::try_new(n, n, 1).unwrap()
 }
 
 pub type Properties = BTreeSet<u16>;
@@ -319,7 +323,7 @@ fn creates_multiple_elections_limited_by_maximum() {
 				INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS_REQUIRED as u64),
 			)),
 			|pre_state| {
-				assert_eq!(pre_state.unsynchronised_state.open_elections, 0);
+				assert_eq!(pre_state.unsynchronised_state.elections_open_for.len(), 0);
 			},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
@@ -336,7 +340,10 @@ fn creates_multiple_elections_limited_by_maximum() {
 		.test_on_finalize(
 			&ChainProgress::None(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS_REQUIRED as u64)),
 			|pre_state| {
-				assert_eq!(pre_state.unsynchronised_state.open_elections, MAX_CONCURRENT_ELECTIONS);
+				assert_eq!(
+					pre_state.unsynchronised_state.elections_open_for.len(),
+					MAX_CONCURRENT_ELECTIONS as usize
+				);
 			},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
@@ -395,12 +402,15 @@ fn reorg_clears_on_going_elections_and_continues() {
 				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
 			],
 		)
+		.then(|| println!("We about to come to consensus on some blocks."))
 		.expect_consensus_multi(all_votes)
-		// Process votes as normal, storing the state
+		// Process votes as normal, progressing by one block, storing the state
 		.test_on_finalize(
 			&ChainProgress::Continuous(range_n(NEXT_BLOCK_NUMBER + 1)),
 			|_| {},
 			vec![
+				// We've already processed the other elections, so we only have to create a new
+				// election for the new block.
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
 					MAX_CONCURRENT_ELECTIONS as u8 + 1,
 				),
@@ -411,42 +421,35 @@ fn reorg_clears_on_going_elections_and_continues() {
 				),
 			],
 		)
+		.then(|| println!("We're about to come to consensus on a block that will trigger a reorg."))
 		// Reorg occurs
 		.test_on_finalize(
-			&ChainProgress::Reorg(range_n(NEXT_BLOCK_NUMBER - REORG_LENGTH)),
+			&ChainProgress::Reorg(
+				RangeOfBlockWitnessRanges::try_new(
+					// Range is inclusive, so for reorg length reorg, we need to -1 from reorg
+					// length.
+					(NEXT_BLOCK_NUMBER + 1) - (REORG_LENGTH - 1),
+					NEXT_BLOCK_NUMBER + 1,
+					1,
+				)
+				.unwrap(),
+			),
 			|_| {},
 			// We remove the actives ones and open one for the first block that we detected a
 			// reorg for.
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					MAX_CONCURRENT_ELECTIONS as u8 + 2,
+					// REORG_LENGTH more than the last time we checked.
+					MAX_CONCURRENT_ELECTIONS as u8 + 1 + REORG_LENGTH as u8,
 				),
-				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
-				// There was a reorg, so there's definitely nothing to process since we're deleting
-				// all the data and just starting a new election, no extra calls here.
-				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(REORG_LENGTH as u16),
+				// We call it again, as even though there was a reorg, maybe some external state
+				// changed that process_block_data uses, and now can process some of the
+				// existing data.
+				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(3),
 				// We keep the data, since it may need to be used by process_block_data to
 				// deduplicate actions. We don't want to submit an action twice.
 				Check::<SimpleBlockWitnesser>::unprocessed_data_is(expected_unprocessed_data),
-			],
-		)
-		.expect_consensus_multi(vec![create_votes_expectation(vec![5, 6, 77])])
-		.test_on_finalize(
-			&range_n((NEXT_BLOCK_NUMBER - REORG_LENGTH) + 1),
-			|_| {},
-			// We remove the actives ones and open one for the first block that we detected a
-			// reorg for.
-			vec![
-				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					MAX_CONCURRENT_ELECTIONS as u8 + 3,
-				),
-				// We resolve one, but we've also progressed, so we open one.
-				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
-				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(3),
-				// We now have two pieces of data for the same block.
-				Check::<SimpleBlockWitnesser>::unprocessed_data_is(
-					block_after_reorg_block_unprocessed_data,
-				),
 			],
 		);
 }

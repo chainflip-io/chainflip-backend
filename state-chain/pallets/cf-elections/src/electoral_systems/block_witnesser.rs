@@ -191,20 +191,30 @@ impl<
 				return Ok(())
 			},
 			ChainProgress::Reorg(reorg_range) => {
+				// We ensure that a reorg always includes the block that we last emitted an election
+				// for. Implying that new forks are at least as long as the previous chain we had
+				// knowledge of.
+				ensure!(
+					reorg_range.witness_to_root() >= last_block_election_emitted_for,
+					CorruptStorageError::new()
+				);
 				log::info!("Got a reorg: {:?}", reorg_range);
+				// println!("Got a reorg: {:?}", reorg_range);
 				// Delete any elections that are ongoing for any blocks in the reorg range.
 
 				let block_witness_ranges =
 					reorg_range.block_witness_ranges().map_err(|()| CorruptStorageError::new())?;
 				for (i, election_identifier) in election_identifiers.into_iter().enumerate() {
 					let election = ElectoralAccess::election_mut(election_identifier);
-					let properties = election.properties()?;
-					let root_block = properties.0.root().clone();
+					let (block_witness_range, _) = election.properties()?;
 
-					if block_witness_ranges.contains(&election.properties()?.0) {
+					if block_witness_ranges.contains(&block_witness_range) {
+						log::info!(
+							"Deleting election with root: {:?} due to reorg",
+							block_witness_range.root()
+						);
 						election.delete();
-						// remove root block
-						elections_open_for.remove(&root_block);
+						elections_open_for.remove(&block_witness_range.root());
 						remaining_election_identifiers.remove(i);
 					}
 				}
@@ -215,6 +225,7 @@ impl<
 				for range in block_witness_ranges.clone() {
 					let root = *range.root();
 					log::info!("New election for root: {:?}", root);
+					// println!("New election for root in reorg: {:?}", root);
 					ElectoralAccess::new_election(
 						(),
 						(range, ElectionGenerator::generate_election_properties(root)),
@@ -249,8 +260,6 @@ impl<
 		// TODO: Wrap in safe mode
 		let settings = ElectoralAccess::unsynchronised_settings()?;
 
-		log::info!("Starting new elections for blocks: {:?}", elections_open_for);
-
 		// We always want to check with remaining elections we can resolve, note the ones we just
 		// initiated won't be included here, which is intention, they can't have come to consensus
 		// yet.
@@ -258,6 +267,7 @@ impl<
 			let election_access = ElectoralAccess::election_mut(election_identifier);
 			if let Some(block_data) = election_access.check_consensus()?.has_consensus() {
 				log::info!("Got consensus on block data: {:?}", block_data);
+				// println!("Got consensus on block data: {:?}", block_data);
 
 				let (block_witness_range, _extra_properties) = election_access.properties()?;
 
@@ -268,10 +278,14 @@ impl<
 			}
 		}
 
-		// println!(
-		// 	"after resolving: open elections: {}, last_block_election_emitted_for: {}",
-		// 	open_elections, last_block_election_emitted_for
-		// );
+		log::info!("Last block root seen: {:?}", last_seen_root);
+		log::info!("Last block election emitted for: {:?}", last_block_election_emitted_for);
+		log::info!("Open elections: {:?}", elections_open_for);
+		log::info!("Max concurrent elections: {:?}", settings.max_concurrent_elections);
+
+		// println!("Last block root seen: {:?}", last_seen_root);
+		// println!("Last block election emitted for: {:?}", last_block_election_emitted_for);
+		// println!("Open elections: {:?}", elections_open_for);
 
 		for range_root in (last_block_election_emitted_for.saturating_add(Chain::WITNESS_PERIOD)..=
 			last_seen_root)
@@ -280,7 +294,8 @@ impl<
 				(settings.max_concurrent_elections as usize)
 					.saturating_sub(elections_open_for.len()),
 			) {
-			// println!("New election for root not reorg: {:?}", range_root);
+			log::info!("Starting new election for root: {:?}", range_root);
+			// println!("Starting new election for root: {:?}", range_root);
 			ElectoralAccess::new_election(
 				(),
 				(
@@ -297,14 +312,16 @@ impl<
 		}
 
 		let earliest_open_election = elections_open_for.iter().next().cloned();
-		let earliset_unprocessed_data_block =
-			unprocessed_data.iter().map(|(block_number, _)| block_number).min().cloned();
+		let earliest = unprocessed_data.iter().map(|(block_number, _)| block_number).min().cloned();
 		let earliest_unprocessed_block = min(
 			// If there are no elections open and no data, then the last time we emitted election
 			// is the last thing we processed.
 			earliest_open_election.unwrap_or(last_block_election_emitted_for),
-			earliset_unprocessed_data_block.unwrap_or(last_block_election_emitted_for),
+			earliest.unwrap_or(last_block_election_emitted_for),
 		);
+
+		debug_assert!(earliest_unprocessed_block <= last_block_election_emitted_for);
+
 		unprocessed_data = BlockDataProcessor::process_block_data(
 			last_seen_root,
 			earliest_unprocessed_block,
