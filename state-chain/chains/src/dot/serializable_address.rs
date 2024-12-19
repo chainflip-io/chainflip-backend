@@ -1,6 +1,7 @@
 use super::*;
 use anyhow::anyhow;
 use frame_support::sp_runtime::AccountId32;
+use sp_core::crypto::Ss58Codec;
 
 #[derive(Debug, Clone)]
 pub struct SubstrateNetworkAddress {
@@ -45,7 +46,6 @@ impl serde::Serialize for SubstrateNetworkAddress {
 fn from_ss58check_with_version(
 	s: &str,
 ) -> Result<SubstrateNetworkAddress, sp_core::crypto::PublicError> {
-	use sp_core::crypto::Ss58Codec;
 	<AccountId32 as Ss58Codec>::from_ss58check_with_version(s).map(
 		|(account_id, format_specifier)| SubstrateNetworkAddress { format_specifier, account_id },
 	)
@@ -78,5 +78,11 @@ impl TryFrom<SubstrateNetworkAddress> for PolkadotAccountId {
 impl From<PolkadotAccountId> for SubstrateNetworkAddress {
 	fn from(account_id: PolkadotAccountId) -> Self {
 		Self::polkadot(account_id.0)
+	}
+}
+
+impl std::fmt::Display for SubstrateNetworkAddress {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		write!(f, "{}", self.account_id.to_ss58check_with_version(self.format_specifier))
 	}
 }
