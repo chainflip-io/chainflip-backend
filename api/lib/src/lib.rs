@@ -597,28 +597,6 @@ pub trait DepositMonitorApi:
 	}
 }
 
-#[async_trait]
-pub trait TrackerApi {
-	async fn get_affiliates(
-		&self,
-		broker: AccountId32,
-	) -> anyhow::Result<Vec<(AffiliateShortId, AccountId32)>>;
-}
-
-#[async_trait]
-impl TrackerApi for StateChainClient<()> {
-	async fn get_affiliates(
-		&self,
-		broker: AccountId32,
-	) -> anyhow::Result<Vec<(AffiliateShortId, AccountId32)>> {
-		self.base_rpc_client
-			.raw_rpc_client
-			.cf_get_affiliates(broker, None)
-			.await
-			.map_err(|e| anyhow!("Failed to get registered affiliates: {:?}", e))
-	}
-}
-
 #[derive(Debug, Zeroize, PartialEq, Eq)]
 /// Public and Secret keys as bytes
 pub struct KeyPair {
