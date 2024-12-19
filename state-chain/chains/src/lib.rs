@@ -934,26 +934,27 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
 )]
 #[serde(tag = "chain")]
+pub enum VaultSwapExtraParameters<Address, Amount> {
 	Bitcoin {
-		min_output_amount: Number,
+		min_output_amount: Amount,
 		retry_duration: BlockNumber,
 	},
 	Solana {
 		from: Address,
 		event_data_account: Address,
-		input_amount: Number,
+		input_amount: Amount,
 		refund_parameters: ChannelRefundParameters<Address>,
 		from_token_account: Option<Address>,
 	},
 }
 
-impl<Address: Clone, Number> VaultSwapExtraParameters<Address, Number> {
+impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 	/// Try map address type parameters into another type.
 	/// Typically used to convert RPC supported types into internal types.
 	pub fn try_map_address<AddressOther>(
 		self,
 		f: impl Fn(Address) -> Result<AddressOther, DispatchError>,
-	) -> Result<VaultSwapExtraParameters<AddressOther, Number>, DispatchError> {
+	) -> Result<VaultSwapExtraParameters<AddressOther, Amount>, DispatchError> {
 		Ok(match self {
 			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
 				VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration },
@@ -977,9 +978,9 @@ impl<Address: Clone, Number> VaultSwapExtraParameters<Address, Number> {
 
 	/// Try map numerical parameters into another type.
 	/// Typically used to convert RPC supported types into internal types.
-	pub fn try_map_numbers<NumberOther>(
+	pub fn try_map_amounts<NumberOther>(
 		self,
-		f: impl Fn(Number) -> Result<NumberOther, DispatchError>,
+		f: impl Fn(Amount) -> Result<NumberOther, DispatchError>,
 	) -> Result<VaultSwapExtraParameters<Address, NumberOther>, DispatchError> {
 		Ok(match self {
 			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>

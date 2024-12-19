@@ -1916,7 +1916,7 @@ where
 								.map_err(|_| "Cannot convert decode address".into())
 						})
 						.map_err(DispatchErrorWithMessage::from)?
-						.try_map_numbers(|n| {
+						.try_map_amounts(|n| {
 							u128::try_from(n)
 								.map_err(|_| "Cannot convert number input into u128".into())
 						})
