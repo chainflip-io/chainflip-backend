@@ -244,7 +244,7 @@ async function testGasLimitSwapToEvm(
   if (abortTest) {
     // newCcmMetadata's gasBudgetis the estimated gas required. Chainflip overestimates
     // the overhead for safety so we use a 25% buffer to ensure the gas budget is too low.
-    ccmMetadata.gasBudget = (Math.round(Number(ccmMetadata.gasBudget) * 0.75)).toString();
+    ccmMetadata.gasBudget = Math.round(Number(ccmMetadata.gasBudget) * 0.75).toString();
   } else {
     // A small buffer should work (10%) as CF should be overestimate, not underestimate
     ccmMetadata.gasBudget = (
