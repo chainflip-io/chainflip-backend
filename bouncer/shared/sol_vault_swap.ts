@@ -1,7 +1,14 @@
+import assert from 'assert';
 import * as anchor from '@coral-xyz/anchor';
-
 import { InternalAsset as Asset, Chains, assetConstants } from '@chainflip/cli';
-import { PublicKey, Keypair, sendAndConfirmTransaction } from '@solana/web3.js';
+import {
+  PublicKey,
+  Keypair,
+  sendAndConfirmTransaction,
+  TransactionInstruction,
+  Transaction,
+  AccountMeta,
+} from '@solana/web3.js';
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
   getContractAddress,
@@ -14,12 +21,16 @@ import {
   chainContractId,
   decodeDotAddressForContract,
   sleep,
+  createStateChainKeypair,
+  stateChainAssetFromAsset,
+  decodeSolAddress,
 } from './utils';
 import { CcmDepositMetadata } from './new_swap';
 
 import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/swap_endpoint';
 import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/vault';
 import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfaces';
+import { getChainflipApi } from './utils/substrate';
 
 // @ts-expect-error workaround because of anchor issue
 const { BN } = anchor.default;
@@ -29,6 +40,46 @@ const { BN } = anchor.default;
 process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
 
 const createdEventAccounts: PublicKey[] = [];
+
+interface SolVaultSwapDetails {
+  // chain: string;
+  instruction: SolInstruction;
+}
+
+type SolInstruction = {
+  program_id: string;
+  accounts: RpcAccountMeta[];
+  data: string;
+};
+
+type RpcAccountMeta = {
+  pubkey: string;
+  isSigner: boolean;
+  isWritable: boolean;
+};
+
+interface SolanaVaultSwapExtraParameters {
+  chain: 'Solana';
+  from: string;
+  event_data_account: string;
+  input_amount: string;
+  refund_parameters: ChannelRefundParameters;
+  from_token_account?: string;
+}
+
+// interface BitcoinVaultSwapExtraParameters {
+//   chain: 'Bitcoin';
+//   min_output_amount: number;
+//   retry_duration: number;
+// }
+
+// type VaultSwapExtraParameters = BitcoinVaultSwapExtraParameters | SolanaVaultSwapExtraParameters;
+
+type ChannelRefundParameters = {
+  retry_duration: number;
+  refund_address: string;
+  min_price: string;
+};
 
 // Temporary before the SDK implements this.
 export async function executeSolVaultSwap(
@@ -52,119 +103,94 @@ export async function executeSolVaultSwap(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();
 
+  // TODO: To use to compare with the returned data from the broker API.
   const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl as SwapEndpoint);
   const vaultProgram = new anchor.Program<Vault>(VaultIdl as Vault);
+
+  // TODO: To use to compare with the returned data from the broker API.
+  const fetchedDataAccount = await vaultProgram.account.dataAccount.fetch(solanaVaultDataAccount);
+  const aggKey = fetchedDataAccount.aggKey;
 
   const newEventAccountKeypair = Keypair.generate();
   createdEventAccounts.push(newEventAccountKeypair.publicKey);
 
-  const fetchedDataAccount = await vaultProgram.account.dataAccount.fetch(solanaVaultDataAccount);
-  const aggKey = fetchedDataAccount.aggKey;
-
-  const amountToSwap = new BN(
-    amountToFineAmount(amount ?? defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
+  const amountToSwap = amountToFineAmount(
+    amount ?? defaultAssetAmounts(srcAsset),
+    assetDecimals(srcAsset),
   );
 
-  let cfParameters;
+  // TODO: Is this needed for Vault swaps to DOT?
+  // const destinationAddress =
+  //   destChain === Chains.Polkadot ? decodeDotAddressForContract(destAddress) : destAddress;
 
-  if (messageMetadata) {
-    // TODO: Currently manually encoded. To use SDK/BrokerApi.
-    switch (destChain) {
-      case Chains.Ethereum:
-      case Chains.Arbitrum:
-        cfParameters =
-          '0x000001000000040101010101010101010101010101010101010101010101010101010101010101000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000';
-        break;
-      default:
-        throw new Error(`Unsupported chain: ${destChain}`);
-    }
-  } else {
-    // TODO: Currently manually encoded. To use SDK/BrokerApi.
-    switch (destChain) {
-      case Chains.Ethereum:
-      case Chains.Arbitrum:
-        cfParameters =
-          '0x0001000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000';
-        break;
-      case Chains.Polkadot:
-        cfParameters =
-          '0x0001000000010404040404040404040404040404040404040404040404040404040404040404000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000';
-        break;
-      // TODO: Not supporting BTC for now because the encoding is annoying.
-      default:
-        throw new Error(`Unsupported chain: ${destChain}`);
-    }
+  // TODO: Unify this with BTC (& maybe later EVM) vault swaps.
+  await using chainflip = await getChainflipApi();
+  const brokerUri = '//BROKER_1';
+  const broker = createStateChainKeypair(brokerUri);
+
+  const refundParams: ChannelRefundParameters = {
+    retry_duration: 0,
+    refund_address: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
+    min_price: '0x0',
+  };
+
+  const extraParameters: SolanaVaultSwapExtraParameters = {
+    chain: 'Solana',
+    from: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
+    event_data_account: decodeSolAddress(newEventAccountKeypair.publicKey.toBase58()),
+    input_amount: amountToSwap,
+    refund_parameters: refundParams,
+    // TODO: Hardcoded for Sol atm
+    from_token_account: undefined,
+  };
+
+  console.log('amountToSwap', amountToSwap);
+  console.log('0x + Number(amountToSwap).toString(16)', '0x' + Number(amountToSwap).toString(16));
+
+  const vaultSwapDetails = (await chainflip.rpc(
+    `cf_get_vault_swap_details`,
+    broker.address,
+    { chain: chainFromAsset(srcAsset), asset: stateChainAssetFromAsset(srcAsset) },
+    { chain: chainFromAsset(destAsset), asset: stateChainAssetFromAsset(destAsset) },
+    destAddress,
+    0, // broker_commission
+    extraParameters, // extra_parameters
+    // TODO: To pass ccm metadata
+    null, // channel_metadata
+    null, // boost_fee
+    null, // affiliates
+    null, // dca_parameters
+  )) as unknown as SolVaultSwapDetails;
+
+  console.log('vaultSwapDetails:', vaultSwapDetails);
+
+  // TODO: Assert also that programId is the Vault one.
+  // assert.strictEqual(vaultSwapDetails.chain, 'Solana');
+  console.log('vaultSwapDetails.instruction:', vaultSwapDetails.instruction.accounts);
+
+  // Iterate over vaultSwapDetails.instruction.accounts which is AccountMeta[] but it
+  // should be converted into the web 3 AccountMeta[]
+  const keys: AccountMeta[] = [];
+  for (const account of vaultSwapDetails.instruction.accounts) {
+    keys.push({
+      pubkey: new PublicKey(account.pubkey),
+      isSigner: account.isSigner,
+      isWritable: account.isWritable,
+    });
   }
 
-  const destinationAddress =
-    destChain === Chains.Polkadot ? decodeDotAddressForContract(destAddress) : destAddress;
+  const transaction = new Transaction();
+  const instruction = new TransactionInstruction({
+    keys,
+    programId: new PublicKey(vaultSwapDetails.instruction.program_id),
+    data: Buffer.from(vaultSwapDetails.instruction.data, 'hex'),
+  });
 
-  const tx =
-    srcAsset === 'Sol'
-      ? await cfSwapEndpointProgram.methods
-          .xSwapNative({
-            amount: amountToSwap,
-            dstChain: chainContractId(destChain),
-            dstAddress: Buffer.from(destinationAddress.slice(2), 'hex'),
-            dstToken: assetConstants[destAsset].contractId,
-            ccmParameters: messageMetadata
-              ? {
-                  message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
-                  gasAmount: new BN(messageMetadata.gasBudget),
-                }
-              : null,
-            cfParameters: Buffer.from(cfParameters!.slice(2) ?? '', 'hex'),
-          })
-          .accountsPartial({
-            dataAccount: solanaVaultDataAccount,
-            aggKey,
-            from: whaleKeypair.publicKey,
-            eventDataAccount: newEventAccountKeypair.publicKey,
-            swapEndpointDataAccount,
-            systemProgram: anchor.web3.SystemProgram.programId,
-          })
-          .signers([whaleKeypair, newEventAccountKeypair])
-          .transaction()
-      : await cfSwapEndpointProgram.methods
-          .xSwapToken({
-            amount: amountToSwap,
-            dstChain: chainContractId(destChain),
-            dstAddress: Buffer.from(destinationAddress.slice(2), 'hex'),
-            dstToken: assetConstants[destAsset].contractId,
-            ccmParameters: messageMetadata
-              ? {
-                  message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
-                  gasAmount: new BN(messageMetadata.gasBudget),
-                }
-              : null,
-            cfParameters: Buffer.from(cfParameters!.slice(2) ?? '', 'hex'),
-            decimals: assetDecimals(srcAsset),
-          })
-          .accountsPartial({
-            dataAccount: solanaVaultDataAccount,
-            tokenVaultAssociatedTokenAccount: new PublicKey(
-              getContractAddress('Solana', 'TOKEN_VAULT_ATA'),
-            ),
-            from: whaleKeypair.publicKey,
-            fromTokenAccount: getAssociatedTokenAddressSync(
-              new PublicKey(getContractAddress('Solana', 'SolUsdc')),
-              whaleKeypair.publicKey,
-              false,
-            ),
-            eventDataAccount: newEventAccountKeypair.publicKey,
-            swapEndpointDataAccount,
-            tokenSupportedAccount: new PublicKey(
-              getContractAddress('Solana', 'SolUsdcTokenSupport'),
-            ),
-            tokenProgram: TOKEN_PROGRAM_ID,
-            mint: new PublicKey(getContractAddress('Solana', 'SolUsdc')),
-            systemProgram: anchor.web3.SystemProgram.programId,
-          })
-          .signers([whaleKeypair, newEventAccountKeypair])
-          .transaction();
+  transaction.add(instruction);
+
   const txHash = await sendAndConfirmTransaction(
     connection,
-    tx,
+    transaction,
     [whaleKeypair, newEventAccountKeypair],
     { commitment: 'confirmed' },
   );
