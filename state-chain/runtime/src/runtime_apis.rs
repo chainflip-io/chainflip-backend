@@ -45,8 +45,14 @@ pub enum VaultSwapDetails<BtcAddress> {
 		nulldata_payload: Vec<u8>,
 		deposit_address: BtcAddress,
 	},
-	Ethereum(EvmVaultSwapDetails),
-	Arbitrum(EvmVaultSwapDetails),
+	Ethereum {
+		#[serde(flatten)]
+		details: EvmVaultSwapDetails,
+	},
+	Arbitrum {
+		#[serde(flatten)]
+		details: EvmVaultSwapDetails,
+	},
 	Solana {
 		#[serde(flatten)]
 		instruction: SolInstructionRpc,
@@ -62,6 +68,14 @@ pub struct EvmVaultSwapDetails {
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
+	pub fn ethereum(details: EvmVaultSwapDetails) -> Self {
+		VaultSwapDetails::Ethereum { details }
+	}
+
+	pub fn arbitrum(details: EvmVaultSwapDetails) -> Self {
+		VaultSwapDetails::Arbitrum { details }
+	}
+
 	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>
 	where
 		F: FnOnce(BtcAddress) -> T,

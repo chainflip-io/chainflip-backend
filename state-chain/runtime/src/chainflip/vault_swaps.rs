@@ -196,13 +196,13 @@ pub fn evm_vault_swap<A>(
 	}?;
 
 	match source_asset.into() {
-		ForeignChain::Ethereum => Ok(VaultSwapDetails::Ethereum(EvmVaultSwapDetails {
+		ForeignChain::Ethereum => Ok(VaultSwapDetails::ethereum(EvmVaultSwapDetails {
 			calldata,
 			// Only return `amount` for native currently. 0 for Tokens
 			value: (source_asset == Asset::Eth).then_some(U256::from(amount)).unwrap_or_default(),
 			to: Environment::key_manager_address(),
 		})),
-		ForeignChain::Arbitrum => Ok(VaultSwapDetails::Arbitrum(EvmVaultSwapDetails {
+		ForeignChain::Arbitrum => Ok(VaultSwapDetails::arbitrum(EvmVaultSwapDetails {
 			calldata,
 			// Only return `amount` for native currently. 0 for Tokens
 			value: (source_asset == Asset::ArbEth)
