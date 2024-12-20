@@ -102,7 +102,7 @@ pub fn bitcoin_vault_swap(
 	})
 }
 
-pub fn solana_vault_swap(
+pub fn solana_vault_swap<A>(
 	broker_id: AccountId,
 	input_amount: AssetAmount,
 	source_asset: Asset,
@@ -117,7 +117,7 @@ pub fn solana_vault_swap(
 	from: EncodedAddress,
 	event_data_account: EncodedAddress,
 	from_token_account: Option<EncodedAddress>,
-) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
+) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	// Load up environment variables.
 	let api_environment =
 		SolEnvironment::api_environment().map_err(|_| "Failed to load Solana API environment")?;
