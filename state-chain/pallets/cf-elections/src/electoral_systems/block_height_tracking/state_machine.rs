@@ -1,4 +1,5 @@
 use crate::electoral_system::ElectoralSystem;
+use sp_std::collections::btree_set::BTreeSet;
 
 #[cfg(test)]
 use proptest::prelude::{BoxedStrategy, Just, Strategy};
@@ -6,13 +7,37 @@ use proptest::prelude::{BoxedStrategy, Just, Strategy};
 use proptest::test_runner::TestRunner;
 
 /// A type which has an associated index type.
-/// This effectively models dependent sum types.
+/// This effectively models types families.
 pub trait Indexed {
 	type Index;
-	fn has_index(&self, base: &Self::Index) -> bool;
+	fn index(&self) -> Self::Index;
 }
 
 pub type IndexOf<Ixd> = <Ixd as Indexed>::Index;
+
+pub struct IndexAndValue<A: Indexed>(A::Index, A);
+
+impl<A: Indexed> Indexed for IndexAndValue<A> {
+	type Index = A::Index;
+
+	fn index(&self) -> Self::Index {
+		todo!()
+	}
+}
+
+impl<A: Indexed> Validate for IndexAndValue<A> {
+	type Error = &'static str;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		todo!()
+		// if self.1.has_index(&self.0) {
+		// 	Ok(())
+		// } else {
+		// 	Err("invalid index inside `IndexAndValue` type")
+		// }
+	}
+}
+
 
 /// A type which can be validated.
 pub trait Validate {
@@ -69,9 +94,9 @@ pub trait StateMachine: 'static {
 	type State: Validate;
 	type DisplayState;
 
-	/// To every state, this function associates an input index which
-	/// describes what kind of input we want to receive next.
-	fn input_index(s: &Self::State) -> IndexOf<Self::Input>;
+	/// To every state, this function associates a set of input indices which
+	/// describes what kind of input(s) we want to receive next.
+	fn input_index(s: &Self::State) -> BTreeSet<IndexOf<Self::Input>>;
 
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore
@@ -95,11 +120,13 @@ pub trait StateMachine: 'static {
 	#[cfg(test)]
 	fn test(
 		states: impl Strategy<Value = Self::State>,
-		inputs: impl Fn(IndexOf<Self::Input>) -> BoxedStrategy<Self::Input>,
+		inputs: impl Fn(BTreeSet<IndexOf<Self::Input>>) -> BoxedStrategy<Self::Input>,
 	) where
 		Self::State: sp_std::fmt::Debug + Clone,
 		Self::Input: sp_std::fmt::Debug + Clone,
+		<Self::Input as Indexed>::Index: Ord
 	{
+
 		let mut runner = TestRunner::default();
 
 		runner
@@ -111,7 +138,7 @@ pub trait StateMachine: 'static {
 					// ensure that inputs are well formed
 					assert!(state.is_valid().is_ok(), "input state not valid");
 					assert!(input.is_valid().is_ok(), "input not valid");
-					assert!(input.has_index(&Self::input_index(&state)), "input has wrong index");
+					assert!(!Self::input_index(&state).contains(&input.index()), "input has wrong index");
 
 					// backup state
 					let prev_state = state.clone();
