@@ -246,6 +246,14 @@ impl<
 				*last_block_root_seen
 			},
 			ChainProgress::Continuous(witness_range) => {
+				if last_block_election_emitted_for.into() == 0u64 {
+					// The first time we see a block, we want to initialise the
+					// last_block_election_emitted_for, so we only emit an election for the most
+					// recent. TODO: Make this it's own enum variant `FirstConsenus`?
+					last_block_election_emitted_for =
+						witness_range.witness_from_root.saturating_sub(Chain::WITNESS_PERIOD);
+					return Ok(())
+				}
 				log::info!("Continuous progress: {:?}", witness_range);
 				witness_range.witness_to_root()
 			},
