@@ -759,7 +759,15 @@ fn swap_excess_are_confiscated() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1.into(), 1.into(), from, to, MAX_SWAP, None, [FeeType::NetworkFee { min_fee_enforced: true }])]
+			vec![Swap::new(
+				1.into(),
+				1.into(),
+				from,
+				to,
+				MAX_SWAP,
+				None,
+				[FeeType::NetworkFee { min_fee_enforced: true }]
+			)]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
 	});
