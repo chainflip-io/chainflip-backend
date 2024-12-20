@@ -5,6 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{
 	address::EncodedAddress,
+	cf_parameters::VaultSwapParameters,
 	evm::{DepositDetails, H256},
 	CcmDepositMetadata, Ethereum,
 };
@@ -25,10 +26,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::{
-		common::cf_parameters::VaultSwapParameters,
-		evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
-	},
+	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 };
 
 use super::{

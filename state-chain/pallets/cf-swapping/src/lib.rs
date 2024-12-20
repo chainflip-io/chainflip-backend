@@ -5,7 +5,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
-	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersDecoded,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
@@ -338,7 +338,7 @@ struct SwapRequest<T: Config> {
 	id: SwapRequestId,
 	input_asset: Asset,
 	output_asset: Asset,
-	refund_params: Option<ChannelRefundParameters>,
+	refund_params: Option<ChannelRefundParametersDecoded>,
 	state: SwapRequestState<T>,
 }
 
@@ -1698,7 +1698,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<&ChannelRefundParameters>,
+			refund_params: Option<&ChannelRefundParametersDecoded>,
 			swap_type: SwapType,
 			broker_fees: Beneficiaries<T::AccountId>,
 			swap_request_id: SwapRequestId,
@@ -1876,7 +1876,7 @@ pub mod pallet {
 			output_asset: Asset,
 			request_type: SwapRequestType,
 			broker_fees: Beneficiaries<Self::AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParametersDecoded>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin,
 		) -> SwapRequestId {
@@ -2162,6 +2162,12 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 			.find(|(_, id)| id == affiliate_id)
 			.map(|(short_id, _)| short_id)
 	}
+
+	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId> {
+		AffiliateIdMapping::<T>::iter_prefix(broker_id)
+			.map(|(short_id, account_id)| (account_id, short_id))
+			.collect()
+	}
 }
 
 pub(crate) mod utilities {
@@ -2197,7 +2203,7 @@ pub(crate) mod utilities {
 	}
 
 	pub(super) fn calculate_swap_refund_parameters(
-		params: &ChannelRefundParameters,
+		params: &ChannelRefundParametersDecoded,
 		execute_at_block: u32,
 		input_amount: AssetAmount,
 	) -> SwapRefundParameters {

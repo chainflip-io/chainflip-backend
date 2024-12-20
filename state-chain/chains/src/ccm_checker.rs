@@ -8,6 +8,7 @@ use crate::{
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -15,6 +16,17 @@ pub enum CcmValidityError {
 	CannotDecodeCcmAdditionalData,
 	CcmIsTooLong,
 	CcmAdditionalDataContainsInvalidAccounts,
+}
+impl From<CcmValidityError> for DispatchError {
+	fn from(value: CcmValidityError) -> Self {
+		match value {
+			CcmValidityError::CannotDecodeCcmAdditionalData =>
+				"Invalid Ccm: Cannot decode additional data".into(),
+			CcmValidityError::CcmIsTooLong => "Invalid Ccm: message too long".into(),
+			CcmValidityError::CcmAdditionalDataContainsInvalidAccounts =>
+				"Invalid Ccm: additional data contains invalid accounts".into(),
+		}
+	}
 }
 
 pub trait CcmValidityCheck {
