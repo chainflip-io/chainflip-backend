@@ -22,10 +22,10 @@ use state_chain_runtime::{
 // We have a set of nodes that are funded and can redeem in the redeeming period and
 // not redeem when out of the period
 fn cannot_redeem_funds_out_of_redemption_period() {
-	const EPOCH_BLOCKS: u32 = 100;
+	const EPOCH_DURATION_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 3;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_DURATION_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -68,7 +68,7 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			}
 
 			let end_of_redemption_period =
-				EPOCH_BLOCKS * REDEMPTION_PERIOD_AS_PERCENTAGE as u32 / 100;
+				EPOCH_DURATION_BLOCKS * REDEMPTION_PERIOD_AS_PERCENTAGE as u32 / 100;
 			// Move to end of the redemption period
 			System::set_block_number(end_of_redemption_period + 1);
 			// We will try to redeem
@@ -125,7 +125,7 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 fn funded_node_is_added_to_backups() {
 	const EPOCH_BLOCKS: u32 = 10_000_000;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		// As we run a rotation at genesis we will need accounts to support
 		// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
 		.accounts(vec![
@@ -149,7 +149,7 @@ fn backup_reward_is_calculated_linearly() {
 	const MAX_AUTHORITIES: u32 = 10;
 	const NUM_BACKUPS: u32 = 20;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -194,7 +194,7 @@ fn can_calculate_account_apy() {
 	const MAX_AUTHORITIES: u32 = 10;
 	const NUM_BACKUPS: u32 = 20;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -246,7 +246,7 @@ fn apy_can_be_above_100_percent() {
 	const MAX_AUTHORITIES: u32 = 2;
 	const NUM_BACKUPS: u32 = 2;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -282,7 +282,7 @@ fn backup_rewards_event_gets_emitted_on_heartbeat_interval() {
 	const NUM_BACKUPS: u32 = 20;
 	const MAX_AUTHORITIES: u32 = 100;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.accounts(
 			(0..MAX_AUTHORITIES as u8)
 				.map(|i| (AccountId32::from([i; 32]), AccountRole::Validator, GENESIS_BALANCE))
