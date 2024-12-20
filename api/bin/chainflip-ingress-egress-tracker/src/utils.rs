@@ -1,9 +1,11 @@
 use cf_chains::instances::{ChainInstanceAlias, ChainInstanceFor};
-use cf_primitives::BroadcastId;
+use chainflip_api::primitives::BroadcastId;
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
 use pallet_cf_broadcast::TransactionOutIdFor;
+use sp_core::bounded::alloc::sync::Arc;
+
 use tracing::log;
 
 pub fn hex_encode_bytes(bytes: &[u8]) -> String {
@@ -11,7 +13,7 @@ pub fn hex_encode_bytes(bytes: &[u8]) -> String {
 }
 
 pub async fn get_broadcast_id<I, StateChainClient>(
-	state_chain_client: &StateChainClient,
+	state_chain_client: Arc<StateChainClient>,
 	tx_out_id: &TransactionOutIdFor<state_chain_runtime::Runtime, ChainInstanceFor<I>>,
 ) -> Option<BroadcastId>
 where

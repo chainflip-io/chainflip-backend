@@ -3,18 +3,27 @@ use crate::{
 	utils::{get_broadcast_id, hex_encode_bytes},
 };
 use cf_chains::{
-	address::ToHumanreadableAddress,
+	address::{IntoForeignChainAddress, ToHumanreadableAddress},
 	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
-	AnyChain, Arbitrum, Bitcoin, Chain, Ethereum, Polkadot,
+	instances::ChainInstanceFor,
+	AnyChain, Arbitrum, Bitcoin, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
+	Ethereum, IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
 };
-use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
-use chainflip_engine::state_chain_observer::client::{
-	chain_api::ChainApi, storage_api::StorageApi,
+use chainflip_api::primitives::{
+	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters,
+	ForeignChain, NetworkEnvironment,
 };
-use pallet_cf_ingress_egress::DepositWitness;
+use chainflip_engine::state_chain_observer::client::{
+	chain_api::ChainApi, storage_api::StorageApi, StateChainClient,
+};
+use codec::Encode;
+use pallet_cf_broadcast::TransactionOutIdFor;
+use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use serde::{Serialize, Serializer};
+use sp_core::{bounded::alloc::sync::Arc, crypto::AccountId32, Get};
+use std::collections::BTreeMap;
 
 /// A wrapper type for bitcoin hashes that serializes the hash in reverse.
 #[derive(Debug)]
@@ -67,6 +76,16 @@ enum DepositDetails {
 	Arbitrum { tx_hashes: Vec<H256> },
 }
 
+struct BroadcastDetails<I: cf_chains::instances::ChainInstanceAlias + Chain + 'static>
+where
+	state_chain_runtime::Runtime: pallet_cf_broadcast::Config<ChainInstanceFor<I>>,
+{
+	broadcast_id: BroadcastId,
+	tx_out_id: TransactionOutIdFor<state_chain_runtime::Runtime, ChainInstanceFor<I>>,
+	tx_ref: I::TransactionRef,
+}
+
+#[allow(clippy::large_enum_variant)]
 #[derive(Serialize)]
 #[serde(untagged)]
 enum WitnessInformation {
@@ -84,6 +103,22 @@ enum WitnessInformation {
 		tx_out_id: TransactionId,
 		tx_ref: TransactionRef,
 	},
+	VaultDeposit {
+		#[serde(skip_serializing)]
+		tx_id: TransactionInIdForAnyChain,
+		deposit_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
+		input_asset: cf_chains::assets::any::Asset,
+		output_asset: cf_chains::assets::any::Asset,
+		amount: NumberOrHex,
+		destination_address: String,
+		ccm_deposit_metadata: Option<CcmDepositMetadata>,
+		deposit_details: Option<DepositDetails>,
+		broker_fee: Beneficiary<AccountId32>,
+		affiliate_fees: Affiliates<AccountId32>,
+		refund_params: ChannelRefundParameters,
+		dca_params: Option<DcaParameters>,
+		boost_fee: BasisPoints,
+	},
 }
 
 impl WitnessInformation {
@@ -96,25 +131,32 @@ impl WitnessInformation {
 				TransactionId::Polkadot { .. } => ForeignChain::Polkadot,
 				TransactionId::Arbitrum { .. } => ForeignChain::Arbitrum,
 			},
+			Self::VaultDeposit { input_asset: asset, .. } => (*asset).into(),
 		}
+	}
+
+	async fn save_to_store<S: Store>(&self, store: &mut S) -> anyhow::Result<()> {
+		match self {
+			Self::Deposit { .. } => store.save_to_array(self).await?,
+			Self::Broadcast { .. } | Self::VaultDeposit { .. } =>
+				store.save_singleton(self).await?,
+		};
+		Ok(())
 	}
 }
 
 impl Storable for WitnessInformation {
-	fn get_key(&self) -> String {
+	fn key(&self) -> String {
 		let chain = self.to_foreign_chain().to_string();
 
 		match self {
-			Self::Deposit { deposit_address, .. } => {
-				format!("deposit:{chain}:{deposit_address}")
-			},
-			Self::Broadcast { broadcast_id, .. } => {
-				format!("broadcast:{chain}:{broadcast_id}")
-			},
+			Self::Deposit { deposit_address, .. } => format!("deposit:{chain}:{deposit_address}"),
+			Self::Broadcast { broadcast_id, .. } => format!("broadcast:{chain}:{broadcast_id}"),
+			Self::VaultDeposit { tx_id, .. } => format!("vault_deposit:{chain}:{tx_id}"),
 		}
 	}
 
-	fn get_expiry_duration(&self) -> std::time::Duration {
+	fn expiry_duration(&self) -> std::time::Duration {
 		match self.to_foreign_chain() {
 			ForeignChain::Bitcoin => std::time::Duration::from_secs(3600 * 6),
 			_ => Self::DEFAULT_EXPIRY_DURATION,
@@ -122,83 +164,271 @@ impl Storable for WitnessInformation {
 	}
 }
 
-type DepositInfo<T> = (DepositWitness<T>, <T as Chain>::ChainBlockNumber, NetworkEnvironment);
+trait IntoDepositDetailsAnyChain {
+	fn into_any_chain(self) -> Option<DepositDetails>;
+}
 
-impl From<DepositInfo<Ethereum>> for WitnessInformation {
-	fn from((value, height, _): DepositInfo<Ethereum>) -> Self {
-		Self::Deposit {
-			deposit_chain_block_height: height,
-			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
-			amount: value.amount.into(),
-			asset: value.asset.into(),
-			deposit_details: value
-				.deposit_details
-				.tx_hashes
-				.map(|tx_hashes| DepositDetails::Ethereum { tx_hashes }),
+impl IntoDepositDetailsAnyChain for cf_chains::evm::DepositDetails {
+	fn into_any_chain(self) -> Option<DepositDetails> {
+		self.tx_hashes.map(|tx_hashes| DepositDetails::Ethereum { tx_hashes })
+	}
+}
+impl IntoDepositDetailsAnyChain for cf_chains::btc::Utxo {
+	fn into_any_chain(self) -> Option<DepositDetails> {
+		Some(DepositDetails::Bitcoin { tx_id: self.id.tx_id, vout: self.id.vout })
+	}
+}
+impl IntoDepositDetailsAnyChain for u32 {
+	fn into_any_chain(self) -> Option<DepositDetails> {
+		Some(DepositDetails::Polkadot { extrinsic_index: self })
+	}
+}
+impl IntoDepositDetailsAnyChain for Vec<H256> {
+	fn into_any_chain(self) -> Option<DepositDetails> {
+		Some(DepositDetails::Arbitrum { tx_hashes: self })
+	}
+}
+impl IntoDepositDetailsAnyChain for () {
+	fn into_any_chain(self) -> Option<DepositDetails> {
+		None
+	}
+}
+
+trait DepositWitnessExt<C: Chain> {
+	fn into_witness_information(
+		self,
+		height: <C as Chain>::ChainBlockNumber,
+		network: NetworkEnvironment,
+	) -> WitnessInformation;
+}
+
+impl<C: Chain + Get<ForeignChain>> DepositWitnessExt<C> for DepositWitness<C>
+where
+	C::DepositDetails: IntoDepositDetailsAnyChain,
+{
+	fn into_witness_information(
+		self,
+		height: C::ChainBlockNumber,
+		network: NetworkEnvironment,
+	) -> WitnessInformation {
+		WitnessInformation::Deposit {
+			deposit_chain_block_height: height.into(),
+			deposit_address: match C::get() {
+				// TODO: consider using the humanreadable impl for Polkadot (ss58)
+				ForeignChain::Polkadot => hex_encode_bytes(&self.deposit_address.encode()),
+				_ => format!(
+					"{}",
+					self.deposit_address.into_foreign_chain_address().to_humanreadable(network)
+				),
+			},
+			amount: self.amount.into().into(),
+			asset: self.asset.into(),
+			deposit_details: self.deposit_details.into_any_chain(),
 		}
 	}
 }
 
-impl From<DepositInfo<Bitcoin>> for WitnessInformation {
-	fn from((value, height, network): DepositInfo<Bitcoin>) -> Self {
-		Self::Deposit {
-			deposit_chain_block_height: height,
-			deposit_address: value.deposit_address.to_humanreadable(network),
-			amount: value.amount.into(),
-			asset: value.asset.into(),
-			deposit_details: Some(DepositDetails::Bitcoin {
-				tx_id: value.deposit_details.id.tx_id,
-				vout: value.deposit_details.id.vout,
-			}),
-		}
+trait VaultDepositWitnessExt<C: Chain> {
+	fn into_witness_information(
+		self,
+		height: <C as Chain>::ChainBlockNumber,
+		affiliate_mapping: &BTreeMap<AffiliateShortId, AccountId32>,
+	) -> WitnessInformation;
+}
+
+impl<T: pallet_cf_ingress_egress::Config<I, AccountId = AccountId32>, I: 'static>
+	VaultDepositWitnessExt<T::TargetChain> for VaultDepositWitness<T, I>
+where
+	<T::TargetChain as Chain>::DepositDetails: IntoDepositDetailsAnyChain,
+{
+	fn into_witness_information(
+		self,
+		height: <T::TargetChain as Chain>::ChainBlockNumber,
+		affiliate_mapping: &BTreeMap<AffiliateShortId, AccountId32>,
+	) -> WitnessInformation {
+		WitnessInformation::VaultDeposit {
+			tx_id: <<<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId as IntoTransactionInIdForAnyChain<
+				<T::TargetChain as Chain>::ChainCrypto,
+			>>::into_transaction_in_id_for_any_chain(self.tx_id),
+			deposit_chain_block_height: height.into(),
+			input_asset: self.input_asset.into(),
+			output_asset: self.output_asset,
+			amount: self.deposit_amount.into().into(),
+			destination_address: format!("{}", self.destination_address),
+			ccm_deposit_metadata: self.deposit_metadata,
+			deposit_details: self.deposit_details.into_any_chain(),
+			broker_fee: self.broker_fee.clone(),
+			affiliate_fees: self.affiliate_fees
+				.into_iter()
+				.map(|affiliate| {
+					Beneficiary { account: affiliate_mapping.get(&affiliate.account).cloned()
+						.unwrap_or_else(|| {
+							log::warn!(
+								"Affiliate not found for short id {} on broker `{}`",
+								affiliate.account,
+								self.broker_fee.account,
+							);
+							AccountId32::from([0; 32])
+						}), bps: affiliate.bps }
+				})
+				.collect::<Vec<Beneficiary<AccountId32>>>()
+				.try_into()
+				.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same."),
+					refund_params: self.refund_params,
+					dca_params: self.dca_params,
+					boost_fee: self.boost_fee,
+				}
 	}
 }
 
-impl From<DepositInfo<Polkadot>> for WitnessInformation {
-	fn from((value, height, _): DepositInfo<Polkadot>) -> Self {
-		Self::Deposit {
-			deposit_chain_block_height: height as u64,
-			deposit_address: hex_encode_bytes(value.deposit_address.aliased_ref()),
-			amount: value.amount.into(),
-			asset: value.asset.into(),
-			deposit_details: Some(DepositDetails::Polkadot {
-				extrinsic_index: value.deposit_details,
-			}),
-		}
+trait BroadcastIntoWitnessInformation {
+	fn into_witness_information(self) -> anyhow::Result<WitnessInformation>;
+}
+
+impl BroadcastIntoWitnessInformation for BroadcastDetails<Ethereum> {
+	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
+		Ok(WitnessInformation::Broadcast {
+			broadcast_id: self.broadcast_id,
+			tx_out_id: TransactionId::Ethereum { signature: self.tx_out_id },
+			tx_ref: TransactionRef::Ethereum { hash: self.tx_ref },
+		})
 	}
 }
 
-impl From<DepositInfo<Arbitrum>> for WitnessInformation {
-	fn from((value, height, _): DepositInfo<Arbitrum>) -> Self {
-		Self::Deposit {
-			deposit_chain_block_height: height,
-			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
-			amount: value.amount.into(),
-			asset: value.asset.into(),
-			deposit_details: value
-				.deposit_details
-				.tx_hashes
-				.map(|tx_hashes| DepositDetails::Arbitrum { tx_hashes }),
-		}
+impl BroadcastIntoWitnessInformation for BroadcastDetails<Arbitrum> {
+	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
+		Ok(WitnessInformation::Broadcast {
+			broadcast_id: self.broadcast_id,
+			tx_out_id: TransactionId::Arbitrum { signature: self.tx_out_id },
+			tx_ref: TransactionRef::Arbitrum { hash: self.tx_ref },
+		})
 	}
 }
 
-async fn save_deposit_witnesses<S: Store, C: Chain>(
+impl BroadcastIntoWitnessInformation for BroadcastDetails<Bitcoin> {
+	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
+		Ok(WitnessInformation::Broadcast {
+			broadcast_id: self.broadcast_id,
+			tx_out_id: TransactionId::Bitcoin { hash: BitcoinHash(self.tx_out_id) },
+			tx_ref: TransactionRef::Bitcoin { hash: BitcoinHash(self.tx_ref) },
+		})
+	}
+}
+
+impl BroadcastIntoWitnessInformation for BroadcastDetails<Polkadot> {
+	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
+		Ok(WitnessInformation::Broadcast {
+			broadcast_id: self.broadcast_id,
+			tx_out_id: TransactionId::Polkadot {
+				signature: DotSignature(*self.tx_out_id.aliased_ref()),
+			},
+			tx_ref: TransactionRef::Polkadot { transaction_id: self.tx_ref },
+		})
+	}
+}
+
+async fn save_deposit_witnesses<S, C>(
 	store: &mut S,
 	deposit_witnesses: Vec<DepositWitness<C>>,
-	block_height: <C as Chain>::ChainBlockNumber,
-	chainflip_network: NetworkEnvironment,
-) -> anyhow::Result<()>
-where
-	WitnessInformation:
-		From<(DepositWitness<C>, <C as Chain>::ChainBlockNumber, NetworkEnvironment)>,
+	block_height: C::ChainBlockNumber,
+	network: NetworkEnvironment,
+) where
+	C::DepositDetails: IntoDepositDetailsAnyChain,
+	S: Store,
+	C: Chain + Get<ForeignChain>,
 {
 	for witness in deposit_witnesses {
-		store
-			.save_to_array(&WitnessInformation::from((witness, block_height, chainflip_network)))
-			.await?;
+		let _ = witness
+			.into_witness_information(block_height, network)
+			.save_to_store(store)
+			.await
+			.inspect_err(|e| {
+				tracing::error!("Failed to save deposit witness: {:?}", e);
+			});
 	}
+}
 
+#[cfg_attr(test, mockall::automock)]
+pub trait CfGetAffiliates {
+	async fn cf_get_affiliates(
+		&self,
+		broker_fee_account: &AccountId32,
+	) -> anyhow::Result<BTreeMap<AffiliateShortId, state_chain_runtime::AccountId>>;
+}
+
+impl<S> CfGetAffiliates for StateChainClient<S> {
+	async fn cf_get_affiliates(
+		&self,
+		broker_fee_account: &AccountId32,
+	) -> anyhow::Result<BTreeMap<AffiliateShortId, state_chain_runtime::AccountId>> {
+		use custom_rpc::CustomApiClient;
+
+		Ok(self
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_get_affiliates(broker_fee_account.clone(), None)
+			.await?
+			.into_iter()
+			.collect::<BTreeMap<_, _>>())
+	}
+}
+
+async fn save_vault_deposit_witness<S, T, I: 'static, StateChainClient>(
+	store: &mut S,
+	deposit_witness: VaultDepositWitness<T, I>,
+	block_height: <T::TargetChain as Chain>::ChainBlockNumber,
+	state_chain_client: Arc<StateChainClient>,
+) -> anyhow::Result<()>
+where
+	S: Store,
+	T: pallet_cf_ingress_egress::Config<I, AccountId = AccountId32>,
+	<T::TargetChain as Chain>::DepositDetails: IntoDepositDetailsAnyChain,
+	StateChainClient: CfGetAffiliates + 'static + Send + Sync,
+{
+	let affiliate_mapping = state_chain_client
+		.cf_get_affiliates(&deposit_witness.broker_fee.account)
+		.await?;
+
+	let _ = deposit_witness
+		.into_witness_information(block_height, &affiliate_mapping)
+		.save_to_store(store)
+		.await
+		.inspect_err(|e| {
+			tracing::error!("Failed to save vault deposit witness: {:?}", e);
+		});
+	Ok(())
+}
+
+async fn save_broadcast_witness<S: Store, StateChainClient, I>(
+	store: &mut S,
+	tx_out_id: TransactionOutIdFor<state_chain_runtime::Runtime, ChainInstanceFor<I>>,
+	tx_ref: I::TransactionRef,
+	state_chain_client: Arc<StateChainClient>,
+) -> anyhow::Result<()>
+where
+	I: cf_chains::instances::ChainInstanceAlias + Chain + 'static,
+	StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+	state_chain_runtime::Runtime: pallet_cf_broadcast::Config<ChainInstanceFor<I>>,
+	BroadcastDetails<I>: BroadcastIntoWitnessInformation,
+{
+	if let Some(broadcast_details) =
+		get_broadcast_id::<I, StateChainClient>(state_chain_client, &tx_out_id)
+			.await
+			.map(|broadcast_id| BroadcastDetails::<I> { broadcast_id, tx_out_id, tx_ref })
+	{
+		match broadcast_details.into_witness_information() {
+			// In case of errors, log it and continue operation
+			Ok(witness) => {
+				let _result = witness.save_to_store(store).await.map_err(|e| {
+					tracing::error!("Failed to save broadcast witness: {:?}", e);
+					e
+				});
+			},
+			Err(e) => {
+				tracing::error!("Failed to save broadcast witness: {:?}", e);
+			},
+		};
+	}
 	Ok(())
 }
 
@@ -206,11 +436,11 @@ pub async fn handle_call<S, StateChainClient>(
 	call: state_chain_runtime::RuntimeCall,
 	store: &mut S,
 	chainflip_network: NetworkEnvironment,
-	state_chain_client: &StateChainClient,
+	state_chain_client: Arc<StateChainClient>,
 ) -> anyhow::Result<()>
 where
 	S: Store,
-	StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + CfGetAffiliates + ChainApi + 'static + Send + Sync,
 {
 	use pallet_cf_broadcast::Call as BroadcastCall;
 	use pallet_cf_ingress_egress::Call as IngressEgressCall;
@@ -220,108 +450,84 @@ where
 		EthereumIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
-		}) =>
-			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
-				.await?,
+		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
 		BitcoinIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
-		}) =>
-			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
-				.await?,
+		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
 		PolkadotIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
-		}) =>
-			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
-				.await?,
+		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
 		ArbitrumIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
-		}) =>
-			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
-				.await?,
+		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
 		SolanaIngressEgress(IngressEgressCall::process_deposits {
-			deposit_witnesses: _,
-			block_height: _,
-		}) => todo!(),
+			deposit_witnesses,
+			block_height,
+		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
+		EthereumIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
+			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
+		BitcoinIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
+			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
+		PolkadotIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
+			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
+		ArbitrumIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
+			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
+		SolanaIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
+			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,
 			..
 		}) => {
-			let broadcast_id =
-				get_broadcast_id::<Ethereum, StateChainClient>(state_chain_client, &tx_out_id)
-					.await;
-
-			if let Some(broadcast_id) = broadcast_id {
-				store
-					.save_singleton(&WitnessInformation::Broadcast {
-						broadcast_id,
-						tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
-						tx_ref: TransactionRef::Ethereum { hash: transaction_ref },
-					})
-					.await?;
-			}
+			save_broadcast_witness::<_, _, Ethereum>(
+				store,
+				tx_out_id,
+				transaction_ref,
+				state_chain_client,
+			)
+			.await?;
 		},
 		BitcoinBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,
 			..
 		}) => {
-			let broadcast_id =
-				get_broadcast_id::<Bitcoin, StateChainClient>(state_chain_client, &tx_out_id).await;
-
-			if let Some(broadcast_id) = broadcast_id {
-				store
-					.save_singleton(&WitnessInformation::Broadcast {
-						broadcast_id,
-						tx_out_id: TransactionId::Bitcoin { hash: BitcoinHash(tx_out_id) },
-						tx_ref: TransactionRef::Bitcoin { hash: BitcoinHash(transaction_ref) },
-					})
-					.await?;
-				println!("{:?}", BitcoinHash(transaction_ref));
-			}
+			save_broadcast_witness::<_, _, Bitcoin>(
+				store,
+				tx_out_id,
+				transaction_ref,
+				state_chain_client,
+			)
+			.await?;
 		},
 		PolkadotBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,
 			..
 		}) => {
-			let broadcast_id =
-				get_broadcast_id::<Polkadot, StateChainClient>(state_chain_client, &tx_out_id)
-					.await;
-
-			if let Some(broadcast_id) = broadcast_id {
-				store
-					.save_singleton(&WitnessInformation::Broadcast {
-						broadcast_id,
-						tx_out_id: TransactionId::Polkadot {
-							signature: DotSignature(*tx_out_id.aliased_ref()),
-						},
-						tx_ref: TransactionRef::Polkadot { transaction_id: transaction_ref },
-					})
-					.await?;
-			}
+			save_broadcast_witness::<_, _, Polkadot>(
+				store,
+				tx_out_id,
+				transaction_ref,
+				state_chain_client,
+			)
+			.await?;
 		},
 		ArbitrumBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,
 			..
 		}) => {
-			let broadcast_id =
-				get_broadcast_id::<Arbitrum, StateChainClient>(state_chain_client, &tx_out_id)
-					.await;
-
-			if let Some(broadcast_id) = broadcast_id {
-				store
-					.save_singleton(&WitnessInformation::Broadcast {
-						broadcast_id,
-						tx_out_id: TransactionId::Arbitrum { signature: tx_out_id },
-						tx_ref: TransactionRef::Arbitrum { hash: transaction_ref },
-					})
-					.await?;
-			}
+			save_broadcast_witness::<_, _, Arbitrum>(
+				store,
+				tx_out_id,
+				transaction_ref,
+				state_chain_client,
+			)
+			.await?;
 		},
 		SolanaBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id: _,
@@ -379,30 +585,19 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::anyhow;
 	use async_trait::async_trait;
 	use cf_chains::{
 		dot::PolkadotAccountId,
 		evm::{EvmTransactionMetadata, TransactionFee},
 		instances::ChainInstanceFor,
-		Chain,
+		Chain, ForeignChainAddress,
 	};
-	use cf_primitives::{BroadcastId, NetworkEnvironment};
-	use chainflip_engine::state_chain_observer::client::{
-		chain_api::ChainApi,
-		storage_api,
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
-		BlockInfo,
-	};
-	use frame_support::storage::types::QueryKindTrait;
-	use jsonrpsee::core::ClientError;
-	use mockall::mock;
+	use cf_utilities::assert_ok;
+	use chainflip_api::primitives::AffiliateShortId;
+	use chainflip_engine::state_chain_observer::client::{mocks::MockStateChainClient, BlockInfo};
 	use pallet_cf_ingress_egress::DepositWitness;
-	use sp_core::{storage::StorageKey, H160};
+	use sp_core::H160;
 	use std::collections::HashMap;
-
-	type RpcResult<T> = Result<T, ClientError>;
 
 	#[derive(Default)]
 	struct MockStore {
@@ -411,95 +606,33 @@ mod tests {
 
 	#[async_trait]
 	impl Store for MockStore {
-		type Output = ();
-
-		async fn save_to_array<S: Storable>(
-			&mut self,
-			storable: &S,
-		) -> anyhow::Result<Self::Output> {
-			let key = storable.get_key();
-			let value = serde_json::to_value(storable)?;
-
-			let array = self.storage.entry(key).or_insert(serde_json::Value::Array(vec![]));
-
-			array.as_array_mut().ok_or(anyhow!("expect array"))?.push(value);
+		async fn save_to_array<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
+			self.storage
+				.entry(storable.key())
+				.or_insert(serde_json::Value::Array(vec![]))
+				.as_array_mut()
+				.expect("Can only be an array.")
+				.push(serde_json::to_value(storable)?);
 
 			Ok(())
 		}
 
-		async fn save_singleton<S: Storable>(
-			&mut self,
-			storable: &S,
-		) -> anyhow::Result<Self::Output> {
-			let key = storable.get_key();
-
-			let value = serde_json::to_value(storable)?;
-
-			self.storage.insert(key, value);
+		async fn save_singleton<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
+			self.storage.insert(storable.key(), serde_json::to_value(storable)?);
 
 			Ok(())
 		}
 	}
 
-	mock! {
-		pub StateChainClient {}
-		#[async_trait]
-		impl ChainApi for StateChainClient {
-			fn latest_finalized_block(&self) -> BlockInfo;
-			fn latest_unfinalized_block(&self) -> BlockInfo;
-
-			async fn finalized_block_stream(&self) -> Box<dyn StreamApi<FINALIZED>>;
-			async fn unfinalized_block_stream(&self) -> Box<dyn StreamApi<UNFINALIZED>>;
-
-			async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<BlockInfo>;
-		}
-
-		#[async_trait]
-		impl StorageApi for StateChainClient {
-			async fn storage_item<
-				Value: codec::FullCodec + 'static,
-				OnEmpty: 'static,
-				QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
-			>(
-				&self,
-				storage_key: StorageKey,
-				block_hash: state_chain_runtime::Hash,
-			) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query>;
-
-			async fn storage_value<StorageValue: storage_api::StorageValueAssociatedTypes + 'static>(
-				&self,
-				block_hash: state_chain_runtime::Hash,
-			) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>;
-
-			async fn storage_map_entry<StorageMap: storage_api::StorageMapAssociatedTypes + 'static>(
-				&self,
-				block_hash: state_chain_runtime::Hash,
-				key: &StorageMap::Key,
-			) -> RpcResult<
-				<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
-			>
-			where
-				StorageMap::Key: Sync;
-
-			async fn storage_double_map_entry<StorageDoubleMap: storage_api::StorageDoubleMapAssociatedTypes + 'static>(
-				&self,
-				block_hash: state_chain_runtime::Hash,
-				key1: &StorageDoubleMap::Key1,
-				key2: &StorageDoubleMap::Key2,
-			) -> RpcResult<
-				<StorageDoubleMap::QueryKind as QueryKindTrait<
-					StorageDoubleMap::Value,
-					StorageDoubleMap::OnEmpty,
-				>>::Query,
-			>
-			where
-				StorageDoubleMap::Key1: Sync,
-				StorageDoubleMap::Key2: Sync;
-
-			async fn storage_map<StorageMap: storage_api::StorageMapAssociatedTypes + 'static, ReturnedIter: FromIterator<(<StorageMap as storage_api::StorageMapAssociatedTypes>::Key, StorageMap::Value)> + 'static>(
-				&self,
-				block_hash: state_chain_runtime::Hash,
-			) -> RpcResult<ReturnedIter>;
+	// This implementation is necessary to keep the compiler happy.
+	impl CfGetAffiliates for MockStateChainClient {
+		async fn cf_get_affiliates(
+			&self,
+			_broker_fee_account: &AccountId32,
+		) -> anyhow::Result<BTreeMap<AffiliateShortId, state_chain_runtime::AccountId>> {
+			unimplemented!(
+				"This is not tested via the MockStateChainClient, use MockCfGetAffiliates instead."
+			)
 		}
 	}
 
@@ -511,32 +644,27 @@ mod tests {
 		state_chain_runtime::Runtime:
 			pallet_cf_broadcast::Config<ChainInstanceFor<C>, TargetChain = C>,
 	{
-		let mut client = MockStateChainClient::new();
+		let mut state_chain_client = MockStateChainClient::new();
 
-		client
+		state_chain_client
 			.expect_storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
 				state_chain_runtime::Runtime,
 				ChainInstanceFor<C>,
 			>>()
 			.return_once(move |_, _| Ok(result));
 
-		client.expect_latest_unfinalized_block().returning(|| BlockInfo {
+		state_chain_client.expect_latest_unfinalized_block().returning(|| BlockInfo {
 			parent_hash: state_chain_runtime::Hash::default(),
 			hash: state_chain_runtime::Hash::default(),
 			number: 1,
 		});
 
-		client
+		state_chain_client
 	}
 
-	fn parse_eth_address(address: &'static str) -> (H160, &'static str) {
-		let mut eth_address_bytes = [0; 20];
-
-		for (index, byte) in hex::decode(&address[2..]).unwrap().into_iter().enumerate() {
-			eth_address_bytes[index] = byte;
-		}
-
-		(H160::from(eth_address_bytes), address)
+	fn parse_eth_address(address: &str) -> (H160, &str) {
+		let eth_address_bytes = H160::from_slice(&hex::decode(&address[2..]).unwrap());
+		(eth_address_bytes, address)
 	}
 
 	#[tokio::test]
@@ -550,62 +678,68 @@ mod tests {
 		let (eth_address2, eth_address_str2) =
 			parse_eth_address("0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF");
 
-		let client = MockStateChainClient::new();
+		let client = Arc::new(MockStateChainClient::new());
+
 		let mut store = MockStore::default();
-		handle_call(
-			state_chain_runtime::RuntimeCall::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Call::process_deposits {
-					deposit_witnesses: vec![DepositWitness {
-						deposit_address: eth_address1,
-						amount: 100u128,
-						asset: cf_chains::assets::eth::Asset::Eth,
-						deposit_details: Default::default(),
-					}],
-					block_height: 1,
-				},
-			),
-			&mut store,
-			NetworkEnvironment::Testnet,
-			&client,
-		)
-		.await
-		.expect("failed to handle call");
-		handle_call(
-			state_chain_runtime::RuntimeCall::PolkadotIngressEgress(
-				pallet_cf_ingress_egress::Call::process_deposits {
-					deposit_witnesses: vec![DepositWitness {
-						deposit_address: polkadot_account_id,
-						amount: 100u128,
-						asset: cf_chains::assets::dot::Asset::Dot,
-						deposit_details: 1,
-					}],
-					block_height: 1,
-				},
-			),
-			&mut store,
-			NetworkEnvironment::Testnet,
-			&client,
-		)
-		.await
-		.expect("failed to handle call");
-		handle_call(
-			state_chain_runtime::RuntimeCall::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Call::process_deposits {
-					deposit_witnesses: vec![DepositWitness {
-						deposit_address: eth_address2,
-						amount: 100u128,
-						asset: cf_chains::assets::eth::Asset::Eth,
-						deposit_details: Default::default(),
-					}],
-					block_height: 1,
-				},
-			),
-			&mut store,
-			NetworkEnvironment::Testnet,
-			&client,
-		)
-		.await
-		.expect("failed to handle call");
+		assert_ok!(
+			handle_call(
+				state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+					pallet_cf_ingress_egress::Call::process_deposits {
+						deposit_witnesses: vec![DepositWitness {
+							deposit_address: eth_address1,
+							amount: 100u128,
+							asset: cf_chains::assets::eth::Asset::Eth,
+							deposit_details: Default::default(),
+						}],
+						block_height: 1,
+					},
+				),
+				&mut store,
+				NetworkEnvironment::Testnet,
+				client.clone(),
+			)
+			.await
+		);
+
+		assert_ok!(
+			handle_call(
+				state_chain_runtime::RuntimeCall::PolkadotIngressEgress(
+					pallet_cf_ingress_egress::Call::process_deposits {
+						deposit_witnesses: vec![DepositWitness {
+							deposit_address: polkadot_account_id,
+							amount: 100u128,
+							asset: cf_chains::assets::dot::Asset::Dot,
+							deposit_details: 1,
+						}],
+						block_height: 1,
+					},
+				),
+				&mut store,
+				NetworkEnvironment::Testnet,
+				client.clone(),
+			)
+			.await
+		);
+
+		assert_ok!(
+			handle_call(
+				state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+					pallet_cf_ingress_egress::Call::process_deposits {
+						deposit_witnesses: vec![DepositWitness {
+							deposit_address: eth_address2,
+							amount: 100u128,
+							asset: cf_chains::assets::eth::Asset::Eth,
+							deposit_details: Default::default(),
+						}],
+						block_height: 1,
+					},
+				),
+				&mut store,
+				NetworkEnvironment::Testnet,
+				client.clone(),
+			)
+			.await
+		);
 
 		assert_eq!(store.storage.len(), 3);
 		println!("{:?}", store.storage);
@@ -625,24 +759,25 @@ mod tests {
 			.get(format!("deposit:Ethereum:{}", eth_address_str2.to_lowercase()).as_str())
 			.unwrap());
 
-		handle_call(
-			state_chain_runtime::RuntimeCall::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Call::process_deposits {
-					deposit_witnesses: vec![DepositWitness {
-						deposit_address: eth_address1,
-						amount: 2_000_000u128,
-						asset: cf_chains::assets::eth::Asset::Eth,
-						deposit_details: Default::default(),
-					}],
-					block_height: 1,
-				},
-			),
-			&mut store,
-			NetworkEnvironment::Testnet,
-			&client,
-		)
-		.await
-		.expect("failed to handle call");
+		assert_ok!(
+			handle_call(
+				state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+					pallet_cf_ingress_egress::Call::process_deposits {
+						deposit_witnesses: vec![DepositWitness {
+							deposit_address: eth_address1,
+							amount: 2_000_000u128,
+							asset: cf_chains::assets::eth::Asset::Eth,
+							deposit_details: Default::default(),
+						}],
+						block_height: 1,
+					},
+				),
+				&mut store,
+				NetworkEnvironment::Testnet,
+				client,
+			)
+			.await
+		);
 		assert_eq!(store.storage.len(), 3);
 		insta::assert_snapshot!(store
 			.storage
@@ -656,32 +791,97 @@ mod tests {
 
 		let tx_out_id = SchnorrVerificationComponents { s: [0; 32], k_times_g_address: [0; 20] };
 
-		let client = create_client::<Ethereum>(Some((1, 2)));
+		let client = Arc::new(create_client::<Ethereum>(Some((1, 2))));
 		let mut store = MockStore::default();
-		handle_call(
-			state_chain_runtime::RuntimeCall::EthereumBroadcaster(
-				pallet_cf_broadcast::Call::transaction_succeeded {
-					tx_out_id,
-					signer_id: eth_address,
-					tx_fee: TransactionFee { gas_used: 0, effective_gas_price: 0 },
-					tx_metadata: EvmTransactionMetadata {
-						max_fee_per_gas: None,
-						max_priority_fee_per_gas: None,
-						contract: H160::from([0; 20]),
-						gas_limit: None,
+		assert_ok!(
+			handle_call(
+				state_chain_runtime::RuntimeCall::EthereumBroadcaster(
+					pallet_cf_broadcast::Call::transaction_succeeded {
+						tx_out_id,
+						signer_id: eth_address,
+						tx_fee: TransactionFee { gas_used: 0, effective_gas_price: 0 },
+						tx_metadata: EvmTransactionMetadata {
+							max_fee_per_gas: None,
+							max_priority_fee_per_gas: None,
+							contract: H160::from([0; 20]),
+							gas_limit: None,
+						},
+						transaction_ref: Default::default(),
 					},
-					transaction_ref: Default::default(),
-				},
-			),
-			&mut store,
-			NetworkEnvironment::Testnet,
-			&client,
-		)
-		.await
-		.expect("failed to handle call");
+				),
+				&mut store,
+				NetworkEnvironment::Testnet,
+				client,
+			)
+			.await
+		);
 
 		assert_eq!(store.storage.len(), 1);
 		insta::assert_snapshot!(store.storage.get("broadcast:Ethereum:1").unwrap());
+	}
+
+	#[tokio::test]
+	async fn test_handle_vault_deposit_calls() {
+		chainflip_api::use_chainflip_account_id_encoding();
+		let (eth_address, _) = parse_eth_address("0x541f563237A309B3A61E33BDf07a8930Bdba8D99");
+		let affiliate_short_id = AffiliateShortId::from(69);
+
+		let tx_id = H256::from_slice(
+			&hex::decode("b5c8bd9430b6cc87a0e2fe110ece6bf527fa4f170a4bc8cd032f768fc5219838")
+				.unwrap(),
+		);
+
+		let mut client = MockCfGetAffiliates::new();
+
+		// We expect the affiliates to be mapped from short id's to account id's
+		client.expect_cf_get_affiliates().returning(move |_| {
+			Ok(BTreeMap::from_iter([(affiliate_short_id, AccountId32::new([1; 32]))]))
+		});
+
+		let client = Arc::new(client);
+
+		let mut store = MockStore::default();
+		assert_ok!(
+			save_vault_deposit_witness(
+				&mut store,
+				VaultDepositWitness::<
+					state_chain_runtime::Runtime,
+					state_chain_runtime::EthereumInstance,
+				> {
+					tx_id,
+					deposit_address: Some(eth_address),
+					channel_id: Default::default(),
+					deposit_amount: 100u128,
+					input_asset: cf_chains::assets::eth::Asset::Eth,
+					output_asset: chainflip_api::primitives::Asset::Flip,
+					destination_address: cf_chains::address::EncodedAddress::Dot([0; 32]),
+					deposit_metadata: None,
+					deposit_details: Default::default(),
+					broker_fee: Beneficiary { account: AccountId32::new([0; 32]), bps: 10 },
+					affiliate_fees: frame_support::BoundedVec::try_from(vec![Beneficiary {
+						account: affiliate_short_id,
+						bps: 10
+					}])
+					.unwrap(),
+					refund_params: ChannelRefundParameters {
+						refund_address: ForeignChainAddress::Eth(eth_address),
+						retry_duration: Default::default(),
+						min_price: Default::default(),
+					},
+					dca_params: Some(DcaParameters { number_of_chunks: 5, chunk_interval: 100 }),
+					boost_fee: 5,
+				},
+				1,
+				client
+			)
+			.await
+		);
+
+		assert_eq!(store.storage.len(), 1);
+		insta::assert_snapshot!(store
+			.storage
+			.get("vault_deposit:Ethereum:b5c8bd9430b6cc87a0e2fe110ece6bf527fa4f170a4bc8cd032f768fc5219838")
+			.unwrap());
 	}
 
 	#[test]

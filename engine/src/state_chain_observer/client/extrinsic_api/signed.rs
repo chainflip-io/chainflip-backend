@@ -27,7 +27,7 @@ pub mod signer;
 mod submission_watcher;
 
 // Wrapper type to avoid await.await on submits/finalize calls being possible
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "client-mocks"), mockall::automock)]
 #[async_trait]
 pub trait UntilFinalized {
 	async fn until_finalized(self) -> submission_watcher::FinalizationResult;
@@ -54,7 +54,7 @@ impl UntilFinalized for UntilFinalizedFuture {
 }
 
 // Wrapper type to avoid await.await on submits/finalize calls being possible
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "client-mocks"), mockall::automock)]
 #[async_trait]
 pub trait UntilInBlock {
 	async fn until_in_block(self) -> submission_watcher::InBlockResult;

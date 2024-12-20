@@ -83,8 +83,8 @@ impl MockEthereumTransactionMetadata {
 }
 
 impl IntoForeignChainAddress<MockEthereum> for u64 {
-	fn into_foreign_chain_address(address: u64) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(H160::repeat_byte(address as u8))
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Eth(H160::repeat_byte(self as u8))
 	}
 }
 
