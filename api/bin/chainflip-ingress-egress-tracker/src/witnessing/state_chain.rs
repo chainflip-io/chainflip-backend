@@ -138,26 +138,25 @@ impl WitnessInformation {
 	async fn save_to_store<S: Store>(&self, store: &mut S) -> anyhow::Result<()> {
 		match self {
 			Self::Deposit { .. } => store.save_to_array(self).await?,
-			Self::Broadcast { .. } => store.save_singleton(self).await?,
-			Self::VaultDeposit { .. } => store.save_singleton(self).await?,
+			Self::Broadcast { .. } | Self::VaultDeposit { .. } =>
+				store.save_singleton(self).await?,
 		};
 		Ok(())
 	}
 }
 
 impl Storable for WitnessInformation {
-	fn get_key(&self) -> anyhow::Result<String> {
+	fn key(&self) -> String {
 		let chain = self.to_foreign_chain().to_string();
 
 		match self {
-			Self::Deposit { deposit_address, .. } =>
-				Ok(format!("deposit:{chain}:{deposit_address}")),
-			Self::Broadcast { broadcast_id, .. } => Ok(format!("broadcast:{chain}:{broadcast_id}")),
-			Self::VaultDeposit { tx_id, .. } => Ok(format!("vault_deposit:{chain}:{tx_id}")),
+			Self::Deposit { deposit_address, .. } => format!("deposit:{chain}:{deposit_address}"),
+			Self::Broadcast { broadcast_id, .. } => format!("broadcast:{chain}:{broadcast_id}"),
+			Self::VaultDeposit { tx_id, .. } => format!("vault_deposit:{chain}:{tx_id}"),
 		}
 	}
 
-	fn get_expiry_duration(&self) -> std::time::Duration {
+	fn expiry_duration(&self) -> std::time::Duration {
 		match self.to_foreign_chain() {
 			ForeignChain::Bitcoin => std::time::Duration::from_secs(3600 * 6),
 			_ => Self::DEFAULT_EXPIRY_DURATION,
@@ -586,7 +585,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::anyhow;
 	use async_trait::async_trait;
 	use cf_chains::{
 		dot::PolkadotAccountId,
@@ -608,31 +606,19 @@ mod tests {
 
 	#[async_trait]
 	impl Store for MockStore {
-		type Output = ();
-
-		async fn save_to_array<S: Storable>(
-			&mut self,
-			storable: &S,
-		) -> anyhow::Result<Self::Output> {
-			let key = storable.get_key()?;
-			let value = serde_json::to_value(storable)?;
-
-			let array = self.storage.entry(key).or_insert(serde_json::Value::Array(vec![]));
-
-			array.as_array_mut().ok_or(anyhow!("expect array"))?.push(value);
+		async fn save_to_array<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
+			self.storage
+				.entry(storable.key())
+				.or_insert(serde_json::Value::Array(vec![]))
+				.as_array_mut()
+				.expect("Can only be an array.")
+				.push(serde_json::to_value(storable)?);
 
 			Ok(())
 		}
 
-		async fn save_singleton<S: Storable>(
-			&mut self,
-			storable: &S,
-		) -> anyhow::Result<Self::Output> {
-			let key = storable.get_key()?;
-
-			let value = serde_json::to_value(storable)?;
-
-			self.storage.insert(key, value);
+		async fn save_singleton<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
+			self.storage.insert(storable.key(), serde_json::to_value(storable)?);
 
 			Ok(())
 		}
