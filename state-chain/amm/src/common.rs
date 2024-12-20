@@ -240,11 +240,10 @@ fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> Option<U512> {
 	// Iterate over bits of the exponent (n) from most to least significant
 	// (starting with the first non-zero bit):
 	for bit_idx in (0..(32 - n.leading_zeros())).rev() {
-		let bit = (n & (0x1 << bit_idx)) >> bit_idx;
-
 		// Square the intermediate result on each iteration:
 		result = result.checked_mul(result)? >> 128;
 		// Additionally multiply by `x` if the bit is set:
+		let bit = (n & (0x1 << bit_idx)) >> bit_idx;
 		if bit == 0x1 {
 			result = result.checked_mul(x)? >> 128;
 		}
@@ -270,9 +269,10 @@ pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
 
 	let mut root_min = U256::from(0);
 
-	// Compute upper bound as kth root of x where k is the closest power of 2 not exceeding n:
-	let mut root_max =
-		U256::try_from((0..n.ilog2()).fold(x, |acc, _| (acc << 128).integer_sqrt())).unwrap();
+	// Compute upper bound as kth root of x where k is the closest power of 2 not exceeding n (this
+	// is an upper bound because the function is monotonically decreasing for n > 1):
+	let mut root_max = U256::try_from((0..n.ilog2()).fold(x, |acc, _| (acc << 128).integer_sqrt()))
+		.expect("we must have squared x at least once");
 
 	// Upper bound is the root if n is a power of 2:
 	if n.is_power_of_two() {
