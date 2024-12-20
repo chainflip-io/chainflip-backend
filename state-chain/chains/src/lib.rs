@@ -1012,3 +1012,19 @@ pub type VaultSwapExtraParametersRpc =
 
 /// Type used internally within the State chain.
 pub type VaultSwapExtraParametersEncoded = VaultSwapExtraParameters<EncodedAddress, AssetAmount>;
+
+#[cfg(feature = "std")]
+impl VaultSwapExtraParametersRpc {
+	pub fn try_into_encoded_params(
+		self,
+		chain: ForeignChain,
+	) -> Result<VaultSwapExtraParametersEncoded, DispatchError> {
+		self.try_map_address(|a| {
+			a.try_parse_to_encoded_address(chain)
+				.map_err(|_| "Invalid address for chain".into())
+		})?
+		.try_map_amounts(|n| {
+			u128::try_from(n).map_err(|_| "Cannot convert number input into u128".into())
+		})
+	}
+}
