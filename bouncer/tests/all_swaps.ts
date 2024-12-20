@@ -80,20 +80,20 @@ async function main() {
   // We observed this values in the wild and want to ensure that the engine can handle them gracefully.
   allSwaps.push(
     testVaultSwap(
-      "ArbEth",
-      "Eth",
+      'ArbEth',
+      'Eth',
       undefined,
-      newCcmMetadata("Eth", undefined, undefined, "0xdeadbeef"),
+      newCcmMetadata('Eth', undefined, undefined, '0xdeadbeef'),
       testAllSwaps.swapContext,
     ),
   );
 
   allSwaps.push(
     testVaultSwap(
-      "Eth",
-      "ArbEth",
+      'Eth',
+      'ArbEth',
       undefined,
-      newCcmMetadata("ArbEth", undefined, undefined, "0xdeadC0de"),
+      newCcmMetadata('ArbEth', undefined, undefined, '0xdeadC0de'),
       testAllSwaps.swapContext,
     ),
   );
@@ -101,10 +101,10 @@ async function main() {
   // Invalid refund params: passing no params
   allSwaps.push(
     testVaultSwap(
-      "ArbEth",
-      "Eth",
+      'ArbEth',
+      'Eth',
       undefined,
-      newCcmMetadata("Eth", undefined, undefined, "0x"),
+      newCcmMetadata('Eth', undefined, undefined, '0x'),
       testAllSwaps.swapContext,
     ),
   );
