@@ -45,12 +45,37 @@ pub enum VaultSwapDetails<BtcAddress> {
 		nulldata_payload: Vec<u8>,
 		deposit_address: BtcAddress,
 	},
+	Ethereum {
+		#[serde(flatten)]
+		details: EvmVaultSwapDetails,
+	},
+	Arbitrum {
+		#[serde(flatten)]
+		details: EvmVaultSwapDetails,
+	},
 	Solana {
+		#[serde(flatten)]
 		instruction: SolInstructionRpc,
 	},
 }
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+pub struct EvmVaultSwapDetails {
+	#[serde(with = "sp_core::bytes")]
+	pub calldata: Vec<u8>, // The encoded calldata payload including function selector
+	pub value: sp_core::U256, // The ETH amount, or 0 for ERC-20 tokens
+	pub to: sp_core::H160,    // The vault address for either Ethereum or Arbitrum
+}
+
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
+	pub fn ethereum(details: EvmVaultSwapDetails) -> Self {
+		VaultSwapDetails::Ethereum { details }
+	}
+
+	pub fn arbitrum(details: EvmVaultSwapDetails) -> Self {
+		VaultSwapDetails::Arbitrum { details }
+	}
+
 	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>
 	where
 		F: FnOnce(BtcAddress) -> T,
@@ -58,7 +83,7 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 		match self {
 			VaultSwapDetails::Bitcoin { nulldata_payload, deposit_address } =>
 				VaultSwapDetails::Bitcoin { nulldata_payload, deposit_address: f(deposit_address) },
-			VaultSwapDetails::Solana { instruction } => VaultSwapDetails::Solana { instruction },
+			_ => panic!("Expected Bitcoin variant"),
 		}
 	}
 }
