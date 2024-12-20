@@ -1697,7 +1697,7 @@ impl_runtime_apis! {
 			let mut fees_vec = vec![];
 
 			if include_fee(FeeTypes::Network) {
-				fees_vec.push(FeeType::NetworkFee);
+				fees_vec.push(FeeType::NetworkFee { min_fee_enforced: true });
 			}
 
 			if broker_commission > 0 {
