@@ -268,21 +268,19 @@ impl From<Transaction> for RawTransaction {
 /// should be specified as signers during `Instruction` construction. The
 /// program must still validate during execution that the account is a signer.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
-pub struct InstructionInternal<Address> {
+pub struct Instruction<Address = Pubkey> {
 	/// Pubkey of the program that executes this instruction.
 	pub program_id: Address,
 	/// Metadata describing accounts that should be passed to the program.
-	pub accounts: Vec<AccountMetaInternal<Address>>,
+	pub accounts: Vec<AccountMeta<Address>>,
 	/// Opaque data passed to the program for its own interpretation.
 	#[serde(with = "sp_core::bytes")]
 	pub data: Vec<u8>,
 }
 
-/// Instruction type used to encode a Solana Transaction.
-pub type Instruction = InstructionInternal<Pubkey>;
 /// Instruction type used when being presented to the end user.
 /// Serializes addresses into bs58 format.
-pub type InstructionRpc = InstructionInternal<SolAddress>;
+pub type InstructionRpc = Instruction<SolAddress>;
 
 impl From<Instruction> for InstructionRpc {
 	fn from(value: Instruction) -> Self {
@@ -341,7 +339,7 @@ impl Instruction {
 #[derive(
 	Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo,
 )]
-pub struct AccountMetaInternal<Address> {
+pub struct AccountMeta<Address = Pubkey> {
 	/// An account's public key.
 	pub pubkey: Address,
 	/// True if an `Instruction` requires a `Transaction` signature matching `pubkey`.
@@ -350,10 +348,8 @@ pub struct AccountMetaInternal<Address> {
 	pub is_writable: bool,
 }
 
-/// Type used for building Solana Transactions.
-pub type AccountMeta = AccountMetaInternal<Pubkey>;
 /// Type used to be presented to the user. Serializes address into bs58 string.
-pub type AccountMetaRpc = AccountMetaInternal<SolAddress>;
+pub type AccountMetaRpc = AccountMeta<SolAddress>;
 
 impl From<AccountMeta> for AccountMetaRpc {
 	fn from(value: AccountMeta) -> Self {
