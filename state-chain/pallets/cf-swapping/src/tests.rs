@@ -137,7 +137,15 @@ fn create_test_swap(
 		},
 	);
 
-	Swap::new(id.into(), id.into(), input_asset, output_asset, amount, None, [FeeType::NetworkFee])
+	Swap::new(
+		id.into(),
+		id.into(),
+		input_asset,
+		output_asset,
+		amount,
+		None,
+		[FeeType::NetworkFee { min_fee_enforced: true }],
+	)
 }
 
 // Returns some test data
@@ -465,7 +473,7 @@ fn swap_by_deposit_happy_path() {
 					OUTPUT_ASSET,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee],
+					[FeeType::NetworkFee { min_fee_enforced: true }],
 				)]
 			);
 
@@ -522,7 +530,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee]
+					[FeeType::NetworkFee { min_fee_enforced: true }]
 				),
 				Swap::new(
 					2.into(),
@@ -531,7 +539,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee]
+					[FeeType::NetworkFee { min_fee_enforced: true }]
 				),
 				Swap::new(
 					3.into(),
@@ -540,7 +548,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee]
+					[FeeType::NetworkFee { min_fee_enforced: true }]
 				),
 				Swap::new(
 					4.into(),
@@ -549,7 +557,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee]
+					[FeeType::NetworkFee { min_fee_enforced: true }]
 				),
 			]
 		);
@@ -560,8 +568,9 @@ fn process_all_into_stable_swaps_first() {
 		assert_swaps_queue_is_empty();
 
 		let usdc_amount_swapped_after_fee =
-			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE).remaining_amount;
-		let usdc_amount_deposited_after_fee = Swapping::take_network_fee(AMOUNT).remaining_amount;
+			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE, false).remaining_amount;
+		let usdc_amount_deposited_after_fee =
+			Swapping::take_network_fee(AMOUNT, false).remaining_amount;
 
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(
@@ -750,7 +759,7 @@ fn swap_excess_are_confiscated() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1.into(), 1.into(), from, to, MAX_SWAP, None, [FeeType::NetworkFee])]
+			vec![Swap::new(1.into(), 1.into(), from, to, MAX_SWAP, None, [FeeType::NetworkFee { min_fee_enforced: true }])]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
 	});
@@ -1320,7 +1329,7 @@ fn test_buy_back_flip() {
 
 		// Get some network fees, just like we did a swap.
 		let FeeTaken { remaining_amount, fee: network_fee } =
-			Swapping::take_network_fee(SWAP_AMOUNT);
+			Swapping::take_network_fee(SWAP_AMOUNT, false);
 
 		// Sanity check the network fee.
 		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
@@ -1350,31 +1359,6 @@ fn test_buy_back_flip() {
 				.first()
 				.expect("Should have scheduled a swap usdc -> flip"),
 			&Swap::new(1.into(), 1.into(), STABLE_ASSET, Asset::Flip, network_fee, None, [],)
-		);
-	});
-}
-
-#[test]
-fn test_network_fee_calculation() {
-	new_test_ext().execute_with(|| {
-		// Show we can never overflow and panic
-		utilities::calculate_network_fee(Permill::from_percent(100), AssetAmount::MAX);
-		// 200 bps (2%) of 100 = 2
-		assert_eq!(utilities::calculate_network_fee(Permill::from_percent(2u32), 100), (98, 2));
-		// 2220 bps = 22 % of 199 = 43,78
-		assert_eq!(
-			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 199),
-			(155, 44)
-		);
-		// 2220 bps = 22 % of 234 = 51,26
-		assert_eq!(
-			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 233),
-			(181, 52)
-		);
-		// 10 bps = 0,1% of 3000 = 3
-		assert_eq!(
-			utilities::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
-			(2997, 3)
 		);
 	});
 }

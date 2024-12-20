@@ -147,11 +147,10 @@ impl<T: Config> SwapState<T> {
 	}
 }
 
-#[repr(u8)]
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub enum FeeType<T: Config> {
-	NetworkFee = 0,
+	NetworkFee { min_fee_enforced: bool },
 	BrokerFee(Beneficiaries<T::AccountId>),
 }
 
@@ -362,6 +361,8 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// Set the broker bond. This is the amount of FLIP that must be bonded to open a private
 	/// broker channel. The funds are getting freed when the channel is closed.
 	SetBrokerBond { bond: T::Amount },
+	/// Set the minimum fee in USDC paid per chunk
+	SetMinimumNetworkFeePerChunk { min_fee: AssetAmount },
 }
 
 impl_pallet_safe_mode! {
@@ -540,6 +541,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
 
+	/// Minimum network fee charged per chunk (only applies to regular swaps, i.e. it excludes
+	/// internal swaps like ingress/egress fees). In practice this should also effectively be the
+	/// minimum fee charged per swap request due to us also enforcing minimum chunk size.
+	#[pallet::storage]
+	pub type MinimumNetworkFeePerChunk<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -685,6 +692,9 @@ pub mod pallet {
 		},
 		BrokerBondSet {
 			bond: T::Amount,
+		},
+		MinimumNetworkFeeSet {
+			min_fee: AssetAmount,
 		},
 	}
 	#[pallet::error]
@@ -991,6 +1001,10 @@ pub mod pallet {
 					PalletConfigUpdate::SetBrokerBond { bond } => {
 						BrokerBond::<T>::set(bond);
 						Self::deposit_event(Event::<T>::BrokerBondSet { bond });
+					},
+					PalletConfigUpdate::SetMinimumNetworkFeePerChunk { min_fee } => {
+						MinimumNetworkFeePerChunk::<T>::set(min_fee);
+						Self::deposit_event(Event::<T>::MinimumNetworkFeeSet { min_fee });
 					},
 				}
 			}
@@ -1325,9 +1339,9 @@ pub mod pallet {
 
 				for fee_type in &swap.swap.fees {
 					let remaining_amount = match fee_type {
-						FeeType::NetworkFee => {
+						FeeType::NetworkFee { min_fee_enforced } => {
 							let FeeTaken { remaining_amount, fee } =
-								Self::take_network_fee(stable_amount);
+								Self::take_network_fee(stable_amount, *min_fee_enforced);
 							swap.network_fee_taken = Some(fee);
 							remaining_amount
 						},
@@ -1723,9 +1737,16 @@ pub mod pallet {
 			let fees = {
 				let mut fees = Vec::with_capacity(2);
 
-				// Network fee is not charged for network fee swaps:
-				if !matches!(swap_type, SwapType::NetworkFee) {
-					fees.push(FeeType::NetworkFee);
+				match swap_type {
+					SwapType::Swap => {
+						fees.push(FeeType::NetworkFee { min_fee_enforced: true });
+					},
+					SwapType::IngressEgressFee => {
+						fees.push(FeeType::NetworkFee { min_fee_enforced: false });
+					},
+					SwapType::NetworkFee => {
+						// Network fee is not charged for network fee swaps
+					},
 				}
 
 				if !broker_fees.is_empty() {
@@ -1765,7 +1786,7 @@ pub mod pallet {
 		}
 
 		#[transactional]
-		pub fn swap_with_network_fee(
+		pub fn swap_with_network_fee_for_gas(
 			from: Asset,
 			to: Asset,
 			input_amount: AssetAmount,
@@ -1774,13 +1795,14 @@ pub mod pallet {
 				(_, STABLE_ASSET) => {
 					let FeeTaken { remaining_amount: output, fee } = Self::take_network_fee(
 						T::SwappingApi::swap_single_leg(from, to, input_amount)?,
+						false,
 					);
 
 					SwapOutput { intermediary: None, output, network_fee: fee }
 				},
 				(STABLE_ASSET, _) => {
 					let FeeTaken { remaining_amount: input_amount, fee } =
-						Self::take_network_fee(input_amount);
+						Self::take_network_fee(input_amount, false);
 
 					SwapOutput {
 						intermediary: None,
@@ -1791,6 +1813,7 @@ pub mod pallet {
 				_ => {
 					let FeeTaken { remaining_amount: intermediary, fee } = Self::take_network_fee(
 						T::SwappingApi::swap_single_leg(from, STABLE_ASSET, input_amount)?,
+						false,
 					);
 
 					SwapOutput {
@@ -1802,11 +1825,16 @@ pub mod pallet {
 			})
 		}
 
-		pub(super) fn take_network_fee(input: AssetAmount) -> FeeTaken {
+		pub(super) fn take_network_fee(input: AssetAmount, min_fee_enforced: bool) -> FeeTaken {
 			if input.is_zero() {
 				return FeeTaken { remaining_amount: 0, fee: 0 };
 			}
-			let (remaining, fee) = utilities::calculate_network_fee(T::NetworkFee::get(), input);
+
+			let min_fee = if min_fee_enforced { MinimumNetworkFeePerChunk::<T>::get() } else { 0 };
+
+			let (remaining, fee) =
+				utilities::calculate_network_fee(T::NetworkFee::get(), min_fee, input);
+
 			CollectedNetworkFee::<T>::mutate(|total| {
 				total.saturating_accrue(fee);
 			});
@@ -2059,7 +2087,12 @@ pub mod pallet {
 
 			let estimation_output = with_transaction_unchecked(|| {
 				TransactionOutcome::Rollback(
-					Self::swap_with_network_fee(input_asset, output_asset, estimation_input).ok(),
+					Self::swap_with_network_fee_for_gas(
+						input_asset,
+						output_asset,
+						estimation_input,
+					)
+					.ok(),
 				)
 			})?
 			.output;
@@ -2169,9 +2202,14 @@ pub(crate) mod utilities {
 
 	pub(crate) fn calculate_network_fee(
 		fee_percentage: Permill,
+		min_network_fee: AssetAmount,
 		input: AssetAmount,
 	) -> (AssetAmount, AssetAmount) {
-		let fee = fee_percentage * input;
+		// Compute the fee as a % of input, but ensure it is not smaller than min fee:
+		let fee = core::cmp::max(fee_percentage * input, min_network_fee);
+		// Additionally make sure that is not greater than input:
+		let fee = core::cmp::min(fee, input);
+
 		(input - fee, fee)
 	}
 
