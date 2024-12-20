@@ -1117,6 +1117,7 @@ fn can_store_failed_vault_transfers() {
 				amount,
 				destination_address,
 				broadcast_id,
+				egress_details: None,
 			},
 		));
 		assert_eq!(
