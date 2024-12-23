@@ -1,4 +1,9 @@
 use crate::electoral_system::ElectoralSystem;
+use codec::{Decode, Encode};
+use itertools::Either;
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_std::collections::btree_set::BTreeSet;
 
 #[cfg(test)]
 use proptest::prelude::{BoxedStrategy, Just, Strategy};
@@ -6,13 +11,78 @@ use proptest::prelude::{BoxedStrategy, Just, Strategy};
 use proptest::test_runner::TestRunner;
 
 /// A type which has an associated index type.
-/// This effectively models dependent sum types.
+/// This effectively models types families.
 pub trait Indexed {
 	type Index;
-	fn has_index(&self, base: &Self::Index) -> bool;
+	fn has_index(&self, index: &Self::Index) -> bool;
 }
 
 pub type IndexOf<Ixd> = <Ixd as Indexed>::Index;
+
+//--- instances ---
+impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for Either<A, B> {
+	type Index = A::Index;
+
+	fn has_index(&self, index: &Self::Index) -> bool {
+		match self {
+			Either::Left(a) => a.has_index(index),
+			Either::Right(b) => b.has_index(index),
+		}
+	}
+}
+
+impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for (A, B) {
+	type Index = A::Index;
+
+	fn has_index(&self, index: &Self::Index) -> bool {
+		self.0.has_index(index) && self.1.has_index(index)
+	}
+}
+
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub struct ConstantIndex<Idx, A> {
+	pub data: A,
+	_phantom: sp_std::marker::PhantomData<Idx>
+}
+impl<Idx, A> Indexed for ConstantIndex<Idx, A> {
+	type Index = Idx;
+
+	fn has_index(&self, index: &Self::Index) -> bool {
+		true
+	}
+}
+impl<Idx, A> Validate for ConstantIndex<Idx, A> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+pub struct IndexAndValue<A: Indexed>(A::Index, A);
+
+impl<A: Indexed> Indexed for IndexAndValue<A> {
+	type Index = A::Index;
+
+	fn has_index(&self, index: &Self::Index) -> bool {
+		todo!()
+	}
+}
+
+impl<A: Indexed> Validate for IndexAndValue<A> {
+	type Error = &'static str;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		// if self.1.has_index(&self.0) {
+		// 	Ok(())
+		// } else {
+		// 	Err("invalid index inside `IndexAndValue` type")
+		// }
+		todo!()
+	}
+}
 
 /// A type which can be validated.
 pub trait Validate {
@@ -65,21 +135,22 @@ pub trait Validate {
 /// everything is valid.
 pub trait StateMachine: 'static {
 	type Input: Validate + Indexed;
+	type Settings;
 	type Output: Validate;
 	type State: Validate;
-	type DisplayState;
+	// type DisplayState;
 
-	/// To every state, this function associates an input index which
-	/// describes what kind of input we want to receive next.
-	fn input_index(s: &Self::State) -> IndexOf<Self::Input>;
+	/// To every state, this function associates a set of input indices which
+	/// describes what kind of input(s) we want to receive next.
+	fn input_index(s: &Self::State) -> BTreeSet<IndexOf<Self::Input>>;
 
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore
 	/// that the input has the index `input_index(s)`.
-	fn step(s: &mut Self::State, i: Self::Input) -> Self::Output;
+	fn step(s: &mut Self::State, i: Self::Input, set: &Self::Settings) -> Self::Output;
 
 	/// Project the current state to a "DisplayState" value.
-	fn get(s: &Self::State) -> Self::DisplayState;
+	// fn get(s: &Self::State) -> Self::DisplayState;
 
 	/// Contains an optional specification of the `step` function.
 	/// Takes a state, input and next state as arguments. During testing it is verified
@@ -95,30 +166,36 @@ pub trait StateMachine: 'static {
 	#[cfg(test)]
 	fn test(
 		states: impl Strategy<Value = Self::State>,
-		inputs: impl Fn(IndexOf<Self::Input>) -> BoxedStrategy<Self::Input>,
+		settings: impl Strategy<Value = Self::Settings>,
+		inputs: impl Fn(BTreeSet<IndexOf<Self::Input>>) -> BoxedStrategy<Self::Input>,
 	) where
 		Self::State: sp_std::fmt::Debug + Clone,
 		Self::Input: sp_std::fmt::Debug + Clone,
+		Self::Settings: sp_std::fmt::Debug + Clone,
+		<Self::Input as Indexed>::Index: Ord,
 	{
 		let mut runner = TestRunner::default();
 
 		runner
 			.run(
-				&(states.prop_flat_map(|state| {
-					(Just(state.clone()), inputs(Self::input_index(&state)))
+				&((states, settings).prop_flat_map(|(state, settings)| {
+					(Just(state.clone()), inputs(Self::input_index(&state)), Just(settings))
 				})),
-				|(mut state, input)| {
+				|(mut state, input, settings)| {
 					// ensure that inputs are well formed
 					assert!(state.is_valid().is_ok(), "input state not valid");
 					assert!(input.is_valid().is_ok(), "input not valid");
-					assert!(input.has_index(&Self::input_index(&state)), "input has wrong index");
+					assert!(
+						Self::input_index(&state).iter().any(|index| input.has_index(index)),
+						"input has wrong index"
+					);
 
 					// backup state
 					let prev_state = state.clone();
 
 					// run step function and ensure that output is valid
 					assert!(
-						Self::step(&mut state, input.clone()).is_valid().is_ok(),
+						Self::step(&mut state, input.clone(), &settings).is_valid().is_ok(),
 						"step function failed"
 					);
 
