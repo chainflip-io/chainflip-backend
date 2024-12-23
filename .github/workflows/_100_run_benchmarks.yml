@@ -45,6 +45,7 @@ jobs:
     with:
       command: apply
       benchmark_machine_spec: ${{ inputs.benchmark_machine_spec }}
+    secrets: inherit
 
   run_benchmarks:
     permissions:
@@ -110,3 +111,4 @@ jobs:
     with:
       command: destroy
       benchmark_machine_spec: ${{ inputs.benchmark_machine_spec }}
+    secrets: inherit
