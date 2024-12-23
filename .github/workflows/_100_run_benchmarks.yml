@@ -41,7 +41,7 @@ env:
 
 jobs:
   deploy_benchmarks_runner:
-    uses: ./.github/workflows/_100_benchmarks_runner.yml
+    uses: ./.github/workflows/_110_deploy_benchmarks_runner.yml
     with:
       command: apply
       benchmark_machine_spec: ${{ inputs.benchmark_machine_spec }}
@@ -103,7 +103,7 @@ jobs:
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
 
   destroy_benchmarks_runner:
-    uses: ./.github/workflows/_100_benchmarks_runner.yml
+    uses: ./.github/workflows/_110_deploy_benchmarks_runner.yml
     with:
       command: destroy
       benchmark_machine_spec: ${{ inputs.benchmark_machine_spec }}
