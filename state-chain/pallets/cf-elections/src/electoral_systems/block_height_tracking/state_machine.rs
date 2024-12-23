@@ -1,5 +1,8 @@
 use crate::electoral_system::ElectoralSystem;
+use codec::{Decode, Encode};
 use itertools::Either;
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_set::BTreeSet;
 
 #[cfg(test)]
@@ -36,10 +39,27 @@ impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for (A, B) {
 	}
 }
 
-// pub struct NoIndex<A, B>(A);
-// impl Indexed for NoIndex<A,B> {
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub struct ConstantIndex<Idx, A> {
+	pub data: A,
+	_phantom: sp_std::marker::PhantomData<Idx>
+}
+impl<Idx, A> Indexed for ConstantIndex<Idx, A> {
+	type Index = Idx;
 
-// }
+	fn has_index(&self, index: &Self::Index) -> bool {
+		true
+	}
+}
+impl<Idx, A> Validate for ConstantIndex<Idx, A> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
 
 pub struct IndexAndValue<A: Indexed>(A::Index, A);
 
@@ -118,7 +138,7 @@ pub trait StateMachine: 'static {
 	type Settings;
 	type Output: Validate;
 	type State: Validate;
-	type DisplayState;
+	// type DisplayState;
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
@@ -130,7 +150,7 @@ pub trait StateMachine: 'static {
 	fn step(s: &mut Self::State, i: Self::Input, set: &Self::Settings) -> Self::Output;
 
 	/// Project the current state to a "DisplayState" value.
-	fn get(s: &Self::State) -> Self::DisplayState;
+	// fn get(s: &Self::State) -> Self::DisplayState;
 
 	/// Contains an optional specification of the `step` function.
 	/// Takes a state, input and next state as arguments. During testing it is verified

@@ -1,12 +1,19 @@
 use core::{iter::Step, ops::RangeInclusive};
+use cf_chains::witness_period::BlockZero;
+use codec::{Decode, Encode};
+use frame_support::ensure;
+use log::trace;
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
 
 use itertools::Either;
 
 use crate::electoral_systems::block_height_tracking::{
-	state_machine::{IndexOf, StateMachine},
-	ChainProgress,
+	consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold}, state_machine::{ConstantIndex, IndexOf, StateMachine, Validate}, state_machine_es::SMInput, ChainProgress
 };
+
+use super::BlockWitnesserSettings;
 
 // Safe mode:
 // when we enable safe mode, we want to take into account all reorgs,
@@ -16,7 +23,10 @@ use crate::electoral_systems::block_height_tracking::{
 // This means that if safe mode is enabled, we don't call `start_more_elections`,
 // but even in safe mode, if there's a reorg we call `restart_election`.
 
-struct ElectionTracker<N> {
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+struct ElectionTracker<N: Ord> {
 	pub highest_scheduled: N,
 	pub highest_started: N,
 
@@ -27,7 +37,7 @@ struct ElectionTracker<N> {
 	/// The state machine wouldn't close and reopen an election if the election properties
 	/// stay the same, so we have (N, usize) as election properties. And when we want to reopen
 	/// an ongoing election we increment the usize.
-	pub ongoing: BTreeMap<N, usize>,
+	pub ongoing: BTreeMap<N, u32>,
 }
 
 impl<N: Ord + Step + Copy> ElectionTracker<N> {
@@ -63,59 +73,124 @@ impl<N: Ord + Step + Copy> ElectionTracker<N> {
 	}
 }
 
-/// Mock data
-struct BlockData<N> {
-	height: N,
+impl<N : Ord> Validate for ElectionTracker<N> {
+	type Error = &'static str;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		ensure!(self.highest_started > self.highest_scheduled,
+			"highest_started should be <= highest_scheduled"
+		);
+		ensure!(self.ongoing.iter().any(|(height, _)| height > &self.highest_started),
+			"ongoing elections should be <= highest_started"
+		);
+		Ok(())
+	}
 }
 
-struct BWSettings {
-	safe_mode_enabled: bool,
-	max_elections: usize,
+impl<N : BlockZero + Ord> Default for ElectionTracker<N> {
+	fn default() -> Self {
+		Self { highest_scheduled: BlockZero::zero(), highest_started: BlockZero::zero(), ongoing: Default::default() }
+	}
 }
 
-struct BWState<N> {
+
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub struct BWSettings {
+	pub safe_mode_enabled: bool,
+	pub max_concurrent_elections: u32,
+}
+
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub struct BWState<N: Ord> {
 	elections: ElectionTracker<N>,
 }
 
-struct BWStateMachine<N> {
-	_phantom: sp_std::marker::PhantomData<N>,
-}
+impl<N: Ord> Validate for BWState<N> {
+	type Error = &'static str;
 
-// impl<N : Ord + Step> StateMachine for BWStateMachine<N> {
-
-type Input = (Either<ChainProgress<u64>, BlockData<u64>>, BWSettings);
-type Output = ();
-type State = BWState<u64>;
-type DisplayState = ();
-
-fn input_index(s: &State) -> BTreeSet<u64> {
-	todo!()
-}
-
-fn step(s: &mut State, (i, settings): Input) -> Output {
-	match i {
-		Either::Left(ChainProgress::Reorg(range) | ChainProgress::Continuous(range)) => {
-			s.elections.schedule_up_to(*range.end());
-			for election in range {
-				s.elections.restart_election(election);
-			}
-		},
-
-		Either::Left(ChainProgress::WaitingForFirstConsensus | ChainProgress::None(_)) => {},
-
-		Either::Right(blockdata) => {
-			// insert blockdata into our cache of blocks
-			todo!()
-		},
-	}
-
-	if !settings.safe_mode_enabled {
-		s.elections.start_more_elections(settings.max_elections);
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.elections.is_valid()
 	}
 }
 
-fn get(s: &State) -> DisplayState {
-	()
+impl<N: BlockZero + Ord> Default for BWState<N> {
+	fn default() -> Self {
+		Self { elections: Default::default() }
+	}
 }
 
-// }
+pub struct BWStateMachine<BlockData, N> {
+	_phantom: sp_std::marker::PhantomData<(BlockData, N)>,
+}
+
+impl<BlockData: Clone + sp_std::fmt::Debug + 'static, N : Copy + Ord + Step + 'static> StateMachine for BWStateMachine<BlockData, N> {
+	type Input = SMInput<ConstantIndex<(N, u32), BlockData>, ChainProgress<N>>;
+
+	type Settings = BWSettings;
+
+	type Output = Result<(), &'static str>;
+
+	type State = BWState<N>;
+
+	fn input_index(s: &Self::State) -> BTreeSet<IndexOf<Self::Input>> {
+		s.elections.ongoing.clone().into_iter().collect()
+	}
+
+	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
+		match i {
+			SMInput::Context(ChainProgress::Reorg(range) | ChainProgress::Continuous(range)) => {
+				s.elections.schedule_up_to(*range.end());
+				for election in range {
+					s.elections.restart_election(election);
+				}
+			},
+
+			SMInput::Context(ChainProgress::WaitingForFirstConsensus | ChainProgress::None(_)) => {},
+
+			SMInput::Vote(blockdata) => {
+				// insert blockdata into our cache of blocks
+				log::info!("got block data: {:?}", blockdata.data);
+			},
+		};
+
+		if !settings.safe_mode_enabled {
+			s.elections.start_more_elections(settings.max_concurrent_elections as usize);
+		}
+
+		Ok(())
+	}
+
+}
+
+pub struct BWConsensus<BlockData: Eq, N> {
+	consensus: SupermajorityConsensus<BlockData>,
+	_phantom: sp_std::marker::PhantomData<N>
+}
+
+impl<BlockData: Eq, N> Default for BWConsensus<BlockData, N> {
+	fn default() -> Self {
+		Self { consensus: Default::default(), _phantom: Default::default() }
+	}
+}
+
+impl<BlockData: Eq + Clone + sp_std::fmt::Debug, N> ConsensusMechanism for BWConsensus<BlockData, N> {
+	type Vote = ConstantIndex<(N, u32), BlockData>;
+
+	type Result = ConstantIndex<(N, u32), BlockData>;
+
+	type Settings = (Threshold, (N, u32));
+
+	fn insert_vote(&mut self, vote: Self::Vote) {
+		// self.consensus.insert_vote(vote.data)
+		todo!()
+	}
+
+	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
+		todo!()
+	}
+}
+

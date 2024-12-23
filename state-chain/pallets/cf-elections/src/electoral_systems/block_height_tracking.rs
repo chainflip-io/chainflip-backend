@@ -373,7 +373,6 @@ impl<
 	> StateMachine for BlockHeightTrackingDSM<SAFETY_MARGIN, N, H>
 {
 	type State = BHWState<H, N>;
-	type DisplayState = ChainProgress<N>;
 	type Input = SMInput<InputHeaders<H, N>, ()>;
 	type Settings = ();
 	type Output = Result<ChainProgress<N>, &'static str>;
@@ -425,7 +424,11 @@ impl<
 	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {
 		let new_headers = match input {
 			SMInput::Vote(vote) => vote,
-			SMInput::Context(_) => return Ok(Self::get(s)),
+			SMInput::Context(_) => return Ok(match s {
+				BHWState::Starting => ChainProgress::WaitingForFirstConsensus,
+				BHWState::Running { headers, witness_from: _ } =>
+					ChainProgress::None(headers.back().unwrap().block_height),
+			})
 		};
 
 		match s {
@@ -480,11 +483,4 @@ impl<
 		}
 	}
 
-	fn get(s: &Self::State) -> Self::DisplayState {
-		match s {
-			BHWState::Starting => ChainProgress::WaitingForFirstConsensus,
-			BHWState::Running { headers, witness_from: _ } =>
-				ChainProgress::None(headers.back().unwrap().block_height),
-		}
-	}
 }

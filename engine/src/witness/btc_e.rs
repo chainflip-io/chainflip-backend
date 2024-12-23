@@ -11,14 +11,14 @@ use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::block_height_tracking::{
-		primitives::Header, BlockHeightTrackingProperties, InputHeaders,
+		primitives::Header, state_machine::ConstantIndex, BlockHeightTrackingProperties, InputHeaders
 	},
 	vote_storage::VoteStorage,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
 	chainflip::bitcoin_elections::{
-		BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner,
+		BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinDepositChannelWitnessing2, BitcoinElectoralSystemRunner,
 	},
 	BitcoinInstance,
 };
@@ -38,6 +38,53 @@ use anyhow::{anyhow, Result};
 use std::sync::Arc;
 
 use crate::btc::retry_rpc::BtcRetryRpcClient;
+
+#[derive(Clone)]
+pub struct BitcoinDepositChannelWitnessingVoter2 {
+	client: BtcRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinDepositChannelWitnessing2> for BitcoinDepositChannelWitnessingVoter2 {
+	async fn vote(
+		&self,
+		_settings: <BitcoinDepositChannelWitnessing2 as ElectoralSystem>::ElectoralSettings,
+		deposit_addresses: <BitcoinDepositChannelWitnessing2 as ElectoralSystem>::ElectionProperties,
+	) -> Result<
+		<<BitcoinDepositChannelWitnessing2 as ElectoralSystem>::Vote as VoteStorage>::Vote,
+		anyhow::Error,
+	> {
+		let (witness_range, deposit_addresses) = deposit_addresses;
+		let witness_range = BlockWitnessRange::try_new(witness_range, 1).unwrap();
+		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
+
+		let mut txs = vec![];
+		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+		tracing::info!("Witness range: {:?}", witness_range);
+		for block in BlockWitnessRange::<u64>::into_range_inclusive(witness_range) {
+			tracing::info!("Checking block {:?}", block);
+
+			// TODO: these queries should not be infinite
+			let block_hash = self.client.block_hash(block).await;
+
+			let block = self.client.block(block_hash).await?;
+
+			txs.extend(block.txdata);
+		}
+
+		let deposit_addresses = map_script_addresses(deposit_addresses);
+
+		let witnesses = deposit_witnesses(&txs, &deposit_addresses);
+
+		if witnesses.is_empty() {
+			tracing::info!("No witnesses found for BTCE");
+		} else {
+			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
+		}
+
+		Ok(ConstantIndex { data: witnesses, ..Default::default() })
+	}
+}
 
 #[derive(Clone)]
 pub struct BitcoinDepositChannelWitnessingVoter {
@@ -187,7 +234,7 @@ where
 					state_chain_client,
 					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
 						BitcoinBlockHeightTrackingVoter { client: client.clone() },
-						BitcoinDepositChannelWitnessingVoter { client },
+						BitcoinDepositChannelWitnessingVoter2 { client },
 					)),
 				)
 				.continuously_vote()
