@@ -20,7 +20,7 @@ env:
 
 jobs:
   terraform-benchmarks-runner:
-    name: Terrafrom ${{ github.event.inputs.command }} 🔮
+    name: Terraform ${{ github.event.inputs.command }} 🔮
     runs-on: namespace-profile-default
     steps:
       - name: Checkout chainflip-platform-monorepo 🛒
