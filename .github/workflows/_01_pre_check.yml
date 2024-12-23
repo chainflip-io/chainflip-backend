@@ -130,11 +130,9 @@ jobs:
         with:
           dockerfile: ci/docker/${{ matrix.environment }}/${{ matrix.dockerfile }}.Dockerfile
 
-  check-conventional-commits:
+  check-semantic-pr:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-
-      - name: Check for conventional commits 📝
-        uses: webiny/action-conventional-commits@8bc41ff4e7d423d56fa4905f6ff79209a78776c7
+      - uses: amannn/action-semantic-pull-request@e9fabac35e210fea40ca5b14c0da95a099eff26f
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
