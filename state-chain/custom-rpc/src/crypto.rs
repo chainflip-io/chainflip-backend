@@ -23,6 +23,10 @@ where
 		let bytes: &[u8; 32] = account_id.as_ref();
 		Self(subxt::utils::AccountId32::from(*bytes), pair)
 	}
+
+	pub fn account(&self) -> state_chain_runtime::AccountId {
+		<Signature as Verify>::Signer::from(self.1.public()).into_account()
+	}
 }
 
 impl subxt::tx::Signer<StateChainConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {

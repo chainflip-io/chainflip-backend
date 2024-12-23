@@ -47,6 +47,10 @@ frame-support = { workspace = true, default-features = true }
 
 sp-application-crypto = { workspace = true }
 scale-info = { workspace = true, features = ["derive"] }
+sc-transaction-pool = { workspace = true, default-features = true }
+sc-transaction-pool-api = { workspace = true, default-features = true }
+sp-transaction-pool = { workspace = true }
+frame-system-rpc-runtime-api = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }

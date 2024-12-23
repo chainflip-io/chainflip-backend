@@ -329,6 +329,7 @@ pub fn new_full<
 					module.merge(BrokerSignedApiServer::into_rpc(BrokerSignedRpc {
 						client: client.clone(),
 						backend: backend.clone(),
+						pool: pool.clone(),
 						_phantom: PhantomData,
 						executor: executor.clone(),
 						signer: SubxtSignerInterface::new(pair),
