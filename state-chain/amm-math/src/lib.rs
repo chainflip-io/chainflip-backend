@@ -16,7 +16,7 @@ use sp_core::{U256, U512};
 /// zero becomes more valuable relative to asset one the price's literal value goes up, and vice
 /// versa. This ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional
 /// bits.
-pub type Price = U256; // TODO: Delete ths from cf-primitives
+pub type Price = U256;
 
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
 /// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.

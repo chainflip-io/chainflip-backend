@@ -18,7 +18,7 @@ use cf_chains::{
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ChannelRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ChannelRefundParametersDecoded,
 	DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall, ForeignChain, ForeignChainAddress,
 	RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
@@ -53,7 +53,7 @@ use state_chain_runtime::{
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
-const ETH_REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
+const ETH_REFUND_PARAMS: ChannelRefundParametersDecoded = ChannelRefundParametersDecoded {
 	retry_duration: 5,
 	refund_address: ForeignChainAddress::Eth(sp_core::H160([100u8; 20])),
 	min_price: sp_core::U256::zero(),
@@ -856,6 +856,7 @@ fn can_handle_failed_vault_transfer() {
 					amount,
 					destination_address,
 					broadcast_id,
+					egress_details: None,
 				},
 			));
 			testnet.move_forward_blocks(11);
