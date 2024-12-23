@@ -14,7 +14,7 @@ jobs:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
   pr-check:
-    uses: ./.github/workflows/_02_pr_checks.yml
+    uses: ./.github/workflows/_02_pr_check.yml
     secrets: inherit
   force-version-bump:
     uses: ./.github/workflows/_05_force_version_bump.yml
