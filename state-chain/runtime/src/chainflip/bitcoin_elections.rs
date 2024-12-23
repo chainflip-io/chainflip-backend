@@ -59,6 +59,7 @@ pub type BitcoinBlockHeightTracking = DsmElectoralSystem<
 	BlockHeightTrackingDSM<6, btc::BlockNumber, btc::Hash>,
 	<Runtime as Chainflip>::ValidatorId,
 	(),
+	(),
 	BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>,
 >;
 
@@ -154,37 +155,35 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 			>,
 		>(block_height_tracking_identifiers, &())?;
 
-		let chain_progress = match chain_progress {
-			Either::Left(x) => x,
-			Either::Right(x) => x,
-		};
-
-		// This code is going to be removed.
-		// convert the new chain progress to the old version
-		let chain_progress = match chain_progress {
-			ChainProgress::Reorg(added) => OldChainProgress::Reorg(RangeOfBlockWitnessRanges {
-				witness_from_root: added.start().clone(),
-				witness_to_root: added.end().clone(),
-				witness_period: 1, // horrible
-			}),
-			ChainProgress::Continuous(added) =>
-				OldChainProgress::Continuous(RangeOfBlockWitnessRanges {
+		for chain_progress in chain_progress {
+			// This code is going to be removed.
+			// convert the new chain progress to the old version
+			let chain_progress = match chain_progress {
+				ChainProgress::Reorg(added) => OldChainProgress::Reorg(RangeOfBlockWitnessRanges {
 					witness_from_root: added.start().clone(),
 					witness_to_root: added.end().clone(),
 					witness_period: 1, // horrible
 				}),
-			ChainProgress::None(block) => OldChainProgress::None(block),
-			ChainProgress::WaitingForFirstConsensus => OldChainProgress::WaitingForFirstConsensus,
-		};
+				ChainProgress::Continuous(added) =>
+					OldChainProgress::Continuous(RangeOfBlockWitnessRanges {
+						witness_from_root: added.start().clone(),
+						witness_to_root: added.end().clone(),
+						witness_period: 1, // horrible
+					}),
+				ChainProgress::None(block) => OldChainProgress::None(block),
+				ChainProgress::WaitingForFirstConsensus =>
+					OldChainProgress::WaitingForFirstConsensus,
+			};
 
-		log::info!("BitcoinElectionHooks::on_finalize: {:?}", chain_progress);
-		BitcoinDepositChannelWitnessing::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BitcoinDepositChannelWitnessing,
-				RunnerStorageAccess<Runtime, BitcoinInstance>,
-			>,
-		>(deposit_channel_witnessing_identifiers, &chain_progress)?;
+			log::info!("BitcoinElectionHooks::on_finalize: {:?}", chain_progress);
+			BitcoinDepositChannelWitnessing::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					BitcoinDepositChannelWitnessing,
+					RunnerStorageAccess<Runtime, BitcoinInstance>,
+				>,
+			>(deposit_channel_witnessing_identifiers.clone(), &chain_progress)?;
+		}
 
 		Ok(())
 	}

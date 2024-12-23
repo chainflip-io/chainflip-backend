@@ -25,7 +25,7 @@ use frame_support::{
 	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating},
 	Parameter,
 };
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use primitives::{
 	trim_to_length, validate_vote_and_height, ChainBlocks, Header, MergeFailure,
 	VoteValidationError,
@@ -40,6 +40,7 @@ use state_machine::{Indexed, StateMachine, Validate};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
+use state_machine_es::SMInput;
 
 pub mod consensus;
 pub mod primitives;
@@ -221,7 +222,6 @@ impl<
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct InputHeaders<H, N>(pub VecDeque<Header<H, N>>);
 
-/*
 #[cfg(test)]
 mod tests {
 
@@ -234,19 +234,19 @@ mod tests {
 	};
 
 	use super::{
-		primitives::Header, state_machine::StateMachine, BHWState, BlockHeightTrackingDSM,
-		InputHeaders,
+		primitives::Header, state_machine::StateMachine, state_machine_es::SMInput, BHWState,
+		BlockHeightTrackingDSM, BlockHeightTrackingProperties, InputHeaders,
 	};
 
 	pub fn arb_input_headers<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static + Step>(
-		witness_from: N,
+		properties: BlockHeightTrackingProperties<N>,
 	) -> impl Strategy<Value = InputHeaders<H, N>> {
 		// TODO: handle the case where `witness_from` = 0.
 
 		prop::collection::vec(any::<H>(), 2..10).prop_map(move |data| {
 			let headers =
 				data.iter().zip(data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
-					block_height: N::forward(witness_from.clone(), ix),
+					block_height: N::forward(properties.witness_from_index.clone(), ix),
 					hash: h1.clone(),
 					parent_hash: h0.clone(),
 				});
@@ -258,45 +258,49 @@ mod tests {
 	) -> impl Strategy<Value = BHWState<H, N>> {
 		prop_oneof![
 			Just(BHWState::Starting),
-			(any::<N>(), any::<bool>()).prop_flat_map(move |(n, is_reorg_without_known_root)| {
-				arb_input_headers(n).prop_map(move |headers| {
-					let witness_from = if is_reorg_without_known_root {
-						headers.0.front().unwrap().block_height.clone()
-					} else {
-						N::forward(headers.0.back().unwrap().block_height.clone(), 1)
-					};
-					BHWState::Running { headers: headers.0, witness_from }
-				})
-			}),
+			(any::<BlockHeightTrackingProperties<N>>(), any::<bool>()).prop_flat_map(
+				move |(n, is_reorg_without_known_root)| {
+					arb_input_headers(n).prop_map(move |headers| {
+						let witness_from = if is_reorg_without_known_root {
+							headers.0.front().unwrap().block_height.clone()
+						} else {
+							N::forward(headers.0.back().unwrap().block_height.clone(), 1)
+						};
+						BHWState::Running { headers: headers.0, witness_from }
+					})
+				}
+			),
 		]
 	}
 
 	#[test]
 	pub fn test_dsm() {
-		BlockHeightTrackingDSM::<6, u32, bool>::test(arb_state(), |index| {
-			arb_input_headers(index.witness_from_index).boxed()
+		BlockHeightTrackingDSM::<6, u32, bool>::test(arb_state(), Just(()), |index| {
+			prop_oneof![
+				Just(SMInput::Context(())),
+				(0..index.len()).prop_flat_map(move |ix| arb_input_headers(
+					index.clone().into_iter().nth(ix).unwrap()
+				)
+				.prop_map(SMInput::Vote))
+			]
+			.boxed()
 		});
 	}
 }
- */
 
 impl<H, N: BlockZero + Copy + PartialEq> Indexed for InputHeaders<H, N> {
 	type Index = BlockHeightTrackingProperties<N>;
-	
-	fn index(&self) -> Self::Index {
-			todo!()
-		}
 
-	// fn has_index(&self, base: &Self::Index) -> bool {
-	// 	if base.witness_from_index.is_zero() {
-	// 		true
-	// 	} else {
-	// 		match self.0.front() {
-	// 			Some(first) => first.block_height == base.witness_from_index,
-	// 			None => false,
-	// 		}
-	// 	}
-	// }
+	fn has_index(&self, base: &Self::Index) -> bool {
+		if base.witness_from_index.is_zero() {
+			true
+		} else {
+			match self.0.front() {
+				Some(first) => first.block_height == base.witness_from_index,
+				None => false,
+			}
+		}
+	}
 }
 
 impl<H: PartialEq + Clone, N: BlockHeightTrait> Validate for InputHeaders<H, N> {
@@ -370,24 +374,25 @@ impl<
 {
 	type State = BHWState<H, N>;
 	type DisplayState = ChainProgress<N>;
-	type Input = InputHeaders<H, N>;
+	type Input = SMInput<InputHeaders<H, N>, ()>;
+	type Settings = ();
 	type Output = Result<ChainProgress<N>, &'static str>;
 
 	fn input_index(s: &Self::State) -> BTreeSet<<Self::Input as state_machine::Indexed>::Index> {
-		// let witness_from_index = match s {
-		// 	BHWState::Starting => N::zero(),
-		// 	BHWState::Running { headers: _, witness_from } => witness_from.clone(),
-		// };
-		// BlockHeightTrackingProperties { witness_from_index }
-		todo!()
+		let witness_from_index = match s {
+			BHWState::Starting => N::zero(),
+			BHWState::Running { headers: _, witness_from } => witness_from.clone(),
+		};
+		BTreeSet::from([BlockHeightTrackingProperties { witness_from_index }])
 	}
 
 	// specification for step function
 	#[cfg(test)]
 	fn step_specification(before: &Self::State, input: &Self::Input, after: &Self::State) -> bool {
 		match after {
-			// the starting case should only ever be possible as the `before` state.
-			BHWState::Starting => false,
+			// the starting case should only ever be possible if we were starting before,
+			// and there wasn't any input
+			BHWState::Starting => *before == BHWState::Starting && *input == SMInput::Context(()),
 
 			// otherwise we know that the after state will be running
 			BHWState::Running { headers, witness_from } => match before {
@@ -395,14 +400,34 @@ impl<
 				BHWState::Running {
 					headers: before_headers,
 					witness_from: before_witness_from,
-				} =>
-					(*witness_from == before_headers.front().unwrap().block_height) ||
-						(*witness_from == N::forward(headers.back().unwrap().block_height, 1)),
+				} => {
+					(
+						// there are two different cases:
+						// - in case of a reorg, the `witness_from` is reset to the beginning of the
+						//   headers we have:
+						(*witness_from == before_headers.front().unwrap().block_height)
+						||
+						// - in the normal case, the `witness_from` should always be the next
+						//   height after the last header that we have
+						(*witness_from == N::forward(headers.back().unwrap().block_height, 1))
+					) && (
+						// if the input is *not* the empty context, then `witness_from` should
+						// always change after running the transition function.
+						// This ensures that we always have "fresh" election properties,
+						// and are thus deleting/recreating elections as expected.
+						(*input == SMInput::Context(())) || (*witness_from != *before_witness_from)
+					)
+				},
 			},
 		}
 	}
 
-	fn step(s: &mut Self::State, new_headers: Self::Input) -> Self::Output {
+	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {
+		let new_headers = match input {
+			SMInput::Vote(vote) => vote,
+			SMInput::Context(_) => return Ok(Self::get(s)),
+		};
+
 		match s {
 			BHWState::Starting => {
 				let first = new_headers.0.front().unwrap().block_height;
