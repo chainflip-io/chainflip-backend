@@ -1,0 +1,16 @@
+name: CI Commit
+
+on:
+  push:
+
+jobs:
+  check-conventional-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+
+      - name: Check for conventional commits 📝
+        uses: webiny/action-conventional-commits@8bc41ff4e7d423d56fa4905f6ff79209a78776c7
