@@ -40,6 +40,12 @@ env:
   FORCE_COLOR: 1
 
 jobs:
+  deploy_benchmarks_runner:
+    uses: ./.github/workflows/_100_benchmarks_runner.yml
+    with:
+      command: apply
+      benchmark_machine_spec: ${{ inputs.benchmark_machine_spec }}
+
   run_benchmarks:
     permissions:
       contents: write
@@ -95,3 +101,9 @@ jobs:
           branch: auto/benchmark-results
           delete-branch: true
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+
+  destroy_benchmarks_runner:
+    uses: ./.github/workflows/_100_benchmarks_runner.yml
+    with:
+      command: destroy
+      benchmark_machine_spec: ${{ inputs.benchmark_machine_spec }}

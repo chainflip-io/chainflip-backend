@@ -1,21 +1,14 @@
 name: Deploy/Destroy Benchmarks Runner
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       benchmark_machine_spec:
-        required: true
         default: 4vCPU-8GB
-        type: choice
-        options:
-          - 4vCPU-8GB
-          - 4vCPU-16GB
+        type: string
       command:
-        required: true
-        type: choice
-        options:
-          - apply
-          - destroy
+        type: string
+        default: apply
 
 permissions:
   id-token: write
