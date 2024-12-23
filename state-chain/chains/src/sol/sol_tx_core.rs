@@ -268,13 +268,28 @@ impl From<Transaction> for RawTransaction {
 /// should be specified as signers during `Instruction` construction. The
 /// program must still validate during execution that the account is a signer.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
-pub struct Instruction {
+pub struct Instruction<Address = Pubkey> {
 	/// Pubkey of the program that executes this instruction.
-	pub program_id: Pubkey,
+	pub program_id: Address,
 	/// Metadata describing accounts that should be passed to the program.
-	pub accounts: Vec<AccountMeta>,
+	pub accounts: Vec<AccountMeta<Address>>,
 	/// Opaque data passed to the program for its own interpretation.
+	#[serde(with = "sp_core::bytes")]
 	pub data: Vec<u8>,
+}
+
+/// Instruction type used when being presented to the end user.
+/// Serializes addresses into bs58 format.
+pub type InstructionRpc = Instruction<SolAddress>;
+
+impl From<Instruction> for InstructionRpc {
+	fn from(value: Instruction) -> Self {
+		InstructionRpc {
+			program_id: value.program_id.into(),
+			accounts: value.accounts.into_iter().map(|a| a.into()).collect(),
+			data: value.data,
+		}
+	}
 }
 
 impl Instruction {
@@ -324,13 +339,26 @@ impl Instruction {
 #[derive(
 	Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo,
 )]
-pub struct AccountMeta {
+pub struct AccountMeta<Address = Pubkey> {
 	/// An account's public key.
-	pub pubkey: Pubkey,
+	pub pubkey: Address,
 	/// True if an `Instruction` requires a `Transaction` signature matching `pubkey`.
 	pub is_signer: bool,
 	/// True if the account data or metadata may be mutated during program execution.
 	pub is_writable: bool,
+}
+
+/// Type used to be presented to the user. Serializes address into bs58 string.
+pub type AccountMetaRpc = AccountMeta<SolAddress>;
+
+impl From<AccountMeta> for AccountMetaRpc {
+	fn from(value: AccountMeta) -> Self {
+		AccountMetaRpc {
+			pubkey: value.pubkey.into(),
+			is_signer: value.is_signer,
+			is_writable: value.is_writable,
+		}
+	}
 }
 
 impl AccountMeta {
