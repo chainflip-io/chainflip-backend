@@ -1,5 +1,5 @@
 on:
-  workflow_call:
+  pull_request:
 
 env:
   FORCE_COLOR: 1
