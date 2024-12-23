@@ -10,7 +10,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
-	Chain, MAX_CCM_MSG_LENGTH,
+	CcmChannelMetadata, Chain, VaultSwapExtraParametersRpc, MAX_CCM_MSG_LENGTH,
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
@@ -1018,8 +1018,8 @@ pub trait CustomApi {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		min_output_amount: AssetAmount,
-		retry_duration: BlockNumber,
+		extra_parameters: VaultSwapExtraParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
@@ -1894,8 +1894,8 @@ where
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		min_output_amount: AssetAmount,
-		retry_duration: BlockNumber,
+		extra_parameters: VaultSwapExtraParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
@@ -1910,8 +1910,10 @@ where
 					destination_asset,
 					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
 					broker_commission,
-					min_output_amount,
-					retry_duration,
+					extra_parameters
+						.try_into_encoded_params(source_asset.into())
+						.map_err(DispatchErrorWithMessage::from)?,
+					channel_metadata,
 					boost_fee.unwrap_or_default(),
 					affiliate_fees.unwrap_or_default(),
 					dca_parameters,

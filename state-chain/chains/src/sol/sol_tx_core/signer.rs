@@ -2,6 +2,7 @@ use crate::sol::{
 	sol_tx_core::{signer::presigner::PresignerError, transaction::TransactionError},
 	SolPubkey, SolSignature,
 };
+
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -74,57 +75,39 @@ pub mod presigner {
 	}
 }
 
-pub mod signers {
-	use crate::sol::{
-		sol_tx_core::signer::{Signer, SignerError},
-		SolPubkey, SolSignature,
-	};
-
-	/// Convenience trait for working with mixed collections of `Signer`s
-	pub trait Signers {
-		fn pubkeys(&self) -> Vec<SolPubkey>;
-		fn try_pubkeys(&self) -> Result<Vec<SolPubkey>, SignerError>;
-		fn sign_message(&self, message: &[u8]) -> Vec<SolSignature>;
-		fn try_sign_message(&self, message: &[u8]) -> Result<Vec<SolSignature>, SignerError>;
-		fn is_interactive(&self) -> bool;
+pub struct TestSigners<S>(pub Vec<S>);
+impl<S: Signer> TestSigners<S> {
+	pub fn pubkeys(&self) -> Vec<SolPubkey> {
+		self.0.iter().map(|keypair| keypair.pubkey()).collect()
 	}
 
-	macro_rules! default_keypairs_impl {
-		() => {
-			fn pubkeys(&self) -> Vec<SolPubkey> {
-				self.iter().map(|keypair| keypair.pubkey()).collect()
-			}
-
-			fn try_pubkeys(&self) -> Result<Vec<SolPubkey>, SignerError> {
-				let mut pubkeys = Vec::new();
-				for keypair in self.iter() {
-					pubkeys.push(keypair.try_pubkey()?);
-				}
-				Ok(pubkeys)
-			}
-
-			fn sign_message(&self, message: &[u8]) -> Vec<SolSignature> {
-				self.iter().map(|keypair| keypair.sign_message(message)).collect()
-			}
-
-			fn try_sign_message(&self, message: &[u8]) -> Result<Vec<SolSignature>, SignerError> {
-				let mut signatures = Vec::new();
-				for keypair in self.iter() {
-					signatures.push(keypair.try_sign_message(message)?);
-				}
-				Ok(signatures)
-			}
-
-			fn is_interactive(&self) -> bool {
-				self.iter().any(|s| s.is_interactive())
-			}
-		};
+	pub fn try_pubkeys(&self) -> Result<Vec<SolPubkey>, SignerError> {
+		let mut pubkeys = Vec::new();
+		for keypair in self.0.iter() {
+			pubkeys.push(keypair.try_pubkey()?);
+		}
+		Ok(pubkeys)
 	}
 
-	impl<T: Signer> Signers for [&T; 1] {
-		default_keypairs_impl!();
+	pub fn sign_message(&self, message: &[u8]) -> Vec<SolSignature> {
+		self.0.iter().map(|keypair| keypair.sign_message(message)).collect()
 	}
-	impl<T: Signer> Signers for [&T; 2] {
-		default_keypairs_impl!();
+
+	pub fn try_sign_message(&self, message: &[u8]) -> Result<Vec<SolSignature>, SignerError> {
+		let mut signatures = Vec::new();
+		for keypair in self.0.iter() {
+			signatures.push(keypair.try_sign_message(message)?);
+		}
+		Ok(signatures)
+	}
+
+	pub fn is_interactive(&self) -> bool {
+		self.0.iter().any(|s| s.is_interactive())
+	}
+}
+
+impl<S> From<Vec<S>> for TestSigners<S> {
+	fn from(s: Vec<S>) -> Self {
+		Self(s)
 	}
 }

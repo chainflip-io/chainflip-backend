@@ -254,6 +254,25 @@ impl EncodedAddress {
 			)),
 		}
 	}
+
+	pub fn chain(&self) -> ForeignChain {
+		match self {
+			EncodedAddress::Eth(_) => ForeignChain::Ethereum,
+			EncodedAddress::Dot(_) => ForeignChain::Polkadot,
+			EncodedAddress::Btc(_) => ForeignChain::Bitcoin,
+			EncodedAddress::Arb(_) => ForeignChain::Arbitrum,
+			EncodedAddress::Sol(_) => ForeignChain::Solana,
+		}
+	}
+	pub fn into_vec(self) -> Vec<u8> {
+		match self {
+			EncodedAddress::Eth(bytes) => bytes.to_vec(),
+			EncodedAddress::Arb(bytes) => bytes.to_vec(),
+			EncodedAddress::Sol(bytes) => bytes.to_vec(),
+			EncodedAddress::Dot(bytes) => bytes.to_vec(),
+			EncodedAddress::Btc(byte_vec) => byte_vec,
+		}
+	}
 }
 
 pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
