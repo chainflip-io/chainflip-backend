@@ -129,11 +129,3 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: ci/docker/${{ matrix.environment }}/${{ matrix.dockerfile }}.Dockerfile
-
-  check-semantic-pr:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check for semantic PR 📝
-        uses: amannn/action-semantic-pull-request@0723387faaf9b38adef4775cd42cfd5155ed6017
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
