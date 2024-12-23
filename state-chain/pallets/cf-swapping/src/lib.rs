@@ -672,10 +672,12 @@ pub mod pallet {
 		PrivateBrokerChannelOpened {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
+			bond: T::Amount,
 		},
 		PrivateBrokerChannelClosed {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
+			bond: T::Amount,
 		},
 		AffiliateRegistrationUpdated {
 			broker_id: T::AccountId,
@@ -1134,8 +1136,10 @@ pub mod pallet {
 				Error::<T>::PrivateChannelExistsForBroker
 			);
 
+			let bond = BrokerBond::<T>::get();
+
 			ensure!(
-				T::FundingInfo::total_balance_of(&broker_id) >= BrokerBond::<T>::get(),
+				T::FundingInfo::total_balance_of(&broker_id) >= bond,
 				Error::<T>::InsufficientFunds
 			);
 
@@ -1143,9 +1147,13 @@ pub mod pallet {
 
 			BrokerPrivateBtcChannels::<T>::insert(broker_id.clone(), channel_id);
 
-			T::Bonder::update_bond(&broker_id, BrokerBond::<T>::get());
+			T::Bonder::update_bond(&broker_id, bond);
 
-			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened { broker_id, channel_id });
+			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened {
+				broker_id,
+				channel_id,
+				bond,
+			});
 
 			Ok(())
 		}
@@ -1159,9 +1167,15 @@ pub mod pallet {
 				return Err(Error::<T>::NoPrivateChannelExistsForBroker.into())
 			};
 
+			let bond = T::Bonder::get_bond(&broker_id);
+
 			T::Bonder::update_bond(&broker_id, 0u128.into());
 
-			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
+			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed {
+				broker_id,
+				channel_id,
+				bond,
+			});
 
 			Ok(())
 		}

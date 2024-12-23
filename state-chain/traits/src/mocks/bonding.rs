@@ -13,15 +13,13 @@ impl<Id, Amount> MockPallet for MockBonder<Id, Amount> {
 
 const BOND: &[u8] = b"BOND";
 
-impl<Id: Encode, Amount: Decode + Default> MockBonder<Id, Amount> {
-	pub fn get_bond(account_id: &Id) -> Amount {
-		Self::get_storage(BOND, account_id).unwrap_or_default()
-	}
-}
-
-impl<Id: Encode, Amount: Encode> Bonding for MockBonder<Id, Amount> {
+impl<Id: Encode, Amount: Encode + Decode + Default> Bonding for MockBonder<Id, Amount> {
 	type AccountId = Id;
 	type Amount = Amount;
+
+	fn get_bond(account_id: &Id) -> Amount {
+		Self::get_storage(BOND, account_id).unwrap_or_default()
+	}
 
 	fn update_bond(account_id: &Self::AccountId, bond: Amount) {
 		Self::put_storage(BOND, account_id, bond);

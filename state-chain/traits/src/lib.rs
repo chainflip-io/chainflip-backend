@@ -686,7 +686,10 @@ pub trait HistoricalEpoch {
 /// Handles the bonding logic
 pub trait Bonding {
 	type AccountId;
-	type Amount;
+	type Amount: Default;
+
+	/// Get the bond of an authority
+	fn get_bond(account_id: &Self::AccountId) -> Self::Amount;
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::AccountId, bond: Self::Amount);
 }
