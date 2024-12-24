@@ -8,10 +8,6 @@ use sp_core::bounded::alloc::sync::Arc;
 
 use tracing::log;
 
-pub fn hex_encode_bytes(bytes: &[u8]) -> String {
-	format!("0x{}", hex::encode(bytes))
-}
-
 pub async fn get_broadcast_id<I, StateChainClient>(
 	state_chain_client: Arc<StateChainClient>,
 	tx_out_id: &TransactionOutIdFor<state_chain_runtime::Runtime, ChainInstanceFor<I>>,

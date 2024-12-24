@@ -86,14 +86,12 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Arb(source_address) => source_address.0.to_vec(),
 			ForeignChainAddress::Sol(source_address) => source_address.0.to_vec(),
 			ForeignChainAddress::Dot(source_address) => source_address.aliased_ref().to_vec(),
-			ForeignChainAddress::Btc(_) => {
-				cf_runtime_utilities::log_or_panic!(
-					"Bitcoin should not be used as a source address as the encoding depends on the
-				network",
-				);
-				sp_std::vec::Vec::new()
-			},
+			ForeignChainAddress::Btc(script_pubkey) => script_pubkey.bytes(),
 		}
+	}
+
+	pub fn to_encoded_address(&self, network: NetworkEnvironment) -> EncodedAddress {
+		to_encoded_address(self.clone(), || network)
 	}
 }
 
@@ -278,6 +276,13 @@ impl EncodedAddress {
 			EncodedAddress::Dot(bytes) => bytes.to_vec(),
 			EncodedAddress::Btc(byte_vec) => byte_vec,
 		}
+	}
+
+	pub fn from_chain_account<C: Chain>(
+		account: C::ChainAccount,
+		network: NetworkEnvironment,
+	) -> Self {
+		account.into_foreign_chain_address().to_encoded_address(network)
 	}
 }
 

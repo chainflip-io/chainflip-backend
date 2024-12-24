@@ -1,14 +1,15 @@
 use crate::{
 	store::{Storable, Store},
-	utils::{get_broadcast_id, hex_encode_bytes},
+	utils::get_broadcast_id,
 };
 use cf_chains::{
-	address::{IntoForeignChainAddress, ToHumanreadableAddress},
+	address::EncodedAddress,
 	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
-	AnyChain, Arbitrum, Bitcoin, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
-	Ethereum, IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
+	AnyChain, Arbitrum, Bitcoin, CcmDepositMetadata, Chain, ChainCrypto,
+	ChannelRefundParametersEncoded, Ethereum, IntoTransactionInIdForAnyChain, Polkadot,
+	TransactionInIdForAnyChain,
 };
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
 use chainflip_api::primitives::{
@@ -18,7 +19,6 @@ use chainflip_api::primitives::{
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi, StateChainClient,
 };
-use codec::Encode;
 use pallet_cf_broadcast::TransactionOutIdFor;
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use serde::{Serialize, Serializer};
@@ -85,6 +85,24 @@ where
 	tx_ref: I::TransactionRef,
 }
 
+/// Wrapper struct for consistent address serialization.
+#[derive(Clone, Debug)]
+struct TrackerAddress(EncodedAddress);
+
+impl From<EncodedAddress> for TrackerAddress {
+	fn from(addr: EncodedAddress) -> Self {
+		TrackerAddress(addr)
+	}
+}
+impl serde::Serialize for TrackerAddress {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		serializer.serialize_str(&format!("{}", &self.0))
+	}
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize)]
 #[serde(untagged)]
@@ -92,7 +110,7 @@ enum WitnessInformation {
 	Deposit {
 		deposit_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
 		#[serde(skip_serializing)]
-		deposit_address: String,
+		deposit_address: TrackerAddress,
 		amount: NumberOrHex,
 		asset: cf_chains::assets::any::Asset,
 		deposit_details: Option<DepositDetails>,
@@ -110,14 +128,14 @@ enum WitnessInformation {
 		input_asset: cf_chains::assets::any::Asset,
 		output_asset: cf_chains::assets::any::Asset,
 		amount: NumberOrHex,
-		destination_address: String,
+		destination_address: TrackerAddress,
 		ccm_deposit_metadata: Option<CcmDepositMetadata>,
 		deposit_details: Option<DepositDetails>,
 		broker_fee: Beneficiary<AccountId32>,
 		affiliate_fees: Affiliates<AccountId32>,
-		refund_params: ChannelRefundParameters,
+		refund_params: ChannelRefundParametersEncoded,
 		dca_params: Option<DcaParameters>,
-		boost_fee: BasisPoints,
+		max_boost_fee: BasisPoints,
 	},
 }
 
@@ -150,7 +168,8 @@ impl Storable for WitnessInformation {
 		let chain = self.to_foreign_chain().to_string();
 
 		match self {
-			Self::Deposit { deposit_address, .. } => format!("deposit:{chain}:{deposit_address}"),
+			Self::Deposit { deposit_address: TrackerAddress(address), .. } =>
+				format!("deposit:{chain}:{address}"),
 			Self::Broadcast { broadcast_id, .. } => format!("broadcast:{chain}:{broadcast_id}"),
 			Self::VaultDeposit { tx_id, .. } => format!("vault_deposit:{chain}:{tx_id}"),
 		}
@@ -213,14 +232,8 @@ where
 	) -> WitnessInformation {
 		WitnessInformation::Deposit {
 			deposit_chain_block_height: height.into(),
-			deposit_address: match C::get() {
-				// TODO: consider using the humanreadable impl for Polkadot (ss58)
-				ForeignChain::Polkadot => hex_encode_bytes(&self.deposit_address.encode()),
-				_ => format!(
-					"{}",
-					self.deposit_address.into_foreign_chain_address().to_humanreadable(network)
-				),
-			},
+			deposit_address: EncodedAddress::from_chain_account::<C>(self.deposit_address, network)
+				.into(),
 			amount: self.amount.into().into(),
 			asset: self.asset.into(),
 			deposit_details: self.deposit_details.into_any_chain(),
@@ -233,6 +246,7 @@ trait VaultDepositWitnessExt<C: Chain> {
 		self,
 		height: <C as Chain>::ChainBlockNumber,
 		affiliate_mapping: &BTreeMap<AffiliateShortId, AccountId32>,
+		network: NetworkEnvironment,
 	) -> WitnessInformation;
 }
 
@@ -245,6 +259,7 @@ where
 		self,
 		height: <T::TargetChain as Chain>::ChainBlockNumber,
 		affiliate_mapping: &BTreeMap<AffiliateShortId, AccountId32>,
+		network: NetworkEnvironment,
 	) -> WitnessInformation {
 		WitnessInformation::VaultDeposit {
 			tx_id: <<<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId as IntoTransactionInIdForAnyChain<
@@ -254,7 +269,7 @@ where
 			input_asset: self.input_asset.into(),
 			output_asset: self.output_asset,
 			amount: self.deposit_amount.into().into(),
-			destination_address: format!("{}", self.destination_address),
+			destination_address: self.destination_address.into(),
 			ccm_deposit_metadata: self.deposit_metadata,
 			deposit_details: self.deposit_details.into_any_chain(),
 			broker_fee: self.broker_fee.clone(),
@@ -274,10 +289,10 @@ where
 				.collect::<Vec<Beneficiary<AccountId32>>>()
 				.try_into()
 				.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same."),
-					refund_params: self.refund_params,
-					dca_params: self.dca_params,
-					boost_fee: self.boost_fee,
-				}
+			refund_params: self.refund_params.map_address(|a| a.to_encoded_address(network)),
+			dca_params: self.dca_params,
+			max_boost_fee: self.boost_fee,
+		}
 	}
 }
 
@@ -378,6 +393,7 @@ async fn save_vault_deposit_witness<S, T, I: 'static, StateChainClient>(
 	deposit_witness: VaultDepositWitness<T, I>,
 	block_height: <T::TargetChain as Chain>::ChainBlockNumber,
 	state_chain_client: Arc<StateChainClient>,
+	network: NetworkEnvironment,
 ) -> anyhow::Result<()>
 where
 	S: Store,
@@ -390,7 +406,7 @@ where
 		.await?;
 
 	let _ = deposit_witness
-		.into_witness_information(block_height, &affiliate_mapping)
+		.into_witness_information(block_height, &affiliate_mapping, network)
 		.save_to_store(store)
 		.await
 		.inspect_err(|e| {
@@ -468,15 +484,50 @@ where
 			block_height,
 		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
 		EthereumIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
-			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
+			save_vault_deposit_witness(
+				store,
+				*deposit,
+				block_height,
+				state_chain_client,
+				chainflip_network,
+			)
+			.await?,
 		BitcoinIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
-			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
+			save_vault_deposit_witness(
+				store,
+				*deposit,
+				block_height,
+				state_chain_client,
+				chainflip_network,
+			)
+			.await?,
 		PolkadotIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
-			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
+			save_vault_deposit_witness(
+				store,
+				*deposit,
+				block_height,
+				state_chain_client,
+				chainflip_network,
+			)
+			.await?,
 		ArbitrumIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
-			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
+			save_vault_deposit_witness(
+				store,
+				*deposit,
+				block_height,
+				state_chain_client,
+				chainflip_network,
+			)
+			.await?,
 		SolanaIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
-			save_vault_deposit_witness(store, *deposit, block_height, state_chain_client).await?,
+			save_vault_deposit_witness(
+				store,
+				*deposit,
+				block_height,
+				state_chain_client,
+				chainflip_network,
+			)
+			.await?,
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,
@@ -587,10 +638,11 @@ mod tests {
 	use super::*;
 	use async_trait::async_trait;
 	use cf_chains::{
+		btc::ScriptPubkey,
 		dot::PolkadotAccountId,
 		evm::{EvmTransactionMetadata, TransactionFee},
 		instances::ChainInstanceFor,
-		Chain, ForeignChainAddress,
+		CcmChannelMetadata, Chain, ChannelRefundParameters, ForeignChainAddress,
 	};
 	use cf_utilities::assert_ok;
 	use chainflip_api::primitives::AffiliateShortId;
@@ -855,7 +907,17 @@ mod tests {
 					input_asset: cf_chains::assets::eth::Asset::Eth,
 					output_asset: chainflip_api::primitives::Asset::Flip,
 					destination_address: cf_chains::address::EncodedAddress::Dot([0; 32]),
-					deposit_metadata: None,
+					deposit_metadata: Some(CcmDepositMetadata {
+						channel_metadata: CcmChannelMetadata {
+							message: b"HELLO".to_vec().try_into().unwrap(),
+							gas_budget: 12345,
+							ccm_additional_data: b"MORE".to_vec().try_into().unwrap(),
+						},
+						source_chain: ForeignChain::Ethereum,
+						source_address: Some(cf_chains::address::ForeignChainAddress::Eth(
+							[0xcf; 20].into()
+						)),
+					}),
 					deposit_details: Default::default(),
 					broker_fee: Beneficiary { account: AccountId32::new([0; 32]), bps: 10 },
 					affiliate_fees: frame_support::BoundedVec::try_from(vec![Beneficiary {
@@ -872,7 +934,8 @@ mod tests {
 					boost_fee: 5,
 				},
 				1,
-				client
+				client,
+				NetworkEnvironment::Testnet,
 			)
 			.await
 		);
@@ -904,5 +967,35 @@ mod tests {
 			"\"0x1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100\""
 		);
 		assert_eq!(serde_json::to_string(&s).unwrap(), "\"0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\"");
+	}
+
+	#[test]
+	fn vault_destination_address_serialization() {
+		const KEY: &'static str = "TEST";
+		#[derive(Serialize)]
+		struct DestinationAddressTest {
+			eth_address: TrackerAddress,
+			dot_address: TrackerAddress,
+			btc_address: TrackerAddress,
+			arb_address: TrackerAddress,
+			sol_address: TrackerAddress,
+		}
+		impl Storable for DestinationAddressTest {
+			fn key(&self) -> String {
+				KEY.to_string()
+			}
+		}
+
+		let value = DestinationAddressTest {
+			eth_address: EncodedAddress::Eth([0xee; 20]).into(),
+			dot_address: EncodedAddress::Dot([0xd0; 32]).into(),
+			btc_address: ForeignChainAddress::Btc(ScriptPubkey::Taproot([0xbc; 32]))
+				.to_encoded_address(NetworkEnvironment::Mainnet)
+				.into(),
+			arb_address: EncodedAddress::Arb([0xab; 20]).into(),
+			sol_address: EncodedAddress::Sol([0x50; 32]).into(),
+		};
+
+		insta::assert_json_snapshot!(value);
 	}
 }
