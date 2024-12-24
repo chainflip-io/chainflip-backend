@@ -1,4 +1,4 @@
-use cf_chains::{CcmAdditionalData, ChannelRefundParameters};
+use crate::{CcmAdditionalData, ChannelRefundParametersDecoded};
 use cf_primitives::{AccountId, AffiliateAndFee, Beneficiary, DcaParameters, MAX_AFFILIATES};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -21,7 +21,7 @@ pub type VersionedCcmCfParameters = VersionedCfParameters<CcmAdditionalData>;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct VaultSwapParameters {
-	pub refund_params: ChannelRefundParameters,
+	pub refund_params: ChannelRefundParametersDecoded,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: u8,
 	pub broker_fee: Beneficiary<AccountId>,
@@ -31,7 +31,9 @@ pub struct VaultSwapParameters {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use cf_chains::{ChannelRefundParameters, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH};
+	use crate::{
+		ChannelRefundParametersDecoded, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH,
+	};
 
 	const MAX_VAULT_SWAP_PARAMETERS_LENGTH: u32 = 1_000;
 	const MAX_CF_PARAM_LENGTH: u32 =
@@ -53,7 +55,7 @@ mod tests {
 	#[test]
 	fn test_versioned_cf_parameters() {
 		let vault_swap_parameters = VaultSwapParameters {
-			refund_params: ChannelRefundParameters {
+			refund_params: ChannelRefundParametersDecoded {
 				retry_duration: 1,
 				refund_address: ForeignChainAddress::Eth(sp_core::H160::from([2; 20])),
 				min_price: Default::default(),

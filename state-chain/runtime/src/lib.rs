@@ -46,27 +46,22 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{
-		api::BitcoinApi,
-		vault_swap_encoding::{
-			encode_swap_params_in_nulldata_payload, SharedCfParameters, UtxoEncodedData,
-		},
-		BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey,
-	},
+	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
+	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
+	TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
-	AffiliateAndFee, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
-	DcaParameters, EpochIndex, NetworkEnvironment, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
+	NetworkEnvironment, STABLE_ASSET,
 };
 use cf_traits::{
-	AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter, BalanceApi,
-	DummyEgressSuccessWitnesser, DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider,
-	NoLimit, SwapLimits, SwapLimitsProvider,
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
+	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit, SwapLimits,
+	SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -2223,98 +2218,94 @@ impl_runtime_apis! {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
-			min_output_amount: AssetAmount,
-			retry_duration: BlockNumber,
+			extra_parameters: VaultSwapExtraParametersEncoded,
+			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
 			// Validate params
-			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
 			}
-			ChainAddressConverter::try_from_encoded_address(destination_address.clone())
-				.and_then(|address| {
-					if ForeignChain::from(destination_asset) != address.chain() {
-						Err(())
-					} else {
-						Ok(())
-					}
-				})
-				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
-
-			// Payload expiry time is set to time left to next rotation.
-			// 	* For BTC: the actual expiry time is 2 rotations, but we deliberately set expires_at to be the time left to next
-			//    rotation to cater for the case when a forced rotation happens between when the payload was requested and
-			//    before expires_at. BTC funds can be lost in 3 cases:
-			// 		* User makes the vault transaction after expires_at, and it happens that we did a forced rotation in between
-			//      * User submits the vault transaction 3 days (1 epoch) after expires_at, and with no forced rotations in between
-			//      * We do 2 forced rotations in between payload request and expires_at
-			//  * For SOLANA: The actual expiry time is indeed time left to next rotation. If a forced rotation
-			//    happens in between as explained before, it is actually not a problem as the user won't lose any funds.
-			//  * For ETH: payload never expires hence we don't send expires_at
-			let current_block = System::block_number();
-			let (Some(next_rotation_block), _) = Validator::estimate_next_session_rotation(current_block) else {
-				Err(pallet_cf_validator::Error::<Runtime>::InvalidEpochDuration)?
-			};
-			let blocks_until_next_rotation = next_rotation_block.saturating_sub(current_block);
-			let expires_at = Timestamp::now() + blocks_until_next_rotation as u64 * SLOT_DURATION;
+			// Conversion implicitly verifies address validity
+			frame_support::ensure!(
+				ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+					.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
+					.chain() == ForeignChain::from(destination_asset)
+				,
+				"Destination address and asset are on different chains."
+			);
 
 			// Encode swap
-			match ForeignChain::from(source_asset) {
-				ForeignChain::Bitcoin => {
-					let private_channel_id =
-						pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
-							.ok_or(
-								pallet_cf_swapping::Error::<Runtime>::NoPrivateChannelExistsForBroker,
-							)?;
-					let params = UtxoEncodedData {
-							output_asset: destination_asset,
-							output_address: destination_address,
-							parameters: SharedCfParameters {
-								retry_duration: retry_duration.try_into()
-									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
-								min_output_amount,
-								number_of_chunks: dca_parameters
-									.as_ref()
-									.map(|params| params.number_of_chunks)
-									.unwrap_or(1)
-									.try_into()
-									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-								chunk_interval: dca_parameters
-									.as_ref()
-									.map(|params| params.chunk_interval)
-									.unwrap_or(SWAP_DELAY_BLOCKS)
-									.try_into()
-									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-								boost_fee: boost_fee.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
-								broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
-								affiliates: affiliate_fees.into_iter().map(|beneficiary|
-										Result::<AffiliateAndFee, DispatchErrorWithMessage>::Ok(
-											AffiliateAndFee {
-												affiliate: Swapping::get_short_id(&broker_id, &beneficiary.account)
-													.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
-												fee: beneficiary.bps.try_into()
-													.map_err(|_| pallet_cf_swapping::Error::<Runtime>::AffiliateFeeTooHigh)?
-											}
-										)
-									)
-									.collect::<Result<Vec<AffiliateAndFee>,_>>()?
-									.try_into()
-									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::TooManyAffiliates)?,
-							},
-						};
+			match (ForeignChain::from(source_asset), extra_parameters) {
+				(
+					ForeignChain::Bitcoin,
+					VaultSwapExtraParameters::Bitcoin {
+						min_output_amount,
+						retry_duration,
+					}
+				) => {
+					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
 
+					// Payload expiry time is set to time left to next rotation.
+					// 	* For BTC: the actual expiry time is 2 rotations, but we deliberately set expires_at to be the time left to next
+					//    rotation to cater for the case when a forced rotation happens between when the payload was requested and
+					//    before expires_at. BTC funds can be lost in 3 cases:
+					// 		* User makes the vault transaction after expires_at, and it happens that we did a forced rotation in between
+					//      * User submits the vault transaction 3 days (1 epoch) after expires_at, and with no forced rotations in between
+					//      * We do 2 forced rotations in between payload request and expires_at
+					//  * For SOLANA: The actual expiry time is indeed time left to next rotation. If a forced rotation
+					//    happens in between as explained before, it is actually not a problem as the user won't lose any funds.
+					//  * For ETH: payload never expires hence we don't send expires_at
+					let current_block = System::block_number();
+					let (Some(next_rotation_block), _) = Validator::estimate_next_session_rotation(current_block) else {
+						Err(pallet_cf_validator::Error::<Runtime>::InvalidEpochDuration)?
+					};
+					let blocks_until_next_rotation = next_rotation_block.saturating_sub(current_block);
+					let expires_at = Timestamp::now() + blocks_until_next_rotation as u64 * SLOT_DURATION;
 
-
-					Ok(VaultSwapDetails::Bitcoin {
-						nulldata_payload: encode_swap_params_in_nulldata_payload(params),
-						deposit_address: derive_btc_vault_deposit_address(private_channel_id),
-						expires_at
-					})
+					crate::chainflip::vault_swap::bitcoin_vault_swap(
+						broker_id,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						min_output_amount,
+						retry_duration,
+						boost_fee,
+						affiliate_fees,
+						dca_parameters,
+						expires_at,
+					)
 				},
-				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
+				(
+					ForeignChain::Solana,
+					VaultSwapExtraParameters::Solana {
+						input_amount,
+						refund_parameters,
+						from,
+						event_data_account,
+						from_token_account,
+					}
+				) => crate::chainflip::vault_swap::solana_vault_swap(
+					broker_id,
+					input_amount,
+					source_asset,
+					destination_asset,
+					destination_address,
+					broker_commission,
+					refund_parameters,
+					channel_metadata,
+					boost_fee,
+					affiliate_fees,
+					dca_parameters,
+					from,
+					event_data_account,
+					from_token_account,
+				),
+				_ => Err(DispatchErrorWithMessage::from(
+					"Incompatible or unsupported source_asset and extra_parameters"
+				)),
 			}
 		}
 

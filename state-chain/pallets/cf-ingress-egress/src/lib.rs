@@ -28,7 +28,7 @@ use cf_chains::{
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
 	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall,
+	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParametersDecoded, ConsolidateCall,
 	DepositChannel, DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
 	FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
 	TransferAssetParams,
@@ -385,7 +385,7 @@ pub mod pallet {
 		pub tx_id: TransactionInIdFor<T, I>,
 		pub broker_fee: Beneficiary<T::AccountId>,
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
-		pub refund_params: ChannelRefundParameters,
+		pub refund_params: ChannelRefundParametersDecoded,
 		pub dca_params: Option<DcaParameters>,
 		pub boost_fee: BasisPoints,
 	}
@@ -438,7 +438,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadata>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParametersDecoded>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -789,6 +789,7 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			destination_address: TargetChainAccount<T, I>,
 			broadcast_id: BroadcastId,
+			egress_details: Option<ScheduledEgressDetails<T::TargetChain>>,
 		},
 		/// A CCM has failed to broadcast.
 		CcmBroadcastFailed {
@@ -870,10 +871,6 @@ pub mod pallet {
 		TransactionRejectionRequestExpired {
 			account_id: T::AccountId,
 			tx_id: TransactionInIdFor<T, I>,
-		},
-		CcmFallbackScheduled {
-			broadcast_id: BroadcastId,
-			egress_details: ScheduledEgressDetails<T::TargetChain>,
 		},
 		TransactionRejectedByBroker {
 			broadcast_id: BroadcastId,
@@ -1230,6 +1227,7 @@ pub mod pallet {
 						amount,
 						destination_address,
 						broadcast_id,
+						egress_details: None,
 					});
 				},
 				// The only way this can fail is if the target chain is unsupported, which should
@@ -2738,15 +2736,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		broadcast_id: BroadcastId,
 		fallback: TransferAssetParams<T::TargetChain>,
 	) {
+		// let destination_address = fallback.to.clone();
+
 		match Self::schedule_egress(
 			fallback.asset,
 			fallback.amount,
-			fallback.to,
+			fallback.to.clone(),
 			None,
 		) {
-			Ok(egress_details) => Self::deposit_event(Event::<T, I>::CcmFallbackScheduled {
+			Ok(egress_details) => Self::deposit_event(Event::<T, I>::TransferFallbackRequested {
+				asset: fallback.asset,
+				amount: fallback.amount,
+				destination_address: fallback.to,
 				broadcast_id,
-				egress_details,
+				egress_details: Some(egress_details),
 			}),
 			Err(e) => log::error!("Ccm fallback failed to schedule the fallback egress: Target chain: {:?}, broadcast_id: {:?}, error: {:?}", T::TargetChain::get(), broadcast_id, e),
 		}
@@ -2896,7 +2899,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParametersDecoded>,
 		dca_params: Option<DcaParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),

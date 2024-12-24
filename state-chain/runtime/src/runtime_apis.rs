@@ -5,8 +5,9 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress, Chain,
-	ChainCrypto, ForeignChainAddress,
+	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
+	sol::SolInstructionRpc, CcmChannelMetadata, Chain, ChainCrypto, ForeignChainAddress,
+	VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
@@ -46,6 +47,9 @@ pub enum VaultSwapDetails<BtcAddress> {
 		/// Payload expiry time, expressed as timestamp since the UNIX_EPOCH in milliseconds
 		expires_at: u64,
 	},
+	Solana {
+		instruction: SolInstructionRpc,
+	},
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
@@ -60,6 +64,7 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 					deposit_address: f(deposit_address),
 					expires_at,
 				},
+			VaultSwapDetails::Solana { instruction } => VaultSwapDetails::Solana { instruction },
 		}
 	}
 }
@@ -429,8 +434,8 @@ decl_runtime_apis!(
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
-			min_output_amount: AssetAmount,
-			retry_duration: BlockNumber,
+			extra_parameters: VaultSwapExtraParametersEncoded,
+			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId32>,
 			dca_parameters: Option<DcaParameters>,

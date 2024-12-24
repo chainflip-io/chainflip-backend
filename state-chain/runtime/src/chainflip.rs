@@ -11,6 +11,7 @@ mod offences;
 pub mod pending_rotation_broadcasts;
 mod signer_nomination;
 pub mod solana_elections;
+pub mod vault_swap;
 
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
@@ -49,15 +50,16 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
-			DurableNonceAndAccount, RecoverDurableNonce, SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
+			SolanaEnvironment,
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
-	ChainEnvironment, ChainState, ChannelRefundParameters, ForeignChain, ReplayProtectionProvider,
-	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
-	TransactionBuilder,
+	ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
+	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
+	Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
@@ -555,6 +557,12 @@ impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
 	}
 }
 
+impl ChainEnvironment<CurrentOnChainKey, SolAddress> for SolEnvironment {
+	fn lookup(_s: CurrentOnChainKey) -> Option<SolAddress> {
+		SolanaBroadcaster::current_on_chain_key()
+	}
+}
+
 impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	fn lookup(_s: ComputePrice) -> Option<u64> {
 		SolanaChainTrackingProvider::priority_fee()
@@ -687,7 +695,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints,
-				refund_parameters: Option<ChannelRefundParameters>,
+				refund_parameters: Option<ChannelRefundParametersDecoded>,
 				dca_parameters: Option<DcaParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
@@ -940,7 +948,7 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 	}
 
 	fn maybe_ccm_limit() -> Option<usize> {
-		// Substract extra nonces from the limit to make sure CCMs won't block regular batches.
+		// Subtract extra nonces from the limit to make sure CCMs won't block regular batches.
 		Some(Self::maybe_transfers_limit()?.saturating_sub(4))
 	}
 

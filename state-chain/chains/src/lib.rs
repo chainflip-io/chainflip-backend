@@ -20,7 +20,9 @@ use address::{
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
 use cf_amm_math::Price;
-use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId};
+use cf_primitives::{
+	AssetAmount, BlockNumber, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId,
+};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -64,6 +66,7 @@ use cf_primitives::chains::assets::any::GetChainAssetMap;
 pub use deposit_channel::*;
 use strum::IntoEnumIterator;
 pub mod ccm_checker;
+pub mod cf_parameters;
 pub mod instances;
 
 pub mod mocks;
@@ -847,6 +850,7 @@ impl RetryPolicy for DefaultRetryPolicy {
 	}
 }
 
+/// Refund parameter used within the swapping pallet.
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
@@ -869,14 +873,14 @@ pub struct SwapRefundParameters {
 	PartialOrd,
 	Ord,
 )]
-pub struct ChannelRefundParametersGeneric<A> {
+pub struct ChannelRefundParameters<A> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
+impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
 	fn benchmark_value() -> Self {
 		Self {
 			retry_duration: BenchmarkValue::benchmark_value(),
@@ -885,23 +889,24 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
 		}
 	}
 }
+#[cfg(feature = "std")]
+pub type RefundParametersRpc = ChannelRefundParameters<crate::address::AddressString>;
+pub type ChannelRefundParametersDecoded = ChannelRefundParameters<ForeignChainAddress>;
+pub type ChannelRefundParametersEncoded = ChannelRefundParameters<EncodedAddress>;
 
-pub type ChannelRefundParameters = ChannelRefundParametersGeneric<ForeignChainAddress>;
-pub type ChannelRefundParametersEncoded = ChannelRefundParametersGeneric<EncodedAddress>;
-
-impl<A: Clone> ChannelRefundParametersGeneric<A> {
-	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParametersGeneric<B> {
-		ChannelRefundParametersGeneric {
+impl<A: Clone> ChannelRefundParameters<A> {
+	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParameters<B> {
+		ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone()),
 			min_price: self.min_price,
 		}
 	}
-	pub fn try_map_address<B, F: FnOnce(A) -> Result<B, sp_runtime::DispatchError>>(
+	pub fn try_map_address<B, F: FnOnce(A) -> Result<B, DispatchError>>(
 		&self,
 		f: F,
-	) -> Result<ChannelRefundParametersGeneric<B>, sp_runtime::DispatchError> {
-		Ok(ChannelRefundParametersGeneric {
+	) -> Result<ChannelRefundParameters<B>, DispatchError> {
+		Ok(ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone())?,
 			min_price: self.min_price,
@@ -922,5 +927,104 @@ pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 	fn deposit_id(&self) -> Option<C::TransactionInId> {
 		None
+	}
+}
+
+#[derive(
+	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
+)]
+#[serde(tag = "chain")]
+pub enum VaultSwapExtraParameters<Address, Amount> {
+	Bitcoin {
+		min_output_amount: Amount,
+		retry_duration: BlockNumber,
+	},
+	Solana {
+		from: Address,
+		event_data_account: Address,
+		input_amount: Amount,
+		refund_parameters: ChannelRefundParameters<Address>,
+		from_token_account: Option<Address>,
+	},
+}
+
+impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
+	/// Try map address type parameters into another type.
+	/// Typically used to convert RPC supported types into internal types.
+	pub fn try_map_address<AddressOther>(
+		self,
+		f: impl Fn(Address) -> Result<AddressOther, DispatchError>,
+	) -> Result<VaultSwapExtraParameters<AddressOther, Amount>, DispatchError> {
+		Ok(match self {
+			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
+				VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration },
+			VaultSwapExtraParameters::Solana {
+				from,
+				event_data_account,
+				input_amount,
+				refund_parameters,
+				from_token_account,
+			} => VaultSwapExtraParameters::Solana {
+				from: f(from)?,
+				event_data_account: f(event_data_account)?,
+				input_amount,
+				refund_parameters: refund_parameters.try_map_address(|a| {
+					f(a).map_err(|_| "Failed to convert address in refund parameters".into())
+				})?,
+				from_token_account: from_token_account.map(f).transpose()?,
+			},
+		})
+	}
+
+	/// Try map numerical parameters into another type.
+	/// Typically used to convert RPC supported types into internal types.
+	pub fn try_map_amounts<NumberOther>(
+		self,
+		f: impl Fn(Amount) -> Result<NumberOther, DispatchError>,
+	) -> Result<VaultSwapExtraParameters<Address, NumberOther>, DispatchError> {
+		Ok(match self {
+			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
+				VaultSwapExtraParameters::Bitcoin {
+					min_output_amount: f(min_output_amount)?,
+					retry_duration,
+				},
+			VaultSwapExtraParameters::Solana {
+				from,
+				event_data_account,
+				input_amount,
+				refund_parameters,
+				from_token_account,
+			} => VaultSwapExtraParameters::Solana {
+				from,
+				event_data_account,
+				input_amount: f(input_amount)?,
+				refund_parameters,
+				from_token_account,
+			},
+		})
+	}
+}
+
+/// Type intended for RPC calls
+#[cfg(feature = "std")]
+pub type VaultSwapExtraParametersRpc =
+	VaultSwapExtraParameters<crate::address::AddressString, cf_utilities::rpc::NumberOrHex>;
+
+/// Type used internally within the State chain.
+pub type VaultSwapExtraParametersEncoded = VaultSwapExtraParameters<EncodedAddress, AssetAmount>;
+
+#[cfg(feature = "std")]
+impl VaultSwapExtraParametersRpc {
+	pub fn try_into_encoded_params(
+		self,
+		chain: ForeignChain,
+	) -> Result<VaultSwapExtraParametersEncoded, DispatchError> {
+		self.try_map_address(|a| {
+			a.try_parse_to_encoded_address(chain)
+				.map_err(|_| "Invalid address for chain".into())
+		})?
+		.try_map_amounts(|n| {
+			u128::try_from(n).map_err(|_| "Cannot convert number input into u128".into())
+		})
 	}
 }

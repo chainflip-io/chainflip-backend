@@ -40,6 +40,13 @@ env:
   FORCE_COLOR: 1
 
 jobs:
+  deploy_benchmarks_runner:
+    uses: ./.github/workflows/_110_deploy_benchmarks_runner.yml
+    with:
+      command: apply
+      benchmark_machine_spec: ${{ inputs.benchmark_machine_spec }}
+    secrets: inherit
+
   run_benchmarks:
     permissions:
       contents: write
@@ -51,6 +58,8 @@ jobs:
         x64,
         "${{ github.event.inputs.benchmark_machine_spec }}",
       ]
+    needs: [deploy_benchmarks_runner]
+    continue-on-error: true
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -95,3 +104,11 @@ jobs:
           branch: auto/benchmark-results
           delete-branch: true
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+
+  destroy_benchmarks_runner:
+    needs: [run_benchmarks]
+    uses: ./.github/workflows/_110_deploy_benchmarks_runner.yml
+    with:
+      command: destroy
+      benchmark_machine_spec: ${{ inputs.benchmark_machine_spec }}
+    secrets: inherit

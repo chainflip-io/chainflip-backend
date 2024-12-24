@@ -17,7 +17,7 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
+	CcmChannelMetadata, ChannelRefundParametersDecoded, DepositChannel, DepositOriginType,
 	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
@@ -56,7 +56,7 @@ const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
 const ETH_ETH: EthAsset = EthAsset::Eth;
 const ETH_FLIP: EthAsset = EthAsset::Flip;
 const DEFAULT_DEPOSIT_AMOUNT: u128 = 1_000;
-const ETH_REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
+const ETH_REFUND_PARAMS: ChannelRefundParametersDecoded = ChannelRefundParametersDecoded {
 	retry_duration: 0,
 	refund_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
 	min_price: sp_core::U256::zero(),
@@ -1117,6 +1117,7 @@ fn can_store_failed_vault_transfers() {
 				amount,
 				destination_address,
 				broadcast_id,
+				egress_details: None,
 			},
 		));
 		assert_eq!(
@@ -1807,7 +1808,7 @@ fn submit_vault_swap_request(
 	deposit_details: DepositDetails,
 	broker_fee: Beneficiary<u64>,
 	affiliate_fees: Affiliates<AffiliateShortId>,
-	refund_params: ChannelRefundParameters,
+	refund_params: ChannelRefundParametersDecoded,
 	dca_params: Option<DcaParameters>,
 	boost_fee: BasisPoints,
 ) -> DispatchResult {
