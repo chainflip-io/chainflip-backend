@@ -37,9 +37,10 @@ pub use sol_prim::{
 	Signature as SolSignature, SlotNumber as SolBlockNumber,
 };
 pub use sol_tx_core::{
-	AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts, CcmAddress as SolCcmAddress,
-	Hash as RawSolHash, Instruction as SolInstruction, InstructionRpc as SolInstructionRpc,
-	Message as SolMessage, Pubkey as SolPubkey, Transaction as SolTransaction,
+	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
+	CcmAddress as SolCcmAddress, Hash as RawSolHash, Instruction as SolInstruction,
+	InstructionRpc as SolInstructionRpc, Message as SolMessage, Pubkey as SolPubkey,
+	Transaction as SolTransaction,
 };
 
 // Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch
