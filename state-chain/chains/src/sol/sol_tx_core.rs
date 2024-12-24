@@ -1605,7 +1605,7 @@ mod tests {
 			VaultProgram::with_id(VAULT_PROGRAM)
 				.execute_ccm_native_call(
 					ccm_parameter.source_chain as u32,
-					ForeignChainAddress::to_source_address(ccm_parameter.source_address.unwrap()),
+					ForeignChainAddress::raw_bytes(ccm_parameter.source_address.unwrap()),
 					ccm_parameter.channel_metadata.message.to_vec(),
 					TRANSFER_AMOUNT,
 					VAULT_PROGRAM_DATA_ACCOUNT,
@@ -1668,7 +1668,7 @@ mod tests {
 			),
 			VaultProgram::with_id(VAULT_PROGRAM).execute_ccm_token_call(
 				ccm_parameter.source_chain as u32,
-				ForeignChainAddress::to_source_address(ccm_parameter.source_address.unwrap()),
+				ForeignChainAddress::raw_bytes(ccm_parameter.source_address.unwrap()),
 				ccm_parameter.channel_metadata.message.to_vec(),
 				amount,
 				VAULT_PROGRAM_DATA_ACCOUNT,

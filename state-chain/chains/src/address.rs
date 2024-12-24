@@ -80,7 +80,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Sol(_) => ForeignChain::Solana,
 		}
 	}
-	pub fn to_source_address(self) -> Vec<u8> {
+	pub fn raw_bytes(self) -> Vec<u8> {
 		match self {
 			ForeignChainAddress::Eth(source_address) => source_address.0.to_vec(),
 			ForeignChainAddress::Arb(source_address) => source_address.0.to_vec(),
