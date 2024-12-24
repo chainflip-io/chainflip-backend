@@ -971,7 +971,7 @@ mod tests {
 
 	#[test]
 	fn vault_destination_address_serialization() {
-		const KEY: &'static str = "TEST";
+		const KEY: &str = "TEST";
 		#[derive(Serialize)]
 		struct DestinationAddressTest {
 			eth_address: TrackerAddress,
