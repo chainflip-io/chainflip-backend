@@ -943,7 +943,7 @@ mod tests {
 		assert_eq!(store.storage.len(), 1);
 		insta::assert_snapshot!(store
 			.storage
-			.get("vault_deposit:Ethereum:b5c8bd9430b6cc87a0e2fe110ece6bf527fa4f170a4bc8cd032f768fc5219838")
+			.get("vault_deposit:Ethereum:0xb5c8bd9430b6cc87a0e2fe110ece6bf527fa4f170a4bc8cd032f768fc5219838")
 			.unwrap());
 	}
 

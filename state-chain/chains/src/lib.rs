@@ -625,7 +625,7 @@ pub enum TransactionInIdForAnyChain {
 impl std::fmt::Display for TransactionInIdForAnyChain {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::Bitcoin(hash) | Self::Evm(hash) => write!(f, "{:x}", hash),
+			Self::Bitcoin(hash) | Self::Evm(hash) => write!(f, "{:#x}", hash),
 			Self::Polkadot(transaction_id) =>
 				write!(f, "{}-{}", transaction_id.block_number, transaction_id.extrinsic_index),
 			Self::Solana((address, id)) => write!(f, "{address}-{id}",),
