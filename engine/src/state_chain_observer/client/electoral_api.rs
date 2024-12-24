@@ -7,11 +7,11 @@ use pallet_cf_elections::{
 	electoral_system_runner::CompositeElectionIdentifierOf, vote_storage::VoteStorage,
 	ElectoralDataFor, ElectoralSystemRunner,
 };
-use state_chain_runtime::SolanaInstance;
+use state_chain_runtime::{BitcoinInstance, SolanaInstance};
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::error;
 
-pub trait ElectoralApi<Instance: 'static>
+pub trait ElectoralApi<Chain: cf_chains::Chain, Instance: 'static>
 where
 	state_chain_runtime::Runtime: pallet_cf_elections::Config<Instance>,
 {
@@ -37,7 +37,7 @@ where
 impl<
 		RawRpcClient: RawRpcApi + Send + Sync + 'static,
 		SignedExtrinsicClient: SignedExtrinsicApi + Send + Sync + 'static,
-	> ElectoralApi<SolanaInstance>
+	> ElectoralApi<cf_chains::Solana, SolanaInstance>
 	for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
 {
 	fn electoral_data(
@@ -67,10 +67,14 @@ impl<
 	fn filter_votes(
 		&self,
 		proposed_votes: BTreeMap<
-			CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner>,
-			<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
-		>,
-	) -> impl std::future::Future<Output = BTreeSet<CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner>>> + Send + 'static{
+			CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as
+pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner>,
+			<<<state_chain_runtime::Runtime as
+pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner as
+ElectoralSystemRunner>::Vote as VoteStorage>::Vote, 		>,
+	) -> impl std::future::Future<Output =
+BTreeSet<CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as
+	pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner>>> + Send + 'static{
 		let base_rpc_client = self.base_rpc_client.clone();
 		let account_id = self.signed_extrinsic_client.account_id();
 		async move {
@@ -84,6 +88,76 @@ impl<
 						CompositeElectionIdentifierOf<
 							<state_chain_runtime::Runtime as pallet_cf_elections::Config<
 								SolanaInstance,
+							>>::ElectoralSystemRunner,
+						>,
+					> as Decode>::decode(&mut &electoral_data[..])
+					.map_err(Into::into)
+				})
+				.inspect_err(|error| {
+					error!("Failure in filter_votes rpc: '{}'", error);
+				})
+				.unwrap_or_default()
+		}
+	}
+}
+
+impl<
+		RawRpcClient: RawRpcApi + Send + Sync + 'static,
+		SignedExtrinsicClient: SignedExtrinsicApi + Send + Sync + 'static,
+	> ElectoralApi<cf_chains::Bitcoin, BitcoinInstance>
+	for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
+{
+	fn electoral_data(
+		&self,
+		block: BlockInfo,
+	) -> impl std::future::Future<
+		Output = Option<ElectoralDataFor<state_chain_runtime::Runtime, BitcoinInstance>>,
+	> + Send
+	       + 'static {
+		let base_rpc_client = self.base_rpc_client.clone();
+		let account_id = self.signed_extrinsic_client.account_id();
+		async move {
+			base_rpc_client
+				.raw_rpc_client
+				.cf_bitcoin_electoral_data(account_id, Some(block.hash))
+				.await
+				.map_err(anyhow::Error::from)
+				.and_then(|electoral_data| {
+					<Option<ElectoralDataFor<state_chain_runtime::Runtime,
+		BitcoinInstance>> as Decode>::decode(&mut &electoral_data[..]).map_err(Into::into)
+				})
+				.inspect_err(|error| {
+					error!("Failure in electoral_data rpc: '{}'", error);
+				})
+				.ok()
+				.flatten()
+		}
+	}
+
+	fn filter_votes(
+		&self,
+		proposed_votes: BTreeMap<
+			CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as
+pallet_cf_elections::Config<BitcoinInstance>>::ElectoralSystemRunner>,
+			<<<state_chain_runtime::Runtime as
+pallet_cf_elections::Config<BitcoinInstance>>::ElectoralSystemRunner as
+ElectoralSystemRunner>::Vote as VoteStorage>::Vote, 		>,
+	) -> impl std::future::Future<Output =
+BTreeSet<CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as
+	pallet_cf_elections::Config<BitcoinInstance>>::ElectoralSystemRunner>>> + Send + 'static{
+		let base_rpc_client = self.base_rpc_client.clone();
+		let account_id = self.signed_extrinsic_client.account_id();
+		async move {
+			base_rpc_client
+				.raw_rpc_client
+				.cf_bitcoin_filter_votes(account_id, proposed_votes.encode(), None)
+				.await
+				.map_err(anyhow::Error::from)
+				.and_then(|electoral_data| {
+					<BTreeSet<
+						CompositeElectionIdentifierOf<
+							<state_chain_runtime::Runtime as pallet_cf_elections::Config<
+								BitcoinInstance,
 							>>::ElectoralSystemRunner,
 						>,
 					> as Decode>::decode(&mut &electoral_data[..])
