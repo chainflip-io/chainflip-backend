@@ -1,7 +1,9 @@
 use anyhow::Context;
 use cf_chains::{Chain, Ethereum};
-use cf_primitives::chains::assets::eth::Asset;
 use cf_utilities::task_scope;
+use chainflip_api::primitives::{
+	chains::assets::eth::Asset as EthAsset, Asset, EpochIndex, ForeignChain,
+};
 use std::sync::Arc;
 
 use chainflip_engine::{
@@ -37,7 +39,7 @@ pub(super) async fn start<ProcessCall, ProcessingFut>(
 	witness_call: ProcessCall,
 ) -> anyhow::Result<()>
 where
-	ProcessCall: Fn(state_chain_runtime::RuntimeCall, cf_primitives::EpochIndex) -> ProcessingFut
+	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync
 		+ Clone
@@ -73,7 +75,7 @@ where
 		.erc20_deposits::<_, _, _, UsdcEvents>(
 			witness_call.clone(),
 			eth_client.clone(),
-			Asset::Usdc,
+			EthAsset::Usdc,
 			env_params.usdc_contract_address,
 		)
 		.await?
@@ -85,7 +87,7 @@ where
 		.erc20_deposits::<_, _, _, FlipEvents>(
 			witness_call.clone(),
 			eth_client.clone(),
-			Asset::Flip,
+			EthAsset::Flip,
 			env_params.flip_contract_address,
 		)
 		.await?
@@ -97,7 +99,7 @@ where
 		.erc20_deposits::<_, _, _, UsdtEvents>(
 			witness_call.clone(),
 			eth_client.clone(),
-			Asset::Usdt,
+			EthAsset::Usdt,
 			env_params.usdt_contract_address,
 		)
 		.await?
@@ -109,7 +111,7 @@ where
 		.ethereum_deposits(
 			witness_call.clone(),
 			eth_client.clone(),
-			Asset::Eth,
+			EthAsset::Eth,
 			env_params.eth_address_checker_address,
 			env_params.eth_vault_address,
 		)
@@ -123,8 +125,8 @@ where
 			witness_call.clone(),
 			eth_client.clone(),
 			env_params.eth_vault_address,
-			cf_primitives::Asset::Eth,
-			cf_primitives::ForeignChain::Ethereum,
+			Asset::Eth,
+			ForeignChain::Ethereum,
 			env_params.supported_erc20_tokens.clone(),
 		)
 		.logging("witnessing Vault")

@@ -80,20 +80,18 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Sol(_) => ForeignChain::Solana,
 		}
 	}
-	pub fn to_source_address(self) -> Vec<u8> {
+	pub fn raw_bytes(self) -> Vec<u8> {
 		match self {
 			ForeignChainAddress::Eth(source_address) => source_address.0.to_vec(),
 			ForeignChainAddress::Arb(source_address) => source_address.0.to_vec(),
 			ForeignChainAddress::Sol(source_address) => source_address.0.to_vec(),
 			ForeignChainAddress::Dot(source_address) => source_address.aliased_ref().to_vec(),
-			ForeignChainAddress::Btc(_) => {
-				cf_runtime_utilities::log_or_panic!(
-					"Bitcoin should not be used as a source address as the encoding depends on the
-				network",
-				);
-				sp_std::vec::Vec::new()
-			},
+			ForeignChainAddress::Btc(script_pubkey) => script_pubkey.bytes(),
 		}
+	}
+
+	pub fn to_encoded_address(&self, network: NetworkEnvironment) -> EncodedAddress {
+		to_encoded_address(self.clone(), || network)
 	}
 }
 
@@ -188,36 +186,42 @@ impl TryFrom<EncodedAddress> for SolAddress {
 	}
 }
 pub trait IntoForeignChainAddress<C: Chain> {
-	fn into_foreign_chain_address(address: C::ChainAccount) -> ForeignChainAddress;
+	fn into_foreign_chain_address(self) -> ForeignChainAddress;
+}
+
+impl<C: Chain> IntoForeignChainAddress<C> for ForeignChainAddress {
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		self
+	}
 }
 
 impl IntoForeignChainAddress<Ethereum> for EvmAddress {
-	fn into_foreign_chain_address(address: EvmAddress) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(address)
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Eth(self)
 	}
 }
 
 impl IntoForeignChainAddress<Arbitrum> for EvmAddress {
-	fn into_foreign_chain_address(address: EvmAddress) -> ForeignChainAddress {
-		ForeignChainAddress::Arb(address)
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Arb(self)
 	}
 }
 
 impl IntoForeignChainAddress<Polkadot> for PolkadotAccountId {
-	fn into_foreign_chain_address(address: PolkadotAccountId) -> ForeignChainAddress {
-		ForeignChainAddress::Dot(address)
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Dot(self)
 	}
 }
 
 impl IntoForeignChainAddress<Bitcoin> for ScriptPubkey {
-	fn into_foreign_chain_address(address: ScriptPubkey) -> ForeignChainAddress {
-		ForeignChainAddress::Btc(address)
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Btc(self)
 	}
 }
 
 impl IntoForeignChainAddress<Solana> for SolAddress {
-	fn into_foreign_chain_address(address: SolAddress) -> ForeignChainAddress {
-		ForeignChainAddress::Sol(address)
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Sol(self)
 	}
 }
 
@@ -272,6 +276,13 @@ impl EncodedAddress {
 			EncodedAddress::Dot(bytes) => bytes.to_vec(),
 			EncodedAddress::Btc(byte_vec) => byte_vec,
 		}
+	}
+
+	pub fn from_chain_account<C: Chain>(
+		account: C::ChainAccount,
+		network: NetworkEnvironment,
+	) -> Self {
+		account.into_foreign_chain_address().to_encoded_address(network)
 	}
 }
 
@@ -330,7 +341,13 @@ pub fn decode_and_validate_address_for_asset<GetNetwork: FnOnce() -> NetworkEnvi
 pub trait ToHumanreadableAddress {
 	#[cfg(feature = "std")]
 	/// A type that serializes the address in a human-readable way.
-	type Humanreadable: Serialize + DeserializeOwned + Send + Sync + Debug + Clone;
+	type Humanreadable: Serialize
+		+ DeserializeOwned
+		+ std::fmt::Display
+		+ Send
+		+ Sync
+		+ Debug
+		+ Clone;
 
 	#[cfg(feature = "std")]
 	fn to_humanreadable(&self, network_environment: NetworkEnvironment) -> Self::Humanreadable;
@@ -381,6 +398,19 @@ pub enum ForeignChainAddressHumanreadable {
 	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
 	Arb(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 	Sol(<SolAddress as ToHumanreadableAddress>::Humanreadable),
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for ForeignChainAddressHumanreadable {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			ForeignChainAddressHumanreadable::Eth(address) |
+			ForeignChainAddressHumanreadable::Arb(address) => write!(f, "{:#x}", address),
+			ForeignChainAddressHumanreadable::Dot(address) => write!(f, "{}", address),
+			ForeignChainAddressHumanreadable::Btc(address) => write!(f, "{}", address),
+			ForeignChainAddressHumanreadable::Sol(address) => write!(f, "{}", address),
+		}
+	}
 }
 
 #[cfg(feature = "std")]

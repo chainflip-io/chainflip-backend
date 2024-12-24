@@ -307,7 +307,7 @@ impl SolanaTransactionBuilder {
 			VaultProgram::with_id(vault_program)
 				.execute_ccm_native_call(
 					source_chain as u32,
-					source_address.map_or_else(Vec::new, |address| address.to_source_address()),
+					source_address.map_or_else(Vec::new, |address| address.raw_bytes()),
 					message,
 					amount,
 					vault_program_data_account,
@@ -362,7 +362,7 @@ impl SolanaTransactionBuilder {
 		),
 		VaultProgram::with_id(vault_program).execute_ccm_token_call(
 			source_chain as u32,
-			source_address.map_or_else(Vec::new, |address| address.to_source_address()),
+			source_address.map_or_else(Vec::new, |address| address.raw_bytes()),
 			message,
 			amount,
 			vault_program_data_account,

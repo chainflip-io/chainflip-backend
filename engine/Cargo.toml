@@ -122,6 +122,9 @@ bs58 = { workspace = true, default-features = true }
 base64 = { workspace = true }
 rocksdb = { workspace = true, features = ["lz4"] }
 
+# Used only with feature client-mocks
+mockall = { workspace = true, features = ["nightly"], optional = true }
+
 [dev-dependencies]
 csv = { workspace = true }
 ethereum = { workspace = true, default-features = true }
@@ -139,5 +142,6 @@ substrate-build-script-utils = { workspace = true }
 engine-upgrade-utils = { workspace = true }
 
 [features]
+client-mocks = ["mockall"]
 integration-test = []
 std = []
