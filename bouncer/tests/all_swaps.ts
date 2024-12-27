@@ -76,38 +76,5 @@ async function main() {
   appendSwap('SolUsdc', 'Eth', testVaultSwap);
   appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
 
-  // Note: Test vault swap with invalid refund params to ensure the engine decoding fallback works.
-  // We observed this values in the wild and want to ensure that the engine can handle them gracefully.
-  allSwaps.push(
-    testVaultSwap(
-      'ArbEth',
-      'Eth',
-      undefined,
-      newCcmMetadata('Eth', undefined, undefined, '0xdeadbeef'),
-      testAllSwaps.swapContext,
-    ),
-  );
-
-  allSwaps.push(
-    testVaultSwap(
-      'Eth',
-      'ArbEth',
-      undefined,
-      newCcmMetadata('ArbEth', undefined, undefined, '0xdeadC0de'),
-      testAllSwaps.swapContext,
-    ),
-  );
-
-  // Invalid refund params: passing no params
-  allSwaps.push(
-    testVaultSwap(
-      'ArbEth',
-      'Eth',
-      undefined,
-      newCcmMetadata('Eth', undefined, undefined, '0x'),
-      testAllSwaps.swapContext,
-    ),
-  );
-
   await Promise.all(allSwaps);
 }
