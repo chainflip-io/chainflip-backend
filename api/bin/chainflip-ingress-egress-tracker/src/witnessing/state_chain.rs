@@ -289,7 +289,7 @@ where
 				.collect::<Vec<Beneficiary<AccountId32>>>()
 				.try_into()
 				.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same."),
-			refund_params: self.refund_params.and_then(|params| Some(params.map_address(|a| a.to_encoded_address(network)))).or(None),
+			refund_params: self.refund_params.map(|params| params.map_address(|a| a.to_encoded_address(network))),
 			dca_params: self.dca_params,
 			max_boost_fee: self.boost_fee,
 		}
