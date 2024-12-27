@@ -122,7 +122,7 @@ impl WitnessDataExtraction for RuntimeCall {
 			},
 			_ => {
 				log::warn!("No witness data injection for call {:?}", self);
-			}
+			},
 		}
 	}
 }

@@ -568,6 +568,8 @@ pub enum ExecutexSwapAndCallError {
 	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
 	/// Some other DispatchError occurred.
 	DispatchError(DispatchError),
+	/// No vault account exists yet.
+	NoVault,
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {

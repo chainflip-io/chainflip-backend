@@ -4,9 +4,11 @@ use crate::*;
 
 pub mod api;
 pub mod benchmarking;
+pub mod xcm_types;
 
 #[cfg(feature = "std")]
 pub use crate::dot::serializable_address::*;
+use cf_utilities::SliceToArray;
 use dot::{
 	fee_constants, polkadot_sdk_types, EncodedPolkadotPayload, GenericUncheckedExtrinsic,
 	PolkadotAccountId, PolkadotAccountIdLookup, PolkadotBalance, PolkadotCallHash,
@@ -26,7 +28,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::SignedPayload,
-	traits::{DispatchInfoOf, SignedExtension},
+	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension},
 };
 
 impl Chain for Assethub {
@@ -60,12 +62,48 @@ pub type AssethubPayload = SignedPayload<AssethubRuntimeCall, AssethubSignedExtr
 pub type AssethubUncheckedExtrinsic =
 	GenericUncheckedExtrinsic<AssethubRuntimeCall, AssethubSignedExtra>;
 
+pub type OutputAccountId = u64;
+
 /// The builder for creating and signing assethub extrinsics, and creating signature payload
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct AssethubExtrinsicBuilder {
 	pub extrinsic_call: AssethubRuntimeCall,
 	pub replay_protection: PolkadotReplayProtection,
 	pub signer_and_signature: Option<(PolkadotPublicKey, PolkadotSignature)>,
+}
+
+pub fn calculate_derived_address(
+	master_account: PolkadotAccountId,
+	channel_id: u64,
+) -> PolkadotAccountId {
+	const PREFIX: &[u8; 16] = b"modlpy/utilisuba";
+	const RAW_PUBLIC_KEY_SIZE: usize = 32;
+	const PAYLOAD_LENGTH: usize = PREFIX.len() + RAW_PUBLIC_KEY_SIZE + size_of::<u16>();
+
+	let mut layers = channel_id
+		.to_be_bytes()
+		.chunks(2)
+		.map(|chunk| u16::from_be_bytes(chunk.as_array::<2>()))
+		.skip_while(|layer| *layer == 0u16)
+		.collect::<Vec<u16>>();
+
+	layers.reverse();
+
+	let payload_hash =
+		layers.into_iter().fold(*master_account.aliased_ref(), |sub_account, salt| {
+			let mut payload = Vec::with_capacity(PAYLOAD_LENGTH);
+			// Fill the first slots with the derivation prefix.
+			payload.extend(PREFIX);
+			// Then add the 32-byte public key.
+			payload.extend(sub_account);
+			// Finally, add the index to the end of the payload.
+			payload.extend(&salt.to_le_bytes());
+
+			// Hash the whole thing
+			BlakeTwo256::hash(&payload).to_fixed_bytes()
+		});
+
+	PolkadotAccountId::from_aliased(payload_hash)
 }
 
 #[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
@@ -278,12 +316,15 @@ impl FeeRefundCalculator<Assethub> for PolkadotTransactionData {
 }
 
 // The Assethub Runtime type that is expected by the assethub runtime
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum AssethubRuntimeCall {
 	#[codec(index = 0u8)]
 	System(SystemCall),
 	#[codec(index = 10u8)]
 	Balances(BalancesCall),
+	#[codec(index = 31u8)]
+	PolkadotXcm(XcmCall),
 	#[codec(index = 40u8)]
 	Utility(UtilityCall),
 	#[codec(index = 42u8)]
@@ -295,6 +336,90 @@ pub enum AssethubRuntimeCall {
 #[allow(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum SystemCall {}
+
+#[allow(non_camel_case_types)]
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+pub enum XcmCall {
+	#[codec(index = 1u8)]
+	teleport_assets {
+		#[allow(missing_docs)]
+		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		#[allow(missing_docs)]
+		fee_asset_itme: u32,
+	},
+	#[codec(index = 2u8)]
+	reserve_transfer_assets {
+		#[allow(missing_docs)]
+		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		#[allow(missing_docs)]
+		fee_asset_itme: u32,
+	},
+	#[codec(index = 8u8)]
+	limited_reserve_transfer_assets {
+		#[allow(missing_docs)]
+		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		#[allow(missing_docs)]
+		fee_asset_itme: u32,
+		#[allow(missing_docs)]
+		weight_limit: xcm_types::runtime_types::xcm::v3::WeightLimit,
+	},
+	#[codec(index = 9u8)]
+	limited_teleport_assets {
+		#[allow(missing_docs)]
+		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		#[allow(missing_docs)]
+		fee_asset_itme: u32,
+		#[allow(missing_docs)]
+		weight_limit: xcm_types::runtime_types::xcm::v3::WeightLimit,
+	},
+	#[codec(index = 11u8)]
+	transfer_assets {
+		#[allow(missing_docs)]
+		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		#[allow(missing_docs)]
+		fee_asset_itme: u32,
+		#[allow(missing_docs)]
+		weight_limit: xcm_types::runtime_types::xcm::v3::WeightLimit,
+	},
+	#[codec(index = 13u8)]
+	transfer_assets_using_type_and_then {
+		#[allow(missing_docs)]
+		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		#[allow(missing_docs)]
+		assets_transfer_type: api::TransferType,
+		#[allow(missing_docs)]
+		remote_fees_id: xcm_types::runtime_types::xcm::VersionedAssetId,
+		#[allow(missing_docs)]
+		fees_transfer_type: api::TransferType,
+		#[allow(missing_docs)]
+		custom_xcm_on_dest: xcm_types::runtime_types::xcm::VersionedXcm,
+		#[allow(missing_docs)]
+		weight_limit: xcm_types::runtime_types::xcm::v3::WeightLimit,
+	},
+}
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
@@ -696,3 +821,19 @@ pub enum AssetsCall {
 #[cfg(test)]
 pub(crate) const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 1003004, transaction_version: 15 };
+
+#[test]
+fn derive_address() {
+	let address = calculate_derived_address(
+		PolkadotAccountId(sp_core::hex2array!(
+			"690dc0d83d5c7d19cda8299412279fc519ad1872fdb0bf733b64d16333fb5463"
+		)),
+		0,
+	);
+	assert_eq!(
+		address,
+		PolkadotAccountId(sp_core::hex2array!(
+			"7b24281dda44fdf236e4cb57907c39af3e959462225c49ad0d5f11f3355c33b1"
+		))
+	);
+}
