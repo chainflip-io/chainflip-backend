@@ -537,6 +537,11 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// An optional withdrawal address for affiliate broker.
+	#[pallet::storage]
+	pub type AffiliateWithdrawalAddress<T: Config> =
+		StorageMap<_, Identity, T::AccountId, ForeignChainAddress, OptionQuery>;
+
 	/// The bond for a broker to open a private channel.
 	#[pallet::storage]
 	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
@@ -758,6 +763,8 @@ pub mod pallet {
 		TooManyAffiliates,
 		/// The Bonder does not have enough Funds to cover the bond.
 		InsufficientFunds,
+		/// The withdrawal address for an affiliate is already registered.
+		AddressAlreadyRegistered,
 	}
 
 	#[pallet::genesis_config]
@@ -1204,6 +1211,27 @@ pub mod pallet {
 				previous_affiliate_id,
 			});
 
+			Ok(())
+		}
+
+		#[pallet::call_index(15)]
+		#[pallet::weight(10_000)]
+		pub fn register_affiliate_withdrawal_address(
+			origin: OriginFor<T>,
+			short_id: AffiliateShortId,
+			withdrawal_address: ForeignChainAddress,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let affiliate_account = AffiliateIdMapping::<T>::get(broker_id, short_id)
+				.ok_or(Error::<T>::AffiliateNotRegistered)?;
+
+			ensure!(
+				!AffiliateWithdrawalAddress::<T>::contains_key(&affiliate_account),
+				Error::<T>::AddressAlreadyRegistered
+			);
+
+			AffiliateWithdrawalAddress::<T>::insert(&affiliate_account, withdrawal_address);
 			Ok(())
 		}
 	}
