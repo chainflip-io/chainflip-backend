@@ -699,6 +699,11 @@ pub mod pallet {
 		BrokerBondSet {
 			bond: T::Amount,
 		},
+		AffiliatePayout {
+			account_id: T::AccountId,
+			short_id: AffiliateShortId,
+			amount: AssetAmount,
+		},
 		MinimumNetworkFeeSet {
 			min_fee: AssetAmount,
 		},
@@ -765,6 +770,8 @@ pub mod pallet {
 		InsufficientFunds,
 		/// The withdrawal address for an affiliate is already registered.
 		AddressAlreadyRegistered,
+		/// During a withdrawal request a
+		AffiliateWithdrawalAddressDosentExist,
 	}
 
 	#[pallet::genesis_config]
@@ -1234,6 +1241,17 @@ pub mod pallet {
 			AffiliateWithdrawalAddress::<T>::insert(&affiliate_account, withdrawal_address);
 			Ok(())
 		}
+
+		#[pallet::call_index(16)]
+		#[pallet::weight(10_000)]
+		pub fn withdraw_to_affiliate(
+			origin: OriginFor<T>,
+			short_id: AffiliateShortId,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+			Self::withdrawal_to_affiliate(broker_id, short_id)?;
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -1315,6 +1333,35 @@ pub mod pallet {
 					}
 				})
 				.collect()
+		}
+
+		fn withdrawal_to_affiliate(
+			broker_id: T::AccountId,
+			affiliate_short_id: AffiliateShortId,
+		) -> DispatchResult {
+			// Affiliates only collect fees in Usdc.
+			let asset = Asset::Usdc;
+			let affiliate_account = AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
+				.ok_or(Error::<T>::AffiliateNotRegistered)?;
+
+			let withdrawal_address = AffiliateWithdrawalAddress::<T>::get(&affiliate_account)
+				.ok_or(Error::<T>::AffiliateWithdrawalAddressDosentExist)?;
+
+			let earned_fees = T::BalanceApi::get_balance(&affiliate_account, asset);
+			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
+			T::BalanceApi::try_debit_account(&affiliate_account, asset, earned_fees)?;
+
+			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+				T::EgressHandler::schedule_egress(asset, earned_fees, withdrawal_address, None)
+					.map_err(Into::into)?;
+
+			Self::deposit_event(Event::<T>::AffiliatePayout {
+				account_id: affiliate_account,
+				short_id: affiliate_short_id,
+				amount: earned_fees,
+			});
+
+			Ok(())
 		}
 
 		fn take_broker_fees(
