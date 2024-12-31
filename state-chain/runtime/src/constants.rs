@@ -98,4 +98,7 @@ pub mod common {
 	/// dispatched to the witnessing deadline. After the deadline is passed, any authorities failed
 	/// to witness the dispatched call are penalized.
 	pub const LATE_WITNESS_GRACE_PERIOD: BlockNumber = 10u32;
+
+	/// Lifetime in blocks of submitted signed extrinsics
+	pub const SIGNED_EXTRINSIC_LIFETIME: BlockNumber = 128;
 }

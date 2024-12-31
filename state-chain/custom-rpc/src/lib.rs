@@ -74,6 +74,7 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+use thiserror::Error;
 
 pub mod broker;
 pub mod crypto;
@@ -1149,6 +1150,14 @@ where
 	}
 }
 
+#[derive(Error, Debug, Clone)]
+pub enum ExtrinsicDispatchError {
+	#[error("{0:?}")]
+	OtherDispatchError(sp_runtime::DispatchError),
+	#[error("Module error ‘{name}‘ from pallet ‘{pallet}‘: ‘{error}‘")]
+	KnownModuleError { pallet: String, name: String, error: String },
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum CfApiError {
 	#[error(transparent)]
@@ -1157,6 +1166,12 @@ pub enum CfApiError {
 	DispatchError(#[from] DispatchErrorWithMessage),
 	#[error("{0:?}")]
 	RuntimeApiError(#[from] ApiError),
+	#[error("{0:?}")]
+	SubstrateClientError(#[from] sc_client_api::blockchain::Error),
+	#[error("{0:?}")]
+	TransactionPoolError(#[from] sc_transaction_pool::error::Error),
+	#[error("{0:?}")]
+	ExtrinsicDispatchError(#[from] ExtrinsicDispatchError),
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
 	#[error(transparent)]
@@ -1202,6 +1217,9 @@ impl From<CfApiError> for ErrorObjectOwned {
 			},
 			CfApiError::ErrorObject(object) => object,
 			CfApiError::OtherError(error) => internal_error(error),
+			CfApiError::SubstrateClientError(error) => call_error(error),
+			CfApiError::TransactionPoolError(error) => call_error(error),
+			CfApiError::ExtrinsicDispatchError(error) => call_error(error),
 		}
 	}
 }
