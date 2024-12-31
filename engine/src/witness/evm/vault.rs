@@ -66,17 +66,17 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let (vault_swap_parameters, _) =
+			let vault_swap_parameters =
 				if let Ok(decoded) = VersionedCfParameters::decode(&mut &cf_parameters[..]) {
 					match decoded {
 						VersionedCfParameters::V0(CfParameters {
 							ccm_additional_data: (),
 							vault_swap_parameters,
-						}) => (Some(vault_swap_parameters), ()),
+						}) => Some(vault_swap_parameters),
 					}
 				} else {
 					tracing::warn!("Failed to decode cf_parameters!");
-					(None, ())
+					None
 				};
 
 			Some(CallBuilder::vault_swap_request(
@@ -99,17 +99,17 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let (vault_swap_parameters, _) =
+			let vault_swap_parameters =
 				if let Ok(decoded) = VersionedCfParameters::decode(&mut &cf_parameters[..]) {
 					match decoded {
 						VersionedCfParameters::V0(CfParameters {
 							ccm_additional_data: (),
 							vault_swap_parameters,
-						}) => (Some(vault_swap_parameters), ()),
+						}) => Some(vault_swap_parameters),
 					}
 				} else {
 					tracing::warn!("Failed to decode cf_parameters!");
-					(None, ())
+					None
 				};
 
 			Some(CallBuilder::vault_swap_request(
