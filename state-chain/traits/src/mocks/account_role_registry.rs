@@ -66,4 +66,8 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 			Err(_) => Err(frame_support::error::BadOrigin),
 		}
 	}
+
+	fn get_all(role: AccountRole) -> Vec<<T as Config>::AccountId> {
+		Vec::new()
+	}
 }

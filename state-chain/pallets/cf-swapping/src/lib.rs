@@ -9,8 +9,8 @@ use cf_chains::{
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
-	ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
+	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
 	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
 	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
@@ -920,18 +920,8 @@ pub mod pallet {
 				)
 				.map_err(address_error_to_pallet_error::<T>)?;
 
-			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
-			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
-			T::BalanceApi::try_debit_account(&account_id, asset, earned_fees)?;
-
-			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
-				T::EgressHandler::schedule_egress(
-					asset,
-					earned_fees,
-					destination_address_internal,
-					None,
-				)
-				.map_err(Into::into)?;
+			let (egress_id, egress_amount, fee_withheld) =
+				Self::trigger_withdrawal(&account_id, asset, destination_address_internal)?;
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				egress_amount,
@@ -1249,7 +1239,7 @@ pub mod pallet {
 			short_id: AffiliateShortId,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-			Self::withdrawal_to_affiliate(broker_id, short_id)?;
+			Self::withdrawal_to_affiliate(&broker_id, short_id)?;
 			Ok(())
 		}
 	}
@@ -1335,11 +1325,26 @@ pub mod pallet {
 				.collect()
 		}
 
+		fn trigger_withdrawal(
+			account_id: &T::AccountId,
+			asset: Asset,
+			address: ForeignChainAddress,
+		) -> Result<(EgressId, AssetAmount, AssetAmount), DispatchError> {
+			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
+			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
+			T::BalanceApi::try_debit_account(&account_id, asset, earned_fees)?;
+
+			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+				T::EgressHandler::schedule_egress(asset, earned_fees, address, None)
+					.map_err(Into::into)?;
+
+			Ok((egress_id, egress_amount, fee_withheld))
+		}
+
 		fn withdrawal_to_affiliate(
-			broker_id: T::AccountId,
+			broker_id: &T::AccountId,
 			affiliate_short_id: AffiliateShortId,
 		) -> DispatchResult {
-			// Affiliates only collect fees in Usdc.
 			let asset = Asset::Usdc;
 			let affiliate_account = AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
 				.ok_or(Error::<T>::AffiliateNotRegistered)?;
@@ -1347,18 +1352,13 @@ pub mod pallet {
 			let withdrawal_address = AffiliateWithdrawalAddress::<T>::get(&affiliate_account)
 				.ok_or(Error::<T>::AffiliateWithdrawalAddressDosentExist)?;
 
-			let earned_fees = T::BalanceApi::get_balance(&affiliate_account, asset);
-			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
-			T::BalanceApi::try_debit_account(&affiliate_account, asset, earned_fees)?;
-
-			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
-				T::EgressHandler::schedule_egress(asset, earned_fees, withdrawal_address, None)
-					.map_err(Into::into)?;
+			let (egress_id, egress_amount, fee_withheld) =
+				Self::trigger_withdrawal(&affiliate_account, asset, withdrawal_address)?;
 
 			Self::deposit_event(Event::<T>::AffiliatePayout {
 				account_id: affiliate_account,
 				short_id: affiliate_short_id,
-				amount: earned_fees,
+				amount: egress_amount,
 			});
 
 			Ok(())
@@ -1440,6 +1440,16 @@ pub mod pallet {
 			}
 
 			Ok(())
+		}
+
+		pub fn trigger_commission_distribution() {
+			for broker in T::AccountRoleRegistry::get_all(AccountRole::Broker) {
+				for (short_id, _) in AffiliateIdMapping::<T>::iter_prefix(&broker) {
+					if let Err(err) = Self::withdrawal_to_affiliate(&broker, short_id) {
+						todo!("Fire event or log here!");
+					}
+				}
+			}
 		}
 
 		#[transactional]
