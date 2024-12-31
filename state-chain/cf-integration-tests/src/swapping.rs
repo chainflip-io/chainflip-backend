@@ -535,7 +535,7 @@ fn vault_swap_deposit_witness(
 			bps: 0,
 		},
 		affiliate_fees: Default::default(),
-		refund_params: ETH_REFUND_PARAMS,
+		refund_params: Some(ETH_REFUND_PARAMS),
 		dca_params: None,
 		boost_fee: 0,
 		deposit_address: Some(H160::from([0x03; 20])),

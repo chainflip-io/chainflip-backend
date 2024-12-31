@@ -133,7 +133,7 @@ enum WitnessInformation {
 		deposit_details: Option<DepositDetails>,
 		broker_fee: Beneficiary<AccountId32>,
 		affiliate_fees: Affiliates<AccountId32>,
-		refund_params: ChannelRefundParametersEncoded,
+		refund_params: Option<ChannelRefundParametersEncoded>,
 		dca_params: Option<DcaParameters>,
 		max_boost_fee: BasisPoints,
 	},
@@ -289,7 +289,7 @@ where
 				.collect::<Vec<Beneficiary<AccountId32>>>()
 				.try_into()
 				.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same."),
-			refund_params: self.refund_params.map_address(|a| a.to_encoded_address(network)),
+			refund_params: self.refund_params.map(|params| params.map_address(|a| a.to_encoded_address(network))),
 			dca_params: self.dca_params,
 			max_boost_fee: self.boost_fee,
 		}
@@ -642,7 +642,7 @@ mod tests {
 		dot::PolkadotAccountId,
 		evm::{EvmTransactionMetadata, TransactionFee},
 		instances::ChainInstanceFor,
-		CcmChannelMetadata, Chain, ChannelRefundParameters, ForeignChainAddress,
+		CcmChannelMetadata, Chain, ForeignChainAddress,
 	};
 	use cf_utilities::assert_ok;
 	use chainflip_api::primitives::AffiliateShortId;
@@ -874,6 +874,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_handle_vault_deposit_calls() {
+		use cf_chains::ChannelRefundParametersDecoded;
 		chainflip_api::use_chainflip_account_id_encoding();
 		let (eth_address, _) = parse_eth_address("0x541f563237A309B3A61E33BDf07a8930Bdba8D99");
 		let affiliate_short_id = AffiliateShortId::from(69);
@@ -925,11 +926,11 @@ mod tests {
 						bps: 10
 					}])
 					.unwrap(),
-					refund_params: ChannelRefundParameters {
+					refund_params: Some(ChannelRefundParametersDecoded {
 						refund_address: ForeignChainAddress::Eth(eth_address),
 						retry_duration: Default::default(),
 						min_price: Default::default(),
-					},
+					}),
 					dca_params: Some(DcaParameters { number_of_chunks: 5, chunk_interval: 100 }),
 					boost_fee: 5,
 				},

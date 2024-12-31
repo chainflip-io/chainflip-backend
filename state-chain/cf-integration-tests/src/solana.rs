@@ -455,7 +455,7 @@ fn vault_swap_deposit_witness(
 			bps: 0,
 		},
 		affiliate_fees: Default::default(),
-		refund_params: REFUND_PARAMS,
+		refund_params: Some(REFUND_PARAMS),
 		dca_params: None,
 		boost_fee: 0,
 		deposit_address: Some(SolAddress([2u8; 32])),
