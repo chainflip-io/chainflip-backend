@@ -16,9 +16,7 @@ use super::{
 
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
-	cf_parameters::{
-		CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
-	},
+	cf_parameters::{CfParameters, VaultSwapParameters, VersionedCfParameters},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain,
