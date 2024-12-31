@@ -91,7 +91,7 @@ jobs:
 
       - name: Check workflow files 📝
         run: |
-          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/v1.7.4/scripts/download-actionlint.bash)
           ./actionlint -color -shellcheck=
         shell: bash
 
