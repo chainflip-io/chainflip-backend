@@ -2224,7 +2224,7 @@ impl_runtime_apis! {
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
-			// Validate params
+			// Validate parameters
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
 			}
@@ -2236,6 +2236,18 @@ impl_runtime_apis! {
 				,
 				"Destination address and asset are on different chains."
 			);
+
+			let boost_fee: u8 = boost_fee
+				.try_into()
+				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
+
+			// Ensure the refund duration is valid.
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
+				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
+				VaultSwapExtraParametersEncoded::Ethereum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
+			})?;
 
 			// Encode swap
 			match (ForeignChain::from(source_asset), extra_parameters) {
@@ -2265,7 +2277,7 @@ impl_runtime_apis! {
 					let blocks_until_next_rotation = next_rotation_block.saturating_sub(current_block);
 					let expires_at = Timestamp::now() + blocks_until_next_rotation as u64 * SLOT_DURATION;
 
-					crate::chainflip::vault_swap::bitcoin_vault_swap(
+					crate::chainflip::vault_swaps::bitcoin_vault_swap(
 						broker_id,
 						destination_asset,
 						destination_address,
@@ -2279,15 +2291,51 @@ impl_runtime_apis! {
 					)
 				},
 				(
+					ForeignChain::Ethereum,
+					VaultSwapExtraParametersEncoded::Ethereum(extra_params)
+				) => {
+					crate::chainflip::vault_swaps::evm_vault_swap(
+						broker_id,
+						source_asset,
+						extra_params.input_amount,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						extra_params.refund_parameters,
+						boost_fee,
+						affiliate_fees,
+						dca_parameters,
+						channel_metadata,
+					)
+				},
+				(
+					ForeignChain::Arbitrum,
+					VaultSwapExtraParametersEncoded::Arbitrum(extra_params)
+				) => {
+					crate::chainflip::vault_swaps::evm_vault_swap(
+						broker_id,
+						source_asset,
+						extra_params.input_amount,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						extra_params.refund_parameters,
+						boost_fee,
+						affiliate_fees,
+						dca_parameters,
+						channel_metadata,
+					)
+				},
+				(
 					ForeignChain::Solana,
 					VaultSwapExtraParameters::Solana {
-						input_amount,
-						refund_parameters,
 						from,
 						event_data_account,
+						input_amount,
+						refund_parameters,
 						from_token_account,
 					}
-				) => crate::chainflip::vault_swap::solana_vault_swap(
+				) => crate::chainflip::vault_swaps::solana_vault_swap(
 					broker_id,
 					input_amount,
 					source_asset,

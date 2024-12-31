@@ -177,7 +177,6 @@ pub fn try_extract_vault_swap_witness(
 
 #[cfg(test)]
 mod tests {
-
 	use std::sync::LazyLock;
 
 	use bitcoin::{
@@ -204,7 +203,7 @@ mod tests {
 	static MOCK_SWAP_PARAMS: LazyLock<UtxoEncodedData> = LazyLock::new(|| UtxoEncodedData {
 		output_asset: cf_primitives::Asset::Dot,
 		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
-		parameters: SharedCfParameters {
+		parameters: BtcCfParameters {
 			retry_duration: 5,
 			min_output_amount: u128::MAX,
 			number_of_chunks: 0x0ffff,

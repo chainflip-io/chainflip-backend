@@ -1,9 +1,11 @@
-use crate::{CcmAdditionalData, ChannelRefundParametersDecoded};
-use cf_primitives::{AccountId, AffiliateAndFee, Beneficiary, DcaParameters, MAX_AFFILIATES};
+use crate::{CcmAdditionalData, CcmChannelMetadata, ChannelRefundParametersDecoded};
+use cf_primitives::{
+	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
-use sp_runtime::BoundedVec;
+use sp_runtime::{BoundedVec, Vec};
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub enum VersionedCfParameters<CcmData = ()> {
@@ -19,6 +21,15 @@ pub struct CfParameters<CcmData = ()> {
 
 pub type VersionedCcmCfParameters = VersionedCfParameters<CcmAdditionalData>;
 
+impl CfParameters<CcmAdditionalData> {
+	pub fn with_ccm_data(cf_parameter: CfParameters<()>, data: CcmAdditionalData) -> Self {
+		CfParameters {
+			ccm_additional_data: data,
+			vault_swap_parameters: cf_parameter.vault_swap_parameters,
+		}
+	}
+}
+
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct VaultSwapParameters {
 	pub refund_params: ChannelRefundParametersDecoded,
@@ -26,6 +37,40 @@ pub struct VaultSwapParameters {
 	pub boost_fee: u8,
 	pub broker_fee: Beneficiary<AccountId>,
 	pub affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
+}
+
+/// Provide a function that builds and encodes `cf_parameters`.
+/// The return type is encoded Vec<u8>, which circumvents the difference in return types depending
+/// on if CCM data is available.
+pub fn build_cf_parameters(
+	refund_parameters: ChannelRefundParametersDecoded,
+	dca_parameters: Option<DcaParameters>,
+	boost_fee: u8,
+	broker_id: AccountId,
+	broker_commission: BasisPoints,
+	affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
+	ccm: Option<&CcmChannelMetadata>,
+) -> Vec<u8> {
+	let vault_swap_parameters = VaultSwapParameters {
+		refund_params: refund_parameters,
+		dca_params: dca_parameters,
+		boost_fee,
+		broker_fee: Beneficiary { account: broker_id, bps: broker_commission },
+		affiliate_fees,
+	};
+
+	match ccm {
+		Some(ccm) => VersionedCcmCfParameters::V0(CfParameters {
+			ccm_additional_data: ccm.ccm_additional_data.clone(),
+			vault_swap_parameters,
+		})
+		.encode(),
+		None => VersionedCfParameters::V0(CfParameters {
+			ccm_additional_data: (),
+			vault_swap_parameters,
+		})
+		.encode(),
+	}
 }
 
 #[cfg(test)]
