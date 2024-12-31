@@ -156,11 +156,7 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				Some(CcmDepositMetadata {
 					source_chain,
-					source_address: Some(
-						<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
-							sender,
-						),
-					),
+					source_address: Some(sender.into_foreign_chain_address()),
 					channel_metadata: CcmChannelMetadata {
 						message: message
 							.to_vec()
@@ -208,11 +204,7 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				Some(CcmDepositMetadata {
 					source_chain,
-					source_address: Some(
-						<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
-							sender,
-						),
-					),
+					source_address: Some(sender.into_foreign_chain_address()),
 					channel_metadata: CcmChannelMetadata {
 						message: message
 							.to_vec()
