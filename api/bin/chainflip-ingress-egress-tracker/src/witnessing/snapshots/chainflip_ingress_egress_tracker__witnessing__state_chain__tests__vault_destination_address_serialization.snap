@@ -1,0 +1,11 @@
+---
+source: api/bin/chainflip-ingress-egress-tracker/src/witnessing/state_chain.rs
+expression: value
+---
+{
+  "eth_address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "dot_address": "0xd0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0",
+  "btc_address": "bc1phj7te09uhj7te09uhj7te09uhj7te09uhj7te09uhj7te09uhj7q5zaqme",
+  "arb_address": "0xabababababababababababababababababababab",
+  "sol_address": "6QWeT6FpJrm8AF1btu6WH2k2Xhq6t5vbheKVfQavmeoZ"
+}

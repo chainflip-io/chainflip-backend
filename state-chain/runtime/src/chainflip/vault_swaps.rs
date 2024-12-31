@@ -63,6 +63,7 @@ pub fn bitcoin_vault_swap(
 	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
+	expires_at: u64,
 ) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
 	let private_channel_id =
 		pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
@@ -100,6 +101,7 @@ pub fn bitcoin_vault_swap(
 	Ok(VaultSwapDetails::Bitcoin {
 		nulldata_payload: encode_swap_params_in_nulldata_payload(params),
 		deposit_address: derive_btc_vault_deposit_address(private_channel_id),
+		expires_at,
 	})
 }
 

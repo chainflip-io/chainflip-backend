@@ -34,8 +34,7 @@ impl ExecutexSwapAndCall {
 		Self {
 			transfer_param,
 			source_chain: source_chain as u32,
-			source_address: source_address
-				.map_or_else(Vec::new, |address| address.to_source_address()),
+			source_address: source_address.map_or_else(Vec::new, |address| address.raw_bytes()),
 			gas_budget,
 			message,
 		}
@@ -103,7 +102,7 @@ mod test_execute_x_swap_and_execute {
 			ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([0xff; 32]));
 		let dummy_src_chain = ForeignChain::Polkadot;
 		let dummy_chain = dummy_src_chain as u32;
-		let dummy_address = ForeignChainAddress::to_source_address(dummy_src_address.clone());
+		let dummy_address = ForeignChainAddress::raw_bytes(dummy_src_address.clone());
 		let dummy_message = vec![0x00, 0x01, 0x02, 0x03, 0x04];
 
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);

@@ -621,6 +621,20 @@ pub enum TransactionInIdForAnyChain {
 	MockEthereum([u8; 4]),
 }
 
+#[cfg(feature = "std")]
+impl std::fmt::Display for TransactionInIdForAnyChain {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Bitcoin(hash) | Self::Evm(hash) => write!(f, "{:#x}", hash),
+			Self::Polkadot(transaction_id) =>
+				write!(f, "{}-{}", transaction_id.block_number, transaction_id.extrinsic_index),
+			Self::Solana((address, id)) => write!(f, "{address}-{id}",),
+			Self::MockEthereum(id) => write!(f, "{:?}", id),
+			Self::None => write!(f, "None"),
+		}
+	}
+}
+
 pub trait IntoTransactionInIdForAnyChain<C: ChainCrypto<TransactionInId = Self>> {
 	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain;
 }
@@ -674,7 +688,7 @@ pub enum DepositOriginType {
 	Vault,
 }
 
-pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
+pub const MAX_CCM_MSG_LENGTH: u32 = 15_000;
 pub const MAX_CCM_ADDITIONAL_DATA_LENGTH: u32 = 1_000;
 
 pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use cf_primitives::EpochIndex;
 use cf_utilities::task_scope::Scope;
+use chainflip_api::primitives::EpochIndex;
 use chainflip_engine::{
 	dot::retry_rpc::DotRetryRpcClient,
 	settings::NodeContainer,

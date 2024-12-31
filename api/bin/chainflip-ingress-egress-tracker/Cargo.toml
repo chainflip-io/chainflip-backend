@@ -14,6 +14,7 @@ async-trait = { workspace = true }
 bitcoin = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 hex = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
 serde = { workspace = true, default-features = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
@@ -25,17 +26,21 @@ config = { workspace = true }
 redis = { workspace = true, features = ["tokio-comp"] }
 
 sp-core = { workspace = true, default-features = true }
-codec = { workspace = true, default-features = true, features = ["derive", "full"] }
+codec = { workspace = true, default-features = true, features = [
+    "derive",
+    "full",
+] }
 
 # Local dependencies
 chainflip-engine = { workspace = true }
 cf-utilities = { workspace = true, default-features = true }
-cf-primitives = { workspace = true, default-features = true }
 pallet-cf-environment = { workspace = true, default-features = true }
 pallet-cf-ingress-egress = { workspace = true, default-features = true }
 pallet-cf-broadcast = { workspace = true, default-features = true }
 state-chain-runtime = { workspace = true, default-features = true }
 cf-chains = { workspace = true, default-features = true }
+custom-rpc = { workspace = true }
+chainflip-api = { workspace = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }
@@ -45,3 +50,4 @@ frame-support = { workspace = true, default-features = true }
 insta = { workspace = true, features = ["json"] }
 jsonrpsee = { workspace = true, features = ["full"] }
 mockall = { workspace = true }
+chainflip-engine = { workspace = true, features = ["client-mocks"] }

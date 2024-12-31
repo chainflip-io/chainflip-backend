@@ -44,6 +44,8 @@ pub enum VaultSwapDetails<BtcAddress> {
 		#[serde(with = "sp_core::bytes")]
 		nulldata_payload: Vec<u8>,
 		deposit_address: BtcAddress,
+		/// Payload expiry time, expressed as timestamp since the UNIX_EPOCH in milliseconds
+		expires_at: u64,
 	},
 	Ethereum {
 		#[serde(flatten)]
@@ -81,9 +83,15 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 		F: FnOnce(BtcAddress) -> T,
 	{
 		match self {
-			VaultSwapDetails::Bitcoin { nulldata_payload, deposit_address } =>
-				VaultSwapDetails::Bitcoin { nulldata_payload, deposit_address: f(deposit_address) },
-			_ => panic!("Expected Bitcoin variant"),
+			VaultSwapDetails::Bitcoin { nulldata_payload, deposit_address, expires_at } =>
+				VaultSwapDetails::Bitcoin {
+					nulldata_payload,
+					deposit_address: f(deposit_address),
+					expires_at,
+				},
+			VaultSwapDetails::Solana { instruction } => VaultSwapDetails::Solana { instruction },
+			VaultSwapDetails::Ethereum { details } => VaultSwapDetails::Ethereum { details },
+			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
 		}
 	}
 }

@@ -1,7 +1,6 @@
 use crate::{
-	address::{ForeignChainAddress, IntoForeignChainAddress},
-	none::NoneChainCrypto,
-	Chain, DepositDetailsToTransactionInId, FeeRefundCalculator,
+	address::ForeignChainAddress, none::NoneChainCrypto, Chain, DepositDetailsToTransactionInId,
+	FeeRefundCalculator,
 };
 use codec::{FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
@@ -44,12 +43,6 @@ impl FeeRefundCalculator<AnyChain> for () {
 		_fee_paid: <AnyChain as Chain>::TransactionFee,
 	) -> <AnyChain as Chain>::ChainAmount {
 		unimplemented!()
-	}
-}
-
-impl IntoForeignChainAddress<AnyChain> for ForeignChainAddress {
-	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
-		address
 	}
 }
 

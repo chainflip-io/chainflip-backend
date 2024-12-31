@@ -119,7 +119,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 					Asset::Eth,
 					DEPOSIT_AMOUNT,
 					None,
-					[FeeType::NetworkFee],
+					[FeeType::NetworkFee { min_fee_enforced: true }],
 				),]
 			);
 		})
@@ -163,7 +163,7 @@ fn ccm_principal_swap_only() {
 					OUTPUT_ASSET,
 					SWAP_AMOUNT,
 					None,
-					[FeeType::NetworkFee],
+					[FeeType::NetworkFee { min_fee_enforced: true }],
 				),]
 			);
 		})
