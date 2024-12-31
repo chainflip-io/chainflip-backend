@@ -251,8 +251,7 @@ where
 
 macro_rules! vault_deposit_witness {
 	($source_asset: expr, $deposit_amount: expr, $dest_asset: expr, $dest_address: expr, $metadata: expr, $tx_id: expr, $params: expr) => {
-		if $params.is_some() {
-			let params = $params.unwrap();
+		if let Some(params) = $params {
 			VaultDepositWitness {
 				input_asset: $source_asset.try_into().expect("invalid asset for chain"),
 				output_asset: $dest_asset,
