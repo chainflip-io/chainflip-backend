@@ -1199,11 +1199,11 @@ mod vault_swaps {
 				tx_id,
 				broker_fee: Beneficiary { account: BROKER, bps: 5 },
 				affiliate_fees: Default::default(),
-				refund_params: ChannelRefundParametersDecoded {
+				refund_params: Some(ChannelRefundParametersDecoded {
 					retry_duration: 2,
 					refund_address: ForeignChainAddress::Eth([2; 20].into()),
 					min_price: Default::default(),
-				},
+				}),
 				dca_params: None,
 				boost_fee: 5,
 			};
