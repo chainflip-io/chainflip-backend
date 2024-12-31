@@ -9,6 +9,7 @@ import {
   getWhaleKey,
   sleep,
   assetDecimals,
+  getContractAddress,
 } from './utils';
 
 const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
@@ -121,4 +122,22 @@ export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => 
     );
     await sleep(periodMilisec);
   }
+}
+
+const EVM_BASE_GAS_LIMIT = 21000;
+
+export async function estimateCcmCfTesterGas(destChain: Chain, message: string) {
+  const web3 = new Web3(getEvmEndpoint(destChain));
+  const cfTester = getContractAddress(destChain, 'CFTESTER');
+  const vault = getContractAddress(destChain, 'VAULT');
+  const messageLength = message.slice(2).length / 2;
+
+  // Use a dummy valid call to the CfTester contract appending the actual message.
+  const data =
+    '0x4904ac5f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000' +
+    web3.eth.abi.encodeParameters(['uint256'], [messageLength]).slice(2) +
+    message.slice(2);
+
+  // Estimate needs to be done using "from: vault" to prevent logic revertion
+  return (await web3.eth.estimateGas({ data, to: cfTester, from: vault })) - EVM_BASE_GAS_LIMIT;
 }
