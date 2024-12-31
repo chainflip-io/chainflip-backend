@@ -540,7 +540,7 @@ pub mod pallet {
 	/// An optional withdrawal address for affiliate broker.
 	#[pallet::storage]
 	pub type AffiliateWithdrawalAddress<T: Config> =
-		StorageMap<_, Identity, T::AccountId, ForeignChainAddress, OptionQuery>;
+		StorageMap<_, Identity, T::AccountId, EncodedAddress, OptionQuery>;
 
 	/// The bond for a broker to open a private channel.
 	#[pallet::storage]
@@ -770,7 +770,9 @@ pub mod pallet {
 		InsufficientFunds,
 		/// The withdrawal address for an affiliate is already registered.
 		AddressAlreadyRegistered,
-		/// During a withdrawal request a
+		/// Validation of affiliate withdrawal address failed.
+		ExpectedEthereumAddress,
+		/// TODO
 		AffiliateWithdrawalAddressDosentExist,
 	}
 
@@ -912,24 +914,7 @@ pub mod pallet {
 			ensure!(T::SafeMode::get().withdrawals_enabled, Error::<T>::WithdrawalsDisabled);
 
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-
-			let destination_address_internal =
-				T::AddressConverter::decode_and_validate_address_for_asset(
-					destination_address.clone(),
-					asset,
-				)
-				.map_err(address_error_to_pallet_error::<T>)?;
-
-			let (egress_id, egress_amount, fee_withheld) =
-				Self::trigger_withdrawal(&account_id, asset, destination_address_internal)?;
-
-			Self::deposit_event(Event::<T>::WithdrawalRequested {
-				egress_amount,
-				egress_asset: asset,
-				egress_fee: fee_withheld,
-				destination_address,
-				egress_id,
-			});
+			Self::trigger_withdrawal(&account_id, asset, destination_address)?;
 
 			Ok(())
 		}
@@ -1216,12 +1201,21 @@ pub mod pallet {
 		pub fn register_affiliate_withdrawal_address(
 			origin: OriginFor<T>,
 			short_id: AffiliateShortId,
-			withdrawal_address: ForeignChainAddress,
+			withdrawal_address: EncodedAddress,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let affiliate_account = AffiliateIdMapping::<T>::get(broker_id, short_id)
 				.ok_or(Error::<T>::AffiliateNotRegistered)?;
+
+			ensure!(
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					withdrawal_address.clone(),
+					Asset::Eth,
+				)
+				.is_ok(),
+				Error::<T>::ExpectedEthereumAddress
+			);
 
 			ensure!(
 				!AffiliateWithdrawalAddress::<T>::contains_key(&affiliate_account),
@@ -1234,7 +1228,7 @@ pub mod pallet {
 
 		#[pallet::call_index(16)]
 		#[pallet::weight(10_000)]
-		pub fn withdraw_to_affiliate(
+		pub fn affiliate_withdrawal_request(
 			origin: OriginFor<T>,
 			short_id: AffiliateShortId,
 		) -> DispatchResult {
@@ -1328,38 +1322,50 @@ pub mod pallet {
 		fn trigger_withdrawal(
 			account_id: &T::AccountId,
 			asset: Asset,
-			address: ForeignChainAddress,
-		) -> Result<(EgressId, AssetAmount, AssetAmount), DispatchError> {
+			destination_address: EncodedAddress,
+		) -> DispatchResult {
+			let destination_address_internal =
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
+
 			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
 			T::BalanceApi::try_debit_account(&account_id, asset, earned_fees)?;
 
 			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
-				T::EgressHandler::schedule_egress(asset, earned_fees, address, None)
-					.map_err(Into::into)?;
+				T::EgressHandler::schedule_egress(
+					asset,
+					earned_fees,
+					destination_address_internal,
+					None,
+				)
+				.map_err(Into::into)?;
 
-			Ok((egress_id, egress_amount, fee_withheld))
+			Self::deposit_event(Event::<T>::WithdrawalRequested {
+				egress_amount,
+				egress_asset: asset,
+				egress_fee: fee_withheld,
+				destination_address,
+				egress_id,
+			});
+
+			Ok(())
 		}
 
 		fn withdrawal_to_affiliate(
 			broker_id: &T::AccountId,
 			affiliate_short_id: AffiliateShortId,
 		) -> DispatchResult {
-			let asset = Asset::Usdc;
 			let affiliate_account = AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
 				.ok_or(Error::<T>::AffiliateNotRegistered)?;
 
 			let withdrawal_address = AffiliateWithdrawalAddress::<T>::get(&affiliate_account)
 				.ok_or(Error::<T>::AffiliateWithdrawalAddressDosentExist)?;
 
-			let (egress_id, egress_amount, fee_withheld) =
-				Self::trigger_withdrawal(&affiliate_account, asset, withdrawal_address)?;
-
-			Self::deposit_event(Event::<T>::AffiliatePayout {
-				account_id: affiliate_account,
-				short_id: affiliate_short_id,
-				amount: egress_amount,
-			});
+			Self::trigger_withdrawal(&affiliate_account, Asset::Usdc, withdrawal_address)?;
 
 			Ok(())
 		}
