@@ -1,13 +1,15 @@
 use crate::{
-	call_error, crypto::SubxtSignerInterface, internal_error,
-	subxt_state_chain_config::StateChainConfig, CfApiError, ExtrinsicDispatchError, RpcResult,
-	StorageQueryApi,
+	call_error,
+	crypto::{PairSigner, SubxtSignerInterface},
+	internal_error,
+	subxt_state_chain_config::StateChainConfig,
+	CfApiError, ExtrinsicDispatchError, RpcResult, StorageQueryApi,
 };
 use anyhow::anyhow;
 use cf_chains::address::AddressString;
 use cf_primitives::{Affiliates, Asset, BasisPoints, BlockNumber, DcaParameters};
 use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
-use codec::Decode;
+use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, Deserialize, Serialize};
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::{StreamExt, TryFutureExt};
@@ -20,13 +22,13 @@ use sc_transaction_pool_api::{TransactionPool, TransactionStatus};
 use sp_api::{CallApiAt, Core};
 use sp_core::crypto::AccountId32;
 use sp_runtime::{
-	traits::{Block as BlockT, Hash as HashT},
+	traits::{Block as BlockT, Hash as HashT, Header},
 	transaction_validity::TransactionSource,
 };
 use state_chain_runtime::{
 	constants::common::SIGNED_EXTRINSIC_LIFETIME,
 	runtime_apis::{CustomRuntimeApi, VaultSwapDetails},
-	AccountId, Hash, Nonce,
+	AccountId, Hash, Nonce, RuntimeCall,
 };
 use std::{marker::PhantomData, sync::Arc};
 use subxt::{
@@ -83,6 +85,7 @@ where
 	pub executor: Arc<dyn sp_core::traits::SpawnNamed>,
 	pub _phantom: PhantomData<B>,
 	pub signer: SubxtSignerInterface<sp_core::sr25519::Pair>,
+	pub pair_signer: PairSigner<sp_core::sr25519::Pair>,
 }
 
 impl<C, B, BE> BrokerSignedRpc<C, B, BE>
@@ -130,7 +133,7 @@ where
 		Ok(OnlineClient::<StateChainConfig>::new().await.map_err(internal_error)?)
 	}
 
-	pub fn create_signed_extrinsic(
+	pub fn create_dynamic_signed_extrinsic(
 		&self,
 		block_hash: Hash,
 		tx_payload: DynamicPayload,
@@ -154,6 +157,41 @@ where
 			.create_signed_offline(&tx_payload, &self.signer, tx_params)
 			.map_err(internal_error)?
 			.into_encoded();
+
+		Ok(Decode::decode(&mut &call_data[..]).map_err(internal_error)?)
+	}
+
+	pub fn create_signed_extrinsic(
+		&self,
+		current_hash: Hash,
+		call: RuntimeCall,
+	) -> RpcResult<B::Extrinsic> {
+		let Some(current_header) = self.client.header(current_hash)? else {
+			Err(internal_error(format!(
+				"Could not fetch block header for block {:?}",
+				current_hash
+			)))?
+		};
+		let Some(genesis_hash) = self.client.block_hash(0).ok().flatten() else {
+			Err(internal_error("Could not fetch genesis hash".to_string()))?
+		};
+
+		let runtime_version = self.client.runtime_api().version(current_hash)?;
+
+		let account_nonce =
+			self.client.runtime_api().account_nonce(current_hash, self.signer.account())?;
+
+		let (signed_extrinsic, _) = self.pair_signer.new_signed_extrinsic(
+			call,
+			&runtime_version,
+			genesis_hash,
+			current_hash,
+			*current_header.number(),
+			SIGNED_EXTRINSIC_LIFETIME,
+			account_nonce,
+		);
+
+		let call_data = signed_extrinsic.encode();
 
 		Ok(Decode::decode(&mut &call_data[..]).map_err(internal_error)?)
 	}
@@ -373,7 +411,7 @@ where
 	async fn cf_send_remark(&self) -> RpcResult<()> {
 		let best_hash = self.client.info().best_hash;
 
-		let extrinsic = self.create_signed_extrinsic(
+		let extrinsic = self.create_dynamic_signed_extrinsic(
 			best_hash,
 			subxt::dynamic::tx(
 				"System",
@@ -401,13 +439,18 @@ where
 	async fn register_account(&self) -> RpcResult<String> {
 		let best_hash = self.client.info().best_hash;
 
+		// let extrinsic = self.create_dynamic_signed_extrinsic(
+		// 	best_hash,
+		// 	subxt::dynamic::tx(
+		// 		"Swapping",
+		// 		"register_as_broker",
+		// 		Vec::<subxt::dynamic::Value>::with_capacity(0),
+		// 	),
+		// )?;
+
 		let extrinsic = self.create_signed_extrinsic(
 			best_hash,
-			subxt::dynamic::tx(
-				"Swapping",
-				"register_as_broker",
-				Vec::<subxt::dynamic::Value>::with_capacity(0),
-			),
+			RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 		)?;
 
 		// validate transaction

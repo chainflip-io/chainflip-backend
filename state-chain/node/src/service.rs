@@ -1,7 +1,7 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 use custom_rpc::{
 	broker::{BrokerSignedApiServer, BrokerSignedRpc},
-	crypto::{broker_crypto, SubxtSignerInterface},
+	crypto::{broker_crypto, PairSigner, SubxtSignerInterface},
 	monitoring::MonitoringApiServer,
 	CustomApiServer, CustomRpc,
 };
@@ -332,7 +332,8 @@ pub fn new_full<
 						pool: pool.clone(),
 						_phantom: PhantomData,
 						executor: executor.clone(),
-						signer: SubxtSignerInterface::new(pair),
+						signer: SubxtSignerInterface::new(pair.clone()),
+						pair_signer: PairSigner::new(pair),
 					}))?;
 				}
 

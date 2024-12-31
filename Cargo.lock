@@ -2557,6 +2557,7 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "frame-metadata-hash-extension",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
