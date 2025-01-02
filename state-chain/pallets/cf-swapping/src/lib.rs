@@ -703,6 +703,11 @@ pub mod pallet {
 			short_id: AffiliateShortId,
 			amount: AssetAmount,
 		},
+		AffiliateWithdrawalAddressRegistered {
+			account_id: T::AccountId,
+			short_id: AffiliateShortId,
+			address: EncodedAddress,
+		},
 		MinimumNetworkFeeSet {
 			min_fee: AssetAmount,
 		},
@@ -1220,7 +1225,13 @@ pub mod pallet {
 				Error::<T>::AddressAlreadyRegistered
 			);
 
-			AffiliateWithdrawalAddress::<T>::insert(&affiliate_account, withdrawal_address);
+			AffiliateWithdrawalAddress::<T>::insert(&affiliate_account, withdrawal_address.clone());
+
+			Self::deposit_event(Event::<T>::AffiliateWithdrawalAddressRegistered {
+				account_id: affiliate_account,
+				short_id,
+				address: withdrawal_address,
+			});
 			Ok(())
 		}
 
