@@ -30,10 +30,6 @@ import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
 
-// Using AnchorProvider runs into issues so instead we store the wallet in id.json and then
-// set the ANCHOR_WALLET env. Depending on how the SDK is implemented we can remove this.
-process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
-
 const createdEventAccounts: PublicKey[] = [];
 
 interface SolVaultSwapDetails {
