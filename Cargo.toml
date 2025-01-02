@@ -129,7 +129,7 @@ regex = { version = "1.10.2" }
 reqwest = { version = "0.11.4" }
 rlp = { version = "0.5.2", default-features = false }
 rocksdb = { version = "0.21.0" }
-schemars = { version = "1.0.0-alpha.15" }
+schemars = { version = "1.0.0-alpha.17" }
 serde_bytes = { version = "0.11.14", default-features = false }
 serde_path_to_error = "*"
 serde_with = { version = "3.11.0", default-features = false }
