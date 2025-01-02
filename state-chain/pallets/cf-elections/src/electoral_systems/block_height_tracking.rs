@@ -387,38 +387,42 @@ impl<
 
 	// specification for step function
 	#[cfg(test)]
-	fn step_specification(before: &Self::State, input: &Self::Input, after: &Self::State) -> bool {
-		match after {
-			// the starting case should only ever be possible if we were starting before,
-			// and there wasn't any input
-			BHWState::Starting => *before == BHWState::Starting && *input == SMInput::Context(()),
+	fn step_specification(before: &Self::State, input: &Self::Input, settings: &Self::Settings, after: &Self::State) {
+		use BHWState::*;
+		match (before, after) {
 
-			// otherwise we know that the after state will be running
-			BHWState::Running { headers, witness_from } => match before {
-				BHWState::Starting => true,
-				BHWState::Running {
-					headers: before_headers,
-					witness_from: before_witness_from,
-				} => {
-					(
-						// there are two different cases:
-						// - in case of a reorg, the `witness_from` is reset to the beginning of the
-						//   headers we have:
-						(*witness_from == before_headers.front().unwrap().block_height)
-						||
-						// - in the normal case, the `witness_from` should always be the next
-						//   height after the last header that we have
-						(*witness_from == N::forward(headers.back().unwrap().block_height, 1))
-					) && (
-						// if the input is *not* the empty context, then `witness_from` should
-						// always change after running the transition function.
-						// This ensures that we always have "fresh" election properties,
-						// and are thus deleting/recreating elections as expected.
-						(*input == SMInput::Context(())) || (*witness_from != *before_witness_from)
-					)
-				},
+			(Starting, Starting) => assert!(*input == SMInput::Context(()), "BHW should remain in Starting state only if it doesn't get a vote as input."),
+
+			(Starting, Running { .. }) => (),
+
+			(Running { .. }, Starting) => panic!("BHW should never transit into Starting state once its running."),
+
+			(Running { headers: s0_headers, witness_from: s0_witness_from }, Running { headers: s1_headers, witness_from: s1_witness_from }) => {
+				assert!(
+					// there are two different cases:
+					// - in case of a reorg, the `witness_from` is reset to the beginning of the
+					//   headers we have:
+					(*s1_witness_from == s0_headers.front().unwrap().block_height)
+					||
+					// - in the normal case, the `witness_from` should always be the next
+					//   height after the last header that we have
+					(*s1_witness_from == N::forward(s1_headers.back().unwrap().block_height, 1)),
+
+					"witness_from should be either next height, or height of first header"
+				);
+
+				assert!(
+				// if the input is *not* the empty context, then `witness_from` should
+				// always change after running the transition function.
+				// This ensures that we always have "fresh" election properties,
+				// and are thus deleting/recreating elections as expected.
+				(*input == SMInput::Context(())) || (*s1_witness_from != *s0_witness_from),
+
+				"witness_from should always change, except when we get a non-vote input"
+				);
 			},
 		}
+
 	}
 
 	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {

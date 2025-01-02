@@ -159,9 +159,7 @@ pub trait StateMachine: 'static {
 	/// Takes a state, input and next state as arguments. During testing it is verified
 	/// that the resulting state after the step function always fulfills this specification.
 	#[cfg(test)]
-	fn step_specification(before: &Self::State, input: &Self::Input, after: &Self::State) -> bool {
-		true
-	}
+	fn step_specification(before: &Self::State, input: &Self::Input, settings: &Self::Settings, after: &Self::State) {}
 
 	/// Given strategies `states` and `inputs` for generating arbitrary, valid values, runs the step
 	/// function and ensures that it's result is always valid and additionally fulfills the
@@ -204,10 +202,9 @@ pub trait StateMachine: 'static {
 
 					// ensure that state is still well formed
 					assert!(state.is_valid().is_ok(), "state after step function is not valid");
-					assert!(
-						Self::step_specification(&prev_state, &input, &state),
-						"step function does not fulfill spec"
-					);
+					
+					// ensure that step function computed valid state
+					Self::step_specification(&prev_state, &input, &settings, &state);
 
 					Ok(())
 				},

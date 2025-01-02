@@ -208,55 +208,6 @@ where
 
 		return Ok(result);
 
-		/*
-
-			   if let Some(election_identifier) = election_identifiers
-				   .into_iter()
-				   .at_most_one()
-				   .map_err(|_| CorruptStorageError::new())?
-			   {
-				   let election_access = ElectoralAccess::election_mut(election_identifier);
-
-				   // if we have consensus, we can pass it to the state machine's step function
-				   if let Some(input) = election_access.check_consensus()?.has_consensus() {
-					   let (next_input_index, output) =
-						   ElectoralAccess::mutate_unsynchronised_state(|state| {
-							   // call the state machine
-							   let output = SM::step(state, input);
-
-							   // if we have been successful, get the input index of the new state
-							   match output.into_result() {
-								   Ok(output) => Ok((SM::input_index(state), output)),
-								   Err(err) => {
-									   log::error!("Electoral system moved into a bad state: {err:?}");
-									   Err(CorruptStorageError::new())
-								   },
-							   }
-						   })?;
-
-					   // delete the old election and create a new one with the new input index
-					   election_access.delete();
-					   ElectoralAccess::new_election((), next_input_index.into_iter().nth(0).unwrap(), ())?;
-
-					   Ok(Either::Right(output))
-				   } else {
-					   // if there is no consensus, simply get the current `DisplayState` of the SM.
-
-					   log::info!("No consensus could be reached!");
-					   Ok(Either::Left(SM::get(&ElectoralAccess::unsynchronised_state()?)))
-				   }
-			   } else {
-				   // if there is no election going on, we create an election corresponding to the
-				   // current state.
-
-				   log::info!("Starting new election with value because no elections exist");
-
-				   let state = ElectoralAccess::unsynchronised_state()?;
-
-				   ElectoralAccess::new_election((), SM::input_index(&state).into_iter().nth(0).unwrap(), ())?;
-				   Ok(Either::Left(SM::get(&state)))
-			   }
-		*/
 	}
 
 	fn check_consensus<

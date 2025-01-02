@@ -13,7 +13,7 @@ use pallet_cf_elections::{
 			self, consensus::SupermajorityConsensus, state_machine::ConstantIndex, state_machine_es::DsmElectoralSystem, BlockHeightTrackingConsensus, BlockHeightTrackingDSM, ChainProgress, OldChainProgress, RangeOfBlockWitnessRanges
 		},
 		block_witnesser::{
-			primitives::{BWConsensus, BWSettings, BWStateMachine, Hook}, BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData
+			state_machine::{BWSettings, BWStateMachine, Hook}, consensus::BWConsensus, BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData
 		},
 		composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
