@@ -377,12 +377,12 @@ impl<
 	type Settings = ();
 	type Output = Result<ChainProgress<N>, &'static str>;
 
-	fn input_index(s: &Self::State) -> BTreeSet<<Self::Input as state_machine::Indexed>::Index> {
+	fn input_index(s: &Self::State) -> Vec<<Self::Input as state_machine::Indexed>::Index> {
 		let witness_from_index = match s {
 			BHWState::Starting => N::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from.clone(),
 		};
-		BTreeSet::from([BlockHeightTrackingProperties { witness_from_index }])
+		Vec::from([BlockHeightTrackingProperties { witness_from_index }])
 	}
 
 	// specification for step function

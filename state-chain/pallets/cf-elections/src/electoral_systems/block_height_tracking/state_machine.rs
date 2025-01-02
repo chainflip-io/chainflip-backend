@@ -3,7 +3,7 @@ use codec::{Decode, Encode};
 use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::collections::btree_set::BTreeSet;
+use sp_std::vec::Vec;
 
 #[cfg(test)]
 use proptest::prelude::{BoxedStrategy, Just, Strategy};
@@ -44,7 +44,12 @@ impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for (A, B) {
 )]
 pub struct ConstantIndex<Idx, A> {
 	pub data: A,
-	_phantom: sp_std::marker::PhantomData<Idx>
+	pub _phantom: sp_std::marker::PhantomData<Idx>
+}
+impl<Idx, A> ConstantIndex<Idx, A> {
+	pub fn new(data: A) -> Self {
+		ConstantIndex { data, _phantom: Default::default() }
+	}
 }
 impl<Idx, A> Indexed for ConstantIndex<Idx, A> {
 	type Index = Idx;
@@ -61,26 +66,24 @@ impl<Idx, A> Validate for ConstantIndex<Idx, A> {
 	}
 }
 
-pub struct IndexAndValue<A: Indexed>(A::Index, A);
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub struct IndexAndValue<Idx, A>(pub Idx, pub A);
 
-impl<A: Indexed> Indexed for IndexAndValue<A> {
-	type Index = A::Index;
+impl<Idx: PartialEq, A> Indexed for IndexAndValue<Idx, A> {
+	type Index = Idx;
 
 	fn has_index(&self, index: &Self::Index) -> bool {
-		todo!()
+		self.0 == *index
 	}
 }
 
-impl<A: Indexed> Validate for IndexAndValue<A> {
+impl<Idx, A> Validate for IndexAndValue<Idx, A> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		// if self.1.has_index(&self.0) {
-		// 	Ok(())
-		// } else {
-		// 	Err("invalid index inside `IndexAndValue` type")
-		// }
-		todo!()
+		Ok(())
 	}
 }
 
@@ -142,7 +145,7 @@ pub trait StateMachine: 'static {
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
-	fn input_index(s: &Self::State) -> BTreeSet<IndexOf<Self::Input>>;
+	fn input_index(s: &Self::State) -> Vec<IndexOf<Self::Input>>;
 
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore
@@ -167,7 +170,7 @@ pub trait StateMachine: 'static {
 	fn test(
 		states: impl Strategy<Value = Self::State>,
 		settings: impl Strategy<Value = Self::Settings>,
-		inputs: impl Fn(BTreeSet<IndexOf<Self::Input>>) -> BoxedStrategy<Self::Input>,
+		inputs: impl Fn(Vec<IndexOf<Self::Input>>) -> BoxedStrategy<Self::Input>,
 	) where
 		Self::State: sp_std::fmt::Debug + Clone,
 		Self::Input: sp_std::fmt::Debug + Clone,

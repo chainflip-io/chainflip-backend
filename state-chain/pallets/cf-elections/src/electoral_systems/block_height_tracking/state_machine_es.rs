@@ -84,7 +84,7 @@ where
 	>,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-	Context: 'static + Clone,
+	Context: 'static + Clone + sp_std::fmt::Debug,
 	C: ConsensusMechanism<Settings = (Threshold, <SM::Input as Indexed>::Index)> + 'static,
 	<C as ConsensusMechanism>::Result: Indexed + Clone + Member + Parameter,
 	<C as ConsensusMechanism>::Vote: Member
@@ -92,7 +92,7 @@ where
 		+ Clone
 		+ Validate
 		+ Indexed<Index = <<C as ConsensusMechanism>::Result as Indexed>::Index>,
-	<SM::Input as Indexed>::Index: Clone + Member + Parameter + sp_std::fmt::Debug + Ord,
+	<SM::Input as Indexed>::Index: Clone + Member + Parameter + sp_std::fmt::Debug,
 	SM::State: MaybeSerializeDeserialize + Member + Parameter + Eq + sp_std::fmt::Debug,
 	// SM::Input: Indexed + Clone + Member + Parameter,
 	SM::Output: IntoResult,
@@ -110,7 +110,7 @@ where
 	type ElectionState = ();
 	type Vote = vote_storage::bitmap::Bitmap<<C as ConsensusMechanism>::Vote>;
 	type Consensus = <C as ConsensusMechanism>::Result;
-	type OnFinalizeContext = Context;
+	type OnFinalizeContext = Vec<Context>;
 
 	// we return either the state if no input was processed,
 	// or the output produced by the state machine
@@ -131,12 +131,13 @@ where
 		ElectoralAccess: crate::electoral_system::ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
 	>(
 		election_identifiers: Vec<crate::electoral_system::ElectionIdentifierOf<Self>>,
-		context: &Self::OnFinalizeContext,
+		contexts: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, crate::CorruptStorageError> {
 		// initialize the result value
 		let mut result = Vec::new();
 
 		// read state
+		log::debug!("ESSM: reading state & settings");
 		let mut state = ElectoralAccess::unsynchronised_state()?;
 		let settings = ElectoralAccess::unsynchronised_settings()?;
 
@@ -156,19 +157,26 @@ where
 		};
 
 		// step with OnFinalizeContext
-		step(SMInput::Context(context.clone()))?;
+		log::debug!("ESSM: stepping for each context (n = {:?})", contexts.len());
+		for context in contexts {
+			log::debug!("ESSM: stepping with context {context:?}");
+			step(SMInput::Context(context.clone()))?;
+		}
 
 		// step for each election that reached consensus
+		log::debug!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
 		for election_identifier in &election_identifiers {
 			let election_access = ElectoralAccess::election_mut(election_identifier.clone());
+			log::debug!("ESSM: checking consensus for {election_identifier:?}");
 			if let Some(input) = election_access.check_consensus()?.has_consensus() {
+				log::debug!("ESSM: stepping with input {input:?}");
 				step(SMInput::Vote(input))?;
 			}
 		}
 
 		// gather the input indices after all state transitions
 		let input_indices = SM::input_index(&state);
-		let mut open_elections = BTreeSet::new();
+		let mut open_elections = Vec::new();
 
 		// delete elections which are no longer in the input indices
 		// NOTE: This happens after *all* step functions have been run
@@ -177,23 +185,25 @@ where
 		// be kept open.
 		for election_identifier in election_identifiers {
 			let election = ElectoralAccess::election_mut(election_identifier);
+			log::debug!("ESSM: getting properties");
 			let properties = election.properties()?;
 			if !input_indices.contains(&properties) {
 				log::info!("deleting election for {properties:?}");
 				election.delete();
 			} else {
 				log::info!("keeping election for {properties:?}");
-				open_elections.insert(properties.clone());
+				open_elections.push(properties.clone());
 			}
 		}
 
 		// Create elections for new input indices which weren't open before,
 		// i.e. contained in `input_indices` but not in `open_elections`.
-		for index in input_indices.difference(&open_elections) {
+		for index in input_indices.iter().filter(|index| !open_elections.contains(index)) {
 			log::info!("creating election for {index:?}");
 			ElectoralAccess::new_election((), index.clone(), ())?;
 		}
 
+		log::debug!("ESSM: setting state");
 		ElectoralAccess::set_unsynchronised_state(state)?;
 
 		return Ok(result);
@@ -259,7 +269,9 @@ where
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: crate::electoral_system::ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, crate::CorruptStorageError> {
+		log::debug!("ESSM consensus: reading properties");
 		let properties = election_access.properties()?;
+		log::debug!("ESSM consensus: reading properties done");
 		let mut consensus = C::default();
 		let num_authorities = consensus_votes.num_authorities();
 
@@ -273,6 +285,7 @@ where
 			}
 		}
 
+		log::debug!("ESSM consensus: calling consensus mechanism");
 		Ok(consensus.check_consensus(&(
 			Threshold { threshold: success_threshold_from_share_count(num_authorities) },
 			properties,

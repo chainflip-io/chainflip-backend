@@ -1,17 +1,20 @@
 use core::{iter::Step, ops::RangeInclusive};
 use cf_chains::witness_period::BlockZero;
 use codec::{Decode, Encode};
-use frame_support::ensure;
+use frame_support::{ensure, Hashable};
 use log::trace;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
+use sp_std::vec::Vec;
 
 use itertools::Either;
 
+use crate::electoral_systems::block_height_tracking::state_machine::IndexAndValue;
 use crate::electoral_systems::block_height_tracking::{
 	consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold}, state_machine::{ConstantIndex, IndexOf, StateMachine, Validate}, state_machine_es::SMInput, ChainProgress
 };
+use crate::{SharedData, SharedDataHash};
 
 use super::BlockWitnesserSettings;
 
@@ -102,6 +105,21 @@ pub struct BWSettings {
 	pub max_concurrent_elections: u32,
 }
 
+// #[derive(
+// 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+// )]
+// pub struct BWHooks<N, InputIndex> {
+// 	pub active_deposit_channels_at: Box<dyn FnMut(N) -> InputIndex>
+// }
+
+pub trait BWHooks<N, InputIndex> {
+	fn active_deposit_channels_at(height: N) -> InputIndex;
+}
+
+pub trait Hook<A,B> {
+	fn run(input: A) -> B;
+}
+
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
@@ -123,12 +141,22 @@ impl<N: BlockZero + Ord> Default for BWState<N> {
 	}
 }
 
-pub struct BWStateMachine<BlockData, N> {
-	_phantom: sp_std::marker::PhantomData<(BlockData, N)>,
+pub struct BWStateMachine<
+	ElectionProperties,
+	BlockData,
+	N,
+	BlockElectionPropertiesGenerator: Hook<N, ElectionProperties>
+	> {
+	_phantom: sp_std::marker::PhantomData<(ElectionProperties, BlockData, N, BlockElectionPropertiesGenerator)>,
 }
 
-impl<BlockData: Clone + sp_std::fmt::Debug + 'static, N : Copy + Ord + Step + 'static> StateMachine for BWStateMachine<BlockData, N> {
-	type Input = SMInput<ConstantIndex<(N, u32), BlockData>, ChainProgress<N>>;
+impl<
+	ElectionProperties: PartialEq + Clone + sp_std::fmt::Debug + 'static,
+	BlockData: PartialEq + Clone + sp_std::fmt::Debug + 'static,
+	N : Copy + Ord + Step + sp_std::fmt::Debug + 'static,
+	BlockElectionPropertiesGenerator: Hook<N, ElectionProperties> + 'static
+> StateMachine for BWStateMachine<ElectionProperties, BlockData, N, BlockElectionPropertiesGenerator> {
+	type Input = SMInput<IndexAndValue<(N, ElectionProperties, u32), BlockData>, ChainProgress<N>>;
 
 	type Settings = BWSettings;
 
@@ -136,11 +164,12 @@ impl<BlockData: Clone + sp_std::fmt::Debug + 'static, N : Copy + Ord + Step + 's
 
 	type State = BWState<N>;
 
-	fn input_index(s: &Self::State) -> BTreeSet<IndexOf<Self::Input>> {
-		s.elections.ongoing.clone().into_iter().collect()
+	fn input_index(s: &Self::State) -> Vec<IndexOf<Self::Input>> {
+		s.elections.ongoing.clone().into_iter().map(|(height, extra)| (height, BlockElectionPropertiesGenerator::run(height), extra)).collect()
 	}
 
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
+		log::info!("BW: input {i:?}");
 		match i {
 			SMInput::Context(ChainProgress::Reorg(range) | ChainProgress::Continuous(range)) => {
 				s.elections.schedule_up_to(*range.end());
@@ -153,7 +182,8 @@ impl<BlockData: Clone + sp_std::fmt::Debug + 'static, N : Copy + Ord + Step + 's
 
 			SMInput::Vote(blockdata) => {
 				// insert blockdata into our cache of blocks
-				log::info!("got block data: {:?}", blockdata.data);
+				s.elections.mark_election_done(blockdata.0.0);
+				log::info!("got block data: {:?}", blockdata.1);
 			},
 		};
 
@@ -161,36 +191,42 @@ impl<BlockData: Clone + sp_std::fmt::Debug + 'static, N : Copy + Ord + Step + 's
 			s.elections.start_more_elections(settings.max_concurrent_elections as usize);
 		}
 
+		log::info!("BW: done. current elections: {:?}", s.elections.ongoing);
+
 		Ok(())
 	}
 
 }
 
-pub struct BWConsensus<BlockData: Eq, N> {
-	consensus: SupermajorityConsensus<BlockData>,
-	_phantom: sp_std::marker::PhantomData<N>
+pub struct BWConsensus<BlockData: Eq, N, ElectionProperties> {
+	pub consensus: SupermajorityConsensus<SharedDataHash>,
+	pub data: BTreeMap::<SharedDataHash, BlockData>,
+	pub _phantom: sp_std::marker::PhantomData<(N, ElectionProperties)>
 }
 
-impl<BlockData: Eq, N> Default for BWConsensus<BlockData, N> {
+impl<BlockData: Eq, N, ElectionProperties> Default for BWConsensus<BlockData, N, ElectionProperties> {
 	fn default() -> Self {
-		Self { consensus: Default::default(), _phantom: Default::default() }
+		Self { consensus: Default::default(), data: Default::default(), _phantom: Default::default() }
 	}
 }
 
-impl<BlockData: Eq + Clone + sp_std::fmt::Debug, N> ConsensusMechanism for BWConsensus<BlockData, N> {
-	type Vote = ConstantIndex<(N, u32), BlockData>;
+impl<BlockData: Eq + Clone + sp_std::fmt::Debug + Hashable, N: Clone, ElectionProperties: Clone> ConsensusMechanism for BWConsensus<BlockData, N, ElectionProperties> {
+	type Vote = ConstantIndex<(N, ElectionProperties, u32), BlockData>;
 
-	type Result = ConstantIndex<(N, u32), BlockData>;
+	type Result = IndexAndValue<(N, ElectionProperties, u32), BlockData>;
 
-	type Settings = (Threshold, (N, u32));
+	type Settings = (Threshold, (N, ElectionProperties, u32));
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
-		// self.consensus.insert_vote(vote.data)
-		todo!()
+		let vote_hash = SharedDataHash::of(&vote.data);
+		self.data.insert(vote_hash, vote.data.clone());
+		self.consensus.insert_vote(vote_hash);
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-		todo!()
+		self.consensus.check_consensus(&settings.0)
+			.map(|consensus| self.data.get(&consensus).expect("hash of vote should exist").clone())
+			.map(|data| IndexAndValue(settings.1.clone(), data))
 	}
 }
 

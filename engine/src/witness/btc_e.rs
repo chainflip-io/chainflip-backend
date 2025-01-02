@@ -54,7 +54,7 @@ impl VoterApi<BitcoinDepositChannelWitnessing2> for BitcoinDepositChannelWitness
 		<<BitcoinDepositChannelWitnessing2 as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		let (witness_range, deposit_addresses) = deposit_addresses;
+		let (witness_range, deposit_addresses, _extra) = deposit_addresses;
 		let witness_range = BlockWitnessRange::try_new(witness_range, 1).unwrap();
 		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
 
@@ -82,7 +82,7 @@ impl VoterApi<BitcoinDepositChannelWitnessing2> for BitcoinDepositChannelWitness
 			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
 		}
 
-		Ok(ConstantIndex { data: witnesses, ..Default::default() })
+		Ok(ConstantIndex { data: witnesses, _phantom: Default::default() })
 	}
 }
 
