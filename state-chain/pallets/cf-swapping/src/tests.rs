@@ -27,6 +27,7 @@ use cf_test_utilities::{assert_event_sequence, assert_events_eq, assert_has_matc
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
+		balance_api::MockBalance,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
@@ -1786,4 +1787,19 @@ mod private_channels {
 			assert_eq!(BrokerBond::<Test>::get(), FLIPPERINOS_PER_FLIP * 100);
 		});
 	}
+}
+
+#[test]
+fn register_address_and_request_withdrawal() {
+	new_test_ext().execute_with(|| {
+		const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+		MockBalance::credit_account(&ALICE, Asset::Usdc, 200);
+		assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), ALICE, SHORT_ID,));
+		assert_ok!(Swapping::register_affiliate_withdrawal_address(
+			OriginTrait::signed(BROKER),
+			SHORT_ID,
+			EncodedAddress::Eth(Default::default()),
+		));
+		assert_ok!(Swapping::affiliate_withdrawal_request(OriginTrait::signed(BROKER), SHORT_ID));
+	});
 }
