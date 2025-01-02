@@ -2,6 +2,7 @@ use crate::{BitcoinIngressEgress, Runtime};
 use cf_chains::{btc, Bitcoin};
 use cf_traits::Chainflip;
 use log::info;
+use serde::{Deserialize, Serialize};
 
 use cf_chains::instances::BitcoinInstance;
 
@@ -13,8 +14,9 @@ use pallet_cf_elections::{
 			self, consensus::SupermajorityConsensus, state_machine::ConstantIndex, state_machine_es::DsmElectoralSystem, BlockHeightTrackingConsensus, BlockHeightTrackingDSM, ChainProgress, OldChainProgress, RangeOfBlockWitnessRanges
 		},
 		block_witnesser::{
-			state_machine::{BWSettings, BWStateMachine, Hook}, consensus::BWConsensus, BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData
+			state_machine::{BWSettings, BWStateMachine}, consensus::BWConsensus, BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData
 		},
+		state_machine::core::Hook,
 		composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
@@ -72,6 +74,8 @@ pub type BitcoinBlockHeightTracking = DsmElectoralSystem<
 	BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>,
 >;
 
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize, Default)]
 pub struct BitcoinDepositChannelWitnessingGenerator;
 
 impl
@@ -95,6 +99,7 @@ impl
 	> for BitcoinDepositChannelWitnessingGenerator
 {
 	fn run(
+		&self,
 		block_witness_root: btc::BlockNumber,
 	) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
 		// TODO: Channel expiry

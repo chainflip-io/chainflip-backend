@@ -18,6 +18,7 @@ use crate::electoral_systems::block_height_tracking::{
 };
 use crate::{SharedData, SharedDataHash};
 use super::primitives::ElectionTracker;
+use super::super::state_machine::core::*;
 use super::helpers::*;
 
 
@@ -29,22 +30,17 @@ pub struct BWSettings {
 	pub max_concurrent_elections: u32,
 }
 
-pub trait BWHooks<N, InputIndex> {
-	fn active_deposit_channels_at(height: N) -> InputIndex;
-}
-
-pub trait Hook<A,B> {
-	fn run(input: A) -> B;
-}
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
-pub struct BWState<N: Ord> {
+pub struct BWState<N: Ord, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionProperties>> {
 	elections: ElectionTracker<N>,
+    generate_election_properties_hook: ElectionPropertiesHook,
+    _phantom: sp_std::marker::PhantomData<ElectionProperties>
 }
 
-impl<N: Ord> Validate for BWState<N> {
+impl<N: Ord, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionProperties>> Validate for BWState<N, ElectionProperties, ElectionPropertiesHook> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -52,12 +48,13 @@ impl<N: Ord> Validate for BWState<N> {
 	}
 }
 
-impl<N: BlockZero + Ord> Default for BWState<N> {
+impl<N: BlockZero + Ord, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionProperties>> Default for BWState<N, ElectionProperties, ElectionPropertiesHook> 
+    where ElectionPropertiesHook: Default
+{
 	fn default() -> Self {
-		Self { elections: Default::default() }
+		Self { elections: Default::default(), generate_election_properties_hook: Default::default(), _phantom: Default::default() }
 	}
 }
-
 
 
 
@@ -76,16 +73,14 @@ impl<
 	N : Copy + Ord + Step + sp_std::fmt::Debug + 'static,
 	BlockElectionPropertiesGenerator: Hook<N, ElectionProperties> + 'static
 > StateMachine for BWStateMachine<ElectionProperties, BlockData, N, BlockElectionPropertiesGenerator> {
+
 	type Input = SMInput<IndexAndValue<(N, ElectionProperties, u32), BlockData>, ChainProgress<N>>;
-
 	type Settings = BWSettings;
-
 	type Output = Result<(), &'static str>;
-
-	type State = BWState<N>;
+	type State = BWState<N, ElectionProperties, BlockElectionPropertiesGenerator>;
 
 	fn input_index(s: &Self::State) -> Vec<IndexOf<Self::Input>> {
-		s.elections.ongoing.clone().into_iter().map(|(height, extra)| (height, BlockElectionPropertiesGenerator::run(height), extra)).collect()
+		s.elections.ongoing.clone().into_iter().map(|(height, extra)| (height, s.generate_election_properties_hook.run(height), extra)).collect()
 	}
 
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
@@ -116,16 +111,18 @@ impl<
 		Ok(())
 	}
 
+    /// Specifiation for step function
 	#[cfg(test)]
 	fn step_specification(before: &Self::State, input: &Self::Input, settings: &Self::Settings, after: &Self::State) {
+		use SMInput::*;
+		use ChainProgress::*;
+
 		assert!(
 			// there should always be at most as many elections as given in the settings
 			after.elections.ongoing.len() <= settings.max_concurrent_elections as usize, 
 			"too many concurrent elections"
 		);
 
-		use SMInput::*;
-		use ChainProgress::*;
 		match input {
 			Vote(IndexAndValue((height, _, _), _)) => {
 				assert!(
@@ -152,3 +149,56 @@ impl<
 	}
 
 }
+
+#[cfg(test)]
+mod tests {
+	use proptest::{
+		prelude::{any, prop, Arbitrary, Just, Strategy},
+		prop_oneof, proptest,
+	};
+
+    use super::*;
+    use super::super::super::state_machine::core::*;
+    use hook_test_utils::*;
+
+    type SM = BWStateMachine<(), (), u8, ConstantHook<u8, ()>>;
+
+    fn generate_state<N: Arbitrary + Step + Ord + Clone>() -> impl Strategy<Value = BWState<N, (), ConstantHook<N, ()>>> {
+
+        (any::<N>(), any::<usize>(), prop::collection::vec(any::<(N, u32)>(), 0..10)).prop_map(
+            |(highest_started, scheduled_not_started, ongoing)| BWState {
+                elections: ElectionTracker {
+                    highest_started: highest_started.clone(),
+                    highest_scheduled: N::forward(highest_started, scheduled_not_started),
+                    ongoing: BTreeMap::from_iter(ongoing.into_iter()) 
+                },
+                generate_election_properties_hook: ConstantHook { state: (), _phantom: Default::default() },
+                _phantom: core::marker::PhantomData,
+            }
+        )
+    }
+
+    fn generate_input(index: IndexOf<<SM as StateMachine>::Input>) -> impl Strategy<Value = <SM as StateMachine>::Input> {
+        let context = prop_oneof![
+            Just(ChainProgress::WaitingForFirstConsensus)
+        ];
+
+        prop_oneof![
+            Just(SMInput::Vote(IndexAndValue(index, ()))),
+            context.prop_map(SMInput::Context)
+        ]
+    }
+
+    #[test]
+    pub fn test_bw_statemachine() {
+        BWStateMachine::<(), (), u8, ConstantHook<u8, ()>>::test(
+            generate_state(),
+            Just(BWSettings { safe_mode_enabled: false, max_concurrent_elections: 5 }),
+            |index| 
+				(0..index.len()).prop_flat_map(move |ix| generate_input(
+					index.clone().into_iter().nth(ix).unwrap()
+				)).boxed()
+        );
+    }
+}
+
