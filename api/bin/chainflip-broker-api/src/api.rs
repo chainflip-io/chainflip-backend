@@ -1,5 +1,5 @@
 use jsonrpsee_flatten::types::ArrayParam;
-use schemars::JsonSchema;
+use schemars::{json_schema, JsonSchema};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -20,15 +20,41 @@ api_json_schema::impl_schema_endpoint! {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MockApi;
 
+/// The empty type's [ArrayParam] implementation needs to use `[(); 0]` as the 'empty array' type.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Empty;
-impl ArrayParam for Empty {
-	type ArrayTuple = ((),);
 
-	fn into_array_tuple(self) -> Self::ArrayTuple {
-		((),)
+impl JsonSchema for Empty {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"Empty".into()
 	}
 
-	fn from_array_tuple(((),): Self::ArrayTuple) -> Self {
+	fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		json_schema!({
+			"oneOf": [
+				{
+					"description": "The empty Array `[]`.",
+					"type": "array",
+					"const": "[]"
+				},
+				{
+					"description": "The empty object `{}`.",
+					"type": "object",
+					"const": "{}"
+				}
+			]
+		})
+	}
+}
+
+impl ArrayParam for Empty {
+	type ArrayTuple = [(); 0];
+
+	fn into_array_tuple(self) -> Self::ArrayTuple {
+		[(); 0]
+	}
+
+	fn from_array_tuple(_: Self::ArrayTuple) -> Self {
 		Empty
 	}
 }

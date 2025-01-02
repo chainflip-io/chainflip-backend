@@ -1,4 +1,5 @@
 pub mod __macro_imports {
+	pub use heck::{AsLowerCamelCase, ToLowerCamelCase, ToSnakeCase};
 	pub use schemars::{generate::SchemaSettings, JsonSchema, Schema, SchemaGenerator};
 	pub use serde::{Deserialize, Serialize};
 	pub use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -99,7 +100,7 @@ pub mod __macro_imports {
 /// //////
 ///
 /// api_json_schema::impl_schema_endpoint! {
-///    prefix: my_api,
+///    prefix: "my_api_",
 ///    MyEndpoint: my_endpoint::Endpoint,
 ///    // The generated `Schema` endpoint can be included in the list of documented endpoints.
 ///    Schema: schema::Endpoint,
@@ -136,6 +137,7 @@ macro_rules! impl_schema_endpoint {
 			$method_name:ident: $endpoint:ty
 		),+ $(,)?
 	) => {
+		#[derive(Debug, Clone, Copy)]
 		pub struct ApiWrapper<T> {
 			/// For accessing the wrapped API.
 			pub api: T,
@@ -148,6 +150,13 @@ macro_rules! impl_schema_endpoint {
 				&self.api
 			}
 		}
+		impl<T: Default> Default for ApiWrapper<T> {
+			fn default() -> Self {
+				ApiWrapper {
+					api: Default::default()
+				}
+			}
+		}
 
 		pub mod schema {
 			use $crate::schema_macro::__macro_imports::*;
@@ -155,12 +164,24 @@ macro_rules! impl_schema_endpoint {
 
 			pub struct Endpoint;
 
-			#[derive(Debug, PartialEq, Eq, Clone, JsonSchema, SerializeDisplay, DeserializeFromStr)]
-			#[serde(rename_all = "snake_case")]
+			#[derive(Debug, PartialEq, Eq, Clone, SerializeDisplay, DeserializeFromStr)]
 			pub enum Method {
 				$(
 					$method_name,
 				)+
+			}
+
+			impl JsonSchema for Method {
+				fn schema_name() -> std::borrow::Cow<'static, str> {
+					"Method".into()
+				}
+
+				fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+					json_schema!({
+						"type": "string",
+						"enum": Self::all().iter().map(|m| m.to_string()).collect::<Vec<_>>()
+					})
+				}
 			}
 
 			impl Method {
@@ -173,26 +194,18 @@ macro_rules! impl_schema_endpoint {
 				}
 			}
 
-			#[derive(Debug, PartialEq, Eq, Clone, JsonSchema, Serialize, Deserialize)]
+			#[derive(Debug, Default, PartialEq, Eq, Clone, JsonSchema, Serialize, Deserialize)]
 			pub struct SchemaRequest {
 				#[serde(skip_serializing_if = "Vec::is_empty")]
 				#[serde(default)]
 				methods: Vec<Method>,
 			}
 
-			impl Default for SchemaRequest {
-				fn default() -> Self {
-					Self {
-						methods: Method::all().to_vec(),
-					}
-				}
-			}
-
 			impl core::fmt::Display for Method {
 				fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-					write!(f, "{}", match self {
+					write!(f, "{}{}", $prefix, match self {
 						$(
-							Method::$method_name => concat!($prefix, stringify!($method_name)),
+							Method::$method_name => AsLowerCamelCase(stringify!($method_name)),
 						)+
 					})
 				}
@@ -202,12 +215,20 @@ macro_rules! impl_schema_endpoint {
 				type Err = String;
 
 				fn from_str(s: &str) -> Result<Self, Self::Err> {
-					match s {
-						$(
-							concat!($prefix, stringify!($method_name)) => Ok(Method::$method_name),
-						)+
-						_ => Err(format!("Unknown method: {}", s)),
-					}
+					let method = s.strip_prefix($prefix)
+						.ok_or_else(|| format!("Invalid prefix. Must be {}", $prefix))?
+						.to_string();
+
+					$(
+						if [
+							stringify!($method_name).to_lower_camel_case(),
+							stringify!($method_name).to_snake_case(),
+						].contains(&method) {
+							return Ok(Method::$method_name)
+						}
+					)+
+
+					Err(format!("Unknown method: {}", method))
 				}
 			}
 
@@ -258,7 +279,11 @@ macro_rules! impl_schema_endpoint {
 						.for_deserialize()
 						.into_generator();
 
-					let methods = request.methods
+					let methods = if request.methods.is_empty() {
+							Method::all().to_vec()
+						} else {
+							request.methods
+						}
 						.into_iter()
 						.map(|method| {
 							match method {

@@ -1,6 +1,4 @@
 use crate::api::request_swap_deposit_address;
-use anyhow::anyhow;
-use cf_utilities::rpc::NumberOrHex;
 use chainflip_api::{
 	primitives::{state_chain_runtime::runtime_apis::VaultSwapDetails, VaultSwapExtraParameters},
 	AddressString, BaseRpcApi, ChainflipApi, CustomApiClient,
@@ -8,7 +6,7 @@ use chainflip_api::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{ApiWrapper, MockApi};
+use super::ApiWrapper;
 
 pub struct Endpoint;
 
