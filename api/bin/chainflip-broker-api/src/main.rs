@@ -1,4 +1,4 @@
-use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
+use cf_chains::VaultSwapExtraParametersRpc;
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
@@ -13,9 +13,8 @@ use chainflip_api::{
 		DcaParameters, RefundParameters,
 	},
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, ChannelId, DepositMonitorApi,
-	OperatorApi, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
-	WithdrawFeesDetail,
+	AccountId32, AddressString, BlockUpdate, BrokerApi, ChannelId, DepositMonitorApi, OperatorApi,
+	SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;

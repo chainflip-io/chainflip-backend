@@ -63,12 +63,23 @@ pub enum VaultSwapDetails<BtcAddress> {
 	},
 }
 
+/// Parameters required for construction of a Vault Swap on EVM chains.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 pub struct EvmVaultSwapDetails {
+	/// The bytes to put in the `calldata` field of the transaction.
 	#[serde(with = "sp_core::bytes")]
+	#[cfg_attr(feature = "std", schemars(schema_with = "cf_utilities::json_schema::hex_vec"))]
 	pub calldata: Vec<u8>, // The encoded calldata payload including function selector
+	/// The amount to put in the `value` field of the transaction.
+	#[cfg_attr(feature = "std", schemars(schema_with = "cf_utilities::json_schema::u256_hex"))]
 	pub value: sp_core::U256, // The ETH amount, or 0 for ERC-20 tokens
-	pub to: sp_core::H160,    // The vault address for either Ethereum or Arbitrum
+	/// The Chainflip Vault address. This should be entered in the `to` field of the transaction.
+	#[cfg_attr(
+		feature = "std",
+		schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")
+	)]
+	pub to: sp_core::H160, // The vault address for either Ethereum or Arbitrum
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {

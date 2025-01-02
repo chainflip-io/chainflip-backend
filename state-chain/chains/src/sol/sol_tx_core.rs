@@ -278,6 +278,25 @@ pub struct Instruction<Address = Pubkey> {
 	pub data: Vec<u8>,
 }
 
+#[cfg(feature = "std")]
+impl schemars::JsonSchema for Instruction<SolAddress> {
+	fn schema_name() -> sp_std::borrow::Cow<'static, str> {
+		sp_std::borrow::Cow::from("SolanaInstruction")
+	}
+	fn json_schema(gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({
+			"type": "object",
+			"description": "Represents a Solana Instruction for inclusion in a Transaction.",
+			"properties": {
+				"program_id": gen.subschema_for::<SolAddress>(),
+				"accounts": { "type": "array", "items": gen.subschema_for::<AccountMeta<SolAddress>>() },
+				"data": cf_utilities::json_schema::hex_vec(gen),
+			},
+			"required": ["program_id", "accounts", "data"]
+		})
+	}
+}
+
 /// Instruction type used when being presented to the end user.
 /// Serializes addresses into bs58 format.
 pub type InstructionRpc = Instruction<SolAddress>;
@@ -339,6 +358,7 @@ impl Instruction {
 #[derive(
 	Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo,
 )]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 pub struct AccountMeta<Address = Pubkey> {
 	/// An account's public key.
 	pub pubkey: Address,
