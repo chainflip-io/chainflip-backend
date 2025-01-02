@@ -59,11 +59,11 @@ const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
 // gas limit (32M). We cap it to a lower value than Ethereum to work around that.
 const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
 
-// Solana transactions have a length of 1232. Cappig it to some reasonable values
-// that when construction the call the Solana length is not exceeded.
-// TODO: Revisit these values once cfParameters is encoded in the SDK for SolVaultSwaps.
-const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 500;
-const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 1000;
+// Solana transactions have a length of 1232. Capping it to some reasonable values
+// that when construction the call the Solana length is not exceeded. Technically the
+// check should be tx lenght (dstAsset, srcAsset, ccmData, cf_parameters...) < 1232
+const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 400;
+const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 200;
 
 // Solana CCM-related parameters. These are limits in the protocol.
 const MAX_CCM_BYTES_SOL = 705;
