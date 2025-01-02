@@ -24,7 +24,7 @@ import {
   decodeSolAddress,
   decodeDotAddressForContract,
 } from './utils';
-import { CcmDepositMetadata } from './new_swap';
+import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 
 import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/swap_endpoint';
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
@@ -68,13 +68,15 @@ type ChannelRefundParameters = {
   min_price: string;
 };
 
-// TODO: DCA, FoK and affiliates to be implemented in PRO-1863
 export async function executeSolVaultSwap(
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
 ) {
   const whaleKeypair = getSolWhaleKeyPair();
 
@@ -93,9 +95,11 @@ export async function executeSolVaultSwap(
   const broker = createStateChainKeypair(brokerUri);
 
   const refundParams: ChannelRefundParameters = {
-    retry_duration: 0,
-    refund_address: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
-    min_price: '0x0',
+    retry_duration: fillOrKillParams?.retryDurationBlocks ?? 0,
+    refund_address: decodeSolAddress(
+      fillOrKillParams?.refundAddress ?? whaleKeypair.publicKey.toBase58(),
+    ),
+    min_price: fillOrKillParams?.minPriceX128 ?? '0x0',
   };
 
   const extraParameters: SolanaVaultSwapExtraParameters = {
@@ -130,9 +134,12 @@ export async function executeSolVaultSwap(
       gas_budget: messageMetadata.gasBudget,
       ccm_additional_data: messageMetadata.ccmAdditionalData,
     },
-    null, // boost_fee
+    boostFeeBps ?? 0, // boost_fee
     null, // affiliates
-    null, // dca_parameters
+    dcaParams && {
+      number_of_chunks: dcaParams.numberOfChunks,
+      chunk_interval: dcaParams.chunkIntervalBlocks,
+    },
   )) as unknown as SolVaultSwapDetails;
 
   assert.strictEqual(vaultSwapDetails.chain, 'Solana');
@@ -179,7 +186,10 @@ export async function checkSolEventAccountsClosure(
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();
-  const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl as SwapEndpoint);
+  const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(
+    SwapEndpointIdl as SwapEndpoint,
+    { connection: getSolConnection() } as anchor.Provider,
+  );
   const swapEndpointDataAccountAddress = new PublicKey(
     getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
   );

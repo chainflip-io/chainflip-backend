@@ -281,17 +281,15 @@ export async function executeVaultSwap(
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash: receipt.hash };
     sourceAddress = wallet.address.toLowerCase();
   } else {
-    // Temporary until we implement the Solana encoding in the SDK/BrokerApi
-    if (boostFeeBps || fillOrKillParams || dcaParams) {
-      throw new Error(
-        'BoostFeeBps, FillOrKillParams and DcaParams are not supported for Solana vault swaps for now',
-      );
-    }
     const { slot, accountAddress } = await executeSolVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
       messageMetadata,
+      undefined,
+      boostFeeBps,
+      fillOrKillParams,
+      dcaParams,
     );
     transactionId = {
       type: TransactionOrigin.VaultSwapSolana,
