@@ -10,6 +10,7 @@ import {
   AccountMeta,
 } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
+import BigNumber from 'bignumber.js';
 import {
   getContractAddress,
   amountToFineAmount,
@@ -62,7 +63,7 @@ interface SolanaVaultSwapExtraParameters {
 // }
 // type VaultSwapExtraParameters = BitcoinVaultSwapExtraParameters | SolanaVaultSwapExtraParameters;
 
-type ChannelRefundParameters = {
+export type ChannelRefundParameters = {
   retry_duration: number;
   refund_address: string;
   min_price: string;
@@ -106,7 +107,7 @@ export async function executeSolVaultSwap(
     chain: 'Solana',
     from: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
     event_data_account: decodeSolAddress(newEventAccountKeypair.publicKey.toBase58()),
-    input_amount: amountToSwap,
+    input_amount: '0x' + new BigNumber(amountToSwap).toString(16),
     refund_parameters: refundParams,
     from_token_account:
       srcAsset === 'Sol'

@@ -202,7 +202,7 @@ pub fn evm_vault_swap<A>(
 			calldata,
 			// Only return `amount` for native currently. 0 for Tokens
 			value: (source_asset == Asset::Eth).then_some(U256::from(amount)).unwrap_or_default(),
-			to: Environment::key_manager_address(),
+			to: Environment::eth_vault_address(),
 		})),
 		ForeignChain::Arbitrum => Ok(VaultSwapDetails::arbitrum(EvmVaultSwapDetails {
 			calldata,
@@ -210,7 +210,7 @@ pub fn evm_vault_swap<A>(
 			value: (source_asset == Asset::ArbEth)
 				.then_some(U256::from(amount))
 				.unwrap_or_default(),
-			to: Environment::arb_key_manager_address(),
+			to: Environment::arb_vault_address(),
 		})),
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",

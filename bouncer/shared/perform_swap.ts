@@ -267,7 +267,7 @@ export async function executeVaultSwap(
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
-    const receipt = await executeEvmVaultSwap(
+    const txHash = await executeEvmVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
@@ -278,7 +278,7 @@ export async function executeVaultSwap(
       dcaParams,
       wallet,
     );
-    transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash: receipt.hash };
+    transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
   } else {
     const { slot, accountAddress } = await executeSolVaultSwap(
