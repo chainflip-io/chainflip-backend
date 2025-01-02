@@ -1,8 +1,15 @@
+import assert from 'assert';
 import * as anchor from '@coral-xyz/anchor';
-
-import { InternalAsset as Asset, Chains, assetConstants } from '@chainflip/cli';
-import { PublicKey, Keypair, sendAndConfirmTransaction } from '@solana/web3.js';
-import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { InternalAsset as Asset, Chains } from '@chainflip/cli';
+import {
+  PublicKey,
+  Keypair,
+  sendAndConfirmTransaction,
+  TransactionInstruction,
+  Transaction,
+  AccountMeta,
+} from '@solana/web3.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import {
   getContractAddress,
   amountToFineAmount,
@@ -11,160 +18,158 @@ import {
   assetDecimals,
   getSolWhaleKeyPair,
   getSolConnection,
-  chainContractId,
-  decodeDotAddressForContract,
   sleep,
+  createStateChainKeypair,
+  stateChainAssetFromAsset,
+  decodeSolAddress,
+  decodeDotAddressForContract,
 } from './utils';
-import { CcmDepositMetadata } from './new_swap';
+import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 
 import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/swap_endpoint';
-import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/vault';
-import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfaces';
-
-// @ts-expect-error workaround because of anchor issue
-const { BN } = anchor.default;
-
-// Using AnchorProvider runs into issues so instead we store the wallet in id.json and then
-// set the ANCHOR_WALLET env. Depending on how the SDK is implemented we can remove this.
-process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
+import { getSolanaSwapEndpointIdl } from './contract_interfaces';
+import { getChainflipApi } from './utils/substrate';
 
 const createdEventAccounts: PublicKey[] = [];
 
-// Temporary before the SDK implements this.
+interface SolVaultSwapDetails {
+  chain: string;
+  program_id: string;
+  accounts: RpcAccountMeta[];
+  data: string;
+}
+
+type RpcAccountMeta = {
+  pubkey: string;
+  is_signer: boolean;
+  is_writable: boolean;
+};
+
+interface SolanaVaultSwapExtraParameters {
+  chain: 'Solana';
+  from: string;
+  event_data_account: string;
+  input_amount: string;
+  refund_parameters: ChannelRefundParameters;
+  from_token_account?: string;
+}
+
+// TODO: Unify this with BTC & EVM vault swaps.
+// interface BitcoinVaultSwapExtraParameters {
+//   chain: 'Bitcoin';
+//   min_output_amount: number;
+//   retry_duration: number;
+// }
+// type VaultSwapExtraParameters = BitcoinVaultSwapExtraParameters | SolanaVaultSwapExtraParameters;
+
+type ChannelRefundParameters = {
+  retry_duration: number;
+  refund_address: string;
+  min_price: string;
+};
+
 export async function executeSolVaultSwap(
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
 ) {
-  const destChain = chainFromAsset(destAsset);
-
-  const solanaVaultDataAccount = new PublicKey(getContractAddress('Solana', 'DATA_ACCOUNT'));
-  const swapEndpointDataAccount = new PublicKey(
-    getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
-  );
   const whaleKeypair = getSolWhaleKeyPair();
 
   const connection = getSolConnection();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const VaultIdl: any = await getSolanaVaultIdl();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();
-
-  const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl as SwapEndpoint);
-  const vaultProgram = new anchor.Program<Vault>(VaultIdl as Vault);
 
   const newEventAccountKeypair = Keypair.generate();
   createdEventAccounts.push(newEventAccountKeypair.publicKey);
 
-  const fetchedDataAccount = await vaultProgram.account.dataAccount.fetch(solanaVaultDataAccount);
-  const aggKey = fetchedDataAccount.aggKey;
-
-  const amountToSwap = new BN(
-    amountToFineAmount(amount ?? defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
+  const amountToSwap = amountToFineAmount(
+    amount ?? defaultAssetAmounts(srcAsset),
+    assetDecimals(srcAsset),
   );
 
-  let cfParameters;
+  await using chainflip = await getChainflipApi();
+  const brokerUri = '//BROKER_1';
+  const broker = createStateChainKeypair(brokerUri);
 
-  if (messageMetadata) {
-    // TODO: Currently manually encoded. To use SDK/BrokerApi.
-    switch (destChain) {
-      case Chains.Ethereum:
-      case Chains.Arbitrum:
-        cfParameters =
-          '0x000001000000040101010101010101010101010101010101010101010101010101010101010101000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000';
-        break;
-      default:
-        throw new Error(`Unsupported chain: ${destChain}`);
-    }
-  } else {
-    // TODO: Currently manually encoded. To use SDK/BrokerApi.
-    switch (destChain) {
-      case Chains.Ethereum:
-      case Chains.Arbitrum:
-        cfParameters =
-          '0x0001000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000';
-        break;
-      case Chains.Polkadot:
-        cfParameters =
-          '0x0001000000010404040404040404040404040404040404040404040404040404040404040404000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000';
-        break;
-      // TODO: Not supporting BTC for now because the encoding is annoying.
-      default:
-        throw new Error(`Unsupported chain: ${destChain}`);
-    }
+  const refundParams: ChannelRefundParameters = {
+    retry_duration: fillOrKillParams?.retryDurationBlocks ?? 0,
+    refund_address: decodeSolAddress(
+      fillOrKillParams?.refundAddress ?? whaleKeypair.publicKey.toBase58(),
+    ),
+    min_price: fillOrKillParams?.minPriceX128 ?? '0x0',
+  };
+
+  const extraParameters: SolanaVaultSwapExtraParameters = {
+    chain: 'Solana',
+    from: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
+    event_data_account: decodeSolAddress(newEventAccountKeypair.publicKey.toBase58()),
+    input_amount: amountToSwap,
+    refund_parameters: refundParams,
+    from_token_account:
+      srcAsset === 'Sol'
+        ? undefined
+        : getAssociatedTokenAddressSync(
+            new PublicKey(getContractAddress('Solana', 'SolUsdc')),
+            whaleKeypair.publicKey,
+            false,
+          ).toString(),
+  };
+
+  const vaultSwapDetails = (await chainflip.rpc(
+    `cf_get_vault_swap_details`,
+    broker.address,
+    { chain: chainFromAsset(srcAsset), asset: stateChainAssetFromAsset(srcAsset) },
+    { chain: chainFromAsset(destAsset), asset: stateChainAssetFromAsset(destAsset) },
+    chainFromAsset(destAsset) === Chains.Polkadot
+      ? decodeDotAddressForContract(destAddress)
+      : destAddress,
+    0, // broker_commission
+    extraParameters, // extra_parameters
+    // channel_metadata
+    messageMetadata && {
+      message: messageMetadata.message as `0x${string}`,
+      gas_budget: messageMetadata.gasBudget,
+      ccm_additional_data: messageMetadata.ccmAdditionalData,
+    },
+    boostFeeBps ?? 0, // boost_fee
+    null, // affiliates
+    dcaParams && {
+      number_of_chunks: dcaParams.numberOfChunks,
+      chunk_interval: dcaParams.chunkIntervalBlocks,
+    },
+  )) as unknown as SolVaultSwapDetails;
+
+  assert.strictEqual(vaultSwapDetails.chain, 'Solana');
+  assert.strictEqual(
+    new PublicKey(vaultSwapDetails.program_id).toBase58(),
+    getContractAddress('Solana', 'SWAP_ENDPOINT'),
+  );
+
+  // Convert vaultSwapDetails.instruction.accounts into AccountMeta[]
+  const keys: AccountMeta[] = [];
+  for (const account of vaultSwapDetails.accounts) {
+    keys.push({
+      pubkey: new PublicKey(account.pubkey),
+      isSigner: account.is_signer,
+      isWritable: account.is_writable,
+    });
   }
 
-  const destinationAddress =
-    destChain === Chains.Polkadot ? decodeDotAddressForContract(destAddress) : destAddress;
+  const transaction = new Transaction();
+  const instruction = new TransactionInstruction({
+    keys,
+    programId: new PublicKey(vaultSwapDetails.program_id),
+    data: Buffer.from(vaultSwapDetails.data.slice(2), 'hex'),
+  });
 
-  const tx =
-    srcAsset === 'Sol'
-      ? await cfSwapEndpointProgram.methods
-          .xSwapNative({
-            amount: amountToSwap,
-            dstChain: chainContractId(destChain),
-            dstAddress: Buffer.from(destinationAddress.slice(2), 'hex'),
-            dstToken: assetConstants[destAsset].contractId,
-            ccmParameters: messageMetadata
-              ? {
-                  message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
-                  gasAmount: new BN(messageMetadata.gasBudget),
-                }
-              : null,
-            cfParameters: Buffer.from(cfParameters!.slice(2) ?? '', 'hex'),
-          })
-          .accountsPartial({
-            dataAccount: solanaVaultDataAccount,
-            aggKey,
-            from: whaleKeypair.publicKey,
-            eventDataAccount: newEventAccountKeypair.publicKey,
-            swapEndpointDataAccount,
-            systemProgram: anchor.web3.SystemProgram.programId,
-          })
-          .signers([whaleKeypair, newEventAccountKeypair])
-          .transaction()
-      : await cfSwapEndpointProgram.methods
-          .xSwapToken({
-            amount: amountToSwap,
-            dstChain: chainContractId(destChain),
-            dstAddress: Buffer.from(destinationAddress.slice(2), 'hex'),
-            dstToken: assetConstants[destAsset].contractId,
-            ccmParameters: messageMetadata
-              ? {
-                  message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
-                  gasAmount: new BN(messageMetadata.gasBudget),
-                }
-              : null,
-            cfParameters: Buffer.from(cfParameters!.slice(2) ?? '', 'hex'),
-            decimals: assetDecimals(srcAsset),
-          })
-          .accountsPartial({
-            dataAccount: solanaVaultDataAccount,
-            tokenVaultAssociatedTokenAccount: new PublicKey(
-              getContractAddress('Solana', 'TOKEN_VAULT_ATA'),
-            ),
-            from: whaleKeypair.publicKey,
-            fromTokenAccount: getAssociatedTokenAddressSync(
-              new PublicKey(getContractAddress('Solana', 'SolUsdc')),
-              whaleKeypair.publicKey,
-              false,
-            ),
-            eventDataAccount: newEventAccountKeypair.publicKey,
-            swapEndpointDataAccount,
-            tokenSupportedAccount: new PublicKey(
-              getContractAddress('Solana', 'SolUsdcTokenSupport'),
-            ),
-            tokenProgram: TOKEN_PROGRAM_ID,
-            mint: new PublicKey(getContractAddress('Solana', 'SolUsdc')),
-            systemProgram: anchor.web3.SystemProgram.programId,
-          })
-          .signers([whaleKeypair, newEventAccountKeypair])
-          .transaction();
+  transaction.add(instruction);
+
   const txHash = await sendAndConfirmTransaction(
     connection,
-    tx,
+    transaction,
     [whaleKeypair, newEventAccountKeypair],
     { commitment: 'confirmed' },
   );
@@ -181,7 +186,10 @@ export async function checkSolEventAccountsClosure(
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();
-  const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl as SwapEndpoint);
+  const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(
+    SwapEndpointIdl as SwapEndpoint,
+    { connection: getSolConnection() } as anchor.Provider,
+  );
   const swapEndpointDataAccountAddress = new PublicKey(
     getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
   );

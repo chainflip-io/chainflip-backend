@@ -34,7 +34,7 @@ async function testDCASwap(
     chunkIntervalBlocks: CHUNK_INTERVAL,
   };
   const fillOrKillParams: FillOrKillParamsX128 = {
-    refundAddress: '0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF',
+    refundAddress: await newAddress(inputAsset, randomBytes(32).toString('hex')),
     minPriceX128: '1',
     retryDurationBlocks: 100,
   };
@@ -43,7 +43,7 @@ async function testDCASwap(
 
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
 
-  const destBalanceBefore = await getBalance(inputAsset, destAddress);
+  const destBalanceBefore = await getBalance(destAsset, destAddress);
   testDCASwaps.debugLog(`DCA destination address: ${destAddress}`);
 
   let swapRequestedHandle;
@@ -135,5 +135,10 @@ async function testDCASwap(
 }
 
 export async function main() {
-  await Promise.all([testDCASwap(Assets.Eth, 1, 2), testDCASwap(Assets.ArbEth, 1, 2, true)]);
+  await Promise.all([
+    testDCASwap(Assets.Eth, 1, 2),
+    testDCASwap(Assets.ArbEth, 1, 2),
+    testDCASwap(Assets.Sol, 1, 2, true),
+    testDCASwap(Assets.SolUsdc, 1, 2, true),
+  ]);
 }

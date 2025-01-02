@@ -238,27 +238,32 @@ pub fn solana_vault_swap<A>(
 	let api_environment =
 		SolEnvironment::api_environment().map_err(|_| "Failed to load Solana API environment")?;
 
-	let agg_key = SolEnvironment::current_agg_key()
+	let agg_key: SolPubkey = SolEnvironment::current_agg_key()
 		.map_err(|_| "Failed to load Solana Agg key")?
 		.into();
 
-	let on_chain_key = SolEnvironment::current_on_chain_key()
-		.map_err(|_| DispatchErrorWithMessage::from("Failed to load Solana On-chain key"))?
-		.into();
+	let on_chain_key: SolPubkey = SolEnvironment::current_on_chain_key()
+		.map(|key| key.into())
+		.unwrap_or_else(|_| agg_key);
 
-	// Ensure CCM message is valid
-	if let Some(ccm) = channel_metadata.as_ref() {
-		if let DecodedCcmAdditionalData::Solana(ccm_accounts) =
-			CcmValidityChecker::check_and_decode(ccm, destination_asset)?
-		{
-			// Ensure the CCM parameters do not contain blacklisted accounts.
-			check_ccm_for_blacklisted_accounts(
-				&ccm_accounts,
-				vec![api_environment.token_vault_pda_account.into(), agg_key, on_chain_key],
-			)
-			.map_err(DispatchError::from)?;
-		} else {
-			return Err(DispatchErrorWithMessage::from("Solana Ccm additional data is invalid"));
+	// TODO: This is a bug. This check shouldn't be for Solana Vault swaps but rather for any vault
+	// swap with Solana as the destination chain. It should be moved to cf_get_vault_swap_details.
+	// It might not be straightforward since the agg_key is not available there. PRO-1926
+	if ForeignChain::from(destination_asset) == ForeignChain::Solana {
+		// Ensure CCM message is valid
+		if let Some(ccm) = channel_metadata.as_ref() {
+			if let DecodedCcmAdditionalData::Solana(ccm_accounts) =
+				CcmValidityChecker::check_and_decode(ccm, destination_asset)?
+			{
+				// Ensure the CCM parameters do not contain blacklisted accounts.
+				check_ccm_for_blacklisted_accounts(
+					&ccm_accounts,
+					vec![api_environment.token_vault_pda_account.into(), agg_key, on_chain_key],
+				)
+				.map_err(DispatchError::from)?;
+			} else {
+				return Err(DispatchErrorWithMessage::from("Solana Ccm additional data is invalid"));
+			}
 		}
 	}
 

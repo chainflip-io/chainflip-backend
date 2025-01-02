@@ -45,6 +45,8 @@ export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
+// TODO: To add Bitcoin and it's corresponding logic for all_swaps to work. PRO-1854.
+export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 
 export type Asset = SDKAsset;
