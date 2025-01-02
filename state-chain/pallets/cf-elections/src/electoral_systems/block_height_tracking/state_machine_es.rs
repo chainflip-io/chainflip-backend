@@ -4,10 +4,10 @@ use frame_support::{
 	Parameter,
 };
 use itertools::{Either, Itertools};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 use crate::{
-	electoral_system::{ElectionWriteAccess, ElectoralSystem},
+	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
 	vote_storage, CorruptStorageError,
 };
 
@@ -31,31 +31,70 @@ impl<A, B> IntoResult for Result<A, B> {
 	}
 }
 
+/// This is an Either type, unfortunately it's more ergonomic
+/// to recreate this instead of using `itertools::Either`, because
+/// we need a special implementation of Indexed: we want the vote to
+/// be indexed but not the context.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SMInput<Vote, Context> {
+	Vote(Vote),
+	Context(Context),
+}
+
+impl<V: Indexed, C> Indexed for SMInput<V, C> {
+	type Index = V::Index;
+
+	fn has_index(&self, index: &Self::Index) -> bool {
+		match self {
+			SMInput::Vote(vote) => vote.has_index(index),
+			SMInput::Context(_) => true,
+		}
+	}
+}
+
+impl<V: Validate, C> Validate for SMInput<V, C> {
+	type Error = V::Error;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		match self {
+			SMInput::Vote(vote) => vote.is_valid(),
+			SMInput::Context(_) => Ok(()),
+		}
+	}
+}
+
 /// Creates an Electoral System from a given state machine
 /// and a given consensus mechanism.
 pub struct DsmElectoralSystem<
 	Type,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	Settings,
+	Context,
 	Consensus,
 > {
-	_phantom: core::marker::PhantomData<(Type, ValidatorId, Settings, Consensus)>,
+	_phantom: core::marker::PhantomData<(Type, ValidatorId, Settings, Context, Consensus)>,
 }
 
-impl<SM, ValidatorId, Settings, C> ElectoralSystem
-	for DsmElectoralSystem<SM, ValidatorId, Settings, C>
+impl<SM, ValidatorId, Settings, Context, C> ElectoralSystem
+	for DsmElectoralSystem<SM, ValidatorId, Settings, Context, C>
 where
-	SM: StateMachine,
+	SM: StateMachine<
+		Input = SMInput<<C as ConsensusMechanism>::Result, Context>,
+		Settings = Settings,
+	>,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-	C: ConsensusMechanism<
-			Vote = SM::Input,
-			Result = SM::Input,
-			Settings = (Threshold, <SM::Input as Indexed>::Index),
-		> + 'static,
+	Context: 'static + Clone + sp_std::fmt::Debug,
+	C: ConsensusMechanism<Settings = (Threshold, <SM::Input as Indexed>::Index)> + 'static,
+	<C as ConsensusMechanism>::Result: Indexed + Clone + Member + Parameter,
+	<C as ConsensusMechanism>::Vote: Member
+		+ Parameter
+		+ Clone
+		+ Validate
+		+ Indexed<Index = <<C as ConsensusMechanism>::Result as Indexed>::Index>,
 	<SM::Input as Indexed>::Index: Clone + Member + Parameter + sp_std::fmt::Debug,
 	SM::State: MaybeSerializeDeserialize + Member + Parameter + Eq + sp_std::fmt::Debug,
-	SM::Input: Indexed + Clone + Member + Parameter,
+	// SM::Input: Indexed + Clone + Member + Parameter,
 	SM::Output: IntoResult,
 	<SM::Output as IntoResult>::Err: sp_std::fmt::Debug,
 {
@@ -64,18 +103,18 @@ where
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
 
-	type ElectoralUnsynchronisedSettings = ();
-	type ElectoralSettings = Settings;
+	type ElectoralUnsynchronisedSettings = Settings;
+	type ElectoralSettings = ();
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = <SM::Input as Indexed>::Index;
 	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<SM::Input>;
-	type Consensus = SM::Input;
-	type OnFinalizeContext = ();
+	type Vote = vote_storage::bitmap::Bitmap<<C as ConsensusMechanism>::Vote>;
+	type Consensus = <C as ConsensusMechanism>::Result;
+	type OnFinalizeContext = Vec<Context>;
 
 	// we return either the state if no input was processed,
 	// or the output produced by the state machine
-	type OnFinalizeReturn = Either<SM::DisplayState, <SM::Output as IntoResult>::Ok>;
+	type OnFinalizeReturn = Vec<<SM::Output as IntoResult>::Ok>;
 
 	fn generate_vote_properties(
 		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
@@ -92,54 +131,83 @@ where
 		ElectoralAccess: crate::electoral_system::ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
 	>(
 		election_identifiers: Vec<crate::electoral_system::ElectionIdentifierOf<Self>>,
-		context: &Self::OnFinalizeContext,
+		contexts: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, crate::CorruptStorageError> {
-		if let Some(election_identifier) = election_identifiers
-			.into_iter()
-			.at_most_one()
-			.map_err(|_| CorruptStorageError::new())?
-		{
-			let election_access = ElectoralAccess::election_mut(election_identifier);
+		// initialize the result value
+		let mut result = Vec::new();
 
-			// if we have consensus, we can pass it to the state machine's step function
-			if let Some(input) = election_access.check_consensus()?.has_consensus() {
-				let (next_input_index, output) =
-					ElectoralAccess::mutate_unsynchronised_state(|state| {
-						// call the state machine
-						let output = SM::step(state, input);
+		// read state
+		log::debug!("ESSM: reading state & settings");
+		let mut state = ElectoralAccess::unsynchronised_state()?;
+		let settings = ElectoralAccess::unsynchronised_settings()?;
 
-						// if we have been successful, get the input index of the new state
-						match output.into_result() {
-							Ok(output) => Ok((SM::input_index(state), output)),
-							Err(err) => {
-								log::error!("Electoral system moved into a bad state: {err:?}");
-								Err(CorruptStorageError::new())
-							},
-						}
-					})?;
+		// define step function which progresses the state machine
+		// by one input
+		let mut step = |input| {
+			SM::step(&mut state, input, &settings)
+				.into_result()
+				.map(|output| {
+					result.push(output);
+					()
+				})
+				.map_err(|err| {
+					log::error!("Electoral system moved into a bad state: {err:?}");
+					CorruptStorageError::new()
+				})
+		};
 
-				// delete the old election and create a new one with the new input index
-				election_access.delete();
-				ElectoralAccess::new_election((), next_input_index, ())?;
-
-				Ok(Either::Right(output))
-			} else {
-				// if there is no consensus, simply get the current `DisplayState` of the SM.
-
-				log::info!("No consensus could be reached!");
-				Ok(Either::Left(SM::get(&ElectoralAccess::unsynchronised_state()?)))
-			}
-		} else {
-			// if there is no election going on, we create an election corresponding to the
-			// current state.
-
-			log::info!("Starting new election with value because no elections exist");
-
-			let state = ElectoralAccess::unsynchronised_state()?;
-
-			ElectoralAccess::new_election((), SM::input_index(&state), ())?;
-			Ok(Either::Left(SM::get(&state)))
+		// step with OnFinalizeContext
+		log::debug!("ESSM: stepping for each context (n = {:?})", contexts.len());
+		for context in contexts {
+			log::debug!("ESSM: stepping with context {context:?}");
+			step(SMInput::Context(context.clone()))?;
 		}
+
+		// step for each election that reached consensus
+		log::debug!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
+		for election_identifier in &election_identifiers {
+			let election_access = ElectoralAccess::election_mut(election_identifier.clone());
+			log::debug!("ESSM: checking consensus for {election_identifier:?}");
+			if let Some(input) = election_access.check_consensus()?.has_consensus() {
+				log::debug!("ESSM: stepping with input {input:?}");
+				step(SMInput::Vote(input))?;
+			}
+		}
+
+		// gather the input indices after all state transitions
+		let input_indices = SM::input_index(&state);
+		let mut open_elections = Vec::new();
+
+		// delete elections which are no longer in the input indices
+		// NOTE: This happens after *all* step functions have been run
+		// (thus cannot be part of the loop above) since we first want to
+		// apply *all* state transitions to determine which elections should
+		// be kept open.
+		for election_identifier in election_identifiers {
+			let election = ElectoralAccess::election_mut(election_identifier);
+			log::debug!("ESSM: getting properties");
+			let properties = election.properties()?;
+			if !input_indices.contains(&properties) {
+				log::info!("deleting election for {properties:?}");
+				election.delete();
+			} else {
+				log::info!("keeping election for {properties:?}");
+				open_elections.push(properties.clone());
+			}
+		}
+
+		// Create elections for new input indices which weren't open before,
+		// i.e. contained in `input_indices` but not in `open_elections`.
+		for index in input_indices.iter().filter(|index| !open_elections.contains(index)) {
+			log::info!("creating election for {index:?}");
+			ElectoralAccess::new_election((), index.clone(), ())?;
+		}
+
+		log::debug!("ESSM: setting state");
+		ElectoralAccess::set_unsynchronised_state(state)?;
+
+		return Ok(result);
+
 	}
 
 	fn check_consensus<
@@ -152,7 +220,9 @@ where
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: crate::electoral_system::ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, crate::CorruptStorageError> {
+		log::debug!("ESSM consensus: reading properties");
 		let properties = election_access.properties()?;
+		log::debug!("ESSM consensus: reading properties done");
 		let mut consensus = C::default();
 		let num_authorities = consensus_votes.num_authorities();
 
@@ -166,6 +236,7 @@ where
 			}
 		}
 
+		log::debug!("ESSM consensus: calling consensus mechanism");
 		Ok(consensus.check_consensus(&(
 			Threshold { threshold: success_threshold_from_share_count(num_authorities) },
 			properties,

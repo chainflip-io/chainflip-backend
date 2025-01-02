@@ -2,6 +2,7 @@ use crate::{BitcoinIngressEgress, Runtime};
 use cf_chains::{btc, Bitcoin};
 use cf_traits::Chainflip;
 use log::info;
+use serde::{Deserialize, Serialize};
 
 use cf_chains::instances::BitcoinInstance;
 
@@ -10,13 +11,12 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
 		block_height_tracking::{
-			self, state_machine_es::DsmElectoralSystem, BlockHeightTrackingConsensus,
-			BlockHeightTrackingDSM, ChainProgress, OldChainProgress, RangeOfBlockWitnessRanges,
+			self, consensus::SupermajorityConsensus, state_machine::ConstantIndex, state_machine_es::DsmElectoralSystem, BlockHeightTrackingConsensus, BlockHeightTrackingDSM, ChainProgress, OldChainProgress, RangeOfBlockWitnessRanges
 		},
 		block_witnesser::{
-			BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings,
-			ProcessBlockData,
+			state_machine::{BWSettings, BWStateMachine}, consensus::BWConsensus, BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData
 		},
+		state_machine::core::Hook,
 		composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
@@ -34,7 +34,7 @@ use sp_runtime::Either;
 use sp_std::vec::Vec;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
-	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing),
+	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing2),
 	<Runtime as Chainflip>::ValidatorId,
 	RunnerStorageAccess<Runtime, BitcoinInstance>,
 	BitcoinElectionHooks,
@@ -55,13 +55,27 @@ pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 	BitcoinDepositChannelWitnessingGenerator,
 >;
 
+type ElectionProperties = Vec<DepositChannelDetails<Runtime, BitcoinInstance>>;
+type BlockData = Vec<DepositWitness<Bitcoin>>;
+
+pub type BitcoinDepositChannelWitnessing2 = DsmElectoralSystem<
+	BWStateMachine<ElectionProperties, BlockData, btc::BlockNumber, BitcoinDepositChannelWitnessingGenerator>,
+	<Runtime as Chainflip>::ValidatorId,
+	BWSettings,
+	ChainProgress<btc::BlockNumber>,
+	BWConsensus<BlockData, btc::BlockNumber, ElectionProperties>
+>;
+
 pub type BitcoinBlockHeightTracking = DsmElectoralSystem<
 	BlockHeightTrackingDSM<6, btc::BlockNumber, btc::Hash>,
 	<Runtime as Chainflip>::ValidatorId,
 	(),
+	(),
 	BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>,
 >;
 
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize, Default)]
 pub struct BitcoinDepositChannelWitnessingGenerator;
 
 impl
@@ -71,6 +85,21 @@ impl
 	> for BitcoinDepositChannelWitnessingGenerator
 {
 	fn generate_election_properties(
+		block_witness_root: btc::BlockNumber,
+	) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
+		// TODO: Channel expiry
+		BitcoinIngressEgress::active_deposit_channels_at(block_witness_root)
+	}
+}
+
+impl
+	Hook<
+		btc::BlockNumber,
+		Vec<DepositChannelDetails<Runtime, BitcoinInstance>>,
+	> for BitcoinDepositChannelWitnessingGenerator
+{
+	fn run(
+		&self,
 		block_witness_root: btc::BlockNumber,
 	) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
 		// TODO: Channel expiry
@@ -130,7 +159,7 @@ impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 
 pub struct BitcoinElectionHooks;
 
-impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for BitcoinElectionHooks {
+impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing2> for BitcoinElectionHooks {
 	fn on_finalize(
 		(block_height_tracking_identifiers, deposit_channel_witnessing_identifiers): (
 			Vec<
@@ -140,7 +169,7 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 			>,
 			Vec<
 				ElectionIdentifier<
-					<BitcoinDepositChannelWitnessing as ElectoralSystem>::ElectionIdentifierExtra,
+					<BitcoinDepositChannelWitnessing2 as ElectoralSystem>::ElectionIdentifierExtra,
 				>,
 			>,
 		),
@@ -152,39 +181,16 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 				BitcoinBlockHeightTracking,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(block_height_tracking_identifiers, &())?;
-
-		let chain_progress = match chain_progress {
-			Either::Left(x) => x,
-			Either::Right(x) => x,
-		};
-
-		// This code is going to be removed.
-		// convert the new chain progress to the old version
-		let chain_progress = match chain_progress {
-			ChainProgress::Reorg(added) => OldChainProgress::Reorg(RangeOfBlockWitnessRanges {
-				witness_from_root: added.start().clone(),
-				witness_to_root: added.end().clone(),
-				witness_period: 1, // horrible
-			}),
-			ChainProgress::Continuous(added) =>
-				OldChainProgress::Continuous(RangeOfBlockWitnessRanges {
-					witness_from_root: added.start().clone(),
-					witness_to_root: added.end().clone(),
-					witness_period: 1, // horrible
-				}),
-			ChainProgress::None(block) => OldChainProgress::None(block),
-			ChainProgress::WaitingForFirstConsensus => OldChainProgress::WaitingForFirstConsensus,
-		};
+		>(block_height_tracking_identifiers, &Vec::from([()]))?;
 
 		log::info!("BitcoinElectionHooks::on_finalize: {:?}", chain_progress);
-		BitcoinDepositChannelWitnessing::on_finalize::<
+		BitcoinDepositChannelWitnessing2::on_finalize::<
 			DerivedElectoralAccess<
 				_,
-				BitcoinDepositChannelWitnessing,
+				BitcoinDepositChannelWitnessing2,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(deposit_channel_witnessing_identifiers, &chain_progress)?;
+		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress)?;
 
 		Ok(())
 	}
@@ -202,7 +208,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 		unsynchronised_settings: (
 			Default::default(),
 			// TODO: Write a migration to set this too.
-			BlockWitnesserSettings { max_concurrent_elections: 5 },
+			BWSettings { safe_mode_enabled: false, max_concurrent_elections: 5 },
 		),
 		settings: (Default::default(), Default::default()),
 	}

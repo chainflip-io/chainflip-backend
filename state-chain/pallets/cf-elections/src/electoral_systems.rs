@@ -10,6 +10,7 @@ pub mod monotonic_change;
 pub mod monotonic_median;
 pub mod solana_vault_swap_accounts;
 pub mod unsafe_median;
+pub mod state_machine;
 
 #[cfg(test)]
 pub(crate) mod mocks;

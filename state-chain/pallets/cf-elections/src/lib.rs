@@ -625,6 +625,7 @@ pub mod pallet {
 				));
 				ElectionProperties::<T, I>::insert(election_identifier, properties);
 				ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
+				log::debug!("Created new election with identifier {unique_monotonic_identifier:?}");
 				Ok(election_identifier)
 			}
 
@@ -698,6 +699,7 @@ pub mod pallet {
 				ElectionProperties::<T, I>::remove(composite_election_identifier);
 				ElectionState::<T, I>::remove(unique_monotonic_identifier);
 				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
+				log::debug!("Deleted election with identifier {unique_monotonic_identifier:?}");
 			}
 
 			fn refresh_election(
