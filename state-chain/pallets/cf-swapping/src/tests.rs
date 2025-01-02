@@ -39,6 +39,7 @@ use frame_support::{
 	testing_prelude::bounded_vec,
 	traits::{Hooks, OriginTrait},
 };
+
 use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
 use sp_std::iter;
@@ -1793,13 +1794,26 @@ mod private_channels {
 fn register_address_and_request_withdrawal() {
 	new_test_ext().execute_with(|| {
 		const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
-		MockBalance::credit_account(&ALICE, Asset::Usdc, 200);
+		const BALANCE: AssetAmount = 200;
+		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+
+		MockBalance::credit_account(&ALICE, Asset::Usdc, BALANCE);
+
 		assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), ALICE, SHORT_ID,));
+
 		assert_ok!(Swapping::register_affiliate_withdrawal_address(
 			OriginTrait::signed(BROKER),
 			SHORT_ID,
-			EncodedAddress::Eth(Default::default()),
+			withdrawal_address.clone(),
 		));
+
 		assert_ok!(Swapping::affiliate_withdrawal_request(OriginTrait::signed(BROKER), SHORT_ID));
+
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Swapping(Event::AffiliateRegistrationUpdated { .. }),
+			RuntimeEvent::Swapping(Event::AffiliateWithdrawalAddressRegistered { .. }),
+			RuntimeEvent::Swapping(Event::WithdrawalRequested { .. }),
+		);
 	});
 }
