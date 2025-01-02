@@ -709,6 +709,11 @@ pub mod pallet {
 			short_id: AffiliateShortId,
 			address: EncodedAddress,
 		},
+		AffiliateWithdrawalRequestFailed {
+			broker: T::AccountId,
+			short_id: AffiliateShortId,
+			error: DispatchError,
+		},
 		MinimumNetworkFeeSet {
 			min_fee: AssetAmount,
 		},
@@ -1462,8 +1467,12 @@ pub mod pallet {
 		pub fn trigger_commission_distribution() {
 			for broker in T::AccountRoleRegistry::get_all(AccountRole::Broker) {
 				for (short_id, _) in AffiliateIdMapping::<T>::iter_prefix(&broker) {
-					if let Err(err) = Self::withdrawal_to_affiliate(&broker, short_id) {
-						todo!("Fire event or log here!");
+					if let Err(error) = Self::withdrawal_to_affiliate(&broker, short_id) {
+						Self::deposit_event(Event::<T>::AffiliateWithdrawalRequestFailed {
+							broker: broker.clone(),
+							short_id,
+							error,
+						});
 					}
 				}
 			}
