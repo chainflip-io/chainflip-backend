@@ -1,0 +1,20 @@
+[package]
+name = "api-json-schema"
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+version = "0.1.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "api-docgen"
+path = "src/api-docgen.rs"
+
+[dependencies]
+schemars = { workspace = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_with = { workspace = true, features = ["macros"] }
+heck = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true, features = ["derive"] }

@@ -14,6 +14,8 @@ macro_rules! define_binary {
             define_binary!(@impl_serde_serialize, $type, $size);
             #[cfg(feature = "serde")]
             define_binary!(@impl_serde_deserialize, $type, $size);
+            #[cfg(all(feature = "serde", feature = "std"))]
+            define_binary!(@impl_json_schema, $type, $size);
         }
     };
 
@@ -64,7 +66,6 @@ macro_rules! define_binary {
     };
 
     (@impl_from_str, $type: ident, $size: expr) => {
-        #[cfg(feature = "str")]
         mod from_str {
             use super::*;
 
@@ -80,7 +81,6 @@ macro_rules! define_binary {
         }
     };
     (@impl_display, $type: ident, $size: expr, $marker: literal) => {
-        #[cfg(feature = "str")]
         mod to_str {
             use super::*;
 
@@ -104,7 +104,6 @@ macro_rules! define_binary {
         }
     };
     (@impl_serde_serialize, $type: ident, $size: expr) => {
-        #[cfg(feature = "serde")]
         mod serde_ser {
             use super::*;
 
@@ -130,7 +129,6 @@ macro_rules! define_binary {
     };
 
     (@impl_serde_deserialize, $type: ident, $size: expr) => {
-        #[cfg(feature = "serde")]
         mod serde_de {
             use super::*;
 
@@ -159,6 +157,21 @@ macro_rules! define_binary {
                     bs58::decode(v).onto(&mut out.0).map_err(E::custom)?;
 
                     Ok(out)
+                }
+            }
+        }
+    };
+
+    (@impl_json_schema, $type: ident, $size: expr) => {
+        mod json_schema {
+            use super::*;
+
+            impl schemars::JsonSchema for $type {
+                fn schema_name() -> std::borrow::Cow<'static, str> {
+                    std::borrow::Cow::from(stringify!($type))
+                }
+                fn json_schema(gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+                    cf_utilities::json_schema::base58_array::<{ $size }>(gen)
                 }
             }
         }

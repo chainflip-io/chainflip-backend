@@ -404,6 +404,7 @@ pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIAR
 	PartialOrd,
 	Ord,
 )]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 pub struct Beneficiary<Id> {
 	pub account: Id,
 	pub bps: BasisPoints,
@@ -435,6 +436,7 @@ impl From<AffiliateAndFee> for Beneficiary<AffiliateShortId> {
 	PartialOrd,
 	Ord,
 )]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 pub struct DcaParameters {
 	/// The number of individual swaps to be executed
 	pub number_of_chunks: u32,

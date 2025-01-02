@@ -15,7 +15,7 @@ use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
-	BrokerApi,
+	BrokerApi, ChainflipApi,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -247,7 +247,7 @@ async fn request_redemption(
 	Ok(())
 }
 
-async fn bind_redeem_address(api: Arc<impl OperatorApi + Sync>, eth_address: &str) -> Result<()> {
+async fn bind_redeem_address(api: Arc<impl OperatorApi>, eth_address: &str) -> Result<()> {
 	let eth_address = EthereumAddress::from(
 		clean_hex_address::<[u8; 20]>(eth_address).context("Invalid ETH address supplied")?,
 	);
@@ -266,7 +266,7 @@ async fn bind_redeem_address(api: Arc<impl OperatorApi + Sync>, eth_address: &st
 	Ok(())
 }
 
-async fn bind_executor_address(api: Arc<impl OperatorApi + Sync>, eth_address: &str) -> Result<()> {
+async fn bind_executor_address(api: Arc<impl OperatorApi>, eth_address: &str) -> Result<()> {
 	let eth_address = EthereumAddress::from(
 		clean_hex_address::<[u8; 20]>(eth_address).context("Invalid ETH address supplied")?,
 	);

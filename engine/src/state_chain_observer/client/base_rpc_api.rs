@@ -88,6 +88,10 @@ pub type WatchExtrinsicStream = Pin<
 #[cfg_attr(any(test, feature = "client-mocks"), mockall::automock(type InnerClient = jsonrpsee::ws_client::WsClient;))]
 #[async_trait]
 pub trait BaseRpcApi {
+	type InnerClient: RawRpcApi + Send + Sync;
+
+	fn raw_rpc_client(&self) -> &Self::InnerClient;
+
 	async fn health(&self) -> RpcResult<Health>;
 
 	async fn next_account_nonce(
@@ -185,6 +189,12 @@ fn unwrap_value<T>(list_or_value: sp_rpc::list::ListOrValue<T>) -> T {
 
 #[async_trait]
 impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcClient> {
+	type InnerClient = RawRpcClient;
+
+	fn raw_rpc_client(&self) -> &RawRpcClient {
+		&self.raw_rpc_client
+	}
+
 	async fn health(&self) -> RpcResult<Health> {
 		self.raw_rpc_client.system_health().await
 	}

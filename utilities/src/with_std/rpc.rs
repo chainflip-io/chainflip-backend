@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
 
@@ -6,6 +7,16 @@ use sp_core::U256;
 pub enum NumberOrHex {
 	Number(u64),
 	Hex(U256),
+}
+
+impl JsonSchema for NumberOrHex {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"number_or_hex".into()
+	}
+
+	fn json_schema(gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		super::json_schema::number_or_hex(gen)
+	}
 }
 
 impl Default for NumberOrHex {

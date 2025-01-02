@@ -19,6 +19,7 @@ sha2 = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 codec = { workspace = true, optional = true, features = ["derive"] }
 scale-info = { workspace = true, optional = true, features = ["derive"] }
+schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
@@ -42,4 +43,5 @@ std = [
 	"sha2?/std",
 	"cf-utilities/std",
 	"dep:thiserror",
+	"dep:schemars",
 ]
