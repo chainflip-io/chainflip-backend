@@ -1375,6 +1375,13 @@ type MigrationsForV1_8 = (
 			SolanaInstance,
 		],
 	},
+	VersionedMigration<
+		3,
+		4,
+		migrations::solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
