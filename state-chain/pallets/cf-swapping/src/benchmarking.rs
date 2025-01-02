@@ -199,5 +199,66 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn register_affiliate_withdrawal_address() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		const IDX: u8 = 0;
+		let caller = OriginFor::<T>::signed(broker_id.clone());
+		let affiliate_id = frame_benchmarking::account::<T::AccountId>("affiliate", 0, 0);
+
+		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+
+		assert_ok!(Pallet::<T>::register_affiliate(
+			caller.clone(),
+			affiliate_id.clone(),
+			IDX.into(),
+		));
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::register_affiliate_withdrawal_address(
+				caller.clone(),
+				IDX.into(),
+				withdrawal_address.clone(),
+			));
+		}
+
+		assert_eq!(AffiliateWithdrawalAddress::<T>::get(affiliate_id), Some(withdrawal_address));
+	}
+
+	#[benchmark]
+	fn affiliate_withdrawal_request() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		const IDX: u8 = 0;
+		let caller = OriginFor::<T>::signed(broker_id.clone());
+		let affiliate_id = frame_benchmarking::account::<T::AccountId>("affiliate", 0, 0);
+		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+
+		T::BalanceApi::credit_account(&affiliate_id, Asset::Usdc, 200);
+
+		assert_ok!(Pallet::<T>::register_affiliate(
+			caller.clone(),
+			affiliate_id.clone(),
+			IDX.into(),
+		));
+
+		assert_ok!(Pallet::<T>::register_affiliate_withdrawal_address(
+			caller.clone(),
+			IDX.into(),
+			withdrawal_address.clone(),
+		));
+
+		assert_eq!(AffiliateWithdrawalAddress::<T>::get(affiliate_id), Some(withdrawal_address));
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::affiliate_withdrawal_request(caller, IDX.into()));
+		}
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
