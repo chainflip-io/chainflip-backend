@@ -1642,6 +1642,7 @@ mod private_channels {
 				Event::<Test>::PrivateBrokerChannelOpened {
 					broker_id: BROKER,
 					channel_id: FIRST_CHANNEL_ID,
+					bond: DefaultBrokerBond::<Test>::get(),
 				},
 			));
 
@@ -1702,6 +1703,7 @@ mod private_channels {
 				Event::<Test>::PrivateBrokerChannelClosed {
 					broker_id: BROKER,
 					channel_id: CHANNEL_ID,
+					bond: DefaultBrokerBond::<Test>::get(),
 				},
 			));
 

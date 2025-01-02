@@ -441,8 +441,12 @@ impl<T: Config> Bonding for Bonder<T> {
 	type AccountId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn update_bond(authority: &Self::AccountId, bond: Self::Amount) {
-		Account::<T>::mutate_exists(authority, |maybe_account| {
+	fn get_bond(account_id: &Self::AccountId) -> Self::Amount {
+		Account::<T>::get(account_id).bond
+	}
+
+	fn update_bond(account_id: &Self::AccountId, bond: Self::Amount) {
+		Account::<T>::mutate_exists(account_id, |maybe_account| {
 			if let Some(account) = maybe_account.as_mut() {
 				account.bond = bond
 			}
