@@ -76,10 +76,10 @@ curl -X POST http://localhost:80 \
 
 One of the following alternatives:
 
-- [`Request_for_AddressString2_0`](#request_for_addressstring2_0)
-- [`Request_for_AddressString2_1`](#request_for_addressstring2_1)
-- [`Request_for_AddressString2_2`](#request_for_addressstring2_2)
-- [`Request_for_AddressString2_3`](#request_for_addressstring2_3)
+- Request encoded Vault Swap parameters for Bitcoin.
+- Request encoded Vault Swap parameters for Ethereum.
+- Request encoded Vault Swap parameters for Arbitrum.
+- Request encoded Vault Swap parameters for Solana.
 
 ### Response
 
