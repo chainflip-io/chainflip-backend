@@ -252,12 +252,18 @@ mod benchmarks {
 			withdrawal_address.clone(),
 		));
 
-		assert_eq!(AffiliateWithdrawalAddress::<T>::get(affiliate_id), Some(withdrawal_address));
+		assert_eq!(AffiliateWithdrawalAddress::<T>::get(&affiliate_id), Some(withdrawal_address));
 
 		#[block]
 		{
 			assert_ok!(Pallet::<T>::affiliate_withdrawal_request(caller, IDX.into()));
 		}
+
+		assert_eq!(
+			T::BalanceApi::get_balance(&affiliate_id, Asset::Usdc),
+			0,
+			"Expect account balance to be 0 after distribution."
+		);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
