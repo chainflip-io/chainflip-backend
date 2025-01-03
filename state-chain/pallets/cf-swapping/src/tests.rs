@@ -1817,3 +1817,25 @@ fn register_address_and_request_withdrawal() {
 		);
 	});
 }
+
+#[test]
+fn can_only_register_withdrawal_address_onces() {
+	new_test_ext().execute_with(|| {
+		const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+		assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), ALICE, SHORT_ID,));
+		assert_ok!(Swapping::register_affiliate_withdrawal_address(
+			OriginTrait::signed(BROKER),
+			SHORT_ID,
+			withdrawal_address.clone(),
+		));
+		assert_noop!(
+			Swapping::register_affiliate_withdrawal_address(
+				OriginTrait::signed(BROKER),
+				SHORT_ID,
+				withdrawal_address.clone(),
+			),
+			Error::<Test>::AddressAlreadyRegistered
+		);
+	});
+}
