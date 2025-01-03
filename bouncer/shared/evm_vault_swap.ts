@@ -140,7 +140,7 @@ export async function executeEvmVaultSwap(
   const refundParams: ChannelRefundParameters = {
     retry_duration: fokParams.retryDurationBlocks,
     refund_address: fokParams.refundAddress,
-    min_price: fokParams.minPriceX128,
+    min_price: '0x' + new BigNumber(fokParams.minPriceX128).toString(16),
   };
 
   const extraParameters: EvmVaultSwapExtraParameters = {
