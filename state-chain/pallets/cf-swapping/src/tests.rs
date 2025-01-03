@@ -27,6 +27,7 @@ use cf_test_utilities::{assert_event_sequence, assert_events_eq, assert_has_matc
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
+		balance_api::MockBalance,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
@@ -38,6 +39,7 @@ use frame_support::{
 	testing_prelude::bounded_vec,
 	traits::{Hooks, OriginTrait},
 };
+
 use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
 use sp_std::iter;
@@ -1770,4 +1772,54 @@ mod private_channels {
 			assert_eq!(BrokerBond::<Test>::get(), FLIPPERINOS_PER_FLIP * 100);
 		});
 	}
+}
+
+#[test]
+fn register_address_and_request_withdrawal() {
+	new_test_ext().execute_with(|| {
+		const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+		const BALANCE: AssetAmount = 200;
+		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+
+		MockBalance::credit_account(&ALICE, Asset::Usdc, BALANCE);
+
+		assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), ALICE, SHORT_ID,));
+
+		assert_ok!(Swapping::register_affiliate_withdrawal_address(
+			OriginTrait::signed(BROKER),
+			SHORT_ID,
+			withdrawal_address.clone(),
+		));
+
+		assert_ok!(Swapping::affiliate_withdrawal_request(OriginTrait::signed(BROKER), SHORT_ID));
+
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Swapping(Event::AffiliateRegistrationUpdated { .. }),
+			RuntimeEvent::Swapping(Event::AffiliateWithdrawalAddressRegistered { .. }),
+			RuntimeEvent::Swapping(Event::WithdrawalRequested { .. }),
+		);
+	});
+}
+
+#[test]
+fn can_only_register_withdrawal_address_onces() {
+	new_test_ext().execute_with(|| {
+		const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+		assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), ALICE, SHORT_ID,));
+		assert_ok!(Swapping::register_affiliate_withdrawal_address(
+			OriginTrait::signed(BROKER),
+			SHORT_ID,
+			withdrawal_address.clone(),
+		));
+		assert_noop!(
+			Swapping::register_affiliate_withdrawal_address(
+				OriginTrait::signed(BROKER),
+				SHORT_ID,
+				withdrawal_address.clone(),
+			),
+			Error::<Test>::AddressAlreadyRegistered
+		);
+	});
 }
