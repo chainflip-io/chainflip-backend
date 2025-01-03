@@ -114,7 +114,7 @@ async function legacyEvmVaultSwap(sourceAsset: Asset, destAsset: Asset, ccmSwap:
   const tx = {
     to: vaultAddress,
     data,
-    gas: sourceChain === 'Arbitrum' ? 5000000 : 200000,
+    gas: sourceChain === 'Arbitrum' ? 32000000 : 5000000,
     value: chainGasAsset(sourceChain) === sourceAsset ? amount : '0',
   };
 
