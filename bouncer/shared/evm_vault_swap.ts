@@ -177,7 +177,7 @@ export async function executeEvmVaultSwap(
     to: vaultSwapDetails.to,
     data: vaultSwapDetails.calldata,
     value: new BigNumber(vaultSwapDetails.value.slice(2), 16).toString(),
-    gas: srcChain === 'Arbitrum' ? 20000000 : 1000000,
+    gas: srcChain === 'Arbitrum' ? 32000000 : 5000000,
   };
 
   const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
