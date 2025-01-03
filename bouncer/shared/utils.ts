@@ -45,8 +45,7 @@ export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
-// TODO: To add Bitcoin and it's corresponding logic for all_swaps to work. PRO-1854.
-export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
+export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];
 export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 
 export type Asset = SDKAsset;
@@ -497,12 +496,14 @@ export enum TransactionOrigin {
   DepositChannel = 'DepositChannel',
   VaultSwapEvm = 'VaultSwapEvm',
   VaultSwapSolana = 'VaultSwapSolana',
+  VaultSwapBitcoin = 'VaultSwapBitcoin',
 }
 
 export type TransactionOriginId =
   | { type: TransactionOrigin.DepositChannel; channelId: number }
   | { type: TransactionOrigin.VaultSwapEvm; txHash: string }
-  | { type: TransactionOrigin.VaultSwapSolana; addressAndSlot: [string, number] };
+  | { type: TransactionOrigin.VaultSwapSolana; addressAndSlot: [string, number] }
+  | { type: TransactionOrigin.VaultSwapBitcoin; txId: string };
 
 function checkRequestTypeMatches(actual: object | string, expected: SwapRequestType) {
   if (typeof actual === 'object') {
@@ -527,7 +528,16 @@ function checkTransactionInMatches(actual: any, expected: TransactionOriginId): 
       ('Solana' in actual.Vault.txId &&
         expected.type === TransactionOrigin.VaultSwapSolana &&
         actual.Vault.txId.Solana[1].replaceAll(',', '') === expected.addressAndSlot[1].toString() &&
-        actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString())
+        actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString()) ||
+      ('Bitcoin' in actual.Vault.txId &&
+        expected.type === TransactionOrigin.VaultSwapBitcoin &&
+        actual.Vault.txId.Bitcoin ===
+          // Reverse byte order of BTC transactions
+          '0x' +
+            // eslint-disable-next-line @typescript-eslint/no-use-before-define
+            [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
+              .map((x) => x.toString(16).padStart(2, '0'))
+              .join(''))
     );
   }
   throw new Error(`Unsupported transaction origin type ${actual}`);

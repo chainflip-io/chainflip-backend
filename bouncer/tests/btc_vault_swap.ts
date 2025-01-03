@@ -1,13 +1,17 @@
 import assert from 'assert';
+import { Chains } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
 import { BTC_ENDPOINT, waitForBtcTransaction, sendVaultTransaction } from '../shared/send_btc';
 import {
   amountToFineAmount,
   Asset,
   assetDecimals,
+  chainFromAsset,
   createStateChainKeypair,
+  decodeDotAddressForContract,
   newAddress,
   observeBalanceIncrease,
+  stateChainAssetFromAsset,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
@@ -20,11 +24,17 @@ export const testBtcVaultSwap = new ExecutableTest('Btc-Vault-Swap', main, 120);
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
 
-interface VaultSwapDetails {
+interface BtcVaultSwapDetails {
   chain: string;
   nulldata_payload: string;
   deposit_address: string;
   expires_at: number;
+}
+
+interface BtcVaultSwapExtraParameters {
+  chain: 'Bitcoin';
+  min_output_amount: string;
+  retry_duration: number;
 }
 
 interface Beneficiary {
@@ -32,7 +42,7 @@ interface Beneficiary {
   bps: number;
 }
 
-async function buildAndSendBtcVaultSwap(
+export async function buildAndSendBtcVaultSwap(
   depositAmountBtc: number,
   brokerUri: string,
   destinationAsset: Asset,
@@ -51,23 +61,32 @@ async function buildAndSendBtcVaultSwap(
     affiliates.push({ account: affiliateAddress, bps: commissionBps });
   }
 
-  const vaultSwapDetails = (await chainflip.rpc(
+  const extraParameters: BtcVaultSwapExtraParameters = {
+    chain: 'Bitcoin',
+    min_output_amount: '0',
+    retry_duration: 0,
+  };
+
+  const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_get_vault_swap_details`,
     broker.address,
-    'BTC', // source_asset
-    destinationAsset.toUpperCase(),
-    destinationAddress,
+    { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
+    { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },
+    chainFromAsset(destinationAsset) === Chains.Polkadot
+      ? decodeDotAddressForContract(destinationAddress)
+      : destinationAddress,
     commissionBps, // broker_commission
-    0, // min_output_amount
-    0, // retry_duration
+    extraParameters,
+    null, // channel_metadata
     0, // boost_fee
     affiliates,
-  )) as unknown as VaultSwapDetails;
+    null, // dca_params
+  )) as unknown as BtcVaultSwapDetails;
 
-  assert.strictEqual(vaultSwapDetails.chain, 'Bitcoin');
-  testBtcVaultSwap.debugLog('nulldata_payload:', vaultSwapDetails.nulldata_payload);
-  testBtcVaultSwap.debugLog('deposit_address:', vaultSwapDetails.deposit_address);
-  testBtcVaultSwap.debugLog('expires_at:', vaultSwapDetails.expires_at);
+  assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
+  testBtcVaultSwap.debugLog('nulldata_payload:', BtcVaultSwapDetails.nulldata_payload);
+  testBtcVaultSwap.debugLog('deposit_address:', BtcVaultSwapDetails.deposit_address);
+  testBtcVaultSwap.debugLog('expires_at:', BtcVaultSwapDetails.expires_at);
 
   // Calculate expected expiry time assuming block time is 6 secs, expires_at = time left to next rotation
   const epochDuration = (await chainflip.rpc(`cf_epoch_duration`)) as number;
@@ -77,21 +96,22 @@ async function buildAndSendBtcVaultSwap(
   const expectedExpiresAt = Date.now() + blocksUntilNextRotation * 6000;
   // Check that expires_at field is correct (within 20 secs drift)
   assert(
-    Math.abs(expectedExpiresAt - vaultSwapDetails.expires_at) <= 20 * 1000,
-    `VaultSwapDetails expiry timestamp is not within a 20 secs drift of the expected expiry time.
-      expectedExpiresAt = ${expectedExpiresAt} and actualExpiresAt = ${vaultSwapDetails.expires_at}`,
+    Math.abs(expectedExpiresAt - BtcVaultSwapDetails.expires_at) <= 20 * 1000,
+    `BtcVaultSwapDetails expiry timestamp is not within a 20 secs drift of the expected expiry time.
+      expectedExpiresAt = ${expectedExpiresAt} and actualExpiresAt = ${BtcVaultSwapDetails.expires_at}`,
   );
 
   const txid = await sendVaultTransaction(
-    vaultSwapDetails.nulldata_payload,
+    BtcVaultSwapDetails.nulldata_payload,
     depositAmountBtc,
-    vaultSwapDetails.deposit_address,
+    BtcVaultSwapDetails.deposit_address,
     refundAddress,
   );
   testBtcVaultSwap.log('Broadcast successful, txid:', txid);
 
   await waitForBtcTransaction(txid);
   testBtcVaultSwap.debugLog('Transaction confirmed');
+  return txid;
 }
 
 async function testVaultSwap(
@@ -151,7 +171,7 @@ async function testVaultSwap(
   );
 }
 
-async function openPrivateBtcChannel(brokerUri: string) {
+export async function openPrivateBtcChannel(brokerUri: string) {
   // TODO: Use chainflip SDK instead so we can support any broker uri
   assert.strictEqual(brokerUri, '//BROKER_1', 'Support for other brokers is not implemented');
 
