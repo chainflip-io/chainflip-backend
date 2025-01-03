@@ -32,7 +32,7 @@ import { ChannelRefundParameters } from './sol_vault_swap';
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
 interface EvmVaultSwapDetails {
-  chain: string;
+  chain: 'Ethereum' | 'Arbitrum';
   calldata: string;
   value: string;
   to: string;
