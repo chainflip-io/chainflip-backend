@@ -10,6 +10,9 @@ mod missed_authorship_slots;
 mod offences;
 pub mod pending_rotation_broadcasts;
 mod signer_nomination;
+
+// Election pallet implementations
+pub mod bitcoin_elections;
 pub mod solana_elections;
 pub mod vault_swaps;
 
