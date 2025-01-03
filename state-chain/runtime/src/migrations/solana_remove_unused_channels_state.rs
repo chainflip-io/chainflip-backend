@@ -24,13 +24,15 @@ impl UncheckedOnRuntimeUpgrade for SolanaRemoveUnusedChannelsState {
 		)
 		.collect();
 
-		ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys().for_each(|key| {
+		let keys = ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
+			.collect::<Vec<_>>();
+		for key in keys.into_iter() {
 			if let CompositeElectoralUnsynchronisedStateMapKey::C((address, _asset)) = key {
 				if !addresses_in_use.contains(&address) {
 					ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::remove(key);
 				}
 			}
-		});
+		}
 
 		Weight::zero()
 	}
