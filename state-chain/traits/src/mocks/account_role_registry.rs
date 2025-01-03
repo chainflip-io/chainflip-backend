@@ -67,7 +67,7 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 		}
 	}
 
-	fn get_all(role: AccountRole) -> Vec<<T as Config>::AccountId> {
+	fn get_all(_role: AccountRole) -> Vec<<T as Config>::AccountId> {
 		Vec::new()
 	}
 }

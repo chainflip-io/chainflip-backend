@@ -1207,7 +1207,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(15)]
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::register_affiliate_withdrawal_address())]
 		pub fn register_affiliate_withdrawal_address(
 			origin: OriginFor<T>,
 			short_id: AffiliateShortId,
@@ -1243,7 +1243,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(16)]
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::affiliate_withdrawal_request())]
 		pub fn affiliate_withdrawal_request(
 			origin: OriginFor<T>,
 			short_id: AffiliateShortId,
@@ -1347,9 +1347,9 @@ pub mod pallet {
 				)
 				.map_err(address_error_to_pallet_error::<T>)?;
 
-			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
+			let earned_fees = T::BalanceApi::get_balance(account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
-			T::BalanceApi::try_debit_account(&account_id, asset, earned_fees)?;
+			T::BalanceApi::try_debit_account(account_id, asset, earned_fees)?;
 
 			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
 				T::EgressHandler::schedule_egress(
