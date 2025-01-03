@@ -70,7 +70,8 @@ async function main() {
           // Vault Swaps
           appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-          if (ccmSupportedChains.includes(destChain)) {
+          // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
+          if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
             // CCM Vault swaps
             appendSwap(sourceAsset, destAsset, testVaultSwap, true);
           }
