@@ -55,14 +55,6 @@ interface SolanaVaultSwapExtraParameters {
   from_token_account?: string;
 }
 
-// TODO: Unify this with BTC & EVM vault swaps.
-// interface BitcoinVaultSwapExtraParameters {
-//   chain: 'Bitcoin';
-//   min_output_amount: number;
-//   retry_duration: number;
-// }
-// type VaultSwapExtraParameters = BitcoinVaultSwapExtraParameters | SolanaVaultSwapExtraParameters;
-
 export type ChannelRefundParameters = {
   retry_duration: number;
   refund_address: string;
