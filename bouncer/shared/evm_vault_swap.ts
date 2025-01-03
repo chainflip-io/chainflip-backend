@@ -130,7 +130,6 @@ export async function executeEvmVaultSwap(
     );
     return receipt.hash;
   }
-  console.log('Using the broker API');
 
   // Use the broker API
   await using chainflip = await getChainflipApi();
