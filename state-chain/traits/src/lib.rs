@@ -833,6 +833,25 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	}
 }
 
+pub trait DeregistrationCheck {
+	type AccountId;
+	type Error: Into<DispatchError>;
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error>;
+}
+
+impl<A: DeregistrationCheck, B: DeregistrationCheck<AccountId = A::AccountId>> DeregistrationCheck
+	for (A, B)
+{
+	type AccountId = A::AccountId;
+	type Error = DispatchError;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), DispatchError> {
+		A::check(account_id)
+			.map_err(Into::into)
+			.and_then(|()| B::check(account_id).map_err(Into::into))
+	}
+}
+
 #[derive(
 	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug,
 )]

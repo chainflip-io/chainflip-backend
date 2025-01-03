@@ -535,6 +535,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type DeregistrationCheck = Bonder<Self>;
 	type WeightInfo = ();
 }
 
