@@ -1590,6 +1590,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "chainflip-engine",
+ "chainflip-integrator",
  "chainflip-node",
  "custom-rpc",
  "ed25519-dalek",
@@ -1633,6 +1634,7 @@ dependencies = [
  "anyhow",
  "cf-chains",
  "chainflip-api",
+ "chainflip-integrator",
  "clap",
  "custom-rpc",
  "futures",
@@ -1806,6 +1808,28 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.18",
+ "utilities",
+]
+
+[[package]]
+name = "chainflip-integrator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cf-chains",
+ "cf-primitives",
+ "frame-support",
+ "futures",
+ "hex",
+ "insta",
+ "jsonrpsee 0.23.2",
+ "log",
+ "parity-scale-codec",
+ "serde",
+ "serde_json",
+ "sp-core 34.0.0",
+ "state-chain-runtime",
+ "thiserror",
  "utilities",
 ]
 
@@ -2557,6 +2581,7 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "chainflip-integrator",
  "frame-metadata-hash-extension",
  "frame-support",
  "frame-system",

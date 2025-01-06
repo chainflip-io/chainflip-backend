@@ -15,7 +15,10 @@ use chainflip_api::{
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, ChannelId, DepositMonitorApi, OperatorApi,
-	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
+	SignedExtrinsicApi, StateChainApi,
+};
+use chainflip_integrator::{
+	GetOpenDepositChannelsQuery, RefundParameters, SwapDepositAddress, TransactionInId,
 	WithdrawFeesDetail,
 };
 use clap::Parser;
@@ -28,7 +31,6 @@ use jsonrpsee::{
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
 	PendingSubscriptionSink,
 };
-use serde::{Deserialize, Serialize};
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
@@ -69,12 +71,6 @@ impl From<BrokerApiError> for ErrorObjectOwned {
 			),
 		}
 	}
-}
-
-#[derive(Serialize, Deserialize)]
-pub enum GetOpenDepositChannelsQuery {
-	All,
-	Mine,
 }
 
 #[rpc(server, client, namespace = "broker")]

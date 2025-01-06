@@ -23,6 +23,7 @@ workspace = true
 
 [dependencies]
 chainflip-api = { workspace = true }
+chainflip-integrator = { workspace = true }
 cf-chains = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }

@@ -6,9 +6,18 @@ use crate::{
 	CfApiError, ExtrinsicDispatchError, RpcResult, StorageQueryApi,
 };
 use anyhow::anyhow;
-use cf_chains::address::AddressString;
-use cf_primitives::{Affiliates, Asset, BasisPoints, BlockNumber, DcaParameters};
+use cf_chains::{
+	address::AddressString, CcmChannelMetadata, ChannelRefundParametersEncoded,
+	ChannelRefundParametersGeneric,
+};
+use cf_primitives::{
+	AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters,
+};
 use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
+use chainflip_integrator::{
+	extract_event, find_lowest_unused_short_id, GetOpenDepositChannelsQuery, RefundParameters,
+	SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
+};
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, Deserialize, Serialize};
 use frame_system_rpc_runtime_api::AccountNonceApi;
@@ -27,7 +36,7 @@ use sp_runtime::{
 };
 use state_chain_runtime::{
 	constants::common::SIGNED_EXTRINSIC_LIFETIME,
-	runtime_apis::{CustomRuntimeApi, VaultSwapDetails},
+	runtime_apis::{ChainAccounts, CustomRuntimeApi, VaultSwapDetails},
 	AccountId, Hash, Nonce, RuntimeCall,
 };
 use std::{marker::PhantomData, sync::Arc};
@@ -44,6 +53,27 @@ pub trait BrokerSignedApi {
 	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
 	async fn register_account(&self) -> RpcResult<String>;
 
+	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
+	async fn request_swap_deposit_address(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		refund_parameters: Option<RefundParameters>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<SwapDepositAddress>;
+
+	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
+	async fn withdraw_fees(
+		&self,
+		asset: Asset,
+		destination_address: AddressString,
+	) -> RpcResult<WithdrawFeesDetail>;
+
 	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
 	async fn request_swap_parameter_encoding(
 		&self,
@@ -57,6 +87,31 @@ pub trait BrokerSignedApi {
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<VaultSwapDetails<AddressString>>;
+
+	#[method(name = "mark_transaction_for_rejection", aliases = ["broker_MarkTransactionForRejection"])]
+	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()>;
+
+	#[method(name = "get_open_deposit_channels", aliases = ["broker_getOpenDepositChannels"])]
+	async fn get_open_deposit_channels(
+		&self,
+		query: GetOpenDepositChannelsQuery,
+	) -> RpcResult<ChainAccounts>;
+
+	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]
+	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId>;
+
+	#[method(name = "close_private_btc_channel", aliases = ["broker_closePrivateBtcChannel"])]
+	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId>;
+
+	#[method(name = "register_affiliate", aliases = ["broker_registerAffiliate"])]
+	async fn register_affiliate(
+		&self,
+		affiliate_id: AccountId32,
+		short_id: Option<AffiliateShortId>,
+	) -> RpcResult<AffiliateShortId>;
+
+	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
+	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
 }
 
 /// An Broker signed RPC extension for the state chain node.
@@ -281,13 +336,17 @@ where
 			.expect("Unexpected state chain node behaviour")
 			.map(|dispatch_info| ExtrinsicDetails {
 				tx_hash,
-				_header: signed_block.block.header().clone(),
-				_events: extrinsic_events,
+				header: signed_block.block.header().clone(),
+				events: extrinsic_events,
 				_dispatch_info: dispatch_info,
 			})
 	}
 
-	pub async fn submit_one(&self, block_hash: Hash, extrinsic: B::Extrinsic) -> RpcResult<Hash> {
+	pub async fn submit_one(&self, call: RuntimeCall, at: Option<Hash>) -> RpcResult<Hash> {
+		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
+
+		let extrinsic = self.create_signed_extrinsic(block_hash, call)?;
+
 		let tx_hash = self
 			.pool
 			.submit_one(block_hash, TransactionSource::External, extrinsic)
@@ -299,74 +358,80 @@ where
 
 	pub async fn submit_watch(
 		&self,
-		block_hash: Hash,
-		extrinsic: B::Extrinsic,
+		call: RuntimeCall,
 		wait_for: WaitFor,
+		at: Option<Hash>,
 	) -> RpcResult<ExtrinsicDetails> {
-		match wait_for {
-			WaitFor::InBlock | WaitFor::Finalized => {
-				let mut status_stream = self
-					.pool
-					.submit_and_watch(block_hash, TransactionSource::External, extrinsic)
-					.await?;
+		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 
-				// Periodically poll the transaction pool to check inclusion status
-				while let Some(status) = status_stream.next().await {
-					log::warn!(" ------ transaction status: {:?}", status);
+		let extrinsic = self.create_signed_extrinsic(block_hash, call)?;
 
-					match status {
-						TransactionStatus::InBlock((block_hash, tx_index)) => {
-							if matches!(wait_for, WaitFor::InBlock) {
-								return self.get_extrinsic_details(block_hash, tx_index);
-							}
-						},
-						TransactionStatus::Finalized((block_hash, tx_index)) => {
-							if matches!(wait_for, WaitFor::Finalized) {
-								return self.get_extrinsic_details(block_hash, tx_index);
-							}
-						},
-						TransactionStatus::Future |
-						TransactionStatus::Ready |
-						TransactionStatus::Broadcast(_) => {
-							log::warn!("Transaction in progress status: {:?}", status);
-							continue
-						},
-						TransactionStatus::Invalid => {
-							log::warn!("Transaction failed status: {:?}", status);
-							return Err(CfApiError::OtherError(anyhow!(
-								"transaction is no longer valid in the current state. "
-							)))
-						},
-						TransactionStatus::Dropped => {
-							log::warn!("Transaction failed status: {:?}", status);
-							return Err(CfApiError::OtherError(anyhow!(
-								"transaction was dropped from the pool because of the limit"
-							)))
-						},
-						TransactionStatus::Usurped(_hash) => {
-							log::warn!("Transaction failed status: {:?}", status);
-							return Err(CfApiError::OtherError(anyhow!(
-								"Transaction has been replaced in the pool, "
-							)))
-						},
-						TransactionStatus::FinalityTimeout(_block_hash) => {
-							log::warn!("Transaction failed status: {:?}", status);
-							//return Err(CfApiError::OtherError(anyhow!("Maximum number of finality
-							// watchers has been reached")))
-							continue
-						},
-						TransactionStatus::Retracted(_block_hash) => {
-							log::warn!("Transaction failed status: {:?}", status);
-							return Err(CfApiError::OtherError(anyhow!(
-								"The block this transaction was included in has been retracted."
-							)))
-						},
+		// validate transaction
+		self.pool
+			.api()
+			.validate_transaction(block_hash, TransactionSource::External, extrinsic.clone())
+			.await??;
+
+		let mut status_stream = self
+			.pool
+			.submit_and_watch(block_hash, TransactionSource::External, extrinsic)
+			.await?;
+
+		// Periodically poll the transaction pool to check inclusion status
+		while let Some(status) = status_stream.next().await {
+			log::warn!(" ------ transaction status: {:?}", status);
+
+			match status {
+				TransactionStatus::InBlock((block_hash, tx_index)) => {
+					if matches!(wait_for, WaitFor::InBlock) {
+						return self.get_extrinsic_details(block_hash, tx_index);
 					}
-				}
-
-				Err(CfApiError::OtherError(anyhow!("transaction unexpected error")))
-			},
+				},
+				TransactionStatus::Finalized((block_hash, tx_index)) => {
+					if matches!(wait_for, WaitFor::Finalized) {
+						return self.get_extrinsic_details(block_hash, tx_index);
+					}
+				},
+				TransactionStatus::Future |
+				TransactionStatus::Ready |
+				TransactionStatus::Broadcast(_) => {
+					log::warn!("Transaction in progress status: {:?}", status);
+					continue
+				},
+				TransactionStatus::Invalid => {
+					log::warn!("Transaction failed status: {:?}", status);
+					return Err(CfApiError::OtherError(anyhow!(
+						"transaction is no longer valid in the current state. "
+					)))
+				},
+				TransactionStatus::Dropped => {
+					log::warn!("Transaction failed status: {:?}", status);
+					return Err(CfApiError::OtherError(anyhow!(
+						"transaction was dropped from the pool because of the limit"
+					)))
+				},
+				TransactionStatus::Usurped(_hash) => {
+					log::warn!("Transaction failed status: {:?}", status);
+					return Err(CfApiError::OtherError(anyhow!(
+						"Transaction has been replaced in the pool, "
+					)))
+				},
+				TransactionStatus::FinalityTimeout(_block_hash) => {
+					log::warn!("Transaction failed status: {:?}", status);
+					//return Err(CfApiError::OtherError(anyhow!("Maximum number of finality
+					// watchers has been reached")))
+					continue
+				},
+				TransactionStatus::Retracted(_block_hash) => {
+					log::warn!("Transaction failed status: {:?}", status);
+					return Err(CfApiError::OtherError(anyhow!(
+						"The block this transaction was included in has been retracted."
+					)))
+				},
+			}
 		}
+
+		Err(CfApiError::OtherError(anyhow!("transaction unexpected error")))
 	}
 }
 
@@ -437,48 +502,131 @@ where
 	}
 
 	async fn register_account(&self) -> RpcResult<String> {
-		let best_hash = self.client.info().best_hash;
-
-		// let extrinsic = self.create_dynamic_signed_extrinsic(
-		// 	best_hash,
-		// 	subxt::dynamic::tx(
-		// 		"Swapping",
-		// 		"register_as_broker",
-		// 		Vec::<subxt::dynamic::Value>::with_capacity(0),
-		// 	),
-		// )?;
-
-		let extrinsic = self.create_signed_extrinsic(
-			best_hash,
-			RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
-		)?;
-
-		// validate transaction
-		// match self
-		// 	.pool
-		// 	.api()
-		// 	.validate_transaction(best_hash, TransactionSource::External, extrinsic.clone())
-		// 	.await {
-		//
-		// 	Ok(_) => {
-		// 		let result = self.submit_watch(best_hash, extrinsic, WaitFor::Finalized).await?;
-		//
-		// 		log::warn!("result is '{:?}'", result);
-		// 		let WaitForResult::BlockHash(tx_hash) = result else {
-		// 			Err(internal_error("invalid block hash"))?
-		// 		};
-		// 		Ok(format!("{tx_hash:#x}"))
-		// 	}
-		// 	Err(e) => {
-		// 		Err(e.into())
-		// 	}
-		// }
-
-		let details = self.submit_watch(best_hash, extrinsic, WaitFor::InBlock).await?;
+		let details = self
+			.submit_watch(
+				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
+				WaitFor::InBlock,
+				None,
+			)
+			.await?;
 
 		Ok(format!("{:#x}", details.tx_hash))
 	}
 
+	async fn request_swap_deposit_address(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		refund_parameters: Option<RefundParameters>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<SwapDepositAddress> {
+		let destination_address = destination_address
+			.try_parse_to_encoded_address(destination_asset.into())
+			.map_err(anyhow::Error::msg)?;
+
+		let extrinsic_details = self
+			.submit_watch(
+				RuntimeCall::from(
+					pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
+						source_asset,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						channel_metadata,
+						boost_fee: boost_fee.unwrap_or_default(),
+						affiliate_fees: affiliate_fees.unwrap_or_default(),
+						refund_parameters: refund_parameters
+							.map(|rpc_params: ChannelRefundParametersGeneric<AddressString>| {
+								Ok::<_, anyhow::Error>(ChannelRefundParametersEncoded {
+									retry_duration: rpc_params.retry_duration,
+									refund_address: rpc_params
+										.refund_address
+										.try_parse_to_encoded_address(source_asset.into())?,
+									min_price: rpc_params.min_price,
+								})
+							})
+							.transpose()?,
+						dca_parameters,
+					},
+				),
+				WaitFor::InBlock,
+				None,
+			)
+			.await?;
+
+		Ok(extract_event!(
+			extrinsic_details.events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::SwapDepositAddressReady,
+			{
+				deposit_address,
+				channel_id,
+				source_chain_expiry_block,
+				channel_opening_fee,
+				refund_parameters,
+				..
+			},
+			SwapDepositAddress {
+				address: AddressString::from_encoded_address(deposit_address),
+				issued_block: extrinsic_details.header.number,
+				channel_id: *channel_id,
+				source_chain_expiry_block: (*source_chain_expiry_block).into(),
+				channel_opening_fee: (*channel_opening_fee).into(),
+				refund_parameters: refund_parameters.as_ref().map(|params| {
+					params.map_address(|refund_address| {
+						AddressString::from_encoded_address(&refund_address)
+					})
+				}),
+			}
+		)?)
+	}
+
+	async fn withdraw_fees(
+		&self,
+		asset: Asset,
+		destination_address: AddressString,
+	) -> RpcResult<WithdrawFeesDetail> {
+		let extrinsic_details = self
+			.submit_watch(
+				RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
+					asset,
+					destination_address: destination_address
+						.try_parse_to_encoded_address(asset.into())
+						.map_err(anyhow::Error::msg)?,
+				}),
+				WaitFor::InBlock,
+				None,
+			)
+			.await?;
+
+		Ok(extract_event!(
+			extrinsic_details.events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::WithdrawalRequested,
+			{
+				egress_amount,
+				egress_fee,
+				destination_address,
+				egress_id,
+				..
+			},
+			WithdrawFeesDetail {
+				tx_hash: extrinsic_details.tx_hash,
+				egress_id: *egress_id,
+				egress_amount: (*egress_amount).into(),
+				egress_fee: (*egress_fee).into(),
+				destination_address: AddressString::from_encoded_address(destination_address),
+			}
+		)?)
+	}
+
+	// This is also defined in custom-rpc as cf_get_vault_swap_details. This is required here
+	// to make a smooth migration from broker API binary. TODO: consider defining only in 1 place
 	async fn request_swap_parameter_encoding(
 		&self,
 		source_asset: Asset,
@@ -496,7 +644,7 @@ where
 			.runtime_api()
 			.cf_get_vault_swap_details(
 				self.client.info().best_hash,
-				self.signer.account(),
+				self.pair_signer.account_id.clone(),
 				source_asset,
 				destination_asset,
 				destination_address.try_parse_to_encoded_address(destination_asset.into())?,
@@ -508,6 +656,122 @@ where
 				dca_parameters,
 			)??
 			.map_btc_address(Into::into))
+	}
+
+	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()> {
+		match tx_id {
+			TransactionInId::Bitcoin(tx_id) =>
+				self.submit_watch(
+					RuntimeCall::BitcoinIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+					WaitFor::InBlock,
+					None,
+				)
+				.await,
+		}?;
+		Ok(())
+	}
+
+	async fn get_open_deposit_channels(
+		&self,
+		query: GetOpenDepositChannelsQuery,
+	) -> RpcResult<ChainAccounts> {
+		let account_id = match query {
+			GetOpenDepositChannelsQuery::All => None,
+			GetOpenDepositChannelsQuery::Mine => Some(self.pair_signer.account_id.clone()),
+		};
+
+		self.client
+			.runtime_api()
+			.cf_get_open_deposit_channels(self.client.info().best_hash, account_id)
+			.map_err(CfApiError::RuntimeApiError)
+	}
+
+	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
+		let extrinsic_details = self
+			.submit_watch(
+				RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
+				WaitFor::InBlock,
+				None,
+			)
+			.await?;
+
+		Ok(extract_event!(
+			&extrinsic_details.events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::PrivateBrokerChannelOpened,
+			{ channel_id, .. },
+			*channel_id
+		)?)
+	}
+
+	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
+		let extrinsic_details = self
+			.submit_watch(
+				RuntimeCall::from(pallet_cf_swapping::Call::close_private_btc_channel {}),
+				WaitFor::InBlock,
+				None,
+			)
+			.await?;
+
+		Ok(extract_event!(
+			&extrinsic_details.events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::PrivateBrokerChannelClosed,
+			{ channel_id, .. },
+			*channel_id
+		)?)
+	}
+
+	async fn register_affiliate(
+		&self,
+		affiliate_id: AccountId32,
+		short_id: Option<AffiliateShortId>,
+	) -> RpcResult<AffiliateShortId> {
+		let register_as_id = if let Some(short_id) = short_id {
+			short_id
+		} else {
+			let affiliates = self.get_affiliates().await?;
+
+			// Check if the affiliate is already registered
+			if let Some((existing_short_id, _)) =
+				affiliates.iter().find(|(_, id)| id == &affiliate_id)
+			{
+				return Ok(*existing_short_id);
+			}
+
+			// Auto assign the lowest unused short id
+			let used_ids: Vec<AffiliateShortId> =
+				affiliates.into_iter().map(|(short_id, _)| short_id).collect();
+			find_lowest_unused_short_id(&used_ids)?
+		};
+
+		let extrinsic_details = self
+			.submit_watch(
+				RuntimeCall::from(pallet_cf_swapping::Call::register_affiliate {
+					affiliate_id,
+					short_id: register_as_id,
+				}),
+				WaitFor::InBlock,
+				None,
+			)
+			.await?;
+
+		Ok(extract_event!(
+			&extrinsic_details.events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::AffiliateRegistrationUpdated,
+			{ affiliate_short_id, .. },
+			*affiliate_short_id
+		)?)
+	}
+
+	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
+		self.client
+			.runtime_api()
+			.cf_get_affiliates(self.client.info().best_hash, self.pair_signer.account_id.clone())
+			.map_err(CfApiError::RuntimeApiError)
 	}
 }
 
@@ -522,7 +786,7 @@ pub enum WaitFor {
 
 pub struct ExtrinsicDetails {
 	tx_hash: Hash,
-	_header: state_chain_runtime::Header,
-	_events: Vec<state_chain_runtime::RuntimeEvent>,
+	header: state_chain_runtime::Header,
+	events: Vec<state_chain_runtime::RuntimeEvent>,
 	_dispatch_info: DispatchInfo,
 }

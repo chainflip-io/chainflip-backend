@@ -49,6 +49,7 @@ use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
+	transaction_validity::TransactionValidityError,
 	Percent, Permill,
 };
 use sp_state_machine::InspectState;
@@ -908,7 +909,7 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
 	async fn cf_subscribe_lp_order_fills(&self);
 
-	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
+	#[subscription(name = "subscribe_transaction_screening_events", aliases = ["broker_subscribe_transaction_screening_events"], item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn cf_subscribe_transaction_screening_events(&self);
 
 	#[method(name = "lp_get_order_fills")]
@@ -1171,12 +1172,15 @@ pub enum CfApiError {
 	#[error("{0:?}")]
 	TransactionPoolError(#[from] sc_transaction_pool::error::Error),
 	#[error("{0:?}")]
+	TransactionValidityError(#[from] TransactionValidityError),
+	#[error("{0:?}")]
 	ExtrinsicDispatchError(#[from] ExtrinsicDispatchError),
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
 	#[error(transparent)]
 	OtherError(#[from] anyhow::Error),
 }
+
 pub type RpcResult<T> = Result<T, CfApiError>;
 
 fn internal_error(error: impl core::fmt::Debug) -> ErrorObjectOwned {
@@ -1219,6 +1223,7 @@ impl From<CfApiError> for ErrorObjectOwned {
 			CfApiError::OtherError(error) => internal_error(error),
 			CfApiError::SubstrateClientError(error) => call_error(error),
 			CfApiError::TransactionPoolError(error) => call_error(error),
+			CfApiError::TransactionValidityError(error) => call_error(error),
 			CfApiError::ExtrinsicDispatchError(error) => call_error(error),
 		}
 	}

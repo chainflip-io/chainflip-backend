@@ -28,6 +28,8 @@ jsonrpsee = { workspace = true, features = ["full"] }
 # Local
 chainflip-engine = { workspace = true }
 cf-utilities = { workspace = true, default-features = true }
+chainflip-integrator = { workspace = true }
+
 
 # State Chain
 cf-amm = { workspace = true, default-features = true }

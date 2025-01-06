@@ -7,6 +7,7 @@ members = [
   "api/bin/chainflip-ingress-egress-tracker",
   "api/bin/chainflip-lp-api",
   "api/lib",
+  "api/integrator",
   "engine",
   "engine-proc-macros",
   "engine-runner-bin",
@@ -273,6 +274,7 @@ cf-engine-dylib = { path = "engine-dylib" }
 chainflip-api = { path = "api/lib" }
 chainflip-engine = { path = "engine" }
 engine-proc-macros = { path = "engine-proc-macros" }
+chainflip-integrator = { path = "api/integrator" }
 
 # Chainflip utilities and others
 cf-runtime-macros = { path = "state-chain/runtime-utilities/macros", default-features = false }
