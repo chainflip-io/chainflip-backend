@@ -104,6 +104,7 @@
 #![feature(try_find)]
 #![feature(step_trait)]
 #![feature(trait_alias)]
+#![feature(associated_type_defaults)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]

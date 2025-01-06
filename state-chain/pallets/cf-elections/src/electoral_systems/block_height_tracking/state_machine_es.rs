@@ -63,7 +63,7 @@ impl<V: Validate, C> Validate for SMInput<V, C> {
 	}
 }
 
-pub trait ESBounds {
+pub trait ESInterface {
 
 	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
 
@@ -140,10 +140,11 @@ pub trait ESBounds {
 }
 
 
-type Vote_of_VoteStorage<VS : VoteStorage> = VS::Vote;
+#[allow(type_alias_bounds)]
+type VoteOfVoteStorage<VS : VoteStorage> = VS::Vote;
 
 
-pub trait SMCMESBounds0 : 'static + Sized + ESBounds
+pub trait StateMachineES : 'static + Sized + ESInterface
 <
 	ElectoralUnsynchronisedStateMapKey = (),
 	ElectoralUnsynchronisedStateMapValue = (),
@@ -161,10 +162,13 @@ pub trait SMCMESBounds0 : 'static + Sized + ESBounds
 	type Consensus2 : Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
 	type Vote2 : Validate + Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
 	type VoteStorage2 : VoteStorage<Vote = Self::Vote2>;
+
+	type StateMachine : StateMachineForES<Self> + 'static;
+	type ConsensusMechanism : ConsensusMechanismForES<Self> + 'static;
 }
 
 
-pub trait StateMachineForES<ES: SMCMESBounds0> = StateMachine
+pub trait StateMachineForES<ES: StateMachineES> = StateMachine
 <
 	Input = SMInput<ES::Consensus, ES::OnFinalizeContextItem>,
 	State = ES::ElectoralUnsynchronisedState,
@@ -172,25 +176,20 @@ pub trait StateMachineForES<ES: SMCMESBounds0> = StateMachine
 	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
 >;
 
-pub trait ConsensusMechanismForES<ES: SMCMESBounds0> = ConsensusMechanism
+pub trait ConsensusMechanismForES<ES: StateMachineES> = ConsensusMechanism
 <
-	Vote = Vote_of_VoteStorage<ES::Vote>,
+	Vote = VoteOfVoteStorage<ES::Vote>,
 	Result = ES::Consensus,
 	Settings = (Threshold, ES::ElectionProperties)
 >;
 
-pub trait SMCMESBounds : 'static + Sized + SMCMESBounds0
-{
-	type StateMachine : StateMachineForES<Self> + 'static;
-	type ConsensusMechanism : ConsensusMechanismForES<Self> + 'static;
-}
 
-pub struct SMCMESInstance<Bounds: SMCMESBounds>
+pub struct StateMachineESInstance<Bounds: StateMachineES>
 {
 	_phantom: core::marker::PhantomData<Bounds>,
 }
 
-impl<Bounds: SMCMESBounds> ElectoralSystem for SMCMESInstance<Bounds> 
+impl<Bounds: StateMachineES> ElectoralSystem for StateMachineESInstance<Bounds> 
 where
 	<Bounds::Vote as VoteStorage>::Properties : Default,
 	Bounds::Consensus : Indexed

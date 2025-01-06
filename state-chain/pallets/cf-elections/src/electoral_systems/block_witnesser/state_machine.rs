@@ -1,20 +1,16 @@
 
-use core::{iter::Step, ops::RangeInclusive};
+use core::iter::Step;
 use cf_chains::witness_period::BlockZero;
 use codec::{Decode, Encode};
-use frame_support::{ensure, Hashable};
-use log::trace;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
-use sp_std::vec::Vec;
-use sp_std::ops::Add;
 
 use itertools::Either;
 
 use crate::electoral_systems::block_height_tracking::state_machine::MultiIndexAndValue;
 use crate::electoral_systems::block_height_tracking::{
-	consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold}, state_machine::{ConstantIndex, IndexOf, StateMachine, Validate}, state_machine_es::SMInput, ChainProgress
+	state_machine::{ConstantIndex, IndexOf, StateMachine, Validate}, state_machine_es::SMInput, ChainProgress
 };
 use crate::{SharedData, SharedDataHash};
 use super::primitives::ElectionTracker;
@@ -55,7 +51,6 @@ impl<N: BlockZero + Ord, ElectionProperties, ElectionPropertiesHook: Hook<N,Elec
 		Self { elections: Default::default(), generate_election_properties_hook: Default::default(), _phantom: Default::default() }
 	}
 }
-
 
 
 pub struct BWStateMachine<
@@ -159,13 +154,12 @@ impl<
 mod tests {
 	use proptest::{
 		prelude::{any, prop, Arbitrary, BoxedStrategy, Just, Strategy},
-		prop_oneof, proptest,
+		prop_oneof,
 	};
 
     use crate::prop_do;
 
     use super::*;
-    use super::super::super::state_machine::core::*;
     use hook_test_utils::*;
 
     type SM = BWStateMachine<(), (), u64, ConstantHook<u64, ()>>;
@@ -213,7 +207,6 @@ mod tests {
 		} else {
 			Just(SMInput::Context(ChainProgress::WaitingForFirstConsensus)).boxed()
 		}
-
     }
 
 
