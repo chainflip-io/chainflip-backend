@@ -16,6 +16,7 @@ pub enum CcmValidityError {
 	CannotDecodeCcmAdditionalData,
 	CcmIsTooLong,
 	CcmAdditionalDataContainsInvalidAccounts,
+	RedundantDataSupplied,
 }
 impl From<CcmValidityError> for DispatchError {
 	fn from(value: CcmValidityError) -> Self {
@@ -25,6 +26,8 @@ impl From<CcmValidityError> for DispatchError {
 			CcmValidityError::CcmIsTooLong => "Invalid Ccm: message too long".into(),
 			CcmValidityError::CcmAdditionalDataContainsInvalidAccounts =>
 				"Invalid Ccm: additional data contains invalid accounts".into(),
+			CcmValidityError::RedundantDataSupplied =>
+				"Invalid Ccm: Additional data supplied but they will not be used".into(),
 		}
 	}
 }
@@ -74,6 +77,8 @@ impl CcmValidityCheck for CcmValidityChecker {
 			}
 
 			Ok(DecodedCcmAdditionalData::Solana(ccm_accounts))
+		} else if !ccm.ccm_additional_data.is_empty() {
+			Err(CcmValidityError::RedundantDataSupplied)
 		} else {
 			Ok(DecodedCcmAdditionalData::NotRequired)
 		}
