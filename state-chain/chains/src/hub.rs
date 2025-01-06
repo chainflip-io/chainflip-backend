@@ -833,7 +833,20 @@ fn derive_address() {
 	assert_eq!(
 		address,
 		PolkadotAccountId(sp_core::hex2array!(
-			"7b24281dda44fdf236e4cb57907c39af3e959462225c49ad0d5f11f3355c33b1"
+			"690dc0d83d5c7d19cda8299412279fc519ad1872fdb0bf733b64d16333fb5463"
+		))
+	);
+
+	let address = calculate_derived_address(
+		PolkadotAccountId(sp_core::hex2array!(
+			"690dc0d83d5c7d19cda8299412279fc519ad1872fdb0bf733b64d16333fb5463"
+		)),
+		1,
+	);
+	assert_eq!(
+		address,
+		PolkadotAccountId(sp_core::hex2array!(
+			"19d0f04b6dd7a4d2f9338d99d9ddeb137275b4bdad8bacacc381a15769ace183"
 		))
 	);
 }
