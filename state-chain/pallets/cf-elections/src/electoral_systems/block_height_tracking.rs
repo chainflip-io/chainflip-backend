@@ -127,6 +127,21 @@ pub enum ChainProgress<ChainBlockNumber> {
 	WaitingForFirstConsensus,
 }
 
+impl<N: Ord> Validate for ChainProgress<N> {
+	type Error = &'static str;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		use ChainProgress::*;
+		match self {
+			Reorg(range) | Continuous(range) => {
+				ensure!(range.start() <= range.end(), "range a..=b in ChainProgress should have a <= b");
+				Ok(())
+			},
+			None(_) | WaitingForFirstConsensus => Ok(()),
+		}
+	}
+}
+
 //-------- implementation of block height tracking as a state machine --------------
 
 trait BlockHeightTrait = PartialEq + Ord + Copy + Step + BlockZero;
@@ -275,7 +290,11 @@ mod tests {
 
 	#[test]
 	pub fn test_dsm() {
-		BlockHeightTrackingDSM::<6, u32, bool>::test(arb_state(), Just(()), |index| {
+		BlockHeightTrackingDSM::<6, u32, bool>::test(
+			module_path!(),
+			arb_state(),
+			Just(()),
+			|index| {
 			prop_oneof![
 				Just(SMInput::Context(())),
 				(0..index.len()).prop_flat_map(move |ix| arb_input_headers(

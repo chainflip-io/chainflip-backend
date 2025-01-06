@@ -93,6 +93,14 @@ pub trait Validate {
 	fn is_valid(&self) -> Result<(), Self::Error>;
 }
 
+impl Validate for () {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 /// A trait for implementing state machines, in particular used for simple electoral systems.
 /// The model currently only supports electoral systems with a single ongoing election at any given
 /// time. (Extending it to multiple ongoing elections is WIP.)
@@ -163,6 +171,7 @@ pub trait StateMachine: 'static {
 	/// `step_specification`.
 	#[cfg(test)]
 	fn test(
+		path: &'static str,
 		states: impl Strategy<Value = Self::State>,
 		settings: impl Strategy<Value = Self::Settings>,
 		inputs: impl Fn(IndexOf<Self::Input>) -> BoxedStrategy<Self::Input>,
@@ -172,7 +181,15 @@ pub trait StateMachine: 'static {
 		Self::Settings: sp_std::fmt::Debug + Clone,
 		<Self::Input as Indexed>::Index: Ord,
 	{
-		let mut runner = TestRunner::default();
+    	use proptest::test_runner::{Config, FileFailurePersistence};
+
+		let mut runner = TestRunner::new(
+			Config {
+				source_file: Some(path),
+				failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel("proptest-regressions"))),
+				..Default::default()
+			}
+		);
 
 		runner
 			.run(
@@ -182,7 +199,7 @@ pub trait StateMachine: 'static {
 				|(mut state, input, settings)| {
 					// ensure that inputs are well formed
 					assert!(state.is_valid().is_ok(), "input state not valid {:?}", state.is_valid());
-					assert!(input.is_valid().is_ok(), "input not valid");
+					assert!(input.is_valid().is_ok(), "input not valid {:?}", input.is_valid());
 					assert!(input.has_index(&Self::input_index(&state)), "input has wrong index");
 
 					// backup state

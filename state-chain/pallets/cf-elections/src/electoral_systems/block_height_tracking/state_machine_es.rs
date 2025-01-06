@@ -1,9 +1,12 @@
 
+use core::fmt::Error;
+
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
+use itertools::Either;
 use sp_std::{vec::Vec, fmt::Debug};
 
 use crate::{
@@ -52,13 +55,13 @@ impl<V: Indexed, C> Indexed for SMInput<V, C> {
 	}
 }
 
-impl<V: Validate, C> Validate for SMInput<V, C> {
-	type Error = V::Error;
+impl<V: Validate, C: Validate> Validate for SMInput<V, C> {
+	type Error = Either<V::Error, C::Error>;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		match self {
-			SMInput::Vote(vote) => vote.is_valid(),
-			SMInput::Context(_) => Ok(()),
+			SMInput::Vote(vote) => vote.is_valid().map_err(Either::Left),
+			SMInput::Context(context) => context.is_valid().map_err(Either::Right),
 		}
 	}
 }

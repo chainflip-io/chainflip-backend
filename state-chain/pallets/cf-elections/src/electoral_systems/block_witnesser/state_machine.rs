@@ -137,10 +137,10 @@ impl<
 
 				let all_elections = before.elections.ongoing.key_set().merge(range.clone().into_set());
 
-				assert!(
+				assert_eq!(
 					// There should be exactly those elections ongoing which have the lowest heights (at most max_concurrent_elections of them)
-					all_elections.into_iter().take(settings.max_concurrent_elections as usize).collect::<BTreeSet<_>>() == after.elections.ongoing.key_set(),
-					"wrong ongoing election after receiving new block height range"
+					all_elections.into_iter().take(settings.max_concurrent_elections as usize).collect::<BTreeSet<_>>(), after.elections.ongoing.key_set()
+					// "wrong ongoing election after receiving new block height range"
 				)
 			},
 
@@ -170,11 +170,11 @@ mod tests {
 		let into_n = |x: usize| N::saturating_forward(N::zero(), x);
 
 		prop_do!{
-			let highest_started_u = in any::<usize>();
-			let scheduled_not_started = in any::<usize>();
+			let highest_started_u in any::<usize>();
+			let scheduled_not_started in any::<usize>();
 			let highest_started = into_n(highest_started_u);
 			let highest_scheduled = into_n(highest_started_u.saturating_add(scheduled_not_started));
-			let ongoing = in prop::collection::vec(((0..highest_started_u).prop_map(into_n), any::<u32>()), 0..10);
+			let ongoing in prop::collection::vec(((0..highest_started_u).prop_map(into_n), any::<u32>()), 0..10);
 			return BWState {
                 elections: ElectionTracker {
                     highest_started: highest_started.clone(),
@@ -190,13 +190,15 @@ mod tests {
     fn generate_input(index: IndexOf<<SM as StateMachine>::Input>) -> BoxedStrategy<<SM as StateMachine>::Input> {
 
 		let generate_input = |index| {
-			let context = prop_oneof![
-				Just(ChainProgress::WaitingForFirstConsensus)
-			];
 
 			prop_oneof![
 				Just(SMInput::Vote(MultiIndexAndValue(index, ()))),
-				context.prop_map(SMInput::Context)
+				prop_oneof![
+					Just(ChainProgress::WaitingForFirstConsensus),
+					any::<u64>().prop_map(ChainProgress::None),
+					any::<(u64, u64)>().prop_map(|(a,b)| ChainProgress::Continuous(a..=a)),
+					any::<(u64, u64)>().prop_map(|(a,b)| ChainProgress::Reorg(a..=a))
+				].prop_map(SMInput::Context)
 			]
 		};
 
@@ -213,8 +215,13 @@ mod tests {
     #[test]
     pub fn test_bw_statemachine() {
         SM::test(
+			file!(),
             generate_state(),
-            Just(BWSettings { safe_mode_enabled: false, max_concurrent_elections: 5 }),
+			prop_do!{
+				// let safe_mode_enabled in any::<bool>();
+				// let max_concurrent_elections in 1..10u32;
+				return BWSettings { safe_mode_enabled: false, max_concurrent_elections: 5 }
+			},
 			generate_input
         );
     }
