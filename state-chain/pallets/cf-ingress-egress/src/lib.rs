@@ -712,7 +712,7 @@ pub mod pallet {
 
 	/// Stores the details of transactions that are scheduled for rejecting.
 	#[pallet::storage]
-	pub(crate) type ScheduledTxForReject<T: Config<I>, I: 'static = ()> =
+	pub(crate) type ScheduledTransactionsForRejection<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 
 	/// Stores the details of transactions that failed to be rejected.
@@ -1080,7 +1080,7 @@ pub mod pallet {
 				}
 			}
 
-			for tx in ScheduledTxForReject::<T, I>::take() {
+			for tx in ScheduledTransactionsForRejection::<T, I>::take() {
 				if let Some(Ok(refund_address)) = tx.refund_address.clone().map(TryInto::try_into) {
 					if let Ok(api_call) =
 						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
@@ -2260,7 +2260,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						refund_address.clone(),
 				};
 
-				ScheduledTxForReject::<T, I>::append(TransactionRejectionDetails {
+				ScheduledTransactionsForRejection::<T, I>::append(TransactionRejectionDetails {
 					refund_address,
 					amount: deposit_amount,
 					asset,
