@@ -296,7 +296,7 @@ impl<T: Config> Pallet<T> {
 				for (destination, amount) in owed_assets.iter_mut() {
 					debug_assert!(*amount > 0);
 					let _ = Self::reconcile(chain, destination, amount, total_withheld);
-					if *total_withheld == 0 {
+					if amount > total_withheld || *total_withheld == 0 {
 						break;
 					}
 				}
