@@ -36,7 +36,7 @@ impl WitnessDataExtraction for RuntimeCall {
 				let fee_info = mem::take(&mut new_chain_state.tracked_data.median_tip);
 				Some(fee_info.encode())
 			},
-			// In Arbitrum the gas calculations are complext and we need  to use a call to the
+			// In Arbitrum the gas calculations are complex and we need to use a call to the
 			// NodeInterface which simulates a transaction to get that value. However, that
 			// estimation can't be done at a particular block but rather when the node receives
 			// the RPC call.
@@ -245,8 +245,8 @@ mod tests {
 		test_medians::<Ethereum>();
 		test_medians::<Bitcoin>();
 		test_medians::<Polkadot>();
-		// we dont test medians for Arbitrum since there is no priority fee in arbitrum
-		// we dont test medians for Solana as we use a different method for Solana block height
+		// we don't test medians for Arbitrum since there is no priority fee in arbitrum
+		// we don't test medians for Solana as we use a different method for Solana block height
 		// tracking
 	}
 
