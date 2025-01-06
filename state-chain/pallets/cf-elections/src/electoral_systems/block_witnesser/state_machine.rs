@@ -28,7 +28,7 @@ pub struct BWSettings {
 
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize,
 )]
 pub struct BWState<N: Ord, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionProperties>> {
 	elections: ElectionTracker<N>,
@@ -36,7 +36,7 @@ pub struct BWState<N: Ord, ElectionProperties, ElectionPropertiesHook: Hook<N,El
     _phantom: sp_std::marker::PhantomData<ElectionProperties>
 }
 
-impl<N: Ord, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionProperties>> Validate for BWState<N, ElectionProperties, ElectionPropertiesHook> {
+impl<N: Ord + Step, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionProperties>> Validate for BWState<N, ElectionProperties, ElectionPropertiesHook> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -82,10 +82,7 @@ impl<
 		log::info!("BW: input {i:?}");
 		match i {
 			SMInput::Context(ChainProgress::Reorg(range) | ChainProgress::Continuous(range)) => {
-				s.elections.schedule_up_to(*range.end());
-				for election in range {
-					s.elections.restart_election(election);
-				}
+				s.elections.schedule_range(range);
 			},
 
 			SMInput::Context(ChainProgress::WaitingForFirstConsensus | ChainProgress::None(_)) => {},
@@ -109,7 +106,8 @@ impl<
     /// Specifiation for step function
 	#[cfg(test)]
 	fn step_specification(before: &Self::State, input: &Self::Input, settings: &Self::Settings, after: &Self::State) {
-		use SMInput::*;
+		use itertools::Itertools;
+use SMInput::*;
 		use ChainProgress::*;
 
 		assert!(
@@ -121,27 +119,23 @@ impl<
 
 		match input {
 			Vote(MultiIndexAndValue((height, _, _), _)) => {
+
 				// the elections after a vote are the ones from before, minus the voted one + all outstanding ones
 				let after_should = before.elections.ongoing.key_set().without(*height)
-							.merge((N::forward(before.elections.highest_started, 1) .. before.elections.highest_scheduled).take((settings.max_concurrent_elections as usize + 1).saturating_sub(before.elections.ongoing.len())).collect());
+							.merge((before.elections.next_election .. before.elections.highest_scheduled).take((settings.max_concurrent_elections as usize + 1).saturating_sub(before.elections.ongoing.len())).collect());
 
 				assert_eq!(
-					// after receiving a vote, the ongoing elections should be the same as previously,
-					// except with the vote's height removed
 					after.elections.ongoing.key_set(), after_should,
 					"wrong ongoing election set after received vote",
 				)
 			},
 
 			Context(Reorg(range) | Continuous(range)) => {
+				// if an election is not part of the reorg range, it should not be stopped or restarted 
+				assert!(before.elections.ongoing.iter().all(
+					|(height, ix)| if height < range.start() {after.elections.ongoing.iter().contains(&(height, ix))} else {true}
+				), "ongoing election which wasn't part of reorg should stay open");
 
-				let all_elections = before.elections.ongoing.key_set().merge(range.clone().into_set());
-
-				assert_eq!(
-					// There should be exactly those elections ongoing which have the lowest heights (at most max_concurrent_elections of them)
-					all_elections.into_iter().take(settings.max_concurrent_elections as usize).collect::<BTreeSet<_>>(), after.elections.ongoing.key_set()
-					// "wrong ongoing election after receiving new block height range"
-				)
 			},
 
 			Context(WaitingForFirstConsensus | None(_)) => (),
@@ -173,13 +167,14 @@ mod tests {
 			let highest_started_u in any::<usize>();
 			let scheduled_not_started in any::<usize>();
 			let highest_started = into_n(highest_started_u);
-			let highest_scheduled = into_n(highest_started_u.saturating_add(scheduled_not_started));
+			let highest_scheduled = into_n(highest_started_u.saturating_add(scheduled_not_started).saturating_sub(1));
 			let ongoing in prop::collection::vec(((0..highest_started_u).prop_map(into_n), any::<u32>()), 0..10);
 			return BWState {
                 elections: ElectionTracker {
-                    highest_started: highest_started.clone(),
+                    next_election: highest_started.clone(),
                     highest_scheduled: highest_scheduled.clone(),
-                    ongoing: BTreeMap::from_iter(ongoing.into_iter()) 
+                    ongoing: BTreeMap::from_iter(ongoing.into_iter()),
+					reorg_counter: 0
                 },
                 generate_election_properties_hook: ConstantHook { state: (), _phantom: Default::default() },
                 _phantom: core::marker::PhantomData,

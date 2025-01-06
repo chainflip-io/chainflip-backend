@@ -28,11 +28,14 @@ use super::BlockWitnesserSettings;
 // but even in safe mode, if there's a reorg we call `restart_election`.
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize
 )]
 pub struct ElectionTracker<N: Ord> {
+	/// The block heights which we have already received but not started elections for, yet.
+	/// This means that we assume that we had elections for heights < scheduled.start().
+	/// These might have already concluded of course.
+	pub next_election: N,
 	pub highest_scheduled: N,
-	pub highest_started: N,
 
 	/// Map containing all currently active elections.
 	/// The associated usize is somewhat an artifact of the fact that
@@ -42,15 +45,24 @@ pub struct ElectionTracker<N: Ord> {
 	/// stay the same, so we have (N, usize) as election properties. And when we want to reopen
 	/// an ongoing election we increment the usize.
 	pub ongoing: BTreeMap<N, u32>,
+
+	/// Whenever a reorg is detected, we increment this counter, as to restart all ongoing
+	/// relevant elections.
+	pub reorg_counter: u32,
 }
 
 impl<N: Ord + Step + Copy> ElectionTracker<N> {
 	/// Given the current state, if there are less than `max_ongoing`
 	/// ongoing elections we push more elections into ongoing.
 	pub fn start_more_elections(&mut self, max_ongoing: usize) {
-		while self.highest_started < self.highest_scheduled && self.ongoing.len() < max_ongoing {
-			self.highest_started = N::forward(self.highest_started, 1);
-			self.ongoing.insert(self.highest_started, 0);
+		// filter out all elections which are ongoing, but shouldn't be, because
+		// they are in the scheduled range (for example because there was a reorg)
+		self.ongoing.retain(|height, _| *height < self.next_election );
+
+		// schedule 
+		while self.next_election <= self.highest_scheduled && self.ongoing.len() < max_ongoing {
+			self.ongoing.insert(self.next_election, self.reorg_counter);
+			self.next_election = N::forward(self.next_election, 1);
 		}
 	}
 
@@ -61,31 +73,37 @@ impl<N: Ord + Step + Copy> ElectionTracker<N> {
 		}
 	}
 
-	/// This function only restarts elections which have been previously
-	/// started (i.e. <= highest started).
-	pub fn restart_election(&mut self, election: N) {
-		if election <= self.highest_started {
-			*self.ongoing.entry(election).or_insert(0) += 1;
-		}
-	}
+	/// This function schedules all elections up to `range.end()`
+	pub fn schedule_range(&mut self, range: RangeInclusive<N>) {
 
-	/// This function schedules all elections up to `election`
-	pub fn schedule_up_to(&mut self, election: N) {
-		if self.highest_scheduled < election {
-			self.highest_scheduled = election;
+		// Check whether there is a reorg concerning elections we have started previously.
+		// If there is, we ensure that all ongoing or previously finished elections in range
+		// are going to be restarted once there is the capacity to do so.
+		if *range.start() < self.next_election {
+			self.next_election = *range.start();
+			self.reorg_counter += 1;
+		}
+
+		// QUESTION: currently, the following check ensures that
+		// the highest scheduled election never decreases. Do we want this?
+		// It's difficult to imagine a situation where the highest block number
+		// after a reorg is lower than it was previously, and also, even if, in that
+		// case we simply keep the higher number that doesn't seem to be too much of a problem.
+		if self.highest_scheduled < *range.end() {
+			self.highest_scheduled = *range.end();
 		}
 	}
 }
 
-impl<N : Ord> Validate for ElectionTracker<N> {
+impl<N : Ord + Step> Validate for ElectionTracker<N> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		ensure!(self.highest_started <= self.highest_scheduled,
-			"highest_started should be <= highest_scheduled"
+		ensure!(self.next_election <= N::forward(self.highest_scheduled.clone(), 1),
+			"next_election should be <= highest_scheduled + 1"
 		);
-		ensure!(self.ongoing.iter().all(|(height, _)| height <= &self.highest_started),
-			"ongoing elections should be <= highest_started"
+		ensure!(self.ongoing.iter().all(|(height, _)| height < &self.next_election),
+			"ongoing elections should be < next_election"
 		);
 		Ok(())
 	}
@@ -93,7 +111,7 @@ impl<N : Ord> Validate for ElectionTracker<N> {
 
 impl<N : BlockZero + Ord> Default for ElectionTracker<N> {
 	fn default() -> Self {
-		Self { highest_scheduled: BlockZero::zero(), highest_started: BlockZero::zero(), ongoing: Default::default() }
+		Self { highest_scheduled: BlockZero::zero(), next_election: BlockZero::zero(), ongoing: Default::default(), reorg_counter: 0 }
 	}
 }
 
