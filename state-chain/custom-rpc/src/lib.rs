@@ -239,6 +239,7 @@ pub enum RpcAccountInfo {
 	},
 	Broker {
 		flip_balance: NumberOrHex,
+		bond: NumberOrHex,
 		earned_fees: any::AssetMap<NumberOrHex>,
 		affiliates: Vec<(AffiliateShortId, AccountId)>,
 		btc_vault_deposit_address: Option<String>,
@@ -275,6 +276,7 @@ impl RpcAccountInfo {
 	fn broker(broker_info: BrokerInfo, balance: u128) -> Self {
 		Self::Broker {
 			flip_balance: balance.into(),
+			bond: broker_info.bond.into(),
 			btc_vault_deposit_address: broker_info.btc_vault_deposit_address,
 			earned_fees: cf_chains::assets::any::AssetMap::from_iter_or_default(
 				broker_info
@@ -2180,6 +2182,7 @@ mod test {
 					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 				),
 				affiliates: vec![(cf_primitives::AffiliateShortId(1), AccountId32::new([1; 32]))],
+				bond: 0,
 			},
 			0,
 		);
