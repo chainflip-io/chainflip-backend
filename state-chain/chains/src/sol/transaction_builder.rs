@@ -15,13 +15,17 @@ use crate::{
 		compute_units_costs::{
 			compute_limit_with_buffer, BASE_COMPUTE_UNITS_PER_TX,
 			COMPUTE_UNITS_PER_BUMP_DERIVATION, COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
-			COMPUTE_UNITS_PER_CLOSE_VAULT_SWAP_ACCOUNTS, COMPUTE_UNITS_PER_FETCH_NATIVE,
-			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
-			COMPUTE_UNITS_PER_SET_GOV_KEY, COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+			COMPUTE_UNITS_PER_CLOSE_VAULT_SWAP_ACCOUNTS, COMPUTE_UNITS_PER_ENABLE_TOKEN_SUPPORT,
+			COMPUTE_UNITS_PER_FETCH_NATIVE, COMPUTE_UNITS_PER_FETCH_TOKEN,
+			COMPUTE_UNITS_PER_ROTATION, COMPUTE_UNITS_PER_SET_GOV_KEY,
+			COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS, COMPUTE_UNITS_PER_TRANSFER_NATIVE,
 			COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 		},
 		sol_tx_core::{
-			address_derivation::{derive_associated_token_account, derive_fetch_account},
+			address_derivation::{
+				derive_associated_token_account, derive_fetch_account,
+				derive_token_supported_account,
+			},
 			compute_budget::ComputeBudgetInstruction,
 			program_instructions::{
 				swap_endpoints::SwapEndpointProgram, InstructionExt, SystemProgramInstruction,
@@ -437,6 +441,70 @@ impl SolanaTransactionBuilder {
 				COMPUTE_UNITS_PER_CLOSE_VAULT_SWAP_ACCOUNTS +
 					COMPUTE_UNITS_PER_CLOSE_ACCOUNT * number_of_accounts as u32,
 			),
+		)
+	}
+
+	/// Create an instruction to set on-chain vault swap governance values.
+	pub fn set_program_swaps_parameters(
+		min_native_swap_amount: u64,
+		max_dst_address_len: u16,
+		max_ccm_message_len: u32,
+		max_cf_parameters_len: u32,
+		max_event_accounts: u32,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		gov_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+		let instructions = vec![VaultProgram::with_id(vault_program).set_program_swaps_parameters(
+			min_native_swap_amount,
+			max_dst_address_len,
+			max_ccm_message_len,
+			max_cf_parameters_len,
+			max_event_accounts,
+			vault_program_data_account,
+			gov_key,
+		)];
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			gov_key.into(),
+			compute_price,
+			compute_limit_with_buffer(COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS),
+		)
+	}
+
+	/// Enable support for a new token or update the min_swap_amount for an already supported token.
+	pub fn enable_token_support(
+		min_swap_amount: u64,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		token_mint_pubkey: SolAddress,
+		gov_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+		let token_supported_account =
+			derive_token_supported_account(vault_program, token_mint_pubkey)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+		let instructions = vec![VaultProgram::with_id(vault_program).enable_token_support(
+			min_swap_amount,
+			vault_program_data_account,
+			gov_key,
+			token_supported_account.address,
+			token_mint_pubkey,
+			system_program_id(),
+		)];
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			gov_key.into(),
+			compute_price,
+			compute_limit_with_buffer(COMPUTE_UNITS_PER_ENABLE_TOKEN_SUPPORT),
 		)
 	}
 }
