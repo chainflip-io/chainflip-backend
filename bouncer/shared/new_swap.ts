@@ -21,7 +21,8 @@ export async function newSwap(
 ): Promise<void> {
   const destinationAddress =
     destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress;
-  const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
+  // const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
+  const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:9944';
 
   // If the dry_run of the extrinsic fails on the broker-api then it won't retry. So we retry here to
   // avoid flakiness on CI.

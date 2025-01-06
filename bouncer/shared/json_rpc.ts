@@ -41,5 +41,7 @@ export async function lpApiRpc(method: string, params: any[]): Promise<any> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function brokerApiRpc(method: string, params: any[]): Promise<any> {
-  return jsonRpc(method, params, 'http://127.0.0.1:10997');
+  // const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
+  const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:9944';
+  return jsonRpc(method, params, brokerUrl);
 }
