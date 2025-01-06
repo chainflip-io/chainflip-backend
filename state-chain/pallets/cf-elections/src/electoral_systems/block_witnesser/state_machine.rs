@@ -12,7 +12,7 @@ use sp_std::ops::Add;
 
 use itertools::Either;
 
-use crate::electoral_systems::block_height_tracking::state_machine::IndexAndValue;
+use crate::electoral_systems::block_height_tracking::state_machine::MultiIndexAndValue;
 use crate::electoral_systems::block_height_tracking::{
 	consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold}, state_machine::{ConstantIndex, IndexOf, StateMachine, Validate}, state_machine_es::SMInput, ChainProgress
 };
@@ -74,12 +74,12 @@ impl<
 	BlockElectionPropertiesGenerator: Hook<N, ElectionProperties> + 'static
 > StateMachine for BWStateMachine<ElectionProperties, BlockData, N, BlockElectionPropertiesGenerator> {
 
-	type Input = SMInput<IndexAndValue<(N, ElectionProperties, u32), BlockData>, ChainProgress<N>>;
+	type Input = SMInput<MultiIndexAndValue<(N, ElectionProperties, u32), BlockData>, ChainProgress<N>>;
 	type Settings = BWSettings;
 	type Output = Result<(), &'static str>;
 	type State = BWState<N, ElectionProperties, BlockElectionPropertiesGenerator>;
 
-	fn input_index(s: &Self::State) -> Vec<IndexOf<Self::Input>> {
+	fn input_index(s: &Self::State) -> IndexOf<Self::Input> {
 		s.elections.ongoing.clone().into_iter().map(|(height, extra)| (height, s.generate_election_properties_hook.run(height), extra)).collect()
 	}
 
@@ -119,17 +119,22 @@ impl<
 
 		assert!(
 			// there should always be at most as many elections as given in the settings
-			after.elections.ongoing.len() <= settings.max_concurrent_elections as usize, 
+			// or more if we had more elections previously
+			after.elections.ongoing.len() <= sp_std::cmp::max(settings.max_concurrent_elections as usize, before.elections.ongoing.len()), 
 			"too many concurrent elections"
 		);
 
 		match input {
-			Vote(IndexAndValue((height, _, _), _)) => {
-				assert!(
+			Vote(MultiIndexAndValue((height, _, _), _)) => {
+				// the elections after a vote are the ones from before, minus the voted one + all outstanding ones
+				let after_should = before.elections.ongoing.key_set().without(*height)
+							.merge((N::forward(before.elections.highest_started, 1) .. before.elections.highest_scheduled).take((settings.max_concurrent_elections as usize + 1).saturating_sub(before.elections.ongoing.len())).collect());
+
+				assert_eq!(
 					// after receiving a vote, the ongoing elections should be the same as previously,
 					// except with the vote's height removed
-					after.elections.ongoing.key_set().with(*height) == before.elections.ongoing.key_set(),
-					"wrong ongoing election set after received vote"
+					after.elections.ongoing.key_set(), after_should,
+					"wrong ongoing election set after received vote",
 				)
 			},
 
@@ -153,51 +158,71 @@ impl<
 #[cfg(test)]
 mod tests {
 	use proptest::{
-		prelude::{any, prop, Arbitrary, Just, Strategy},
+		prelude::{any, prop, Arbitrary, BoxedStrategy, Just, Strategy},
 		prop_oneof, proptest,
 	};
+
+    use crate::prop_do;
 
     use super::*;
     use super::super::super::state_machine::core::*;
     use hook_test_utils::*;
 
-    type SM = BWStateMachine<(), (), u8, ConstantHook<u8, ()>>;
+    type SM = BWStateMachine<(), (), u64, ConstantHook<u64, ()>>;
 
-    fn generate_state<N: Arbitrary + Step + Ord + Clone>() -> impl Strategy<Value = BWState<N, (), ConstantHook<N, ()>>> {
 
-        (any::<N>(), any::<usize>(), prop::collection::vec(any::<(N, u32)>(), 0..10)).prop_map(
-            |(highest_started, scheduled_not_started, ongoing)| BWState {
+    fn generate_state<N: BlockZero + Arbitrary + Step + Ord + Clone>() -> impl Strategy<Value = BWState<N, (), ConstantHook<N, ()>>> {
+
+		let into_n = |x: usize| N::saturating_forward(N::zero(), x);
+
+		prop_do!{
+			let highest_started_u = in any::<usize>();
+			let scheduled_not_started = in any::<usize>();
+			let highest_started = into_n(highest_started_u);
+			let highest_scheduled = into_n(highest_started_u.saturating_add(scheduled_not_started));
+			let ongoing = in prop::collection::vec(((0..highest_started_u).prop_map(into_n), any::<u32>()), 0..10);
+			return BWState {
                 elections: ElectionTracker {
                     highest_started: highest_started.clone(),
-                    highest_scheduled: N::forward(highest_started, scheduled_not_started),
+                    highest_scheduled: highest_scheduled.clone(),
                     ongoing: BTreeMap::from_iter(ongoing.into_iter()) 
                 },
                 generate_election_properties_hook: ConstantHook { state: (), _phantom: Default::default() },
                 _phantom: core::marker::PhantomData,
             }
-        )
+		}
     }
 
-    fn generate_input(index: IndexOf<<SM as StateMachine>::Input>) -> impl Strategy<Value = <SM as StateMachine>::Input> {
-        let context = prop_oneof![
-            Just(ChainProgress::WaitingForFirstConsensus)
-        ];
+    fn generate_input(index: IndexOf<<SM as StateMachine>::Input>) -> BoxedStrategy<<SM as StateMachine>::Input> {
 
-        prop_oneof![
-            Just(SMInput::Vote(IndexAndValue(index, ()))),
-            context.prop_map(SMInput::Context)
-        ]
+		let generate_input = |index| {
+			let context = prop_oneof![
+				Just(ChainProgress::WaitingForFirstConsensus)
+			];
+
+			prop_oneof![
+				Just(SMInput::Vote(MultiIndexAndValue(index, ()))),
+				context.prop_map(SMInput::Context)
+			]
+		};
+
+		if index.len() > 0 {
+			(0..index.len()).prop_flat_map(move |ix| generate_input(
+				index.clone().into_iter().nth(ix).unwrap()
+			)).boxed()
+		} else {
+			Just(SMInput::Context(ChainProgress::WaitingForFirstConsensus)).boxed()
+		}
+
     }
+
 
     #[test]
     pub fn test_bw_statemachine() {
-        BWStateMachine::<(), (), u8, ConstantHook<u8, ()>>::test(
+        SM::test(
             generate_state(),
             Just(BWSettings { safe_mode_enabled: false, max_concurrent_elections: 5 }),
-            |index| 
-				(0..index.len()).prop_flat_map(move |ix| generate_input(
-					index.clone().into_iter().nth(ix).unwrap()
-				)).boxed()
+			generate_input
         );
     }
 }

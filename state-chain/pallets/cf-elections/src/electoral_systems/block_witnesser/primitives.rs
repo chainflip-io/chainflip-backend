@@ -11,7 +11,7 @@ use sp_std::ops::Add;
 
 use itertools::Either;
 
-use crate::electoral_systems::block_height_tracking::state_machine::IndexAndValue;
+use crate::electoral_systems::block_height_tracking::state_machine::MultiIndexAndValue;
 use crate::electoral_systems::block_height_tracking::{
 	consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold}, state_machine::{ConstantIndex, IndexOf, StateMachine, Validate}, state_machine_es::SMInput, ChainProgress
 };
@@ -81,10 +81,10 @@ impl<N : Ord> Validate for ElectionTracker<N> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		ensure!(self.highest_started > self.highest_scheduled,
+		ensure!(self.highest_started <= self.highest_scheduled,
 			"highest_started should be <= highest_scheduled"
 		);
-		ensure!(self.ongoing.iter().any(|(height, _)| height > &self.highest_started),
+		ensure!(self.ongoing.iter().all(|(height, _)| height <= &self.highest_started),
 			"ongoing elections should be <= highest_started"
 		);
 		Ok(())

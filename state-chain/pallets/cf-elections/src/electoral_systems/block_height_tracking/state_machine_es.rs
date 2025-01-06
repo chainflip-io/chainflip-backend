@@ -1,19 +1,19 @@
+
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
-use itertools::{Either, Itertools};
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::{vec::Vec, fmt::Debug};
 
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
-	vote_storage, CorruptStorageError,
+	vote_storage::{self, VoteStorage}, CorruptStorageError,
 };
 
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
-	state_machine::{Indexed, StateMachine, Validate},
+	state_machine::{Indexed, IndexOf, StateMachine, Validate},
 };
 
 pub trait IntoResult {
@@ -63,76 +63,166 @@ impl<V: Validate, C> Validate for SMInput<V, C> {
 	}
 }
 
-/// Creates an Electoral System from a given state machine
-/// and a given consensus mechanism.
-pub struct DsmElectoralSystem<
-	Type,
-	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	Settings,
-	Context,
-	Consensus,
-> {
-	_phantom: core::marker::PhantomData<(Type, ValidatorId, Settings, Context, Consensus)>,
+pub trait ESBounds {
+
+	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
+
+	/// This is intended for storing any internal state of the ElectoralSystem. It is not
+	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
+	/// by the engine.
+	///
+	/// Also note that if this state is changed that will not cause election's consensus to be
+	/// retested.
+	type ElectoralUnsynchronisedState: Parameter + Member + MaybeSerializeDeserialize;
+	/// This is intended for storing any internal state of the ElectoralSystem. It is not
+	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
+	/// by the engine.
+	///
+	/// Also note that if this state is changed that will not cause election's consensus to be
+	/// retested.
+	type ElectoralUnsynchronisedStateMapKey: Parameter + Member;
+	/// This is intended for storing any internal state of the ElectoralSystem. It is not
+	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
+	/// by the engine.
+	///
+	/// Also note that if this state is changed that will not cause election's consensus to be
+	/// retested.
+	type ElectoralUnsynchronisedStateMapValue: Parameter + Member;
+
+	/// Settings of the electoral system. These can be changed at any time by governance, and
+	/// are not synchronised with elections, and therefore there is not a universal mapping from
+	/// elections to these settings values. Therefore it should only be used for internal
+	/// state, i.e. the engines should not consume this data.
+	///
+	/// Also note that if these settings are changed that will not cause election's consensus to be
+	/// retested.
+	type ElectoralUnsynchronisedSettings: Parameter + Member + MaybeSerializeDeserialize;
+
+	/// Settings of the electoral system. These settings are synchronised with
+	/// elections, so all engines will have a consistent view of the electoral settings to use for a
+	/// given election.
+	type ElectoralSettings: Parameter + Member + MaybeSerializeDeserialize + Eq;
+
+	/// Extra data stored along with the UniqueMonotonicIdentifier as part of the
+	/// ElectionIdentifier. This is used by composite electoral systems to identify which variant of
+	/// election it is working with, without needing to reading in further election
+	/// state/properties/etc.
+	type ElectionIdentifierExtra: Parameter + Member + Copy + Eq + Ord;
+
+	/// The properties of a single election, for example this could describe which block of the
+	/// external chain the election is associated with and what needs to be witnessed.
+	type ElectionProperties: Parameter + Member;
+
+	/// Per-election state needed by the ElectoralSystem. This state is not synchronised across
+	/// engines, and may change during the lifetime of a election.
+	type ElectionState: Parameter + Member;
+
+	/// A description of the validator's view of the election's topic. For example a list of all
+	/// ingresses the validator has observed in the block the election is about.
+	type Vote: VoteStorage;
+
+	/// This is the information that results from consensus. Typically this will be the same as the
+	/// `Vote` type, but with more complex consensus models the result of an election may not be
+	/// sensibly represented in the same form as a single vote.
+	type Consensus: Parameter + Member + Eq;
+
+	/// Custom parameters for `on_finalize`. Used to communicate information like the latest chain
+	/// tracking block to the electoral system. While it gives more flexibility to use a generic
+	/// type here, instead of an associated type, particularly as it would allow `on_finalize` to
+	/// take trait instead of a specific type, I want to avoid spreading additional generics
+	/// throughout the rest of the code. As an alternative, you can use dynamic dispatch (i.e.
+	/// Box<dyn ...>) to achieve much the same affect.
+	type OnFinalizeContext;
+
+	/// Custom return of the `on_finalize` callback. This can be used to communicate any information
+	/// you want to the caller.
+	type OnFinalizeReturn;
 }
 
-impl<SM, ValidatorId, Settings, Context, C> ElectoralSystem
-	for DsmElectoralSystem<SM, ValidatorId, Settings, Context, C>
-where
-	SM: StateMachine<
-		Input = SMInput<<C as ConsensusMechanism>::Result, Context>,
-		Settings = Settings,
-	>,
-	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-	Context: 'static + Clone + sp_std::fmt::Debug,
-	C: ConsensusMechanism<Settings = (Threshold, <SM::Input as Indexed>::Index)> + 'static,
-	<C as ConsensusMechanism>::Result: Indexed + Clone + Member + Parameter,
-	<C as ConsensusMechanism>::Vote: Member
-		+ Parameter
-		+ Clone
-		+ Validate
-		+ Indexed<Index = <<C as ConsensusMechanism>::Result as Indexed>::Index>,
-	<SM::Input as Indexed>::Index: Clone + Member + Parameter + sp_std::fmt::Debug,
-	SM::State: MaybeSerializeDeserialize + Member + Parameter + Eq + sp_std::fmt::Debug,
-	// SM::Input: Indexed + Clone + Member + Parameter,
-	SM::Output: IntoResult,
-	<SM::Output as IntoResult>::Err: sp_std::fmt::Debug,
+
+type Vote_of_VoteStorage<VS : VoteStorage> = VS::Vote;
+
+
+pub trait SMCMESBounds0 : 'static + Sized + ESBounds
+<
+	ElectoralUnsynchronisedStateMapKey = (),
+	ElectoralUnsynchronisedStateMapValue = (),
+	ElectoralSettings = (),
+	ElectionIdentifierExtra = (),
+	ElectionState = (),
+	OnFinalizeContext = Vec<Self::OnFinalizeContextItem>,
+	OnFinalizeReturn = Vec<Self::OnFinalizeReturnItem>,
+	Consensus = Self::Consensus2,
+	Vote = Self::VoteStorage2,
+>
 {
-	type ValidatorId = ValidatorId;
-	type ElectoralUnsynchronisedState = SM::State;
-	type ElectoralUnsynchronisedStateMapKey = ();
-	type ElectoralUnsynchronisedStateMapValue = ();
+	type OnFinalizeContextItem : Clone + Debug;
+	type OnFinalizeReturnItem;
+	type Consensus2 : Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
+	type Vote2 : Validate + Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
+	type VoteStorage2 : VoteStorage<Vote = Self::Vote2>;
+}
 
-	type ElectoralUnsynchronisedSettings = Settings;
-	type ElectoralSettings = ();
-	type ElectionIdentifierExtra = ();
-	type ElectionProperties = <SM::Input as Indexed>::Index;
-	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<<C as ConsensusMechanism>::Vote>;
-	type Consensus = <C as ConsensusMechanism>::Result;
-	type OnFinalizeContext = Vec<Context>;
 
-	// we return either the state if no input was processed,
-	// or the output produced by the state machine
-	type OnFinalizeReturn = Vec<<SM::Output as IntoResult>::Ok>;
+pub trait StateMachineForES<ES: SMCMESBounds0> = StateMachine
+<
+	Input = SMInput<ES::Consensus, ES::OnFinalizeContextItem>,
+	State = ES::ElectoralUnsynchronisedState,
+	Settings = ES::ElectoralUnsynchronisedSettings,
+	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
+>;
+
+pub trait ConsensusMechanismForES<ES: SMCMESBounds0> = ConsensusMechanism
+<
+	Vote = Vote_of_VoteStorage<ES::Vote>,
+	Result = ES::Consensus,
+	Settings = (Threshold, ES::ElectionProperties)
+>;
+
+pub trait SMCMESBounds : 'static + Sized + SMCMESBounds0
+{
+	type StateMachine : StateMachineForES<Self> + 'static;
+	type ConsensusMechanism : ConsensusMechanismForES<Self> + 'static;
+}
+
+pub struct SMCMESInstance<Bounds: SMCMESBounds>
+{
+	_phantom: core::marker::PhantomData<Bounds>,
+}
+
+impl<Bounds: SMCMESBounds> ElectoralSystem for SMCMESInstance<Bounds> 
+where
+	<Bounds::Vote as VoteStorage>::Properties : Default,
+	Bounds::Consensus : Indexed
+
+{
+	type ValidatorId = Bounds::ValidatorId;
+	type ElectoralUnsynchronisedState = Bounds::ElectoralUnsynchronisedState;
+	type ElectoralUnsynchronisedStateMapKey = Bounds::ElectoralUnsynchronisedStateMapKey;
+	type ElectoralUnsynchronisedStateMapValue = Bounds::ElectoralUnsynchronisedStateMapValue;
+	type ElectoralUnsynchronisedSettings = Bounds::ElectoralUnsynchronisedSettings;
+	type ElectoralSettings = Bounds::ElectoralSettings;
+	type ElectionIdentifierExtra = Bounds::ElectionIdentifierExtra;
+	type ElectionProperties = Bounds::ElectionProperties;
+	type ElectionState = Bounds::ElectionState;
+	type Vote = Bounds::Vote;
+	type Consensus = Bounds::Consensus;
+	type OnFinalizeContext = Bounds::OnFinalizeContext;
+	type OnFinalizeReturn = Bounds::OnFinalizeReturn;
 
 	fn generate_vote_properties(
-		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
-		_previous_vote: Option<(
-			crate::electoral_system::VotePropertiesOf<Self>,
-			crate::electoral_system::AuthorityVoteOf<Self>,
-		)>,
-		_vote: &<Self::Vote as crate::vote_storage::VoteStorage>::PartialVote,
-	) -> Result<crate::electoral_system::VotePropertiesOf<Self>, crate::CorruptStorageError> {
-		Ok(())
+			election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
+			previous_vote: Option<(crate::electoral_system::VotePropertiesOf<Self>, crate::electoral_system::AuthorityVoteOf<Self>)>,
+			vote: &<Self::Vote as VoteStorage>::PartialVote,
+		) -> Result<crate::electoral_system::VotePropertiesOf<Self>, CorruptStorageError> {
+		Ok(Default::default())
 	}
 
-	fn on_finalize<
-		ElectoralAccess: crate::electoral_system::ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
-	>(
-		election_identifiers: Vec<crate::electoral_system::ElectionIdentifierOf<Self>>,
-		contexts: &Self::OnFinalizeContext,
-	) -> Result<Self::OnFinalizeReturn, crate::CorruptStorageError> {
+	fn on_finalize<ElectoralAccess: crate::electoral_system::ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
+			election_identifiers: Vec<crate::electoral_system::ElectionIdentifierOf<Self>>,
+			contexts: &Self::OnFinalizeContext,
+		) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
+
 		// initialize the result value
 		let mut result = Vec::new();
 
@@ -144,8 +234,7 @@ where
 		// define step function which progresses the state machine
 		// by one input
 		let mut step = |input| {
-			SM::step(&mut state, input, &settings)
-				.into_result()
+			Bounds::StateMachine::step(&mut state, input, &settings)
 				.map(|output| {
 					result.push(output);
 					()
@@ -175,7 +264,7 @@ where
 		}
 
 		// gather the input indices after all state transitions
-		let input_indices = SM::input_index(&state);
+		let input_indices : Vec<_> = Bounds::StateMachine::input_index(&state).into_iter().collect();
 		let mut open_elections = Vec::new();
 
 		// delete elections which are no longer in the input indices
@@ -210,25 +299,26 @@ where
 
 	}
 
-	fn check_consensus<
-		ElectionAccess: crate::electoral_system::ElectionReadAccess<ElectoralSystem = Self>,
-	>(
-		election_access: &ElectionAccess,
-		// This is the consensus as of the last time the consensus was checked. Note this is *NOT*
-		// the "last" consensus, i.e. this can be `None` even if on some previous check we had
-		// consensus, but it was subsequently lost.
-		_previous_consensus: Option<&Self::Consensus>,
-		consensus_votes: crate::electoral_system::ConsensusVotes<Self>,
-	) -> Result<Option<Self::Consensus>, crate::CorruptStorageError> {
+	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
+			election_access: &ElectionAccess,
+			// This is the consensus as of the last time the consensus was checked. Note this is *NOT*
+			// the "last" consensus, i.e. this can be `None` even if on some previous check we had
+			// consensus, but it was subsequently lost.
+			previous_consensus: Option<&Self::Consensus>,
+			consensus_votes: crate::electoral_system::ConsensusVotes<Self>,
+		) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		log::debug!("ESSM consensus: reading properties");
 		let properties = election_access.properties()?;
 		log::debug!("ESSM consensus: reading properties done");
-		let mut consensus = C::default();
+		let mut consensus = Bounds::ConsensusMechanism::default();
 		let num_authorities = consensus_votes.num_authorities();
+
+		let mut properties_vec = Vec::new();
+		properties_vec.push(properties.clone());
 
 		for vote in consensus_votes.active_votes() {
 			// insert vote if it is valid for the given properties
-			if vote.is_valid().is_ok() && vote.has_index(&properties) {
+			if vote.is_valid().is_ok() && vote.has_index(&properties_vec) {
 				log::info!("inserting vote {vote:?}");
 				consensus.insert_vote(vote);
 			} else {
@@ -243,3 +333,4 @@ where
 		)))
 	}
 }
+

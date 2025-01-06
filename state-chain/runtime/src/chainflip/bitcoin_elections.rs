@@ -8,21 +8,16 @@ use cf_chains::instances::BitcoinInstance;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use pallet_cf_elections::{
-	electoral_system::ElectoralSystem,
-	electoral_systems::{
+	electoral_system::ElectoralSystem, electoral_systems::{
 		block_height_tracking::{
-			self, consensus::SupermajorityConsensus, state_machine::ConstantIndex, state_machine_es::DsmElectoralSystem, BlockHeightTrackingConsensus, BlockHeightTrackingDSM, ChainProgress, OldChainProgress, RangeOfBlockWitnessRanges
-		},
-		block_witnesser::{
-			state_machine::{BWSettings, BWStateMachine}, consensus::BWConsensus, BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData
-		},
-		state_machine::core::Hook,
-		composite::{
+			self, consensus::SupermajorityConsensus, state_machine::{ConstantIndex, MultiIndexAndValue}, state_machine_es::{ESBounds, SMCMESBounds, SMCMESBounds0, SMCMESInstance}, BHWState, BlockHeightTrackingConsensus, BlockHeightTrackingDSM, BlockHeightTrackingProperties, ChainProgress, InputHeaders, OldChainProgress, RangeOfBlockWitnessRanges
+		}, block_witnesser::{
+			consensus::BWConsensus, state_machine::{BWSettings, BWState, BWStateMachine}, BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData
+		}, composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
-		},
-	},
-	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
+		}, state_machine::core::Hook
+	}, vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess
 };
 
 use pallet_cf_ingress_egress::{
@@ -55,24 +50,79 @@ pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 	BitcoinDepositChannelWitnessingGenerator,
 >;
 
+
+/// The electoral system for block height tracking
+pub struct BitcoinBlockHeightTrackingDefinition {}
+
+impl ESBounds for BitcoinBlockHeightTrackingDefinition {
+	type ValidatorId = <Runtime as Chainflip>::ValidatorId;
+	type ElectoralUnsynchronisedState = BHWState<btc::Hash, btc::BlockNumber>;
+	type ElectoralUnsynchronisedStateMapKey = ();
+	type ElectoralUnsynchronisedStateMapValue = ();
+	type ElectoralUnsynchronisedSettings = ();
+	type ElectoralSettings = ();
+	type ElectionIdentifierExtra = ();
+	type ElectionProperties = BlockHeightTrackingProperties<btc::BlockNumber>;
+	type ElectionState = ();
+	type Vote = vote_storage::bitmap::Bitmap<InputHeaders<btc::Hash, btc::BlockNumber>>;
+	type Consensus = InputHeaders<btc::Hash, btc::BlockNumber>;
+	type OnFinalizeContext = Vec<()>;
+	type OnFinalizeReturn = Vec<ChainProgress<btc::BlockNumber>>;
+}
+
+impl SMCMESBounds0 for BitcoinBlockHeightTrackingDefinition {
+	type OnFinalizeContextItem = ();
+	type OnFinalizeReturnItem = ChainProgress<btc::BlockNumber>;
+	type Consensus2 = InputHeaders<btc::Hash, btc::BlockNumber>;
+	type Vote2 = InputHeaders<btc::Hash, btc::BlockNumber>;
+	type VoteStorage2 = vote_storage::bitmap::Bitmap<InputHeaders<btc::Hash, btc::BlockNumber>>;
+}
+
+impl SMCMESBounds for BitcoinBlockHeightTrackingDefinition {
+	type ConsensusMechanism = BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>;
+	type StateMachine = BlockHeightTrackingDSM<6, btc::BlockNumber, btc::Hash>;
+}
+
+pub type BitcoinBlockHeightTracking = SMCMESInstance<BitcoinBlockHeightTrackingDefinition>;
+
+/// The electoral system for deposit channel witnessing
+pub struct BitcoinDepositChannelWitnessingDefinition {}
+
 type ElectionProperties = Vec<DepositChannelDetails<Runtime, BitcoinInstance>>;
 type BlockData = Vec<DepositWitness<Bitcoin>>;
 
-pub type BitcoinDepositChannelWitnessing2 = DsmElectoralSystem<
-	BWStateMachine<ElectionProperties, BlockData, btc::BlockNumber, BitcoinDepositChannelWitnessingGenerator>,
-	<Runtime as Chainflip>::ValidatorId,
-	BWSettings,
-	ChainProgress<btc::BlockNumber>,
-	BWConsensus<BlockData, btc::BlockNumber, ElectionProperties>
->;
+impl ESBounds for BitcoinDepositChannelWitnessingDefinition {
+	type ValidatorId = <Runtime as Chainflip>::ValidatorId;
+	type ElectoralUnsynchronisedState = BWState<btc::BlockNumber, ElectionProperties, BitcoinDepositChannelWitnessingGenerator>;
+	type ElectoralUnsynchronisedStateMapKey = ();
+	type ElectoralUnsynchronisedStateMapValue = ();
+	type ElectoralUnsynchronisedSettings = BWSettings;
+	type ElectoralSettings = ();
+	type ElectionIdentifierExtra = ();
+	type ElectionProperties = (btc::BlockNumber, ElectionProperties, u32);
+	type ElectionState = ();
+	type Vote = vote_storage::bitmap::Bitmap<ConstantIndex<(btc::BlockNumber, ElectionProperties, u32), BlockData>>;
+	type Consensus = MultiIndexAndValue<(btc::BlockNumber, ElectionProperties, u32), BlockData>;
+	type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
+	type OnFinalizeReturn = Vec<()>;
+}
 
-pub type BitcoinBlockHeightTracking = DsmElectoralSystem<
-	BlockHeightTrackingDSM<6, btc::BlockNumber, btc::Hash>,
-	<Runtime as Chainflip>::ValidatorId,
-	(),
-	(),
-	BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>,
->;
+impl SMCMESBounds0 for BitcoinDepositChannelWitnessingDefinition {
+	type OnFinalizeContextItem = ChainProgress<btc::BlockNumber>;
+	type OnFinalizeReturnItem = ();
+	type Consensus2 = MultiIndexAndValue<(btc::BlockNumber, ElectionProperties, u32), BlockData>;
+	type Vote2 = ConstantIndex<(btc::BlockNumber, ElectionProperties, u32), BlockData>;
+	type VoteStorage2 = vote_storage::bitmap::Bitmap<ConstantIndex<(btc::BlockNumber, ElectionProperties, u32), BlockData>>;
+}
+
+impl SMCMESBounds for BitcoinDepositChannelWitnessingDefinition {
+	type StateMachine = BWStateMachine<ElectionProperties, BlockData, btc::BlockNumber, BitcoinDepositChannelWitnessingGenerator>;
+	type ConsensusMechanism = BWConsensus<BlockData, btc::BlockNumber, ElectionProperties>;
+}
+
+
+pub type BitcoinDepositChannelWitnessing2 = SMCMESInstance<BitcoinDepositChannelWitnessingDefinition>;
+
 
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize, Default)]

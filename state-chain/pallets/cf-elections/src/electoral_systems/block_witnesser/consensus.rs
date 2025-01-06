@@ -11,7 +11,7 @@ use sp_std::ops::Add;
 
 use itertools::Either;
 
-use crate::electoral_systems::block_height_tracking::state_machine::IndexAndValue;
+use crate::electoral_systems::block_height_tracking::state_machine::MultiIndexAndValue;
 use crate::electoral_systems::block_height_tracking::{
 	consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold}, state_machine::{ConstantIndex, IndexOf, StateMachine, Validate}, state_machine_es::SMInput, ChainProgress
 };
@@ -35,7 +35,7 @@ impl<BlockData: Eq, N, ElectionProperties> Default for BWConsensus<BlockData, N,
 impl<BlockData: Eq + Clone + sp_std::fmt::Debug + Hashable, N: Clone, ElectionProperties: Clone> ConsensusMechanism for BWConsensus<BlockData, N, ElectionProperties> {
 	type Vote = ConstantIndex<(N, ElectionProperties, u32), BlockData>;
 
-	type Result = IndexAndValue<(N, ElectionProperties, u32), BlockData>;
+	type Result = MultiIndexAndValue<(N, ElectionProperties, u32), BlockData>;
 
 	type Settings = (Threshold, (N, ElectionProperties, u32));
 
@@ -48,6 +48,6 @@ impl<BlockData: Eq + Clone + sp_std::fmt::Debug + Hashable, N: Clone, ElectionPr
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
 		self.consensus.check_consensus(&settings.0)
 			.map(|consensus| self.data.get(&consensus).expect("hash of vote should exist").clone())
-			.map(|data| IndexAndValue(settings.1.clone(), data))
+			.map(|data| MultiIndexAndValue(settings.1.clone(), data))
 	}
 }

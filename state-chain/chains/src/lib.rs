@@ -223,6 +223,16 @@ pub mod witness_period {
 			*self == 0
 		}
 	}
+
+	impl BlockZero for u8 {
+		fn zero() -> Self {
+			0
+		}
+
+		fn is_zero(&self) -> bool {
+			*self == 0
+		}
+	}
 }
 
 /// A trait representing all the types and constants that need to be implemented for supported

@@ -289,14 +289,14 @@ mod tests {
 }
 
 impl<H, N: BlockZero + Copy + PartialEq> Indexed for InputHeaders<H, N> {
-	type Index = BlockHeightTrackingProperties<N>;
+	type Index = Vec<BlockHeightTrackingProperties<N>>;
 
 	fn has_index(&self, base: &Self::Index) -> bool {
-		if base.witness_from_index.is_zero() {
+		if base.iter().any(|base| base.witness_from_index.is_zero()) {
 			true
 		} else {
 			match self.0.front() {
-				Some(first) => first.block_height == base.witness_from_index,
+				Some(first) => base.iter().any(|base| first.block_height == base.witness_from_index),
 				None => false,
 			}
 		}
@@ -377,7 +377,7 @@ impl<
 	type Settings = ();
 	type Output = Result<ChainProgress<N>, &'static str>;
 
-	fn input_index(s: &Self::State) -> Vec<<Self::Input as state_machine::Indexed>::Index> {
+	fn input_index(s: &Self::State) -> <Self::Input as state_machine::Indexed>::Index {
 		let witness_from_index = match s {
 			BHWState::Starting => N::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from.clone(),

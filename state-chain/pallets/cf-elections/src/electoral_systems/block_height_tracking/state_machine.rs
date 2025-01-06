@@ -52,7 +52,7 @@ impl<Idx, A> ConstantIndex<Idx, A> {
 	}
 }
 impl<Idx, A> Indexed for ConstantIndex<Idx, A> {
-	type Index = Idx;
+	type Index = Vec<Idx>;
 
 	fn has_index(&self, index: &Self::Index) -> bool {
 		true
@@ -69,17 +69,17 @@ impl<Idx, A> Validate for ConstantIndex<Idx, A> {
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
-pub struct IndexAndValue<Idx, A>(pub Idx, pub A);
+pub struct MultiIndexAndValue<Idx, A>(pub Idx, pub A);
 
-impl<Idx: PartialEq, A> Indexed for IndexAndValue<Idx, A> {
-	type Index = Idx;
+impl<Idx: PartialEq, A> Indexed for MultiIndexAndValue<Idx, A> {
+	type Index = Vec<Idx>;
 
-	fn has_index(&self, index: &Self::Index) -> bool {
-		self.0 == *index
+	fn has_index(&self, indices: &Self::Index) -> bool {
+		indices.contains(&self.0)
 	}
 }
 
-impl<Idx, A> Validate for IndexAndValue<Idx, A> {
+impl<Idx, A> Validate for MultiIndexAndValue<Idx, A> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -145,15 +145,12 @@ pub trait StateMachine: 'static {
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
-	fn input_index(s: &Self::State) -> Vec<IndexOf<Self::Input>>;
+	fn input_index(s: &Self::State) -> IndexOf<Self::Input>;
 
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore
 	/// that the input has the index `input_index(s)`.
 	fn step(s: &mut Self::State, i: Self::Input, set: &Self::Settings) -> Self::Output;
-
-	/// Project the current state to a "DisplayState" value.
-	// fn get(s: &Self::State) -> Self::DisplayState;
 
 	/// Contains an optional specification of the `step` function.
 	/// Takes a state, input and next state as arguments. During testing it is verified
@@ -168,7 +165,7 @@ pub trait StateMachine: 'static {
 	fn test(
 		states: impl Strategy<Value = Self::State>,
 		settings: impl Strategy<Value = Self::Settings>,
-		inputs: impl Fn(Vec<IndexOf<Self::Input>>) -> BoxedStrategy<Self::Input>,
+		inputs: impl Fn(IndexOf<Self::Input>) -> BoxedStrategy<Self::Input>,
 	) where
 		Self::State: sp_std::fmt::Debug + Clone,
 		Self::Input: sp_std::fmt::Debug + Clone,
@@ -184,12 +181,9 @@ pub trait StateMachine: 'static {
 				})),
 				|(mut state, input, settings)| {
 					// ensure that inputs are well formed
-					assert!(state.is_valid().is_ok(), "input state not valid");
+					assert!(state.is_valid().is_ok(), "input state not valid {:?}", state.is_valid());
 					assert!(input.is_valid().is_ok(), "input not valid");
-					assert!(
-						Self::input_index(&state).iter().any(|index| input.has_index(index)),
-						"input has wrong index"
-					);
+					assert!(input.has_index(&Self::input_index(&state)), "input has wrong index");
 
 					// backup state
 					let prev_state = state.clone();

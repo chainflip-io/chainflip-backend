@@ -1,4 +1,5 @@
 
+use core::{iter::Step, result};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_core::MaxEncodedLen;
@@ -23,3 +24,19 @@ pub mod hook_test_utils {
         }
     }
 }
+
+
+pub trait SaturatingStep : Step + Clone {
+    fn saturating_forward(start: Self, mut count: usize) -> Self {
+        for _ in 0..count {
+            if let Some(result) =  Self::forward_checked(start.clone(), count) {
+                return result;
+            } else {
+                count /= 2;
+            }
+        }
+        return start;
+    }
+}
+
+impl<X: Step + Clone> SaturatingStep for X {}
