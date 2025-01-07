@@ -77,8 +77,11 @@ function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: nu
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
-      // Additional data is un-used for EVM chains.
-      return '0x';
+      length = MAX_CCM_ADDITIONAL_DATA_LENGTH;
+      if (maxLength !== undefined) {
+        length = Math.min(length, maxLength);
+      }
+      return newCcmArbitraryBytes(length);
     case 'Solana': {
       const messageLength = (message!.length - 2) / 2;
       length = (destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC) - messageLength;
@@ -162,6 +165,7 @@ export async function newVaultSwapCcmMetadata(
   ccmAdditionalDataArray?: string,
 ): Promise<CcmDepositMetadata> {
   const sourceChain = chainFromAsset(sourceAsset);
+  const destChain = chainFromAsset(destAsset);
   let messageMaxLength;
   let metadataMaxLength;
 
@@ -189,8 +193,11 @@ export async function newVaultSwapCcmMetadata(
   }
 
   const message = ccmMessage ?? newCcmMessage(destAsset, messageMaxLength);
+  // For now we only enforce empty ccmAdditionalData for Vault swaps, not deposit channels.
   const ccmAdditionalData =
-    ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message, metadataMaxLength);
+    ccmAdditionalDataArray ?? destChain === `Solana`
+      ? newCcmAdditionalData(destAsset, message, metadataMaxLength)
+      : '0x';
   return newCcmMetadata(destAsset, message, ccmAdditionalData);
 }
 
