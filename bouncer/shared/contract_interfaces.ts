@@ -26,6 +26,9 @@ export const getCFTesterAbi = loadContractCached(
 export const getKeyManagerAbi = loadContractCached(
   `../contract-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/IKeyManager.json`,
 );
+export const getEvmVaultAbi = loadContractCached(
+  `../contract-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/IVault.json`,
+);
 export const getSolanaVaultIdl = loadContractCached(
   `../contract-interfaces/sol-program-idls/${CF_SOL_PROGRAM_IDL_TAG}/vault.json`,
 );

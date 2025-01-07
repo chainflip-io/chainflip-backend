@@ -10,6 +10,8 @@ import {
   AccountMeta,
 } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
+import BigNumber from 'bignumber.js';
+import { randomBytes } from 'crypto';
 import {
   getContractAddress,
   amountToFineAmount,
@@ -23,6 +25,7 @@ import {
   stateChainAssetFromAsset,
   decodeSolAddress,
   decodeDotAddressForContract,
+  newAddress,
 } from './utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 
@@ -54,15 +57,7 @@ interface SolanaVaultSwapExtraParameters {
   from_token_account?: string;
 }
 
-// TODO: Unify this with BTC & EVM vault swaps.
-// interface BitcoinVaultSwapExtraParameters {
-//   chain: 'Bitcoin';
-//   min_output_amount: number;
-//   retry_duration: number;
-// }
-// type VaultSwapExtraParameters = BitcoinVaultSwapExtraParameters | SolanaVaultSwapExtraParameters;
-
-type ChannelRefundParameters = {
+export type ChannelRefundParameters = {
   retry_duration: number;
   refund_address: string;
   min_price: string;
@@ -106,7 +101,7 @@ export async function executeSolVaultSwap(
     chain: 'Solana',
     from: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
     event_data_account: decodeSolAddress(newEventAccountKeypair.publicKey.toBase58()),
-    input_amount: amountToSwap,
+    input_amount: '0x' + new BigNumber(amountToSwap).toString(16),
     refund_parameters: refundParams,
     from_token_account:
       srcAsset === 'Sol'
@@ -194,30 +189,49 @@ export async function checkSolEventAccountsClosure(
     getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
   );
 
-  const maxRetries = 50; // 300 seconds
+  async function checkAccounts(swapEventAccounts: PublicKey[]): Promise<boolean> {
+    const maxRetries = 20; // 120 seconds
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const swapEndpointDataAccount =
-      await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
-        swapEndpointDataAccountAddress,
-      );
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const swapEndpointDataAccount =
+        await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
+          swapEndpointDataAccountAddress,
+        );
 
-    if (swapEndpointDataAccount.openEventAccounts.length >= 10) {
-      await sleep(6000);
-    } else {
-      const onChainOpenedAccounts = swapEndpointDataAccount.openEventAccounts.map((element) =>
-        element.toString(),
-      );
-      for (const eventAccount of eventAccounts) {
-        if (!onChainOpenedAccounts.includes(eventAccount.toString())) {
-          const accountInfo = await getSolConnection().getAccountInfo(eventAccount);
-          if (accountInfo !== null) {
-            throw new Error('Event account still exists, should have been closed');
+      if (swapEndpointDataAccount.openEventAccounts.length >= 10) {
+        await sleep(6000);
+      } else {
+        const onChainOpenedAccounts = swapEndpointDataAccount.openEventAccounts.map((element) =>
+          element.toString(),
+        );
+        for (const eventAccount of swapEventAccounts) {
+          if (!onChainOpenedAccounts.includes(eventAccount.toString())) {
+            const accountInfo = await getSolConnection().getAccountInfo(eventAccount);
+            if (accountInfo !== null) {
+              throw new Error('Event account still exists, should have been closed');
+            }
           }
         }
+        return true;
       }
-      return;
     }
+    return false;
   }
-  throw new Error('Timed out waiting for event accounts to be closed');
+
+  let success = await checkAccounts(eventAccounts);
+  if (!success) {
+    // Due to implementation details on the SC the accounts won't necessarily be closed
+    // immediately and the timeout won't be executed until one extra Vault swap is witnessed.
+    // We manually trigger a new one to ensure the timeout is executed.
+    await executeSolVaultSwap(
+      'Sol',
+      'ArbEth',
+      await newAddress('ArbEth', randomBytes(32).toString('hex')),
+    );
+    success = await checkAccounts(eventAccounts);
+  }
+
+  if (!success) {
+    throw new Error('Timed out waiting for event accounts to be closed');
+  }
 }

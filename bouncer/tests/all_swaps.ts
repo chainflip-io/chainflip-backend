@@ -14,9 +14,11 @@ import {
   VaultSwapParams,
   vaultSwapSupportedChains,
 } from '../shared/utils';
+import { openPrivateBtcChannel } from './btc_vault_swap';
 
+// This timeout needs to be increased when running 3-nodes
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
+export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1200);
 
 export async function initiateSwap(
   sourceAsset: Asset,
@@ -48,6 +50,9 @@ export async function initiateSwap(
 async function main() {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
 
+  // Open a private BTC channel to be used for btc vault swaps
+  await openPrivateBtcChannel('//BROKER_1');
+
   function appendSwap(
     sourceAsset: Asset,
     destAsset: Asset,
@@ -70,7 +75,8 @@ async function main() {
           // Vault Swaps
           appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-          if (ccmSupportedChains.includes(destChain)) {
+          // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
+          if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
             // CCM Vault swaps
             appendSwap(sourceAsset, destAsset, testVaultSwap, true);
           }

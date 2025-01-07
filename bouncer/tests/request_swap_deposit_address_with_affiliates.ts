@@ -139,9 +139,15 @@ const requestSwapDepositAddress = async (
   }
 
   if (params.ccmParams) {
-    assert.strictEqual(event.channelMetadata?.message, params.ccmParams.message);
+    assert.strictEqual(
+      event.channelMetadata?.message,
+      params.ccmParams.message === '0x' ? '' : params.ccmParams.message,
+    );
     assert.strictEqual(event.channelMetadata.gasBudget, BigInt(params.ccmParams.gasBudget));
-    assert.strictEqual(event.channelMetadata.ccmAdditionalData, params.ccmParams.ccmAdditionalData);
+    assert.strictEqual(
+      event.channelMetadata.ccmAdditionalData,
+      params.ccmParams.ccmAdditionalData === '0x' ? '' : params.ccmParams.ccmAdditionalData,
+    );
   }
 };
 
@@ -215,7 +221,7 @@ const withCcm: NewSwapRequest = {
   ccmParams: {
     message: '0xcafebabe',
     gasBudget: '1000000',
-    ccmAdditionalData: '0xdeadbeef',
+    ccmAdditionalData: '0x',
   },
 };
 

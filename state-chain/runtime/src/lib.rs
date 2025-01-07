@@ -47,10 +47,14 @@ use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
+	ccm_checker::{
+		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
+		DecodedCcmAdditionalData,
+	},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	sol::{SolAddress, SolanaCrypto},
+	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
 	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
 	TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
 };
@@ -304,7 +308,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
 	type ChannelIdAllocator = BitcoinIngressEgress;
@@ -391,7 +395,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -419,7 +423,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -447,7 +451,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 }
@@ -475,7 +479,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -503,7 +507,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -1239,7 +1243,7 @@ type AllMigrations = (
 	// This ClearEvents should only be run at the start of all migrations. This is in case another
 	// migration needs to trigger an event like a Broadcast for example.
 	pallet_cf_cfe_interface::migrations::ClearEvents<Runtime>,
-	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
+	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFEs EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
@@ -2012,7 +2016,7 @@ impl_runtime_apis! {
 
 					match details.action {
 						ChannelAction::Swap { destination_asset, channel_metadata, .. }
-							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
+							// Ignoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
 							if destination_asset == to && channel_asset == from && channel_metadata.is_none() =>
 						{
 							filtered_swaps.push(deposit.amount.into());
@@ -2220,11 +2224,11 @@ impl_runtime_apis! {
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
-			// Validate parameters
+			// Validate parameters.
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
 			}
-			// Conversion implicitly verifies address validity
+			// Conversion implicitly verifies address validity.
 			frame_support::ensure!(
 				ChainAddressConverter::try_from_encoded_address(destination_address.clone())
 					.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
@@ -2233,17 +2237,48 @@ impl_runtime_apis! {
 				"Destination address and asset are on different chains."
 			);
 
+			// Validate boost fee.
 			let boost_fee: u8 = boost_fee
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
 
-			// Ensure the refund duration is valid.
+			// Validate refund duration.
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
 				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
 				VaultSwapExtraParametersEncoded::Ethereum(extra_params) => extra_params.refund_parameters.retry_duration,
 				VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => extra_params.refund_parameters.retry_duration,
 				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
 			})?;
+
+			// Validate CCM.
+			if let Some(ccm) = channel_metadata.as_ref() {
+				// Ensure CCM message is valid
+				match CcmValidityChecker::check_and_decode(ccm, destination_asset)
+				{
+					Ok(DecodedCcmAdditionalData::Solana(ccm_accounts)) => {
+						// Ensure the CCM parameters do not contain blacklisted accounts.
+						// Load up environment variables.
+						let api_environment =
+							SolEnvironment::api_environment().map_err(|_| "Failed to load Solana API environment")?;
+
+						let agg_key: SolPubkey = SolEnvironment::current_agg_key()
+							.map_err(|_| "Failed to load Solana Agg key")?
+							.into();
+
+						let on_chain_key: SolPubkey = SolEnvironment::current_on_chain_key()
+							.map(|key| key.into())
+							.unwrap_or_else(|_| agg_key);
+
+						check_ccm_for_blacklisted_accounts(
+							&ccm_accounts,
+							vec![api_environment.token_vault_pda_account.into(), agg_key, on_chain_key],
+						)
+						.map_err(DispatchError::from)?;
+					},
+					Ok(DecodedCcmAdditionalData::NotRequired) => {},
+					Err(_) => return Err(DispatchErrorWithMessage::from("Solana Ccm additional data is invalid")),
+				};
+			}
 
 			// Encode swap
 			match (ForeignChain::from(source_asset), extra_parameters) {
