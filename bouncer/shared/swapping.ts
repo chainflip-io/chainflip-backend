@@ -63,7 +63,7 @@ const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
 // that when construction the call the Solana length is not exceeded. Technically the
 // check should be tx lenght (dstAsset, srcAsset, ccmData, cf_parameters...) < 1232
 const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 300;
-const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 200;
+const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 150;
 
 // Solana CCM-related parameters. These are limits in the protocol.
 const MAX_CCM_BYTES_SOL = 705;
