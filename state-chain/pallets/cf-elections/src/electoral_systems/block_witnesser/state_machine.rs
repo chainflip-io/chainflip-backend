@@ -151,36 +151,52 @@ impl<
 
 				if !settings.safe_mode_enabled {
 
-					// if there is a reorg, the new reorg index must be different than the indices of the previously ongoing elections
 					if *range.start() < before.elections.next_election {
 						assert!(
 							before.elections.ongoing.iter().all(|(_, ix)| *ix != after.elections.reorg_id),
-							"wrong reorg_counter after reorg"
+							"if there is a reorg, the new reorg_id must be different than the ids of the previously ongoing elections"
 						)
 					} else {
-						assert_eq!(before.elections.reorg_id, after.elections.reorg_id);
+						assert_eq!(
+							before.elections.reorg_id, after.elections.reorg_id,
+							"if there is no reorg, the reorg_id should stay the same"
+						);
 					}
 
-					// if an ongoing election is not part of the reorg range, it should not be stopped or restarted
-					assert!(before.elections.ongoing.iter().all(
-						|(height, ix)| if height < range.start() {after.elections.ongoing.iter().contains(&(height, ix))} else {true}
-					), "ongoing election which wasn't part of reorg should stay open. (after.ongoing = {:?})", after.elections.ongoing);
-
-					// if an ongoing election is part of the reorg range, it should should either be removed or restarted with the new index
-					assert!(before.elections.ongoing.iter().all(
-						|(height, ix)| if height >= range.start() {
-							after.elections.ongoing.get(&height).is_none_or(|index| *index == after.elections.reorg_id)
+					for (height, ix) in &before.elections.ongoing {
+						if height < range.start() {
+							assert!(
+								after.elections.ongoing.iter().contains(&(height, ix)), 
+								"ongoing election which wasn't part of reorg should stay open with same index. (after.ongoing = {:?})", after.elections.ongoing
+							);
 						} else {
-							true
+							assert!(
+								after.elections.ongoing.get(&height).is_none_or(|index| *index == after.elections.reorg_id),
+								"ongoing election which was part of reorg should either be removed or stay open with new index (after.ongoing = {:?})", after.elections.ongoing
+							)
 						}
-					), "ongoing election which was part of reorg should stay open with new index (after.ongoing = {:?})", after.elections.ongoing);
+					}
 
 				} else {
 
+					// if safe mode is enabled, ongoing elections shouldn't change
 					assert!(
 						before.elections.ongoing == after.elections.ongoing,
-						"during safemode no new elections should be created or existing ones updated"
-					)
+						"if safemode is enabled, ongoing elections shouldn't change (except being closed when they come to consensus)"
+					);
+
+					// but the next_election should still be updated in order to restart the reorg'ed elections after safemode is disabled
+					if *range.start() < before.elections.next_election {
+						assert!(
+							after.elections.next_election == *range.start(),
+							"if safemode is enabled, and a reorg happens, next_election should be the start of the reorg range"
+						);
+					} else {
+						assert!(
+							after.elections.next_election == before.elections.next_election,
+							"if safemode is enabled, and no (relevant) reorg happens, next_election should not be udpated"
+						);
+					}
 				}
 			},
 
