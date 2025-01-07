@@ -179,9 +179,16 @@ export async function openPrivateBtcChannel(brokerUri: string) {
   try {
     await brokerApiRpc('broker_open_private_btc_channel', []);
     testBtcVaultSwap.log('Private Btc channel opened');
-  } catch (error) {
-    // We expect this to fail if the channel already exists from a previous run
-    testBtcVaultSwap.debugLog('Failed to open private Btc channel', error);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    // We expect this to fail if the channel already exists
+    if (error.message.includes('PrivateChannelExistsForBroker')) {
+      testBtcVaultSwap.debugLog('Failed to open private Btc channel', error);
+    } else {
+      // Any other error is unexpected, ie InsufficientFunds
+      testBtcVaultSwap.log(`Failed to open private Btc channel for ${brokerUri}`);
+      throw error;
+    }
   }
 }
 
