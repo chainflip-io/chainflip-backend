@@ -16,8 +16,9 @@ import {
 } from '../shared/utils';
 import { openPrivateBtcChannel } from './btc_vault_swap';
 
+// This timeout needs to be increased when running 3-nodes
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
+export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1200);
 
 export async function initiateSwap(
   sourceAsset: Asset,
