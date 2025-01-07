@@ -215,7 +215,7 @@ const withCcm: NewSwapRequest = {
   ccmParams: {
     message: '0xcafebabe',
     gasBudget: '1000000',
-    ccmAdditionalData: '0xdeadbeef',
+    ccmAdditionalData: '0x',
   },
 };
 
