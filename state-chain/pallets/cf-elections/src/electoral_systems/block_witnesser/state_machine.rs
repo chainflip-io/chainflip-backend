@@ -132,9 +132,14 @@ impl<
 		match input {
 			Vote(MultiIndexAndValue((height, _, _), _)) => {
 
+				let new_elections = if settings.safe_mode_enabled {
+					BTreeSet::new()
+				} else {
+					(before.elections.next_election ..= before.elections.highest_scheduled).take((settings.max_concurrent_elections as usize + 1).saturating_sub(before.elections.ongoing.len())).collect()
+				};
+
 				// the elections after a vote are the ones from before, minus the voted one + all outstanding ones
-				let after_should = before.elections.ongoing.key_set().without(*height)
-							.merge((before.elections.next_election ..= before.elections.highest_scheduled).take((settings.max_concurrent_elections as usize + 1).saturating_sub(before.elections.ongoing.len())).collect());
+				let after_should = before.elections.ongoing.key_set().without(*height).merge(new_elections);
 
 				assert_eq!(
 					after.elections.ongoing.key_set(), after_should,
@@ -143,29 +148,40 @@ impl<
 			},
 
 			Context(Reorg(range) | Continuous(range)) => {
-				// if there is a reorg, the new reorg index must be different than the indices of the previously ongoing elections
-				assert!(
+
+				if !settings.safe_mode_enabled {
+
+					// if there is a reorg, the new reorg index must be different than the indices of the previously ongoing elections
 					if *range.start() < before.elections.next_election {
-						before.elections.ongoing.iter().all(|(_, ix)| *ix != after.elections.reorg_id)
+						assert!(
+							before.elections.ongoing.iter().all(|(_, ix)| *ix != after.elections.reorg_id),
+							"wrong reorg_counter after reorg"
+						)
 					} else {
-						true
-					},
-					"wrong reorg_counter after reorg"
-				);
-
-				// if an ongoing election is not part of the reorg range, it should not be stopped or restarted
-				assert!(before.elections.ongoing.iter().all(
-					|(height, ix)| if height < range.start() {after.elections.ongoing.iter().contains(&(height, ix))} else {true}
-				), "ongoing election which wasn't part of reorg should stay open");
-
-				// if an ongoing election is part of the reorg range, it should should either be removed or restarted with the new index
-				assert!(before.elections.ongoing.iter().all(
-					|(height, ix)| if height >= range.start() {
-						after.elections.ongoing.get(&height).is_none_or(|index| *index == after.elections.reorg_id)
-					} else {
-						true
+						assert_eq!(before.elections.reorg_id, after.elections.reorg_id);
 					}
-				), "ongoing election which was part of reorg should stay open with new index (after.ongoing = {:?})", after.elections.ongoing);
+
+					// if an ongoing election is not part of the reorg range, it should not be stopped or restarted
+					assert!(before.elections.ongoing.iter().all(
+						|(height, ix)| if height < range.start() {after.elections.ongoing.iter().contains(&(height, ix))} else {true}
+					), "ongoing election which wasn't part of reorg should stay open. (after.ongoing = {:?})", after.elections.ongoing);
+
+					// if an ongoing election is part of the reorg range, it should should either be removed or restarted with the new index
+					assert!(before.elections.ongoing.iter().all(
+						|(height, ix)| if height >= range.start() {
+							after.elections.ongoing.get(&height).is_none_or(|index| *index == after.elections.reorg_id)
+						} else {
+							true
+						}
+					), "ongoing election which was part of reorg should stay open with new index (after.ongoing = {:?})", after.elections.ongoing);
+
+				} else {
+
+					assert!(
+						before.elections.ongoing == after.elections.ongoing,
+						"during safemode no new elections should be created or existing ones updated"
+					)
+				}
 			},
 
 			Context(WaitingForFirstConsensus | None(_)) => (),
@@ -232,8 +248,8 @@ mod tests {
 				prop_oneof![
 					Just(ChainProgress::WaitingForFirstConsensus),
 					any::<u8>().prop_map(ChainProgress::None),
-					any::<(u8, u8)>().prop_map(|(a,b)| ChainProgress::Continuous(a..=a)),
-					any::<(u8, u8)>().prop_map(|(a,b)| ChainProgress::Reorg(a..=a))
+					any::<(u8, u8)>().prop_map(|(a,b)| ChainProgress::Continuous(a..=a.saturating_add(b))),
+					any::<(u8, u8)>().prop_map(|(a,b)| ChainProgress::Reorg(a..=a.saturating_add(b)))
 				].prop_map(SMInput::Context)
 			]
 		};
@@ -254,9 +270,9 @@ mod tests {
 			file!(),
             generate_state(),
 			prop_do!{
-				// let safe_mode_enabled in any::<bool>();
-				// let max_concurrent_elections in 1..10u32;
-				return BWSettings { safe_mode_enabled: false, max_concurrent_elections: 5 }
+				let safe_mode_enabled in any::<bool>();
+				let max_concurrent_elections in 0..10u32;
+				return BWSettings { safe_mode_enabled, max_concurrent_elections }
 			},
 			generate_input
         );

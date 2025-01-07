@@ -212,7 +212,7 @@ pub trait StateMachine: 'static {
 					);
 
 					// ensure that state is still well formed
-					assert!(state.is_valid().is_ok(), "state after step function is not valid");
+					assert!(state.is_valid().is_ok(), "state after step function is not valid ({:?})", state);
 					
 					// ensure that step function computed valid state
 					Self::step_specification(&prev_state, &input, &settings, &state);

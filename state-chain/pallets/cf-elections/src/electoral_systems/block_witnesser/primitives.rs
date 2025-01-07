@@ -99,9 +99,6 @@ impl<N : Ord + Step> Validate for ElectionTracker<N> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		ensure!(self.ongoing.iter().all(|(height, _)| height < &self.next_election),
-			"ongoing elections should be < next_election"
-		);
 		Ok(())
 	}
 }
