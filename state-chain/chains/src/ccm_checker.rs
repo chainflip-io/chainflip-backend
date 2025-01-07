@@ -218,6 +218,32 @@ mod test {
 	}
 
 	#[test]
+	fn can_check_for_redundant_data() {
+		let ccm = sol_test_values::ccm_parameter().channel_metadata;
+
+		// Ok for Solana Chain
+		assert_ok!(CcmValidityChecker::check_and_decode(&ccm, Asset::Sol));
+
+		// Fails for non-solana chains
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Btc),
+			CcmValidityError::RedundantDataSupplied,
+		);
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Dot),
+			CcmValidityError::RedundantDataSupplied,
+		);
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth),
+			CcmValidityError::RedundantDataSupplied,
+		);
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::ArbEth),
+			CcmValidityError::RedundantDataSupplied,
+		);
+	}
+
+	#[test]
 	fn only_check_against_solana_chain() {
 		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
 
@@ -234,6 +260,7 @@ mod test {
 		);
 
 		// Always valid on other chains.
+		ccm.ccm_additional_data.clear();
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth),
 			DecodedCcmAdditionalData::NotRequired
