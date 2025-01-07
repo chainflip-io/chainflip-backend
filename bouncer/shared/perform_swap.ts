@@ -243,7 +243,7 @@ export async function performAndTrackSwap(
 
   if (broadcastId) await observeBroadcastSuccess(broadcastId, tag);
   else throw new Error('Failed to retrieve broadcastId!');
-  console.log(`${tag} broadcast executed succesfully, swap is complete!`);
+  console.log(`${tag} broadcast executed successfully, swap is complete!`);
 }
 
 export async function executeVaultSwap(

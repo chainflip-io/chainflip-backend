@@ -14,6 +14,7 @@ import {
   VaultSwapParams,
   vaultSwapSupportedChains,
 } from '../shared/utils';
+import { openPrivateBtcChannel } from './btc_vault_swap';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
@@ -47,6 +48,9 @@ export async function initiateSwap(
 
 async function main() {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
+
+  // Open a private BTC channel to be used for btc vault swaps
+  await openPrivateBtcChannel('//BROKER_1');
 
   function appendSwap(
     sourceAsset: Asset,

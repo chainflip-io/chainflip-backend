@@ -9,6 +9,7 @@ import {
   chainFromAsset,
   createStateChainKeypair,
   decodeDotAddressForContract,
+  fineAmountToAmount,
   newAddress,
   observeBalanceIncrease,
   stateChainAssetFromAsset,
@@ -17,6 +18,7 @@ import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
 import { brokerApiRpc } from '../shared/json_rpc';
 import { getEarnedBrokerFees } from './broker_fee_collection';
+import { fundFlip } from '../shared/fund_flip';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBtcVaultSwap = new ExecutableTest('Btc-Vault-Swap', main, 120);
@@ -175,19 +177,37 @@ export async function openPrivateBtcChannel(brokerUri: string) {
   // TODO: Use chainflip SDK instead so we can support any broker uri
   assert.strictEqual(brokerUri, '//BROKER_1', 'Support for other brokers is not implemented');
 
-  // TODO: use chainflip SDK to check if the channel is already open
-  try {
-    await brokerApiRpc('broker_open_private_btc_channel', []);
-    testBtcVaultSwap.log('Private Btc channel opened');
+  // Check if the channel is already open
+  const chainflip = await getChainflipApi();
+  const broker = createStateChainKeypair(brokerUri);
+  const existingPrivateChannel = Number(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    // We expect this to fail if the channel already exists
-    if (error.message.includes('PrivateChannelExistsForBroker')) {
-      testBtcVaultSwap.debugLog('Failed to open private Btc channel', error);
-    } else {
-      // Any other error is unexpected, ie InsufficientFunds
-      testBtcVaultSwap.log(`Failed to open private Btc channel for ${brokerUri}`);
-      throw error;
+    (await chainflip.query.swapping.brokerPrivateBtcChannels(broker.address)) as any,
+  );
+
+  if (!existingPrivateChannel) {
+    // Fund the broker the required bond amount for opening a private channel
+    const fundAmount = fineAmountToAmount(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (await chainflip.query.swapping.brokerBond()) as any as string,
+      assetDecimals('Flip'),
+    );
+    await fundFlip(broker.address, fundAmount);
+
+    // Open the private channel
+    try {
+      await brokerApiRpc('broker_open_private_btc_channel', []);
+      console.log('Private Btc channel opened');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      // Ignore the error if the channel already exists
+      if (error.message.includes('PrivateChannelExistsForBroker')) {
+        console.log('Tried to open private Btc channel but one already exists', error);
+      } else {
+        // Any other error is unexpected, ie InsufficientFunds
+        console.log(`Failed to open private Btc channel for ${brokerUri}`);
+        throw error;
+      }
     }
   }
 }
