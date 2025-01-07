@@ -21,12 +21,15 @@ import {
   VaultSwapParams,
   TransactionOriginId,
   TransactionOrigin,
+  defaultAssetAmounts,
+  newAddress,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { executeEvmVaultSwap } from './evm_vault_swap';
 import { executeSolVaultSwap } from './sol_vault_swap';
+import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from '../tests/btc_vault_swap';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
@@ -242,7 +245,7 @@ export async function performAndTrackSwap(
 
   if (broadcastId) await observeBroadcastSuccess(broadcastId, tag);
   else throw new Error('Failed to retrieve broadcastId!');
-  console.log(`${tag} broadcast executed succesfully, swap is complete!`);
+  console.log(`${tag} broadcast executed successfully, swap is complete!`);
 }
 
 export async function executeVaultSwap(
@@ -269,7 +272,7 @@ export async function executeVaultSwap(
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
-    const receipt = await executeEvmVaultSwap(
+    const txHash = await executeEvmVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
@@ -280,8 +283,24 @@ export async function executeVaultSwap(
       dcaParams,
       wallet,
     );
-    transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash: receipt.hash };
+    transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
+  } else if (srcChain === 'Bitcoin') {
+    const brokerUri = '//BROKER_1';
+    await openPrivateBtcChannel(brokerUri);
+    const txId = await buildAndSendBtcVaultSwap(
+      Number(amount ?? defaultAssetAmounts(sourceAsset)),
+      brokerUri,
+      destAsset,
+      destAddress,
+      fillOrKillParams === undefined
+        ? await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND')
+        : fillOrKillParams.refundAddress,
+      [],
+    );
+    transactionId = { type: TransactionOrigin.VaultSwapBitcoin, txId };
+    // Unused for now
+    sourceAddress = '';
   } else {
     const { slot, accountAddress } = await executeSolVaultSwap(
       sourceAsset,
