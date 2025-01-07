@@ -25,10 +25,9 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for RenameScheduledTxFo
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		let old: Vec<TransactionRejectionDetails<T, I>> = old::ScheduledTxForReject::<T, I>::take();
-		old.iter().for_each(|elem| {
-			crate::ScheduledTransactionsForRejection::<T, I>::append(elem);
-		});
+		crate::ScheduledTransactionsForRejection::<T, I>::put(
+			old::ScheduledTxForReject::<T, I>::take(),
+		);
 		Weight::zero()
 	}
 
@@ -42,5 +41,34 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for RenameScheduledTxFo
 
 		assert_eq!(pre_upgrade_count, post_upgrade_count);
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod migration_tests {
+	use crate::mock_btc::Test;
+
+	use self::mock_btc::new_test_ext;
+
+	use super::*;
+
+	#[test]
+	fn test_migration() {
+		new_test_ext().execute_with(|| {
+			old::ScheduledTxForReject::<Test, ()>::put::<
+				sp_runtime::Vec<TransactionRejectionDetails<Test, ()>>,
+			>(vec![]);
+			assert_eq!(old::ScheduledTxForReject::<Test, ()>::get(), vec![]);
+
+			#[cfg(feature = "try-runtime")]
+			let state: Vec<u8> = RenameScheduledTxForReject::<Test, ()>::pre_upgrade().unwrap();
+
+			RenameScheduledTxForReject::<Test>::on_runtime_upgrade();
+
+			#[cfg(feature = "try-runtime")]
+			RenameScheduledTxForReject::<Test>::post_upgrade(state).unwrap();
+
+			assert_eq!(ScheduledTransactionsForRejection::<Test>::get(), vec![]);
+		});
 	}
 }
