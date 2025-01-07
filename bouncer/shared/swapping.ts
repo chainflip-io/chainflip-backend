@@ -77,11 +77,7 @@ function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: nu
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
-      length = MAX_CCM_ADDITIONAL_DATA_LENGTH;
-      if (maxLength !== undefined) {
-        length = Math.min(length, maxLength);
-      }
-      return newCcmArbitraryBytes(length);
+      return '0x';
     case 'Solana': {
       const messageLength = (message!.length - 2) / 2;
       length = (destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC) - messageLength;
@@ -92,7 +88,11 @@ function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: nu
 
       // The maximum number of extra accounts that can be passed is limited by the tx size
       // and therefore also depends on the message length.
-      return newSolanaCcmAdditionalData(maxAccounts);
+      const ccmAdditonalData = newSolanaCcmAdditionalData(maxAccounts);
+      if (ccmAdditonalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
+        throw new Error(`CCM additional data length exceeds limit: ${ccmAdditonalData.length}`);
+      }
+      return ccmAdditonalData;
     }
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
@@ -165,7 +165,6 @@ export async function newVaultSwapCcmMetadata(
   ccmAdditionalDataArray?: string,
 ): Promise<CcmDepositMetadata> {
   const sourceChain = chainFromAsset(sourceAsset);
-  const destChain = chainFromAsset(destAsset);
   let messageMaxLength;
   let metadataMaxLength;
 
@@ -195,9 +194,7 @@ export async function newVaultSwapCcmMetadata(
   const message = ccmMessage ?? newCcmMessage(destAsset, messageMaxLength);
   // For now we only enforce empty ccmAdditionalData for Vault swaps, not deposit channels.
   const ccmAdditionalData =
-    ccmAdditionalDataArray ?? destChain === `Solana`
-      ? newCcmAdditionalData(destAsset, message, metadataMaxLength)
-      : '0x';
+    ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message, metadataMaxLength);
   return newCcmMetadata(destAsset, message, ccmAdditionalData);
 }
 
