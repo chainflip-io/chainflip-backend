@@ -782,7 +782,8 @@ pub mod pallet {
 		AddressAlreadyRegistered,
 		/// Validation of affiliate withdrawal address failed.
 		ExpectedEthereumAddress,
-		/// TODO
+		/// The withdrawal address of a affiliate was not present when we try to trigger the
+		/// withdrawal.
 		AffiliateWithdrawalAddressDosentExist,
 	}
 
