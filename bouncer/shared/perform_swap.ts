@@ -77,13 +77,11 @@ export async function requestNewSwap(
 
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
-          event.data.channelMetadata.message === messageMetadata.message &&
+          event.data.channelMetadata.message ===
+            (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
           event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
-          // State Chain event emits "" when an empty hex string is passed
           event.data.channelMetadata.ccmAdditionalData ===
-            (messageMetadata.ccmAdditionalData === '0x'
-              ? ''
-              : event.data.channelMetadata.ccmAdditionalData === messageMetadata.ccmAdditionalData)
+            (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
