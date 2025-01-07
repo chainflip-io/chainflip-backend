@@ -1073,7 +1073,7 @@ pub mod pallet {
 					// Current epoch, shouldn't be possible.
 					_ => {
 						log_or_panic!(
-							"Logic error: Found call for current epoch in prevoius epoch's failed calls: broadcast_id: {}.",
+							"Logic error: Found call for current epoch in previous epoch's failed calls: broadcast_id: {}.",
 							call.broadcast_id,
 						);
 					},

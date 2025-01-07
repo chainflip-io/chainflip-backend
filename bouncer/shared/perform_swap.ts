@@ -80,9 +80,11 @@ export async function requestNewSwap(
 
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
-          event.data.channelMetadata.message === messageMetadata.message &&
+          event.data.channelMetadata.message ===
+            (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
           event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
-          event.data.channelMetadata.ccmAdditionalData === messageMetadata.ccmAdditionalData
+          event.data.channelMetadata.ccmAdditionalData ===
+            (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
