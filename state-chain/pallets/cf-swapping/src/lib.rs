@@ -1139,6 +1139,11 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Opens up a private broker channel.
+		///
+		/// ## Events
+		///
+		/// - [PrivateBrokerChannelOpened](Event::PrivateBrokerChannelOpened)
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::open_private_btc_channel())]
 		pub fn open_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
@@ -1165,6 +1170,11 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Closes the currently open private broker channel.
+		///
+		/// ## Events
+		///
+		/// - [PrivateBrokerChannelClosed](Event::PrivateBrokerChannelClosed)
 		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::close_private_btc_channel())]
 		pub fn close_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
@@ -1206,6 +1216,13 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Registers a withdrawal address for an affiliate. This is a one-time operation. Once the
+		/// address is set up, it's not possible to change it any more.
+		/// Note: This extrinsic is secured by the broker that has registered the affiliate account.
+		///
+		/// ## Events
+		///
+		/// - [PrivateBrokerChannelClosed](Event::PrivateBrokerChannelClosed)
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::register_affiliate_withdrawal_address())]
 		pub fn register_affiliate_withdrawal_address(
@@ -1242,6 +1259,12 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Triggers a withdrawal request to the registered withdrawal address of the affiliate.
+		/// Note: This extrinsic is secured by the broker that has registered the affiliate account.
+		///
+		/// ## Events
+		///
+		/// - [WithdrawalRequested](Event::WithdrawalRequested)
 		#[pallet::call_index(16)]
 		#[pallet::weight(T::WeightInfo::affiliate_withdrawal_request())]
 		pub fn affiliate_withdrawal_request(
