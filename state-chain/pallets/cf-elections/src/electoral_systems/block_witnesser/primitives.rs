@@ -44,11 +44,11 @@ pub struct ElectionTracker<N: Ord> {
 	/// The state machine wouldn't close and reopen an election if the election properties
 	/// stay the same, so we have (N, usize) as election properties. And when we want to reopen
 	/// an ongoing election we increment the usize.
-	pub ongoing: BTreeMap<N, u32>,
+	pub ongoing: BTreeMap<N, u8>,
 
 	/// Whenever a reorg is detected, we increment this counter, as to restart all ongoing
 	/// relevant elections.
-	pub reorg_counter: u32,
+	pub reorg_id: u8,
 }
 
 impl<N: Ord + Step + Copy> ElectionTracker<N> {
@@ -61,7 +61,7 @@ impl<N: Ord + Step + Copy> ElectionTracker<N> {
 
 		// schedule 
 		while self.next_election <= self.highest_scheduled && self.ongoing.len() < max_ongoing {
-			self.ongoing.insert(self.next_election, self.reorg_counter);
+			self.ongoing.insert(self.next_election, self.reorg_id);
 			self.next_election = N::forward(self.next_election, 1);
 		}
 	}
@@ -77,11 +77,11 @@ impl<N: Ord + Step + Copy> ElectionTracker<N> {
 	pub fn schedule_range(&mut self, range: RangeInclusive<N>) {
 
 		// Check whether there is a reorg concerning elections we have started previously.
-		// If there is, we ensure that all ongoing or previously finished elections in range
+		// If there is, we ensure that all ongoing or previously finished elections inside the reorg range
 		// are going to be restarted once there is the capacity to do so.
 		if *range.start() < self.next_election {
 			self.next_election = *range.start();
-			self.reorg_counter += 1;
+			self.reorg_id = generate_new_index(self.ongoing.values());
 		}
 
 		// QUESTION: currently, the following check ensures that
@@ -99,9 +99,6 @@ impl<N : Ord + Step> Validate for ElectionTracker<N> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		ensure!(self.next_election <= N::forward(self.highest_scheduled.clone(), 1),
-			"next_election should be <= highest_scheduled + 1"
-		);
 		ensure!(self.ongoing.iter().all(|(height, _)| height < &self.next_election),
 			"ongoing elections should be < next_election"
 		);
@@ -111,9 +108,29 @@ impl<N : Ord + Step> Validate for ElectionTracker<N> {
 
 impl<N : BlockZero + Ord> Default for ElectionTracker<N> {
 	fn default() -> Self {
-		Self { highest_scheduled: BlockZero::zero(), next_election: BlockZero::zero(), ongoing: Default::default(), reorg_counter: 0 }
+		Self { highest_scheduled: BlockZero::zero(), next_election: BlockZero::zero(), ongoing: Default::default(), reorg_id: 0 }
 	}
 }
 
+/// Generates an element which is not in `indices`.
+fn generate_new_index<'a, N: BlockZero + Ord + Step + 'static>(mut indices: impl Iterator<Item = &'a N> + Clone) -> N {
+	let mut index = N::zero();
+	while indices.any(|ix| *ix == index) {
+		index = N::forward(index, 1);
+	}
+	index
+}
 
+#[cfg(test)]
+mod tests {
 
+	use proptest::prelude::*;
+	use super::generate_new_index;
+
+	proptest!{
+		#[test]
+		fn indices_are_new(xs in prop::collection::vec(any::<u8>(), 0..3)) {
+			assert!(!xs.contains(&generate_new_index(xs.iter())));
+		}
+	}
+}

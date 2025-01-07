@@ -58,14 +58,14 @@ impl<N: Step + Ord> IntoSet<N> for RangeInclusive<N> {
 
 #[macro_export]
 macro_rules! prop_do {
-    (let $var:ident in $expr:expr; $($expr2:tt)+) => {
+    (let $var:pat in $expr:expr; $($expr2:tt)+) => {
         $expr.prop_flat_map(move |$var| prop_do!($($expr2)+))
     };
     (return $($rest:tt)+) => {
         Just($($rest)+)
     };
     ($expr:expr) => {$expr};
-    (let $var:ident = $expr:expr; $($expr2:tt)+ ) => {
+    (let $var:pat = $expr:expr; $($expr2:tt)+ ) => {
         {
             let $var = $expr;   
             prop_do!($($expr2)+)
