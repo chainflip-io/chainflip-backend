@@ -235,19 +235,6 @@ mod tests {
 	
     type SM = BWStateMachine<(), (), u8>;
 
-	// we generate (a,b) with a <= b
-	fn ordered_pair<N: Step + Arbitrary>() -> impl Strategy<Value = (N, N)> {
-		prop_do!{
-			let (x,y) in any::<(N, N)>();
-			let (a,b) = if N::steps_between(&x,&y).1 == None {
-				(y, x)
-			} else {
-				(x,y)
-			};
-			return (a,b)
-		}
-	}
-
     fn generate_state<N: BlockZero + Arbitrary + Step + Ord + Copy>() -> impl Strategy<Value = BWState<N, ()>> {
 
 		prop_do!{

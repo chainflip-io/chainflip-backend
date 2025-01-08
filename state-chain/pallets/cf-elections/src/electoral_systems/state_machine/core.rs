@@ -28,7 +28,7 @@ pub mod hook_test_utils {
     }
 
     impl<A,B: Clone> Hook<A,B> for ConstantHook<A,B> {
-        fn run(&self, input: A) -> B {
+        fn run(&self, _input: A) -> B {
             self.state.clone()
         }
     }
@@ -95,7 +95,7 @@ impl<Idx, A> ConstantIndex<Idx, A> {
 impl<Idx, A> Indexed for ConstantIndex<Idx, A> {
 	type Index = Vec<Idx>;
 
-	fn has_index(&self, index: &Self::Index) -> bool {
+	fn has_index(&self, _index: &Self::Index) -> bool {
 		true
 	}
 }

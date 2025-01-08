@@ -68,7 +68,7 @@ pub trait StateMachine: 'static {
 	/// Takes a state, input and next state as arguments. During testing it is verified
 	/// that the resulting state after the step function always fulfills this specification.
 	#[cfg(test)]
-	fn step_specification(before: &Self::State, input: &Self::Input, settings: &Self::Settings, after: &Self::State) {}
+	fn step_specification(_before: &Self::State, _input: &Self::Input, _settings: &Self::Settings, _after: &Self::State) {}
 
 	/// Given strategies `states` and `inputs` for generating arbitrary, valid values, runs the step
 	/// function and ensures that it's result is always valid and additionally fulfills the

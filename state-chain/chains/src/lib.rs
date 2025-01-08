@@ -74,7 +74,6 @@ pub mod witness_period {
 		ops::{Rem, Sub},
 	};
 
-	use sp_runtime::traits::Block;
 	use sp_std::ops::RangeInclusive;
 
 	use codec::{Decode, Encode};
@@ -168,7 +167,7 @@ pub mod witness_period {
 	}
 
 	impl<I: PartialOrd + Clone + Saturating> Step for BlockWitnessRange<I> {
-		fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
+		fn steps_between(_start: &Self, _end: &Self) -> (usize, Option<usize>) {
 			// assert_eq!(start.period, end.period);
 			todo!()
 		}

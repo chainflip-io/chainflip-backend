@@ -1,7 +1,4 @@
 
-use crate::electoral_system::{
-		ElectionWriteAccess, ElectoralSystem,
-	};
 use sp_std::collections::btree_map::BTreeMap;
 
 /// Abstract consensus mechanism.

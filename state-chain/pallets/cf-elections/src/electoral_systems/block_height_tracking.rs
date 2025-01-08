@@ -3,12 +3,7 @@ use core::{
 	ops::{RangeInclusive, Rem, Sub},
 };
 
-use crate::{
-	electoral_system::{
-		ElectionWriteAccess, ElectoralSystem,
-	},
-	CorruptStorageError,
-};
+use crate::CorruptStorageError;
 use cf_chains::witness_period::{BlockWitnessRange, BlockZero};
 use codec::{Decode, Encode};
 use frame_support::{
@@ -16,7 +11,6 @@ use frame_support::{
 	pallet_prelude::MaxEncodedLen,
 	sp_runtime::traits::{One, Saturating},
 };
-use itertools::Itertools;
 use primitives::{
 	trim_to_length, validate_vote_and_height, ChainBlocks, Header, MergeFailure,
 	VoteValidationError,
@@ -134,7 +128,7 @@ impl<N: Ord> Validate for ChainProgress<N> {
 
 //-------- implementation of block height tracking as a state machine --------------
 
-trait BlockHeightTrait = PartialEq + Ord + Copy + Step + BlockZero;
+pub trait BlockHeightTrait = PartialEq + Ord + Copy + Step + BlockZero;
 
 pub struct BlockHeightTrackingConsensus<ChainBlockNumber, ChainBlockHash> {
 	votes: Vec<InputHeaders<ChainBlockHash, ChainBlockNumber>>,
@@ -398,7 +392,7 @@ impl<
 
 	// specification for step function
 	#[cfg(test)]
-	fn step_specification(before: &Self::State, input: &Self::Input, settings: &Self::Settings, after: &Self::State) {
+	fn step_specification(before: &Self::State, input: &Self::Input, _settings: &Self::Settings, after: &Self::State) {
 		use BHWState::*;
 		match (before, after) {
 
@@ -468,7 +462,7 @@ impl<
 							merge_info.removed
 						);
 
-						let safe_headers = trim_to_length(&mut chainblocks.headers, SAFETY_MARGIN);
+						let _ = trim_to_length(&mut chainblocks.headers, SAFETY_MARGIN);
 
 						let current_state = chainblocks.current_state_as_no_chain_progress();
 

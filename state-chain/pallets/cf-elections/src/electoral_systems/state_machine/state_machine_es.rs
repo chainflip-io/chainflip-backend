@@ -10,7 +10,7 @@ use sp_std::{vec::Vec, fmt::Debug};
 
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
-	vote_storage::{VoteStorage}, CorruptStorageError,
+	vote_storage::VoteStorage, CorruptStorageError,
 };
 
 use super::{
@@ -213,9 +213,9 @@ where
 	type OnFinalizeReturn = Bounds::OnFinalizeReturn;
 
 	fn generate_vote_properties(
-			election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
-			previous_vote: Option<(crate::electoral_system::VotePropertiesOf<Self>, crate::electoral_system::AuthorityVoteOf<Self>)>,
-			vote: &<Self::Vote as VoteStorage>::PartialVote,
+			_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
+			_previous_vote: Option<(crate::electoral_system::VotePropertiesOf<Self>, crate::electoral_system::AuthorityVoteOf<Self>)>,
+			_vote: &<Self::Vote as VoteStorage>::PartialVote,
 		) -> Result<crate::electoral_system::VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(Default::default())
 	}
@@ -306,7 +306,7 @@ where
 			// This is the consensus as of the last time the consensus was checked. Note this is *NOT*
 			// the "last" consensus, i.e. this can be `None` even if on some previous check we had
 			// consensus, but it was subsequently lost.
-			previous_consensus: Option<&Self::Consensus>,
+			_previous_consensus: Option<&Self::Consensus>,
 			consensus_votes: crate::electoral_system::ConsensusVotes<Self>,
 		) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		log::debug!("ESSM consensus: reading properties");

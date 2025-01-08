@@ -4,7 +4,6 @@ use core::{
 };
 
 use codec::{Decode, Encode};
-use frame_support::sp_runtime::traits::Saturating;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
@@ -31,7 +30,7 @@ pub struct MergeInfo<H, N> {
 impl<H, N: Copy + Step> MergeInfo<H, N> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<N>> {
 		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
-			if let (Some(first_removed), Some(last_removed)) =
+			if let (Some(_), Some(_)) =
 				(self.removed.front(), self.removed.back())
 			{
 				Some(ChainProgress::Reorg(first_added.block_height..=last_added.block_height))
