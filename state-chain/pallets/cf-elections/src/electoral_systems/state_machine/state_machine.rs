@@ -1,9 +1,3 @@
-use crate::electoral_system::ElectoralSystem;
-use codec::{Decode, Encode};
-use itertools::Either;
-use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
-use sp_std::vec::Vec;
 use super::core::{IndexOf, Indexed, Validate};
 
 #[cfg(test)]

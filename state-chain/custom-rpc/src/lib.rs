@@ -67,7 +67,7 @@ use state_chain_runtime::{
 		SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash, NetworkFee, SolanaInstance,
+	Hash, NetworkFee,
 };
 use std::{
 	collections::{BTreeMap, HashMap},

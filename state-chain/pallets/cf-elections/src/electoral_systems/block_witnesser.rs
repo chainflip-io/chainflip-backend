@@ -1,4 +1,4 @@
-use core::{cmp::min, ops::RangeInclusive};
+use core::cmp::min;
 
 use crate::{
 	electoral_system::{

@@ -1,29 +1,8 @@
-use core::ops::{Add, AddAssign, Range, RangeInclusive, Sub, SubAssign};
 
-use crate::{
-	electoral_system::{
-		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
-	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
-};
-use cf_chains::btc::BlockNumber;
-use cf_utilities::success_threshold_from_share_count;
-use codec::{Decode, Encode};
-use frame_support::{
-	ensure,
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	sp_runtime::traits::AtLeast32BitUnsigned,
-	Parameter,
-};
-use itertools::Itertools;
-use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
-use sp_std::{
-	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
-	vec::Vec,
-};
+use crate::electoral_system::{
+		ElectionWriteAccess, ElectoralSystem,
+	};
+use sp_std::collections::btree_map::BTreeMap;
 
 /// Abstract consensus mechanism.
 ///

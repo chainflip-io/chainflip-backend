@@ -1,5 +1,4 @@
 
-use core::fmt::Error;
 
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
@@ -11,12 +10,12 @@ use sp_std::{vec::Vec, fmt::Debug};
 
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
-	vote_storage::{self, VoteStorage}, CorruptStorageError,
+	vote_storage::{VoteStorage}, CorruptStorageError,
 };
 
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
-	core::{Indexed, IndexOf, Validate},
+	core::{Indexed, Validate},
 	state_machine::StateMachine
 };
 

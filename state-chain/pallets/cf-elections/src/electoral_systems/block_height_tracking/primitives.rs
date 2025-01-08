@@ -1,31 +1,13 @@
 use core::{
 	iter::Step,
-	ops::{Add, AddAssign, Range, RangeInclusive, Rem, Sub, SubAssign},
+	ops::{Range, RangeInclusive},
 };
 
-use crate::{
-	electoral_system::{
-		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
-	},
-	electoral_systems::block_height_tracking::RangeOfBlockWitnessRanges,
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
-};
 use codec::{Decode, Encode};
-use frame_support::{
-	ensure,
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating},
-	Parameter,
-};
-use itertools::Itertools;
+use frame_support::sp_runtime::traits::Saturating;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{
-	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
-	vec::Vec,
-};
+use sp_std::collections::vec_deque::VecDeque;
 
 use super::{super::state_machine::core::Validate, BlockHeightTrait, ChainProgress};
 
@@ -103,7 +85,7 @@ pub fn trim_to_length<A>(items: &mut VecDeque<A>, target_length: usize) -> VecDe
 	result
 }
 
-pub fn head_and_tail<A: Clone>(mut items: &VecDeque<A>) -> Option<(A, VecDeque<A>)> {
+pub fn head_and_tail<A: Clone>(items: &VecDeque<A>) -> Option<(A, VecDeque<A>)> {
 	let items = items.clone();
 	items.clone().pop_front().map(|head| (head, items))
 }

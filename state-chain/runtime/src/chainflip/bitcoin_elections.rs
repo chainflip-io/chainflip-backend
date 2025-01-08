@@ -1,8 +1,6 @@
 use crate::{BitcoinIngressEgress, Runtime};
 use cf_chains::{btc, Bitcoin};
-use cf_traits::{Chainflip, SafeMode};
-use log::info;
-use pallet_cf_vaults::pallet::Instance3;
+use cf_traits::Chainflip;
 use sp_core::Get;
 use serde::{Deserialize, Serialize};
 
@@ -13,9 +11,9 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystem, electoral_systems::{
 		state_machine::{core::{ConstantIndex, MultiIndexAndValue}, state_machine_es::{ESInterface, StateMachineES, StateMachineESInstance}},
 		block_height_tracking::{
-			self, BHWState, BlockHeightTrackingConsensus, BlockHeightTrackingDSM, BlockHeightTrackingProperties, ChainProgress, InputHeaders, OldChainProgress, RangeOfBlockWitnessRanges
+			BHWState, BlockHeightTrackingConsensus, BlockHeightTrackingDSM, BlockHeightTrackingProperties, ChainProgress, InputHeaders
 		}, block_witnesser::{
-			consensus::BWConsensus, state_machine::{BWSettings, BWState, BWStateMachine, BWTypes}, BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData
+			consensus::BWConsensus, state_machine::{BWSettings, BWState, BWStateMachine, BWTypes}, BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData
 		}, composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
@@ -24,11 +22,10 @@ use pallet_cf_elections::{
 };
 
 use pallet_cf_ingress_egress::{
-	Config, DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo, WitnessSafetyMargin
+	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo, WitnessSafetyMargin
 };
 use scale_info::TypeInfo;
 
-use sp_runtime::Either;
 use sp_std::vec::Vec;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<

@@ -4,7 +4,6 @@ use bitcoin::hashes::Hash;
 use cf_chains::{
 	btc::{self, BlockNumber},
 	witness_period::BlockWitnessRange,
-	Bitcoin,
 };
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
@@ -27,14 +26,13 @@ use state_chain_runtime::{
 use crate::{
 	btc::{retry_rpc::BtcRetryRpcApi, rpc::BlockHeader},
 	elections::voter_api::{CompositeVoter, VoterApi},
-	retrier::RetryLimit,
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
 	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use std::sync::Arc;
 

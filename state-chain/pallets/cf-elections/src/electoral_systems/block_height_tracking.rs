@@ -1,30 +1,22 @@
 use core::{
 	iter::Step,
-	ops::{Add, AddAssign, Range, RangeInclusive, Rem, Sub, SubAssign},
+	ops::{RangeInclusive, Rem, Sub},
 };
 
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
+		ElectionWriteAccess, ElectoralSystem,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
+	CorruptStorageError,
 };
-use cf_chains::{
-	assets::arb::Chain,
-	btc::BlockNumber,
-	witness_period::{BlockWitnessRange, BlockZero},
-};
-use cf_utilities::success_threshold_from_share_count;
+use cf_chains::witness_period::{BlockWitnessRange, BlockZero};
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
-	pallet_prelude::{MaxEncodedLen, MaybeSerializeDeserialize, Member},
-	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating},
-	Parameter,
+	pallet_prelude::MaxEncodedLen,
+	sp_runtime::traits::{One, Saturating},
 };
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use primitives::{
 	trim_to_length, validate_vote_and_height, ChainBlocks, Header, MergeFailure,
 	VoteValidationError,
@@ -32,7 +24,7 @@ use primitives::{
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
-	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
+	collections::vec_deque::VecDeque,
 	vec::Vec,
 };
 use super::state_machine::consensus::{ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold};
@@ -240,10 +232,10 @@ mod tests {
 
 	use core::iter::Step;
 
-	use crate::electoral_systems::state_machine::core::{Indexed, Validate};
+	
 	use proptest::{
 		prelude::{any, prop, Arbitrary, Just, Strategy},
-		prop_oneof, proptest,
+		prop_oneof,
 	};
 
 	use super::{

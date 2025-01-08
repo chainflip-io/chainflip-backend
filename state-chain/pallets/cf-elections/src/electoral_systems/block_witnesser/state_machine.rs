@@ -4,18 +4,14 @@ use cf_chains::witness_period::BlockZero;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
 
-use itertools::Either;
 
-use crate::electoral_systems::state_machine::core::{MultiIndexAndValue, ConstantIndex, IndexOf, Validate};
+use crate::electoral_systems::state_machine::core::{MultiIndexAndValue, IndexOf, Validate};
 use crate::electoral_systems::state_machine::state_machine::StateMachine;
 use crate::electoral_systems::state_machine::state_machine_es::SMInput;
 use crate::electoral_systems::block_height_tracking::ChainProgress;
-use crate::{SharedData, SharedDataHash};
 use super::primitives::ElectionTracker;
 use super::super::state_machine::core::*;
-use super::helpers::*;
 
 
 pub trait BWTypes<N> : 'static {
@@ -111,9 +107,13 @@ impl<
     /// Specifiation for step function
 	#[cfg(test)]
 	fn step_specification(before: &Self::State, input: &Self::Input, settings: &Self::Settings, after: &Self::State) {
+		use std::collections::BTreeSet;
+
 		use itertools::Itertools;
 		use SMInput::*;
 		use ChainProgress::*;
+
+		use crate::electoral_systems::block_witnesser::helpers::*;
 
 		let safemode_enabled = before.safemode_enabled.run(());
 
@@ -215,7 +215,7 @@ impl<
 
 #[cfg(test)]
 mod tests {
-	use core::iter::Filter;
+	use std::collections::BTreeMap;
 
 	use proptest::{
 		prelude::{any, prop, Arbitrary, BoxedStrategy, Just, Strategy},

@@ -1,9 +1,8 @@
 
 use serde::{Deserialize, Serialize};
-use core::{iter::Step, result};
+use core::iter::Step;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_core::MaxEncodedLen;
 use itertools::Either;
 use sp_std::vec::Vec;
 
@@ -13,6 +12,7 @@ pub trait Hook<A,B> {
 
 #[cfg(test)]
 pub mod hook_test_utils {
+    use codec::MaxEncodedLen;
     use super::*;
 
     #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
