@@ -7,34 +7,31 @@ use sp_std::collections::btree_map::BTreeMap;
 
 use crate::electoral_systems::state_machine::core::Validate;
 
-// ----------------------------------- Election tracker
-// ------------------------------------------------------- Safe mode:
-// when we enable safe mode, we want to take into account all reorgs,
-// which means that we have to reopen elections for all elections which
-// have been opened previously.
-//
-// This means that if safe mode is enabled, we don't call `start_more_elections`,
-// but even in safe mode, if there's a reorg we call `restart_election`.
-
+/// Keeps track of ongoing elections for the block witnesser.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct ElectionTracker<N: Ord> {
-	/// The block heights which we have already received but not started elections for, yet.
-	/// This means that we assume that we had elections for heights < scheduled.start().
-	/// These might have already concluded of course.
+	/// The next block height for which an election is going to be started once
+	/// there is the capacity to do so and that height has been witnessed
+	/// (`highest_scheduled >= next_election`).
 	pub next_election: N,
+
+	/// The highest block height that has been seen.
 	pub highest_scheduled: N,
 
 	/// Map containing all currently active elections.
 	/// The associated usize is somewhat an artifact of the fact that
-	/// I intend this to be used in an ES state machine. And the state machine
+	/// this is intended to be used in an electoral system state machine. And the state machine
 	/// has to know when to re-open an election which is currently ongoing.
 	/// The state machine wouldn't close and reopen an election if the election properties
 	/// stay the same, so we have (N, usize) as election properties. And when we want to reopen
 	/// an ongoing election we increment the usize.
 	pub ongoing: BTreeMap<N, u8>,
 
-	/// Whenever a reorg is detected, we increment this counter, as to restart all ongoing
-	/// relevant elections.
+	/// When an election for a given block height is requested by inserting it in `ongoing`, it is
+	/// always inserted with the current `reorg_id` as value.
+	/// When a reorg is detected, this id is mutated to a new unique value that is not in
+	/// `ongoing`. Elections in the range of a reorg are thus recreated with the new id, which
+	/// causes them to be restarted by the electoral system.
 	pub reorg_id: u8,
 }
 

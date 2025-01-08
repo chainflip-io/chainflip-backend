@@ -36,15 +36,19 @@ pub mod hook_test_utils {
 }
 
 pub trait SaturatingStep: Step + Clone {
-	fn saturating_forward(start: Self, mut count: usize) -> Self {
+	// TODO: This behaviour is wrong, since we don't actually saturate!!!!
+	// But it seems like in order to create a proper saturating step we cannot
+	// rely on an existing `Step` implementation for a type. We have to implement
+	// this ourselves for the relevant types.
+	fn saturating_forward(self, mut count: usize) -> Self {
 		for _ in 0..count {
-			if let Some(result) = Self::forward_checked(start.clone(), count) {
+			if let Some(result) = Self::forward_checked(self.clone(), count) {
 				return result;
 			} else {
 				count /= 2;
 			}
 		}
-		return start;
+		return self;
 	}
 }
 
@@ -138,5 +142,16 @@ impl Validate for () {
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		Ok(())
+	}
+}
+
+impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
+	type Error = B;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		match self {
+			Ok(_) => Ok(()),
+			Err(err) => Err(err.clone()),
+		}
 	}
 }

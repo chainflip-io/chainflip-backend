@@ -11,8 +11,8 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
 		block_height_tracking::{
-			BHWState, BlockHeightTrackingConsensus, BlockHeightTrackingDSM,
-			BlockHeightTrackingProperties, ChainProgress, InputHeaders,
+			consensus::BlockHeightTrackingConsensus, BHWState, BlockHeightTrackingProperties,
+			BlockHeightTrackingSM, BlockHeightTrackingTypes, ChainProgress, InputHeaders,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -63,12 +63,34 @@ pub type OldBitcoinDepositChannelWitnessing = BlockWitnesser<
 
 // ------------------------ block height tracking ---------------------------
 /// The electoral system for block height tracking
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Default,
+)]
 pub struct BitcoinBlockHeightTrackingTypes {}
+
+/// Associating the SM related types to the struct
+impl BlockHeightTrackingTypes for BitcoinBlockHeightTrackingTypes {
+	const SAFETY_MARGIN: usize = 6;
+	type ChainBlockNumber = btc::BlockNumber;
+	type ChainBlockHash = btc::Hash;
+}
 
 /// Associating the ES related types to the struct
 impl ESInterface for BitcoinBlockHeightTrackingTypes {
 	type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-	type ElectoralUnsynchronisedState = BHWState<btc::Hash, btc::BlockNumber>;
+	type ElectoralUnsynchronisedState = BHWState<BitcoinBlockHeightTrackingTypes>;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
 	type ElectoralUnsynchronisedSettings = ();
@@ -76,8 +98,8 @@ impl ESInterface for BitcoinBlockHeightTrackingTypes {
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = BlockHeightTrackingProperties<btc::BlockNumber>;
 	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<InputHeaders<btc::Hash, btc::BlockNumber>>;
-	type Consensus = InputHeaders<btc::Hash, btc::BlockNumber>;
+	type Vote = vote_storage::bitmap::Bitmap<InputHeaders<BitcoinBlockHeightTrackingTypes>>;
+	type Consensus = InputHeaders<BitcoinBlockHeightTrackingTypes>;
 	type OnFinalizeContext = Vec<()>;
 	type OnFinalizeReturn = Vec<ChainProgress<btc::BlockNumber>>;
 }
@@ -89,13 +111,13 @@ impl StateMachineES for BitcoinBlockHeightTrackingTypes {
 	type OnFinalizeReturnItem = ChainProgress<btc::BlockNumber>;
 
 	// restating types since we have to prove that they have the correct bounds
-	type Consensus2 = InputHeaders<btc::Hash, btc::BlockNumber>;
-	type Vote2 = InputHeaders<btc::Hash, btc::BlockNumber>;
-	type VoteStorage2 = vote_storage::bitmap::Bitmap<InputHeaders<btc::Hash, btc::BlockNumber>>;
+	type Consensus2 = InputHeaders<BitcoinBlockHeightTrackingTypes>;
+	type Vote2 = InputHeaders<BitcoinBlockHeightTrackingTypes>;
+	type VoteStorage2 = vote_storage::bitmap::Bitmap<InputHeaders<BitcoinBlockHeightTrackingTypes>>;
 
 	// the actual state machine and consensus mechanisms of this ES
-	type ConsensusMechanism = BlockHeightTrackingConsensus<btc::BlockNumber, btc::Hash>;
-	type StateMachine = BlockHeightTrackingDSM<6, btc::BlockNumber, btc::Hash>;
+	type ConsensusMechanism = BlockHeightTrackingConsensus<BitcoinBlockHeightTrackingTypes>;
+	type StateMachine = BlockHeightTrackingSM<BitcoinBlockHeightTrackingTypes>;
 }
 
 /// Generating the state machine-based electoral system
