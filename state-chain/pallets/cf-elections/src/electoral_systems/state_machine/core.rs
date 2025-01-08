@@ -18,6 +18,12 @@ pub mod hook_test_utils {
         pub _phantom: sp_std::marker::PhantomData<A>
     }
 
+    impl<A,B> ConstantHook<A,B> {
+        pub fn new(b: B) -> Self {
+            Self { state: b, _phantom: Default::default() }
+        }
+    }
+
     impl<A,B: Clone> Hook<A,B> for ConstantHook<A,B> {
         fn run(&self, input: A) -> B {
             self.state.clone()

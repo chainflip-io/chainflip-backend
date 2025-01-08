@@ -33,11 +33,9 @@ impl<BlockData: Eq, N, ElectionProperties> Default for BWConsensus<BlockData, N,
 }
 
 impl<BlockData: Eq + Clone + sp_std::fmt::Debug + Hashable, N: Clone, ElectionProperties: Clone> ConsensusMechanism for BWConsensus<BlockData, N, ElectionProperties> {
-	type Vote = ConstantIndex<(N, ElectionProperties, u32), BlockData>;
-
-	type Result = MultiIndexAndValue<(N, ElectionProperties, u32), BlockData>;
-
-	type Settings = (Threshold, (N, ElectionProperties, u32));
+	type Vote = ConstantIndex<(N, ElectionProperties, u8), BlockData>;
+	type Result = MultiIndexAndValue<(N, ElectionProperties, u8), BlockData>;
+	type Settings = (Threshold, (N, ElectionProperties, u8));
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
 		let vote_hash = SharedDataHash::of(&vote.data);

@@ -18,25 +18,30 @@ use super::super::state_machine::core::*;
 use super::helpers::*;
 
 
+pub trait BWTypes<N> : 'static {
+	type ElectionProperties : PartialEq + Clone + sp_std::fmt::Debug + 'static;
+	type ElectionPropertiesHook: Hook<N, Self::ElectionProperties>;
+	type SafeModeEnabledHook: Hook<(), bool>;
+}
+
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
 pub struct BWSettings {
-	pub safe_mode_enabled: bool,
 	pub max_concurrent_elections: u32,
 }
-
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize,
 )]
-pub struct BWState<N: Ord, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionProperties>> {
+pub struct BWState<N: Ord, Types: BWTypes<N>> {
 	elections: ElectionTracker<N>,
-    generate_election_properties_hook: ElectionPropertiesHook,
-    _phantom: sp_std::marker::PhantomData<ElectionProperties>
+    generate_election_properties_hook: Types::ElectionPropertiesHook,
+	safemode_enabled: Types::SafeModeEnabledHook,
+    _phantom: sp_std::marker::PhantomData<Types>
 }
 
-impl<N: Ord + Step, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionProperties>> Validate for BWState<N, ElectionProperties, ElectionPropertiesHook> {
+impl<N: Ord + Step, Types: BWTypes<N>> Validate for BWState<N, Types> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -44,35 +49,35 @@ impl<N: Ord + Step, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionP
 	}
 }
 
-impl<N: BlockZero + Ord, ElectionProperties, ElectionPropertiesHook: Hook<N,ElectionProperties>> Default for BWState<N, ElectionProperties, ElectionPropertiesHook> 
-    where ElectionPropertiesHook: Default
+impl<N: BlockZero + Ord, Types: BWTypes<N>> Default for BWState<N, Types> 
+    where
+		Types::ElectionPropertiesHook: Default,
+		Types::SafeModeEnabledHook: Default,
 {
 	fn default() -> Self {
-		Self { elections: Default::default(), generate_election_properties_hook: Default::default(), _phantom: Default::default() }
+		Self { elections: Default::default(), generate_election_properties_hook: Default::default(), safemode_enabled: Default::default(), _phantom: Default::default() }
 	}
 }
 
 
 pub struct BWStateMachine<
-	ElectionProperties,
+	Types: BWTypes<N>,
 	BlockData,
 	N,
-	BlockElectionPropertiesGenerator: Hook<N, ElectionProperties>
 	> {
-	_phantom: sp_std::marker::PhantomData<(ElectionProperties, BlockData, N, BlockElectionPropertiesGenerator)>,
+	_phantom: sp_std::marker::PhantomData<(Types, BlockData, N)>,
 }
 
 impl<
-	ElectionProperties: PartialEq + Clone + sp_std::fmt::Debug + 'static,
-	BlockData: PartialEq + Clone + sp_std::fmt::Debug + 'static,
 	N : Copy + Ord + Step + sp_std::fmt::Debug + 'static,
-	BlockElectionPropertiesGenerator: Hook<N, ElectionProperties> + 'static
-> StateMachine for BWStateMachine<ElectionProperties, BlockData, N, BlockElectionPropertiesGenerator> {
+	Types: BWTypes<N>,
+	BlockData: PartialEq + Clone + sp_std::fmt::Debug + 'static,
+> StateMachine for BWStateMachine<Types, BlockData, N> {
 
-	type Input = SMInput<MultiIndexAndValue<(N, ElectionProperties, u8), BlockData>, ChainProgress<N>>;
+	type Input = SMInput<MultiIndexAndValue<(N, Types::ElectionProperties, u8), BlockData>, ChainProgress<N>>;
 	type Settings = BWSettings;
 	type Output = Result<(), &'static str>;
-	type State = BWState<N, ElectionProperties, BlockElectionPropertiesGenerator>;
+	type State = BWState<N, Types>;
 
 	fn input_index(s: &Self::State) -> IndexOf<Self::Input> {
 		s.elections.ongoing.clone().into_iter().map(|(height, extra)| (height, s.generate_election_properties_hook.run(height), extra)).collect()
@@ -94,7 +99,7 @@ impl<
 			},
 		};
 
-		if !settings.safe_mode_enabled {
+		if !s.safemode_enabled.run(()) {
 			s.elections.start_more_elections(settings.max_concurrent_elections as usize);
 		}
 
@@ -109,6 +114,8 @@ impl<
 		use itertools::Itertools;
 		use SMInput::*;
 		use ChainProgress::*;
+
+		let safemode_enabled = before.safemode_enabled.run(());
 
 		assert!(
 			// there should always be at most as many elections as given in the settings
@@ -132,7 +139,7 @@ impl<
 		match input {
 			Vote(MultiIndexAndValue((height, _, _), _)) => {
 
-				let new_elections = if settings.safe_mode_enabled {
+				let new_elections = if before.safemode_enabled.run(()) {
 					BTreeSet::new()
 				} else {
 					(before.elections.next_election ..= before.elections.highest_scheduled).take((settings.max_concurrent_elections as usize + 1).saturating_sub(before.elections.ongoing.len())).collect()
@@ -149,7 +156,7 @@ impl<
 
 			Context(Reorg(range) | Continuous(range)) => {
 
-				if !settings.safe_mode_enabled {
+				if !safemode_enabled {
 
 					if *range.start() < before.elections.next_election {
 						assert!(
@@ -220,7 +227,13 @@ mod tests {
     use super::*;
     use hook_test_utils::*;
 
-    type SM = BWStateMachine<(), (), u8, ConstantHook<u8, ()>>;
+	impl<N: Ord> BWTypes<N> for () {
+		type ElectionProperties = ();
+		type ElectionPropertiesHook = ConstantHook<N, ()>;
+		type SafeModeEnabledHook = ConstantHook<(), bool>;
+	}
+	
+    type SM = BWStateMachine<(), (), u8>;
 
 	// we generate (a,b) with a <= b
 	fn ordered_pair<N: Step + Arbitrary>() -> impl Strategy<Value = (N, N)> {
@@ -235,12 +248,13 @@ mod tests {
 		}
 	}
 
-    fn generate_state<N: BlockZero + Arbitrary + Step + Ord + Copy>() -> impl Strategy<Value = BWState<N, (), ConstantHook<N, ()>>> {
+    fn generate_state<N: BlockZero + Arbitrary + Step + Ord + Copy>() -> impl Strategy<Value = BWState<N, ()>> {
 
 		prop_do!{
 			let next_election in any::<N>();
 			let highest_scheduled in any::<N>();
 			let reorg_id in any::<u8>();
+			let safemode_enabled in any::<bool>();
 			let ongoing in prop::collection::vec((any::<N>(), any::<u8>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election));
 			return BWState {
                 elections: ElectionTracker {
@@ -249,7 +263,8 @@ mod tests {
                     ongoing: BTreeMap::from_iter(ongoing),
 					reorg_id
                 },
-                generate_election_properties_hook: ConstantHook { state: (), _phantom: Default::default() },
+                generate_election_properties_hook: ConstantHook::new(()),
+				safemode_enabled: ConstantHook::new(safemode_enabled),
                 _phantom: core::marker::PhantomData,
             }
 		}
@@ -279,16 +294,14 @@ mod tests {
 		}
     }
 
-
     #[test]
     pub fn test_bw_statemachine() {
         SM::test(
 			file!(),
             generate_state(),
 			prop_do!{
-				let safe_mode_enabled in any::<bool>();
 				let max_concurrent_elections in 0..10u32;
-				return BWSettings { safe_mode_enabled, max_concurrent_elections }
+				return BWSettings { max_concurrent_elections }
 			},
 			generate_input
         );
