@@ -39,10 +39,10 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for SolApiEnvironmentMigr
 						match cf_runtime_utilities::genesis_hashes::genesis_hash::<T>() {
 							cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 								SolAddress(bs58_array(
-									"BnECXbsDFYPmhxcV57dodaWtJJjtGPE8Le3LAR7qieYb",
+									"4FVuGMuzuFAo5KWLnVNknDkNZ84er2wcrtJ79pfyoZqH",
 								)),
 								SolAddress(bs58_array(
-									"5mFsKrqCH5v9Q9uF5o6qrsUi1GV2myuhc23NAi5YFs4M",
+									"GfGZCo8KmAQvhZofu3Emt66ZfgjKds6ULhps1DAvN8cm",
 								)),
 							),
 							cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (

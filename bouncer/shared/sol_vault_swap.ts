@@ -127,7 +127,7 @@ export async function executeSolVaultSwap(
     messageMetadata && {
       message: messageMetadata.message as `0x${string}`,
       gas_budget: messageMetadata.gasBudget,
-      ccm_additional_data: messageMetadata.ccmAdditionalData,
+      ccm_additional_data: messageMetadata.ccmAdditionalData as `0x${string}`,
     },
     boostFeeBps ?? 0, // boost_fee
     null, // affiliates
