@@ -11,8 +11,9 @@ use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::block_height_tracking::{
-		primitives::Header, state_machine::ConstantIndex, BlockHeightTrackingProperties, InputHeaders
+		primitives::Header, BlockHeightTrackingProperties, InputHeaders
 	},
+	electoral_systems::state_machine::core::ConstantIndex,
 	vote_storage::VoteStorage,
 };
 use sp_core::bounded::alloc::collections::VecDeque;

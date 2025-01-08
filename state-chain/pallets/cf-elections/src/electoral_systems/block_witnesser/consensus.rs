@@ -1,23 +1,9 @@
-use core::{iter::Step, ops::RangeInclusive};
-use cf_chains::witness_period::BlockZero;
-use codec::{Decode, Encode};
 use frame_support::{ensure, Hashable};
-use log::trace;
-use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
-use sp_std::vec::Vec;
-use sp_std::ops::Add;
-
-use itertools::Either;
-
-use crate::electoral_systems::block_height_tracking::state_machine::MultiIndexAndValue;
-use crate::electoral_systems::block_height_tracking::{
-	consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold}, state_machine::{ConstantIndex, IndexOf, StateMachine, Validate}, state_machine_es::SMInput, ChainProgress
-};
+use crate::electoral_systems::state_machine::consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold};
+use crate::electoral_systems::state_machine::core::{MultiIndexAndValue, ConstantIndex, IndexOf, Validate};
 use crate::{SharedData, SharedDataHash};
 
-use super::BlockWitnesserSettings;
 
 
 pub struct BWConsensus<BlockData: Eq, N, ElectionProperties> {

@@ -11,8 +11,9 @@ use cf_chains::instances::BitcoinInstance;
 use codec::{Decode, Encode, MaxEncodedLen};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem, electoral_systems::{
+		state_machine::{core::{ConstantIndex, MultiIndexAndValue}, state_machine_es::{ESInterface, StateMachineES, StateMachineESInstance}},
 		block_height_tracking::{
-			self, consensus::SupermajorityConsensus, state_machine::{ConstantIndex, MultiIndexAndValue}, state_machine_es::{ESInterface, StateMachineES, StateMachineESInstance}, BHWState, BlockHeightTrackingConsensus, BlockHeightTrackingDSM, BlockHeightTrackingProperties, ChainProgress, InputHeaders, OldChainProgress, RangeOfBlockWitnessRanges
+			self, BHWState, BlockHeightTrackingConsensus, BlockHeightTrackingDSM, BlockHeightTrackingProperties, ChainProgress, InputHeaders, OldChainProgress, RangeOfBlockWitnessRanges
 		}, block_witnesser::{
 			consensus::BWConsensus, state_machine::{BWSettings, BWState, BWStateMachine, BWTypes}, BlockElectionPropertiesGenerator, BlockWitnesser, BlockWitnesserSettings, ProcessBlockData
 		}, composite::{

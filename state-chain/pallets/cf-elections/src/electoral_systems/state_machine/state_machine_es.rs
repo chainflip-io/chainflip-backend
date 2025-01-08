@@ -16,7 +16,8 @@ use crate::{
 
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
-	state_machine::{Indexed, IndexOf, StateMachine, Validate},
+	core::{Indexed, IndexOf, Validate},
+	state_machine::StateMachine
 };
 
 pub trait IntoResult {

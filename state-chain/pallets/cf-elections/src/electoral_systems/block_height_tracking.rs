@@ -18,7 +18,6 @@ use cf_chains::{
 };
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
-use consensus::{ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold};
 use frame_support::{
 	ensure,
 	pallet_prelude::{MaxEncodedLen, MaybeSerializeDeserialize, Member},
@@ -36,16 +35,15 @@ use sp_std::{
 	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
 	vec::Vec,
 };
-use state_machine::{Indexed, StateMachine, Validate};
+use super::state_machine::consensus::{ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold};
+use super::state_machine::core::{Indexed, Validate};
+use super::state_machine::state_machine::StateMachine;
+use super::state_machine::state_machine_es::SMInput;
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
-use state_machine_es::SMInput;
 
-pub mod consensus;
 pub mod primitives;
-pub mod state_machine;
-pub mod state_machine_es;
 
 #[cfg_attr(test, derive(Arbitrary))]
 #[derive(
@@ -242,16 +240,18 @@ mod tests {
 
 	use core::iter::Step;
 
-	use crate::electoral_systems::block_height_tracking::state_machine::{Indexed, Validate};
+	use crate::electoral_systems::state_machine::core::{Indexed, Validate};
 	use proptest::{
 		prelude::{any, prop, Arbitrary, Just, Strategy},
 		prop_oneof, proptest,
 	};
 
 	use super::{
-		primitives::Header, state_machine::StateMachine, state_machine_es::SMInput, BHWState,
+		primitives::Header, BHWState,
 		BlockHeightTrackingDSM, BlockHeightTrackingProperties, InputHeaders,
 	};
+
+	use super::super::state_machine::{state_machine::StateMachine, state_machine_es::SMInput};
 
 	pub fn arb_input_headers<H: Arbitrary + Clone, N: Arbitrary + Clone + 'static + Step>(
 		properties: BlockHeightTrackingProperties<N>,
@@ -396,7 +396,7 @@ impl<
 	type Settings = ();
 	type Output = Result<ChainProgress<N>, &'static str>;
 
-	fn input_index(s: &Self::State) -> <Self::Input as state_machine::Indexed>::Index {
+	fn input_index(s: &Self::State) -> <Self::Input as Indexed>::Index {
 		let witness_from_index = match s {
 			BHWState::Starting => N::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from.clone(),

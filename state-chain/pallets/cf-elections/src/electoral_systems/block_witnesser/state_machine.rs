@@ -8,10 +8,10 @@ use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::V
 
 use itertools::Either;
 
-use crate::electoral_systems::block_height_tracking::state_machine::MultiIndexAndValue;
-use crate::electoral_systems::block_height_tracking::{
-	state_machine::{ConstantIndex, IndexOf, StateMachine, Validate}, state_machine_es::SMInput, ChainProgress
-};
+use crate::electoral_systems::state_machine::core::{MultiIndexAndValue, ConstantIndex, IndexOf, Validate};
+use crate::electoral_systems::state_machine::state_machine::StateMachine;
+use crate::electoral_systems::state_machine::state_machine_es::SMInput;
+use crate::electoral_systems::block_height_tracking::ChainProgress;
 use crate::{SharedData, SharedDataHash};
 use super::primitives::ElectionTracker;
 use super::super::state_machine::core::*;

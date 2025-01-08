@@ -12,8 +12,6 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_chains::{btc::BlockNumber, witness_period::BlockWitnessRange};
-use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
@@ -29,7 +27,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-use super::{state_machine::Validate, BlockHeightTrait, ChainProgress};
+use super::{super::state_machine::core::Validate, BlockHeightTrait, ChainProgress};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
