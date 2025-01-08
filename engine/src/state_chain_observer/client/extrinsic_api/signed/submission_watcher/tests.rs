@@ -75,7 +75,7 @@ async fn new_watcher_and_submit_test_extrinsic<'a, 'env>(
 ) -> SubmissionWatcher<'a, 'env, MockBaseRpcApi> {
 	let (mut watcher, _requests) = SubmissionWatcher::new(
 		scope,
-		signer::PairSigner::new(sp_core::Pair::generate().0),
+		PairSigner::new(sp_core::Pair::generate().0),
 		INITIAL_NONCE,
 		H256::default(),
 		0,

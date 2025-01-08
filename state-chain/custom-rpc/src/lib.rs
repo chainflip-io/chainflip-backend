@@ -19,6 +19,7 @@ use cf_primitives::{
 	SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
+use chainflip_integrator::error_decoder;
 use core::ops::Range;
 use futures::{stream, stream::StreamExt, FutureExt};
 use jsonrpsee::{
@@ -75,13 +76,12 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
-use thiserror::Error;
 
 pub mod broker;
 pub mod crypto;
 pub mod monitoring;
 pub mod order_fills;
-pub mod subxt_state_chain_config;
+pub mod signed_client;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochState {
@@ -1151,14 +1151,6 @@ where
 	}
 }
 
-#[derive(Error, Debug, Clone)]
-pub enum ExtrinsicDispatchError {
-	#[error("{0:?}")]
-	OtherDispatchError(sp_runtime::DispatchError),
-	#[error("Module error ‘{name}‘ from pallet ‘{pallet}‘: ‘{error}‘")]
-	KnownModuleError { pallet: String, name: String, error: String },
-}
-
 #[derive(thiserror::Error, Debug)]
 pub enum CfApiError {
 	#[error(transparent)]
@@ -1174,7 +1166,7 @@ pub enum CfApiError {
 	#[error("{0:?}")]
 	TransactionValidityError(#[from] TransactionValidityError),
 	#[error("{0:?}")]
-	ExtrinsicDispatchError(#[from] ExtrinsicDispatchError),
+	ExtrinsicDispatchError(#[from] error_decoder::DispatchError),
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
 	#[error(transparent)]

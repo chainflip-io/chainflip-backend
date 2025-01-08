@@ -1,8 +1,9 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 use custom_rpc::{
 	broker::{BrokerSignedApiServer, BrokerSignedRpc},
-	crypto::{broker_crypto, PairSigner, SubxtSignerInterface},
+	crypto::broker_crypto,
 	monitoring::MonitoringApiServer,
+	signed_client::SignedPoolClient,
 	CustomApiServer, CustomRpc,
 };
 use futures::FutureExt;
@@ -328,12 +329,12 @@ pub fn new_full<
 				if let Some(pair) = broker_pair.clone() {
 					module.merge(BrokerSignedApiServer::into_rpc(BrokerSignedRpc {
 						client: client.clone(),
-						backend: backend.clone(),
-						pool: pool.clone(),
-						_phantom: PhantomData,
-						executor: executor.clone(),
-						signer: SubxtSignerInterface::new(pair.clone()),
-						pair_signer: PairSigner::new(pair),
+						signed_pool_client: SignedPoolClient::new(
+							client.clone(),
+							pool.clone(),
+							executor.clone(),
+							pair.clone(),
+						),
 					}))?;
 				}
 

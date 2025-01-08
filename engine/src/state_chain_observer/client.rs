@@ -1,10 +1,11 @@
 pub mod base_rpc_api;
 pub mod chain_api;
 pub mod electoral_api;
-pub mod error_decoder;
 pub mod extrinsic_api;
 pub mod storage_api;
 pub mod stream_api;
+pub mod subxt_state_chain_config;
+
 use async_trait::async_trait;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -23,10 +24,21 @@ use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{info, log, warn};
 
+use self::{
+	base_rpc_api::BaseRpcClient,
+	chain_api::ChainApi,
+	extrinsic_api::{
+		signed::{SignedExtrinsicApi, WaitFor, WaitForResult},
+		unsigned,
+	},
+	storage_api::{BlockCompatibility, StorageApi},
+	stream_api::{StateChainStream, StreamApi, FINALIZED, UNFINALIZED},
+};
 use crate::{
 	constants::SIGNED_EXTRINSIC_LIFETIME,
 	state_chain_observer::client::{
 		base_rpc_api::SubxtInterface, storage_api::CheckBlockCompatibility,
+		subxt_state_chain_config::StateChainConfig,
 	},
 };
 use cf_utilities::{
@@ -35,18 +47,7 @@ use cf_utilities::{
 	task_scope::{Scope, UnwrapOrCancel},
 	try_cached_stream::{MakeTryCachedStream, TryCachedStream},
 };
-use custom_rpc::subxt_state_chain_config::StateChainConfig;
-
-use self::{
-	base_rpc_api::BaseRpcClient,
-	chain_api::ChainApi,
-	extrinsic_api::{
-		signed::{signer, SignedExtrinsicApi, WaitFor, WaitForResult},
-		unsigned,
-	},
-	storage_api::{BlockCompatibility, StorageApi},
-	stream_api::{StateChainStream, StreamApi, FINALIZED, UNFINALIZED},
-};
+use chainflip_integrator::signer::PairSigner;
 
 pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
 
@@ -678,8 +679,7 @@ where
 }
 
 struct SignedExtrinsicClientBuilder {
-	nonce_and_signer:
-		Option<(state_chain_runtime::Nonce, signer::PairSigner<sp_core::sr25519::Pair>)>,
+	nonce_and_signer: Option<(state_chain_runtime::Nonce, PairSigner<sp_core::sr25519::Pair>)>,
 	signing_key_file: std::path::PathBuf,
 	required_role: AccountRole,
 	wait_for_required_role: bool,
@@ -720,7 +720,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		)?);
 
 		log::warn!("---- public-key = {:?}", pair.public());
-		let signer = signer::PairSigner::<sp_core::sr25519::Pair>::new(pair.clone());
+		let signer = PairSigner::<sp_core::sr25519::Pair>::new(pair.clone());
 
 		let account_nonce = {
 			loop {

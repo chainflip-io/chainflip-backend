@@ -9,6 +9,9 @@ use frame_support::{Deserialize, Serialize};
 use sp_core::{H256, U256};
 use std::fmt;
 
+pub mod error_decoder;
+pub mod signer;
+
 pub type RefundParameters = ChannelRefundParametersGeneric<AddressString>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

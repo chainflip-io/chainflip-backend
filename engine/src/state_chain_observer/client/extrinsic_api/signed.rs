@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
+use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 use anyhow::Result;
 use async_trait::async_trait;
 use cf_utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, UnwrapOrCancel};
+use chainflip_integrator::signer::PairSigner;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::{Deserialize, Serialize};
@@ -10,8 +12,6 @@ use sp_core::H256;
 use state_chain_runtime::{AccountId, Nonce};
 use tokio::sync::{mpsc, oneshot};
 use tracing::trace;
-
-use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 
 use self::submission_watcher::ExtrinsicDetails;
 
@@ -23,7 +23,6 @@ use super::{
 	common::send_request,
 };
 
-pub mod signer;
 mod submission_watcher;
 
 // Wrapper type to avoid await.await on submits/finalize calls being possible
@@ -175,7 +174,7 @@ impl SignedExtrinsicClient {
 		scope: &Scope<'_, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		account_nonce: Nonce,
-		signer: signer::PairSigner<sp_core::sr25519::Pair>,
+		signer: PairSigner<sp_core::sr25519::Pair>,
 		genesis_hash: H256,
 		state_chain_stream: &mut BlockStream,
 	) -> Result<Self> {

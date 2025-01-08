@@ -26,15 +26,13 @@ use tracing::{debug, error, info, warn};
 
 use crate::state_chain_observer::client::{
 	base_rpc_api,
-	error_decoder::{DispatchError, ErrorDecoder},
 	extrinsic_api::common::invalid_err_obj,
 	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
+use chainflip_integrator::{error_decoder, signer::PairSigner};
 use futures::StreamExt;
 use jsonrpsee::{core::ClientError, types::ErrorObjectOwned};
-
-use super::signer;
 
 #[cfg(test)]
 mod tests;
@@ -46,7 +44,7 @@ pub enum ExtrinsicError<OtherError> {
 	#[error(transparent)]
 	Other(OtherError),
 	#[error(transparent)]
-	Dispatch(DispatchError),
+	Dispatch(error_decoder::DispatchError),
 }
 
 #[derive(Error, Debug)]
@@ -58,7 +56,7 @@ pub enum DryRunError {
 	#[error("The transaction is invalid: {0}")]
 	InvalidTransaction(#[from] TransactionValidityError),
 	#[error("The transaction failed: {0}")]
-	Dispatch(#[from] DispatchError),
+	Dispatch(#[from] error_decoder::DispatchError),
 	#[error(transparent)]
 	RpcError(ClientError),
 }
@@ -133,7 +131,7 @@ pub struct SubmissionWatcher<
 	#[allow(clippy::type_complexity)]
 	submission_status_futures:
 		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<Option<(H256, H256)>>>,
-	signer: signer::PairSigner<sp_core::sr25519::Pair>,
+	signer: PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
 	finalized_block_number: BlockNumber,
@@ -150,7 +148,7 @@ pub struct SubmissionWatcher<
 		)>,
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
-	error_decoder: ErrorDecoder,
+	error_decoder: error_decoder::ErrorDecoder,
 }
 
 pub enum SubmissionLogicError {
@@ -162,7 +160,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 {
 	pub fn new(
 		scope: &'a Scope<'env, anyhow::Error>,
-		signer: signer::PairSigner<sp_core::sr25519::Pair>,
+		signer: PairSigner<sp_core::sr25519::Pair>,
 		finalized_nonce: Nonce,
 		finalized_block_hash: state_chain_runtime::Hash,
 		finalized_block_number: BlockNumber,

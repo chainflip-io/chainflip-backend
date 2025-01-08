@@ -9,6 +9,7 @@ workspace = true
 
 [dependencies]
 codec = { workspace = true, default-features = true }
+scale-info = { workspace = true, features = ["derive"] }
 
 # Chainflip Runtime
 state-chain-runtime = { workspace = true, default-features = true }
@@ -26,9 +27,17 @@ cf-primitives = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
 
 sp-core = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-version = { workspace = true }
 frame-support = { workspace = true, default-features = true }
-
+frame-system = { workspace = true, default-features = true }
+frame-metadata = { workspace = true, default-features = true, features = [
+    "current",
+] }
+frame-metadata-hash-extension = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }
 serde_json = { workspace = true }
+pallet-cf-funding = { workspace = true, default-features = true }
+

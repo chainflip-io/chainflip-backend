@@ -70,6 +70,7 @@ zmq = { workspace = true, features = ["vendored"] }
 # Local deps
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
+chainflip-integrator = { workspace = true }
 chainflip-node = { workspace = true }
 custom-rpc = { workspace = true }
 engine-upgrade-utils = { workspace = true }
