@@ -347,7 +347,7 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	task_scope(|scope| {
+	task_scope("main_broker_api", |scope| {
 		async move {
 			// initialize healthcheck endpoint
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));

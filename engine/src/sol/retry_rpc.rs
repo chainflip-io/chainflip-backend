@@ -375,7 +375,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore]
 	async fn test_sol_retry_rpc() {
-		task_scope(|scope| {
+		task_scope("", |scope| {
 			async move {
 				let retry_client = SolRetryRpcClient::new(
 					scope,
@@ -422,7 +422,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore]
 	async fn test_sol_get_transaction() {
-		task_scope(|scope| {
+		task_scope("",|scope| {
 			async move {
 				let retry_client = SolRetryRpcClient::new(
 					scope,
@@ -474,7 +474,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "requires local node"]
 	async fn test_sol_send_transaction() {
-		task_scope(|scope| {
+		task_scope("",|scope| {
 			async move {
 				let retry_client = SolRetryRpcClient::new(
 					scope,

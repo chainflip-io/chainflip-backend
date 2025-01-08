@@ -17,7 +17,7 @@ const INITIAL_NONCE: state_chain_runtime::Nonce = 10;
 /// If the tx fails due to a bad proof, it should fetch the runtime version and retry.
 #[tokio::test]
 async fn should_update_version_on_bad_proof() {
-	task_scope(|scope| {
+	task_scope("", |scope| {
 		async {
 			let mut mock_rpc_api = MockBaseRpcApi::new();
 

@@ -333,7 +333,7 @@ mod tests {
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn test_get_deposit_channels_info() {
-		task_scope::task_scope(|scope| {
+		task_scope::task_scope("", |scope| {
 			async {
 				let retry_client = SolRetryRpcClient::new(
 					scope,
@@ -457,7 +457,7 @@ mod tests {
 	#[tokio::test]
 	#[should_panic]
 	async fn test_fail_erroneus_fetch_account() {
-		task_scope::task_scope(|scope| {
+		task_scope::task_scope("", |scope| {
 			async {
 				let retry_client = SolRetryRpcClient::new(
 					scope,

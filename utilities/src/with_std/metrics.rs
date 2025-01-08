@@ -554,7 +554,7 @@ pub async fn start<'a, 'env>(
 			.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port))
 	};
 
-	scope.spawn_weak(async move {
+	scope.spawn_weak("metrics_endpoint", async move {
 		future.await;
 		Ok(())
 	});
@@ -589,7 +589,7 @@ mod test {
 		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5567 };
 		let metric = create_and_register_metric();
 
-		task_scope::task_scope(|scope| {
+		task_scope::task_scope("",|scope| {
 			async {
 				start(scope, &prometheus_settings).await.unwrap();
 

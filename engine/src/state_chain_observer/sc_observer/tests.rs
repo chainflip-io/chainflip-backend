@@ -215,7 +215,7 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 		.return_once(|_: pallet_cf_threshold_signature::Call<Runtime, I>| Ok(H256::default()));
 
 	let state_chain_client = Arc::new(state_chain_client);
-	task_scope(|scope| {
+	task_scope("", |scope| {
 		async {
 			// Handle a signing request that we are not participating in
 			sc_observer::handle_signing_request::<_, _, C, I>(
@@ -334,7 +334,7 @@ where
 				.boxed()
 		});
 
-	task_scope(|scope| {
+	task_scope("", |scope| {
 		async {
 			// Handle a keygen request that we are not participating in
 			sc_observer::handle_keygen_request::<_, _, _, I>(
@@ -439,7 +439,7 @@ where
 		});
 
 	let state_chain_client = Arc::new(state_chain_client);
-	task_scope(|scope| {
+	task_scope("", |scope| {
 		async {
 			// Handle the key handover request that we are not participating in
 			sc_observer::handle_key_handover_request::<_, _>(
@@ -739,7 +739,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 #[tokio::test]
 #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
 async fn run_the_sc_observer() {
-	task_scope(|scope| {
+	task_scope("", |scope| {
 		async {
 			let settings = Settings::new_test().unwrap();
 

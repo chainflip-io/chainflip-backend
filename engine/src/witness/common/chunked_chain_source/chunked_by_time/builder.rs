@@ -35,7 +35,7 @@ impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 	where
 		Inner: 'env,
 	{
-		scope.spawn(async move {
+		scope.spawn("ChunkedByTimeBuilder spawn", async move {
 			let stream = assert_stream_send(
 				self.source
 					.stream(self.parameters)

@@ -89,7 +89,7 @@ mod tests {
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn test_get_nonces() {
-		task_scope(|scope| {
+		task_scope("", |scope| {
 			async move {
 				let retry_client = SolRetryRpcClient::new(
 					scope,

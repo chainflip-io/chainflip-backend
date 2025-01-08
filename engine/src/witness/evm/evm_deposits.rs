@@ -389,7 +389,7 @@ mod tests {
 	#[ignore = "requires connection to a node"]
 	#[tokio::test]
 	async fn test_get_ingress_contract() {
-		task_scope::task_scope(|scope| {
+		task_scope::task_scope("", |scope| {
 			async {
 				let vault_address: H160 =
 					"B7A5bd0345EF1Cc5E66bf61BdeC17D2461fBd968".parse().unwrap();

@@ -37,5 +37,8 @@ async fn main() -> anyhow::Result<()> {
 		TrackerOptions::parse(),
 	)?;
 
-	task_scope::task_scope(|scope| async move { start(scope, settings).await }.boxed()).await
+	task_scope::task_scope("main_ingress_egress_tracker", |scope| {
+		async move { start(scope, settings).await }.boxed()
+	})
+	.await
 }

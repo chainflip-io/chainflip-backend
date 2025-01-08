@@ -188,10 +188,10 @@ impl SignedExtrinsicClient {
 			account_id: signer.account_id.clone(),
 			request_sender,
 			dry_run_sender,
-			_task_handle: scope.spawn_with_handle({
+			_task_handle: scope.spawn_with_handle("signed_extrinsic_client",{
 				let mut state_chain_stream = state_chain_stream.clone();
 
-				task_scope(move |scope| async move {
+				task_scope("signed_extrinsic submission", move |scope| async move {
 					let (mut submission_watcher, mut requests) =
 						submission_watcher::SubmissionWatcher::new(
 							scope,

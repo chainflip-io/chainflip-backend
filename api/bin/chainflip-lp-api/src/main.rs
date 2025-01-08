@@ -666,7 +666,7 @@ async fn main() -> anyhow::Result<()> {
 		opts.signing_key_file.to_string_lossy()
 	);
 
-	task_scope(|scope| {
+	task_scope("main_lp_api", |scope| {
 		async move {
 			// initialize healthcheck endpoint
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));

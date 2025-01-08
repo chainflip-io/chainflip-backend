@@ -328,7 +328,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "Requires network connection and will last forever with failing extrinsic submission"]
 	async fn my_test() {
-		task_scope(|scope| {
+		task_scope("", |scope| {
 			async move {
 				let dot_retry_rpc_client = DotRetryRpcClient::new_inner(
 					scope,

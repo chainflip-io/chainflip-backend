@@ -56,7 +56,7 @@ async fn run_cli() -> Result<()> {
 		cli_settings.state_chain.signing_key_file.display()
 	);
 
-	task_scope(|scope| {
+	task_scope("run_cli", |scope| {
 		async move {
 			let api = StateChainApi::connect(scope, cli_settings.state_chain).await?;
 			match command_line_opts.cmd {

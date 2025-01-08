@@ -156,9 +156,9 @@ where
 		muxer_future,
 	) = P2PMuxer::start(incoming_message_receiver, outgoing_message_sender);
 
-	let fut = task_scope(move |scope| {
+	let fut = task_scope("p2p_start", move |scope| {
 		async move {
-			scope.spawn({
+			scope.spawn("p2p_core", {
 				let state_chain_client = state_chain_client.clone();
 				async move {
 					peer_info_submitter::ensure_peer_info_registered(
@@ -188,12 +188,12 @@ where
 				}
 			});
 
-			scope.spawn(async move {
+			scope.spawn("muxer_fut", async move {
 				muxer_future.await;
 				Ok(())
 			});
 
-			scope.spawn(async move {
+			scope.spawn("p2p_monitor", async move {
 				monitor_p2p_registration_events(
 					state_chain_client,
 					sc_block_stream,

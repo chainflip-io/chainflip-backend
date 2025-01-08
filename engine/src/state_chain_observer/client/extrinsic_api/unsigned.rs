@@ -49,7 +49,7 @@ impl UnsignedExtrinsicClient {
 
 		Self {
 			request_sender,
-			_task_handle: scope.spawn_with_handle(async move {
+			_task_handle: scope.spawn_with_handle("unsigned_extrinsic_client", async move {
 				while let Some((call, result_sender)) = request_receiver.recv().await {
 					let _result = result_sender.send({
 						let extrinsic =

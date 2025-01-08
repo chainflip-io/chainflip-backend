@@ -83,7 +83,7 @@ pub async fn start<'a, 'env>(
 		}))
 		.bind((health_check_settings.hostname.parse::<IpAddr>()?, health_check_settings.port));
 
-	scope.spawn_weak(async move {
+	scope.spawn_weak("health_check", async move {
 		future.await;
 		Ok(())
 	});
@@ -102,7 +102,7 @@ mod tests {
 	async fn health_check_test() {
 		let health_check = HealthCheck { hostname: "127.0.0.1".to_string(), port: 5555 };
 
-		task_scope::task_scope(|scope| {
+		task_scope::task_scope("", |scope| {
 			async {
 				let has_completed_initialising =
 					Arc::new(std::sync::atomic::AtomicBool::new(false));

@@ -556,7 +556,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "requires a local node"]
 	async fn test_eth_retry_rpc() {
-		task_scope(|scope| {
+		task_scope("", |scope| {
 			async move {
 				let settings = Settings::new_test().unwrap();
 

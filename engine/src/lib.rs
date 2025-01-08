@@ -118,7 +118,7 @@ async fn run_main(
 ) -> anyhow::Result<()> {
 	let _guard = cf_utilities::logging::init_json_logger(settings.logging.clone()).await;
 
-	task_scope(|scope| {
+	task_scope("run_main", |scope| {
 		async move {
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
@@ -179,7 +179,7 @@ async fn run_main(
 			.await
 			.context("Failed to start p2p")?;
 
-			scope.spawn(p2p_fut);
+			scope.spawn("p2p_fut", p2p_fut);
 
 			// Use the ceremony id counters from before the initial block so the SCO can process the
 			// events from the initial block.
@@ -198,7 +198,7 @@ async fn run_main(
 					ceremony_id_counters.ethereum,
 				);
 
-			scope.spawn(eth_multisig_client_backend_future);
+			scope.spawn("eth_multisig_client_backend_future", eth_multisig_client_backend_future);
 
 			let (dot_multisig_client, dot_multisig_client_backend_future) =
 				multisig::start_client::<PolkadotSigning>(
@@ -209,7 +209,7 @@ async fn run_main(
 					ceremony_id_counters.polkadot,
 				);
 
-			scope.spawn(dot_multisig_client_backend_future);
+			scope.spawn("dot_multisig_client_backend_future", dot_multisig_client_backend_future);
 
 			let (btc_multisig_client, btc_multisig_client_backend_future) =
 				multisig::start_client::<BtcSigning>(
@@ -220,7 +220,7 @@ async fn run_main(
 					ceremony_id_counters.bitcoin,
 				);
 
-			scope.spawn(btc_multisig_client_backend_future);
+			scope.spawn("btc_multisig_client_backend_future", btc_multisig_client_backend_future);
 
 			let (sol_multisig_client, sol_multisig_client_backend_future) =
 				multisig::start_client::<SolSigning>(
@@ -231,7 +231,7 @@ async fn run_main(
 					ceremony_id_counters.solana,
 				);
 
-			scope.spawn(sol_multisig_client_backend_future);
+			scope.spawn("sol_multisig_client_backend_future", sol_multisig_client_backend_future);
 
 			// Create all the clients
 			let eth_client = {
@@ -329,19 +329,22 @@ async fn run_main(
 			)
 			.await?;
 
-			scope.spawn(state_chain_observer::start(
-				state_chain_client.clone(),
-				state_chain_stream,
-				eth_client,
-				arb_client,
-				dot_client,
-				btc_client,
-				sol_client,
-				eth_multisig_client,
-				dot_multisig_client,
-				btc_multisig_client,
-				sol_multisig_client,
-			));
+			scope.spawn(
+				"state_chain_observer",
+				state_chain_observer::start(
+					state_chain_client.clone(),
+					state_chain_stream,
+					eth_client,
+					arb_client,
+					dot_client,
+					btc_client,
+					sol_client,
+					eth_multisig_client,
+					dot_multisig_client,
+					btc_multisig_client,
+					sol_multisig_client,
+				),
+			);
 
 			p2p_ready_receiver.await.unwrap();
 

@@ -120,7 +120,7 @@ where
 			.await,
 		);
 
-		scope.spawn(async move {
+		scope.spawn("monitor_sc_item",async move {
 			cf_utilities::loop_select! {
 				let _ = sender.closed() => { break Ok(()) },
 				if let Some(_block_header) = state_chain_stream.next() => {

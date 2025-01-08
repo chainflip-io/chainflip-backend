@@ -309,7 +309,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 				tokio::sync::oneshot::Sender<Box<dyn StreamApi<IS_FINALIZED>>>,
 			>(1);
 
-		scope.spawn({
+		scope.spawn("create_block_stream", {
 			let mut block_stream_request_receiver: tokio_stream::wrappers::ReceiverStream<_> =
 				tokio_stream::wrappers::ReceiverStream::new(block_stream_request_receiver);
 			let mut latest_block = latest_block;
