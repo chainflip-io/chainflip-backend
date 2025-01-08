@@ -68,7 +68,13 @@ pub trait StateMachine: 'static {
 	/// Takes a state, input and next state as arguments. During testing it is verified
 	/// that the resulting state after the step function always fulfills this specification.
 	#[cfg(test)]
-	fn step_specification(_before: &Self::State, _input: &Self::Input, _settings: &Self::Settings, _after: &Self::State) {}
+	fn step_specification(
+		_before: &Self::State,
+		_input: &Self::Input,
+		_settings: &Self::Settings,
+		_after: &Self::State,
+	) {
+	}
 
 	/// Given strategies `states` and `inputs` for generating arbitrary, valid values, runs the step
 	/// function and ensures that it's result is always valid and additionally fulfills the
@@ -85,15 +91,15 @@ pub trait StateMachine: 'static {
 		Self::Settings: sp_std::fmt::Debug + Clone,
 		<Self::Input as Indexed>::Index: Ord,
 	{
-    	use proptest::test_runner::{Config, FileFailurePersistence};
+		use proptest::test_runner::{Config, FileFailurePersistence};
 
-		let mut runner = TestRunner::new(
-			Config {
-				source_file: Some(path),
-				failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel("proptest-regressions"))),
-				..Default::default()
-			}
-		);
+		let mut runner = TestRunner::new(Config {
+			source_file: Some(path),
+			failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
+				"proptest-regressions",
+			))),
+			..Default::default()
+		});
 
 		runner
 			.run(
@@ -102,7 +108,11 @@ pub trait StateMachine: 'static {
 				})),
 				|(mut state, input, settings)| {
 					// ensure that inputs are well formed
-					assert!(state.is_valid().is_ok(), "input state not valid {:?}", state.is_valid());
+					assert!(
+						state.is_valid().is_ok(),
+						"input state not valid {:?}",
+						state.is_valid()
+					);
 					assert!(input.is_valid().is_ok(), "input not valid {:?}", input.is_valid());
 					assert!(input.has_index(&Self::input_index(&state)), "input has wrong index");
 
@@ -116,8 +126,12 @@ pub trait StateMachine: 'static {
 					);
 
 					// ensure that state is still well formed
-					assert!(state.is_valid().is_ok(), "state after step function is not valid ({:?})", state);
-					
+					assert!(
+						state.is_valid().is_ok(),
+						"state after step function is not valid ({:?})",
+						state
+					);
+
 					// ensure that step function computed valid state
 					Self::step_specification(&prev_state, &input, &settings, &state);
 

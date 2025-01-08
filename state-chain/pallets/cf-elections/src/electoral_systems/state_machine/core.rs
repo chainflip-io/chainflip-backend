@@ -1,55 +1,54 @@
-
-use serde::{Deserialize, Serialize};
-use core::iter::Step;
 use codec::{Decode, Encode};
-use scale_info::TypeInfo;
+use core::iter::Step;
 use itertools::Either;
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_std::vec::Vec;
 
-pub trait Hook<A,B> {
+pub trait Hook<A, B> {
 	fn run(&self, input: A) -> B;
 }
 
 #[cfg(test)]
 pub mod hook_test_utils {
-    use codec::MaxEncodedLen;
-    use super::*;
+	use super::*;
+	use codec::MaxEncodedLen;
 
-    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-    pub struct ConstantHook<A,B> {
-        pub state: B,
-        pub _phantom: sp_std::marker::PhantomData<A>
-    }
+	#[derive(
+		Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen,
+	)]
+	pub struct ConstantHook<A, B> {
+		pub state: B,
+		pub _phantom: sp_std::marker::PhantomData<A>,
+	}
 
-    impl<A,B> ConstantHook<A,B> {
-        pub fn new(b: B) -> Self {
-            Self { state: b, _phantom: Default::default() }
-        }
-    }
+	impl<A, B> ConstantHook<A, B> {
+		pub fn new(b: B) -> Self {
+			Self { state: b, _phantom: Default::default() }
+		}
+	}
 
-    impl<A,B: Clone> Hook<A,B> for ConstantHook<A,B> {
-        fn run(&self, _input: A) -> B {
-            self.state.clone()
-        }
-    }
+	impl<A, B: Clone> Hook<A, B> for ConstantHook<A, B> {
+		fn run(&self, _input: A) -> B {
+			self.state.clone()
+		}
+	}
 }
 
-
-pub trait SaturatingStep : Step + Clone {
-    fn saturating_forward(start: Self, mut count: usize) -> Self {
-        for _ in 0..count {
-            if let Some(result) =  Self::forward_checked(start.clone(), count) {
-                return result;
-            } else {
-                count /= 2;
-            }
-        }
-        return start;
-    }
+pub trait SaturatingStep: Step + Clone {
+	fn saturating_forward(start: Self, mut count: usize) -> Self {
+		for _ in 0..count {
+			if let Some(result) = Self::forward_checked(start.clone(), count) {
+				return result;
+			} else {
+				count /= 2;
+			}
+		}
+		return start;
+	}
 }
 
 impl<X: Step + Clone> SaturatingStep for X {}
-
 
 /// A type which has an associated index type.
 /// This effectively models types families.
@@ -85,7 +84,7 @@ impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for (A, B) {
 )]
 pub struct ConstantIndex<Idx, A> {
 	pub data: A,
-	pub _phantom: sp_std::marker::PhantomData<Idx>
+	pub _phantom: sp_std::marker::PhantomData<Idx>,
 }
 impl<Idx, A> ConstantIndex<Idx, A> {
 	pub fn new(data: A) -> Self {

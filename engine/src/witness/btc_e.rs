@@ -9,10 +9,10 @@ use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
-	electoral_systems::block_height_tracking::{
-		primitives::Header, BlockHeightTrackingProperties, InputHeaders
+	electoral_systems::{
+		block_height_tracking::{primitives::Header, BlockHeightTrackingProperties, InputHeaders},
+		state_machine::core::ConstantIndex,
 	},
-	electoral_systems::state_machine::core::ConstantIndex,
 	vote_storage::VoteStorage,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
@@ -84,7 +84,6 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 		Ok(ConstantIndex { data: witnesses, _phantom: Default::default() })
 	}
 }
-
 
 #[derive(Clone)]
 pub struct BitcoinBlockHeightTrackingVoter {

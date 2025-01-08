@@ -1,22 +1,21 @@
-
-
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
 use itertools::Either;
-use sp_std::{vec::Vec, fmt::Debug};
+use sp_std::{fmt::Debug, vec::Vec};
 
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
-	vote_storage::VoteStorage, CorruptStorageError,
+	vote_storage::VoteStorage,
+	CorruptStorageError,
 };
 
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
 	core::{Indexed, Validate},
-	state_machine::StateMachine
+	state_machine::StateMachine,
 };
 
 pub trait IntoResult {
@@ -67,7 +66,6 @@ impl<V: Validate, C: Validate> Validate for SMInput<V, C> {
 }
 
 pub trait ESInterface {
-
 	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
 
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
@@ -142,61 +140,56 @@ pub trait ESInterface {
 	type OnFinalizeReturn;
 }
 
-
 #[allow(type_alias_bounds)]
-type VoteOfVoteStorage<VS : VoteStorage> = VS::Vote;
+type VoteOfVoteStorage<VS: VoteStorage> = VS::Vote;
 
-
-pub trait StateMachineES : 'static + Sized + ESInterface
-<
-	ElectoralUnsynchronisedStateMapKey = (),
-	ElectoralUnsynchronisedStateMapValue = (),
-	ElectoralSettings = (),
-	ElectionIdentifierExtra = (),
-	ElectionState = (),
-	OnFinalizeContext = Vec<Self::OnFinalizeContextItem>,
-	OnFinalizeReturn = Vec<Self::OnFinalizeReturnItem>,
-	Consensus = Self::Consensus2,
-	Vote = Self::VoteStorage2,
->
+pub trait StateMachineES:
+	'static
+	+ Sized
+	+ ESInterface<
+		ElectoralUnsynchronisedStateMapKey = (),
+		ElectoralUnsynchronisedStateMapValue = (),
+		ElectoralSettings = (),
+		ElectionIdentifierExtra = (),
+		ElectionState = (),
+		OnFinalizeContext = Vec<Self::OnFinalizeContextItem>,
+		OnFinalizeReturn = Vec<Self::OnFinalizeReturnItem>,
+		Consensus = Self::Consensus2,
+		Vote = Self::VoteStorage2,
+	>
 {
-	type OnFinalizeContextItem : Clone + Debug;
+	type OnFinalizeContextItem: Clone + Debug;
 	type OnFinalizeReturnItem;
-	type Consensus2 : Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
-	type Vote2 : Validate + Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
-	type VoteStorage2 : VoteStorage<Vote = Self::Vote2>;
 
-	type StateMachine : StateMachineForES<Self> + 'static;
-	type ConsensusMechanism : ConsensusMechanismForES<Self> + 'static;
+	type Consensus2: Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
+	type Vote2: Validate + Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
+	type VoteStorage2: VoteStorage<Vote = Self::Vote2>;
+
+	type StateMachine: StateMachineForES<Self> + 'static;
+	type ConsensusMechanism: ConsensusMechanismForES<Self> + 'static;
 }
 
-
-pub trait StateMachineForES<ES: StateMachineES> = StateMachine
-<
+pub trait StateMachineForES<ES: StateMachineES> = StateMachine<
 	Input = SMInput<ES::Consensus, ES::OnFinalizeContextItem>,
 	State = ES::ElectoralUnsynchronisedState,
 	Settings = ES::ElectoralUnsynchronisedSettings,
 	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
 >;
 
-pub trait ConsensusMechanismForES<ES: StateMachineES> = ConsensusMechanism
-<
+pub trait ConsensusMechanismForES<ES: StateMachineES> = ConsensusMechanism<
 	Vote = VoteOfVoteStorage<ES::Vote>,
 	Result = ES::Consensus,
-	Settings = (Threshold, ES::ElectionProperties)
+	Settings = (Threshold, ES::ElectionProperties),
 >;
 
-
-pub struct StateMachineESInstance<Bounds: StateMachineES>
-{
+pub struct StateMachineESInstance<Bounds: StateMachineES> {
 	_phantom: core::marker::PhantomData<Bounds>,
 }
 
-impl<Bounds: StateMachineES> ElectoralSystem for StateMachineESInstance<Bounds> 
+impl<Bounds: StateMachineES> ElectoralSystem for StateMachineESInstance<Bounds>
 where
-	<Bounds::Vote as VoteStorage>::Properties : Default,
-	Bounds::Consensus : Indexed
-
+	<Bounds::Vote as VoteStorage>::Properties: Default,
+	Bounds::Consensus: Indexed,
 {
 	type ValidatorId = Bounds::ValidatorId;
 	type ElectoralUnsynchronisedState = Bounds::ElectoralUnsynchronisedState;
@@ -213,18 +206,22 @@ where
 	type OnFinalizeReturn = Bounds::OnFinalizeReturn;
 
 	fn generate_vote_properties(
-			_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
-			_previous_vote: Option<(crate::electoral_system::VotePropertiesOf<Self>, crate::electoral_system::AuthorityVoteOf<Self>)>,
-			_vote: &<Self::Vote as VoteStorage>::PartialVote,
-		) -> Result<crate::electoral_system::VotePropertiesOf<Self>, CorruptStorageError> {
+		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
+		_previous_vote: Option<(
+			crate::electoral_system::VotePropertiesOf<Self>,
+			crate::electoral_system::AuthorityVoteOf<Self>,
+		)>,
+		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+	) -> Result<crate::electoral_system::VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(Default::default())
 	}
 
-	fn on_finalize<ElectoralAccess: crate::electoral_system::ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
-			election_identifiers: Vec<crate::electoral_system::ElectionIdentifierOf<Self>>,
-			contexts: &Self::OnFinalizeContext,
-		) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
-
+	fn on_finalize<
+		ElectoralAccess: crate::electoral_system::ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
+	>(
+		election_identifiers: Vec<crate::electoral_system::ElectionIdentifierOf<Self>>,
+		contexts: &Self::OnFinalizeContext,
+	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		// initialize the result value
 		let mut result = Vec::new();
 
@@ -266,7 +263,7 @@ where
 		}
 
 		// gather the input indices after all state transitions
-		let input_indices : Vec<_> = Bounds::StateMachine::input_index(&state).into_iter().collect();
+		let input_indices: Vec<_> = Bounds::StateMachine::input_index(&state).into_iter().collect();
 		let mut open_elections = Vec::new();
 
 		// delete elections which are no longer in the input indices
@@ -298,17 +295,16 @@ where
 		ElectoralAccess::set_unsynchronised_state(state)?;
 
 		return Ok(result);
-
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-			election_access: &ElectionAccess,
-			// This is the consensus as of the last time the consensus was checked. Note this is *NOT*
-			// the "last" consensus, i.e. this can be `None` even if on some previous check we had
-			// consensus, but it was subsequently lost.
-			_previous_consensus: Option<&Self::Consensus>,
-			consensus_votes: crate::electoral_system::ConsensusVotes<Self>,
-		) -> Result<Option<Self::Consensus>, CorruptStorageError> {
+		election_access: &ElectionAccess,
+		// This is the consensus as of the last time the consensus was checked. Note this is *NOT*
+		// the "last" consensus, i.e. this can be `None` even if on some previous check we had
+		// consensus, but it was subsequently lost.
+		_previous_consensus: Option<&Self::Consensus>,
+		consensus_votes: crate::electoral_system::ConsensusVotes<Self>,
+	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		log::debug!("ESSM consensus: reading properties");
 		let properties = election_access.properties()?;
 		log::debug!("ESSM consensus: reading properties done");
@@ -335,4 +331,3 @@ where
 		)))
 	}
 }
-

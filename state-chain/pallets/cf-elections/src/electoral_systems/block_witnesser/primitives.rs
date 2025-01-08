@@ -1,15 +1,14 @@
-use core::{iter::Step, ops::RangeInclusive};
 use cf_chains::witness_period::BlockZero;
 use codec::{Decode, Encode};
+use core::{iter::Step, ops::RangeInclusive};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_map::BTreeMap;
 
-
 use crate::electoral_systems::state_machine::core::Validate;
 
-// ----------------------------------- Election tracker -------------------------------------------------------
-// Safe mode:
+// ----------------------------------- Election tracker
+// ------------------------------------------------------- Safe mode:
 // when we enable safe mode, we want to take into account all reorgs,
 // which means that we have to reopen elections for all elections which
 // have been opened previously.
@@ -17,9 +16,7 @@ use crate::electoral_systems::state_machine::core::Validate;
 // This means that if safe mode is enabled, we don't call `start_more_elections`,
 // but even in safe mode, if there's a reorg we call `restart_election`.
 
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct ElectionTracker<N: Ord> {
 	/// The block heights which we have already received but not started elections for, yet.
 	/// This means that we assume that we had elections for heights < scheduled.start().
@@ -47,9 +44,9 @@ impl<N: Ord + Step + Copy> ElectionTracker<N> {
 	pub fn start_more_elections(&mut self, max_ongoing: usize) {
 		// filter out all elections which are ongoing, but shouldn't be, because
 		// they are in the scheduled range (for example because there was a reorg)
-		self.ongoing.retain(|height, _| *height < self.next_election );
+		self.ongoing.retain(|height, _| *height < self.next_election);
 
-		// schedule 
+		// schedule
 		while self.next_election <= self.highest_scheduled && self.ongoing.len() < max_ongoing {
 			self.ongoing.insert(self.next_election, self.reorg_id);
 			self.next_election = N::forward(self.next_election, 1);
@@ -65,10 +62,9 @@ impl<N: Ord + Step + Copy> ElectionTracker<N> {
 
 	/// This function schedules all elections up to `range.end()`
 	pub fn schedule_range(&mut self, range: RangeInclusive<N>) {
-
 		// Check whether there is a reorg concerning elections we have started previously.
-		// If there is, we ensure that all ongoing or previously finished elections inside the reorg range
-		// are going to be restarted once there is the capacity to do so.
+		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
+		// range are going to be restarted once there is the capacity to do so.
 		if *range.start() < self.next_election {
 			self.next_election = *range.start();
 			self.reorg_id = generate_new_index(self.ongoing.values());
@@ -85,7 +81,7 @@ impl<N: Ord + Step + Copy> ElectionTracker<N> {
 	}
 }
 
-impl<N : Ord + Step> Validate for ElectionTracker<N> {
+impl<N: Ord + Step> Validate for ElectionTracker<N> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -93,14 +89,21 @@ impl<N : Ord + Step> Validate for ElectionTracker<N> {
 	}
 }
 
-impl<N : BlockZero + Ord> Default for ElectionTracker<N> {
+impl<N: BlockZero + Ord> Default for ElectionTracker<N> {
 	fn default() -> Self {
-		Self { highest_scheduled: BlockZero::zero(), next_election: BlockZero::zero(), ongoing: Default::default(), reorg_id: 0 }
+		Self {
+			highest_scheduled: BlockZero::zero(),
+			next_election: BlockZero::zero(),
+			ongoing: Default::default(),
+			reorg_id: 0,
+		}
 	}
 }
 
 /// Generates an element which is not in `indices`.
-fn generate_new_index<'a, N: BlockZero + Ord + Step + 'static>(mut indices: impl Iterator<Item = &'a N> + Clone) -> N {
+fn generate_new_index<'a, N: BlockZero + Ord + Step + 'static>(
+	mut indices: impl Iterator<Item = &'a N> + Clone,
+) -> N {
 	let mut index = N::zero();
 	while indices.any(|ix| *ix == index) {
 		index = N::forward(index, 1);
@@ -111,10 +114,10 @@ fn generate_new_index<'a, N: BlockZero + Ord + Step + 'static>(mut indices: impl
 #[cfg(test)]
 mod tests {
 
-	use proptest::prelude::*;
 	use super::generate_new_index;
+	use proptest::prelude::*;
 
-	proptest!{
+	proptest! {
 		#[test]
 		fn indices_are_new(xs in prop::collection::vec(any::<u8>(), 0..3)) {
 			assert!(!xs.contains(&generate_new_index(xs.iter())));

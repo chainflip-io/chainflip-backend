@@ -3,6 +3,12 @@ use core::{
 	ops::{RangeInclusive, Rem, Sub},
 };
 
+use super::state_machine::{
+	consensus::{ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold},
+	core::{Indexed, Validate},
+	state_machine::StateMachine,
+	state_machine_es::SMInput,
+};
 use crate::CorruptStorageError;
 use cf_chains::witness_period::{BlockWitnessRange, BlockZero};
 use codec::{Decode, Encode};
@@ -17,14 +23,7 @@ use primitives::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{
-	collections::vec_deque::VecDeque,
-	vec::Vec,
-};
-use super::state_machine::consensus::{ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold};
-use super::state_machine::core::{Indexed, Validate};
-use super::state_machine::state_machine::StateMachine;
-use super::state_machine::state_machine_es::SMInput;
+use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
@@ -118,7 +117,10 @@ impl<N: Ord> Validate for ChainProgress<N> {
 		use ChainProgress::*;
 		match self {
 			Reorg(range) | Continuous(range) => {
-				ensure!(range.start() <= range.end(), "range a..=b in ChainProgress should have a <= b");
+				ensure!(
+					range.start() <= range.end(),
+					"range a..=b in ChainProgress should have a <= b"
+				);
 				Ok(())
 			},
 			None(_) | WaitingForFirstConsensus => Ok(()),
@@ -226,15 +228,14 @@ mod tests {
 
 	use core::iter::Step;
 
-	
 	use proptest::{
 		prelude::{any, prop, Arbitrary, Just, Strategy},
 		prop_oneof,
 	};
 
 	use super::{
-		primitives::Header, BHWState,
-		BlockHeightTrackingDSM, BlockHeightTrackingProperties, InputHeaders,
+		primitives::Header, BHWState, BlockHeightTrackingDSM, BlockHeightTrackingProperties,
+		InputHeaders,
 	};
 
 	use super::super::state_machine::{state_machine::StateMachine, state_machine_es::SMInput};
@@ -281,15 +282,16 @@ mod tests {
 			arb_state(),
 			Just(()),
 			|index| {
-			prop_oneof![
-				Just(SMInput::Context(())),
-				(0..index.len()).prop_flat_map(move |ix| arb_input_headers(
-					index.clone().into_iter().nth(ix).unwrap()
-				)
-				.prop_map(SMInput::Vote))
-			]
-			.boxed()
-		});
+				prop_oneof![
+					Just(SMInput::Context(())),
+					(0..index.len()).prop_flat_map(move |ix| arb_input_headers(
+						index.clone().into_iter().nth(ix).unwrap()
+					)
+					.prop_map(SMInput::Vote))
+				]
+				.boxed()
+			},
+		);
 	}
 }
 
@@ -301,7 +303,8 @@ impl<H, N: BlockZero + Copy + PartialEq> Indexed for InputHeaders<H, N> {
 			true
 		} else {
 			match self.0.front() {
-				Some(first) => base.iter().any(|base| first.block_height == base.witness_from_index),
+				Some(first) =>
+					base.iter().any(|base| first.block_height == base.witness_from_index),
 				None => false,
 			}
 		}
@@ -392,52 +395,61 @@ impl<
 
 	// specification for step function
 	#[cfg(test)]
-	fn step_specification(before: &Self::State, input: &Self::Input, _settings: &Self::Settings, after: &Self::State) {
+	fn step_specification(
+		before: &Self::State,
+		input: &Self::Input,
+		_settings: &Self::Settings,
+		after: &Self::State,
+	) {
 		use BHWState::*;
 		match (before, after) {
-
-			(Starting, Starting) => assert!(*input == SMInput::Context(()), "BHW should remain in Starting state only if it doesn't get a vote as input."),
+			(Starting, Starting) => assert!(
+				*input == SMInput::Context(()),
+				"BHW should remain in Starting state only if it doesn't get a vote as input."
+			),
 
 			(Starting, Running { .. }) => (),
 
-			(Running { .. }, Starting) => panic!("BHW should never transit into Starting state once its running."),
+			(Running { .. }, Starting) =>
+				panic!("BHW should never transit into Starting state once its running."),
 
-			(Running { headers: s0_headers, witness_from: s0_witness_from }, Running { headers: s1_headers, witness_from: s1_witness_from }) => {
+			(
+				Running { headers: headers0, witness_from: from0 },
+				Running { headers: headers1, witness_from: from1 },
+			) => {
 				assert!(
 					// there are two different cases:
 					// - in case of a reorg, the `witness_from` is reset to the beginning of the
 					//   headers we have:
-					(*s1_witness_from == s0_headers.front().unwrap().block_height)
+					(*from1 == headers0.front().unwrap().block_height)
 					||
 					// - in the normal case, the `witness_from` should always be the next
 					//   height after the last header that we have
-					(*s1_witness_from == N::forward(s1_headers.back().unwrap().block_height, 1)),
-
+					(*from1 == N::forward(headers1.back().unwrap().block_height, 1)),
 					"witness_from should be either next height, or height of first header"
 				);
 
 				assert!(
-				// if the input is *not* the empty context, then `witness_from` should
-				// always change after running the transition function.
-				// This ensures that we always have "fresh" election properties,
-				// and are thus deleting/recreating elections as expected.
-				(*input == SMInput::Context(())) || (*s1_witness_from != *s0_witness_from),
-
-				"witness_from should always change, except when we get a non-vote input"
+					// if the input is *not* the empty context, then `witness_from` should
+					// always change after running the transition function.
+					// This ensures that we always have "fresh" election properties,
+					// and are thus deleting/recreating elections as expected.
+					(*input == SMInput::Context(())) || (*from1 != *from0),
+					"witness_from should always change, except when we get a non-vote input"
 				);
 			},
 		}
-
 	}
 
 	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {
 		let new_headers = match input {
 			SMInput::Vote(vote) => vote,
-			SMInput::Context(_) => return Ok(match s {
-				BHWState::Starting => ChainProgress::WaitingForFirstConsensus,
-				BHWState::Running { headers, witness_from: _ } =>
-					ChainProgress::None(headers.back().unwrap().block_height),
-			})
+			SMInput::Context(_) =>
+				return Ok(match s {
+					BHWState::Starting => ChainProgress::WaitingForFirstConsensus,
+					BHWState::Running { headers, witness_from: _ } =>
+						ChainProgress::None(headers.back().unwrap().block_height),
+				}),
 		};
 
 		match s {
@@ -491,5 +503,4 @@ impl<
 			},
 		}
 	}
-
 }

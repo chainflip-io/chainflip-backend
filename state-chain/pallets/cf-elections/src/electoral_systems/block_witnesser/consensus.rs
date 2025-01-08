@@ -1,24 +1,37 @@
+use crate::{
+	electoral_systems::state_machine::{
+		consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold},
+		core::{ConstantIndex, MultiIndexAndValue},
+	},
+	SharedDataHash,
+};
 use frame_support::Hashable;
 use sp_std::collections::btree_map::BTreeMap;
-use crate::electoral_systems::state_machine::consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold};
-use crate::electoral_systems::state_machine::core::{MultiIndexAndValue, ConstantIndex};
-use crate::SharedDataHash;
-
-
 
 pub struct BWConsensus<BlockData: Eq, N, ElectionProperties> {
 	pub consensus: SupermajorityConsensus<SharedDataHash>,
-	pub data: BTreeMap::<SharedDataHash, BlockData>,
-	pub _phantom: sp_std::marker::PhantomData<(N, ElectionProperties)>
+	pub data: BTreeMap<SharedDataHash, BlockData>,
+	pub _phantom: sp_std::marker::PhantomData<(N, ElectionProperties)>,
 }
 
-impl<BlockData: Eq, N, ElectionProperties> Default for BWConsensus<BlockData, N, ElectionProperties> {
+impl<BlockData: Eq, N, ElectionProperties> Default
+	for BWConsensus<BlockData, N, ElectionProperties>
+{
 	fn default() -> Self {
-		Self { consensus: Default::default(), data: Default::default(), _phantom: Default::default() }
+		Self {
+			consensus: Default::default(),
+			data: Default::default(),
+			_phantom: Default::default(),
+		}
 	}
 }
 
-impl<BlockData: Eq + Clone + sp_std::fmt::Debug + Hashable, N: Clone, ElectionProperties: Clone> ConsensusMechanism for BWConsensus<BlockData, N, ElectionProperties> {
+impl<
+		BlockData: Eq + Clone + sp_std::fmt::Debug + Hashable,
+		N: Clone,
+		ElectionProperties: Clone,
+	> ConsensusMechanism for BWConsensus<BlockData, N, ElectionProperties>
+{
 	type Vote = ConstantIndex<(N, ElectionProperties, u8), BlockData>;
 	type Result = MultiIndexAndValue<(N, ElectionProperties, u8), BlockData>;
 	type Settings = (Threshold, (N, ElectionProperties, u8));
@@ -30,7 +43,8 @@ impl<BlockData: Eq + Clone + sp_std::fmt::Debug + Hashable, N: Clone, ElectionPr
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-		self.consensus.check_consensus(&settings.0)
+		self.consensus
+			.check_consensus(&settings.0)
 			.map(|consensus| self.data.get(&consensus).expect("hash of vote should exist").clone())
 			.map(|data| MultiIndexAndValue(settings.1.clone(), data))
 	}
