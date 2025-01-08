@@ -228,6 +228,7 @@ pub fn solana_vault_swap<A>(
 	from: EncodedAddress,
 	event_data_account: EncodedAddress,
 	from_token_account: Option<EncodedAddress>,
+	expires_at: u64,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	// Load up environment variables.
 	let api_environment =
@@ -306,5 +307,6 @@ pub fn solana_vault_swap<A>(
 			_ => Err("Invalid source_asset: Not a Solana asset.")?,
 		}
 		.into(),
+		expires_at,
 	})
 }

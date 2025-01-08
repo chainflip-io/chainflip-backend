@@ -31,7 +31,7 @@ import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap'
 
 import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/swap_endpoint';
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
-import { getChainflipApi } from './utils/substrate';
+import { calcVaultSwapDetailsExpiryTime, getChainflipApi } from './utils/substrate';
 
 const createdEventAccounts: PublicKey[] = [];
 
@@ -40,6 +40,7 @@ interface SolVaultSwapDetails {
   program_id: string;
   accounts: RpcAccountMeta[];
   data: string;
+  expires_at: number;
 }
 
 type RpcAccountMeta = {
@@ -141,6 +142,14 @@ export async function executeSolVaultSwap(
   assert.strictEqual(
     new PublicKey(vaultSwapDetails.program_id).toBase58(),
     getContractAddress('Solana', 'SWAP_ENDPOINT'),
+  );
+
+  // Check that expires_at field is correct (within 20 secs drift)
+  const expectedExpiresAt = await calcVaultSwapDetailsExpiryTime();
+  assert(
+    Math.abs(expectedExpiresAt - vaultSwapDetails.expires_at) <= 20 * 1000,
+    `Solana vaultSwapDetails expiry timestamp is not within a 20 secs drift of the expected expiry time.
+      expectedExpiresAt = ${expectedExpiresAt} and actualExpiresAt = ${vaultSwapDetails.expires_at}`,
   );
 
   // Convert vaultSwapDetails.instruction.accounts into AccountMeta[]

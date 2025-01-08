@@ -58,6 +58,8 @@ pub enum VaultSwapDetails<BtcAddress> {
 	Solana {
 		#[serde(flatten)]
 		instruction: SolInstructionRpc,
+		/// Payload expiry time, expressed as timestamp since the UNIX_EPOCH in milliseconds
+		expires_at: u64,
 	},
 }
 
@@ -89,7 +91,8 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 					deposit_address: f(deposit_address),
 					expires_at,
 				},
-			VaultSwapDetails::Solana { instruction } => VaultSwapDetails::Solana { instruction },
+			VaultSwapDetails::Solana { instruction, expires_at } =>
+				VaultSwapDetails::Solana { instruction, expires_at },
 			VaultSwapDetails::Ethereum { details } => VaultSwapDetails::Ethereum { details },
 			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
 		}

@@ -515,3 +515,13 @@ export function observeBadEvent<T = any>(
     },
   };
 }
+
+export async function calcVaultSwapDetailsExpiryTime(): Promise<number> {
+  await using chainflip = await getChainflipApi();
+  // Calculate expected expiry time assuming block time is 6 secs, expires_at = time left to next rotation
+  const epochDuration = (await chainflip.rpc(`cf_epoch_duration`)) as number;
+  const epochStartedAt = (await chainflip.rpc(`cf_current_epoch_started_at`)) as number;
+  const currentBlockNumber = (await chainflip.rpc.chain.getHeader()).number.toNumber();
+  const blocksUntilNextRotation = epochDuration + epochStartedAt - currentBlockNumber;
+  return Date.now() + blocksUntilNextRotation * 6000;
+}

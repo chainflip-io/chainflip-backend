@@ -2280,6 +2280,23 @@ impl_runtime_apis! {
 				};
 			}
 
+			// Payload expiry time is set to time left to next rotation.
+			// 	* For BTC: the actual expiry time is 2 rotations, but we deliberately set expires_at to be the time left to next
+			//    rotation to cater for the case when a forced rotation happens between when the payload was requested and
+			//    before expires_at. BTC funds can be lost in 3 cases:
+			// 		* User makes the vault transaction after expires_at, and it happens that we did a forced rotation in between
+			//      * User submits the vault transaction 3 days (1 epoch) after expires_at, and with no forced rotations in between
+			//      * We do 2 forced rotations in between payload request and expires_at
+			//  * For SOLANA: The actual expiry time is indeed time left to next rotation. If a forced rotation
+			//    happens in between as explained before, it is actually not a problem as the user won't lose any funds.
+			//  * For ETH: payload never expires hence we don't send expires_at
+			let current_block = System::block_number();
+			let (Some(next_rotation_block), _) = Validator::estimate_next_session_rotation(current_block) else {
+				Err(pallet_cf_validator::Error::<Runtime>::InvalidEpochDuration)?
+			};
+			let blocks_until_next_rotation = next_rotation_block.saturating_sub(current_block);
+			let expires_at = Timestamp::now() + blocks_until_next_rotation as u64 * SLOT_DURATION;
+
 			// Encode swap
 			match (ForeignChain::from(source_asset), extra_parameters) {
 				(
@@ -2290,23 +2307,6 @@ impl_runtime_apis! {
 					}
 				) => {
 					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
-
-					// Payload expiry time is set to time left to next rotation.
-					// 	* For BTC: the actual expiry time is 2 rotations, but we deliberately set expires_at to be the time left to next
-					//    rotation to cater for the case when a forced rotation happens between when the payload was requested and
-					//    before expires_at. BTC funds can be lost in 3 cases:
-					// 		* User makes the vault transaction after expires_at, and it happens that we did a forced rotation in between
-					//      * User submits the vault transaction 3 days (1 epoch) after expires_at, and with no forced rotations in between
-					//      * We do 2 forced rotations in between payload request and expires_at
-					//  * For SOLANA: The actual expiry time is indeed time left to next rotation. If a forced rotation
-					//    happens in between as explained before, it is actually not a problem as the user won't lose any funds.
-					//  * For ETH: payload never expires hence we don't send expires_at
-					let current_block = System::block_number();
-					let (Some(next_rotation_block), _) = Validator::estimate_next_session_rotation(current_block) else {
-						Err(pallet_cf_validator::Error::<Runtime>::InvalidEpochDuration)?
-					};
-					let blocks_until_next_rotation = next_rotation_block.saturating_sub(current_block);
-					let expires_at = Timestamp::now() + blocks_until_next_rotation as u64 * SLOT_DURATION;
 
 					crate::chainflip::vault_swaps::bitcoin_vault_swap(
 						broker_id,
@@ -2381,6 +2381,7 @@ impl_runtime_apis! {
 					from,
 					event_data_account,
 					from_token_account,
+					expires_at
 				),
 				_ => Err(DispatchErrorWithMessage::from(
 					"Incompatible or unsupported source_asset and extra_parameters"

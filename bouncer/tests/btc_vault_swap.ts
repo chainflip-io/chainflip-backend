@@ -14,7 +14,11 @@ import {
   observeBalanceIncrease,
   stateChainAssetFromAsset,
 } from '../shared/utils';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
+import {
+  calcVaultSwapDetailsExpiryTime,
+  getChainflipApi,
+  observeEvent,
+} from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
 import { brokerApiRpc } from '../shared/json_rpc';
 import { getEarnedBrokerFees } from './broker_fee_collection';
@@ -90,13 +94,8 @@ export async function buildAndSendBtcVaultSwap(
   testBtcVaultSwap.debugLog('deposit_address:', BtcVaultSwapDetails.deposit_address);
   testBtcVaultSwap.debugLog('expires_at:', BtcVaultSwapDetails.expires_at);
 
-  // Calculate expected expiry time assuming block time is 6 secs, expires_at = time left to next rotation
-  const epochDuration = (await chainflip.rpc(`cf_epoch_duration`)) as number;
-  const epochStartedAt = (await chainflip.rpc(`cf_current_epoch_started_at`)) as number;
-  const currentBlockNumber = (await chainflip.rpc.chain.getHeader()).number.toNumber();
-  const blocksUntilNextRotation = epochDuration + epochStartedAt - currentBlockNumber;
-  const expectedExpiresAt = Date.now() + blocksUntilNextRotation * 6000;
   // Check that expires_at field is correct (within 20 secs drift)
+  const expectedExpiresAt = await calcVaultSwapDetailsExpiryTime();
   assert(
     Math.abs(expectedExpiresAt - BtcVaultSwapDetails.expires_at) <= 20 * 1000,
     `BtcVaultSwapDetails expiry timestamp is not within a 20 secs drift of the expected expiry time.
