@@ -595,7 +595,7 @@ impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 				if let Some((properties, future)) = option {
 					tracing::info!(
 						target: "task_scope",
-						"[{}]: child task [{} #{}] started '{}'",
+						"[{} / {} #{}]: child task started '{}'",
 						properties.scope_name,
 						properties.task_name,
 						properties.task_id,
@@ -678,7 +678,7 @@ impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 				for task in tasks.into_iter() {
 					tracing::error!(
 						target: "task_scope",
-						"[{}]: child task [{} #{}] ended by cancellation '{}'",
+						"[{} / {} #{}]: child task ended by cancellation '{}'",
 						task.properties.scope_name,
 						task.properties.task_name,
 						task.properties.task_id,
