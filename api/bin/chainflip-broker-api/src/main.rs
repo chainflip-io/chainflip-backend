@@ -303,7 +303,11 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
-		Ok(self.api.raw_client().get_affiliates().await?)
+		Ok(self
+			.api
+			.raw_client()
+			.cf_get_affiliates(self.api.state_chain_client.account_id(), None)
+			.await?)
 	}
 }
 
