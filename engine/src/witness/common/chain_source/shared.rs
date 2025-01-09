@@ -38,7 +38,7 @@ where
 		let (request_sender, request_receiver) =
 			tokio::sync::mpsc::channel::<Request<InnerSource>>(1);
 
-		scope.spawn("SharedSource::new", async move {
+		scope.spawn("shared_source", async move {
 			let mut request_receiver =
 				tokio_stream::wrappers::ReceiverStream::new(request_receiver);
 

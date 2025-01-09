@@ -431,7 +431,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 		mut ceremony_request_receiver: UnboundedReceiver<CeremonyRequest<Chain::CryptoScheme>>,
 		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
 	) -> Result<()> {
-		task_scope("CeremonyManager::run" , |scope| {
+		task_scope("ceremony_manager" , |scope| {
 			async {
 				loop {
 					tokio::select! {
@@ -856,7 +856,7 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 		let (request_sender, request_receiver) = oneshot::channel();
 
 		let task_handle = scope.spawn_with_handle(
-			"CeremonyRunner::run",
+			"ceremony_runner",
 			CeremonyRunner::<Ceremony, Chain>::run(
 				ceremony_id,
 				message_receiver,

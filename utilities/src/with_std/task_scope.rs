@@ -399,12 +399,12 @@ pub struct Scope<'env, Error: Debug + Send + 'static> {
 	/// use futures::FutureExt;
 	///
 	/// let mut a = 1;
-	/// task_scope::<(), (), _>(|scope| async move {
-	///     scope.spawn(async {
+	/// task_scope::<(), (), _>("", |scope| async move {
+	///     scope.spawn("", async {
 	///         a += 1;
 	///             Ok(())
 	///     });
-	///     scope.spawn(async {
+	///     scope.spawn("", async {
 	///         a += 1; // might run concurrently to other spawn
 	///             Ok(())
 	///     });

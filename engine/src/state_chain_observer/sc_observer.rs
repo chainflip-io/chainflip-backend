@@ -254,7 +254,7 @@ where
 	StateChainClient:
 		StorageApi + ChainApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
-	task_scope("start",|scope| async {
+	task_scope("state_chain_observer",|scope| async {
         let account_id = state_chain_client.account_id();
 
         let heartbeat_block_interval = {
@@ -422,7 +422,7 @@ where
                                         if nominee == account_id {
                                             let btc_rpc = btc_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("BtcTxBroadcastRequest", async move {
+                                            scope.spawn("btc_tx_broadcast_request", async move {
                                                 // We check for PendingBroadcasts for Bitcoin specifically because if the previous broadcast was not broadcast,
                                                 // it can cause ours to fail, as we could be using a change UTXO that's only created in the previous broadcast.
                                                 for awaiting_broadcast_id in state_chain_client
@@ -468,7 +468,7 @@ where
                                         if nominee == account_id {
                                             let dot_rpc = dot_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("DotTxBroadcastRequest", async move {
+                                            scope.spawn("dot_tx_broadcast_request", async move {
                                                 match dot_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
                                                     Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
@@ -491,7 +491,7 @@ where
                                         if nominee == account_id {
                                             let eth_rpc = eth_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("EthTxBroadcastRequest", async move {
+                                            scope.spawn("eth_tx_broadcast_request", async move {
                                                 match eth_rpc.broadcast_transaction(payload).await {
                                                     Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
@@ -517,7 +517,7 @@ where
                                         if nominee == account_id {
                                             let arb_rpc = arb_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("ArbTxBroadcastRequest", async move {
+                                            scope.spawn("arb_tx_broadcast_request", async move {
                                                 match arb_rpc.broadcast_transaction(payload).await {
                                                     Ok(tx_hash) => info!("Arbitrum TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
@@ -573,7 +573,7 @@ where
                                         if nominee == account_id {
                                             let sol_rpc = sol_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("SolTxBroadcastRequest", async move {
+                                            scope.spawn("sol_tx_broadcast_request", async move {
                                                 match sol_rpc.broadcast_transaction(payload).await {
                                                     Ok(tx_signature) => info!("Solana TransactionBroadcastRequest {broadcast_id:?} success: tx_signature: {tx_signature:?}"),
                                                     Err(error) => {

@@ -117,7 +117,7 @@ impl EpochSource<(), ()> {
 			.chain(std::iter::once((current_epoch, ((), None))))
 			.collect();
 
-		scope.spawn("EpochSource::builder",{
+		scope.spawn("epoch_source_builder",{
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				cf_utilities::loop_select! {

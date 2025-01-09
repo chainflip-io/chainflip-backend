@@ -36,7 +36,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	where
 		Inner: 'env,
 	{
-		scope.spawn("ChunkedByVaultBuilder spawn", async move {
+		scope.spawn("chunked_by_vault_builder", async move {
 			let stream = assert_stream_send(
 				self.source
 					.stream(self.parameters)
