@@ -111,8 +111,8 @@ pub enum ChainflipAccountStateWithPassive {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct ValidatorInfo {
-	pub balance: u128,
-	pub bond: u128,
+	pub balance: AssetAmount,
+	pub bond: AssetAmount,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
@@ -123,7 +123,7 @@ pub struct ValidatorInfo {
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
+	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
@@ -202,6 +202,7 @@ pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 	pub btc_vault_deposit_address: Option<String>,
 	pub affiliates: Vec<(AffiliateShortId, AccountId32)>,
+	pub bond: AssetAmount,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]

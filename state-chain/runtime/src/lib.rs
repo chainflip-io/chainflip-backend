@@ -1966,6 +1966,7 @@ impl_runtime_apis! {
 		fn cf_broker_info(
 			account_id: AccountId,
 		) -> BrokerInfo {
+			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			BrokerInfo {
 				earned_fees: Asset::all().map(|asset|
 					(asset, AssetBalances::get_balance(&account_id, asset))
@@ -1973,6 +1974,7 @@ impl_runtime_apis! {
 				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
 					.map(derive_btc_vault_deposit_address),
 				affiliates: pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&account_id).collect(),
+				bond: account_info.bond()
 			}
 		}
 
