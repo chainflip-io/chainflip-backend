@@ -555,6 +555,51 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			*affiliate_short_id
 		)
 	}
+
+	async fn register_affiliate_withdrawal_address(
+		&self,
+		short_id: AffiliateShortId,
+		withdrawal_address: AddressString,
+	) -> Result<()> {
+		let (_, events, ..) = self
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::register_affiliate_withdrawal_address {
+					short_id,
+					withdrawal_address: withdrawal_address
+						.try_parse_to_encoded_address(Asset::Eth.into())
+						.map_err(anyhow::Error::msg)?,
+				},
+			)
+			.await?
+			.until_in_block()
+			.await?;
+
+		extract_event!(
+			&events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::AffiliateWithdrawalAddressRegistered,
+			{ .. },
+			()
+		)
+	}
+
+	async fn affiliate_withdrawal_request(&self, short_id: AffiliateShortId) -> Result<()> {
+		let (_, events, ..) = self
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::affiliate_withdrawal_request { short_id },
+			)
+			.await?
+			.until_in_block()
+			.await?;
+
+		extract_event!(
+			&events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::WithdrawalRequested,
+			{ .. },
+			()
+		)
+	}
 }
 
 #[async_trait]
