@@ -470,9 +470,9 @@ pub mod test {
 	use crate::{
 		sol::{
 			sol_tx_core::{address_derivation::derive_deposit_address, sol_test_values::*},
-			SolanaDepositFetchId,
+			SolanaDepositFetchId, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 		},
-		TransferAssetParams, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
+		TransferAssetParams,
 	};
 
 	use sol_prim::{consts::SOL_USDC_DECIMAL, PdaAndBump};
