@@ -124,7 +124,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
   return newCcmArbitraryBytes(length);
 }
 // Minimum overhead to ensure simple CCM transactions succeed
-const OVERHEAD_COMPUTE_UNITS = 10000;
+const OVERHEAD_COMPUTE_UNITS = 20000;
 
 export async function newCcmMetadata(
   destAsset: Asset,

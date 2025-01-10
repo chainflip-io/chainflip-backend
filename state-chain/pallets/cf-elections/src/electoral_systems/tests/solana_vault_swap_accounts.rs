@@ -1,7 +1,7 @@
 use cf_chains::sol::{
 	MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
-	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
+	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH,
 };
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -253,9 +253,8 @@ fn on_finalize_close_accounts_error() {
 
 #[test]
 fn on_finalize_nonces_below_threshold() {
-	NO_OF_SOL_NONCES.with(|hook_called| {
-		hook_called.set(NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES - 1)
-	});
+	NO_OF_SOL_NONCES
+		.with(|hook_called| hook_called.set(NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH - 1));
 	TestSetup::default()
 		.with_unsynchronised_state(0)
 		.build()
