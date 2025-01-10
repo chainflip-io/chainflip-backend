@@ -946,13 +946,14 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 		// rotation tx can fail to build if all nonce accounts are occupied
 		Some(
 			Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(
-				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(1),
+				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(2),
 			),
 		)
 	}
 
 	fn maybe_ccm_limit() -> Option<usize> {
-		// Subtract extra nonces from the limit to make sure CCMs won't block regular fetch batches.
+		// Subtract an extra nonce compared to the regular transfer limit to CCMs will never
+		// completely block regular transfers.
 		Some(
 			Self::maybe_transfers_limit()?.saturating_sub(
 				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(3),

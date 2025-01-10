@@ -33,6 +33,7 @@ import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap'
 import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.1-swap-endpoint/swap_endpoint';
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
+import { getBalance } from './get_balance';
 
 const createdEventAccounts: PublicKey[] = [];
 
@@ -180,6 +181,8 @@ export async function executeSolVaultSwap(
 export async function checkSolEventAccountsClosure(
   eventAccounts: PublicKey[] = createdEventAccounts,
 ) {
+  console.log('=== Checking Solana Vault Swap Account Closure ===');
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();
   const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(
@@ -190,50 +193,46 @@ export async function checkSolEventAccountsClosure(
     getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
   );
 
-  async function checkAccounts(swapEventAccounts: PublicKey[], maxRetries: number): Promise<boolean> {
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const swapEndpointDataAccount =
-        await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
-          swapEndpointDataAccountAddress,
-        );
+  // Only SOL Vault swaps are closed immediately. Also, due to the implementation details in the
+  // SC the timeout won't be executed unless a Vault swap is witnessed. Therefore we do a SOL
+  // Vault swap in the background to force the closure of all accounts.
+  // TODO: Remove once SC is updated to fetch on every SOL Vault swap
+  // await executeSolVaultSwap(
+  //   'Sol',
+  //   'ArbEth',
+  //   await newAddress('ArbEth', randomBytes(32).toString('hex')),
+  // );
 
-      if (swapEndpointDataAccount.openEventAccounts.length >= 10) {
-        await sleep(6000);
-      } else {
-        const onChainOpenedAccounts = swapEndpointDataAccount.openEventAccounts.map((element) =>
-          element.toString(),
-        );
-        for (const eventAccount of swapEventAccounts) {
-          if (!onChainOpenedAccounts.includes(eventAccount.toString())) {
-            const accountInfo = await getSolConnection().getAccountInfo(eventAccount);
-            if (accountInfo !== null) {
-              throw new Error('Event account still exists, should have been closed');
-            }
-          }
-        }
-        // Swap Endpoint's native vault should always have been fetched. 
-        await observeFetch("Sol", getContractAddress('Solana', 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT'))
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Due to implementation details on the SC the accounts SolUSDC accounts won't be closed
-  // immediately and the timeout won't be executed until one extra Vault swap is witnessed
-  // or until a Sol Vault swap is executed. We optimistically check if accounts have been
-  // closed and if not we trigger a Sol Vault swap.
-  let success = await checkAccounts(eventAccounts, 1);
-  if (!success) {
-    await executeSolVaultSwap(
-      'Sol',
-      'ArbEth',
-      await newAddress('ArbEth', randomBytes(32).toString('hex')),
+  let maxRetries = 20; // 120 seconds
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const swapEndpointDataAccount =
+      await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
+        swapEndpointDataAccountAddress,
+      );
+    const onChainOpenedAccounts = swapEndpointDataAccount.openEventAccounts.map((element) =>
+      element.toString(),
     );
-    success = await checkAccounts(eventAccounts, 20); // 120 seconds
-  }
 
-  if (!success) {
-    throw new Error('Timed out waiting for event accounts to be closed');
+    if (
+      eventAccounts.some((eventAccount) => onChainOpenedAccounts.includes(eventAccount.toString()))
+    ) {
+      // Some account is not closed yet
+      await sleep(6000);
+    } else {
+      for (const eventAccount of eventAccounts) {
+        // Ensure accounts are closed correctly
+        const accountInfo = await getSolConnection().getAccountInfo(eventAccount);
+        const balanceEventAccount = Number(await getBalance('Sol', eventAccount.toString()));
+        if (accountInfo !== null || balanceEventAccount > 0) {
+          throw new Error(
+            'This should never happen, a closed account should have no data nor balance',
+          );
+        }
+      }
+      // Swap Endpoint's native vault should always have been fetched.
+      await observeFetch('Sol', getContractAddress('Solana', 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT'));
+      return;
+    }
   }
+  throw new Error('Timed out waiting for event accounts to be closed');
 }
