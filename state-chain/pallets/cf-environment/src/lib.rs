@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	hub::Assethub,
+	hub::{Assethub, OutputAccountId},
 	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, Solana},
 	Chain,
 };
@@ -245,6 +245,10 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Current Nonce of the current Assethub Proxy Account
 	pub type AssethubProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
+
+	#[pallet::storage]
+	/// Current id used in "as_derivative" calls for CCM calls into Assethub
+	pub type AssethubOutputAccountId<T> = StorageValue<_, OutputAccountId, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -612,6 +616,8 @@ pub mod pallet {
 			AssethubVaultAccountId::<T>::set(self.assethub_vault_account_id);
 			AssethubProxyAccountNonce::<T>::set(0);
 
+			AssethubOutputAccountId::<T>::set(1);
+
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
 			Pallet::<T>::update_current_release_version();
@@ -818,6 +824,14 @@ impl<T: Config> Pallet<T> {
 				*nonce += 1;
 			}
 			current_nonce
+		})
+	}
+
+	pub fn next_assethub_output_account_id() -> OutputAccountId {
+		AssethubOutputAccountId::<T>::mutate(|id| {
+			let current_id = *id;
+			*id += 1;
+			current_id
 		})
 	}
 }

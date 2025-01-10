@@ -130,7 +130,7 @@ impl ForeignChain {
 			ForeignChain::Bitcoin => false,
 			ForeignChain::Arbitrum => true,
 			ForeignChain::Solana => true,
-			ForeignChain::Assethub => false,
+			ForeignChain::Assethub => true,
 		}
 	}
 }

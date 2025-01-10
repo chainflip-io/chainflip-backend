@@ -1,4 +1,5 @@
 use crate::{
+	hub::AssethubRuntimeCall,
 	sol::{
 		SolAsset, SolCcmAccounts, SolPubkey, CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL,
 		MAX_CCM_BYTES_USDC,
@@ -35,35 +36,42 @@ pub enum DecodedCcmAdditionalData {
 pub struct CcmValidityChecker;
 
 impl CcmValidityCheck for CcmValidityChecker {
-	/// Checks to see if a given CCM is valid. Currently this only applies to Solana chain.
-	/// For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected length.
-	/// Returns the decoded `cf_parameter`.
+	/// Checks to see if a given CCM is valid. Currently this only applies to Solana and Assethub
+	/// chains. For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected
+	/// length. For Assethub Chain: Decodes the message into a supported extrinsic of the
+	/// PolkadotXcm pallet. Returns the decoded `cf_parameter`.
 	fn check_and_decode(
 		ccm: &CcmChannelMetadata,
 		egress_asset: Asset,
 	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
-		if ForeignChain::from(egress_asset) == ForeignChain::Solana {
-			// Check if the cf_parameter can be decoded
-			let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.ccm_additional_data.clone()[..])
-				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
-			let asset: SolAsset = egress_asset
-				.try_into()
-				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
+		match ForeignChain::from(egress_asset) {
+			ForeignChain::Solana => {
+				// Check if the cf_parameter can be decoded
+				let ccm_accounts =
+					SolCcmAccounts::decode(&mut &ccm.ccm_additional_data.clone()[..])
+						.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
+				let asset: SolAsset = egress_asset.try_into().expect(
+					"Only Solana chain's asset will be checked. This conversion must succeed.",
+				);
 
-			// Length of CCM = length of message + total no. remaining_accounts * constant;
-			let ccm_length =
-				ccm.message.len() + ccm_accounts.remaining_accounts.len() * CCM_BYTES_PER_ACCOUNT;
-			if ccm_length >
-				match asset {
-					SolAsset::Sol => MAX_CCM_BYTES_SOL,
-					SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
-				} {
-				return Err(CcmValidityError::CcmIsTooLong)
-			}
+				// Length of CCM = length of message + total no. remaining_accounts * constant;
+				let ccm_length = ccm.message.len() +
+					ccm_accounts.remaining_accounts.len() * CCM_BYTES_PER_ACCOUNT;
+				if ccm_length >
+					match asset {
+						SolAsset::Sol => MAX_CCM_BYTES_SOL,
+						SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
+					} {
+					return Err(CcmValidityError::CcmIsTooLong)
+				}
 
-			Ok(DecodedCcmAdditionalData::Solana(ccm_accounts))
-		} else {
-			Ok(DecodedCcmAdditionalData::NotRequired)
+				Ok(DecodedCcmAdditionalData::Solana(ccm_accounts))
+			},
+			ForeignChain::Assethub =>
+				<AssethubRuntimeCall as codec::Decode>::decode(&mut ccm.message.as_ref())
+					.map(|_| DecodedCcmAdditionalData::NotRequired)
+					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData),
+			_ => Ok(DecodedCcmAdditionalData::NotRequired),
 		}
 	}
 }

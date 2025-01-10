@@ -1,4 +1,5 @@
 pub mod batch_fetch_and_transfer;
+pub mod execute_x_swap_and_call;
 pub mod rotate_vault_proxy;
 
 use crate::{
@@ -10,7 +11,7 @@ use frame_support::{
 	traits::{Defensive, Get},
 	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
 };
-use hub::AssethubExtrinsicBuilder;
+use hub::{AssethubExtrinsicBuilder, AssethubRuntimeCall, OutputAccountId};
 
 use sp_std::marker::PhantomData;
 
@@ -34,16 +35,24 @@ pub trait AssethubEnvironment {
 	}
 
 	fn runtime_version() -> RuntimeVersion;
+	fn get_new_output_channel_id() -> OutputAccountId;
 }
 
-impl<T: ChainEnvironment<VaultAccount, PolkadotAccountId> + Get<RuntimeVersion>> AssethubEnvironment
-	for T
+impl<
+		T: ChainEnvironment<VaultAccount, PolkadotAccountId>
+			+ Get<RuntimeVersion>
+			+ Get<OutputAccountId>,
+	> AssethubEnvironment for T
 {
 	fn try_vault_account() -> Option<PolkadotAccountId> {
 		Self::lookup(VaultAccount)
 	}
 
 	fn runtime_version() -> RuntimeVersion {
+		Self::get()
+	}
+
+	fn get_new_output_channel_id() -> OutputAccountId {
 		Self::get()
 	}
 }
@@ -126,14 +135,27 @@ where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
 	fn new_unsigned(
-		_transfer_param: TransferAssetParams<Assethub>,
+		transfer_param: TransferAssetParams<Assethub>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
 		_gas_budget: <Assethub as Chain>::ChainAmount,
-		_message: Vec<u8>,
+		message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
-		Err(ExecutexSwapAndCallError::Unsupported)
+		match <AssethubRuntimeCall as codec::Decode>::decode(&mut message.as_ref()) {
+			Ok(xcm_call) => {
+				let vault = E::try_vault_account().ok_or(ExecutexSwapAndCallError::NoVault)?;
+				let output_channel_id = E::get_new_output_channel_id();
+				Ok(Self::ExecuteXSwapAndCall(execute_x_swap_and_call::extrinsic_builder(
+					E::replay_protection(false),
+					output_channel_id,
+					transfer_param,
+					vault,
+					xcm_call,
+				)))
+			},
+			_ => Err(ExecutexSwapAndCallError::Unsupported),
+		}
 	}
 }
 
@@ -221,4 +243,17 @@ impl<E: AssethubEnvironment + ReplayProtectionProvider<Assethub>> ApiCall<Polkad
 		map_over_api_variants!(self, call, call.signer_and_signature.clone())
 			.map(|(signer, _)| signer)
 	}
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo, Eq)]
+pub enum TransferType {
+	/// should teleport `asset` to `dest`
+	Teleport,
+	/// should reserve-transfer `asset` to `dest`, using local chain as reserve
+	LocalReserve,
+	/// should reserve-transfer `asset` to `dest`, using `dest` as reserve
+	DestinationReserve,
+	/// should reserve-transfer `asset` to `dest`, using remote chain `Location` as reserve
+	RemoteReserve(hub::xcm_types::runtime_types::xcm::VersionedLocation),
 }

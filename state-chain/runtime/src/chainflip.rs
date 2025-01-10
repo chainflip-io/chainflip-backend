@@ -47,7 +47,7 @@ use cf_chains::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
-	hub::api::AssethubApi,
+	hub::{api::AssethubApi, OutputAccountId},
 	sol::{
 		api::{
 			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
@@ -573,6 +573,12 @@ impl ReplayProtectionProvider<Assethub> for HubEnvironment {
 impl Get<RuntimeVersion> for HubEnvironment {
 	fn get() -> RuntimeVersion {
 		AssethubChainTracking::chain_state().unwrap().tracked_data.runtime_version
+	}
+}
+
+impl Get<OutputAccountId> for HubEnvironment {
+	fn get() -> OutputAccountId {
+		Environment::next_assethub_output_account_id()
 	}
 }
 
