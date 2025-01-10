@@ -55,6 +55,7 @@ use cf_chains::{
 			SolanaEnvironment,
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
+		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,

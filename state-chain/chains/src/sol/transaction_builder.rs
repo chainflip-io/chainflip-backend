@@ -35,7 +35,6 @@ use crate::{
 		},
 		AccountBump, SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts,
 		SolComputeLimit, SolInstruction, SolMessage, SolPubkey, SolTransaction, Solana,
-		MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 	},
 	FetchAssetParams, ForeignChainAddress,
 };
@@ -473,7 +472,7 @@ pub mod test {
 			sol_tx_core::{address_derivation::derive_deposit_address, sol_test_values::*},
 			SolanaDepositFetchId,
 		},
-		TransferAssetParams,
+		TransferAssetParams, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 	};
 
 	use sol_prim::{consts::SOL_USDC_DECIMAL, PdaAndBump};
