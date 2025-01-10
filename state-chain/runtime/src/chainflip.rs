@@ -947,7 +947,7 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 		// rotation tx can fail to build if all nonce accounts are occupied
 		Some(
 			Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(
-				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(2),
+				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(1),
 			),
 		)
 	}
@@ -957,7 +957,7 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 		// completely block regular transfers.
 		Some(
 			Self::maybe_transfers_limit()?.saturating_sub(
-				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(3),
+				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(2),
 			),
 		)
 	}
