@@ -89,5 +89,11 @@ async function main() {
       });
   });
 
+  // Right now its 32 Vault swaps from Solana (16+16). We need 3 more to make sure
+  // we close and fetch everything. We can remove this once SC is updated.
+  appendSwap("SolUsdc", "ArbEth", testVaultSwap);
+  appendSwap("SolUsdc", "ArbEth", testVaultSwap);
+  appendSwap("SolUsdc", "ArbEth", testVaultSwap);
+
   await Promise.all(allSwaps);
 }

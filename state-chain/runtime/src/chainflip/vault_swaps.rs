@@ -233,13 +233,12 @@ pub fn solana_vault_swap<A>(
 	let api_environment =
 		SolEnvironment::api_environment().map_err(|_| "Failed to load Solana API environment")?;
 
-	let agg_key: SolPubkey = SolEnvironment::current_agg_key()
-		.map_err(|_| "Failed to load Solana Agg key")?
-		.into();
-
-	let on_chain_key: SolPubkey = SolEnvironment::current_on_chain_key()
-		.map(|key| key.into())
-		.unwrap_or_else(|_| agg_key);
+	let swap_endpoint_native_vault =
+		cf_chains::sol::sol_tx_core::address_derivation::derive_swap_endpoint_native_vault_account(
+			api_environment.swap_endpoint_program,
+		)
+		.map_err(|_| "Failed to derive swap_endpoint_native_vault")?
+		.address;
 
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
 		.try_into()
@@ -268,7 +267,7 @@ pub fn solana_vault_swap<A>(
 		instruction: match source_asset {
 			Asset::Sol => SolanaInstructionBuilder::x_swap_native(
 				api_environment,
-				on_chain_key,
+				swap_endpoint_native_vault.into(),
 				destination_asset,
 				destination_address,
 				from,

@@ -944,22 +944,34 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 	fn maybe_transfers_limit() -> Option<usize> {
 		// we need to leave one nonce for the fetch tx and one nonce reserved for rotation tx since
 		// rotation tx can fail to build if all nonce accounts are occupied
-		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(2))
+		Some(
+			Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(
+				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(1),
+			),
+		)
 	}
 
 	fn maybe_ccm_limit() -> Option<usize> {
-		// Subtract extra nonces from the limit to make sure CCMs won't block regular batches.
-		Some(Self::maybe_transfers_limit()?.saturating_sub(4))
+		// Subtract extra nonces from the limit to make sure CCMs won't block regular fetch batches.
+		Some(
+			Self::maybe_transfers_limit()?.saturating_sub(
+				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(3),
+			),
+		)
 	}
 
 	fn maybe_fetches_limit() -> Option<usize> {
-		// only fetch if we have more than once nonce account available since one nonce nonce is
+		// only fetch if we have more than once nonce account available since one nonce is
 		// reserved for rotations. See above
-		Some(if Environment::get_number_of_available_sol_nonce_accounts() > 1 {
-			cf_chains::sol::MAX_SOL_FETCHES_PER_TX
-		} else {
-			0
-		})
+		Some(
+			if Environment::get_number_of_available_sol_nonce_accounts() >
+				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH
+			{
+				cf_chains::sol::MAX_SOL_FETCHES_PER_TX
+			} else {
+				0
+			},
+		)
 	}
 }
 

@@ -186,7 +186,7 @@ impl<
 				// we also wait for certain number of accounts to buffer up or allow a certain
 				// amount of time to pass before initiating account closures.
 				if Hook::get_number_of_available_sol_nonce_accounts() >
-					NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
+					NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH &&
 					(known_accounts.witnessed_open_accounts.len() >=
 						MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES ||
 						(*current_block_number)

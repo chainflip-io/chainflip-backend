@@ -26,10 +26,11 @@ import {
   decodeSolAddress,
   decodeDotAddressForContract,
   newAddress,
+  observeFetch,
 } from './utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/swap_endpoint';
+import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.1-swap-endpoint/swap_endpoint';
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
 
@@ -189,9 +190,7 @@ export async function checkSolEventAccountsClosure(
     getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
   );
 
-  async function checkAccounts(swapEventAccounts: PublicKey[]): Promise<boolean> {
-    const maxRetries = 20; // 120 seconds
-
+  async function checkAccounts(swapEventAccounts: PublicKey[], maxRetries: number): Promise<boolean> {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const swapEndpointDataAccount =
         await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
@@ -212,23 +211,26 @@ export async function checkSolEventAccountsClosure(
             }
           }
         }
+        // Swap Endpoint's native vault should always have been fetched. 
+        await observeFetch("Sol", getContractAddress('Solana', 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT'))
         return true;
       }
     }
     return false;
   }
 
-  let success = await checkAccounts(eventAccounts);
+  // Due to implementation details on the SC the accounts SolUSDC accounts won't be closed
+  // immediately and the timeout won't be executed until one extra Vault swap is witnessed
+  // or until a Sol Vault swap is executed. We optimistically check if accounts have been
+  // closed and if not we trigger a Sol Vault swap.
+  let success = await checkAccounts(eventAccounts, 1);
   if (!success) {
-    // Due to implementation details on the SC the accounts won't necessarily be closed
-    // immediately and the timeout won't be executed until one extra Vault swap is witnessed.
-    // We manually trigger a new one to ensure the timeout is executed.
     await executeSolVaultSwap(
       'Sol',
       'ArbEth',
       await newAddress('ArbEth', randomBytes(32).toString('hex')),
     );
-    success = await checkAccounts(eventAccounts);
+    success = await checkAccounts(eventAccounts, 20); // 120 seconds
   }
 
   if (!success) {

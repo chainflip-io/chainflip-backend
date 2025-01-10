@@ -143,6 +143,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT';
         case 'SWAP_ENDPOINT_DATA_ACCOUNT':
           return '2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9';
+        case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
+            return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -1171,7 +1173,7 @@ export async function startEngines(
 export async function checkAvailabilityAllSolanaNonces() {
   // Check that all Solana nonces are available
   await using chainflip = await getChainflipApi();
-  const maxRetries = 5; // 30 seconds
+  const maxRetries = 7; // 42 seconds
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

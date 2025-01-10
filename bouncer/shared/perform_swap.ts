@@ -23,6 +23,7 @@ import {
   TransactionOrigin,
   defaultAssetAmounts,
   newAddress,
+  getContractAddress,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
@@ -372,6 +373,12 @@ export async function performVaultSwap(
     ]);
     if (log) {
       console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    }
+    if (sourceAsset === 'Sol') {
+      // Native Vault swaps are fetched proactively. SPL-tokens don't need a fetch.
+      const swapEndpointNativeVaultAddress = getContractAddress('Solana', 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT');
+      if (log) console.log(`${tag} Waiting for Swap Endpoint Native Vault Swap Fetch ${swapEndpointNativeVaultAddress}`);
+      await observeFetch(sourceAsset, swapEndpointNativeVaultAddress);
     }
     swapContext?.updateStatus(swapTag, SwapStatus.Success);
     return {

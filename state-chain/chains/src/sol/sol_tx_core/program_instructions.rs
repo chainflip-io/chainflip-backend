@@ -781,7 +781,7 @@ pub mod swap_endpoints {
 				],
 				account_metas: [
 					data_account: { signer: false, writable: false },
-					agg_key: { signer: false, writable: true },
+					native_vault: { signer: false, writable: true },
 					from: { signer: true, writable: true },
 					event_data_account: { signer: true, writable: true },
 					swap_endpoint_data_account: { signer: false, writable: true },
@@ -802,6 +802,17 @@ pub mod swap_endpoints {
 					token_supported_account: { signer: false, writable: false },
 					token_program: { signer: false, writable: false },
 					mint: { signer: false, writable: false },
+					system_program: { signer: false, writable: false },
+				]
+			},
+			fetch_swap_endpoint_native_assets => FetchSwapEndpointNativeAssets {
+				args: [
+					bump: u8,
+				],
+				account_metas: [
+					data_account: { signer: false, writable: false },
+					native_vault: { signer: false, writable: true },
+					agg_key: { signer: true, writable: true },
 					system_program: { signer: false, writable: false },
 				]
 			},
