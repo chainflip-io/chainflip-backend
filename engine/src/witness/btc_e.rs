@@ -102,7 +102,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 		anyhow::Error,
 	> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
-		let BlockHeightTrackingProperties { witness_from_index } = properties;
+		let BlockHeightTrackingProperties { witness_from_index: election_property } = properties;
 
 		let mut headers = VecDeque::new();
 
@@ -130,12 +130,18 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 
 		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
 
-		if best_block_header.block_height <= witness_from_index {
-			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={witness_from_index}", best_block_header.block_height))
-		} else if witness_from_index == 0 {
-			headers.push_back(best_block_header);
-			Ok(InputHeaders(headers))
+
+		if best_block_header.block_height <= election_property {
+			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={election_property}", best_block_header.block_height))
 		} else {
+
+			let witness_from_index = if election_property == 0 {
+				tracing::info!("bht: election_property=0, best_block_height={}, submitting last 6 blocks.", best_block_header.block_height);
+				best_block_header.block_height.saturating_sub(6)
+			} else {
+				election_property
+			};
+
 			// fetch the headers we haven't got yet
 			for index in witness_from_index..best_block_header.block_height {
 				// let header = self.client.block_header(index).await?;
@@ -153,7 +159,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 			// We should have a chain of hashees.
 			if headers.iter().zip(headers.iter().skip(1)).all(|(a, b)| a.hash == b.parent_hash) {
 				tracing::info!(
-					"bht: Submitting vote for (witness_from={witness_from_index})with {} headers",
+					"bht: Submitting vote for (witness_from={election_property})with {} headers",
 					headers.len()
 				);
 				Ok(InputHeaders(headers))

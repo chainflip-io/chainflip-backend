@@ -6,7 +6,7 @@ use super::{
 	state_machine::InputHeaders,
 };
 use crate::electoral_systems::state_machine::consensus::{
-	ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold,
+	ConsensusMechanism, MultipleVotes, StagedConsensus, SupermajorityConsensus, Threshold
 };
 
 pub struct BlockHeightTrackingConsensus<T: BlockHeightTrackingTypes> {
@@ -29,21 +29,16 @@ impl<T: BlockHeightTrackingTypes> ConsensusMechanism for BlockHeightTrackingCons
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-		// let num_authorities = consensus_votes.num_authorities();
 
 		let (threshold, properties) = settings;
 
 		if properties.witness_from_index.is_zero() {
 			// This is the case for finding an appropriate block number to start witnessing from
 
-			let mut consensus: SupermajorityConsensus<_> = SupermajorityConsensus::default();
+			let mut consensus: MultipleVotes<SupermajorityConsensus<_>> = Default::default();
 
 			for vote in &self.votes {
-				// we currently only count votes consisting of a single block height
-				// there has to be a supermajority voting for the exact same header
-				if vote.0.len() == 1 {
-					consensus.insert_vote(vote.0[0].clone())
-				}
+				consensus.insert_vote(vote.0.iter().map(Clone::clone).collect())
 			}
 
 			consensus

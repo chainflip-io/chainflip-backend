@@ -1,4 +1,5 @@
 use sp_std::collections::btree_map::BTreeMap;
+use sp_std::vec::Vec;
 
 /// Abstract consensus mechanism.
 ///
@@ -117,3 +118,42 @@ impl<Stage: ConsensusMechanism, Index: Ord + Copy> ConsensusMechanism
 		None
 	}
 }
+
+
+//------ multiple votes -----------
+/// This is a consensus modifier which allows multiple votes to be cast
+/// 
+pub struct MultipleVotes<Base: ConsensusMechanism> {
+	pub multi_votes: Vec<Vec<Base::Vote>>
+}
+
+impl<Base: ConsensusMechanism> Default for MultipleVotes<Base> {
+	fn default() -> Self {
+		Self { multi_votes: Default::default() }
+	}
+}
+
+impl<Base: ConsensusMechanism> ConsensusMechanism for MultipleVotes<Base> 
+where Base::Vote: Clone
+{
+	type Vote = Vec<Base::Vote>;
+	type Result = Base::Result;
+	type Settings = Base::Settings;
+
+	fn insert_vote(&mut self, votes: Self::Vote) {
+		self.multi_votes.push(votes);
+	}
+
+	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
+		let mut base : Base = Default::default();
+		for votes in &self.multi_votes {
+			for vote in votes {
+				base.insert_vote(vote.clone());
+			}
+		}
+
+		base.check_consensus(settings)
+	}
+}
+
+
