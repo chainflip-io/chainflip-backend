@@ -582,7 +582,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn requests_pulled_in_different_order_works() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
@@ -631,7 +631,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn longer_timeout_ensures_backoff() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const TIMEOUT: Duration = Duration::from_millis(1000);
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(50);
@@ -670,7 +670,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn using_the_request_interface_works() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
@@ -709,7 +709,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn using_the_request_with_limit_interface_works() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
@@ -752,7 +752,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn once_at_max_concurrent_submissions_cannot_submit_more_no_limit_requests() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const TIMEOUT: Duration = Duration::from_millis(200);
 
@@ -832,7 +832,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn using_the_request_with_limit_fails_after_some_attempts() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
@@ -864,7 +864,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn backup_rpc_succeeds_if_primary_not_ready() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
@@ -957,7 +957,7 @@ mod tests {
 
 		// === TEST ===
 
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(300);
 
@@ -1050,7 +1050,7 @@ mod tests {
 	// as broadcasts.
 	#[tokio::test]
 	async fn return_error_when_retry_limit_if_no_client_ready() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
@@ -1084,7 +1084,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "Test runs forever. Useful for manually testing the failing requests will never return (because they are retried until success)."]
 	async fn request_always_fails() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 

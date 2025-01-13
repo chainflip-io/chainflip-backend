@@ -260,7 +260,7 @@ mod tests {
 			.await,
 		);
 
-		task_scope("",|scope| {
+		task_scope(|scope| {
 			async move {
 				let (state_chain_stream, _unfinalised_state_chain_stream, state_chain_client) =
 					state_chain_observer::client::StateChainClient::connect_with_account(

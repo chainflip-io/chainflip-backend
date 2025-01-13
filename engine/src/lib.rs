@@ -118,7 +118,7 @@ async fn run_main(
 ) -> anyhow::Result<()> {
 	let _guard = cf_utilities::logging::init_json_logger(settings.logging.clone()).await;
 
-	task_scope("run_main", |scope| {
+	task_scope(|scope| {
 		async move {
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 

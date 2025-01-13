@@ -196,7 +196,7 @@ mod tests {
 	#[ignore = "requires connection to live network"]
 	#[tokio::test]
 	async fn test_key_manager_witnesser() {
-		task_scope("", |scope| {
+		task_scope(|scope| {
 			async {
 				let retry_client = EvmRetryRpcClient::<EvmRpcClient>::new(
 					scope,

@@ -254,7 +254,7 @@ where
 	StateChainClient:
 		StorageApi + ChainApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
-	task_scope("state_chain_observer",|scope| async {
+	task_scope(|scope| async {
         let account_id = state_chain_client.account_id();
 
         let heartbeat_block_interval = {

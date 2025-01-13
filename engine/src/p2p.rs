@@ -156,7 +156,7 @@ where
 		muxer_future,
 	) = P2PMuxer::start(incoming_message_receiver, outgoing_message_sender);
 
-	let fut = task_scope("p2p_start", move |scope| {
+	let fut = task_scope(move |scope| {
 		async move {
 			scope.spawn("p2p_core", {
 				let state_chain_client = state_chain_client.clone();

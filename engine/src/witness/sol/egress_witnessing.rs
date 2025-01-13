@@ -82,7 +82,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore]
 	async fn test_egress_witnessing() {
-		task_scope::task_scope("",|scope| {
+		task_scope::task_scope(|scope| {
 			async {
 				let client= SolRetryRpcClient::new(
 						scope,

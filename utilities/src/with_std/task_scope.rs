@@ -189,7 +189,6 @@ pub fn task_scope<
 	Error: Debug + Send + 'static,
 	C: for<'b> FnOnce(&'b Scope<'a, Error>) -> futures::future::BoxFuture<'b, Result<T, Error>>,
 >(
-	scope_name: &'static str,
 	top_level_task: C,
 ) -> impl Future<Output = Result<T, Error>> {
 	let location = core::panic::Location::caller();
@@ -197,29 +196,26 @@ pub fn task_scope<
 	async move {
 		tracing::info!(
 			target: "task_scope",
-			"scope \"{}\" opened at '{}'",
-			scope_name,
+			"scope opened at '{}'",
 			location
 		);
 		let guard = scopeguard::guard((), move |_| {
 			if std::thread::panicking() {
 				tracing::error!(
 					target: "task_scope",
-					"scope \"{}\" closed by panic '{}'",
-					scope_name,
+					"scope closed by panic '{}'",
 					location
 				);
 			} else {
 				tracing::error!(
 					target: "task_scope",
-					"scope \"{}\" closed by cancellation '{}'",
-					scope_name,
+					"scope closed by cancellation '{}'",
 					location
 				);
 			}
 		});
 
-		let (scope, mut task_result_stream) = Scope::new(scope_name);
+		let (scope, mut task_result_stream) = Scope::new();
 
 		// try_join ensures if the top level task returns an error we immediately drop
 		// `task_result_stream`, which in turn cancels all the tasks
@@ -248,23 +244,20 @@ pub fn task_scope<
 			async move {
 				tracing::info!(
 					target: "task_scope",
-					"[{}]: parent task started '{}'",
-					scope_name,
+					"parent task started '{}'",
 					location,
 				);
 				let guard = scopeguard::guard((), move |_| {
 					if std::thread::panicking() {
 						tracing::error!(
 							target: "task_scope",
-							"[{}]: parent task ended by panic '{}'",
-							scope_name,
+							"parent task ended by panic '{}'",
 							location
 						);
 					} else {
 						tracing::error!(
 							target: "task_scope",
-							"[{}]: parent task ended by cancellation '{}'",
-							scope_name,
+							"parent task ended by cancellation '{}'",
 							location
 						);
 					}
@@ -274,14 +267,12 @@ pub fn task_scope<
 				match &result {
 					Ok(_) => tracing::info!(
 						target: "task_scope",
-						"[{}]: parent task ended '{}'",
-						scope_name,
+						"parent task ended '{}'",
 						location
 					),
 					Err(error) => tracing::error!(
 						target: "task_scope",
-						"[{}]: parent task ended by error '{error:?}' '{}'",
-						scope_name,
+						"parent task ended by error '{error:?}' '{}'",
 						location
 					),
 				}
@@ -295,8 +286,7 @@ pub fn task_scope<
 			Ok((_, t)) => {
 				tracing::info!(
 					target: "task_scope",
-					"scope \"{}\": closed '{}'",
-					scope_name,
+					"scope closed '{}'",
 					location
 				);
 				Ok(t)
@@ -304,8 +294,7 @@ pub fn task_scope<
 			Err(error) => {
 				tracing::info!(
 					target: "task_scope",
-					"scope \"{}\": closed by error {error:?} '{}'",
-					scope_name,
+					"scope closed by error {error:?} '{}'",
 					location
 				);
 				Err(error)
@@ -320,7 +309,6 @@ type TaskFuture<Error> = Pin<Box<dyn 'static + Future<Output = Result<(), Error>
 struct TaskProperties {
 	weak: bool,
 	location: core::panic::Location<'static>,
-	scope_name: &'static str,
 	task_id: u64,
 	task_name: &'static str,
 }
@@ -333,16 +321,14 @@ impl TaskProperties {
 			Ok(result) => match result {
 				Ok(_) => tracing::info!(
 					target: "task_scope",
-					"[{} / {} #{}] child task ended: '{}'",
-					self.scope_name,
+					"child task {} #{} ended: '{}'",
 					self.task_name,
 					self.task_id,
 					self.location
 				),
 				Err(error) => tracing::error!(
 					target: "task_scope",
-					"[{} / {} #{}] child task ended by error '{error:?}': '{}'",
-					self.scope_name,
+					"child task {} #{} ended by error '{error:?}': '{}'",
 					self.task_name,
 					self.task_id,
 					self.location
@@ -352,8 +338,7 @@ impl TaskProperties {
 				if error.is_panic() {
 					tracing::error!(
 						target: "task_scope",
-						"[{} / {} #{}] child task ended by panic: '{}'",
-						self.scope_name,
+						"child task {} #{} ended by panic: '{}'",
 						self.task_name,
 						self.task_id,
 						self.location
@@ -361,8 +346,7 @@ impl TaskProperties {
 				} else {
 					tracing::error!(
 						target: "task_scope",
-						"[{} / {} #{}] child task ended by cancellation: '{}'",
-						self.scope_name,
+						"child task {} #{} ended by cancellation: '{}'",
 						self.task_name,
 						self.task_id,
 						self.location
@@ -399,7 +383,7 @@ pub struct Scope<'env, Error: Debug + Send + 'static> {
 	/// use futures::FutureExt;
 	///
 	/// let mut a = 1;
-	/// task_scope::<(), (), _>("", |scope| async move {
+	/// task_scope::<(), (), _>(|scope| async move {
 	///     scope.spawn("", async {
 	///         a += 1;
 	///             Ok(())
@@ -412,12 +396,11 @@ pub struct Scope<'env, Error: Debug + Send + 'static> {
 	///             Ok(())
 	/// }.boxed());
 	/// ```
-	scope_name: &'static str,
 	task_counter: std::sync::atomic::AtomicU64,
 	_phantom: std::marker::PhantomData<&'env mut &'env ()>,
 }
 impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
-	fn new(scope_name: &'static str) -> (Self, ScopeResultStream<Error>) {
+	fn new() -> (Self, ScopeResultStream<Error>) {
 		// Must be unbounded so that `try_send` in `spawn` will only fail if the receiver is
 		// dropped, meaning the scope is exiting/aborting, and not when it is full
 		let (sender, receiver) = async_channel::unbounded();
@@ -427,7 +410,6 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 		(
 			Scope {
 				sender,
-				scope_name,
 				task_counter: std::sync::atomic::AtomicU64::new(0),
 				_phantom: Default::default(),
 			},
@@ -463,16 +445,7 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 			let future: Pin<Box<dyn 'env + Future<Output = Result<(), Error>> + Send>> =
 				Box::pin(f.with_current_subscriber());
 			let future: TaskFuture<Error> = unsafe { std::mem::transmute(future) };
-			(
-				TaskProperties {
-					weak,
-					location: *location,
-					scope_name: self.scope_name,
-					task_id,
-					task_name,
-				},
-				future,
-			)
+			(TaskProperties { weak, location: *location, task_id, task_name }, future)
 		});
 	}
 
@@ -595,8 +568,7 @@ impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 				if let Some((properties, future)) = option {
 					tracing::info!(
 						target: "task_scope",
-						"[{} / {} #{}]: child task started '{}'",
-						properties.scope_name,
+						"child task {} #{} started: '{}'",
 						properties.task_name,
 						properties.task_id,
 						properties.location
@@ -678,8 +650,7 @@ impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 				for task in tasks.into_iter() {
 					tracing::error!(
 						target: "task_scope",
-						"[{} / {} #{}]: child task ended by cancellation '{}'",
-						task.properties.scope_name,
+						"child task {} #{} ended by cancellation '{}'",
 						task.properties.task_name,
 						task.properties.task_id,
 						task.properties.location
@@ -752,7 +723,7 @@ mod tests {
 			let task_end_count = std::sync::atomic::AtomicU32::new(0);
 			let task_start_count = std::sync::atomic::AtomicU32::new(0);
 
-			let _result = std::panic::AssertUnwindSafe(task_scope("", |scope| {
+			let _result = std::panic::AssertUnwindSafe(task_scope(|scope| {
 				async {
 					for _i in 0..COUNT {
 						scope.spawn("", async {
@@ -783,7 +754,7 @@ mod tests {
 	#[test]
 	async fn task_handle_returns_value() {
 		const VALUE: u32 = 40;
-		task_scope::<_, Infallible, _>("", |scope| {
+		task_scope::<_, Infallible, _>(|scope| {
 			async {
 				let handle = scope.spawn_with_handle("", async { Ok(VALUE) });
 				assert_eq!(handle.await, VALUE);
@@ -798,7 +769,7 @@ mod tests {
 	#[tokio::main]
 	#[test]
 	async fn dropping_handle_cancels_task() {
-		task_scope::<_, Infallible, _>("", |scope| {
+		task_scope::<_, Infallible, _>(|scope| {
 			async {
 				let _handle = scope.spawn_with_handle::<(), _>("", futures::future::pending());
 
@@ -813,7 +784,7 @@ mod tests {
 	#[tokio::main]
 	#[test]
 	async fn task_handle_does_not_return_error() {
-		task_scope::<(), _, _>("", |scope| {
+		task_scope::<(), _, _>(|scope| {
 			async {
 				let handle = scope.spawn_with_handle::<(), _>("", async { Err(anyhow!("")) });
 				handle.await;
@@ -828,11 +799,11 @@ mod tests {
 	#[tokio::main]
 	#[test]
 	async fn task_scope_ends_all_tasks_when_exiting() {
-		task_scope::<_, Infallible, _>("", |_scope| {
+		task_scope::<_, Infallible, _>(|_scope| {
 			async {
 				let mut receivers = vec![];
 
-				task_scope("", |scope| {
+				task_scope(|scope| {
 					async {
 						receivers = (0..10)
 							.map(|_i| {
@@ -873,10 +844,10 @@ mod tests {
 	async fn example() {
 		let mut a = 0;
 
-		task_scope::<_, Infallible, _>("", |scope| {
+		task_scope::<_, Infallible, _>(|scope| {
 			async {
 				scope.spawn("", async {
-					task_scope::<_, Infallible, _>("", |scope| {
+					task_scope::<_, Infallible, _>(|scope| {
 						async {
 							scope.spawn("", async {
 								a += 10;
@@ -889,7 +860,7 @@ mod tests {
 					.await
 					.unwrap();
 
-					task_scope::<_, Infallible, _>("", |scope| {
+					task_scope::<_, Infallible, _>(|scope| {
 						async {
 							scope.spawn("", async {
 								a += 10;
@@ -918,7 +889,7 @@ mod tests {
 	#[tokio::main]
 	#[test]
 	async fn scope_doesnt_wait_for_weak_tasks() {
-		task_scope::<_, Infallible, _>("", |scope| {
+		task_scope::<_, Infallible, _>(|scope| {
 			async {
 				scope.spawn_weak("", futures::future::pending());
 

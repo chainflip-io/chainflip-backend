@@ -390,7 +390,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore]
 	async fn test_get_swap_endpoint_data() {
-		task_scope::task_scope("", |scope| {
+		task_scope::task_scope(|scope| {
 			async {
 				let client = SolRetryRpcClient::new(
 					scope,
@@ -453,7 +453,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore]
 	async fn test_get_changed_program_swap_accounts() {
-		task_scope::task_scope("", |scope| {
+		task_scope::task_scope(|scope| {
 			async {
 				let client = SolRetryRpcClient::new(
 					scope,
@@ -538,7 +538,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore]
 	async fn test_get_program_swap_event_accounts_data() {
-		task_scope::task_scope("", |scope| {
+		task_scope::task_scope(|scope| {
 			async {
 				let client = SolRetryRpcClient::new(
 					scope,

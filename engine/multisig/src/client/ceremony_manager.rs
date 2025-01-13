@@ -431,7 +431,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 		mut ceremony_request_receiver: UnboundedReceiver<CeremonyRequest<Chain::CryptoScheme>>,
 		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
 	) -> Result<()> {
-		task_scope("ceremony_manager" , |scope| {
+		task_scope(|scope| {
 			async {
 				loop {
 					tokio::select! {
