@@ -88,8 +88,8 @@ pub fn not_enough_withheld_fees() {
 
 		System::assert_has_event(RuntimeEvent::AssetBalances(crate::Event::VaultDeficitDetected {
 			chain: ForeignChain::Bitcoin,
-			amount_owed: BTC_OWED,
-			available: BTC_AVAILABLE,
+			amount_owed: BTC_OWED - BTC_AVAILABLE,
+			available: 0,
 		}));
 		System::assert_has_event(RuntimeEvent::AssetBalances(crate::Event::VaultDeficitDetected {
 			chain: ForeignChain::Ethereum,
