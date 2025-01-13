@@ -14,6 +14,12 @@ pub mod old {
 
 	use super::*;
 
+	const MAX_CCM_MSG_LENGTH: u32 = 10_000;
+	const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
+	
+	type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
+	type CcmCfParameters = BoundedVec<u8, ConstU32<MAX_CCM_CF_PARAM_LENGTH>>;
+
 	#[derive(PartialEq, Eq, Encode, Decode)]
 	pub struct CrossChainMessage<C: Chain> {
 		pub egress_id: EgressId,
@@ -23,7 +29,7 @@ pub mod old {
 		pub message: CcmMessage,
 		pub source_chain: ForeignChain,
 		pub source_address: Option<ForeignChainAddress>,
-		pub ccm_additional_data: CcmAdditionalData,
+		pub cf_parameters: CcmCfParameters,
 		pub gas_budget: C::ChainAmount,
 	}
 
@@ -62,10 +68,10 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ScheduledEgressCcmM
 							asset: old_cross_chain_message.asset,
 							amount: old_cross_chain_message.amount,
 							destination_address: old_cross_chain_message.destination_address,
-							message: old_cross_chain_message.message,
+							message: CcmMessage::try_from(old_cross_chain_message.message.into_inner()).unwrap_or_default(),
 							source_chain: old_cross_chain_message.source_chain,
 							source_address: old_cross_chain_message.source_address,
-							ccm_additional_data: old_cross_chain_message.ccm_additional_data,
+							ccm_additional_data: CcmAdditionalData::try_from(old_cross_chain_message.cf_parameters).unwrap_or_default(),
 							// Using reasonable values for gas budget egress. We can't just
 							// use the ingress gas budget because it's has a different meaning.
 							gas_budget: match destination_chain {

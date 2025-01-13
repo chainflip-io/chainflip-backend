@@ -149,6 +149,8 @@ pub enum SolanaTransactionType {
 		fallback: TransferAssetParams<Solana>,
 	},
 	CloseEventAccounts,
+	SetProgramSwapParameters,
+	SetTokenSwapParameters,
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
@@ -437,6 +439,71 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		Ok(Self {
 			call_type: SolanaTransactionType::CloseEventAccounts,
+			transaction,
+			signer: None,
+			_phantom: Default::default(),
+		})
+	}
+
+	pub fn set_program_swaps_parameters(
+		min_native_swap_amount: u64,
+		max_dst_address_len: u16,
+		max_ccm_message_len: u32,
+		max_cf_parameters_len: u32,
+		max_event_accounts: u32,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		// Lookup environment variables, such as aggkey and durable nonce.
+		let agg_key = Environment::current_agg_key()?;
+		let sol_api_environment = Environment::api_environment()?;
+		let compute_price = Environment::compute_price()?;
+		let durable_nonce = Environment::nonce_account()?;
+
+		// Build the transaction
+		let transaction = SolanaTransactionBuilder::set_program_swaps_parameters(
+			min_native_swap_amount,
+			max_dst_address_len,
+			max_ccm_message_len,
+			max_cf_parameters_len,
+			max_event_accounts,
+			sol_api_environment.vault_program,
+			sol_api_environment.vault_program_data_account,
+			// Assumed that the agg_key is the gov_key in the on-chain programs
+			agg_key,
+			durable_nonce,
+			compute_price,
+		)?;
+
+		Ok(Self {
+			call_type: SolanaTransactionType::SetProgramSwapParameters,
+			transaction,
+			signer: None,
+			_phantom: Default::default(),
+		})
+	}
+	pub fn set_token_swap_parameters(
+		min_swap_amount: u64,
+		token_mint_pubkey: SolAddress,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		// Lookup environment variables, such as aggkey and durable nonce.
+		let agg_key = Environment::current_agg_key()?;
+		let sol_api_environment = Environment::api_environment()?;
+		let compute_price = Environment::compute_price()?;
+		let durable_nonce = Environment::nonce_account()?;
+
+		// Build the transaction
+		let transaction = SolanaTransactionBuilder::enable_token_support(
+			min_swap_amount,
+			sol_api_environment.vault_program,
+			sol_api_environment.vault_program_data_account,
+			token_mint_pubkey,
+			// Assumed that the agg_key is the gov_key in the on-chain programs
+			agg_key,
+			durable_nonce,
+			compute_price,
+		)?;
+
+		Ok(Self {
+			call_type: SolanaTransactionType::SetTokenSwapParameters,
 			transaction,
 			signer: None,
 			_phantom: Default::default(),
