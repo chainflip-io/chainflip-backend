@@ -11,8 +11,8 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
 		block_height_tracking::{
-			consensus::BlockHeightTrackingConsensus, BHWState, BlockHeightTrackingProperties,
-			BlockHeightTrackingSM, BlockHeightTrackingTypes, ChainProgress, InputHeaders,
+			consensus::BlockHeightTrackingConsensus, BlockHeightTrackingProperties,
+			state_machine::{BlockHeightTrackingSM, BHWState, InputHeaders}, BlockHeightTrackingTypes, ChainProgress,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,

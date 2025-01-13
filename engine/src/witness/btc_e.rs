@@ -10,7 +10,7 @@ use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
-		block_height_tracking::{primitives::Header, BlockHeightTrackingProperties, InputHeaders},
+		block_height_tracking::{primitives::Header, BlockHeightTrackingProperties, state_machine::InputHeaders},
 		state_machine::core::ConstantIndex,
 	},
 	vote_storage::VoteStorage,

@@ -88,11 +88,11 @@ impl<
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
 		log::info!("BW: input {i:?}");
 		match i {
-			SMInput::Context(ChainProgress::Reorg(range) | ChainProgress::Continuous(range)) => {
+			SMInput::Context(ChainProgress::Range(range)) => {
 				s.elections.schedule_range(range);
 			},
 
-			SMInput::Context(ChainProgress::WaitingForFirstConsensus | ChainProgress::None(_)) => {
+			SMInput::Context(ChainProgress::None) => {
 			},
 
 			SMInput::Vote(blockdata) => {
@@ -177,7 +177,7 @@ impl<
 				)
 			},
 
-			Context(Reorg(range) | Continuous(range)) => {
+			Context(Range(range)) => {
 				if !safemode_enabled {
 					if *range.start() < before.elections.next_election {
 						assert!(
@@ -227,7 +227,7 @@ impl<
 				}
 			},
 
-			Context(WaitingForFirstConsensus | None(_)) => (),
+			Context(None) => (),
 		}
 	}
 }
@@ -283,12 +283,9 @@ mod tests {
 			prop_oneof![
 				Just(SMInput::Vote(MultiIndexAndValue(index, ()))),
 				prop_oneof![
-					Just(ChainProgress::WaitingForFirstConsensus),
-					any::<u8>().prop_map(ChainProgress::None),
+					Just(ChainProgress::None),
 					any::<(u8, u8)>()
-						.prop_map(|(a, b)| ChainProgress::Continuous(a..=a.saturating_add(b))),
-					any::<(u8, u8)>()
-						.prop_map(|(a, b)| ChainProgress::Reorg(a..=a.saturating_add(b)))
+						.prop_map(|(a, b)| ChainProgress::Range(a..=a.saturating_add(b)))
 				]
 				.prop_map(SMInput::Context)
 			]
@@ -299,7 +296,7 @@ mod tests {
 				.prop_flat_map(move |ix| generate_input(index.clone().into_iter().nth(ix).unwrap()))
 				.boxed()
 		} else {
-			Just(SMInput::Context(ChainProgress::WaitingForFirstConsensus)).boxed()
+			Just(SMInput::Context(ChainProgress::None)).boxed()
 		}
 	}
 

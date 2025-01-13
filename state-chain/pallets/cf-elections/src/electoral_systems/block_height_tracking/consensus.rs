@@ -3,7 +3,7 @@ use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 use super::{
 	primitives::validate_vote_and_height, BlockHeightTrackingProperties, BlockHeightTrackingTypes,
-	InputHeaders,
+	state_machine::InputHeaders,
 };
 use crate::electoral_systems::state_machine::consensus::{
 	ConsensusMechanism, StagedConsensus, SupermajorityConsensus, Threshold,
