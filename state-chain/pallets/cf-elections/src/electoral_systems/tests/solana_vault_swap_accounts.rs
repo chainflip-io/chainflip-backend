@@ -250,8 +250,7 @@ fn on_finalize_close_accounts_error() {
 		.expect_election_properties_only_election(SolanaVaultSwapsKnownAccounts {
 			// if close_accounts errors, the accounts are pushed back into open accounts at the end
 			// of the vector.
-			witnessed_open_accounts: (max_batch_size..TEST_NUMBER_OF_ACCOUNTS)
-				.chain(0u64..max_batch_size)
+			witnessed_open_accounts: (0u64..TEST_NUMBER_OF_ACCOUNTS)
 				.zip([false; TEST_NUMBER_OF_ACCOUNTS as usize])
 				.collect::<Vec<_>>(),
 			closure_initiated_accounts: BTreeSet::new(),

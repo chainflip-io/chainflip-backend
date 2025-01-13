@@ -124,7 +124,7 @@ impl<
 
 	type ElectoralUnsynchronisedSettings = ();
 	type ElectoralSettings = Settings;
-	type ElectionIdentifierExtra = ();
+	type ElectionIdentifierExtra = u64;
 	type ElectionProperties = SolanaVaultSwapsKnownAccounts<Account>;
 	type ElectionState = ();
 	type Vote = vote_storage::bitmap::Bitmap<SolanaVaultSwapsVote<Account, SwapDetails>>;
@@ -170,7 +170,8 @@ impl<
 			.at_most_one()
 			.map_err(|_| CorruptStorageError::new())?
 		{
-			let election_access = ElectoralAccess::election_mut(election_identifier);
+			let mut election_access = ElectoralAccess::election_mut(election_identifier);
+
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				let mut known_accounts = election_access.properties()?;
 				election_access.delete();
@@ -187,60 +188,67 @@ impl<
 				consensus.confirm_closed_accounts.into_iter().for_each(|acc| {
 					known_accounts.closure_initiated_accounts.remove(&acc);
 				});
+				election_access =
+					ElectoralAccess::new_election(Default::default(), known_accounts, ())?;
+			}
 
-				let no_of_available_nonces = Hook::get_number_of_available_sol_nonce_accounts();
-				// We need to have at least two nonces available since we need to have one nonce
-				// reserved for solana rotation
-				if no_of_available_nonces > 1usize {
-					known_accounts.witnessed_open_accounts.sort_by_key(|a| Reverse(a.1));
-					// Since closing accounts is a low priority action, we wait for certain number
-					// of sol nonces to be free for us to initiate account closures which
-					// indicates that there is not enough Chainflip activity on the sol side
-					// and so we can process account closures.
-					//
-					// we also wait for certain number of accounts to buffer up or allow a certain
-					// amount of time to pass before initiating account closures.
-					if known_accounts.witnessed_open_accounts[0].1 ||
-						(no_of_available_nonces >
-							NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
-							(known_accounts.witnessed_open_accounts.len() >=
-								MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES ||
-								(*current_block_number)
-									// current block number is always greater than when apicall was
-									// last created
-									.saturating_sub(ElectoralAccess::unsynchronised_state()?)
-									.into() >=
-									MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS))
-					{
-						let (accounts_to_close, sol_or_nots): (Vec<_>, Vec<_>) = known_accounts
-							.witnessed_open_accounts
-							.drain(
-								..sp_std::cmp::min(
-									known_accounts.witnessed_open_accounts.len(),
-									MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
-								),
-							)
-							.unzip();
+			let no_of_available_nonces = Hook::get_number_of_available_sol_nonce_accounts();
+			let mut known_accounts = election_access.properties()?;
+			// We need to have at least two nonces available since we need to have one nonce
+			// reserved for solana rotation
+			if no_of_available_nonces > 1usize && !known_accounts.witnessed_open_accounts.is_empty()
+			{
+				known_accounts.witnessed_open_accounts.sort_by_key(|a| Reverse(a.1));
+				// Since closing accounts is a low priority action, we wait for certain number
+				// of sol nonces to be free for us to initiate account closures which
+				// indicates that there is not enough Chainflip activity on the sol side
+				// and so we can process account closures.
+				//
+				// we also wait for certain number of accounts to buffer up or allow a certain
+				// amount of time to pass before initiating account closures.
+				if known_accounts.witnessed_open_accounts[0].1 ||
+					(no_of_available_nonces >
+						NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
+						(known_accounts.witnessed_open_accounts.len() >=
+							MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES ||
+							(*current_block_number)
+								// current block number is always greater than when apicall was
+								// last created
+								.saturating_sub(ElectoralAccess::unsynchronised_state()?)
+								.into() >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS))
+				{
+					let (accounts_to_close, _): (Vec<_>, Vec<_>) = known_accounts
+						.witnessed_open_accounts
+						.drain(
+							..sp_std::cmp::min(
+								known_accounts.witnessed_open_accounts.len(),
+								MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
+							),
+						)
+						.unzip();
 
-						match Hook::maybe_fetch_and_close_accounts(accounts_to_close.clone()) {
-							Ok(()) => {
-								known_accounts.closure_initiated_accounts.extend(accounts_to_close);
-								ElectoralAccess::set_unsynchronised_state(*current_block_number)?;
-							},
-							Err(e) => {
-								log::error!("Failed to initiate account closure: {:?}", e);
-								known_accounts
-									.witnessed_open_accounts
-									.extend(accounts_to_close.into_iter().zip(sol_or_nots));
-							},
-						}
+					match Hook::maybe_fetch_and_close_accounts(accounts_to_close.clone()) {
+						Ok(()) => {
+							known_accounts.closure_initiated_accounts.extend(accounts_to_close);
+							election_access.refresh(
+								election_access
+									.election_identifier()
+									.extra()
+									.checked_add(1)
+									.ok_or_else(CorruptStorageError::new)?,
+								known_accounts,
+							)?;
+							ElectoralAccess::set_unsynchronised_state(*current_block_number)?;
+						},
+						Err(e) => {
+							log::error!("Failed to initiate account closure: {:?}", e);
+						},
 					}
 				}
-				ElectoralAccess::new_election((), known_accounts, ())?;
 			}
 		} else {
 			ElectoralAccess::new_election(
-				(),
+				Default::default(),
 				SolanaVaultSwapsKnownAccounts {
 					witnessed_open_accounts: Vec::new(),
 					closure_initiated_accounts: BTreeSet::new(),
