@@ -33,7 +33,7 @@ use pallet_cf_elections::{
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
-		solana_vault_swap_accounts::SolanaVaultSwapAccountsHook,
+		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
@@ -631,5 +631,11 @@ impl BenchmarkValue for SolanaVaultSwapsSettings {
 			swap_endpoint_data_account_address: BenchmarkValue::benchmark_value(),
 			usdc_token_mint_pubkey: BenchmarkValue::benchmark_value(),
 		}
+	}
+}
+
+impl FromSolOrNot for SolanaVaultSwapDetails {
+	fn sol_or_not(s: &SolanaVaultSwapDetails) -> bool {
+		s.from == SolAsset::Sol
 	}
 }

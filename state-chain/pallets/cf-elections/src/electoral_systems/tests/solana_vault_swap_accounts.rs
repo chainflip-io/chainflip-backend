@@ -9,8 +9,8 @@ use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::{ConsensusStatus, ConsensusVote, ConsensusVotes},
 	electoral_systems::solana_vault_swap_accounts::{
-		SolanaVaultSwapAccounts, SolanaVaultSwapAccountsHook, SolanaVaultSwapsKnownAccounts,
-		SolanaVaultSwapsVote,
+		FromSolOrNot, SolanaVaultSwapAccounts, SolanaVaultSwapAccountsHook,
+		SolanaVaultSwapsKnownAccounts, SolanaVaultSwapsVote,
 	},
 };
 
@@ -18,6 +18,12 @@ pub type Account = u64;
 pub type SwapDetails = ();
 pub type BlockNumber = u32;
 pub type ValidatorId = ();
+
+impl FromSolOrNot for () {
+	fn sol_or_not(_s: &Self) -> bool {
+		false
+	}
+}
 
 thread_local! {
 	pub static CLOSE_ACCOUNTS_CALLED: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
@@ -246,6 +252,7 @@ fn on_finalize_close_accounts_error() {
 			// of the vector.
 			witnessed_open_accounts: (max_batch_size..TEST_NUMBER_OF_ACCOUNTS)
 				.chain(0u64..max_batch_size)
+				.zip([false; TEST_NUMBER_OF_ACCOUNTS as usize])
 				.collect::<Vec<_>>(),
 			closure_initiated_accounts: BTreeSet::new(),
 		});
@@ -297,7 +304,9 @@ fn on_finalize_nonces_below_threshold() {
 			],
 		)
 		.expect_election_properties_only_election(SolanaVaultSwapsKnownAccounts {
-			witnessed_open_accounts: (0..TEST_NUMBER_OF_ACCOUNTS).collect::<Vec<_>>(),
+			witnessed_open_accounts: (0..TEST_NUMBER_OF_ACCOUNTS)
+				.zip([false; TEST_NUMBER_OF_ACCOUNTS as usize])
+				.collect::<Vec<_>>(),
 			closure_initiated_accounts: BTreeSet::new(),
 		});
 }
