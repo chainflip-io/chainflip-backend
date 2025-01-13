@@ -6,17 +6,18 @@ import {
   amountToFineAmount,
   Asset,
   assetDecimals,
+  brokerMutex,
   chainFromAsset,
   createStateChainKeypair,
   decodeDotAddressForContract,
   fineAmountToAmount,
+  handleSubstrateError,
   newAddress,
   observeBalanceIncrease,
   stateChainAssetFromAsset,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
-import { brokerApiRpc } from '../shared/json_rpc';
 import { getEarnedBrokerFees } from './broker_fee_collection';
 import { fundFlip } from '../shared/fund_flip';
 
@@ -159,9 +160,6 @@ async function testVaultSwap(
 }
 
 export async function openPrivateBtcChannel(brokerUri: string) {
-  // TODO: Use chainflip SDK instead so we can support any broker uri
-  assert.strictEqual(brokerUri, '//BROKER_1', 'Support for other brokers is not implemented');
-
   // Check if the channel is already open
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
@@ -180,29 +178,29 @@ export async function openPrivateBtcChannel(brokerUri: string) {
     await fundFlip(broker.address, fundAmount);
 
     // Open the private channel
-    try {
-      await brokerApiRpc('broker_open_private_btc_channel', []);
-      console.log('Private Btc channel opened');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      // Ignore the error if the channel already exists
-      if (error.message.includes('PrivateChannelExistsForBroker')) {
-        console.log('Tried to open private Btc channel but one already exists', error);
-      } else {
-        // Any other error is unexpected, ie InsufficientFunds
-        console.log(`Failed to open private Btc channel for ${brokerUri}`);
-        throw error;
-      }
-    }
+    await brokerMutex.runExclusive(async () => {
+      await chainflip.tx.swapping
+        .openPrivateBtcChannel()
+        .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+    });
+    console.log('Private Btc channel opened');
   }
 }
 
-async function registerAffiliate(brokerUri: string, affiliateUri: string) {
-  // TODO: Use chainflip SDK instead so we can support any broker uri
-  assert.strictEqual(brokerUri, '//BROKER_1', 'Support for other brokers is not implemented');
-
+async function registerAffiliate(
+  brokerUri: string,
+  affiliateUri: string,
+  affiliateShortId: number,
+) {
+  const chainflip = await getChainflipApi();
+  const broker = createStateChainKeypair(brokerUri);
   const affiliate = createStateChainKeypair(affiliateUri);
-  return brokerApiRpc('broker_register_affiliate', [affiliate.address]);
+
+  await brokerMutex.runExclusive(async () => {
+    await chainflip.tx.swapping
+      .registerAffiliate(affiliate.address, affiliateShortId)
+      .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+  });
 }
 
 async function main() {
@@ -212,6 +210,6 @@ async function main() {
   const affiliateUri = '//BROKER_2';
 
   await openPrivateBtcChannel(brokerUri);
-  await registerAffiliate(brokerUri, affiliateUri);
+  await registerAffiliate(brokerUri, affiliateUri, 0);
   await testVaultSwap(btcDepositAmount, brokerUri, 'Flip', affiliateUri);
 }
