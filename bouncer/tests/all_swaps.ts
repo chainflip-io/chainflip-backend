@@ -14,7 +14,7 @@ import {
   VaultSwapParams,
   vaultSwapSupportedChains,
 } from '../shared/utils';
-import { openPrivateBtcChannel } from './btc_vault_swap';
+import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
 
 // This timeout needs to be increased when running 3-nodes
 /* eslint-disable @typescript-eslint/no-use-before-define */
