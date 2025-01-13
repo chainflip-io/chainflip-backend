@@ -9,7 +9,7 @@ use super::{super::state_machine::{
 	state_machine::StateMachine,
 	state_machine_es::SMInput,
 }, BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress};
-use crate::{electoral_systems::state_machine::core::SaturatingStep, CorruptStorageError};
+use crate::{electoral_systems::state_machine::core::{Hook, SaturatingStep}, CorruptStorageError};
 use cf_chains::witness_period::{BlockWitnessRange, BlockZero};
 use codec::{Decode, Encode};
 use frame_support::{
@@ -94,6 +94,25 @@ impl<T: BlockHeightTrackingTypes> Validate for BHWState<T> {
 }
 
 
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd, Default
+)]
+pub struct BHWStateWrapper<T: BlockHeightTrackingTypes> {
+    pub state: BHWState<T>,
+    pub block_height_update: T::BlockHeightChangeHook
+}
+
+impl<T: BlockHeightTrackingTypes> Validate for BHWStateWrapper<T> {
+	type Error = &'static str;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+        self.state.is_valid()
+    }
+}
+
+
+
+
 //------------------------ state machine ---------------------------
 
 
@@ -102,13 +121,13 @@ pub struct BlockHeightTrackingSM<T: BlockHeightTrackingTypes> {
 }
 
 impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
-	type State = BHWState<T>;
+	type State = BHWStateWrapper<T>;
 	type Input = SMInput<InputHeaders<T>, ()>;
 	type Settings = ();
 	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
 
 	fn input_index(s: &Self::State) -> <Self::Input as Indexed>::Index {
-		let witness_from_index = match s {
+		let witness_from_index = match s.state {
 			BHWState::Starting => T::ChainBlockNumber::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from.clone(),
 		};
@@ -127,7 +146,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 
 		use BHWState::*;
 
-		match (before, after) {
+		match (&before.state, &after.state) {
 			(Starting, Starting) => assert!(
 				*input == SMInput::Context(()),
 				"BHW should remain in Starting state only if it doesn't get a vote as input."
@@ -172,11 +191,11 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 			SMInput::Context(_) => return Ok(ChainProgress::None)
 		};
 
-		match s {
+		match &mut s.state {
 			BHWState::Starting => {
 				let first = new_headers.0.front().unwrap().block_height;
 				let last = new_headers.0.back().unwrap().block_height;
-				*s = BHWState::Running {
+				s.state = BHWState::Running {
 					headers: new_headers.0.clone(),
 					witness_from: last.saturating_forward(1),
 				};
@@ -198,6 +217,9 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 
 						*headers = chainblocks.headers;
 						*witness_from = headers.back().unwrap().block_height.saturating_forward(1);
+
+                        let highest_seen = headers.back().unwrap().block_height;
+                        s.block_height_update.run(highest_seen);
 
 						// if we merge after a reorg, and the blocks we got are the same
 						// as the ones we previously had, then `into_chain_progress` might
@@ -231,7 +253,7 @@ mod tests {
 		prop_oneof,
 	};
 
-	use crate::electoral_systems::state_machine::core::SaturatingStep;
+	use crate::electoral_systems::{block_height_tracking::state_machine::BHWStateWrapper, state_machine::core::{hook_test_utils::ConstantHook, SaturatingStep}};
 
 	use super::super::super::state_machine::{state_machine::StateMachine, state_machine_es::SMInput};
 	use super::super::{
@@ -261,7 +283,7 @@ mod tests {
 		})
 	}
 
-	pub fn generate_state<T: BlockHeightTrackingTypes>() -> impl Strategy<Value = BHWState<T>>
+	pub fn generate_state<T: BlockHeightTrackingTypes>() -> impl Strategy<Value = BHWStateWrapper<T>>
 	where
 		T::ChainBlockHash: Arbitrary,
 		T::ChainBlockNumber: Arbitrary,
@@ -276,7 +298,10 @@ mod tests {
 						} else {
 							headers.0.back().unwrap().block_height.clone().saturating_forward(1)
 						};
-						BHWState::Running { headers: headers.0, witness_from }
+                        BHWStateWrapper {
+                            state: BHWState::Running { headers: headers.0, witness_from },
+                            block_height_update: ConstantHook::new(())
+                        }
 					})
 				}),
 		]
@@ -288,6 +313,7 @@ mod tests {
 		const SAFETY_MARGIN: usize = 6;
 		type ChainBlockNumber = u32;
 		type ChainBlockHash = bool;
+        type BlockHeightChangeHook = ConstantHook<u32,()>;
 	}
 
 	#[test]

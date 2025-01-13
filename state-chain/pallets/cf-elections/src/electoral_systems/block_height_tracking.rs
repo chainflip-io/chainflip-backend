@@ -4,7 +4,7 @@ use core::{
 };
 
 use super::state_machine::{
-	core::{Indexed, Validate},
+	core::{Hook, Indexed, Validate},
 	state_machine::StateMachine,
 	state_machine_es::SMInput,
 };
@@ -47,6 +47,8 @@ pub trait BlockHeightTrackingTypes: Ord + PartialEq + Clone + sp_std::fmt::Debug
 		+ Clone
 		+ sp_std::fmt::Debug
 		+ 'static;
+
+	type BlockHeightChangeHook: Hook<Self::ChainBlockNumber, ()>;
 }
 
 #[cfg_attr(test, derive(Arbitrary))]

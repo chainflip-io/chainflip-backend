@@ -1,5 +1,5 @@
-use crate::{BitcoinIngressEgress, Runtime};
-use cf_chains::{btc, Bitcoin};
+use crate::{BitcoinChainTracking, BitcoinIngressEgress, Runtime};
+use cf_chains::{btc::{self, BitcoinFeeInfo, BitcoinTrackedData}, Bitcoin};
 use cf_traits::Chainflip;
 use serde::{Deserialize, Serialize};
 use sp_core::Get;
@@ -11,8 +11,7 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
 		block_height_tracking::{
-			consensus::BlockHeightTrackingConsensus, BlockHeightTrackingProperties,
-			state_machine::{BlockHeightTrackingSM, BHWState, InputHeaders}, BlockHeightTrackingTypes, ChainProgress,
+			consensus::BlockHeightTrackingConsensus, state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders}, BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -85,12 +84,13 @@ impl BlockHeightTrackingTypes for BitcoinBlockHeightTrackingTypes {
 	const SAFETY_MARGIN: usize = 6;
 	type ChainBlockNumber = btc::BlockNumber;
 	type ChainBlockHash = btc::Hash;
+	type BlockHeightChangeHook = BitcoinBlockHeightChangeHook;
 }
 
 /// Associating the ES related types to the struct
 impl ESInterface for BitcoinBlockHeightTrackingTypes {
 	type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-	type ElectoralUnsynchronisedState = BHWState<BitcoinBlockHeightTrackingTypes>;
+	type ElectoralUnsynchronisedState = BHWStateWrapper<BitcoinBlockHeightTrackingTypes>;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
 	type ElectoralUnsynchronisedSettings = ();
@@ -118,6 +118,37 @@ impl StateMachineES for BitcoinBlockHeightTrackingTypes {
 	// the actual state machine and consensus mechanisms of this ES
 	type ConsensusMechanism = BlockHeightTrackingConsensus<BitcoinBlockHeightTrackingTypes>;
 	type StateMachine = BlockHeightTrackingSM<BitcoinBlockHeightTrackingTypes>;
+}
+
+/// Hooks
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	Default,
+)]
+pub struct BitcoinBlockHeightChangeHook {}
+
+impl Hook<btc::BlockNumber, ()> for BitcoinBlockHeightChangeHook {
+	fn run(&self, block_height: btc::BlockNumber) {
+		if let Err(err) = BitcoinChainTracking::inner_update_chain_state(cf_chains::ChainState {
+			block_height,
+			tracked_data: BitcoinTrackedData {
+				btc_fee_info: BitcoinFeeInfo::new(0)
+			},
+		}) {
+			log::error!("Failed to update chain state: {:?}", err);
+		}
+	}
 }
 
 /// Generating the state machine-based electoral system
