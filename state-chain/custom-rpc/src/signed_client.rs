@@ -12,9 +12,10 @@ use sc_client_api::{
 use sc_transaction_pool::FullPool;
 use sc_transaction_pool_api::{TransactionPool, TransactionStatus};
 use sp_api::{CallApiAt, Core};
+use sp_block_builder::BlockBuilder;
 use sp_core::crypto::AccountId32;
 use sp_runtime::{
-	traits::{Block as BlockT, Hash as HashT, Header},
+	traits::{Block as BlockT, Hash as HashT},
 	transaction_validity::TransactionSource,
 };
 use state_chain_runtime::{
@@ -55,6 +56,7 @@ where
 		+ sp_runtime::traits::BlockIdTo<B>,
 	C::Api: CustomRuntimeApi<B>
 		+ Core<B>
+		+ sp_block_builder::BlockBuilder<B>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
@@ -84,6 +86,7 @@ where
 		+ sp_runtime::traits::BlockIdTo<B>,
 	C::Api: CustomRuntimeApi<B>
 		+ Core<B>
+		+ sp_block_builder::BlockBuilder<B>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
@@ -105,8 +108,29 @@ where
 		}
 	}
 
+	/// Returns the AccountId of the current
 	pub fn account_id(&self) -> AccountId32 {
 		self.pair_signer.account_id.clone()
+	}
+
+	async fn next_nonce(&self, at_block: Hash) -> RpcResult<Nonce> {
+		let mut current_nonce = self.nonce.write().await;
+
+		match *current_nonce {
+			Some(old_nonce) => {
+				*current_nonce = Some(old_nonce + 1);
+				Ok(old_nonce + 1)
+			},
+			None => {
+				// If nonce is not set, reset it from account
+				let account_nonce = self
+					.client
+					.runtime_api()
+					.account_nonce(at_block, self.pair_signer.account_id.clone())?;
+				*current_nonce = Some(account_nonce);
+				Ok(account_nonce)
+			},
+		}
 	}
 
 	// async fn clear_nonce(&self) {
@@ -114,61 +138,51 @@ where
 	// 	*current_nonce = None;
 	// }
 
-	async fn set_nonce(&self, new_nonce: Nonce) {
-		let mut current_nonce = self.nonce.write().await;
-		*current_nonce = Some(new_nonce);
-	}
+	// async fn set_nonce(&self, new_nonce: Nonce) {
+	// 	let mut current_nonce = self.nonce.write().await;
+	// 	*current_nonce = Some(new_nonce);
+	// }
 
-	async fn current_nonce(&self, at_block: Hash) -> RpcResult<Nonce> {
-		let current_nonce = self.nonce.read().await;
+	// async fn current_nonce(&self, at_block: Hash) -> RpcResult<Nonce> {
+	// 	let current_nonce = self.nonce.read().await;
+	//
+	// 	match *current_nonce {
+	// 		Some(old_nonce) => Ok(old_nonce),
+	// 		None => {
+	// 			// If nonce is not set, reset it from account
+	// 			let account_nonce = self
+	// 				.client
+	// 				.runtime_api()
+	// 				.account_nonce(at_block, self.pair_signer.account_id.clone())?;
+	// 			Ok(account_nonce)
+	// 		},
+	// 	}
+	// }
 
-		match *current_nonce {
-			Some(old_nonce) => Ok(old_nonce),
-			None => {
-				// If nonce is not set, reset it from account
-				let account_nonce = self
-					.client
-					.runtime_api()
-					.account_nonce(at_block, self.pair_signer.account_id.clone())?;
-				Ok(account_nonce)
-			},
-		}
-	}
+	fn create_signed_extrinsic(&self, call: RuntimeCall, nonce: Nonce) -> RpcResult<B::Extrinsic> {
+		let finalized_block_hash = self.client.info().finalized_hash;
+		let finalized_block_number = self.client.info().finalized_number;
+		let genesis_hash = self.client.info().genesis_hash;
 
-	pub fn create_signed_extrinsic(
-		&self,
-		current_hash: Hash,
-		call: RuntimeCall,
-		nonce: Nonce,
-	) -> RpcResult<B::Extrinsic> {
-		let Some(current_header) = self.client.header(current_hash)? else {
-			Err(internal_error(format!(
-				"Could not fetch block header for block {:?}",
-				current_hash
-			)))?
-		};
-		let Some(genesis_hash) = self.client.block_hash(0).ok().flatten() else {
-			Err(internal_error("Could not fetch genesis hash".to_string()))?
-		};
+		let runtime_version = self.client.runtime_api().version(finalized_block_hash)?;
 
-		let runtime_version = self.client.runtime_api().version(current_hash)?;
-
-		let (signed_extrinsic, _) = self.pair_signer.new_signed_extrinsic(
+		let (signed_extrinsic, lifetime) = self.pair_signer.new_signed_extrinsic(
 			call,
 			&runtime_version,
 			genesis_hash,
-			current_hash,
-			*current_header.number(),
+			finalized_block_hash,
+			finalized_block_number,
 			SIGNED_EXTRINSIC_LIFETIME,
 			nonce,
 		);
+		assert!(lifetime.contains(&(finalized_block_number + 1)));
 
 		let call_data = signed_extrinsic.encode();
 
 		Ok(Decode::decode(&mut &call_data[..]).map_err(internal_error)?)
 	}
 
-	pub fn get_extrinsic_details(
+	fn get_extrinsic_details(
 		&self,
 		block_hash: Hash,
 		extrinsic_index: usize,
@@ -227,52 +241,70 @@ where
 			})
 	}
 
+	/// Uses the `BlockBuilder` trait `apply_extrinsic` function to dry run the extrinsic
+	/// This is the same function used by Polkadot System api rpc call `system_dryRun`.
+	/// Meant to be used to quickly test if an extrinsic would result in a failure. Note that this
+	/// always uses the current account nonce at the provided `block_hash`.
+	pub fn dry_run_extrinsic(&self, call: RuntimeCall, at: Option<Hash>) -> RpcResult<()> {
+		let at_block = at.unwrap_or_else(|| self.client.info().best_hash);
+
+		// For apply_extrinsic call, always uses the current stored account nonce.
+		// Using the signed_pool_client managed nonce, might result in apply_extrinsic Future error
+		// when the signed_pool_client managed nonce is higher than the current account nonce
+		let account_nonce = self
+			.client
+			.runtime_api()
+			.account_nonce(at_block, self.pair_signer.account_id.clone())?;
+
+		let extrinsic = self.create_signed_extrinsic(call, account_nonce)?;
+
+		match self.client.runtime_api().apply_extrinsic(at_block, extrinsic)? {
+			Ok(dispatch_result) => match dispatch_result {
+				Ok(_) => Ok(()),
+				Err(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
+					self.error_decoder.decode_dispatch_error(dispatch_error),
+				)),
+			},
+			Err(e) => Err(e.into()),
+		}
+	}
+
+	/// Signs and submits a `RuntimeCall` to the transaction pool without watching for its progress.
+	/// if successful, it returns the transaction hash otherwise returns a CallError
 	pub async fn submit_one(&self, call: RuntimeCall, at: Option<Hash>) -> RpcResult<Hash> {
-		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
+		let at_block = at.unwrap_or_else(|| self.client.info().best_hash);
 
-		let current_nonce = self.current_nonce(block_hash).await?;
-		let extrinsic = self.create_signed_extrinsic(block_hash, call, current_nonce)?;
-
-		// validate transaction
-		// self.pool
-		// 	.api()
-		// 	.validate_transaction(block_hash, TransactionSource::External, extrinsic.clone())
-		// 	.await??;
+		let extrinsic = self.create_signed_extrinsic(call, self.next_nonce(at_block).await?)?;
 
 		let tx_hash = self
 			.pool
-			.submit_one(block_hash, TransactionSource::External, extrinsic)
+			.submit_one(at_block, TransactionSource::External, extrinsic)
 			.map_err(call_error)
 			.await?;
-
-		// Increment nonce for next transaction
-		self.set_nonce(current_nonce + 1).await;
 
 		Ok(tx_hash)
 	}
 
+	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
+	/// `wait_for` param determines whether to wait until the extrinsic is in a best block or a
+	/// finalized block. Once the extrinsic is in a block, `ExtrinsicDetails` is returned.
+	/// If an error occurs, it
+	/// NB: This is a blocking call, if wait_for == InBlock it takes around 1 block (6 secs)
+	/// and if wait_for == Finalized it takes around >12 secs
 	pub async fn submit_watch(
 		&self,
 		call: RuntimeCall,
 		wait_for: WaitFor,
 		at: Option<Hash>,
 	) -> RpcResult<ExtrinsicDetails> {
-		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
+		let at_block = at.unwrap_or_else(|| self.client.info().best_hash);
 
-		let current_nonce = self.current_nonce(block_hash).await?;
-		// Increment nonce for next transaction
-		self.set_nonce(current_nonce + 1).await;
-		let extrinsic = self.create_signed_extrinsic(block_hash, call, current_nonce + 1)?;
+		let extrinsic = self.create_signed_extrinsic(call, self.next_nonce(at_block).await?)?;
 
-		// validate transaction
-		// let val = self.pool
-		// 	.api()
-		// 	.validate_transaction(block_hash, TransactionSource::External, extrinsic.clone())
-		// 	.await??;
-
+		// Validates transaction using runtime, submits to transaction pool and watches its status
 		let mut status_stream = match self
 			.pool
-			.submit_and_watch(block_hash, TransactionSource::External, extrinsic)
+			.submit_and_watch(at_block, TransactionSource::External, extrinsic)
 			.await
 		{
 			Ok(stream) => stream,
@@ -284,8 +316,6 @@ where
 
 		// Periodically poll the transaction pool to check inclusion status
 		while let Some(status) = status_stream.next().await {
-			log::warn!(" ------ transaction status: {:?}", status);
-
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) => {
 					if matches!(wait_for, WaitFor::InBlock) {
@@ -300,11 +330,11 @@ where
 				TransactionStatus::Future |
 				TransactionStatus::Ready |
 				TransactionStatus::Broadcast(_) => {
-					log::warn!("Transaction in progress status: {:?}", status);
+					//log::warn!("Transaction in progress status: {:?}", status);
 					continue
 				},
 				TransactionStatus::Invalid => {
-					log::warn!("Transaction failed status: {:?}", status);
+					//log::warn!("Transaction failed status: {:?}", status);
 					return Err(CfApiError::OtherError(anyhow!(
 						"transaction is no longer valid in the current state. "
 					)))

@@ -111,6 +111,7 @@ where
 		+ sp_runtime::traits::BlockIdTo<B>,
 	C::Api: CustomRuntimeApi<B>
 		+ Core<B>
+		+ sp_block_builder::BlockBuilder<B>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
@@ -135,6 +136,7 @@ where
 		+ sp_runtime::traits::BlockIdTo<B>,
 	C::Api: CustomRuntimeApi<B>
 		+ Core<B>
+		+ sp_block_builder::BlockBuilder<B>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
