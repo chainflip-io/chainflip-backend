@@ -2835,9 +2835,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.filter_map(|details| {
 				// TODO: Subtract safety from opened_at
 				if details.opened_at <= block_height &&
-					(block_height <= details.expires_at &&
-						// If we have not yet processed the expires_at block, then we shouldn't expire it yet. i.e. we should include it as an active channel.
-						ProcessedUpTo::<T, I>::get() < details.expires_at)
+					(block_height <= details.expires_at 
+						// QUESTION: The following code should be discussed, I don't think we have to account for `ProcessedUpTo` in this place.
+						//
+						// &&
+						// // If we have not yet processed the expires_at block, then we shouldn't expire it yet. i.e. we should include it as an active channel.
+						// ProcessedUpTo::<T, I>::get() < details.expires_at)
+					)
 				{
 					// TODO: Filter not filter_map
 					log::info!(
