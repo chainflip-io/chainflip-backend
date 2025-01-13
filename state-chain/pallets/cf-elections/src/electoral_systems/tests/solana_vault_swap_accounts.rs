@@ -1,5 +1,4 @@
 use cf_chains::sol::{
-	MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH,
 };
@@ -204,7 +203,6 @@ fn on_finalize_time_limit_reached() {
 
 #[test]
 fn on_finalize_close_accounts_error() {
-	let max_batch_size: u64 = MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES.try_into().unwrap();
 	FAIL_CLOSE_ACCOUNTS.with(|hook_called| hook_called.set(true));
 	TestSetup::default()
 		.with_unsynchronised_state(0)
