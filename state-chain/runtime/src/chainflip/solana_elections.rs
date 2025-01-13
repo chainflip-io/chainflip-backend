@@ -599,7 +599,7 @@ impl
 		);
 	}
 
-	fn close_accounts(
+	fn maybe_fetch_and_close_accounts(
 		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<(), SolanaTransactionBuildingError> {
 		<SolanaApi<SolEnvironment> as CloseSolanaVaultSwapAccounts>::new_unsigned(accounts).map(

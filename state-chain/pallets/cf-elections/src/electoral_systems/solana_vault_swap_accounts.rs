@@ -35,7 +35,7 @@ use itertools::Itertools;
 use sp_std::vec::Vec;
 
 pub trait SolanaVaultSwapAccountsHook<Account, SwapDetails, E> {
-	fn close_accounts(accounts: Vec<Account>) -> Result<(), E>;
+	fn maybe_fetch_and_close_accounts(accounts: Vec<Account>) -> Result<(), E>;
 	fn initiate_vault_swap(swap_details: SwapDetails);
 	fn get_number_of_available_sol_nonce_accounts() -> usize;
 }
@@ -222,7 +222,7 @@ impl<
 							)
 							.unzip();
 
-						match Hook::close_accounts(accounts_to_close.clone()) {
+						match Hook::maybe_fetch_and_close_accounts(accounts_to_close.clone()) {
 							Ok(()) => {
 								known_accounts.closure_initiated_accounts.extend(accounts_to_close);
 								ElectoralAccess::set_unsynchronised_state(*current_block_number)?;

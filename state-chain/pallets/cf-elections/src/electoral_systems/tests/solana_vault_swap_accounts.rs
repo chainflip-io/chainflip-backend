@@ -36,7 +36,7 @@ thread_local! {
 struct MockHook;
 
 impl SolanaVaultSwapAccountsHook<Account, SwapDetails, ()> for MockHook {
-	fn close_accounts(_accounts: Vec<Account>) -> Result<(), ()> {
+	fn maybe_fetch_and_close_accounts(_accounts: Vec<Account>) -> Result<(), ()> {
 		CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
 		if FAIL_CLOSE_ACCOUNTS.with(|hook_called| hook_called.get()) {
 			Err(())
