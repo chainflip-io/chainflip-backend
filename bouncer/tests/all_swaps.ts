@@ -89,8 +89,8 @@ async function main() {
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
   const assets = Object.values(Assets);
   assethubAssets.forEach((hubAsset) => {
-    appendSwap(hubAsset, randomElement(assets), testSwap);
-    appendSwap(randomElement(assets), hubAsset, testSwap);
+    appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
+    appendSwap(randomElement(AssetsWithoutAssethub), hubAsset, testSwap);
   });
   appendSwap('ArbEth', 'HubDot', testVaultSwap);
   appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
