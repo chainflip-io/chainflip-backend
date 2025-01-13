@@ -7,9 +7,8 @@ use cf_chains::{
 	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
-	AnyChain, Arbitrum, Bitcoin, CcmDepositMetadata, Chain, ChainCrypto,
-	ChannelRefundParametersEncoded, Ethereum, IntoTransactionInIdForAnyChain, Polkadot,
-	TransactionInIdForAnyChain,
+	AnyChain, Arbitrum, Bitcoin, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
+	Ethereum, IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
 };
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
 use chainflip_api::primitives::{
@@ -133,7 +132,7 @@ enum WitnessInformation {
 		deposit_details: Option<DepositDetails>,
 		broker_fee: Beneficiary<AccountId32>,
 		affiliate_fees: Affiliates<AccountId32>,
-		refund_params: Option<ChannelRefundParametersEncoded>,
+		refund_params: Option<ChannelRefundParameters<TrackerAddress>>,
 		dca_params: Option<DcaParameters>,
 		max_boost_fee: BasisPoints,
 	},
@@ -289,7 +288,7 @@ where
 				.collect::<Vec<Beneficiary<AccountId32>>>()
 				.try_into()
 				.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same."),
-			refund_params: self.refund_params.map(|params| params.map_address(|a| a.to_encoded_address(network))),
+			refund_params: self.refund_params.map(|params| params.map_address(|a| TrackerAddress::from(a.to_encoded_address(network)))),
 			dca_params: self.dca_params,
 			max_boost_fee: self.boost_fee,
 		}
