@@ -13,8 +13,8 @@ use cf_chains::{
 		},
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
-	CcmDepositMetadata, Chain, ChannelRefundParametersDecoded, CloseSolanaVaultSwapAccounts,
-	FeeEstimationApi, ForeignChain, Solana,
+	CcmDepositMetadata, Chain, ChannelRefundParametersDecoded, FeeEstimationApi,
+	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
 };
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
 use cf_runtime_utilities::log_or_panic;
@@ -602,13 +602,12 @@ impl
 	fn maybe_fetch_and_close_accounts(
 		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<(), SolanaTransactionBuildingError> {
-		<SolanaApi<SolEnvironment> as CloseSolanaVaultSwapAccounts>::new_unsigned(accounts).map(
-			|apicall| {
+		<SolanaApi<SolEnvironment> as FetchAndCloseSolanaVaultSwapAccounts>::new_unsigned(accounts)
+			.map(|apicall| {
 				let _ = <SolanaBroadcaster as Broadcaster<Solana>>::threshold_sign_and_broadcast(
 					apicall,
 				);
-			},
-		)
+			})
 	}
 
 	fn get_number_of_available_sol_nonce_accounts() -> usize {

@@ -406,7 +406,7 @@ impl SolanaTransactionBuilder {
 
 	/// Creates an instruction to close a number of open event swap accounts created via program
 	/// swap.
-	pub fn close_vault_swap_accounts(
+	pub fn fetch_and_close_vault_swap_accounts(
 		vault_swap_accounts: Vec<VaultSwapAccountAndSender>,
 		vault_program_data_account: SolAddress,
 		swap_endpoint_program: SolAddress,
@@ -645,7 +645,7 @@ pub mod test {
 	fn can_fetch_and_close_vault_swap_accounts() {
 		let env = api_env();
 		let vault_swap_accounts = vec![EVENT_AND_SENDER_ACCOUNTS[0]];
-		let transaction = SolanaTransactionBuilder::close_vault_swap_accounts(
+		let transaction = SolanaTransactionBuilder::fetch_and_close_vault_swap_accounts(
 			vault_swap_accounts,
 			env.vault_program_data_account,
 			env.swap_endpoint_program,
@@ -656,7 +656,7 @@ pub mod test {
 		)
 		.unwrap();
 
-		// Serialized tx built in `close_vault_swap_accounts` test
+		// Serialized tx built in `fetch_and_close_vault_swap_accounts` test
 		let expected_serialized_tx = hex_literal::hex!("01bde6fe3cfdea2b210feb8d1f1e6b9628b36a5a56e69b279a54e93f8a8f475cdf0fcba1b0b8c412157c955ea8084abd98468a7a025f9b437b8d938f1e94485e020100050bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17e5cc1f4d51a40626e11c783b75a45a4922615ecd7f5320b9d4d46481a196a317eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921c1f0efc91eeb48bb80c90cf97775cd5d843a96f16500266cee2c20d053152d2665730decf59d4cd6db8437dab77302287431eb7562b5997601851a0eab6946fc8bb64258728f7a98b57a72fade81639eb845674b3d259b51991a97a1821a31900000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e091ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc1622938c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005060302080004040000000700090340420f000000000007000502307500000a0409050006098579b3e88abc5343fe0a05090003010408a5663d01b94dbd79").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
@@ -675,7 +675,7 @@ pub mod test {
 
 		// We must be able to close MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES accounts without
 		// reaching the transaction length limit.
-		let transaction = SolanaTransactionBuilder::close_vault_swap_accounts(
+		let transaction = SolanaTransactionBuilder::fetch_and_close_vault_swap_accounts(
 			event_accounts,
 			env.vault_program_data_account,
 			env.swap_endpoint_program,

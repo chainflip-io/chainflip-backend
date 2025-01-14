@@ -19,9 +19,10 @@ use crate::{
 		SolAsset, SolHash, SolTrackedData, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
-	CloseSolanaVaultSwapAccounts, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall,
-	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey,
-	SetGovKeyWithAggKey, Solana, TransferAssetParams, TransferFallback, TransferFallbackError,
+	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
+	FetchAndCloseSolanaVaultSwapAccounts, FetchAssetParams, ForeignChainAddress,
+	SetAggKeyWithAggKey, SetGovKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
+	TransferFallbackError,
 };
 
 use cf_primitives::{EgressId, ForeignChain, GasAmount};
@@ -415,7 +416,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		})
 	}
 
-	pub fn batch_close_vault_swap_accounts(
+	pub fn fetch_and_batch_close_vault_swap_accounts(
 		vault_swap_accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Lookup environment variables, such as aggkey and durable nonce.
@@ -425,7 +426,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let durable_nonce = Environment::nonce_account()?;
 
 		// Build the transaction
-		let transaction = SolanaTransactionBuilder::close_vault_swap_accounts(
+		let transaction = SolanaTransactionBuilder::fetch_and_close_vault_swap_accounts(
 			vault_swap_accounts,
 			sol_api_environment.vault_program_data_account,
 			sol_api_environment.swap_endpoint_program,
@@ -552,11 +553,11 @@ impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
 	}
 }
 
-impl<Env: 'static + SolanaEnvironment> CloseSolanaVaultSwapAccounts for SolanaApi<Env> {
+impl<Env: 'static + SolanaEnvironment> FetchAndCloseSolanaVaultSwapAccounts for SolanaApi<Env> {
 	fn new_unsigned(
 		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
-		Self::batch_close_vault_swap_accounts(accounts)
+		Self::fetch_and_batch_close_vault_swap_accounts(accounts)
 	}
 }
 

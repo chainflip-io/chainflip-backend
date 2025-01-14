@@ -200,13 +200,17 @@ impl<
 				!known_accounts.witnessed_open_accounts.is_empty()
 			{
 				known_accounts.witnessed_open_accounts.sort_by_key(|a| Reverse(a.1));
-				// Since closing accounts is a low priority action, we wait for certain number
-				// of sol nonces to be free for us to initiate account closures which
-				// indicates that there is not enough Chainflip activity on the sol side
-				// and so we can process account closures.
+				// Native Vault swaps assets need to be fetched from the Swap Endpoint's Vault.
+				// Therefore initiating a fetch is a high priority action after a native Vault
+				// swap is witnessed. Tokens don't need to be fetched. Closing accounts is not
+				// a high priority action in itself.
+				// Therefore, a fetch (and close accounts) is issued immediately after a native
+				// vault swap is witnessed. For token Vault swaps we allow buffering of accounts
+				// and to then batch close them the limit is reached.
 				//
-				// we also wait for certain number of accounts to buffer up or allow a certain
-				// amount of time to pass before initiating account closures.
+				// For low priority fetches we wait for a higher number of sol nonces to be free
+				// for us to initiate account closures which indicates low Chainflip activity
+				// on the sol side and so we can process account closures.
 				if known_accounts.witnessed_open_accounts[0].1 ||
 					(no_of_available_nonces >
 						NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
