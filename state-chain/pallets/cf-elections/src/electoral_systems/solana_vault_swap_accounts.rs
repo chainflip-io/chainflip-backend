@@ -21,6 +21,7 @@ use crate::{
 use cf_chains::sol::{
 	MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
+	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH,
 	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
 };
 
@@ -195,7 +196,8 @@ impl<
 			let mut known_accounts = election_access.properties()?;
 			// We need to have at least two nonces available since we need to have one nonce
 			// reserved for solana rotation
-			if no_of_available_nonces > NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH && !known_accounts.witnessed_open_accounts.is_empty()
+			if no_of_available_nonces > NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH &&
+				!known_accounts.witnessed_open_accounts.is_empty()
 			{
 				known_accounts.witnessed_open_accounts.sort_by_key(|a| Reverse(a.1));
 				// Since closing accounts is a low priority action, we wait for certain number
