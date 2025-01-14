@@ -1915,7 +1915,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Completes a single deposit request.
 	#[transactional]
-	fn process_channel_deposit_full_witness_inner(
+	pub(crate) fn process_channel_deposit_full_witness_inner(
 		DepositWitness { deposit_address, asset, amount, deposit_details }: &DepositWitness<
 			T::TargetChain,
 		>,
@@ -2024,7 +2024,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn process_prewitness_deposit_inner(
+	pub(crate) fn process_prewitness_deposit_inner(
 		amount: TargetChainAmount<T, I>,
 		asset: TargetChainAsset<T, I>,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
@@ -2222,7 +2222,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn process_full_witness_deposit_inner(
+	pub(crate) fn process_full_witness_deposit_inner(
 		deposit_address: Option<TargetChainAccount<T, I>>,
 		asset: TargetChainAsset<T, I>,
 		deposit_amount: TargetChainAmount<T, I>,
@@ -2236,11 +2236,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_height: TargetChainBlockNumber<T, I>,
 		origin: DepositOrigin<T, I>,
 	) -> Result<FullWitnessDepositOutcome, DepositFailedReason> {
-		// TODO: only apply this check if the deposit hasn't been boosted
-		// already (in case MinimumDeposit increases after some small deposit
-		// is boosted)?
+		let boosted = matches!(boost_status, BoostStatus::Boosted { .. });
 
-		if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
+		if !boosted && deposit_amount < MinimumDeposit::<T, I>::get(asset) {
 			// If the deposit amount is below the minimum allowed, the deposit is ignored.
 			// TODO: track these funds somewhere, for example add them to the withheld fees.
 			return Err(DepositFailedReason::BelowMinimumDeposit);
@@ -2249,9 +2247,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(tx_id) = deposit_details.deposit_id() {
 			// Only consider rejecting a transaction if we haven't already boosted it,
 			// since by boosting the protocol is committing to accept the deposit.
-			if TransactionsMarkedForRejection::<T, I>::take(broker, &tx_id).is_some() &&
-				!matches!(boost_status, BoostStatus::Boosted { .. })
-			{
+			if TransactionsMarkedForRejection::<T, I>::take(broker, &tx_id).is_some() && !boosted {
 				let refund_address = match &action {
 					ChannelAction::Swap { refund_params, .. } => refund_params
 						.as_ref()

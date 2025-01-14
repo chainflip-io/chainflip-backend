@@ -5,8 +5,8 @@ use crate::{
 	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
-	DepositWitness, DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, Event,
-	FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit,
+	DepositOrigin, DepositWitness, DisabledEgressAssets, EgressDustLimit, Event as PalletEvent,
+	Event, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit,
 	NetworkFeeDeductionFromBoostPercent, Pallet, PalletConfigUpdate, PalletSafeMode,
 	PrewitnessedDepositIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 	VaultDepositWitness,
@@ -2228,5 +2228,58 @@ fn assembling_broker_fees() {
 		];
 
 		assert_eq!(IngressEgress::assemble_broker_fees(broker_fee, affiliate_fees), expected);
+	});
+}
+
+#[test]
+fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
+	new_test_ext().execute_with(|| {
+		let deposit_amount = 100;
+		let asset = Asset::Eth;
+
+		const CHANNEL_ID: ChannelId = 0;
+
+		let deposit_origin = DepositOrigin::DepositChannel {
+			deposit_address: Default::default(),
+			channel_id: CHANNEL_ID,
+			deposit_block_height: 0,
+		};
+
+		let result = IngressEgress::process_prewitness_deposit_inner(
+			deposit_amount,
+			asset.try_into().unwrap(),
+			Default::default(),
+			None,
+			None,
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			&BROKER,
+			0,
+			BoostStatus::NotBoosted,
+			None,
+			0,
+			deposit_origin.clone(),
+		);
+
+		assert!(result.is_some());
+
+		// Increase the minimum deposit amount:
+		MinimumDeposit::<Test, ()>::insert(EthAsset::Eth, deposit_amount + 1);
+
+		let result = IngressEgress::process_full_witness_deposit_inner(
+			None,
+			asset.try_into().unwrap(),
+			deposit_amount,
+			Default::default(),
+			None,
+			&BROKER,
+			BoostStatus::NotBoosted,
+			0,
+			None,
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			0,
+			deposit_origin,
+		);
+
+		assert!(result.is_err());
 	});
 }
