@@ -24,14 +24,10 @@ impl UncheckedOnRuntimeUpgrade for SolanaRemoveUnusedChannelsState {
 		)
 		.collect();
 
-		log::info!(
-			"Solana Addresses stored before migration: {:?}",
-			ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
-				.collect::<Vec<_>>()
-		);
-
 		let keys = ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
 			.collect::<Vec<_>>();
+
+		log::info!("Number of Solana Addresses stored before migration: {:?}", keys.len());
 		for key in keys.into_iter() {
 			if let CompositeElectoralUnsynchronisedStateMapKey::C((address, _asset)) = key {
 				if !addresses_in_use.contains(&address) {
@@ -41,9 +37,8 @@ impl UncheckedOnRuntimeUpgrade for SolanaRemoveUnusedChannelsState {
 		}
 
 		log::info!(
-			"Solana Addresses stored after migration: {:?}",
-			ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
-				.collect::<Vec<_>>()
+			"Number of Solana Addresses stored after migration: {:?}",
+			ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys().count()
 		);
 
 		Weight::zero()
