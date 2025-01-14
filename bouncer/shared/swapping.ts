@@ -32,7 +32,7 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
     });
   }
 
-  const cfParameters = {
+  const ccmAdditionalData = {
     cf_receiver: {
       pubkey: new PublicKey(cfReceiverAddress).toBytes(),
       is_writable: false,
@@ -41,7 +41,7 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
     fallback_address: fallbackAddress,
   };
 
-  return u8aToHex(solCcmAdditionalDataCodec.enc(cfParameters));
+  return u8aToHex(solCcmAdditionalDataCodec.enc(ccmAdditionalData));
 }
 
 // Generate random bytes. Setting a minimum length of 10 because very short messages can end up
