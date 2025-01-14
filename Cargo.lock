@@ -4544,7 +4544,7 @@ dependencies = [
  "const_format",
  "proc-macro2",
  "quote",
- "syn 2.0.79",
+ "syn 2.0.89",
 ]
 
 [[package]]

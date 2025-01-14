@@ -113,6 +113,7 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<()> }
 
 impl crate::Config for Test {
+	const NAME: &'static str = "Mock";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
