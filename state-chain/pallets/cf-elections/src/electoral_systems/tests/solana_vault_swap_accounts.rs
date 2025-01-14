@@ -1,5 +1,4 @@
 use cf_chains::sol::{
-	MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH,
 };
@@ -9,8 +8,8 @@ use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::{ConsensusStatus, ConsensusVote, ConsensusVotes},
 	electoral_systems::solana_vault_swap_accounts::{
-		SolanaVaultSwapAccounts, SolanaVaultSwapAccountsHook, SolanaVaultSwapsKnownAccounts,
-		SolanaVaultSwapsVote,
+		FromSolOrNot, SolanaVaultSwapAccounts, SolanaVaultSwapAccountsHook,
+		SolanaVaultSwapsKnownAccounts, SolanaVaultSwapsVote,
 	},
 };
 
@@ -18,6 +17,12 @@ pub type Account = u64;
 pub type SwapDetails = ();
 pub type BlockNumber = u32;
 pub type ValidatorId = ();
+
+impl FromSolOrNot for () {
+	fn sol_or_not(_s: &Self) -> bool {
+		false
+	}
+}
 
 thread_local! {
 	pub static CLOSE_ACCOUNTS_CALLED: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
@@ -30,7 +35,7 @@ thread_local! {
 struct MockHook;
 
 impl SolanaVaultSwapAccountsHook<Account, SwapDetails, ()> for MockHook {
-	fn close_accounts(_accounts: Vec<Account>) -> Result<(), ()> {
+	fn maybe_fetch_and_close_accounts(_accounts: Vec<Account>) -> Result<(), ()> {
 		CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
 		if FAIL_CLOSE_ACCOUNTS.with(|hook_called| hook_called.get()) {
 			Err(())
@@ -198,7 +203,6 @@ fn on_finalize_time_limit_reached() {
 
 #[test]
 fn on_finalize_close_accounts_error() {
-	let max_batch_size: u64 = MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES.try_into().unwrap();
 	FAIL_CLOSE_ACCOUNTS.with(|hook_called| hook_called.set(true));
 	TestSetup::default()
 		.with_unsynchronised_state(0)
@@ -244,8 +248,8 @@ fn on_finalize_close_accounts_error() {
 		.expect_election_properties_only_election(SolanaVaultSwapsKnownAccounts {
 			// if close_accounts errors, the accounts are pushed back into open accounts at the end
 			// of the vector.
-			witnessed_open_accounts: (max_batch_size..TEST_NUMBER_OF_ACCOUNTS)
-				.chain(0u64..max_batch_size)
+			witnessed_open_accounts: (0u64..TEST_NUMBER_OF_ACCOUNTS)
+				.zip([false; TEST_NUMBER_OF_ACCOUNTS as usize])
 				.collect::<Vec<_>>(),
 			closure_initiated_accounts: BTreeSet::new(),
 		});
@@ -297,7 +301,9 @@ fn on_finalize_nonces_below_threshold() {
 			],
 		)
 		.expect_election_properties_only_election(SolanaVaultSwapsKnownAccounts {
-			witnessed_open_accounts: (0..TEST_NUMBER_OF_ACCOUNTS).collect::<Vec<_>>(),
+			witnessed_open_accounts: (0..TEST_NUMBER_OF_ACCOUNTS)
+				.zip([false; TEST_NUMBER_OF_ACCOUNTS as usize])
+				.collect::<Vec<_>>(),
 			closure_initiated_accounts: BTreeSet::new(),
 		});
 }

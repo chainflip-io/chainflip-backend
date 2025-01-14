@@ -56,6 +56,7 @@ pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 740usize; // 492 
 // Values used when closing vault swap accounts.
 pub const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES: usize = 5;
 pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
+pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 4;
 // Leaving always one nonce for a potential rotation.
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH: usize = 1;
 
