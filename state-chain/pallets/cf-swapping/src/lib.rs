@@ -698,11 +698,6 @@ pub mod pallet {
 		BrokerBondSet {
 			bond: T::Amount,
 		},
-		AffiliatePayout {
-			account_id: T::AccountId,
-			short_id: AffiliateShortId,
-			amount: AssetAmount,
-		},
 		AffiliateWithdrawalAddressRegistered {
 			account_id: T::AccountId,
 			short_id: AffiliateShortId,
