@@ -2226,7 +2226,7 @@ impl_runtime_apis! {
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
-			let dest_chain = ForeignChain::from(source_asset);
+			let source_chain = ForeignChain::from(source_asset);
 
 			// Validate parameters.
 			if let Some(params) = dca_parameters.as_ref() {
@@ -2257,8 +2257,11 @@ impl_runtime_apis! {
 			// Validate CCM.
 			if let Some(ccm) = channel_metadata.as_ref() {
 				// Reject Btc vault swaps as it is unsupported
-				if dest_chain == ForeignChain::Bitcoin {
+				if source_chain == ForeignChain::Bitcoin {
 					return Err(DispatchErrorWithMessage::from("Vault swaps with Ccm is not supported for the Bitcoin Chain"));
+				}
+				if !ForeignChain::from(destination_asset).ccm_support() {
+					return Err(DispatchErrorWithMessage::from("Destination chain does not support CCM"));
 				}
 
 				// Ensure CCM message is valid
@@ -2290,7 +2293,7 @@ impl_runtime_apis! {
 			}
 
 			// Encode swap
-			match (dest_chain, extra_parameters) {
+			match (source_chain, extra_parameters) {
 				(
 					ForeignChain::Bitcoin,
 					VaultSwapExtraParameters::Bitcoin {
