@@ -665,7 +665,7 @@ impl<T: Config> Pallet<T> {
 						Some(Self::consolidation_parameters().consolidation_threshold),
 					)
 					.map_err(|error| {
-						log::error!(
+						log::warn!(
 							"Unable to select desired amount from available utxos. Error: {:?}",
 							error
 						);
