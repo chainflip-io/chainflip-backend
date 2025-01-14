@@ -245,7 +245,7 @@ where
 	/// This is the same function used by Polkadot System api rpc call `system_dryRun`.
 	/// Meant to be used to quickly test if an extrinsic would result in a failure. Note that this
 	/// always uses the current account nonce at the provided `block_hash`.
-	pub fn dry_run_extrinsic(&self, call: RuntimeCall, at: Option<Hash>) -> RpcResult<()> {
+	fn dry_run_extrinsic(&self, call: RuntimeCall, at: Option<Hash>) -> RpcResult<()> {
 		let at_block = at.unwrap_or_else(|| self.client.info().best_hash);
 
 		// For apply_extrinsic call, always uses the current stored account nonce.
@@ -271,8 +271,17 @@ where
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool without watching for its progress.
 	/// if successful, it returns the transaction hash otherwise returns a CallError
-	pub async fn submit_one(&self, call: RuntimeCall, at: Option<Hash>) -> RpcResult<Hash> {
+	pub async fn submit_one(
+		&self,
+		call: RuntimeCall,
+		dry_run: bool,
+		at: Option<Hash>,
+	) -> RpcResult<Hash> {
 		let at_block = at.unwrap_or_else(|| self.client.info().best_hash);
+
+		if dry_run {
+			self.dry_run_extrinsic(call.clone(), at)?;
+		}
 
 		let extrinsic = self.create_signed_extrinsic(call, self.next_nonce(at_block).await?)?;
 
@@ -295,9 +304,14 @@ where
 		&self,
 		call: RuntimeCall,
 		wait_for: WaitFor,
+		dry_run: bool,
 		at: Option<Hash>,
 	) -> RpcResult<ExtrinsicDetails> {
 		let at_block = at.unwrap_or_else(|| self.client.info().best_hash);
+
+		if dry_run {
+			self.dry_run_extrinsic(call.clone(), at)?;
+		}
 
 		let extrinsic = self.create_signed_extrinsic(call, self.next_nonce(at_block).await?)?;
 

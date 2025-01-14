@@ -146,6 +146,7 @@ where
 			.submit_watch(
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 				WaitFor::InBlock,
+				true,
 				None,
 			)
 			.await?;
@@ -196,6 +197,7 @@ where
 					},
 				),
 				WaitFor::InBlock,
+				true,
 				None,
 			)
 			.await?;
@@ -242,6 +244,7 @@ where
 						.map_err(anyhow::Error::msg)?,
 				}),
 				WaitFor::InBlock,
+				false,
 				None,
 			)
 			.await?;
@@ -311,6 +314,7 @@ where
 							},
 						),
 						WaitFor::InBlock,
+						true,
 						None,
 					)
 					.await,
@@ -339,6 +343,7 @@ where
 			.submit_watch(
 				RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
 				WaitFor::InBlock,
+				true,
 				None,
 			)
 			.await?;
@@ -358,6 +363,7 @@ where
 			.submit_watch(
 				RuntimeCall::from(pallet_cf_swapping::Call::close_private_btc_channel {}),
 				WaitFor::InBlock,
+				true,
 				None,
 			)
 			.await?;
@@ -402,6 +408,7 @@ where
 					short_id: register_as_id,
 				}),
 				WaitFor::InBlock,
+				true,
 				None,
 			)
 			.await?;
