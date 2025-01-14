@@ -1246,6 +1246,8 @@ type AllMigrations = (
 	PalletMigrations,
 	MigrationsForV1_8,
 	migrations::housekeeping::Migration,
+	// Can be removed once Solana address re-use is activated.
+	migrations::solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
 	migrations::reap_old_accounts::Migration,
 );
 
@@ -1375,13 +1377,6 @@ type MigrationsForV1_8 = (
 			SolanaInstance,
 		],
 	},
-	VersionedMigration<
-		3,
-		4,
-		migrations::solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
-		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
