@@ -2256,7 +2256,6 @@ impl_runtime_apis! {
 
 			// Validate CCM.
 			if let Some(ccm) = channel_metadata.as_ref() {
-				// Reject Btc vault swaps as it is unsupported
 				if source_chain == ForeignChain::Bitcoin {
 					return Err(DispatchErrorWithMessage::from("Vault swaps with Ccm are not supported for the Bitcoin Chain"));
 				}
