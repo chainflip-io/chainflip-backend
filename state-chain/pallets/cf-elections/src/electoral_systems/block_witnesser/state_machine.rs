@@ -92,8 +92,7 @@ impl<
 				s.elections.schedule_range(range);
 			},
 
-			SMInput::Context(ChainProgress::None) => {
-			},
+			SMInput::Context(ChainProgress::None) => {},
 
 			SMInput::Vote(blockdata) => {
 				// insert blockdata into our cache of blocks

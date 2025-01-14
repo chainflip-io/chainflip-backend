@@ -20,14 +20,12 @@ use super::{
 };
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystem},
-	electoral_systems::{
-		block_height_tracking::{OldChainProgress as ChainProgress, RangeOfBlockWitnessRanges},
-		block_witnesser::*,
-	},
+	electoral_systems::{block_height_tracking::ChainProgress, block_witnesser::*},
 };
 use cf_chains::{mocks::MockEthereum, Chain};
 use sp_std::collections::btree_set::BTreeSet;
 
+/*
 thread_local! {
 	pub static PROPERTIES_TO_RETURN: std::cell::RefCell<Properties> = const { std::cell::RefCell::new(BTreeSet::new()) };
 	pub static GENERATE_ELECTION_HOOK_CALLED: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
@@ -44,9 +42,11 @@ pub type ValidatorId = u16;
 
 pub type BlockData = Vec<u8>;
 
+
 struct MockGenerateElectionHook<ChainBlockNumber, Properties> {
 	_phantom: core::marker::PhantomData<(ChainBlockNumber, Properties)>,
 }
+
 
 fn range_n(n: u64) -> RangeOfBlockWitnessRanges<u64> {
 	// TODO: Test with other witness ranges.
@@ -453,6 +453,8 @@ fn reorg_clears_on_going_elections_and_continues() {
 			],
 		);
 }
+
+*/
 
 // #[test]
 // fn partially_processed_block_data_processed_next_on_finalize() {

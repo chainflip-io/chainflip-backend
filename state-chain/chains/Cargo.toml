@@ -63,6 +63,10 @@ arrayref = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
+derive-where = "1.2.7"
+proptest = { version = "1.6", optional = true } # note this has to be in the normal dependencies because other packages depend on it
+duplicate = "2.0.0"
+saturating_cast = "0.1.0"
 
 # Substrate packages
 ss58-registry = { workspace = true, optional = true }
@@ -73,6 +77,7 @@ sp-std = { workspace = true }
 sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
+
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true }
@@ -134,3 +139,5 @@ try-runtime = [
 ]
 
 runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core"]
+
+test = ["proptest"]

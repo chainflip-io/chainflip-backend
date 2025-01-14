@@ -2,11 +2,11 @@ use cf_chains::witness_period::BlockZero;
 use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 use super::{
-	primitives::validate_vote_and_height, BlockHeightTrackingProperties, BlockHeightTrackingTypes,
-	state_machine::InputHeaders,
+	primitives::validate_vote_and_height, state_machine::InputHeaders,
+	BlockHeightTrackingProperties, BlockHeightTrackingTypes,
 };
 use crate::electoral_systems::state_machine::consensus::{
-	ConsensusMechanism, MultipleVotes, StagedConsensus, SupermajorityConsensus, Threshold
+	ConsensusMechanism, MultipleVotes, StagedConsensus, SupermajorityConsensus, Threshold,
 };
 
 pub struct BlockHeightTrackingConsensus<T: BlockHeightTrackingTypes> {
@@ -29,7 +29,6 @@ impl<T: BlockHeightTrackingTypes> ConsensusMechanism for BlockHeightTrackingCons
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-
 		let (threshold, properties) = settings;
 
 		if properties.witness_from_index.is_zero() {

@@ -1,23 +1,25 @@
-
 use core::{
 	iter::Step,
 	ops::{RangeInclusive, Rem, Sub},
 };
 
-use super::{super::state_machine::{
-	core::{Indexed, Validate},
-	state_machine::StateMachine,
-	state_machine_es::SMInput,
-}, BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress};
-use crate::{electoral_systems::state_machine::core::{Hook, SaturatingStep}, CorruptStorageError};
-use cf_chains::witness_period::{BlockWitnessRange, BlockZero};
+use super::{
+	super::state_machine::{
+		core::{Indexed, Validate},
+		state_machine::StateMachine,
+		state_machine_es::SMInput,
+	},
+	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
+	BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
+};
+use crate::{electoral_systems::state_machine::core::Hook, CorruptStorageError};
+use cf_chains::witness_period::{BlockWitnessRange, BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
 	pallet_prelude::MaxEncodedLen,
 	sp_runtime::traits::{Block, One, Saturating},
 };
-use super::primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
@@ -93,28 +95,34 @@ impl<T: BlockHeightTrackingTypes> Validate for BHWState<T> {
 	}
 }
 
-
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd, Default
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
+	Default,
 )]
 pub struct BHWStateWrapper<T: BlockHeightTrackingTypes> {
-    pub state: BHWState<T>,
-    pub block_height_update: T::BlockHeightChangeHook
+	pub state: BHWState<T>,
+	pub block_height_update: T::BlockHeightChangeHook,
 }
 
 impl<T: BlockHeightTrackingTypes> Validate for BHWStateWrapper<T> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-        self.state.is_valid()
-    }
+		self.state.is_valid()
+	}
 }
 
-
-
-
 //------------------------ state machine ---------------------------
-
 
 pub struct BlockHeightTrackingSM<T: BlockHeightTrackingTypes> {
 	_phantom: core::marker::PhantomData<T>,
@@ -142,7 +150,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 		_settings: &Self::Settings,
 		after: &Self::State,
 	) {
-		use crate::electoral_systems::state_machine::core::SaturatingStep;
+		use cf_chains::witness_period::SaturatingStep;
 
 		use BHWState::*;
 
@@ -188,7 +196,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {
 		let new_headers = match input {
 			SMInput::Vote(vote) => vote,
-			SMInput::Context(_) => return Ok(ChainProgress::None)
+			SMInput::Context(_) => return Ok(ChainProgress::None),
 		};
 
 		match &mut s.state {
@@ -218,8 +226,8 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 						*headers = chainblocks.headers;
 						*witness_from = headers.back().unwrap().block_height.saturating_forward(1);
 
-                        let highest_seen = headers.back().unwrap().block_height;
-                        s.block_height_update.run(highest_seen);
+						let highest_seen = headers.back().unwrap().block_height;
+						s.block_height_update.run(highest_seen);
 
 						// if we merge after a reorg, and the blocks we got are the same
 						// as the ones we previously had, then `into_chain_progress` might
@@ -248,19 +256,27 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 #[cfg(test)]
 mod tests {
 
+	use cf_chains::{
+		self,
+		witness_period::{BlockWitnessRange, BlockZero, SaturatingStep},
+		ChainWitnessConfig,
+	};
 	use proptest::{
 		prelude::{any, prop, Arbitrary, Just, Strategy},
 		prop_oneof,
 	};
 
-	use crate::electoral_systems::{block_height_tracking::state_machine::BHWStateWrapper, state_machine::core::{hook_test_utils::ConstantHook, SaturatingStep}};
-
-	use super::super::super::state_machine::{state_machine::StateMachine, state_machine_es::SMInput};
-	use super::super::{
-		primitives::Header, BlockHeightTrackingProperties,
-		BlockHeightTrackingTypes,
+	use crate::electoral_systems::{
+		block_height_tracking::state_machine::BHWStateWrapper,
+		state_machine::core::hook_test_utils::ConstantHook,
 	};
+
 	use super::{
+		super::{
+			super::state_machine::{state_machine::StateMachine, state_machine_es::SMInput},
+			primitives::Header,
+			BlockHeightTrackingProperties, BlockHeightTrackingTypes,
+		},
 		BHWState, BlockHeightTrackingSM, InputHeaders,
 	};
 
@@ -269,42 +285,49 @@ mod tests {
 	) -> impl Strategy<Value = InputHeaders<T>>
 	where
 		T::ChainBlockHash: Arbitrary,
+		T::ChainBlockNumber: Arbitrary + BlockZero,
 	{
-		// TODO: handle the case where `witness_from` = 0.
-
-		prop::collection::vec(any::<T::ChainBlockHash>(), 2..10).prop_map(move |data| {
-			let headers =
-				data.iter().zip(data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
-					block_height: properties.witness_from_index.clone().saturating_forward(ix),
-					hash: h1.clone(),
-					parent_hash: h0.clone(),
-				});
-			InputHeaders::<T>(headers.collect())
-		})
+		use crate::prop_do;
+		prop_do! {
+			let header_data in prop::collection::vec(any::<T::ChainBlockHash>(), 2..10);
+			let random_index in any::<T::ChainBlockNumber>();
+			let first_height = if properties.witness_from_index.is_zero() { random_index } else { properties.witness_from_index };
+			return {
+				let headers =
+					header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
+						block_height: first_height.clone().saturating_forward(ix),
+						hash: h1.clone(),
+						parent_hash: h0.clone(),
+					});
+				InputHeaders::<T>(headers.collect())
+			}
+		}
 	}
 
 	pub fn generate_state<T: BlockHeightTrackingTypes>() -> impl Strategy<Value = BHWStateWrapper<T>>
 	where
 		T::ChainBlockHash: Arbitrary,
-		T::ChainBlockNumber: Arbitrary,
+		T::ChainBlockNumber: Arbitrary + BlockZero,
+		T::BlockHeightChangeHook: Default + sp_std::fmt::Debug,
 	{
+		use crate::prop_do;
 		prop_oneof![
 			Just(BHWState::Starting),
-			(any::<BlockHeightTrackingProperties<T::ChainBlockNumber>>(), any::<bool>())
-				.prop_flat_map(move |(n, is_reorg_without_known_root)| {
-					generate_input::<T>(n).prop_map(move |headers| {
-						let witness_from = if is_reorg_without_known_root {
-							headers.0.front().unwrap().block_height.clone()
-						} else {
-							headers.0.back().unwrap().block_height.clone().saturating_forward(1)
-						};
-                        BHWStateWrapper {
-                            state: BHWState::Running { headers: headers.0, witness_from },
-                            block_height_update: ConstantHook::new(())
-                        }
-					})
-				}),
+			prop_do! {
+				let is_reorg_without_known_root in any::<bool>();
+				let n in any::<BlockHeightTrackingProperties<T::ChainBlockNumber>>();
+				let headers in generate_input::<T>(n);
+				return {
+					let witness_from = if is_reorg_without_known_root {
+						headers.0.front().unwrap().block_height.clone()
+					} else {
+						headers.0.back().unwrap().block_height.clone().saturating_forward(1)
+					};
+					BHWState::Running { headers: headers.0, witness_from }
+				}
+			}
 		]
+		.prop_map(|state| BHWStateWrapper { state, block_height_update: Default::default() })
 	}
 
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
@@ -313,20 +336,56 @@ mod tests {
 		const SAFETY_MARGIN: usize = 6;
 		type ChainBlockNumber = u32;
 		type ChainBlockHash = bool;
-        type BlockHeightChangeHook = ConstantHook<u32,()>;
+		type BlockHeightChangeHook = ConstantHook<u32, ()>;
 	}
 
 	#[test]
 	pub fn test_dsm() {
-		BlockHeightTrackingSM::<TestTypes1>::test(module_path!(), generate_state(), Just(()), |index| {
-			prop_oneof![
-				Just(SMInput::Context(())),
-				(0..index.len()).prop_flat_map(move |ix| generate_input(
+		BlockHeightTrackingSM::<TestTypes1>::test(
+			module_path!(),
+			generate_state(),
+			Just(()),
+			|index| {
+				prop_oneof![
+					Just(SMInput::Context(())),
+					(0..index.len()).prop_flat_map(move |ix| generate_input(
+						index.clone().into_iter().nth(ix).unwrap()
+					)
+					.prop_map(SMInput::Vote))
+				]
+				.boxed()
+			},
+		);
+	}
+
+	struct TestChain {}
+	impl ChainWitnessConfig for TestChain {
+		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+		type ChainBlockNumber = u32;
+	}
+
+	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+	struct TestTypes2 {}
+	impl BlockHeightTrackingTypes for TestTypes2 {
+		const SAFETY_MARGIN: usize = 6;
+		type ChainBlockNumber = BlockWitnessRange<TestChain>;
+		type ChainBlockHash = bool;
+		type BlockHeightChangeHook = ConstantHook<Self::ChainBlockNumber, ()>;
+	}
+
+	#[test]
+	pub fn test_dsm2() {
+		BlockHeightTrackingSM::<TestTypes2>::test(
+			module_path!(),
+			generate_state(),
+			Just(()),
+			|index| {
+				prop_oneof![(0..index.len()).prop_flat_map(move |ix| generate_input(
 					index.clone().into_iter().nth(ix).unwrap()
 				)
-				.prop_map(SMInput::Vote))
-			]
-			.boxed()
-		});
+				.prop_map(SMInput::Vote))]
+				.boxed()
+			},
+		);
 	}
 }

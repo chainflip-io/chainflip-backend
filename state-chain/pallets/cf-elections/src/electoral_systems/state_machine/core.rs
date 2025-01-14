@@ -1,3 +1,4 @@
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use core::iter::Step;
 use itertools::Either;
@@ -28,31 +29,18 @@ pub mod hook_test_utils {
 		}
 	}
 
+	impl<A, B: Default> Default for ConstantHook<A, B> {
+		fn default() -> Self {
+			Self::new(Default::default())
+		}
+	}
+
 	impl<A, B: Clone> Hook<A, B> for ConstantHook<A, B> {
 		fn run(&self, _input: A) -> B {
 			self.state.clone()
 		}
 	}
 }
-
-pub trait SaturatingStep: Step + Clone {
-	// TODO: This behaviour is wrong, since we don't actually saturate!!!!
-	// But it seems like in order to create a proper saturating step we cannot
-	// rely on an existing `Step` implementation for a type. We have to implement
-	// this ourselves for the relevant types.
-	fn saturating_forward(self, mut count: usize) -> Self {
-		for _ in 0..count {
-			if let Some(result) = Self::forward_checked(self.clone(), count) {
-				return result;
-			} else {
-				count /= 2;
-			}
-		}
-		return self;
-	}
-}
-
-impl<X: Step + Clone> SaturatingStep for X {}
 
 /// A type which has an associated index type.
 /// This effectively models types families.

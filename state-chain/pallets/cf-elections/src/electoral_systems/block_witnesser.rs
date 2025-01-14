@@ -22,8 +22,6 @@ use serde::{Deserialize, Serialize};
 use sp_core::bounded::alloc::collections::BTreeSet;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-use super::block_height_tracking::OldChainProgress as ChainProgress;
-
 pub mod consensus;
 pub mod helpers;
 pub mod primitives;
@@ -117,6 +115,7 @@ pub struct BlockWitnesserState<ChainBlockNumber: Ord + Default, BlockData> {
 	pub elections_open_for: BTreeSet<ChainBlockNumber>,
 }
 
+/*
 impl<
 		Chain: cf_chains::Chain,
 		BlockData: Member + Parameter + Eq + MaybeSerializeDeserialize,
@@ -154,7 +153,7 @@ impl<
 	// that block we want to witness. e.g. all the deposit channel addresses that are active at
 	// that block.
 	type ElectionProperties =
-		(BlockWitnessRange<<Chain as cf_chains::Chain>::ChainBlockNumber>, Properties);
+		(BlockWitnessRange<Chain>, Properties);
 	type ElectionState = ();
 	type Vote = vote_storage::bitmap::Bitmap<BlockData>;
 	type Consensus = BlockData;
@@ -391,3 +390,4 @@ impl<
 		})
 	}
 }
+ */

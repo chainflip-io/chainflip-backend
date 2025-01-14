@@ -10,7 +10,9 @@ use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
-		block_height_tracking::{primitives::Header, BlockHeightTrackingProperties, state_machine::InputHeaders},
+		block_height_tracking::{
+			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties,
+		},
 		state_machine::core::ConstantIndex,
 	},
 	vote_storage::VoteStorage,
@@ -54,13 +56,13 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 		anyhow::Error,
 	> {
 		let (witness_range, deposit_addresses, _extra) = deposit_addresses;
-		let witness_range = BlockWitnessRange::try_new(witness_range, 1).unwrap();
+		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
 		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
 
 		let mut txs = vec![];
 		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
 		tracing::info!("Witness range: {:?}", witness_range);
-		for block in BlockWitnessRange::<u64>::into_range_inclusive(witness_range) {
+		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
 			tracing::info!("Checking block {:?}", block);
 
 			// TODO: these queries should not be infinite
@@ -130,13 +132,14 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 
 		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
 
-
 		if best_block_header.block_height <= election_property {
 			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={election_property}", best_block_header.block_height))
 		} else {
-
 			let witness_from_index = if election_property == 0 {
-				tracing::info!("bht: election_property=0, best_block_height={}, submitting last 6 blocks.", best_block_header.block_height);
+				tracing::info!(
+					"bht: election_property=0, best_block_height={}, submitting last 6 blocks.",
+					best_block_header.block_height
+				);
 				best_block_header.block_height.saturating_sub(6)
 			} else {
 				election_property

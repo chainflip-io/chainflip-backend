@@ -3,6 +3,7 @@ use core::{
 	ops::{Range, RangeInclusive},
 };
 
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -27,7 +28,7 @@ pub struct MergeInfo<H, N> {
 	pub added: VecDeque<Header<H, N>>,
 }
 
-impl<H, N: Copy + Step> MergeInfo<H, N> {
+impl<H, N: Copy> MergeInfo<H, N> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<N>> {
 		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
 			Some(ChainProgress::Range(first_added.block_height..=last_added.block_height))
@@ -57,7 +58,10 @@ pub enum MergeFailure<H, N> {
 	InternalError(&'static str),
 }
 
-pub fn extract_common_prefix<A: Eq>(a: &mut VecDeque<A>, b: &mut VecDeque<A>) -> VecDeque<A> {
+pub fn extract_common_prefix<A: PartialEq>(
+	a: &mut VecDeque<A>,
+	b: &mut VecDeque<A>,
+) -> VecDeque<A> {
 	let mut prefix = VecDeque::new();
 
 	while a.front().is_some() && (a.front() == b.front()) {
@@ -108,14 +112,17 @@ impl<H, N: Copy> ChainBlocks<H, N> {
 impl<H, N> Validate for ChainBlocks<H, N>
 where
 	H: PartialEq + Clone,
-	N: PartialEq + Ord + Copy + BlockHeightTrait,
+	N: PartialEq + Copy + SaturatingStep,
 {
 	type Error = VoteValidationError;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		let mut pairs = self.headers.iter().zip(self.headers.iter().skip(1));
 
-		if !pairs.clone().all(|(a, b)| N::forward(a.block_height, 1) == b.block_height) {
+		if !pairs
+			.clone()
+			.all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height)
+		{
 			Err(VoteValidationError::BlockHeightsNotContinuous)
 		} else if !pairs.all(|(a, b)| a.hash == b.parent_hash) {
 			Err(VoteValidationError::ParentHashMismatch)
@@ -130,7 +137,7 @@ pub fn validate_vote_and_height<H: PartialEq + Clone, N: PartialEq>(
 	other: &VecDeque<Header<H, N>>,
 ) -> Result<(), VoteValidationError>
 where
-	N: Ord + Copy + BlockHeightTrait,
+	N: Copy + SaturatingStep,
 {
 	// a vote has to be nonempty
 	if other.len() == 0 {
@@ -151,7 +158,7 @@ pub enum ChainBlocksMergeResult<N> {
 	FailedMissing { range: Range<N> },
 }
 
-impl<H: Eq + Clone, N: Ord + Copy + Step> ChainBlocks<H, N> {
+impl<H: Eq + Clone, N: Copy + SaturatingStep + PartialEq> ChainBlocks<H, N> {
 	//
 	// We have the following assumptions:
 	//
@@ -171,7 +178,7 @@ impl<H: Eq + Clone, N: Ord + Copy + Step> ChainBlocks<H, N> {
 			.front()
 			.ok_or(MergeFailure::InternalError("expected other to not be empty!".into()))?;
 
-		let self_next_height = N::forward(self.headers.back().unwrap().block_height, 1);
+		let self_next_height = self.headers.back().unwrap().block_height.saturating_forward(1);
 
 		if self_next_height == other_head.block_height {
 			// this is "assumption (3): case 1"

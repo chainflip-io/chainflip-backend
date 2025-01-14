@@ -8,8 +8,8 @@ use super::state_machine::{
 	state_machine::StateMachine,
 	state_machine_es::SMInput,
 };
-use crate::{electoral_systems::state_machine::core::SaturatingStep, CorruptStorageError};
-use cf_chains::witness_period::{BlockWitnessRange, BlockZero};
+use crate::CorruptStorageError;
+use cf_chains::witness_period::{BlockWitnessRange, BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
@@ -24,21 +24,30 @@ use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-pub mod primitives;
 pub mod consensus;
+pub mod primitives;
 pub mod state_machine;
 
 pub trait BlockHeightTrackingTypes: Ord + PartialEq + Clone + sp_std::fmt::Debug + 'static {
 	const SAFETY_MARGIN: usize;
-	type ChainBlockNumber: Serialize
-		+ for<'a> Deserialize<'a>
-		+ PartialEq
-		+ Ord
-		+ Copy
-		+ Step
+	type ChainBlockNumber: SaturatingStep
 		+ BlockZero
 		+ sp_std::fmt::Debug
+		+ Copy
+		+ Eq
+		+ Ord
+		+ Serialize
+		+ for<'a> Deserialize<'a>
 		+ 'static;
+	// Serialize
+	// 	+ for<'a> Deserialize<'a>
+	// 	+ PartialEq
+	// 	+ Ord
+	// 	+ Copy
+	// 	+ Step
+	// 	+ BlockZero
+	// 	+ sp_std::fmt::Debug
+	// 	+ 'static;
 	type ChainBlockHash: Serialize
 		+ for<'a> Deserialize<'a>
 		+ PartialEq
@@ -61,66 +70,9 @@ pub struct BlockHeightTrackingProperties<BlockNumber> {
 	pub witness_from_index: BlockNumber,
 }
 
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-pub struct RangeOfBlockWitnessRanges<ChainBlockNumber> {
-	pub witness_from_root: ChainBlockNumber,
-	pub witness_to_root: ChainBlockNumber,
-	pub witness_period: ChainBlockNumber,
-}
-
-impl<
-		ChainBlockNumber: Saturating
-			+ One
-			+ Copy
-			+ PartialOrd
-			+ Step
-			+ Into<u64>
-			+ Sub<ChainBlockNumber, Output = ChainBlockNumber>
-			+ Rem<ChainBlockNumber, Output = ChainBlockNumber>
-			+ Saturating
-			+ Eq,
-	> RangeOfBlockWitnessRanges<ChainBlockNumber>
-{
-	pub fn try_new(
-		witness_from_root: ChainBlockNumber,
-		witness_to_root: ChainBlockNumber,
-		witness_period: ChainBlockNumber,
-	) -> Result<Self, CorruptStorageError> {
-		ensure!(witness_from_root <= witness_to_root, CorruptStorageError::new());
-
-		Ok(Self { witness_from_root, witness_to_root, witness_period })
-	}
-
-	pub fn block_witness_ranges(&self) -> Result<Vec<BlockWitnessRange<ChainBlockNumber>>, ()> {
-		(self.witness_from_root..=self.witness_to_root)
-			.step_by(Into::<u64>::into(self.witness_period) as usize)
-			.map(|root| BlockWitnessRange::try_new(root, self.witness_period))
-			.collect::<Result<Vec<_>, _>>()
-	}
-
-	pub fn witness_to_root(&self) -> ChainBlockNumber {
-		self.witness_to_root
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum OldChainProgress<ChainBlockNumber> {
-	// Block witnesser will discard any elections that were started for this range and start them
-	// again since we've detected a reorg
-	Reorg(RangeOfBlockWitnessRanges<ChainBlockNumber>),
-	// the chain is just progressing as a normal chain of hashes
-	Continuous(RangeOfBlockWitnessRanges<ChainBlockNumber>),
-	// there was no update to the witnessed block headers
-	None(ChainBlockNumber),
-	// We are starting up and don't have consensus on a block number yet
-	WaitingForFirstConsensus,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum ChainProgress<ChainBlockNumber> {
-	// Range of new block heights witnessed. If this is not consecutive, it means that 
+	// Range of new block heights witnessed. If this is not consecutive, it means that
 	Range(RangeInclusive<ChainBlockNumber>),
 	// there was no update to the witnessed block headers
 	None,
@@ -147,5 +99,3 @@ impl<N: Ord> Validate for ChainProgress<N> {
 //-------- implementation of block height tracking as a state machine --------------
 
 pub trait BlockHeightTrait = PartialEq + Ord + Copy + Step + BlockZero;
-
-
