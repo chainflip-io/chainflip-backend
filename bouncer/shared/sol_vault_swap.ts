@@ -195,15 +195,15 @@ export async function checkSolEventAccountsClosure(
 
   // Only SOL Vault swaps are closed immediately. Also, due to the implementation details in the
   // SC the timeout won't be executed unless a Vault swap is witnessed. Therefore we do a SOL
-  // Vault swap in the background to force the closure of all accounts.
-  // TODO: Remove once SC is updated to fetch on every SOL Vault swap
-  // await executeSolVaultSwap(
-  //   'Sol',
-  //   'ArbEth',
-  //   await newAddress('ArbEth', randomBytes(32).toString('hex')),
-  // );
+  // Vault swap in the background to force the closure of all accounts. We assume that there
+  // won't be more than 5 accounts opened as closures must have been done by the time this runs.
+  await executeSolVaultSwap(
+    'Sol',
+    'ArbEth',
+    await newAddress('ArbEth', randomBytes(32).toString('hex')),
+  );
 
-  let maxRetries = 20; // 120 seconds
+  const maxRetries = 20; // 120 seconds
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const swapEndpointDataAccount =
       await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
