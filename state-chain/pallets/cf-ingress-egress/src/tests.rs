@@ -2234,52 +2234,48 @@ fn assembling_broker_fees() {
 #[test]
 fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 	new_test_ext().execute_with(|| {
-		let deposit_amount = 100;
-		let asset = Asset::Eth;
-
-		const CHANNEL_ID: ChannelId = 0;
-
-		let deposit_origin = DepositOrigin::DepositChannel {
-			deposit_address: Default::default(),
-			channel_id: CHANNEL_ID,
-			deposit_block_height: 0,
-		};
-
-		let result = IngressEgress::process_prewitness_deposit_inner(
-			deposit_amount,
-			asset.try_into().unwrap(),
-			Default::default(),
-			None,
-			None,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
-			&BROKER,
-			0,
-			BoostStatus::NotBoosted,
-			None,
-			0,
-			deposit_origin.clone(),
-		);
-
-		assert!(result.is_some());
+		const DEPOSIT_AMOUNT: AssetAmount = 100;
 
 		// Increase the minimum deposit amount:
-		MinimumDeposit::<Test, ()>::insert(EthAsset::Eth, deposit_amount + 1);
+		MinimumDeposit::<Test, ()>::insert(EthAsset::Eth, DEPOSIT_AMOUNT + 1);
 
-		let result = IngressEgress::process_full_witness_deposit_inner(
+		assert_eq!(
+			IngressEgress::process_full_witness_deposit_inner(
+				None,
+				Asset::Eth.try_into().unwrap(),
+				DEPOSIT_AMOUNT,
+				Default::default(),
+				None,
+				&BROKER,
+				BoostStatus::NotBoosted,
+				0,
+				None,
+				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				0,
+				DepositOrigin::Vault { tx_id: H256::default() },
+			)
+			.err(),
+			Some(DepositFailedReason::BelowMinimumDeposit)
+		);
+
+		assert!(IngressEgress::process_full_witness_deposit_inner(
 			None,
-			asset.try_into().unwrap(),
-			deposit_amount,
+			Asset::Eth.try_into().unwrap(),
+			DEPOSIT_AMOUNT,
 			Default::default(),
 			None,
 			&BROKER,
-			BoostStatus::NotBoosted,
+			BoostStatus::Boosted {
+				prewitnessed_deposit_id: 0,
+				pools: vec![],
+				amount: DEPOSIT_AMOUNT,
+			},
 			0,
 			None,
 			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
 			0,
-			deposit_origin,
-		);
-
-		assert!(result.is_err());
+			DepositOrigin::Vault { tx_id: H256::default() },
+		)
+		.is_ok());
 	});
 }
