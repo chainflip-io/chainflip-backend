@@ -5,7 +5,10 @@ use cf_chains::{
 		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
 		BitcoinFeeInfo, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
 	},
-	sol::{api::SolanaTransactionType, SolAddress, SolHash},
+	sol::{
+		api::{SolanaGovCall, SolanaTransactionType},
+		SolAddress, SolHash,
+	},
 };
 use cf_traits::SafeMode;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
@@ -682,11 +685,11 @@ fn ensure_governance_origin_checks() {
 }
 
 #[test]
-fn can_update_solana_vault_swap_settings() {
+fn can_dispatch_solana_gov_call() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Environment::update_solana_vault_swap_settings(
+		assert_ok!(Environment::dispatch_solana_gov_call(
 			RuntimeOrigin::root(),
-			cf_primitives::SolanaVaultSwapSettings::ProgramSwap {
+			SolanaGovCall::SetProgramSwapsParameters {
 				min_native_swap_amount: 1_000_000_000_000u64,
 				max_dst_address_len: 255u16,
 				max_ccm_message_len: 200_000u32,
@@ -700,9 +703,9 @@ fn can_update_solana_vault_swap_settings() {
 			SolanaTransactionType::SetProgramSwapParameters
 		);
 
-		assert_ok!(Environment::update_solana_vault_swap_settings(
+		assert_ok!(Environment::dispatch_solana_gov_call(
 			RuntimeOrigin::root(),
-			cf_primitives::SolanaVaultSwapSettings::TokenSwap {
+			SolanaGovCall::SetTokenSwapParameters {
 				min_swap_amount: 1_000_000_000_000u64,
 				token_mint_pubkey: SolAddress([0x11; 32]),
 			}

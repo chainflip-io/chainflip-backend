@@ -13,14 +13,14 @@ use cf_chains::{
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
 	sol::{
-		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment},
+		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
 		SolAddress, SolApiEnvironment, SolHash, Solana,
 	},
 	Chain,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	BroadcastId, NetworkEnvironment, SemVer, SolanaVaultSwapSettings,
+	BroadcastId, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
@@ -285,11 +285,8 @@ pub mod pallet {
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
 		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
-		/// An Solana transaction was sent to the Smart Program to update Vault Swap settings.
-		SolanaVaultSwapSettingUpdated {
-			settings: SolanaVaultSwapSettings,
-			broadcast_id: BroadcastId,
-		},
+		/// An Governance transaction was dispatched to a Solana Program.
+		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
 	}
 
 	#[pallet::call]
@@ -507,7 +504,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allows Governance to update Solana's Vault Swap settings.
+		/// **READ WARNINGS BEFORE USING THIS**
+		///
+		/// Allows Governance to dispatch calls to the Solana Contracts.
+		///
 		/// Requires Governance Origin. This action is allowed to consume
 		/// any nonce account because it's a high priority action.
 		/// Therefore, do NOT execute this governance function around
@@ -515,48 +515,27 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [OnSuccess](Event::SolanaVaultSwapSettingUpdated)
+		/// - [OnSuccess](Event::SolanaGovCallDispatched)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(8)]
 		#[pallet::weight(Weight::zero())]
-		pub fn update_solana_vault_swap_settings(
+		pub fn dispatch_solana_gov_call(
 			origin: OriginFor<T>,
-			settings: SolanaVaultSwapSettings,
+			gov_call: SolanaGovCall,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let sol_transaction = match settings {
-				SolanaVaultSwapSettings::ProgramSwap {
-					min_native_swap_amount,
-					max_dst_address_len,
-					max_ccm_message_len,
-					max_cf_parameters_len,
-					max_event_accounts,
-				} => SolanaApi::set_program_swaps_parameters(
-					min_native_swap_amount,
-					max_dst_address_len,
-					max_ccm_message_len,
-					max_cf_parameters_len,
-					max_event_accounts,
-				),
-				SolanaVaultSwapSettings::TokenSwap { min_swap_amount, token_mint_pubkey } =>
-					SolanaApi::set_token_swap_parameters(min_swap_amount, token_mint_pubkey),
-			}.map_err(|e| {
+			let (broadcast_id, _) =
+				T::SolanaBroadcaster::threshold_sign_and_broadcast(gov_call.to_api_call().map_err(|e| {
 				// If we fail here, most likely some Solana Environment variables were not set.
 				log::error!("Failed to build Solana Api call to update Solana Vault Swap settings. Error: {:?}", e);
 				Error::<T>::FailedToBuildSolanaApiCall
-			})?;
+			})?);
 
-			let (broadcast_id, _) =
-				T::SolanaBroadcaster::threshold_sign_and_broadcast(sol_transaction);
-
-			Self::deposit_event(Event::<T>::SolanaVaultSwapSettingUpdated {
-				settings,
-				broadcast_id,
-			});
+			Self::deposit_event(Event::<T>::SolanaGovCallDispatched { gov_call, broadcast_id });
 
 			Ok(())
 		}

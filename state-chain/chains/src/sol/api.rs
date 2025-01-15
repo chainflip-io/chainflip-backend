@@ -1,6 +1,6 @@
 use crate::RejectCall;
 use cf_runtime_utilities::log_or_panic;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use core::marker::PhantomData;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -163,6 +163,56 @@ pub struct SolanaApi<Environment: 'static> {
 	#[doc(hidden)]
 	#[codec(skip)]
 	pub _phantom: PhantomData<Environment>,
+}
+
+#[derive(
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub enum SolanaGovCall {
+	SetProgramSwapsParameters {
+		min_native_swap_amount: u64,
+		max_dst_address_len: u16,
+		max_ccm_message_len: u32,
+		max_cf_parameters_len: u32,
+		max_event_accounts: u32,
+	},
+	SetTokenSwapParameters {
+		min_swap_amount: u64,
+		token_mint_pubkey: SolAddress,
+	},
+}
+
+impl SolanaGovCall {
+	pub fn to_api_call<E: SolanaEnvironment>(
+		&self,
+	) -> Result<SolanaApi<E>, SolanaTransactionBuildingError> {
+		match self {
+			SolanaGovCall::SetProgramSwapsParameters {
+				min_native_swap_amount,
+				max_dst_address_len,
+				max_ccm_message_len,
+				max_cf_parameters_len,
+				max_event_accounts,
+			} => SolanaApi::set_program_swaps_parameters(
+				*min_native_swap_amount,
+				*max_dst_address_len,
+				*max_ccm_message_len,
+				*max_cf_parameters_len,
+				*max_event_accounts,
+			),
+			SolanaGovCall::SetTokenSwapParameters { min_swap_amount, token_mint_pubkey } =>
+				SolanaApi::set_token_swap_parameters(*min_swap_amount, *token_mint_pubkey),
+		}
+	}
 }
 
 impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
