@@ -7,11 +7,11 @@ import {
   Chains,
   Chain,
 } from '@chainflip/cli';
+import { Keyring } from '@polkadot/api';
 import { HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import BigNumber from 'bignumber.js';
 import Web3 from 'web3';
-import Keyring from '../polkadot/keyring';
 import {
   getContractAddress,
   amountToFineAmount,
@@ -48,16 +48,23 @@ export async function executeEvmVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  brokerFees: {
+    account: string;
+    commissionBps: number;
+  },
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
   wallet?: HDNodeWallet,
-  brokerFees?: {
-    account: string;
+  affiliateFees: {
+    accountAddress: string;
+    accountShortId: number;
     commissionBps: number;
-  },
+  }[] = [],
+  // Will use Broker API 50% of the time if true, SDK otherwise.
+  allowUseBrokerApi = true,
 ): Promise<string> {
   const srcChain = chainFromAsset(sourceAsset);
   const destChain = chainFromAsset(destAsset);
@@ -70,12 +77,15 @@ export async function executeEvmVaultSwap(
     minPriceX128: '0',
   };
 
-  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
+  if (allowUseBrokerApi) {
+    if (
+      new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address !== brokerFees.account
+    ) {
+      throw new Error('Cannot use different Broker account when using Broker API for a vault swap');
+    }
+  }
 
-  const brokerComission = brokerFees ?? {
-    account: new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
-    commissionBps: 1,
-  };
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
 
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.
@@ -89,7 +99,7 @@ export async function executeEvmVaultSwap(
 
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
 
-  if (Math.random() > 0.5) {
+  if (!allowUseBrokerApi || Math.random() > 0.5) {
     // Use SDK
     const networkOptions = {
       signer: evmWallet,
@@ -101,6 +111,11 @@ export async function executeEvmVaultSwap(
       // This is run with fresh addresses to prevent nonce issues. Will be 1 for ERC20s.
       gasLimit: srcChain === Chains.Arbitrum ? 32000000n : 5000000n,
     } as const;
+
+    const mappedAffiliateFees = affiliateFees.map((f) => ({
+      account: f.accountShortId,
+      commissionBps: f.commissionBps,
+    }));
 
     const receipt = await executeSwap(
       {
@@ -117,13 +132,13 @@ export async function executeEvmVaultSwap(
           message: messageMetadata.message,
           ccmAdditionalData: messageMetadata.ccmAdditionalData,
         },
-        brokerFees: brokerComission,
+        brokerFees,
         // The SDK will encode these parameters and the ccmAdditionalData
         // into the `cfParameters` field for the vault swap.
         boostFeeBps,
         fillOrKillParams: fokParams,
         dcaParams,
-        affiliateFees: undefined,
+        affiliateFees: mappedAffiliateFees,
       } as ExecuteSwapParams,
       networkOptions,
       txOptions,
@@ -157,15 +172,14 @@ export async function executeEvmVaultSwap(
       ? decodeDotAddressForContract(destAddress)
       : destAddress,
     0, // broker_commission
-    extraParameters, // extra_parameters
-    // channel_metadata
+    extraParameters,
     messageMetadata && {
       message: messageMetadata.message as `0x${string}`,
       gas_budget: messageMetadata.gasBudget,
       ccm_additional_data: messageMetadata.ccmAdditionalData,
     },
-    boostFeeBps ?? 0, // boost_fee
-    null, // affiliates
+    boostFeeBps ?? 0,
+    affiliateFees.map((f) => ({ account: f.accountAddress, commissionBps: f.commissionBps })),
     dcaParams && {
       number_of_chunks: dcaParams.numberOfChunks,
       chunk_interval: dcaParams.chunkIntervalBlocks,

@@ -305,9 +305,7 @@ async function testGasLimitSwapToEvm(
           const aborted = event.data.broadcastId === broadcastId;
           if (aborted) {
             throw new Error(
-              `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${
-                event.data.broadcastId
-              }. Gas budget: ${gasLimitBudget}`,
+              `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${event.data.broadcastId}. Gas budget: ${gasLimitBudget}`,
             );
           }
           return aborted;

@@ -1,4 +1,5 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
+import { Keyring } from '@polkadot/api';
 import { encodeAddress } from '../polkadot/util-crypto';
 import { DcaParams, newSwap, FillOrKillParamsX128 } from './new_swap';
 import { send, sendViaCfTester } from './send';
@@ -30,7 +31,7 @@ import { SwapContext, SwapStatus } from './swap_context';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { executeEvmVaultSwap } from './evm_vault_swap';
 import { executeSolVaultSwap } from './sol_vault_swap';
-import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from './btc_vault_swap';
+import { buildAndSendBtcVaultSwap } from './btc_vault_swap';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
@@ -258,11 +259,26 @@ export async function executeVaultSwap(
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
+  brokerFees?: {
+    account: string;
+    commissionBps: number;
+  },
+  affiliateFees: {
+    accountAddress: string;
+    accountShortId: number;
+    commissionBps: number;
+  }[] = [],
+  allowUseBrokerApi = true,
 ) {
   let sourceAddress: string;
   let transactionId: TransactionOriginId;
 
   const srcChain = chainFromAsset(sourceAsset);
+
+  const usableBrokerFees = brokerFees ?? {
+    account: new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
+    commissionBps: 1,
+  };
 
   if (evmChains.includes(srcChain)) {
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
@@ -277,27 +293,28 @@ export async function executeVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
+      usableBrokerFees,
       messageMetadata,
       amount,
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
       wallet,
+      affiliateFees,
+      allowUseBrokerApi,
     );
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
   } else if (srcChain === 'Bitcoin') {
-    const brokerUri = '//BROKER_1';
-    await openPrivateBtcChannel(brokerUri);
     const txId = await buildAndSendBtcVaultSwap(
       Number(amount ?? defaultAssetAmounts(sourceAsset)),
-      brokerUri,
       destAsset,
       destAddress,
       fillOrKillParams === undefined
         ? await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND')
         : fillOrKillParams.refundAddress,
-      [],
+      usableBrokerFees,
+      affiliateFees.map((f) => ({ account: f.accountAddress, bps: f.commissionBps })),
     );
     transactionId = { type: TransactionOrigin.VaultSwapBitcoin, txId };
     // Unused for now
@@ -307,11 +324,13 @@ export async function executeVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
+      usableBrokerFees,
       messageMetadata,
       undefined,
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
+      affiliateFees.map((f) => ({ account: f.accountAddress, bps: f.commissionBps })),
     );
     transactionId = {
       type: TransactionOrigin.VaultSwapSolana,
@@ -335,6 +354,16 @@ export async function performVaultSwap(
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
+  brokerFees?: {
+    account: string;
+    commissionBps: number;
+  },
+  affiliateFees: {
+    accountAddress: string;
+    accountShortId: number;
+    commissionBps: number;
+  }[] = [],
+  allowUseBrokerApi = true,
 ): Promise<VaultSwapParams> {
   const tag = swapTag ?? '';
 
@@ -356,6 +385,9 @@ export async function performVaultSwap(
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
+      brokerFees,
+      affiliateFees,
+      allowUseBrokerApi,
     );
     swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapInitiated);
 
