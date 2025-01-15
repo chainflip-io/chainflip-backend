@@ -1,4 +1,3 @@
-
 pub use crate::{self as pallet_cf_ingress_egress};
 use crate::{DepositWitness, PalletSafeMode};
 
