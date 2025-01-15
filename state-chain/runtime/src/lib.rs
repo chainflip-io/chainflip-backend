@@ -1246,6 +1246,8 @@ type AllMigrations = (
 	PalletMigrations,
 	MigrationsForV1_8,
 	migrations::housekeeping::Migration,
+	// Can be removed once Solana address re-use is activated.
+	migrations::solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
 	migrations::reap_old_accounts::Migration,
 );
 

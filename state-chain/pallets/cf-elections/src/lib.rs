@@ -500,7 +500,7 @@ pub mod pallet {
 
 	/// Stores persistent state the electoral system needs.
 	#[pallet::storage]
-	type ElectoralUnsynchronisedStateMap<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ElectoralUnsynchronisedStateMap<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
