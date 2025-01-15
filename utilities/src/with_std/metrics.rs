@@ -554,7 +554,7 @@ pub async fn start<'a, 'env>(
 			.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port))
 	};
 
-	scope.spawn_weak("metrics_endpoint", async move {
+	scope.spawn_weak(async move {
 		future.await;
 		Ok(())
 	});

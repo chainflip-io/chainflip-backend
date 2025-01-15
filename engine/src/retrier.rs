@@ -258,7 +258,7 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 	) -> Self {
 		let (primary_signaller, primary_signal) = Signal::new();
 
-		scope.spawn_weak("client_selector", async move {
+		scope.spawn_weak(async move {
 			let client = primary_fut.await;
 			primary_signaller.signal((client, PrimaryOrBackup::Primary));
 			Ok(())
@@ -267,7 +267,7 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 		let backup_signal = if let Some(backup_fut) = backup_fut {
 			let (backup_signaller, backup_signal) = Signal::new();
 
-			scope.spawn_weak("backup_signal", async move {
+			scope.spawn_weak(async move {
 				let client = backup_fut.await;
 				backup_signaller.signal((client, PrimaryOrBackup::Backup));
 				Ok(())
@@ -413,7 +413,7 @@ where
 		let mut client_selector: ClientSelector<Client> =
 			ClientSelector::new(scope, primary_client_fut, backup_client_fut);
 
-		scope.spawn("client_retrier", async move {
+		scope.spawn(async move {
 			cf_utilities::loop_select! {
 				if let Some((response_sender, request_log, closure, retry_limit)) = request_receiver.recv() => {
 					RPC_RETRIER_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);

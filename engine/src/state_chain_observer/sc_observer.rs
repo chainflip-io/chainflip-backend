@@ -70,7 +70,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
 		let keygen_result_future =
 			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
-		scope.spawn("handle_keygen_request", async move {
+		scope.spawn(async move {
 			state_chain_client
 				.finalize_signed_extrinsic(
 					pallet_cf_threshold_signature::Call::<Runtime, I>::report_keygen_outcome {
@@ -117,7 +117,7 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 			sharing_participants,
 			receiving_participants,
 		);
-		scope.spawn("handle_key_handover_request", async move {
+		scope.spawn(async move {
 			let _result = state_chain_client
 				.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 					Runtime,
@@ -163,7 +163,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 		let signing_result_future =
 			multisig_client.initiate_signing(ceremony_id, signers, signing_info);
 
-		scope.spawn("handle_signing_request", async move {
+		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signatures) => {
 					let _result = state_chain_client
@@ -265,7 +265,7 @@ where
         // Ensure we don't submit initial heartbeat too early. Early heartbeats could falsely indicate
         // liveness
         let has_submitted_init_heartbeat = Arc::new(AtomicBool::new(false));
-        scope.spawn("initial heartbeat", {
+        scope.spawn({
             let state_chain_client = state_chain_client.clone();
             let has_submitted_init_heartbeat = has_submitted_init_heartbeat.clone();
             async move {
@@ -422,7 +422,7 @@ where
                                         if nominee == account_id {
                                             let btc_rpc = btc_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("btc_tx_broadcast_request", async move {
+                                            scope.spawn(async move {
                                                 // We check for PendingBroadcasts for Bitcoin specifically because if the previous broadcast was not broadcast,
                                                 // it can cause ours to fail, as we could be using a change UTXO that's only created in the previous broadcast.
                                                 for awaiting_broadcast_id in state_chain_client
@@ -468,7 +468,7 @@ where
                                         if nominee == account_id {
                                             let dot_rpc = dot_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("dot_tx_broadcast_request", async move {
+                                            scope.spawn(async move {
                                                 match dot_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
                                                     Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
@@ -491,7 +491,7 @@ where
                                         if nominee == account_id {
                                             let eth_rpc = eth_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("eth_tx_broadcast_request", async move {
+                                            scope.spawn(async move {
                                                 match eth_rpc.broadcast_transaction(payload).await {
                                                     Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
@@ -517,7 +517,7 @@ where
                                         if nominee == account_id {
                                             let arb_rpc = arb_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("arb_tx_broadcast_request", async move {
+                                            scope.spawn(async move {
                                                 match arb_rpc.broadcast_transaction(payload).await {
                                                     Ok(tx_hash) => info!("Arbitrum TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
@@ -573,7 +573,7 @@ where
                                         if nominee == account_id {
                                             let sol_rpc = sol_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
-                                            scope.spawn("sol_tx_broadcast_request", async move {
+                                            scope.spawn(async move {
                                                 match sol_rpc.broadcast_transaction(payload).await {
                                                     Ok(tx_signature) => info!("Solana TransactionBroadcastRequest {broadcast_id:?} success: tx_signature: {tx_signature:?}"),
                                                     Err(error) => {

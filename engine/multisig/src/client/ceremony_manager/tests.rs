@@ -347,15 +347,15 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 				oneshot::channel();
 			const CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
 
-			let task_handle = scope.spawn_with_handle(
-				"",
-				CeremonyRunner::<SigningCeremony<EvmCryptoScheme>, EthSigning>::run(
-					CEREMONY_ID,
-					ceremony_runner_p2p_receiver,
-					ceremony_runner_request_receiver,
-					mpsc::unbounded_channel().0,
-				),
-			);
+			let task_handle = scope.spawn_with_handle(CeremonyRunner::<
+				SigningCeremony<EvmCryptoScheme>,
+				EthSigning,
+			>::run(
+				CEREMONY_ID,
+				ceremony_runner_p2p_receiver,
+				ceremony_runner_request_receiver,
+				mpsc::unbounded_channel().0,
+			));
 
 			// Turn the task handle into a ceremony handle and insert it into the ceremony manager
 			let ceremony_handle = CeremonyHandle {

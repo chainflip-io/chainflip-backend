@@ -203,14 +203,12 @@ pub fn task_scope<
 			if std::thread::panicking() {
 				tracing::error!(
 					target: "task_scope",
-					"scope closed by panic '{}'",
-					location
+					"scope closed by panic '{location}'"
 				);
 			} else {
 				tracing::error!(
 					target: "task_scope",
-					"scope closed by cancellation '{}'",
-					location
+					"scope closed by cancellation '{location}'"
 				);
 			}
 		});
@@ -244,21 +242,18 @@ pub fn task_scope<
 			async move {
 				tracing::info!(
 					target: "task_scope",
-					"parent task started '{}'",
-					location,
+					"parent task started '{location}'"
 				);
 				let guard = scopeguard::guard((), move |_| {
 					if std::thread::panicking() {
 						tracing::error!(
 							target: "task_scope",
-							"parent task ended by panic '{}'",
-							location
+							"parent task ended by panic '{location}'"
 						);
 					} else {
 						tracing::error!(
 							target: "task_scope",
-							"parent task ended by cancellation '{}'",
-							location
+							"parent task ended by cancellation '{location}'"
 						);
 					}
 				});
@@ -267,13 +262,11 @@ pub fn task_scope<
 				match &result {
 					Ok(_) => tracing::info!(
 						target: "task_scope",
-						"parent task ended '{}'",
-						location
+						"parent task ended '{location}'"
 					),
 					Err(error) => tracing::error!(
 						target: "task_scope",
-						"parent task ended by error '{error:?}' '{}'",
-						location
+						"parent task ended by error '{error:?}' '{location}'"
 					),
 				}
 				result
@@ -286,16 +279,14 @@ pub fn task_scope<
 			Ok((_, t)) => {
 				tracing::info!(
 					target: "task_scope",
-					"scope closed '{}'",
-					location
+					"scope closed '{location}'"
 				);
 				Ok(t)
 			},
 			Err(error) => {
 				tracing::info!(
 					target: "task_scope",
-					"scope closed by error {error:?} '{}'",
-					location
+					"scope closed by error {error:?} '{location}'"
 				);
 				Err(error)
 			},
@@ -310,7 +301,6 @@ struct TaskProperties {
 	weak: bool,
 	location: core::panic::Location<'static>,
 	task_id: u64,
-	task_name: &'static str,
 }
 impl TaskProperties {
 	fn log_on_end<T, E: Debug + Send + 'static>(
@@ -321,15 +311,13 @@ impl TaskProperties {
 			Ok(result) => match result {
 				Ok(_) => tracing::info!(
 					target: "task_scope",
-					"child task {} #{} ended: '{}'",
-					self.task_name,
+					"child task #{} ended: '{}'",
 					self.task_id,
 					self.location
 				),
 				Err(error) => tracing::error!(
 					target: "task_scope",
-					"child task {} #{} ended by error '{error:?}': '{}'",
-					self.task_name,
+					"child task #{} ended by error '{error:?}': '{}'",
 					self.task_id,
 					self.location
 				),
@@ -338,16 +326,14 @@ impl TaskProperties {
 				if error.is_panic() {
 					tracing::error!(
 						target: "task_scope",
-						"child task {} #{} ended by panic: '{}'",
-						self.task_name,
+						"child task #{} ended by panic: '{}'",
 						self.task_id,
 						self.location
 					);
 				} else {
 					tracing::error!(
 						target: "task_scope",
-						"child task {} #{} ended by cancellation: '{}'",
-						self.task_name,
+						"child task #{} ended by cancellation: '{}'",
 						self.task_id,
 						self.location
 					);
@@ -384,11 +370,11 @@ pub struct Scope<'env, Error: Debug + Send + 'static> {
 	///
 	/// let mut a = 1;
 	/// task_scope::<(), (), _>(|scope| async move {
-	///     scope.spawn("", async {
+	///     scope.spawn(async {
 	///         a += 1;
 	///             Ok(())
 	///     });
-	///     scope.spawn("", async {
+	///     scope.spawn(async {
 	///         a += 1; // might run concurrently to other spawn
 	///             Ok(())
 	///     });
@@ -432,12 +418,7 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 	}
 
 	#[track_caller]
-	fn inner_spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(
-		&self,
-		weak: bool,
-		task_name: &'static str,
-		f: F,
-	) {
+	fn inner_spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, weak: bool, f: F) {
 		let location = core::panic::Location::caller();
 		let task_id = self.task_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
@@ -445,28 +426,20 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 			let future: Pin<Box<dyn 'env + Future<Output = Result<(), Error>> + Send>> =
 				Box::pin(f.with_current_subscriber());
 			let future: TaskFuture<Error> = unsafe { std::mem::transmute(future) };
-			(TaskProperties { weak, location: *location, task_id, task_name }, future)
+			(TaskProperties { weak, location: *location, task_id }, future)
 		});
 	}
 
 	/// Spawns a task that the scope will wait for before exiting.
 	#[track_caller]
-	pub fn spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(
-		&self,
-		task_name: &'static str,
-		f: F,
-	) {
-		self.inner_spawn(false, task_name, f)
+	pub fn spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
+		self.inner_spawn(false, f)
 	}
 
 	/// Spawns a task that the scope will not wait for before exiting, instead it will be cancelled.
 	#[track_caller]
-	pub fn spawn_weak<F: 'env + Future<Output = Result<(), Error>> + Send>(
-		&self,
-		task_name: &'static str,
-		f: F,
-	) {
-		self.inner_spawn(true, task_name, f)
+	pub fn spawn_weak<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
+		self.inner_spawn(true, f)
 	}
 
 	/// Spawns a task that the scope will wait for before exiting, and returns a handle that you can
@@ -477,11 +450,10 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 		F: 'env + Future<Output = Result<T, Error>> + Send,
 	>(
 		&self,
-		task_name: &'static str,
 		f: F,
 	) -> ScopedJoinHandle<T> {
 		let (handle, future) = ScopedJoinHandle::new(f);
-		self.spawn(task_name, future);
+		self.spawn(future);
 		handle
 	}
 }
@@ -568,8 +540,7 @@ impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 				if let Some((properties, future)) = option {
 					tracing::info!(
 						target: "task_scope",
-						"child task {} #{} started: '{}'",
-						properties.task_name,
+						"child task #{} started: '{}'",
 						properties.task_id,
 						properties.location
 					);
@@ -650,8 +621,7 @@ impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 				for task in tasks.into_iter() {
 					tracing::error!(
 						target: "task_scope",
-						"child task {} #{} ended by cancellation '{}'",
-						task.properties.task_name,
+						"child task #{} ended by cancellation '{}'",
 						task.properties.task_id,
 						task.properties.location
 					);
@@ -726,7 +696,7 @@ mod tests {
 			let _result = std::panic::AssertUnwindSafe(task_scope(|scope| {
 				async {
 					for _i in 0..COUNT {
-						scope.spawn("", async {
+						scope.spawn(async {
 							task_start_count.fetch_add(1, Ordering::Relaxed);
 							std::thread::sleep(std::time::Duration::from_millis(10));
 							task_end_count.fetch_add(1, Ordering::Relaxed);
@@ -756,7 +726,7 @@ mod tests {
 		const VALUE: u32 = 40;
 		task_scope::<_, Infallible, _>(|scope| {
 			async {
-				let handle = scope.spawn_with_handle("", async { Ok(VALUE) });
+				let handle = scope.spawn_with_handle(async { Ok(VALUE) });
 				assert_eq!(handle.await, VALUE);
 				Ok(())
 			}
@@ -771,7 +741,7 @@ mod tests {
 	async fn dropping_handle_cancels_task() {
 		task_scope::<_, Infallible, _>(|scope| {
 			async {
-				let _handle = scope.spawn_with_handle::<(), _>("", futures::future::pending());
+				let _handle = scope.spawn_with_handle::<(), _>(futures::future::pending());
 
 				Ok(())
 			}
@@ -786,7 +756,7 @@ mod tests {
 	async fn task_handle_does_not_return_error() {
 		task_scope::<(), _, _>(|scope| {
 			async {
-				let handle = scope.spawn_with_handle::<(), _>("", async { Err(anyhow!("")) });
+				let handle = scope.spawn_with_handle::<(), _>(async { Err(anyhow!("")) });
 				handle.await;
 				panic!()
 			}
@@ -808,7 +778,7 @@ mod tests {
 						receivers = (0..10)
 							.map(|_i| {
 								let (sender, receiver) = oneshot::channel::<()>();
-								scope.spawn("", async move {
+								scope.spawn(async move {
 									let _sender = sender;
 									futures::future::pending().await
 								});
@@ -846,10 +816,10 @@ mod tests {
 
 		task_scope::<_, Infallible, _>(|scope| {
 			async {
-				scope.spawn("", async {
+				scope.spawn(async {
 					task_scope::<_, Infallible, _>(|scope| {
 						async {
-							scope.spawn("", async {
+							scope.spawn(async {
 								a += 10;
 								Ok(())
 							});
@@ -862,7 +832,7 @@ mod tests {
 
 					task_scope::<_, Infallible, _>(|scope| {
 						async {
-							scope.spawn("", async {
+							scope.spawn(async {
 								a += 10;
 								Ok(())
 							});
@@ -891,7 +861,7 @@ mod tests {
 	async fn scope_doesnt_wait_for_weak_tasks() {
 		task_scope::<_, Infallible, _>(|scope| {
 			async {
-				scope.spawn_weak("", futures::future::pending());
+				scope.spawn_weak(futures::future::pending());
 
 				Ok(())
 			}

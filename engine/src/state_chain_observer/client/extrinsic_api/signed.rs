@@ -188,7 +188,7 @@ impl SignedExtrinsicClient {
 			account_id: signer.account_id.clone(),
 			request_sender,
 			dry_run_sender,
-			_task_handle: scope.spawn_with_handle("signed_extrinsic_client",{
+			_task_handle: scope.spawn_with_handle({
 				let mut state_chain_stream = state_chain_stream.clone();
 
 				task_scope(move |scope| async move {

@@ -83,7 +83,7 @@ pub async fn start<'a, 'env>(
 		}))
 		.bind((health_check_settings.hostname.parse::<IpAddr>()?, health_check_settings.port));
 
-	scope.spawn_weak("health_check", async move {
+	scope.spawn_weak(async move {
 		future.await;
 		Ok(())
 	});

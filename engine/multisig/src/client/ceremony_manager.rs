@@ -855,15 +855,12 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 		let (message_sender, message_receiver) = mpsc::unbounded_channel();
 		let (request_sender, request_receiver) = oneshot::channel();
 
-		let task_handle = scope.spawn_with_handle(
-			"ceremony_runner",
-			CeremonyRunner::<Ceremony, Chain>::run(
-				ceremony_id,
-				message_receiver,
-				request_receiver,
-				outcome_sender,
-			),
-		);
+		let task_handle = scope.spawn_with_handle(CeremonyRunner::<Ceremony, Chain>::run(
+			ceremony_id,
+			message_receiver,
+			request_receiver,
+			outcome_sender,
+		));
 
 		CeremonyHandle {
 			message_sender,

@@ -158,7 +158,7 @@ where
 
 	let fut = task_scope(move |scope| {
 		async move {
-			scope.spawn("p2p_core", {
+			scope.spawn({
 				let state_chain_client = state_chain_client.clone();
 				async move {
 					peer_info_submitter::ensure_peer_info_registered(
@@ -188,12 +188,12 @@ where
 				}
 			});
 
-			scope.spawn("muxer_fut", async move {
+			scope.spawn(async move {
 				muxer_future.await;
 				Ok(())
 			});
 
-			scope.spawn("p2p_monitor", async move {
+			scope.spawn(async move {
 				monitor_p2p_registration_events(
 					state_chain_client,
 					sc_block_stream,

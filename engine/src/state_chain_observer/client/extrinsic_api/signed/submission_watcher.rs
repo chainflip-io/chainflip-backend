@@ -229,7 +229,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					});
 					self.submission_status_futures.insert(
 						(request.id, request.next_submission_id),
-						self.scope.spawn_with_handle("submit_extrinsic_at_nonce", async move {
+						self.scope.spawn_with_handle(async move {
 							while let Some(status) = transaction_status_stream.next().await {
 								// NOTE: Currently the _extrinsic_index returned by substrate
 								// through the subscription is wrong and is always 0

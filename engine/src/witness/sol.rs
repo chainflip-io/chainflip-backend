@@ -243,7 +243,7 @@ where
 		+ Send
 		+ Sync,
 {
-	scope.spawn("state_chain_client", async move {
+	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
 			async {
 				crate::elections::Voter::new(
