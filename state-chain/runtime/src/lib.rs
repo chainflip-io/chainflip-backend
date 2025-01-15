@@ -290,6 +290,8 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinKeyProvider = BitcoinThresholdSigner;
 	type RuntimeSafeMode = RuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
+	type SolEnvironment = SolEnvironment;
+	type SolanaBroadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 

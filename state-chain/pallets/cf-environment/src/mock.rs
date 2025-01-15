@@ -4,15 +4,26 @@ use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
-	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot, Solana,
+	eth,
+	sol::{
+		api::{
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
+			SolanaEnvironment,
+		},
+		sol_tx_core::sol_test_values,
+		SolAddress, SolAmount, SolApiEnvironment, SolHash,
+	},
+	ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, ChainEnvironment, Polkadot, Solana,
 };
-use cf_primitives::SemVer;
+use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::key_provider::MockKeyProvider, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{derive_impl, parameter_types};
 use sp_core::{H160, H256};
+use sp_runtime::DispatchError;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -124,6 +135,93 @@ impl GetBitcoinFeeInfo for MockBitcoinFeeInfo {
 	}
 }
 
+parameter_types! {
+	pub static SolanaCallBroadcasted: Option<SolanaApi<MockSolEnvironment>> = None;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct MockSolEnvironment;
+impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment {
+	fn lookup(_s: ApiEnvironment) -> Option<SolApiEnvironment> {
+		Some(sol_test_values::api_env())
+	}
+}
+impl ChainEnvironment<CurrentAggKey, SolAddress> for MockSolEnvironment {
+	fn lookup(_s: CurrentAggKey) -> Option<SolAddress> {
+		Some(sol_test_values::agg_key())
+	}
+}
+impl ChainEnvironment<CurrentOnChainKey, SolAddress> for MockSolEnvironment {
+	fn lookup(_s: CurrentOnChainKey) -> Option<SolAddress> {
+		Some(sol_test_values::agg_key())
+	}
+}
+impl ChainEnvironment<ComputePrice, SolAmount> for MockSolEnvironment {
+	fn lookup(_s: ComputePrice) -> Option<u64> {
+		Some(sol_test_values::compute_price())
+	}
+}
+impl ChainEnvironment<DurableNonce, DurableNonceAndAccount> for MockSolEnvironment {
+	fn lookup(_s: DurableNonce) -> Option<DurableNonceAndAccount> {
+		Some(sol_test_values::durable_nonce())
+	}
+}
+impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for MockSolEnvironment {
+	fn lookup(_s: AllNonceAccounts) -> Option<Vec<DurableNonceAndAccount>> {
+		Some(vec![(sol_test_values::nonce_accounts()[0], SolHash([0x00; 32]))])
+	}
+}
+impl RecoverDurableNonce for MockSolEnvironment {
+	fn recover_durable_nonce(_nonce_account: SolAddress) {
+		unimplemented!();
+	}
+}
+impl SolanaEnvironment for MockSolEnvironment {}
+
+pub struct MockSolanaBroadcaster;
+impl Broadcaster<Solana> for MockSolanaBroadcaster {
+	type ApiCall = cf_chains::sol::api::SolanaApi<MockSolEnvironment>;
+	type Callback = RuntimeCall;
+
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		SolanaCallBroadcasted::set(Some(api_call));
+		(1, 2)
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		_api_call: Self::ApiCall,
+		_success_callback: Option<Self::Callback>,
+		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
+	) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_rotation_tx(
+		_api_call: Self::ApiCall,
+		_new_key: SolAddress,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		unimplemented!()
+	}
+
+	fn re_sign_broadcast(
+		_broadcast_id: BroadcastId,
+		_request_broadcast: bool,
+		_refresh_replay_protection: bool,
+	) -> Result<ThresholdSignatureRequestId, DispatchError> {
+		unimplemented!()
+	}
+
+	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
+		unimplemented!()
+	}
+
+	fn expire_broadcast(_broadcast_id: BroadcastId) {
+		unimplemented!()
+	}
+}
+
 impl_pallet_safe_mode!(MockPalletSafeMode; flag1, flag2);
 impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
@@ -140,6 +238,8 @@ impl pallet_cf_environment::Config for Test {
 	type BitcoinKeyProvider = MockBitcoinKeyProvider;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
+	type SolEnvironment = MockSolEnvironment;
+	type SolanaBroadcaster = MockSolanaBroadcaster;
 	type WeightInfo = ();
 }
 

@@ -18,6 +18,7 @@ sp-core = { workspace = true }
 sp-arithmetic = { workspace = true }
 lazy_format = { workspace = true }
 
+sol-prim = { workspace = true }
 cf-utilities = { workspace = true }
 
 frame-support = { workspace = true }
@@ -35,6 +36,7 @@ default = ["std"]
 std = [
   "sp-core/std",
   "sp-arithmetic/std",
+  "sol-prim/std",
   "cf-utilities/std",
   "codec/std",
   "ethabi/std",

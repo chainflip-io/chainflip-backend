@@ -12,16 +12,19 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, Solana},
+	sol::{
+		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment},
+		SolAddress, SolApiEnvironment, SolHash, Solana,
+	},
 	Chain,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	NetworkEnvironment, SemVer,
+	BroadcastId, NetworkEnvironment, SemVer, SolanaVaultSwapSettings,
 };
 use cf_traits::{
-	CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
-	SolanaNonceWatch,
+	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
+	SafeMode, SolanaNonceWatch,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -100,6 +103,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type CurrentReleaseVersion: Get<SemVer>;
 
+		type SolEnvironment: SolanaEnvironment;
+
+		/// Solana broadcaster.
+		type SolanaBroadcaster: Broadcaster<
+			Solana,
+			ApiCall = SolanaApi<Self::SolEnvironment>,
+			Callback = RuntimeCallFor<Self>,
+		>;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -112,6 +124,8 @@ pub mod pallet {
 		NonceAccountNotBeingUsedOrDoesNotExist,
 		/// The given UTXO parameters are invalid.
 		InvalidUtxoParameters,
+		/// Failed to build Solana Api call. See logs for more details
+		FailedToBuildSolanaApiCall,
 	}
 
 	#[pallet::pallet]
@@ -272,6 +286,11 @@ pub mod pallet {
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
 		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
+		/// An Solana transaction was sent to the Smart Program to update Vault Swap settings.
+		SolanaVaultSwapSettingUpdated {
+			settings: SolanaVaultSwapSettings,
+			broadcast_id: BroadcastId,
+		},
 	}
 
 	#[pallet::call]
@@ -484,6 +503,57 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::DurableNonceSetForAccount {
 				nonce_account,
 				durable_nonce: new_hash,
+			});
+
+			Ok(())
+		}
+
+		/// Allows Governance to update Solana's Vault Swap settings.
+		/// Requires Governance Origin.
+		///
+		/// ## Events
+		///
+		/// - [OnSuccess](Event::SolanaVaultSwapSettingUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(8)]
+		#[pallet::weight(Weight::zero())]
+		pub fn update_solana_vault_swap_settings(
+			origin: OriginFor<T>,
+			settings: SolanaVaultSwapSettings,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			let sol_transaction = match settings {
+				SolanaVaultSwapSettings::ProgramSwap {
+					min_native_swap_amount,
+					max_dst_address_len,
+					max_ccm_message_len,
+					max_cf_parameters_len,
+					max_event_accounts,
+				} => SolanaApi::set_program_swaps_parameters(
+					min_native_swap_amount,
+					max_dst_address_len,
+					max_ccm_message_len,
+					max_cf_parameters_len,
+					max_event_accounts,
+				),
+				SolanaVaultSwapSettings::TokenSwap { min_swap_amount, token_mint_pubkey } =>
+					SolanaApi::set_token_swap_parameters(min_swap_amount, token_mint_pubkey),
+			}.map_err(|e| {
+				// If we fail here, most likely some Solana Environment variables were not set.
+				log::error!("Failed to build Solana Api call to update Solana Vault Swap settings. Error: {:?}", e);
+				Error::<T>::FailedToBuildSolanaApiCall
+			})?;
+
+			let (broadcast_id, _) =
+				T::SolanaBroadcaster::threshold_sign_and_broadcast(sol_transaction);
+
+			Self::deposit_event(Event::<T>::SolanaVaultSwapSettingUpdated {
+				settings,
+				broadcast_id,
 			});
 
 			Ok(())

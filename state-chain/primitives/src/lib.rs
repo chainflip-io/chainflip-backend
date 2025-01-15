@@ -10,6 +10,7 @@ use frame_support::sp_runtime::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sol_prim::Address as SolAddress;
 use sp_core::ConstU32;
 use sp_std::{
 	cmp::{Ord, PartialOrd},
@@ -443,3 +444,29 @@ pub struct DcaParameters {
 }
 
 pub type ShortId = u8;
+
+#[derive(
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub enum SolanaVaultSwapSettings {
+	ProgramSwap {
+		min_native_swap_amount: u64,
+		max_dst_address_len: u16,
+		max_ccm_message_len: u32,
+		max_cf_parameters_len: u32,
+		max_event_accounts: u32,
+	},
+	TokenSwap {
+		min_swap_amount: u64,
+		token_mint_pubkey: SolAddress,
+	},
+}
