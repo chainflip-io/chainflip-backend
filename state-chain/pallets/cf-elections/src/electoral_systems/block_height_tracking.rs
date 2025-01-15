@@ -19,7 +19,7 @@ use frame_support::{
 use primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
+use sp_std::{collections::vec_deque::VecDeque, vec::Vec, fmt::Debug};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
@@ -28,33 +28,24 @@ pub mod consensus;
 pub mod primitives;
 pub mod state_machine;
 
-pub trait BlockHeightTrackingTypes: Ord + PartialEq + Clone + sp_std::fmt::Debug + 'static {
+pub trait BlockHeightTrackingTypes: Ord + PartialEq + Clone + Debug + 'static {
 	const SAFETY_MARGIN: usize;
 	type ChainBlockNumber: SaturatingStep
 		+ BlockZero
-		+ sp_std::fmt::Debug
+		+ Debug
 		+ Copy
 		+ Eq
 		+ Ord
 		+ Serialize
 		+ for<'a> Deserialize<'a>
 		+ 'static;
-	// Serialize
-	// 	+ for<'a> Deserialize<'a>
-	// 	+ PartialEq
-	// 	+ Ord
-	// 	+ Copy
-	// 	+ Step
-	// 	+ BlockZero
-	// 	+ sp_std::fmt::Debug
-	// 	+ 'static;
 	type ChainBlockHash: Serialize
 		+ for<'a> Deserialize<'a>
 		+ PartialEq
 		+ Eq
 		+ Ord
 		+ Clone
-		+ sp_std::fmt::Debug
+		+ Debug
 		+ 'static;
 
 	type BlockHeightChangeHook: Hook<Self::ChainBlockNumber, ()>;

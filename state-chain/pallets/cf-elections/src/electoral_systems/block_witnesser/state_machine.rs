@@ -33,7 +33,7 @@ pub trait BWTypes: 'static {
 }
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd, Default
 )]
 pub struct BWSettings {
 	pub max_concurrent_elections: u32,
@@ -42,9 +42,9 @@ pub struct BWSettings {
 #[derive_where(Debug, Clone, PartialEq, Eq; T::SafeModeEnabledHook: Debug + Clone + Eq, T::ElectionPropertiesHook: Debug + Clone + Eq)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct BWState<T: BWTypes> {
-	elections: ElectionTracker<T::ChainBlockNumber>,
-	generate_election_properties_hook: T::ElectionPropertiesHook,
-	safemode_enabled: T::SafeModeEnabledHook,
+	pub elections: ElectionTracker<T::ChainBlockNumber>,
+	pub generate_election_properties_hook: T::ElectionPropertiesHook,
+	pub safemode_enabled: T::SafeModeEnabledHook,
 	_phantom: sp_std::marker::PhantomData<T>,
 }
 

@@ -19,12 +19,12 @@ pub struct ElectionTracker<N: Ord> {
 	pub highest_scheduled: N,
 
 	/// Map containing all currently active elections.
-	/// The associated usize is somewhat an artifact of the fact that
+	/// The associated u8 "reord_id" is somewhat an artifact of the fact that
 	/// this is intended to be used in an electoral system state machine. And the state machine
 	/// has to know when to re-open an election which is currently ongoing.
 	/// The state machine wouldn't close and reopen an election if the election properties
-	/// stay the same, so we have (N, usize) as election properties. And when we want to reopen
-	/// an ongoing election we increment the usize.
+	/// stay the same, so we have (N, u8) as election properties. And when we want to reopen
+	/// an ongoing election we change the u8 reorg_id.
 	pub ongoing: BTreeMap<N, u8>,
 
 	/// When an election for a given block height is requested by inserting it in `ongoing`, it is
