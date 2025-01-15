@@ -738,6 +738,31 @@ solana_program!(
 				bpf_loader_upgradeable: { signer: false, writable: false },
 			]
 		},
+		set_program_swaps_parameters => SetProgramSwapsParameters {
+			args: [
+				min_native_swap_amount: u64,
+				max_dst_address_len: u16,
+				max_ccm_message_len: u32,
+				max_cf_parameters_len: u32,
+				max_event_accounts: u32,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				gov_key: { signer: true, writable: false },
+			]
+		},
+		enable_token_support => EnableTokenSupport {
+			args: [
+				min_swap_amount: u64,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				gov_key: { signer: true, writable: true },
+				token_supported_account: { signer: false, writable: true },
+				mint: { signer: false, writable: false },
+				system_program: { signer: false, writable: false },
+			]
+		},
 	},
 	types: [
 		DepositChannelHistoricalFetch {

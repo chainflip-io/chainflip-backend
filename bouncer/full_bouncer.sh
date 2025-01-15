@@ -7,6 +7,7 @@ echo "Running full bouncer 🧪"
 ./commands/run_test.ts "BTC-UTXO-Consolidation"
 ./commands/run_test.ts "Rotation-Barrier"
 ./commands/run_test.ts "Minimum-Deposit"
+./commands/run_test.ts "Solana-Vault-Settings-Governance"
 
 if [[ $LOCALNET == false ]]; then
   echo "🤫 Skipping tests that require localnet"

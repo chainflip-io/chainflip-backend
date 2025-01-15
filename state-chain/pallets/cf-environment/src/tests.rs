@@ -5,7 +5,10 @@ use cf_chains::{
 		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
 		BitcoinFeeInfo, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
 	},
-	sol::{SolAddress, SolHash},
+	sol::{
+		api::{SolanaGovCall, SolanaTransactionType},
+		SolAddress, SolHash,
+	},
 };
 use cf_traits::SafeMode;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
@@ -677,6 +680,40 @@ fn ensure_governance_origin_checks() {
 		assert_noop!(
 			Environment::force_recover_sol_nonce(non_gov_origin, Default::default(), None),
 			sp_runtime::traits::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn can_dispatch_solana_gov_call() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Environment::dispatch_solana_gov_call(
+			RuntimeOrigin::root(),
+			SolanaGovCall::SetProgramSwapsParameters {
+				min_native_swap_amount: 1_000_000_000_000u64,
+				max_dst_address_len: 255u16,
+				max_ccm_message_len: 200_000u32,
+				max_cf_parameters_len: 150_000u32,
+				max_event_accounts: 15u32,
+			}
+		));
+
+		assert_eq!(
+			SolanaCallBroadcasted::get().unwrap().call_type,
+			SolanaTransactionType::SetProgramSwapParameters
+		);
+
+		assert_ok!(Environment::dispatch_solana_gov_call(
+			RuntimeOrigin::root(),
+			SolanaGovCall::SetTokenSwapParameters {
+				min_swap_amount: 1_000_000_000_000u64,
+				token_mint_pubkey: SolAddress([0x11; 32]),
+			}
+		));
+
+		assert_eq!(
+			SolanaCallBroadcasted::get().unwrap().call_type,
+			SolanaTransactionType::SetTokenSwapParameters
 		);
 	});
 }
