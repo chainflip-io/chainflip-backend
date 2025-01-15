@@ -107,16 +107,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
     });
   }
 
-  // Temporal workaround if running the bouncer without the Solana node
-  try {
-    await solClient.getGenesisHash();
-  } catch (e) {
-    console.log('Solana not running, skipping key initialization');
-    return;
-  }
-
   const solanaVaultProgramId = new PublicKey(getContractAddress('Solana', 'VAULT'));
-
   const dataAccount = new PublicKey(getContractAddress('Solana', 'DATA_ACCOUNT'));
   const whaleKeypair = getSolWhaleKeyPair();
 
