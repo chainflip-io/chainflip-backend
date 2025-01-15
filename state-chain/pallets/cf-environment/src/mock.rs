@@ -11,7 +11,6 @@ use cf_chains::{
 			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
 			SolanaEnvironment,
 		},
-		sol_tx_core::sol_test_values,
 		SolAddress, SolAmount, SolApiEnvironment, SolHash,
 	},
 	ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, ChainEnvironment, Polkadot, Solana,
@@ -143,32 +142,40 @@ parameter_types! {
 pub struct MockSolEnvironment;
 impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment {
 	fn lookup(_s: ApiEnvironment) -> Option<SolApiEnvironment> {
-		Some(sol_test_values::api_env())
+		Some(SolApiEnvironment {
+			vault_program: SolAddress([0x00; 32]),
+			vault_program_data_account: SolAddress([0x00; 32]),
+			token_vault_pda_account: SolAddress([0x00; 32]),
+			usdc_token_mint_pubkey: SolAddress([0x00; 32]),
+			usdc_token_vault_ata: SolAddress([0x00; 32]),
+			swap_endpoint_program: SolAddress([0x00; 32]),
+			swap_endpoint_program_data_account: SolAddress([0x00; 32]),
+		})
 	}
 }
 impl ChainEnvironment<CurrentAggKey, SolAddress> for MockSolEnvironment {
 	fn lookup(_s: CurrentAggKey) -> Option<SolAddress> {
-		Some(sol_test_values::agg_key())
+		Some(SolAddress([0x00; 32]))
 	}
 }
 impl ChainEnvironment<CurrentOnChainKey, SolAddress> for MockSolEnvironment {
 	fn lookup(_s: CurrentOnChainKey) -> Option<SolAddress> {
-		Some(sol_test_values::agg_key())
+		Some(SolAddress([0x00; 32]))
 	}
 }
 impl ChainEnvironment<ComputePrice, SolAmount> for MockSolEnvironment {
 	fn lookup(_s: ComputePrice) -> Option<u64> {
-		Some(sol_test_values::compute_price())
+		Some(0u64)
 	}
 }
 impl ChainEnvironment<DurableNonce, DurableNonceAndAccount> for MockSolEnvironment {
 	fn lookup(_s: DurableNonce) -> Option<DurableNonceAndAccount> {
-		Some(sol_test_values::durable_nonce())
+		Some((SolAddress([0x00; 32]), SolHash([0x00; 32])))
 	}
 }
 impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for MockSolEnvironment {
 	fn lookup(_s: AllNonceAccounts) -> Option<Vec<DurableNonceAndAccount>> {
-		Some(vec![(sol_test_values::nonce_accounts()[0], SolHash([0x00; 32]))])
+		Some(vec![(SolAddress([0x00; 32]), SolHash([0x00; 32]))])
 	}
 }
 impl RecoverDurableNonce for MockSolEnvironment {

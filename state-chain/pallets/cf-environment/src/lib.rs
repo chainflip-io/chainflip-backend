@@ -32,7 +32,6 @@ pub use pallet::*;
 use sp_std::{vec, vec::Vec};
 
 mod benchmarking;
-
 mod mock;
 mod tests;
 
