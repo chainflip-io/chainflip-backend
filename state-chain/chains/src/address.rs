@@ -175,16 +175,6 @@ impl TryFrom<ForeignChainAddress> for ScriptPubkey {
 	}
 }
 
-impl TryFrom<EncodedAddress> for SolAddress {
-	type Error = AddressError;
-
-	fn try_from(address: EncodedAddress) -> Result<Self, Self::Error> {
-		match address {
-			EncodedAddress::Sol(addr) => Ok(addr.into()),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
 pub trait IntoForeignChainAddress<C: Chain> {
 	fn into_foreign_chain_address(self) -> ForeignChainAddress;
 }
