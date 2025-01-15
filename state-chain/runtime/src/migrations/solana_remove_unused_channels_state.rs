@@ -13,6 +13,19 @@ use sp_runtime::DispatchError;
 pub struct SolanaRemoveUnusedChannelsState;
 
 impl OnRuntimeUpgrade for SolanaRemoveUnusedChannelsState {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		assert!(ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
+			.next()
+			.is_some());
+		let no_of_items_pre_upgrade: u64 =
+			ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
+				.count()
+				.try_into()
+				.unwrap();
+		Ok(no_of_items_pre_upgrade.encode())
+	}
+
 	fn on_runtime_upgrade() -> Weight {
 		let addresses_in_use: BTreeSet<_> = pallet_cf_ingress_egress::DepositChannelLookup::<
 			Runtime,
@@ -43,19 +56,6 @@ impl OnRuntimeUpgrade for SolanaRemoveUnusedChannelsState {
 		}
 
 		Weight::zero()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
-		assert!(ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
-			.next()
-			.is_some());
-		let no_of_items_pre_upgrade: u64 =
-			ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
-				.count()
-				.try_into()
-				.unwrap();
-		Ok(no_of_items_pre_upgrade.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
