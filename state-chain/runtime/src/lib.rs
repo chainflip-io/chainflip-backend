@@ -2227,6 +2227,7 @@ impl_runtime_apis! {
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
 			let source_chain = ForeignChain::from(source_asset);
+			let destination_chain = ForeignChain::from(destination_asset);
 
 			// Validate parameters.
 			if let Some(params) = dca_parameters.as_ref() {
@@ -2236,7 +2237,7 @@ impl_runtime_apis! {
 			frame_support::ensure!(
 				ChainAddressConverter::try_from_encoded_address(destination_address.clone())
 					.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
-					.chain() == ForeignChain::from(destination_asset)
+					.chain() == destination_chain
 				,
 				"Destination address and asset are on different chains."
 			);
@@ -2257,9 +2258,9 @@ impl_runtime_apis! {
 			// Validate CCM.
 			if let Some(ccm) = channel_metadata.as_ref() {
 				if source_chain == ForeignChain::Bitcoin {
-					return Err(DispatchErrorWithMessage::from("Vault swaps with Ccm are not supported for the Bitcoin Chain"));
+					return Err(DispatchErrorWithMessage::from("Vault swaps with CCM are not supported for the Bitcoin Chain"));
 				}
-				if !ForeignChain::from(destination_asset).ccm_support() {
+				if !destination_chain.ccm_support() {
 					return Err(DispatchErrorWithMessage::from("Destination chain does not support CCM"));
 				}
 
