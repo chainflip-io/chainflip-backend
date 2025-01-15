@@ -508,10 +508,12 @@ pub mod pallet {
 		///
 		/// Allows Governance to dispatch calls to the Solana Contracts.
 		///
-		/// Requires Governance Origin. This action is allowed to consume
-		/// any nonce account because it's a high priority action.
-		/// Therefore, do NOT execute this governance function around
-		/// a rotation as it could consume the nonce saved for rotations.
+		/// Note this will only work as long as the Solana GovKey is the current AggKey, which might
+		/// change in the future.
+		///
+		/// Requires Governance Origin. This action is allowed to consume any nonce account because
+		/// it's a high priority action. Therefore, **DO NOT** execute this governance function
+		/// around a rotation as it could consume the nonce saved for rotations.
 		///
 		/// ## Events
 		///

@@ -517,7 +517,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			max_event_accounts,
 			sol_api_environment.vault_program,
 			sol_api_environment.vault_program_data_account,
-			// Assumed that the agg_key is the gov_key in the on-chain programs
+			// Assumed that the agg_key is the gov_key in the on-chain programs.
+			// This assumption is valid until we change the key to some independent Governance key.
 			agg_key,
 			durable_nonce,
 			compute_price,
@@ -546,7 +547,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			sol_api_environment.vault_program,
 			sol_api_environment.vault_program_data_account,
 			token_mint_pubkey,
-			// Assumed that the agg_key is the gov_key in the on-chain programs
+			// Assumed that the agg_key is the gov_key in the on-chain programs.
+			// This assumption is valid until we change the key to some independent Governance key.
 			agg_key,
 			durable_nonce,
 			compute_price,
