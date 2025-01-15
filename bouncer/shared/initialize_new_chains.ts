@@ -191,7 +191,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   }
   await signAndSendTxSol(tx);
 
-  // Set Vault's upgrade authority to upgradeSignerPDa and enable token support
+  // Set Vault's upgrade authority to upgradeSignerPda and enable token support
   tx = new Transaction().add(
     createUpgradeAuthorityInstruction(
       solanaVaultProgramId,
@@ -224,6 +224,28 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
         { pubkey: tokenSupportedAccount, isSigner: false, isWritable: true },
         { pubkey: solUsdcMintPubkey, isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      programId: solanaVaultProgramId,
+    }),
+  );
+  await signAndSendTxSol(tx);
+
+  // Set Governance authority to the new AggKey (State Chain)
+  const setGovKeyWithGovKeyDiscriminatorString = vaultIdl.instructions.find(
+    (instruction: { name: string }) => instruction.name === 'set_gov_key_with_gov_key',
+  ).discriminator;
+  const setGovKeyWithGovKeyDiscriminator = new Uint8Array(
+    setGovKeyWithGovKeyDiscriminatorString.map(Number),
+  );
+  tx = new Transaction().add(
+    new TransactionInstruction({
+      data: Buffer.concat([
+        Buffer.from(setGovKeyWithGovKeyDiscriminator.buffer),
+        newAggKey.toBuffer(), // newGovKey
+      ]),
+      keys: [
+        { pubkey: dataAccount, isSigner: false, isWritable: true },
+        { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
       ],
       programId: solanaVaultProgramId,
     }),
