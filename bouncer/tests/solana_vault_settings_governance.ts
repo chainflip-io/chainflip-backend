@@ -13,7 +13,7 @@ import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-en
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testSolanaVaultSettingsGovernance = new ExecutableTest(
-  'Solana-Vault-Governance',
+  'Solana-Vault-Settings-Governance',
   main,
   120,
 );

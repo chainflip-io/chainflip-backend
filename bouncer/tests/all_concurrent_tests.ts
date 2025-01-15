@@ -17,7 +17,6 @@ import { testDCASwaps } from './DCA_test';
 import { testBrokerLevelScreening } from './broker_level_screening';
 import { checkSolEventAccountsClosure } from '../shared/sol_vault_swap';
 import { legacyEvmVaultSwaps } from './legacy_vault_swap';
-import { testSolanaVaultSettingsGovernance } from './solana_vault_settings_governance';
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
@@ -49,7 +48,6 @@ async function runAllConcurrentTests() {
     depositChannelCreation.run(),
     testBrokerLevelScreening.run(),
     legacyEvmVaultSwaps.run(),
-    testSolanaVaultSettingsGovernance.run(),
   ];
 
   // Tests that only work if there is more than one node
