@@ -1,4 +1,4 @@
-use cf_chains::witness_period::BlockZero;
+use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::{iter::Step, ops::RangeInclusive};
 use scale_info::TypeInfo;
@@ -35,7 +35,7 @@ pub struct ElectionTracker<N: Ord> {
 	pub reorg_id: u8,
 }
 
-impl<N: Ord + Step + Copy> ElectionTracker<N> {
+impl<N: Ord + SaturatingStep + Copy> ElectionTracker<N> {
 	/// Given the current state, if there are less than `max_ongoing`
 	/// ongoing elections we push more elections into ongoing.
 	pub fn start_more_elections(&mut self, max_ongoing: usize) {
@@ -46,7 +46,7 @@ impl<N: Ord + Step + Copy> ElectionTracker<N> {
 		// schedule
 		while self.next_election <= self.highest_scheduled && self.ongoing.len() < max_ongoing {
 			self.ongoing.insert(self.next_election, self.reorg_id);
-			self.next_election = N::forward(self.next_election, 1);
+			self.next_election = self.next_election.saturating_forward(1);
 		}
 	}
 
@@ -78,7 +78,7 @@ impl<N: Ord + Step + Copy> ElectionTracker<N> {
 	}
 }
 
-impl<N: Ord + Step> Validate for ElectionTracker<N> {
+impl<N: Ord> Validate for ElectionTracker<N> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -98,12 +98,12 @@ impl<N: BlockZero + Ord> Default for ElectionTracker<N> {
 }
 
 /// Generates an element which is not in `indices`.
-fn generate_new_index<'a, N: BlockZero + Ord + Step + 'static>(
+fn generate_new_index<'a, N: BlockZero + SaturatingStep + Ord + 'static>(
 	mut indices: impl Iterator<Item = &'a N> + Clone,
 ) -> N {
 	let mut index = N::zero();
 	while indices.any(|ix| *ix == index) {
-		index = N::forward(index, 1);
+		index = index.saturating_forward(1);
 	}
 	index
 }

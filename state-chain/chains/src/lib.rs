@@ -86,7 +86,7 @@ pub mod witness_period {
 	use saturating_cast::SaturatingCast;
 	use scale_info::TypeInfo;
 	use serde::{Deserialize, Serialize};
-	use sp_runtime::traits::Block;
+	use sp_runtime::traits::{Block, Zero};
 	use sp_std::ops::RangeInclusive;
 
 	// So we can store a range-like object in storage, since this has encode and decode.
@@ -165,9 +165,21 @@ pub mod witness_period {
 	}
 
 	impl<C: ChainWitnessConfig> Step for BlockWitnessRange<C> {
-		fn steps_between(_start: &Self, _end: &Self) -> (usize, Option<usize>) {
-			// assert_eq!(start.period, end.period);
-			todo!()
+		fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
+			if start.root > end.root {
+				(0, None)
+			} else {
+				let distance = end.root - start.root;
+				debug_assert!(distance % C::WITNESS_PERIOD == Zero::zero());
+				let steps: u64 = (distance / C::WITNESS_PERIOD).into();
+				let steps_usize: usize = steps.saturating_cast();
+				let overflow_check = if steps_usize.saturating_cast::<u64>() == steps {
+					Some(steps_usize)
+				} else {
+					None
+				};
+				(steps_usize, overflow_check)
+			}
 		}
 
 		fn forward_checked(mut start: Self, count: usize) -> Option<Self> {
@@ -198,7 +210,7 @@ pub mod witness_period {
 		}
 	}
 
-	#[duplicate::duplicate_item(Integer; [ u32 ]; [ u64 ])]
+	#[duplicate::duplicate_item(Integer; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ])]
 	impl SaturatingStep for Integer {
 		fn saturating_forward(self, count: usize) -> Self {
 			self.saturating_add(count.saturating_cast::<Integer>())
@@ -210,12 +222,9 @@ pub mod witness_period {
 		fn is_zero(&self) -> bool;
 	}
 
-	impl<C: ChainWitnessConfig> BlockZero for BlockWitnessRange<C>
-	where
-		C::ChainBlockNumber: BlockZero,
-	{
+	impl<C: ChainWitnessConfig> BlockZero for BlockWitnessRange<C> {
 		fn zero() -> Self {
-			Self { root: C::ChainBlockNumber::zero(), _phantom: Default::default() }
+			Self { root: Zero::zero(), _phantom: Default::default() }
 		}
 
 		fn is_zero(&self) -> bool {

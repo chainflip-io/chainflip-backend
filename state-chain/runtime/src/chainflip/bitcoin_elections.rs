@@ -207,7 +207,9 @@ impl Hook<(), bool> for BitcoinSafemodeEnabledHook {
 }
 
 /// Associating BW types to the struct
-impl BWTypes<btc::BlockNumber> for BitcoinDepositChannelWitnessingDefinition {
+impl BWTypes for BitcoinDepositChannelWitnessingDefinition {
+	type ChainBlockNumber = btc::BlockNumber;
+	type BlockData = BlockData;
 	type ElectionProperties = ElectionProperties;
 	type ElectionPropertiesHook = BitcoinDepositChannelWitnessingGenerator;
 	type SafeModeEnabledHook = BitcoinSafemodeEnabledHook;
@@ -216,8 +218,7 @@ impl BWTypes<btc::BlockNumber> for BitcoinDepositChannelWitnessingDefinition {
 /// Associating the ES related types to the struct
 impl ESInterface for BitcoinDepositChannelWitnessingDefinition {
 	type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-	type ElectoralUnsynchronisedState =
-		BWState<btc::BlockNumber, BitcoinDepositChannelWitnessingDefinition>;
+	type ElectoralUnsynchronisedState = BWState<BitcoinDepositChannelWitnessingDefinition>;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
 	type ElectoralUnsynchronisedSettings = BWSettings;
@@ -247,8 +248,7 @@ impl StateMachineES for BitcoinDepositChannelWitnessingDefinition {
 	>;
 
 	// the actual state machine and consensus mechanisms of this ES
-	type StateMachine =
-		BWStateMachine<BitcoinDepositChannelWitnessingDefinition, BlockData, btc::BlockNumber>;
+	type StateMachine = BWStateMachine<BitcoinDepositChannelWitnessingDefinition>;
 	type ConsensusMechanism = BWConsensus<BlockData, btc::BlockNumber, ElectionProperties>;
 }
 

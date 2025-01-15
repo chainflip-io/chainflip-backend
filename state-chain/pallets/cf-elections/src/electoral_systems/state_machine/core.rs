@@ -143,3 +143,6 @@ impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
 		}
 	}
 }
+
+/// Encapsulating usual constraints on types meant to be serialized
+pub trait Serde = Serialize + for<'a> Deserialize<'a>;
