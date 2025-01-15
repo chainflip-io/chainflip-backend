@@ -196,19 +196,18 @@ pub fn task_scope<
 	async move {
 		tracing::info!(
 			target: "task_scope",
-			"scope opened at '{}'",
-			location
+			"scope opened: '{location}'",
 		);
 		let guard = scopeguard::guard((), move |_| {
 			if std::thread::panicking() {
 				tracing::error!(
 					target: "task_scope",
-					"scope closed by panic '{location}'"
+					"scope closed by panic: '{location}'"
 				);
 			} else {
 				tracing::error!(
 					target: "task_scope",
-					"scope closed by cancellation '{location}'"
+					"scope closed by cancellation: '{location}'"
 				);
 			}
 		});
@@ -248,12 +247,12 @@ pub fn task_scope<
 					if std::thread::panicking() {
 						tracing::error!(
 							target: "task_scope",
-							"parent task ended by panic '{location}'"
+							"parent task ended by panic: '{location}'"
 						);
 					} else {
 						tracing::error!(
 							target: "task_scope",
-							"parent task ended by cancellation '{location}'"
+							"parent task ended by cancellation: '{location}'"
 						);
 					}
 				});
@@ -262,11 +261,11 @@ pub fn task_scope<
 				match &result {
 					Ok(_) => tracing::info!(
 						target: "task_scope",
-						"parent task ended '{location}'"
+						"parent task ended: '{location}'"
 					),
 					Err(error) => tracing::error!(
 						target: "task_scope",
-						"parent task ended by error '{error:?}' '{location}'"
+						"parent task ended by error '{error:?}': '{location}'"
 					),
 				}
 				result
@@ -279,14 +278,14 @@ pub fn task_scope<
 			Ok((_, t)) => {
 				tracing::info!(
 					target: "task_scope",
-					"scope closed '{location}'"
+					"scope closed: '{location}'"
 				);
 				Ok(t)
 			},
 			Err(error) => {
 				tracing::info!(
 					target: "task_scope",
-					"scope closed by error {error:?} '{location}'"
+					"scope closed by error: {error:?} '{location}'"
 				);
 				Err(error)
 			},
@@ -621,7 +620,7 @@ impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 				for task in tasks.into_iter() {
 					tracing::error!(
 						target: "task_scope",
-						"child task #{} ended by cancellation '{}'",
+						"child task #{} ended by cancellation: '{}'",
 						task.properties.task_id,
 						task.properties.location
 					);
