@@ -16,6 +16,7 @@ import {
   SwapRequestType,
   observeSwapRequested,
   TransactionOrigin,
+  defaultAssetAmounts,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
@@ -25,18 +26,6 @@ import { ExecutableTest } from '../shared/executable_test';
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBrokerFeeCollection = new ExecutableTest('Broker-Fee-Collection', main, 200);
 
-const swapAssetAmount = {
-  [Assets.Eth]: 1,
-  [Assets.Dot]: 1000,
-  [Assets.Flip]: 1000,
-  [Assets.Btc]: 0.1,
-  [Assets.Usdc]: 1000,
-  [Assets.Usdt]: 1000,
-  [Assets.ArbEth]: 1,
-  [Assets.ArbUsdc]: 1000,
-  [Assets.Sol]: 10,
-  [Assets.SolUsdc]: 1000,
-};
 const commissionBps = 1000; // 10%
 
 const keyring = new Keyring({ type: 'sr25519' });
@@ -85,7 +74,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
 
   testBrokerFeeCollection.log(`Running swap ${inputAsset} -> ${destAsset}`);
 
-  const rawDepositForSwapAmount = swapAssetAmount[inputAsset].toString();
+  const rawDepositForSwapAmount = defaultAssetAmounts(inputAsset);
 
   // we need to manually create the swap channel and observe the relative event
   // because we want to use a separate broker to not interfere with other tests

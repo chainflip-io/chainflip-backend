@@ -1,4 +1,5 @@
 import assert from 'assert';
+import { Keyring } from '@polkadot/api';
 import * as anchor from '@coral-xyz/anchor';
 import { InternalAsset as Asset, Chains } from '@chainflip/cli';
 import {
@@ -21,7 +22,6 @@ import {
   getSolWhaleKeyPair,
   getSolConnection,
   sleep,
-  createStateChainKeypair,
   stateChainAssetFromAsset,
   decodeSolAddress,
   decodeDotAddressForContract,
@@ -67,11 +67,19 @@ export async function executeSolVaultSwap(
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  brokerFees: {
+    account: string;
+    commissionBps: number;
+  },
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
+  affiliateFees: {
+    account: string;
+    bps: number;
+  }[] = [],
 ) {
   const whaleKeypair = getSolWhaleKeyPair();
 
@@ -86,8 +94,6 @@ export async function executeSolVaultSwap(
   );
 
   await using chainflip = await getChainflipApi();
-  const brokerUri = '//BROKER_1';
-  const broker = createStateChainKeypair(brokerUri);
 
   const refundParams: ChannelRefundParameters = {
     retry_duration: fillOrKillParams?.retryDurationBlocks ?? 0,
@@ -115,22 +121,21 @@ export async function executeSolVaultSwap(
 
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_get_vault_swap_details`,
-    broker.address,
+    brokerFees.account,
     { chain: chainFromAsset(srcAsset), asset: stateChainAssetFromAsset(srcAsset) },
     { chain: chainFromAsset(destAsset), asset: stateChainAssetFromAsset(destAsset) },
     chainFromAsset(destAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destAddress)
       : destAddress,
-    0, // broker_commission
-    extraParameters, // extra_parameters
-    // channel_metadata
+    brokerFees.commissionBps,
+    extraParameters,
     messageMetadata && {
       message: messageMetadata.message as `0x${string}`,
       gas_budget: messageMetadata.gasBudget,
       ccm_additional_data: messageMetadata.ccmAdditionalData as `0x${string}`,
     },
-    boostFeeBps ?? 0, // boost_fee
-    null, // affiliates
+    boostFeeBps ?? 0,
+    affiliateFees,
     dcaParams && {
       number_of_chunks: dcaParams.numberOfChunks,
       chunk_interval: dcaParams.chunkIntervalBlocks,
@@ -227,6 +232,10 @@ export async function checkSolEventAccountsClosure(
       'Sol',
       'ArbEth',
       await newAddress('ArbEth', randomBytes(32).toString('hex')),
+      {
+        account: new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
+        commissionBps: 0,
+      },
     );
     success = await checkAccounts(eventAccounts);
   }

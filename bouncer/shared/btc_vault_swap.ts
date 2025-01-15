@@ -12,7 +12,7 @@ import {
   handleSubstrateError,
   stateChainAssetFromAsset,
 } from '../shared/utils';
-import { getChainflipApi } from '../shared/utils/substrate';
+import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { fundFlip } from '../shared/fund_flip';
 
 interface BtcVaultSwapDetails {
@@ -28,27 +28,21 @@ interface BtcVaultSwapExtraParameters {
   retry_duration: number;
 }
 
-interface Beneficiary {
-  account: string;
-  bps: number;
-}
-
 export async function buildAndSendBtcVaultSwap(
   depositAmountBtc: number,
-  brokerUri: string,
   destinationAsset: Asset,
   destinationAddress: string,
   refundAddress: string,
-  affiliateAddresses: string[],
-  commissionBps: number = 0,
+  brokerFees: {
+    account: string;
+    commissionBps: number;
+  },
+  affiliateFees: {
+    account: string;
+    bps: number;
+  }[] = [],
 ) {
   await using chainflip = await getChainflipApi();
-  const broker = createStateChainKeypair(brokerUri);
-
-  const affiliates: Beneficiary[] = [];
-  for (const affiliateAddress of affiliateAddresses) {
-    affiliates.push({ account: affiliateAddress, bps: commissionBps });
-  }
 
   const extraParameters: BtcVaultSwapExtraParameters = {
     chain: 'Bitcoin',
@@ -58,17 +52,17 @@ export async function buildAndSendBtcVaultSwap(
 
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_get_vault_swap_details`,
-    broker.address,
+    brokerFees.account,
     { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
     { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },
     chainFromAsset(destinationAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress,
-    commissionBps, // broker_commission
+    brokerFees.commissionBps,
     extraParameters,
     null, // channel_metadata
     0, // boost_fee
-    affiliates,
+    affiliateFees,
     null, // dca_params
   )) as unknown as BtcVaultSwapDetails;
 
@@ -98,7 +92,7 @@ export async function buildAndSendBtcVaultSwap(
   return txid;
 }
 
-export async function openPrivateBtcChannel(brokerUri: string) {
+export async function openPrivateBtcChannel(brokerUri: string): Promise<number> {
   // Check if the channel is already open
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
@@ -106,24 +100,28 @@ export async function openPrivateBtcChannel(brokerUri: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (await chainflip.query.swapping.brokerPrivateBtcChannels(broker.address)) as any,
   );
-
-  if (!existingPrivateChannel) {
-    // Fund the broker the required bond amount for opening a private channel
-    const fundAmount = fineAmountToAmount(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (await chainflip.query.swapping.brokerBond()) as any as string,
-      assetDecimals('Flip'),
-    );
-    await fundFlip(broker.address, fundAmount);
-
-    // Open the private channel
-    await brokerMutex.runExclusive(async () => {
-      await chainflip.tx.swapping
-        .openPrivateBtcChannel()
-        .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
-    });
-    console.log('Private Btc channel opened');
+  if (existingPrivateChannel) {
+    return existingPrivateChannel;
   }
+
+  // Fund the broker the required bond amount for opening a private channel
+  const fundAmount = fineAmountToAmount(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await chainflip.query.swapping.brokerBond()) as any as string,
+    assetDecimals('Flip'),
+  );
+  await fundFlip(broker.address, fundAmount);
+
+  // Open the private channel
+  const openedChannelEvent = observeEvent('swapping:PrivateBrokerChannelOpened', {
+    test: (event) => event.data.brokerId === broker.address,
+  }).event;
+  await brokerMutex.runExclusive(async () => {
+    await chainflip.tx.swapping
+      .openPrivateBtcChannel()
+      .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+  });
+  return Number((await openedChannelEvent).data.channelId);
 }
 
 export async function registerAffiliate(
@@ -135,9 +133,18 @@ export async function registerAffiliate(
   const broker = createStateChainKeypair(brokerUri);
   const affiliate = createStateChainKeypair(affiliateUri);
 
+  const registeredEvent = observeEvent('swapping:AffiliateRegistrationUpdated', {
+    test: (event) =>
+      event.data.brokerId === broker.address &&
+      event.data.affiliateId === affiliate.address &&
+      Number(event.data.affiliateShortId) === affiliateShortId,
+  }).event;
+
   await brokerMutex.runExclusive(async () => {
     await chainflip.tx.swapping
       .registerAffiliate(affiliate.address, affiliateShortId)
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
   });
+
+  return registeredEvent;
 }
