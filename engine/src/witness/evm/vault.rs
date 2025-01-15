@@ -27,6 +27,23 @@ use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
+fn decode_cf_parameters<CcmData>(cf_parameters: &[u8]) -> (Option<VaultSwapParameters>, CcmData)
+where
+	CcmData: Default + Decode,
+{
+	if let Ok(decoded) = VersionedCfParameters::<CcmData>::decode(&mut &cf_parameters[..]) {
+		match decoded {
+			VersionedCfParameters::V0(CfParameters {
+				ccm_additional_data,
+				vault_swap_parameters,
+			}) => (Some(vault_swap_parameters), ccm_additional_data),
+		}
+	} else {
+		tracing::warn!("Failed to decode cf_parameters: {cf_parameters:?}");
+		(None, Default::default())
+	}
+}
+
 pub fn call_from_event<
 	C: cf_chains::Chain<ChainAccount = EthereumAddress, ChainBlockNumber = u64>,
 	CallBuilder: IngressCallBuilder<Chain = C>,
@@ -66,18 +83,7 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let vault_swap_parameters =
-				if let Ok(decoded) = VersionedCfParameters::decode(&mut &cf_parameters[..]) {
-					match decoded {
-						VersionedCfParameters::V0(CfParameters {
-							ccm_additional_data: (),
-							vault_swap_parameters,
-						}) => Some(vault_swap_parameters),
-					}
-				} else {
-					tracing::warn!("Failed to decode cf_parameters!");
-					None
-				};
+			let vault_swap_parameters = decode_cf_parameters::<()>(&cf_parameters[..]).0;
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
@@ -99,18 +105,7 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let vault_swap_parameters =
-				if let Ok(decoded) = VersionedCfParameters::decode(&mut &cf_parameters[..]) {
-					match decoded {
-						VersionedCfParameters::V0(CfParameters {
-							ccm_additional_data: (),
-							vault_swap_parameters,
-						}) => Some(vault_swap_parameters),
-					}
-				} else {
-					tracing::warn!("Failed to decode cf_parameters!");
-					None
-				};
+			let vault_swap_parameters = decode_cf_parameters::<()>(&cf_parameters[..]).0;
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
@@ -136,17 +131,7 @@ where
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ccm_additional_data) =
-				if let Ok(decoded) = VersionedCfParameters::decode(&mut &cf_parameters[..]) {
-					match decoded {
-						VersionedCfParameters::V0(CfParameters {
-							ccm_additional_data,
-							vault_swap_parameters,
-						}) => (Some(vault_swap_parameters), ccm_additional_data),
-					}
-				} else {
-					tracing::warn!("Failed to decode cf_parameters!");
-					(None, Default::default())
-				};
+				decode_cf_parameters(&cf_parameters[..]);
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
@@ -182,17 +167,7 @@ where
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ccm_additional_data) =
-				if let Ok(decoded) = VersionedCfParameters::decode(&mut &cf_parameters[..]) {
-					match decoded {
-						VersionedCfParameters::V0(CfParameters {
-							ccm_additional_data,
-							vault_swap_parameters,
-						}) => (Some(vault_swap_parameters), ccm_additional_data),
-					}
-				} else {
-					tracing::warn!("Failed to decode cf_parameters!");
-					(None, Default::default())
-				};
+				decode_cf_parameters(&cf_parameters[..]);
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
