@@ -19,7 +19,7 @@ use frame_support::{
 use primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::vec_deque::VecDeque, vec::Vec, fmt::Debug};
+use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
@@ -53,7 +53,18 @@ pub trait BlockHeightTrackingTypes: Ord + PartialEq + Clone + Debug + 'static {
 
 #[cfg_attr(test, derive(Arbitrary))]
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
 )]
 pub struct BlockHeightTrackingProperties<BlockNumber> {
 	/// An election starts with a given block number,
@@ -65,6 +76,9 @@ pub struct BlockHeightTrackingProperties<BlockNumber> {
 pub enum ChainProgress<ChainBlockNumber> {
 	// Range of new block heights witnessed. If this is not consecutive, it means that
 	Range(RangeInclusive<ChainBlockNumber>),
+	// Range of new block heights, only emitted when there is a consensus for the first time after
+	// being started.
+	FirstConsensus(RangeInclusive<ChainBlockNumber>),
 	// there was no update to the witnessed block headers
 	None,
 }
@@ -75,7 +89,7 @@ impl<N: Ord> Validate for ChainProgress<N> {
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		use ChainProgress::*;
 		match self {
-			Range(range) => {
+			Range(range) | FirstConsensus(range) => {
 				ensure!(
 					range.start() <= range.end(),
 					"range a..=b in ChainProgress should have a <= b"

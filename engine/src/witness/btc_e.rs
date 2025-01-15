@@ -11,7 +11,7 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
 		block_height_tracking::{
-			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties,
+			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties, BlockHeightTrackingTypes,
 		},
 		state_machine::core::ConstantIndex,
 	},
@@ -20,7 +20,7 @@ use pallet_cf_elections::{
 use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
 	chainflip::bitcoin_elections::{
-		BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner,
+		BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingTypes, BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner
 	},
 	BitcoinInstance,
 };
@@ -140,7 +140,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 					"bht: election_property=0, best_block_height={}, submitting last 6 blocks.",
 					best_block_header.block_height
 				);
-				 best_block_header.block_height.saturating_sub(BitcoinBlockHeightTrackingTypes::SAFETY_MARGIN)
+				 best_block_header.block_height.saturating_sub(BitcoinBlockHeightTrackingTypes::SAFETY_MARGIN as u64)
 			} else {
 				election_property
 			};

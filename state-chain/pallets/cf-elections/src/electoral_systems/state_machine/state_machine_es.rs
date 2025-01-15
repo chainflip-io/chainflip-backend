@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
-	core::{Indexed, Validate},
+	core::{Indexed, MultiIndexAndValue, Validate},
 	state_machine::StateMachine,
 };
 
@@ -170,7 +170,10 @@ pub trait StateMachineES:
 }
 
 pub trait StateMachineForES<ES: StateMachineES> = StateMachine<
-	Input = SMInput<ES::Consensus, ES::OnFinalizeContextItem>,
+	Input = SMInput<
+		MultiIndexAndValue<ES::ElectionProperties, ES::Consensus>,
+		ES::OnFinalizeContextItem,
+	>,
 	State = ES::ElectoralUnsynchronisedState,
 	Settings = ES::ElectoralUnsynchronisedSettings,
 	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
@@ -258,7 +261,7 @@ where
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
 			if let Some(input) = election_access.check_consensus()?.has_consensus() {
 				log::debug!("ESSM: stepping with input {input:?}");
-				step(SMInput::Vote(input))?;
+				step(SMInput::Vote(MultiIndexAndValue(election_access.properties()?, input)))?;
 			}
 		}
 

@@ -33,10 +33,21 @@ pub trait BWTypes: 'static {
 }
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd, Default
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
+	Default,
 )]
 pub struct BWSettings {
-	pub max_concurrent_elections: u32,
+	pub max_concurrent_elections: u16,
 }
 
 #[derive_where(Debug, Clone, PartialEq, Eq; T::SafeModeEnabledHook: Debug + Clone + Eq, T::ElectionPropertiesHook: Debug + Clone + Eq)]
@@ -77,7 +88,10 @@ pub struct BWStateMachine<Types: BWTypes> {
 
 impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 	type Input = SMInput<
-		MultiIndexAndValue<(T::ChainBlockNumber, T::ElectionProperties, u8), T::BlockData>,
+		MultiIndexAndValue<
+			(T::ChainBlockNumber, T::ElectionProperties, u8),
+			ConstantIndex<(T::ChainBlockNumber, T::ElectionProperties, u8), T::BlockData>,
+		>,
 		ChainProgress<T::ChainBlockNumber>,
 	>;
 	type Settings = BWSettings;
@@ -96,6 +110,11 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
 		log::info!("BW: input {i:?}");
 		match i {
+			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
+				s.elections.next_election = *range.start();
+				s.elections.schedule_range(range);
+			},
+
 			SMInput::Context(ChainProgress::Range(range)) => {
 				s.elections.schedule_range(range);
 			},
@@ -184,9 +203,17 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 				)
 			},
 
-			Context(Range(range)) => {
+			Context(Range(range) | FirstConsensus(range)) => {
+				// if the input is `FirstConsensus`, we use the beginning of the range
+				// as the first block we ought to emit an election for.
+				let before_next_election = if let Context(FirstConsensus(_)) = input {
+					*range.start()
+				} else {
+					before.elections.next_election
+				};
+
 				if !safemode_enabled {
-					if *range.start() < before.elections.next_election {
+					if *range.start() < before_next_election {
 						assert!(
 							!before.elections.ongoing.values().contains(&after.elections.reorg_id),
 							"if there is a reorg, the new reorg_id must be different than the ids of the previously ongoing elections"
@@ -220,14 +247,14 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 
 					// but the next_election should still be updated in order to restart the
 					// reorg'ed elections after safemode is disabled
-					if *range.start() < before.elections.next_election {
+					if *range.start() < before_next_election {
 						assert!(
 							after.elections.next_election == *range.start(),
 							"if safemode is enabled, and a reorg happens, next_election should be the start of the reorg range"
 						);
 					} else {
 						assert!(
-							after.elections.next_election == before.elections.next_election,
+							after.elections.next_election == before_next_election,
 							"if safemode is enabled, and no (relevant) reorg happens, next_election should not be udpated"
 						);
 					}
@@ -247,6 +274,7 @@ mod tests {
 	use proptest::{
 		prelude::{any, prop, Arbitrary, BoxedStrategy, Just, Strategy},
 		prop_oneof,
+		sample::select,
 		strategy::LazyJust,
 	};
 
@@ -281,27 +309,37 @@ mod tests {
 	}
 
 	fn generate_input<T: BWTypes<BlockData = ()>>(
-		index: IndexOf<<BWStateMachine<T> as StateMachine>::Input>,
+		indices: IndexOf<<BWStateMachine<T> as StateMachine>::Input>,
 	) -> BoxedStrategy<<BWStateMachine<T> as StateMachine>::Input>
 	where
 		T::ChainBlockNumber: Arbitrary,
 	{
 		let generate_input = |index| {
 			prop_oneof![
-				Just(SMInput::Vote(MultiIndexAndValue(index, ()))),
+				Just(SMInput::Vote(MultiIndexAndValue(index, ConstantIndex::new(())))),
 				prop_oneof![
 					Just(ChainProgress::None),
 					(any::<T::ChainBlockNumber>(), 0..20usize)
-						.prop_map(|(a, b)| ChainProgress::Range(a..=a.saturating_forward(b)))
+						.prop_map(|(a, b)| ChainProgress::Range(a..=a.saturating_forward(b))),
+					(any::<T::ChainBlockNumber>(), 0..20usize).prop_map(|(a, b)| {
+						ChainProgress::FirstConsensus(a..=a.saturating_forward(b))
+					})
 				]
 				.prop_map(SMInput::Context)
 			]
 		};
 
-		if index.len() > 0 {
-			(0..index.len())
-				.prop_flat_map(move |ix| generate_input(index.clone().into_iter().nth(ix).unwrap()))
-				.boxed()
+		if indices.len() > 0 {
+			prop_do! {
+				let index in select(indices);
+				generate_input(index.clone())
+				// return SMInput::Vote(MultiIndexAndValue(index, ConstantIndex::new(input)))
+			}
+			.boxed()
+
+			// (0..index.len())
+			// 	.prop_flat_map(move |ix| generate_input(index.clone().into_iter().nth(ix).unwrap()))
+			// 	.boxed()
 		} else {
 			Just(SMInput::Context(ChainProgress::None)).boxed()
 		}
@@ -321,7 +359,7 @@ mod tests {
 			file!(),
 			generate_state(),
 			prop_do! {
-				let max_concurrent_elections in 0..10u32;
+				let max_concurrent_elections in 0..10u16;
 				return BWSettings { max_concurrent_elections }
 			},
 			generate_input::<u8>,
@@ -340,7 +378,7 @@ mod tests {
 			file!(),
 			generate_state(),
 			prop_do! {
-				let max_concurrent_elections in 0..10u32;
+				let max_concurrent_elections in 0..10u16;
 				return BWSettings { max_concurrent_elections }
 			},
 			generate_input::<BlockWitnessRange<TestChain>>,

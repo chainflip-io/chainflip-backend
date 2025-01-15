@@ -12,7 +12,10 @@ use super::{
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
 	BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
 };
-use crate::{electoral_systems::state_machine::core::Hook, CorruptStorageError};
+use crate::{
+	electoral_systems::state_machine::core::{Hook, MultiIndexAndValue},
+	CorruptStorageError,
+};
 use cf_chains::witness_period::{BlockWitnessRange, BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::{
@@ -130,7 +133,10 @@ pub struct BlockHeightTrackingSM<T: BlockHeightTrackingTypes> {
 
 impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 	type State = BHWStateWrapper<T>;
-	type Input = SMInput<InputHeaders<T>, ()>;
+	type Input = SMInput<
+		MultiIndexAndValue<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>,
+		(),
+	>;
 	type Settings = ();
 	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
 
@@ -195,7 +201,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 
 	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {
 		let new_headers = match input {
-			SMInput::Vote(vote) => vote,
+			SMInput::Vote(MultiIndexAndValue(_properties, consensus)) => consensus,
 			SMInput::Context(_) => return Ok(ChainProgress::None),
 		};
 
@@ -256,6 +262,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 #[cfg(test)]
 mod tests {
 
+	use crate::{electoral_systems::state_machine::core::MultiIndexAndValue, prop_do};
 	use cf_chains::{
 		self,
 		witness_period::{BlockWitnessRange, BlockZero, SaturatingStep},
@@ -264,6 +271,7 @@ mod tests {
 	use proptest::{
 		prelude::{any, prop, Arbitrary, Just, Strategy},
 		prop_oneof,
+		sample::select,
 	};
 
 	use crate::electoral_systems::{
@@ -287,7 +295,6 @@ mod tests {
 		T::ChainBlockHash: Arbitrary,
 		T::ChainBlockNumber: Arbitrary + BlockZero,
 	{
-		use crate::prop_do;
 		prop_do! {
 			let header_data in prop::collection::vec(any::<T::ChainBlockHash>(), 2..10);
 			let random_index in any::<T::ChainBlockNumber>();
@@ -310,7 +317,6 @@ mod tests {
 		T::ChainBlockNumber: Arbitrary + BlockZero,
 		T::BlockHeightChangeHook: Default + sp_std::fmt::Debug,
 	{
-		use crate::prop_do;
 		prop_oneof![
 			Just(BHWState::Starting),
 			prop_do! {
@@ -345,13 +351,14 @@ mod tests {
 			module_path!(),
 			generate_state(),
 			Just(()),
-			|index| {
+			|indices| {
 				prop_oneof![
 					Just(SMInput::Context(())),
-					(0..index.len()).prop_flat_map(move |ix| generate_input(
-						index.clone().into_iter().nth(ix).unwrap()
-					)
-					.prop_map(SMInput::Vote))
+					prop_do! {
+						let index in select(indices);
+						let input in generate_input(index.clone());
+						return SMInput::Vote(MultiIndexAndValue(index, input))
+					}
 				]
 				.boxed()
 			},
@@ -379,11 +386,12 @@ mod tests {
 			module_path!(),
 			generate_state(),
 			Just(()),
-			|index| {
-				prop_oneof![(0..index.len()).prop_flat_map(move |ix| generate_input(
-					index.clone().into_iter().nth(ix).unwrap()
-				)
-				.prop_map(SMInput::Vote))]
+			|indices| {
+				prop_do! {
+					let index in select(indices);
+					let input in generate_input(index.clone());
+					return SMInput::Vote(MultiIndexAndValue(index, input))
+				}
 				.boxed()
 			},
 		);

@@ -33,7 +33,7 @@ impl<
 	> ConsensusMechanism for BWConsensus<BlockData, N, ElectionProperties>
 {
 	type Vote = ConstantIndex<(N, ElectionProperties, u8), BlockData>;
-	type Result = MultiIndexAndValue<(N, ElectionProperties, u8), BlockData>;
+	type Result = ConstantIndex<(N, ElectionProperties, u8), BlockData>;
 	type Settings = (Threshold, (N, ElectionProperties, u8));
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
@@ -46,6 +46,6 @@ impl<
 		self.consensus
 			.check_consensus(&settings.0)
 			.map(|consensus| self.data.get(&consensus).expect("hash of vote should exist").clone())
-			.map(|data| MultiIndexAndValue(settings.1.clone(), data))
+			.map(|data| ConstantIndex::new(data))
 	}
 }

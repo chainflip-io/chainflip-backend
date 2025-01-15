@@ -229,7 +229,7 @@ impl ESInterface for BitcoinDepositChannelWitnessingDefinition {
 	type Vote = vote_storage::bitmap::Bitmap<
 		ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>,
 	>;
-	type Consensus = MultiIndexAndValue<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
+	type Consensus = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
 	type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
 	type OnFinalizeReturn = Vec<()>;
 }
@@ -241,7 +241,7 @@ impl StateMachineES for BitcoinDepositChannelWitnessingDefinition {
 	type OnFinalizeReturnItem = ();
 
 	// restating types since we have to prove that they have the correct bounds
-	type Consensus2 = MultiIndexAndValue<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
+	type Consensus2 = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
 	type Vote2 = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
 	type VoteStorage2 = vote_storage::bitmap::Bitmap<
 		ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>,
