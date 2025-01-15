@@ -9,8 +9,8 @@ use cf_chains::{
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
-	ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
+	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
 	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
 	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
@@ -537,6 +537,11 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// An optional withdrawal address for affiliate broker.
+	#[pallet::storage]
+	pub type AffiliateWithdrawalAddress<T: Config> =
+		StorageMap<_, Identity, T::AccountId, EncodedAddress, OptionQuery>;
+
 	/// The bond for a broker to open a private channel.
 	#[pallet::storage]
 	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
@@ -694,6 +699,16 @@ pub mod pallet {
 		BrokerBondSet {
 			bond: T::Amount,
 		},
+		AffiliateWithdrawalAddressRegistered {
+			account_id: T::AccountId,
+			short_id: AffiliateShortId,
+			address: EncodedAddress,
+		},
+		AffiliateWithdrawalRequestFailed {
+			broker: T::AccountId,
+			short_id: AffiliateShortId,
+			error: DispatchError,
+		},
 		MinimumNetworkFeeSet {
 			min_fee: AssetAmount,
 		},
@@ -758,6 +773,13 @@ pub mod pallet {
 		TooManyAffiliates,
 		/// The Bonder does not have enough Funds to cover the bond.
 		InsufficientFunds,
+		/// The withdrawal address for an affiliate is already registered.
+		AddressAlreadyRegistered,
+		/// Validation of affiliate withdrawal address failed.
+		ExpectedEthereumAddress,
+		/// The withdrawal address of a affiliate was not present when we try to trigger the
+		/// withdrawal.
+		AffiliateWithdrawalAddressDosentExist,
 	}
 
 	#[pallet::genesis_config]
@@ -898,34 +920,7 @@ pub mod pallet {
 			ensure!(T::SafeMode::get().withdrawals_enabled, Error::<T>::WithdrawalsDisabled);
 
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-
-			let destination_address_internal =
-				T::AddressConverter::decode_and_validate_address_for_asset(
-					destination_address.clone(),
-					asset,
-				)
-				.map_err(address_error_to_pallet_error::<T>)?;
-
-			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
-			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
-			T::BalanceApi::try_debit_account(&account_id, asset, earned_fees)?;
-
-			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
-				T::EgressHandler::schedule_egress(
-					asset,
-					earned_fees,
-					destination_address_internal,
-					None,
-				)
-				.map_err(Into::into)?;
-
-			Self::deposit_event(Event::<T>::WithdrawalRequested {
-				egress_amount,
-				egress_asset: asset,
-				egress_fee: fee_withheld,
-				destination_address,
-				egress_id,
-			});
+			Self::trigger_withdrawal(&account_id, asset, destination_address)?;
 
 			Ok(())
 		}
@@ -1140,6 +1135,11 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Opens up a private broker channel.
+		///
+		/// ## Events
+		///
+		/// - [PrivateBrokerChannelOpened](Event::PrivateBrokerChannelOpened)
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::open_private_btc_channel())]
 		pub fn open_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
@@ -1166,6 +1166,11 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Closes the currently open private broker channel.
+		///
+		/// ## Events
+		///
+		/// - [PrivateBrokerChannelClosed](Event::PrivateBrokerChannelClosed)
 		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::close_private_btc_channel())]
 		pub fn close_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
@@ -1204,6 +1209,66 @@ pub mod pallet {
 				previous_affiliate_id,
 			});
 
+			Ok(())
+		}
+
+		/// Registers a withdrawal address for an affiliate. This is a one-time operation. Once the
+		/// address is set up, it's not possible to change it any more.
+		/// Note: This extrinsic is secured by the broker that has registered the affiliate account.
+		///
+		/// ## Events
+		///
+		/// - [PrivateBrokerChannelClosed](Event::PrivateBrokerChannelClosed)
+		#[pallet::call_index(15)]
+		#[pallet::weight(T::WeightInfo::register_affiliate_withdrawal_address())]
+		pub fn register_affiliate_withdrawal_address(
+			origin: OriginFor<T>,
+			short_id: AffiliateShortId,
+			withdrawal_address: EncodedAddress,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let affiliate_account = AffiliateIdMapping::<T>::get(broker_id, short_id)
+				.ok_or(Error::<T>::AffiliateNotRegistered)?;
+
+			ensure!(
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					withdrawal_address.clone(),
+					Asset::Eth,
+				)
+				.is_ok(),
+				Error::<T>::ExpectedEthereumAddress
+			);
+
+			ensure!(
+				!AffiliateWithdrawalAddress::<T>::contains_key(&affiliate_account),
+				Error::<T>::AddressAlreadyRegistered
+			);
+
+			AffiliateWithdrawalAddress::<T>::insert(&affiliate_account, withdrawal_address.clone());
+
+			Self::deposit_event(Event::<T>::AffiliateWithdrawalAddressRegistered {
+				account_id: affiliate_account,
+				short_id,
+				address: withdrawal_address,
+			});
+			Ok(())
+		}
+
+		/// Triggers a withdrawal request to the registered withdrawal address of the affiliate.
+		/// Note: This extrinsic is secured by the broker that has registered the affiliate account.
+		///
+		/// ## Events
+		///
+		/// - [WithdrawalRequested](Event::WithdrawalRequested)
+		#[pallet::call_index(16)]
+		#[pallet::weight(T::WeightInfo::affiliate_withdrawal_request())]
+		pub fn affiliate_withdrawal_request(
+			origin: OriginFor<T>,
+			short_id: AffiliateShortId,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+			Self::withdrawal_to_affiliate(&broker_id, short_id)?;
 			Ok(())
 		}
 	}
@@ -1289,6 +1354,57 @@ pub mod pallet {
 				.collect()
 		}
 
+		fn trigger_withdrawal(
+			account_id: &T::AccountId,
+			asset: Asset,
+			destination_address: EncodedAddress,
+		) -> DispatchResult {
+			let destination_address_internal =
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
+
+			let earned_fees = T::BalanceApi::get_balance(account_id, asset);
+			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
+			T::BalanceApi::try_debit_account(account_id, asset, earned_fees)?;
+
+			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+				T::EgressHandler::schedule_egress(
+					asset,
+					earned_fees,
+					destination_address_internal,
+					None,
+				)
+				.map_err(Into::into)?;
+
+			Self::deposit_event(Event::<T>::WithdrawalRequested {
+				egress_amount,
+				egress_asset: asset,
+				egress_fee: fee_withheld,
+				destination_address,
+				egress_id,
+			});
+
+			Ok(())
+		}
+
+		fn withdrawal_to_affiliate(
+			broker_id: &T::AccountId,
+			affiliate_short_id: AffiliateShortId,
+		) -> DispatchResult {
+			let affiliate_account = AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
+				.ok_or(Error::<T>::AffiliateNotRegistered)?;
+
+			let withdrawal_address = AffiliateWithdrawalAddress::<T>::get(&affiliate_account)
+				.ok_or(Error::<T>::AffiliateWithdrawalAddressDosentExist)?;
+
+			Self::trigger_withdrawal(&affiliate_account, Asset::Usdc, withdrawal_address)?;
+
+			Ok(())
+		}
+
 		fn take_broker_fees(
 			stable_amount: AssetAmount,
 			broker_fees: &Beneficiaries<T::AccountId>,
@@ -1365,6 +1481,20 @@ pub mod pallet {
 			}
 
 			Ok(())
+		}
+
+		pub fn trigger_commission_distribution() {
+			for broker in T::AccountRoleRegistry::get_all(AccountRole::Broker) {
+				for (short_id, _) in AffiliateIdMapping::<T>::iter_prefix(&broker) {
+					if let Err(error) = Self::withdrawal_to_affiliate(&broker, short_id) {
+						Self::deposit_event(Event::<T>::AffiliateWithdrawalRequestFailed {
+							broker: broker.clone(),
+							short_id,
+							error,
+						});
+					}
+				}
+			}
 		}
 
 		#[transactional]
