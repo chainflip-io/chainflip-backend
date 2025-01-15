@@ -1915,7 +1915,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Completes a single deposit request.
 	#[transactional]
-	pub(crate) fn process_channel_deposit_full_witness_inner(
+	fn process_channel_deposit_full_witness_inner(
 		DepositWitness { deposit_address, asset, amount, deposit_details }: &DepositWitness<
 			T::TargetChain,
 		>,
@@ -2024,7 +2024,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	pub(crate) fn process_prewitness_deposit_inner(
+	fn process_prewitness_deposit_inner(
 		amount: TargetChainAmount<T, I>,
 		asset: TargetChainAsset<T, I>,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
@@ -2222,7 +2222,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	pub(crate) fn process_full_witness_deposit_inner(
+	fn process_full_witness_deposit_inner(
 		deposit_address: Option<TargetChainAccount<T, I>>,
 		asset: TargetChainAsset<T, I>,
 		deposit_amount: TargetChainAmount<T, I>,
