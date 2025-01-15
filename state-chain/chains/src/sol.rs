@@ -324,11 +324,7 @@ impl address::ToHumanreadableAddress for SolAddress {
 	}
 }
 
-impl crate::ChannelLifecycleHooks for AccountBump {
-	fn maybe_recycle(self) -> Option<Self> {
-		Some(self)
-	}
-}
+impl crate::ChannelLifecycleHooks for AccountBump {}
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct SolanaDepositFetchId {
