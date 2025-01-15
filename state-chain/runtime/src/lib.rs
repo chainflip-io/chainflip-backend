@@ -123,10 +123,7 @@ use sp_runtime::{
 	BoundedVec,
 };
 
-use frame_support::{
-	genesis_builder_helper::build_state,
-	traits::{EstimateNextSessionRotation, Time},
-};
+use frame_support::genesis_builder_helper::build_state;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
