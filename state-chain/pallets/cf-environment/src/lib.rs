@@ -125,8 +125,6 @@ pub mod pallet {
 		InvalidUtxoParameters,
 		/// Failed to build Solana Api call. See logs for more details
 		FailedToBuildSolanaApiCall,
-		/// There is not enough Solana nonces available to perform the operation.
-		NotEnoughSolanaNoncesAvailable,
 	}
 
 	#[pallet::pallet]
@@ -526,14 +524,6 @@ pub mod pallet {
 			settings: SolanaVaultSwapSettings,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-
-			// Checking that there are at least two available nonces before we call the
-			// Solana API to make sure we don't use a rotation nonce even if we should
-			// not be calling this during a rotation.
-			if Self::get_number_of_available_sol_nonce_accounts() < 2 {
-				log::error!("Not enough Solana nonces available");
-				return Err(Error::<T>::NotEnoughSolanaNoncesAvailable.into());
-			};
 
 			let sol_transaction = match settings {
 				SolanaVaultSwapSettings::ProgramSwap {
