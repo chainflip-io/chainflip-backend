@@ -161,7 +161,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 
 		match input {
 			Vote(MultiIndexAndValue((height, _, _), _)) => {
-				let new_elections = if before.safemode_enabled.run(()) {
+				let new_elections = if safemode_enabled {
 					BTreeSet::new()
 				} else {
 					(before.elections.next_election..=before.elections.highest_scheduled)

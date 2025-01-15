@@ -140,7 +140,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 					"bht: election_property=0, best_block_height={}, submitting last 6 blocks.",
 					best_block_header.block_height
 				);
-				best_block_header.block_height.saturating_sub(6)
+				 best_block_header.block_height.saturating_sub(BitcoinBlockHeightTrackingTypes::SAFETY_MARGIN)
 			} else {
 				election_property
 			};

@@ -49,7 +49,7 @@ impl<T: BlockHeightTrackingTypes> Indexed for InputHeaders<T> {
 impl<T: BlockHeightTrackingTypes> Validate for InputHeaders<T> {
 	type Error = VoteValidationError;
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		if self.0.len() == 0 {
+		if self.0.is_empty() {
 			Err(VoteValidationError::EmptyVote)
 		} else {
 			ChainBlocks { headers: self.0.clone() }.is_valid()
