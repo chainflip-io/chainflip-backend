@@ -8,7 +8,7 @@ import {
   chainFromAsset,
   getContractAddress,
   ccmSupportedChains,
-  solCcmAdditionalDataCodec,
+  solVersionedCcmAdditionalDataCodec,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -32,7 +32,7 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
     });
   }
 
-  const cfParameters = {
+  const ccmAccounts = {
     cf_receiver: {
       pubkey: new PublicKey(cfReceiverAddress).toBytes(),
       is_writable: false,
@@ -41,7 +41,12 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
     fallback_address: fallbackAddress,
   };
 
-  return u8aToHex(solCcmAdditionalDataCodec.enc(cfParameters));
+  return u8aToHex(
+    solVersionedCcmAdditionalDataCodec.enc({
+      tag: 'V0',
+      value: ccmAccounts,
+    }),
+  );
 }
 
 // Generate random bytes. Setting a minimum length of 10 because very short messages can end up
