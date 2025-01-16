@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
 	sol::{SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC},
 	CcmChannelMetadata,
@@ -11,7 +9,7 @@ use sol_prim::consts::{
 	SYSTEM_PROGRAM_ID, TRANSACTION_BYTES_PER_ACCOUNT, TRANSACTION_BYTES_PER_REFERENCE,
 };
 use sp_runtime::DispatchError;
-use sp_std::vec::Vec;
+use sp_std::{vec::Vec, collections::btree_set::BTreeSet};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
@@ -74,19 +72,20 @@ impl CcmValidityCheck for CcmValidityChecker {
 
 			// Use a HashMap to keep track of how many times we've seen an account,
 			// TODO: Insert/initialize the accounts that are part of our CCM. Will depend on asset.
-			let mut count_map: HashMap<sol_prim::Address, bool> =
-				[(SYSTEM_PROGRAM_ID, true)].iter().cloned().collect();
-
+			let mut seen_addresses = BTreeSet::new();
+			seen_addresses.insert(SYSTEM_PROGRAM_ID); // Pre-inserting SYSTEM_PROGRAM_ID if needed
+			
 			let mut accounts_length = 0;
-
+			
 			for &ccm_address in &ccm_accounts.remaining_accounts {
 				accounts_length += TRANSACTION_BYTES_PER_REFERENCE;
-				let entry = count_map.entry(ccm_address.pubkey.into()).or_insert(false);
-				if !*entry {
+				
+				if !seen_addresses.contains(&ccm_address.pubkey.into()) {
+					// First time we see this address
 					accounts_length += TRANSACTION_BYTES_PER_ACCOUNT;
-					*entry = true;
-				};
-			};
+					seen_addresses.insert(ccm_address.pubkey.into());
+				}
+			}
 
 			let ccm_length = ccm.message.len() + accounts_length;
 			if ccm_length >
