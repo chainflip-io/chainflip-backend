@@ -49,7 +49,7 @@ use cf_chains::{
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
 	ccm_checker::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
-		DecodedCcmAdditionalData,
+		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
 	},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -2267,7 +2267,7 @@ impl_runtime_apis! {
 				// Ensure CCM message is valid
 				match CcmValidityChecker::check_and_decode(ccm, destination_asset)
 				{
-					Ok(DecodedCcmAdditionalData::Solana(ccm_accounts)) => {
+					Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(ccm_accounts))) => {
 						// Ensure the CCM parameters do not contain blacklisted accounts.
 						// Load up environment variables.
 						let api_environment =

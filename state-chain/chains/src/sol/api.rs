@@ -12,7 +12,7 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	ccm_checker::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker, CcmValidityError,
-		DecodedCcmAdditionalData,
+		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
 	},
 	sol::{
 		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
@@ -316,14 +316,16 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		// Always expects the `DecodedCcmAdditionalData::Solana(..)` variant of the decoded cf
 		// params.
-		let ccm_accounts = if let DecodedCcmAdditionalData::Solana(ccm_accounts) = decoded_cf_params
-		{
-			Ok(ccm_accounts)
-		} else {
-			Err(SolanaTransactionBuildingError::InvalidCcm(
-				CcmValidityError::CannotDecodeCcmAdditionalData,
-			))
-		}?;
+		let ccm_accounts =
+			if let DecodedCcmAdditionalData::Solana(versioned_sol_data) = decoded_cf_params {
+				match versioned_sol_data {
+					VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => Ok(ccm_accounts),
+				}
+			} else {
+				Err(SolanaTransactionBuildingError::InvalidCcm(
+					CcmValidityError::CannotDecodeCcmAdditionalData,
+				))
+			}?;
 
 		let sol_api_environment = Environment::api_environment()?;
 		let agg_key = Environment::current_agg_key()?;
