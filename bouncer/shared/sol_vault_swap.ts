@@ -11,7 +11,6 @@ import {
 } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import BigNumber from 'bignumber.js';
-import { randomBytes } from 'crypto';
 import {
   getContractAddress,
   amountToFineAmount,
@@ -25,15 +24,16 @@ import {
   stateChainAssetFromAsset,
   decodeSolAddress,
   decodeDotAddressForContract,
-  newAddress,
+  observeFetch,
 } from './utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/swap_endpoint';
+import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.1-swap-endpoint/swap_endpoint';
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
+import { getBalance } from './get_balance';
 
-const createdEventAccounts: PublicKey[] = [];
+const createdEventAccounts: [PublicKey, boolean][] = [];
 
 interface SolVaultSwapDetails {
   chain: string;
@@ -78,7 +78,7 @@ export async function executeSolVaultSwap(
   const connection = getSolConnection();
 
   const newEventAccountKeypair = Keypair.generate();
-  createdEventAccounts.push(newEventAccountKeypair.publicKey);
+  createdEventAccounts.push([newEventAccountKeypair.publicKey, srcAsset === 'Sol']);
 
   const amountToSwap = amountToFineAmount(
     amount ?? defaultAssetAmounts(srcAsset),
@@ -176,9 +176,12 @@ export async function executeSolVaultSwap(
   return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountKeypair.publicKey };
 }
 
+const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES = 5;
 export async function checkSolEventAccountsClosure(
-  eventAccounts: PublicKey[] = createdEventAccounts,
+  eventAccounts: [PublicKey, boolean][] = createdEventAccounts,
 ) {
+  console.log('=== Checking Solana Vault Swap Account Closure ===');
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();
   const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(
@@ -189,49 +192,45 @@ export async function checkSolEventAccountsClosure(
     getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
   );
 
-  async function checkAccounts(swapEventAccounts: PublicKey[]): Promise<boolean> {
-    const maxRetries = 30; // 180 seconds
-
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const swapEndpointDataAccount =
-        await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
-          swapEndpointDataAccountAddress,
-        );
-
-      if (swapEndpointDataAccount.openEventAccounts.length >= 10) {
-        await sleep(6000);
-      } else {
-        const onChainOpenedAccounts = swapEndpointDataAccount.openEventAccounts.map((element) =>
-          element.toString(),
-        );
-        for (const eventAccount of swapEventAccounts) {
-          if (!onChainOpenedAccounts.includes(eventAccount.toString())) {
-            const accountInfo = await getSolConnection().getAccountInfo(eventAccount);
-            if (accountInfo !== null) {
-              throw new Error('Event account still exists, should have been closed');
-            }
-          }
-        }
-        return true;
-      }
-    }
-    return false;
-  }
-
-  let success = await checkAccounts(eventAccounts);
-  if (!success) {
-    // Due to implementation details on the SC the accounts won't necessarily be closed
-    // immediately and the timeout won't be executed until one extra Vault swap is witnessed.
-    // We manually trigger a new one to ensure the timeout is executed.
-    await executeSolVaultSwap(
-      'Sol',
-      'ArbEth',
-      await newAddress('ArbEth', randomBytes(32).toString('hex')),
+  const maxRetries = 20; // 120 seconds
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const swapEndpointDataAccount =
+      await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
+        swapEndpointDataAccountAddress,
+      );
+    const onChainOpenedAccounts = swapEndpointDataAccount.openEventAccounts.map((element) =>
+      element.toString(),
     );
-    success = await checkAccounts(eventAccounts);
-  }
 
-  if (!success) {
-    throw new Error('Timed out waiting for event accounts to be closed');
+    // All native SOL must have been closed. SPL-token might or might not be closed. However,
+    // no more than MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES can be opened at the end.
+    const nativeEventAccounts: PublicKey[] = eventAccounts
+      .filter((eventAccount) => eventAccount[1])
+      .map((eventAccount) => eventAccount[0]);
+
+    if (
+      onChainOpenedAccounts.length > MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES ||
+      nativeEventAccounts.some((eventAccount) =>
+        onChainOpenedAccounts.includes(eventAccount.toString()),
+      )
+    ) {
+      // Some account is not closed yet
+      await sleep(6000);
+    } else {
+      for (const nativeEventAccount of nativeEventAccounts) {
+        // Ensure native accounts are closed correctly
+        const accountInfo = await getSolConnection().getAccountInfo(nativeEventAccount);
+        const balanceEventAccount = Number(await getBalance('Sol', nativeEventAccount.toString()));
+        if (accountInfo !== null || balanceEventAccount > 0) {
+          throw new Error(
+            'This should never happen, a closed account should have no data nor balance',
+          );
+        }
+      }
+      // Swap Endpoint's native vault should always have been fetched.
+      await observeFetch('Sol', getContractAddress('Solana', 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT'));
+      return;
+    }
   }
+  throw new Error('Timed out waiting for event accounts to be closed');
 }

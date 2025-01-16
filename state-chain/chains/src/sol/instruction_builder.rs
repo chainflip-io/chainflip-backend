@@ -33,7 +33,7 @@ pub struct SolanaInstructionBuilder;
 impl SolanaInstructionBuilder {
 	pub fn x_swap_native(
 		api_environment: SolApiEnvironment,
-		agg_key: SolPubkey,
+		swap_endpoint_native_vault: SolPubkey,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		from: SolPubkey,
@@ -52,7 +52,7 @@ impl SolanaInstructionBuilder {
 				cf_parameters,
 			},
 			api_environment.vault_program_data_account,
-			agg_key,
+			swap_endpoint_native_vault,
 			from,
 			event_data_account,
 			api_environment.swap_endpoint_program_data_account,

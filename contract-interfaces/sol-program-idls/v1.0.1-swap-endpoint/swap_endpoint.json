@@ -36,6 +36,78 @@
       "args": []
     },
     {
+      "name": "fetch_swap_endpoint_native_assets",
+      "discriminator": [
+        133,
+        121,
+        179,
+        232,
+        138,
+        188,
+        83,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "native_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  101,
+                  110,
+                  100,
+                  112,
+                  111,
+                  105,
+                  110,
+                  116,
+                  95,
+                  110,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "agg_key",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "initialize",
       "discriminator": [
         175,
@@ -94,8 +166,43 @@
           "name": "data_account"
         },
         {
-          "name": "agg_key",
-          "writable": true
+          "name": "native_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  101,
+                  110,
+                  100,
+                  112,
+                  111,
+                  105,
+                  110,
+                  116,
+                  95,
+                  110,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "from",
@@ -359,6 +466,19 @@
         36,
         210
       ]
+    },
+    {
+      "name": "PayeeDoesntMatchSender",
+      "discriminator": [
+        16,
+        123,
+        0,
+        234,
+        46,
+        151,
+        175,
+        168
+      ]
     }
   ],
   "errors": [
@@ -484,6 +604,22 @@
           },
           {
             "name": "payee",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PayeeDoesntMatchSender",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "payee",
+            "type": "pubkey"
+          },
+          {
+            "name": "sender",
             "type": "pubkey"
           }
         ]

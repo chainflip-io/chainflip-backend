@@ -63,43 +63,43 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_durable_nonces_and_accounts: [
 		(
 			const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
-			const_hash("8T217weMrePR8VqqiY1J6VQKn5GfDXDwTPuYekPffNTo"),
+			const_hash("2qVz58R5aPmF5Q61VaKXnpWQtngdh4Jgbeko32fEcECu"),
 		),
 		(
 			const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
-			const_hash("Hvg5WgDgdhcex1TsJW8PiPqcxUizLitoEmXcCShmXVWJ"),
+			const_hash("6fxCujPRyyTPzcZWpkDRhvDC4NXf4GB5tCTbQRDnz2iw"),
 		),
 		(
 			const_address("HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p"),
-			const_hash("8vM4M9MWoYZE7YDGhpUhoetabY8dwaz4AcDR9hbCHd7u"),
+			const_hash("2VUnNMpXzohc4284EyuhT7PEuUdqy9E7AfxAP8nrm9cv"),
 		),
 		(
 			const_address("HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2"),
-			const_hash("3fWpjCEzbHNU8qQD8YqoE5PfFahHNp4nwVVgJzxwTZya"),
+			const_hash("7bNgRtjaTgCiXwEagFv2cndco5aTzW1dEXGTZp9EDHgE"),
 		),
 		(
 			const_address("GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM"),
-			const_hash("96CDysvpx87Cd4TnxsMajFA9cKwFid1tMUFWnQWnifpJ"),
+			const_hash("DSSpXCVb6LU4a91TAkqyUHGXB1bspfLUxKzb5VhGUvyf"),
 		),
 		(
 			const_address("EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn"),
-			const_hash("BjY7LRovNVwGEh5BGcfK4bZcjVan4YzuyFqcBwraG9Bj"),
+			const_hash("DEwmxJ6xUTXVMnZjvSsRBb9knA1JG3ETT1CQXz5q3yzY"),
 		),
 		(
 			const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
-			const_hash("Hb35byiENfrMFwznb5TUxdAWN52dV81tWYWT3N99VRWr"),
+			const_hash("ERJZ2GKvYB2f7MroWy8qEA3xdvMNHg2DUqjBJ6KVzXYE"),
 		),
 		(
 			const_address("J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna"),
-			const_hash("4TbbvCow8yHxnzdMT22gUt3JvHwAF8dbscBCLRezmpCY"),
+			const_hash("Ecqa1ZZwjS6Lz74k2kXvVKcrWXJNiVGzLqfe1ftBcCYj"),
 		),
 		(
 			const_address("GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55"),
-			const_hash("FooctpZoHqoSjDE983JTJRyovN5Py6PZiiubd53gLFMv"),
+			const_hash("HuksgAnauQ9wTextjMhHVB6oVSCT3GKGb6j1DniSS8eL"),
 		),
 		(
 			const_address("AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv"),
-			const_hash("HCNp5KwKadPNiPs3nY1DtVcDfFkuUE2uUBsBueZbnkWc"),
+			const_hash("2TR5QRLhPzPzB6Gvs4iZsq6Dp8v5w2LamrE9BFrsNkzW"),
 		),
 	],
 	sol_swap_endpoint_program: SolAddress(bs58_array(
