@@ -4,21 +4,25 @@ use bitcoin::hashes::Hash;
 use cf_chains::{
 	btc::{self, BlockNumber},
 	witness_period::BlockWitnessRange,
-	Bitcoin,
 };
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
-	electoral_systems::block_height_tracking::{
-		primitives::Header, BlockHeightTrackingProperties, InputHeaders,
+	electoral_systems::{
+		block_height_tracking::{
+			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties,
+			BlockHeightTrackingTypes,
+		},
+		state_machine::core::ConstantIndex,
 	},
 	vote_storage::VoteStorage,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
 	chainflip::bitcoin_elections::{
-		BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner,
+		BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingTypes,
+		BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner,
 	},
 	BitcoinInstance,
 };
@@ -26,14 +30,13 @@ use state_chain_runtime::{
 use crate::{
 	btc::{retry_rpc::BtcRetryRpcApi, rpc::BlockHeader},
 	elections::voter_api::{CompositeVoter, VoterApi},
-	retrier::RetryLimit,
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
 	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use std::sync::Arc;
 
@@ -54,13 +57,14 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 		<<BitcoinDepositChannelWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		let (witness_range, deposit_addresses) = deposit_addresses;
+		let (witness_range, deposit_addresses, _extra) = deposit_addresses;
+		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
 		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
 
 		let mut txs = vec![];
 		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
 		tracing::info!("Witness range: {:?}", witness_range);
-		for block in BlockWitnessRange::<u64>::into_range_inclusive(witness_range) {
+		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
 			tracing::info!("Checking block {:?}", block);
 
 			// TODO: these queries should not be infinite
@@ -81,7 +85,7 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
 		}
 
-		Ok(witnesses)
+		Ok(ConstantIndex { data: witnesses, _phantom: Default::default() })
 	}
 }
 
@@ -102,7 +106,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 		anyhow::Error,
 	> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
-		let BlockHeightTrackingProperties { witness_from_index } = properties;
+		let BlockHeightTrackingProperties { witness_from_index: election_property } = properties;
 
 		let mut headers = VecDeque::new();
 
@@ -130,12 +134,21 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 
 		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
 
-		if best_block_header.block_height <= witness_from_index {
-			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={witness_from_index}", best_block_header.block_height))
-		} else if witness_from_index == 0 {
-			headers.push_back(best_block_header);
-			Ok(InputHeaders(headers))
+		if best_block_header.block_height <= election_property {
+			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={election_property}", best_block_header.block_height))
 		} else {
+			let witness_from_index = if election_property == 0 {
+				tracing::info!(
+					"bht: election_property=0, best_block_height={}, submitting last 6 blocks.",
+					best_block_header.block_height
+				);
+				best_block_header
+					.block_height
+					.saturating_sub(BitcoinBlockHeightTrackingTypes::BLOCK_BUFFER_SIZE as u64)
+			} else {
+				election_property
+			};
+
 			// fetch the headers we haven't got yet
 			for index in witness_from_index..best_block_header.block_height {
 				// let header = self.client.block_header(index).await?;
@@ -153,7 +166,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 			// We should have a chain of hashees.
 			if headers.iter().zip(headers.iter().skip(1)).all(|(a, b)| a.hash == b.parent_hash) {
 				tracing::info!(
-					"bht: Submitting vote for (witness_from={witness_from_index})with {} headers",
+					"bht: Submitting vote for (witness_from={election_property})with {} headers",
 					headers.len()
 				);
 				Ok(InputHeaders(headers))

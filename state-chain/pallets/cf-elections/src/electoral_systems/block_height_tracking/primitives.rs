@@ -1,35 +1,15 @@
 use core::{
 	iter::Step,
-	ops::{Add, AddAssign, Range, RangeInclusive, Rem, Sub, SubAssign},
+	ops::{Range, RangeInclusive},
 };
 
-use crate::{
-	electoral_system::{
-		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
-	},
-	electoral_systems::block_height_tracking::RangeOfBlockWitnessRanges,
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
-};
-use cf_chains::{btc::BlockNumber, witness_period::BlockWitnessRange};
-use cf_utilities::success_threshold_from_share_count;
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
-use frame_support::{
-	ensure,
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating},
-	Parameter,
-};
-use itertools::Itertools;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{
-	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
-	vec::Vec,
-};
+use sp_std::collections::vec_deque::VecDeque;
 
-use super::{state_machine::Validate, BlockHeightTrait, ChainProgress};
+use super::{super::state_machine::core::Validate, BlockHeightTrait, ChainProgress};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -48,16 +28,10 @@ pub struct MergeInfo<H, N> {
 	pub added: VecDeque<Header<H, N>>,
 }
 
-impl<H, N: Copy + Step> MergeInfo<H, N> {
+impl<H, N: Copy> MergeInfo<H, N> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<N>> {
 		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
-			if let (Some(first_removed), Some(last_removed)) =
-				(self.removed.front(), self.removed.back())
-			{
-				Some(ChainProgress::Reorg(first_added.block_height..=last_added.block_height))
-			} else {
-				Some(ChainProgress::Continuous(first_added.block_height..=last_added.block_height))
-			}
+			Some(ChainProgress::Range(first_added.block_height..=last_added.block_height))
 		} else {
 			None
 		}
@@ -84,7 +58,10 @@ pub enum MergeFailure<H, N> {
 	InternalError(&'static str),
 }
 
-pub fn extract_common_prefix<A: Eq>(a: &mut VecDeque<A>, b: &mut VecDeque<A>) -> VecDeque<A> {
+pub fn extract_common_prefix<A: PartialEq>(
+	a: &mut VecDeque<A>,
+	b: &mut VecDeque<A>,
+) -> VecDeque<A> {
 	let mut prefix = VecDeque::new();
 
 	while a.front().is_some() && (a.front() == b.front()) {
@@ -105,7 +82,7 @@ pub fn trim_to_length<A>(items: &mut VecDeque<A>, target_length: usize) -> VecDe
 	result
 }
 
-pub fn head_and_tail<A: Clone>(mut items: &VecDeque<A>) -> Option<(A, VecDeque<A>)> {
+pub fn head_and_tail<A: Clone>(items: &VecDeque<A>) -> Option<(A, VecDeque<A>)> {
 	let items = items.clone();
 	items.clone().pop_front().map(|head| (head, items))
 }
@@ -127,14 +104,6 @@ pub struct ChainBlocks<H, N> {
 }
 
 impl<H, N: Copy> ChainBlocks<H, N> {
-	pub fn current_state_as_no_chain_progress(&self) -> ChainProgress<N> {
-		if let Some(last) = self.headers.back() {
-			ChainProgress::None(last.block_height)
-		} else {
-			ChainProgress::WaitingForFirstConsensus
-		}
-	}
-
 	pub fn first_height(&self) -> Option<N> {
 		self.headers.front().map(|h| h.block_height)
 	}
@@ -143,14 +112,17 @@ impl<H, N: Copy> ChainBlocks<H, N> {
 impl<H, N> Validate for ChainBlocks<H, N>
 where
 	H: PartialEq + Clone,
-	N: PartialEq + Ord + Copy + BlockHeightTrait,
+	N: PartialEq + Copy + SaturatingStep,
 {
 	type Error = VoteValidationError;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		let mut pairs = self.headers.iter().zip(self.headers.iter().skip(1));
 
-		if !pairs.clone().all(|(a, b)| N::forward(a.block_height, 1) == b.block_height) {
+		if !pairs
+			.clone()
+			.all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height)
+		{
 			Err(VoteValidationError::BlockHeightsNotContinuous)
 		} else if !pairs.all(|(a, b)| a.hash == b.parent_hash) {
 			Err(VoteValidationError::ParentHashMismatch)
@@ -165,7 +137,7 @@ pub fn validate_vote_and_height<H: PartialEq + Clone, N: PartialEq>(
 	other: &VecDeque<Header<H, N>>,
 ) -> Result<(), VoteValidationError>
 where
-	N: Ord + Copy + BlockHeightTrait,
+	N: Copy + SaturatingStep,
 {
 	// a vote has to be nonempty
 	if other.len() == 0 {
@@ -186,7 +158,7 @@ pub enum ChainBlocksMergeResult<N> {
 	FailedMissing { range: Range<N> },
 }
 
-impl<H: Eq + Clone, N: Ord + Copy + Step> ChainBlocks<H, N> {
+impl<H: Eq + Clone, N: Copy + SaturatingStep + PartialEq> ChainBlocks<H, N> {
 	//
 	// We have the following assumptions:
 	//
@@ -206,7 +178,7 @@ impl<H: Eq + Clone, N: Ord + Copy + Step> ChainBlocks<H, N> {
 			.front()
 			.ok_or(MergeFailure::InternalError("expected other to not be empty!".into()))?;
 
-		let self_next_height = N::forward(self.headers.back().unwrap().block_height, 1);
+		let self_next_height = self.headers.back().unwrap().block_height.saturating_forward(1);
 
 		if self_next_height == other_head.block_height {
 			// this is "assumption (3): case 1"

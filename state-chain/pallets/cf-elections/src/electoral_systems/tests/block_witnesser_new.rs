@@ -14,18 +14,33 @@
 // State partially processed, how do we test that the state still gets processed until all the state
 // is processed.
 
+use core::ops::RangeInclusive;
+
 use super::{
 	mocks::{Check, TestSetup},
 	register_checks,
 };
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystem},
-	electoral_systems::{block_height_tracking::ChainProgress, block_witnesser::*},
+	electoral_systems::{
+		block_height_tracking::ChainProgress,
+		block_witnesser::*,
+		state_machine::{
+			core::{ConstantIndex, Hook, MultiIndexAndValue},
+			state_machine_es::{ESInterface, StateMachineES, StateMachineESInstance},
+		},
+	},
+	vote_storage,
 };
 use cf_chains::{mocks::MockEthereum, Chain};
+use codec::{Decode, Encode, MaxEncodedLen};
+use consensus::BWConsensus;
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_core::Get;
 use sp_std::collections::btree_set::BTreeSet;
+use state_machine::{BWSettings, BWState, BWStateMachine, BWTypes};
 
-/*
 thread_local! {
 	pub static PROPERTIES_TO_RETURN: std::cell::RefCell<Properties> = const { std::cell::RefCell::new(BTreeSet::new()) };
 	pub static GENERATE_ELECTION_HOOK_CALLED: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
@@ -42,15 +57,29 @@ pub type ValidatorId = u16;
 
 pub type BlockData = Vec<u8>;
 
-
-struct MockGenerateElectionHook<ChainBlockNumber, Properties> {
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
+pub struct MockGenerateElectionHook<ChainBlockNumber, Properties> {
 	_phantom: core::marker::PhantomData<(ChainBlockNumber, Properties)>,
 }
 
-
-fn range_n(n: u64) -> RangeOfBlockWitnessRanges<u64> {
+fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
+	assert!(count > 0);
 	// TODO: Test with other witness ranges.
-	RangeOfBlockWitnessRanges::try_new(n, n, 1).unwrap()
+	start..=start + count - 1
 }
 
 pub type Properties = BTreeSet<u16>;
@@ -59,6 +88,16 @@ impl BlockElectionPropertiesGenerator<ChainBlockNumber, Properties>
 	for MockGenerateElectionHook<ChainBlockNumber, Properties>
 {
 	fn generate_election_properties(_root_to_witness: ChainBlockNumber) -> Properties {
+		// GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
+		// The properties are not important to the logic of the electoral system itself, so we can
+		// return empty.
+		BTreeSet::new()
+	}
+}
+
+impl Hook<ChainBlockNumber, Properties> for MockGenerateElectionHook<ChainBlockNumber, Properties> {
+	fn run(&self, input: ChainBlockNumber) -> Properties {
+		println!("generate_election_hook called for {input}");
 		GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
 		// The properties are not important to the logic of the electoral system itself, so we can
 		// return empty.
@@ -119,15 +158,104 @@ impl ProcessBlockData<ChainBlockNumber, BlockData>
 	}
 }
 
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
+pub struct MockDepositChannelWitnessingDefinition {}
+
+type ElectionProperties = Properties;
+
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
+pub struct MockSafemodeEnabledHook {}
+
+impl Hook<(), bool> for MockSafemodeEnabledHook {
+	fn run(&self, _input: ()) -> bool {
+		false
+	}
+}
+
+/// Associating BW types to the struct
+impl BWTypes for MockDepositChannelWitnessingDefinition {
+	type ChainBlockNumber = u64;
+	type BlockData = BlockData;
+	type ElectionProperties = ElectionProperties;
+	type ElectionPropertiesHook = MockGenerateElectionHook<u64, Properties>;
+	type SafeModeEnabledHook = MockSafemodeEnabledHook;
+}
+
+/// Associating the ES related types to the struct
+impl ESInterface for MockDepositChannelWitnessingDefinition {
+	type ValidatorId = ValidatorId;
+	type ElectoralUnsynchronisedState = BWState<MockDepositChannelWitnessingDefinition>;
+	type ElectoralUnsynchronisedStateMapKey = ();
+	type ElectoralUnsynchronisedStateMapValue = ();
+	type ElectoralUnsynchronisedSettings = BWSettings;
+	type ElectoralSettings = ();
+	type ElectionIdentifierExtra = ();
+	type ElectionProperties = (u64, ElectionProperties, u8);
+	type ElectionState = ();
+	type Vote =
+		vote_storage::bitmap::Bitmap<ConstantIndex<(u64, ElectionProperties, u8), BlockData>>;
+	type Consensus = ConstantIndex<(u64, ElectionProperties, u8), BlockData>;
+	type OnFinalizeContext = Vec<ChainProgress<u64>>;
+	type OnFinalizeReturn = Vec<()>;
+}
+
+/// Associating the state machine and consensus mechanism to the struct
+impl StateMachineES for MockDepositChannelWitnessingDefinition {
+	// both context and return have to be vectors, these are the item types
+	type OnFinalizeContextItem = ChainProgress<u64>;
+	type OnFinalizeReturnItem = ();
+
+	// restating types since we have to prove that they have the correct bounds
+	type Consensus2 = ConstantIndex<(u64, ElectionProperties, u8), BlockData>;
+	type Vote2 = ConstantIndex<(u64, ElectionProperties, u8), BlockData>;
+	type VoteStorage2 =
+		vote_storage::bitmap::Bitmap<ConstantIndex<(u64, ElectionProperties, u8), BlockData>>;
+
+	// the actual state machine and consensus mechanisms of this ES
+	type StateMachine = BWStateMachine<MockDepositChannelWitnessingDefinition>;
+	type ConsensusMechanism = BWConsensus<BlockData, u64, ElectionProperties>;
+}
+
+/// Generating the state machine-based electoral system
+pub type SimpleBlockWitnesser = StateMachineESInstance<MockDepositChannelWitnessingDefinition>;
+
 // We need to provide a mock chain here... MockEthereum might be what we're after
-type SimpleBlockWitnesser = BlockWitnesser<
-	MockEthereum,
-	BlockData,
-	Properties,
-	ValidatorId,
-	MockBlockProcessor<ChainBlockNumber, BlockData>,
-	MockGenerateElectionHook<ChainBlockNumber, Properties>,
->;
+// type SimpleBlockWitnesser = BlockWitnesser<
+// 	MockEthereum,
+// 	BlockData,
+// 	Properties,
+// 	ValidatorId,
+// 	MockBlockProcessor<ChainBlockNumber, BlockData>,
+// 	MockGenerateElectionHook<ChainBlockNumber, Properties>,
+// >;
 
 register_checks! {
 	SimpleBlockWitnesser {
@@ -135,7 +263,7 @@ register_checks! {
 			assert_eq!(GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "generate_election_properties should have been called {} times so far!", n);
 		},
 		number_of_open_elections_is(_pre, post, n: ElectionCount) {
-			assert_eq!(post.unsynchronised_state.elections_open_for.len(), n as usize, "Number of open elections should be {}", n);
+			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
 		},
 		process_block_data_called_n_times(_pre, _post, n: u8) {
 			assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "process_block_data should have been called {} times so far!", n);
@@ -143,9 +271,12 @@ register_checks! {
 		process_block_data_called_last_with(_pre, _post, block_data: Vec<(ChainBlockNumber, BlockData)>) {
 			assert_eq!(PROCESS_BLOCK_DATA_CALLED_WITH.with(|old_block_data| old_block_data.borrow().clone()), block_data, "process_block_data should have been called with {:?}", block_data);
 		},
-		unprocessed_data_is(_pre, post, data: Vec<(ChainBlockNumber, BlockData)>) {
-			assert_eq!(post.unsynchronised_state.unprocessed_data, data, "Unprocessed data should be {:?}", data);
-		},
+		// unprocessed_data_is(_pre, post, data: Vec<(ChainBlockNumber, BlockData)>) {
+		// 	// assert_eq!(post.unsynchronised_state.unprocessed_data, data, "Unprocessed data should be {:?}", data);
+		// },
+		election_state_is(_pre, post) {
+			println!("election state is: {:?}", post.unsynchronised_state.elections)
+		}
 	}
 }
 
@@ -157,15 +288,20 @@ fn generate_votes(
 ) -> ConsensusVotes<SimpleBlockWitnesser> {
 	println!("Generate votes called");
 
+	let to_vote = |data| ConstantIndex { data, _phantom: Default::default() };
+
 	let incorrect_data = vec![1u8, 2, 3];
 	assert_ne!(incorrect_data, correct_data);
 	let votes = ConsensusVotes {
 		votes: correct_voters
 			.clone()
 			.into_iter()
-			.map(|v| ConsensusVote { vote: Some(((), correct_data.clone())), validator_id: v })
+			.map(|v| {
+				// ConsensusVote { vote: Some(((), correct_data.clone())), validator_id: v }
+				ConsensusVote { vote: Some(((), to_vote(correct_data.clone()))), validator_id: v }
+			})
 			.chain(incorrect_voters.clone().into_iter().map(|v| ConsensusVote {
-				vote: Some(((), incorrect_data.clone())),
+				vote: Some(((), to_vote(incorrect_data.clone()))),
 				validator_id: v,
 			}))
 			.chain(
@@ -196,7 +332,7 @@ fn create_votes_expectation(
 			Default::default(),
 			consensus.clone(),
 		),
-		Some(consensus),
+		Some(ConstantIndex::new(consensus)),
 	)
 }
 
@@ -207,12 +343,12 @@ const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 fn no_block_data_success() {
 	const NEXT_BLOCK_RECEIVED: ChainBlockNumber = 1;
 	TestSetup::<SimpleBlockWitnesser>::default()
-		.with_unsynchronised_settings(BlockWitnesserSettings {
+		.with_unsynchronised_settings(BWSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
 		})
 		.build()
 		.test_on_finalize(
-			&ChainProgress::Continuous(range_n(NEXT_BLOCK_RECEIVED)),
+			&vec![ChainProgress::FirstConsensus(range_n(NEXT_BLOCK_RECEIVED, 1))],
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
@@ -222,10 +358,10 @@ fn no_block_data_success() {
 		)
 		.expect_consensus(
 			generate_votes((0..20).collect(), Default::default(), Default::default(), vec![]),
-			Some(vec![]),
+			Some(ConstantIndex::new(vec![])),
 		)
 		.test_on_finalize(
-			&ChainProgress::Continuous(range_n(NEXT_BLOCK_RECEIVED)),
+			&vec![ChainProgress::None],
 			|_| {},
 			vec![
 				// No extra calls
@@ -246,19 +382,21 @@ fn creates_multiple_elections_below_maximum_when_required() {
 	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
 	const NUMBER_OF_ELECTIONS: ElectionCount = MAX_CONCURRENT_ELECTIONS - 1;
 	TestSetup::<SimpleBlockWitnesser>::default()
-		.with_unsynchronised_settings(BlockWitnesserSettings {
+		.with_unsynchronised_settings(BWSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
 		})
 		.build()
 		.test_on_finalize(
 			// Process multiple elections, but still less than the maximum concurrent
-			&ChainProgress::Continuous(range_n(
-				INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64),
-			)),
+			&vec![ChainProgress::FirstConsensus(range_n(
+				INIT_LAST_BLOCK_RECEIVED,
+				NUMBER_OF_ELECTIONS as u64,
+			))],
 			|pre_state| {
-				assert_eq!(pre_state.unsynchronised_state.elections_open_for.len(), 0);
+				assert_eq!(pre_state.unsynchronised_state.elections.ongoing.len(), 0);
 			},
 			vec![
+				Check::<SimpleBlockWitnesser>::election_state_is(),
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(4),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS),
 			],
@@ -266,7 +404,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 		.expect_consensus_multi(vec![
 			(
 				generate_votes((0..20).collect(), Default::default(), Default::default(), vec![]),
-				Some(vec![]),
+				Some(ConstantIndex::new(vec![])),
 			),
 			(
 				generate_votes(
@@ -275,16 +413,16 @@ fn creates_multiple_elections_below_maximum_when_required() {
 					Default::default(),
 					vec![1, 3, 4],
 				),
-				Some(vec![1, 3, 4]),
+				Some(ConstantIndex::new(vec![1, 3, 4])),
 			),
 			// no progress on external chain but on finalize called again
 		])
 		.test_on_finalize(
 			// same block again
-			&ChainProgress::None(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64)),
+			&vec![ChainProgress::None],
 			|pre_state| {
 				assert_eq!(
-					pre_state.unsynchronised_state.elections_open_for.len(),
+					pre_state.unsynchronised_state.elections.ongoing.len(),
 					NUMBER_OF_ELECTIONS as usize
 				);
 			},
@@ -298,6 +436,8 @@ fn creates_multiple_elections_below_maximum_when_required() {
 			],
 		);
 }
+
+/*
 
 #[test]
 fn creates_multiple_elections_limited_by_maximum() {

@@ -3,6 +3,7 @@ pub(crate) use super::mocks;
 pub(crate) use crate::register_checks;
 
 pub mod block_witnesser;
+pub mod block_witnesser_new;
 pub mod delta_based_ingress;
 pub mod egress_success;
 pub mod liveness;

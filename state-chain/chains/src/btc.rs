@@ -7,7 +7,7 @@ pub mod vault_swap_encoding;
 extern crate alloc;
 use self::deposit_address::DepositAddress;
 use crate::{
-	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, DepositChannel,
+	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, ChainWitnessConfig, DepositChannel,
 	DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
 };
 use alloc::{collections::VecDeque, string::String};
@@ -229,6 +229,11 @@ impl BitcoinFeeInfo {
 		// MINIMUM_BTC_TX_SIZE_IN_BYTES bytes
 		self.sats_per_kilobyte.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 	}
+}
+
+impl ChainWitnessConfig for Bitcoin {
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+	type ChainBlockNumber = BlockNumber;
 }
 
 impl Chain for Bitcoin {
