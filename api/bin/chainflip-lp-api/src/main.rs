@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use cf_primitives::{BasisPoints, BlockNumber, EgressId};
+use cf_rpc_types::lp::{ApiWaitForResult, LimitOrRangeOrder, LimitOrder, RangeOrder, Side, Tick};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -8,10 +9,7 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self,
-	lp::{
-		types::{LimitOrRangeOrder, LimitOrder, RangeOrder},
-		ApiWaitForResult, LpApi, Side, Tick,
-	},
+	lp::LpApi,
 	primitives::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,

@@ -44,6 +44,7 @@ thiserror = { workspace = true, default-features = true }
 # Local
 chainflip-api = { workspace = true }
 cf-utilities = { workspace = true, default-features = true }
+cf-rpc-types = { workspace = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

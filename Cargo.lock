@@ -1455,9 +1455,11 @@ name = "cf-rpc-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "frame-support",
+ "pallet-cf-pools",
  "serde",
  "sp-core 34.0.0",
  "state-chain-runtime",
@@ -1850,6 +1852,7 @@ version = "1.8.0"
 dependencies = [
  "anyhow",
  "cf-primitives",
+ "cf-rpc-types",
  "chainflip-api",
  "clap",
  "custom-rpc",
