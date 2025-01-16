@@ -12,16 +12,19 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, Solana},
+	sol::{
+		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
+		SolAddress, SolApiEnvironment, SolHash, Solana,
+	},
 	Chain,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	NetworkEnvironment, SemVer,
+	BroadcastId, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
-	CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
-	SolanaNonceWatch,
+	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
+	SafeMode, SolanaNonceWatch,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -29,7 +32,6 @@ pub use pallet::*;
 use sp_std::{vec, vec::Vec};
 
 mod benchmarking;
-
 mod mock;
 mod tests;
 
@@ -100,6 +102,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type CurrentReleaseVersion: Get<SemVer>;
 
+		type SolEnvironment: SolanaEnvironment;
+
+		/// Solana broadcaster.
+		type SolanaBroadcaster: Broadcaster<
+			Solana,
+			ApiCall = SolanaApi<Self::SolEnvironment>,
+			Callback = RuntimeCallFor<Self>,
+		>;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -112,6 +123,8 @@ pub mod pallet {
 		NonceAccountNotBeingUsedOrDoesNotExist,
 		/// The given UTXO parameters are invalid.
 		InvalidUtxoParameters,
+		/// Failed to build Solana Api call. See logs for more details
+		FailedToBuildSolanaApiCall,
 	}
 
 	#[pallet::pallet]
@@ -272,6 +285,8 @@ pub mod pallet {
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
 		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
+		/// An Governance transaction was dispatched to a Solana Program.
+		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
 	}
 
 	#[pallet::call]
@@ -488,6 +503,44 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// **READ WARNINGS BEFORE USING THIS**
+		///
+		/// Allows Governance to dispatch calls to the Solana Contracts.
+		///
+		/// Note this will only work as long as the Solana GovKey is the current AggKey, which might
+		/// change in the future.
+		///
+		/// Requires Governance Origin. This action is allowed to consume any nonce account because
+		/// it's a high priority action. Therefore, **DO NOT** execute this governance function
+		/// around a rotation as it could consume the nonce saved for rotations.
+		///
+		/// ## Events
+		///
+		/// - [OnSuccess](Event::SolanaGovCallDispatched)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(8)]
+		#[pallet::weight(Weight::zero())]
+		pub fn dispatch_solana_gov_call(
+			origin: OriginFor<T>,
+			gov_call: SolanaGovCall,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			let (broadcast_id, _) =
+				T::SolanaBroadcaster::threshold_sign_and_broadcast(gov_call.to_api_call().map_err(|e| {
+				// If we fail here, most likely some Solana Environment variables were not set.
+				log::error!("Failed to build Solana Api call to update Solana Vault Swap settings. Error: {:?}", e);
+				Error::<T>::FailedToBuildSolanaApiCall
+			})?);
+
+			Self::deposit_event(Event::<T>::SolanaGovCallDispatched { gov_call, broadcast_id });
+
+			Ok(())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -665,7 +718,7 @@ impl<T: Config> Pallet<T> {
 						Some(Self::consolidation_parameters().consolidation_threshold),
 					)
 					.map_err(|error| {
-						log::error!(
+						log::warn!(
 							"Unable to select desired amount from available utxos. Error: {:?}",
 							error
 						);

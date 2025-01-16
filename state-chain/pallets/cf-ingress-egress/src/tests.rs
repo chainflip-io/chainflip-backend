@@ -5,8 +5,8 @@ use crate::{
 	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
-	DepositWitness, DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, Event,
-	FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit,
+	DepositOrigin, DepositWitness, DisabledEgressAssets, EgressDustLimit, Event as PalletEvent,
+	Event, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit,
 	NetworkFeeDeductionFromBoostPercent, Pallet, PalletConfigUpdate, PalletSafeMode,
 	PrewitnessedDepositIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 	VaultDepositWitness,
@@ -2228,5 +2228,54 @@ fn assembling_broker_fees() {
 		];
 
 		assert_eq!(IngressEgress::assemble_broker_fees(broker_fee, affiliate_fees), expected);
+	});
+}
+
+#[test]
+fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
+	new_test_ext().execute_with(|| {
+		const DEPOSIT_AMOUNT: AssetAmount = 100;
+
+		// Increase the minimum deposit amount:
+		MinimumDeposit::<Test, ()>::insert(EthAsset::Eth, DEPOSIT_AMOUNT + 1);
+
+		assert_eq!(
+			IngressEgress::process_full_witness_deposit_inner(
+				None,
+				Asset::Eth.try_into().unwrap(),
+				DEPOSIT_AMOUNT,
+				Default::default(),
+				None,
+				&BROKER,
+				BoostStatus::NotBoosted,
+				0,
+				None,
+				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				0,
+				DepositOrigin::Vault { tx_id: H256::default() },
+			)
+			.err(),
+			Some(DepositFailedReason::BelowMinimumDeposit)
+		);
+
+		assert!(IngressEgress::process_full_witness_deposit_inner(
+			None,
+			Asset::Eth.try_into().unwrap(),
+			DEPOSIT_AMOUNT,
+			Default::default(),
+			None,
+			&BROKER,
+			BoostStatus::Boosted {
+				prewitnessed_deposit_id: 0,
+				pools: vec![],
+				amount: DEPOSIT_AMOUNT,
+			},
+			0,
+			None,
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			0,
+			DepositOrigin::Vault { tx_id: H256::default() },
+		)
+		.is_ok());
 	});
 }

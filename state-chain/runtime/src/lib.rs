@@ -123,10 +123,7 @@ use sp_runtime::{
 	BoundedVec,
 };
 
-use frame_support::{
-	genesis_builder_helper::build_state,
-	traits::{EstimateNextSessionRotation, Time},
-};
+use frame_support::genesis_builder_helper::build_state;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -290,6 +287,8 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinKeyProvider = BitcoinThresholdSigner;
 	type RuntimeSafeMode = RuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
+	type SolEnvironment = SolEnvironment;
+	type SolanaBroadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -539,6 +538,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type DeregistrationCheck = Bonder<Self>;
 	type WeightInfo = ();
 }
 
@@ -1249,6 +1249,8 @@ type AllMigrations = (
 	PalletMigrations,
 	MigrationsForV1_8,
 	migrations::housekeeping::Migration,
+	// Can be removed once Solana address re-use is activated.
+	migrations::solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
 	migrations::reap_old_accounts::Migration,
 );
 
@@ -2226,6 +2228,9 @@ impl_runtime_apis! {
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
+			let source_chain = ForeignChain::from(source_asset);
+			let destination_chain = ForeignChain::from(destination_asset);
+
 			// Validate parameters.
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
@@ -2234,7 +2239,7 @@ impl_runtime_apis! {
 			frame_support::ensure!(
 				ChainAddressConverter::try_from_encoded_address(destination_address.clone())
 					.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
-					.chain() == ForeignChain::from(destination_asset)
+					.chain() == destination_chain
 				,
 				"Destination address and asset are on different chains."
 			);
@@ -2254,6 +2259,13 @@ impl_runtime_apis! {
 
 			// Validate CCM.
 			if let Some(ccm) = channel_metadata.as_ref() {
+				if source_chain == ForeignChain::Bitcoin {
+					return Err(DispatchErrorWithMessage::from("Vault swaps with CCM are not supported for the Bitcoin Chain"));
+				}
+				if !destination_chain.ccm_support() {
+					return Err(DispatchErrorWithMessage::from("Destination chain does not support CCM"));
+				}
+
 				// Ensure CCM message is valid
 				match CcmValidityChecker::check_and_decode(ccm, destination_asset)
 				{
@@ -2283,7 +2295,7 @@ impl_runtime_apis! {
 			}
 
 			// Encode swap
-			match (ForeignChain::from(source_asset), extra_parameters) {
+			match (source_chain, extra_parameters) {
 				(
 					ForeignChain::Bitcoin,
 					VaultSwapExtraParameters::Bitcoin {
@@ -2292,23 +2304,6 @@ impl_runtime_apis! {
 					}
 				) => {
 					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
-
-					// Payload expiry time is set to time left to next rotation.
-					// 	* For BTC: the actual expiry time is 2 rotations, but we deliberately set expires_at to be the time left to next
-					//    rotation to cater for the case when a forced rotation happens between when the payload was requested and
-					//    before expires_at. BTC funds can be lost in 3 cases:
-					// 		* User makes the vault transaction after expires_at, and it happens that we did a forced rotation in between
-					//      * User submits the vault transaction 3 days (1 epoch) after expires_at, and with no forced rotations in between
-					//      * We do 2 forced rotations in between payload request and expires_at
-					//  * For SOLANA: The actual expiry time is indeed time left to next rotation. If a forced rotation
-					//    happens in between as explained before, it is actually not a problem as the user won't lose any funds.
-					//  * For ETH: payload never expires hence we don't send expires_at
-					let current_block = System::block_number();
-					let (Some(next_rotation_block), _) = Validator::estimate_next_session_rotation(current_block) else {
-						Err(pallet_cf_validator::Error::<Runtime>::InvalidEpochDuration)?
-					};
-					let blocks_until_next_rotation = next_rotation_block.saturating_sub(current_block);
-					let expires_at = Timestamp::now() + blocks_until_next_rotation as u64 * SLOT_DURATION;
 
 					crate::chainflip::vault_swaps::bitcoin_vault_swap(
 						broker_id,
@@ -2320,7 +2315,6 @@ impl_runtime_apis! {
 						boost_fee,
 						affiliate_fees,
 						dca_parameters,
-						expires_at,
 					)
 				},
 				(

@@ -15,7 +15,9 @@ use cf_primitives::FlipBalance;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
-use cf_traits::{AccountInfo, Bonding, FeePayment, FundingInfo, OnAccountFunded, Slashing};
+use cf_traits::{
+	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
+};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -143,6 +145,8 @@ pub mod pallet {
 		InsufficientReserves,
 		/// No pending redemption for this ID.
 		NoPendingRedemptionForThisID,
+		/// Account is bonded.
+		AccountBonded,
 	}
 
 	#[pallet::call]
@@ -447,6 +451,19 @@ impl<T: Config> Bonding for Bonder<T> {
 				account.bond = bond
 			}
 		})
+	}
+}
+
+impl<T: Config> DeregistrationCheck for Bonder<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Error<T>> {
+		if Account::<T>::get(account_id).bond.is_zero() {
+			Ok(())
+		} else {
+			Err(Error::AccountBonded)
+		}
 	}
 }
 

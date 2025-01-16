@@ -2,7 +2,7 @@ use crate::{
 	mock_btc::*,
 	tests::{ALICE, BROKER},
 	BoostPoolId, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness,
-	Event, ReportExpiresAt, ScheduledTxForReject, TransactionPrewitnessedStatus,
+	Event, ReportExpiresAt, ScheduledTransactionsForRejection, TransactionPrewitnessedStatus,
 	TransactionRejectionDetails, TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
 };
 
@@ -149,7 +149,7 @@ fn process_marked_transaction_and_expect_refund() {
 			})
 		);
 
-		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), Some(1));
+		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::decode_len(), Some(1));
 	});
 }
 
@@ -378,7 +378,7 @@ fn send_funds_back_after_they_have_been_rejected() {
 	new_test_ext().execute_with(|| {
 		let deposit_details = helpers::generate_btc_deposit(Hash::random());
 
-		ScheduledTxForReject::<Test, ()>::append(TransactionRejectionDetails {
+		ScheduledTransactionsForRejection::<Test, ()>::append(TransactionRejectionDetails {
 			refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS))),
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			asset: btc::Asset::Btc,
@@ -387,7 +387,7 @@ fn send_funds_back_after_they_have_been_rejected() {
 
 		IngressEgress::on_finalize(1);
 
-		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), None);
+		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::decode_len(), None);
 
 		assert_has_matching_event!(
 			Test,

@@ -250,7 +250,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(19);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(20);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -712,7 +712,7 @@ pub mod pallet {
 
 	/// Stores the details of transactions that are scheduled for rejecting.
 	#[pallet::storage]
-	pub(crate) type ScheduledTxForReject<T: Config<I>, I: 'static = ()> =
+	pub(crate) type ScheduledTransactionsForRejection<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 
 	/// Stores the details of transactions that failed to be rejected.
@@ -1080,7 +1080,7 @@ pub mod pallet {
 				}
 			}
 
-			for tx in ScheduledTxForReject::<T, I>::take() {
+			for tx in ScheduledTransactionsForRejection::<T, I>::take() {
 				if let Some(Ok(refund_address)) = tx.refund_address.clone().map(TryInto::try_into) {
 					if let Ok(api_call) =
 						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
@@ -2236,38 +2236,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_height: TargetChainBlockNumber<T, I>,
 		origin: DepositOrigin<T, I>,
 	) -> Result<FullWitnessDepositOutcome, DepositFailedReason> {
-		// TODO: only apply this check if the deposit hasn't been boosted
-		// already (in case MinimumDeposit increases after some small deposit
-		// is boosted)?
+		if !matches!(boost_status, BoostStatus::Boosted { .. }) {
+			if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
+				// If the deposit amount is below the minimum allowed, the deposit is ignored.
+				// TODO: track these funds somewhere, for example add them to the withheld fees.
+				return Err(DepositFailedReason::BelowMinimumDeposit);
+			}
+			if let Some(tx_id) = deposit_details.deposit_id() {
+				// Only consider rejecting a transaction if we haven't already boosted it,
+				// since by boosting the protocol is committing to accept the deposit.
+				if TransactionsMarkedForRejection::<T, I>::take(broker, &tx_id).is_some() {
+					let refund_address = match &action {
+						ChannelAction::Swap { refund_params, .. } => refund_params
+							.as_ref()
+							.map(|refund_params| refund_params.refund_address.clone()),
+						ChannelAction::LiquidityProvision { refund_address, .. } =>
+							refund_address.clone(),
+					};
 
-		if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
-			// If the deposit amount is below the minimum allowed, the deposit is ignored.
-			// TODO: track these funds somewhere, for example add them to the withheld fees.
-			return Err(DepositFailedReason::BelowMinimumDeposit);
-		}
+					ScheduledTransactionsForRejection::<T, I>::append(
+						TransactionRejectionDetails {
+							refund_address,
+							amount: deposit_amount,
+							asset,
+							deposit_details: deposit_details.clone(),
+						},
+					);
 
-		if let Some(tx_id) = deposit_details.deposit_id() {
-			// Only consider rejecting a transaction if we haven't already boosted it,
-			// since by boosting the protocol is committing to accept the deposit.
-			if TransactionsMarkedForRejection::<T, I>::take(broker, &tx_id).is_some() &&
-				!matches!(boost_status, BoostStatus::Boosted { .. })
-			{
-				let refund_address = match &action {
-					ChannelAction::Swap { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::LiquidityProvision { refund_address, .. } =>
-						refund_address.clone(),
-				};
-
-				ScheduledTxForReject::<T, I>::append(TransactionRejectionDetails {
-					refund_address,
-					amount: deposit_amount,
-					asset,
-					deposit_details: deposit_details.clone(),
-				});
-
-				return Err(DepositFailedReason::TransactionRejectedByBroker);
+					return Err(DepositFailedReason::TransactionRejectedByBroker);
+				}
 			}
 		}
 

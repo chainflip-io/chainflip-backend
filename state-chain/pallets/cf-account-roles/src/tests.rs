@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, *};
+use cf_traits::mocks::deregistration_check::MockDeregistrationCheck;
 use frame_support::{assert_noop, assert_ok, traits::HandleLifetime};
 use frame_system::Provider;
 
@@ -159,6 +160,26 @@ fn test_setting_vanity_names_() {
 			VanityNames::<Test>::get().len(),
 			ACCOUNT_IDS.len() - 1,
 			"Vanity name should of been removed when account was killed"
+		);
+	});
+}
+
+#[test]
+fn deregistration_checks() {
+	new_test_ext().execute_with(|| {
+		// Create and register some accounts.
+		const ROLE: AccountRole = AccountRole::Broker;
+		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
+		<Provider<Test> as HandleLifetime<u64>>::created(&BOB).unwrap();
+		AccountRolesPallet::register_account_role(&ALICE, ROLE).unwrap();
+		AccountRolesPallet::register_account_role(&BOB, ROLE).unwrap();
+
+		MockDeregistrationCheck::set_should_fail(&ALICE, true);
+
+		assert!(<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(&ALICE, ROLE)
+			.is_err());
+		assert!(
+			<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(&BOB, ROLE).is_ok()
 		);
 	});
 }

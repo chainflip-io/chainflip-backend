@@ -194,12 +194,21 @@ pub fn task_scope<
 	let location = core::panic::Location::caller();
 
 	async move {
-		tracing::info!(target: "task_scope", "opened: '{location}'");
+		tracing::info!(
+			target: "task_scope",
+			"scope opened: '{location}'",
+		);
 		let guard = scopeguard::guard((), move |_| {
 			if std::thread::panicking() {
-				tracing::error!(target: "task_scope", "closed by panic: '{location}'");
+				tracing::error!(
+					target: "task_scope",
+					"scope closed by panic: '{location}'"
+				);
 			} else {
-				tracing::error!(target: "task_scope", "closed by cancellation: '{location}'");
+				tracing::error!(
+					target: "task_scope",
+					"scope closed by cancellation: '{location}'"
+				);
 			}
 		});
 
@@ -230,21 +239,34 @@ pub fn task_scope<
 			// This async move scope ensures scope is dropped when top_level_task and its returned
 			// future finish (Instead of when this function exits)
 			async move {
-				tracing::info!(target: "task_scope", "parent task started: '{location}'");
+				tracing::info!(
+					target: "task_scope",
+					"parent task started '{location}'"
+				);
 				let guard = scopeguard::guard((), move |_| {
 					if std::thread::panicking() {
-						tracing::error!(target: "task_scope", "parent task ended by panic: '{location}'");
+						tracing::error!(
+							target: "task_scope",
+							"parent task ended by panic: '{location}'"
+						);
 					} else {
-						tracing::error!(target: "task_scope", "parent task ended by cancellation: '{location}'");
+						tracing::error!(
+							target: "task_scope",
+							"parent task ended by cancellation: '{location}'"
+						);
 					}
 				});
 				let result = top_level_task(&scope).await;
 				scopeguard::ScopeGuard::into_inner(guard);
 				match &result {
-					Ok(_) =>
-						tracing::info!(target: "task_scope", "parent task ended: '{location}'"),
-					Err(error) =>
-						tracing::error!(target: "task_scope", "parent task ended by error '{error:?}': '{location}'"),
+					Ok(_) => tracing::info!(
+						target: "task_scope",
+						"parent task ended: '{location}'"
+					),
+					Err(error) => tracing::error!(
+						target: "task_scope",
+						"parent task ended by error '{error:?}': '{location}'"
+					),
 				}
 				result
 			}
@@ -254,11 +276,17 @@ pub fn task_scope<
 
 		match result {
 			Ok((_, t)) => {
-				tracing::info!(target: "task_scope", "closed: '{location}'", );
+				tracing::info!(
+					target: "task_scope",
+					"scope closed: '{location}'"
+				);
 				Ok(t)
 			},
 			Err(error) => {
-				tracing::error!(target: "task_scope", "closed by error {error:?}: '{location}'");
+				tracing::info!(
+					target: "task_scope",
+					"scope closed by error: {error:?} '{location}'"
+				);
 				Err(error)
 			},
 		}
@@ -271,6 +299,7 @@ type TaskFuture<Error> = Pin<Box<dyn 'static + Future<Output = Result<(), Error>
 struct TaskProperties {
 	weak: bool,
 	location: core::panic::Location<'static>,
+	task_id: u64,
 }
 impl TaskProperties {
 	fn log_on_end<T, E: Debug + Send + 'static>(
@@ -279,16 +308,34 @@ impl TaskProperties {
 	) {
 		match &result {
 			Ok(result) => match result {
-				Ok(_) =>
-					tracing::info!(target: "task_scope", "child task ended: '{}'", self.location),
-				Err(error) =>
-					tracing::error!(target: "task_scope", "child task ended by error '{error:?}': '{}'", self.location),
+				Ok(_) => tracing::info!(
+					target: "task_scope",
+					"child task #{} ended: '{}'",
+					self.task_id,
+					self.location
+				),
+				Err(error) => tracing::error!(
+					target: "task_scope",
+					"child task #{} ended by error '{error:?}': '{}'",
+					self.task_id,
+					self.location
+				),
 			},
 			Err(error) =>
 				if error.is_panic() {
-					tracing::error!(target: "task_scope", "child task ended by panic: '{}'", self.location);
+					tracing::error!(
+						target: "task_scope",
+						"child task #{} ended by panic: '{}'",
+						self.task_id,
+						self.location
+					);
 				} else {
-					tracing::error!(target: "task_scope", "child task ended by cancellation: '{}'", self.location);
+					tracing::error!(
+						target: "task_scope",
+						"child task #{} ended by cancellation: '{}'",
+						self.task_id,
+						self.location
+					);
 				},
 		}
 	}
@@ -334,6 +381,7 @@ pub struct Scope<'env, Error: Debug + Send + 'static> {
 	///             Ok(())
 	/// }.boxed());
 	/// ```
+	task_counter: std::sync::atomic::AtomicU64,
 	_phantom: std::marker::PhantomData<&'env mut &'env ()>,
 }
 impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
@@ -345,7 +393,11 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 		let runtime_handle = tokio::runtime::Handle::current();
 
 		(
-			Scope { sender, _phantom: Default::default() },
+			Scope {
+				sender,
+				task_counter: std::sync::atomic::AtomicU64::new(0),
+				_phantom: Default::default(),
+			},
 			ScopeResultStream {
 				receiver: Some(receiver),
 				can_receive_new_tasks: true,
@@ -367,11 +419,13 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 	#[track_caller]
 	fn inner_spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, weak: bool, f: F) {
 		let location = core::panic::Location::caller();
+		let task_id = self.task_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
 		let _result = self.sender.try_send({
 			let future: Pin<Box<dyn 'env + Future<Output = Result<(), Error>> + Send>> =
 				Box::pin(f.with_current_subscriber());
 			let future: TaskFuture<Error> = unsafe { std::mem::transmute(future) };
-			(TaskProperties { weak, location: *location }, future)
+			(TaskProperties { weak, location: *location, task_id }, future)
 		});
 	}
 
@@ -483,7 +537,12 @@ impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 				Pin::new(&mut self.as_mut().receiver.as_mut().unwrap()).poll_next(cx)
 			{
 				if let Some((properties, future)) = option {
-					tracing::info!(target: "task_scope", "child task started: '{}'", properties.location);
+					tracing::info!(
+						target: "task_scope",
+						"child task #{} started: '{}'",
+						properties.task_id,
+						properties.location
+					);
 					if !properties.weak {
 						self.non_weak_tasks += 1;
 					}
@@ -559,7 +618,12 @@ impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 				// futures as gone.
 
 				for task in tasks.into_iter() {
-					tracing::error!(target: "task_scope", "child task ended by cancellation: '{}'", task.properties.location);
+					tracing::error!(
+						target: "task_scope",
+						"child task #{} ended by cancellation: '{}'",
+						task.properties.task_id,
+						task.properties.location
+					);
 				}
 			},
 			ScopedTasks::MultiThread(runtime, tasks) =>
