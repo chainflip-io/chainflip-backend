@@ -260,7 +260,7 @@ pub fn new_full<
 			match keystore.sr25519_public_keys(broker_crypto::BROKER_KEY_TYPE_ID).as_slice() {
 				[pub_key] => {
 					let pub_key = broker_crypto::Public::from(*pub_key);
-					log::info!("broker public key {:?}", pub_key);
+					log::warn!("broker public key {:?}", pub_key); // TODO remove
 
 					keystore
 						.key_pair(&pub_key)
@@ -280,14 +280,14 @@ pub fn new_full<
 		// try to get the lp key pair from the node keystore
 		let lp_key_pair = match keystore.sr25519_public_keys(lp_crypto::LP_KEY_TYPE_ID).as_slice() {
 			[pub_key] => {
-				let pub_key = broker_crypto::Public::from(*pub_key);
-				log::info!("lp provider public key {:?}", pub_key);
+				let pub_key = lp_crypto::Public::from(*pub_key);
+				log::warn!("lp provider public key {:?}", pub_key); // TODO remove
 
 				keystore
 					.key_pair(&pub_key)
 					.ok()
 					.flatten()
-					.map(|pair: broker_crypto::Pair| pair.into_inner())
+					.map(|pair: lp_crypto::Pair| pair.into_inner())
 			},
 			[] => None, // No LP_KEY_TYPE_ID keys found
 			_ => {

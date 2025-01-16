@@ -74,7 +74,7 @@ where
 		let details = self
 			.signed_pool_client
 			.submit_watch(
-				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
+				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
 				WaitFor::InBlock,
 				true,
 				None,
