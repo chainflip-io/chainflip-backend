@@ -967,6 +967,7 @@ impl FromStr for Hash {
 #[cfg(any(test, feature = "runtime-integration-tests"))]
 pub mod sol_test_values {
 	use crate::{
+		ccm_checker::VersionedSolanaCcmAdditionalData,
 		sol::{
 			api::{DurableNonceAndAccount, VaultSwapAccountAndSender},
 			signing_key::SolSigningKey,
@@ -1126,9 +1127,11 @@ pub mod sol_test_values {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(), // CCM message
 				gas_budget: 0u128,                                         // unused
-				ccm_additional_data: codec::Encode::encode(&ccm_accounts())
-					.try_into()
-					.expect("Test data cannot be too long"), // Extra addresses
+				ccm_additional_data: codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V0(
+					ccm_accounts(),
+				))
+				.try_into()
+				.expect("Test data cannot be too long"), // Extra addresses
 			},
 		}
 	}
