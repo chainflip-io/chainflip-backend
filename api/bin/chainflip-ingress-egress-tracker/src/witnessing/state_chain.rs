@@ -130,7 +130,7 @@ enum WitnessInformation {
 		destination_address: TrackerAddress,
 		ccm_deposit_metadata: Option<CcmDepositMetadata>,
 		deposit_details: Option<DepositDetails>,
-		broker_fee: Beneficiary<AccountId32>,
+		broker_fee: Option<Beneficiary<AccountId32>>,
 		affiliate_fees: Affiliates<AccountId32>,
 		refund_params: Option<ChannelRefundParameters<TrackerAddress>>,
 		dca_params: Option<DcaParameters>,
@@ -278,9 +278,9 @@ where
 					Beneficiary { account: affiliate_mapping.get(&affiliate.account).cloned()
 						.unwrap_or_else(|| {
 							log::warn!(
-								"Affiliate not found for short id {} on broker `{}`",
+								"Affiliate not found for short id {} on broker `{:?}`",
 								affiliate.account,
-								self.broker_fee.account,
+								self.broker_fee.as_ref().map(|Beneficiary { account, .. }| account),
 							);
 							AccountId32::from([0; 32])
 						}), bps: affiliate.bps }
@@ -400,9 +400,15 @@ where
 	<T::TargetChain as Chain>::DepositDetails: IntoDepositDetailsAnyChain,
 	StateChainClient: CfGetAffiliates + 'static + Send + Sync,
 {
-	let affiliate_mapping = state_chain_client
-		.cf_get_affiliates(&deposit_witness.broker_fee.account)
-		.await?;
+	let affiliate_mapping = if let Some(broker_id) = deposit_witness
+		.broker_fee
+		.as_ref()
+		.map(|Beneficiary { account, .. }| account.clone())
+	{
+		state_chain_client.cf_get_affiliates(&broker_id).await?
+	} else {
+		Default::default()
+	};
 
 	let _ = deposit_witness
 		.into_witness_information(block_height, &affiliate_mapping, network)
@@ -919,7 +925,7 @@ mod tests {
 						)),
 					}),
 					deposit_details: Default::default(),
-					broker_fee: Beneficiary { account: AccountId32::new([0; 32]), bps: 10 },
+					broker_fee: Some(Beneficiary { account: AccountId32::new([0; 32]), bps: 10 }),
 					affiliate_fees: frame_support::BoundedVec::try_from(vec![Beneficiary {
 						account: affiliate_short_id,
 						bps: 10

@@ -42,7 +42,7 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					None,
 					SwapOrigin::Vault {
 						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-						broker_id: BROKER,
+						broker_id: Some(BROKER),
 					},
 				);
 
@@ -373,7 +373,7 @@ fn input_amount_excludes_network_fee() {
 				None,
 				SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: BROKER,
+					broker_id: Some(BROKER),
 				},
 			);
 		})
@@ -579,7 +579,7 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 				None,
 				SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: BROKER,
+					broker_id: Some(BROKER),
 				},
 			);
 
@@ -600,7 +600,7 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 				None,
 				SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: BROKER,
+					broker_id: Some(BROKER),
 				},
 			);
 		})

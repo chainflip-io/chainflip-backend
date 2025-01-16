@@ -530,10 +530,7 @@ fn vault_swap_deposit_witness(
 		deposit_metadata: Some(ccm_deposit_metadata_mock()),
 		tx_id: Default::default(),
 		deposit_details: DepositDetails { tx_hashes: None },
-		broker_fee: cf_primitives::Beneficiary {
-			account: sp_runtime::AccountId32::new([0; 32]),
-			bps: 0,
-		},
+		broker_fee: None,
 		affiliate_fees: Default::default(),
 		refund_params: Some(ETH_REFUND_PARAMS),
 		dca_params: None,

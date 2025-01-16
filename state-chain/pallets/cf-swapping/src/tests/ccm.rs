@@ -9,7 +9,7 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 	let encoded_output_address = MockAddressConverter::to_encoded_address(output_address.clone());
 	let origin = SwapOrigin::Vault {
 		tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-		broker_id: BROKER,
+		broker_id: Some(BROKER),
 	};
 
 	Swapping::init_swap_request(
@@ -111,7 +111,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				None,
 				SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: BROKER,
+					broker_id: Some(BROKER),
 				},
 			);
 

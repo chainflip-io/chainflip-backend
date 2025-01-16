@@ -147,10 +147,10 @@ pub fn try_extract_vault_swap_witness(
 			deposit_address: vault_address.clone(),
 		},
 		deposit_metadata: None, // No ccm for BTC (yet?)
-		broker_fee: Beneficiary {
+		broker_fee: Some(Beneficiary {
 			account: broker_id.clone(),
 			bps: data.parameters.broker_fee.into(),
-		},
+		}),
 		affiliate_fees: data
 			.parameters
 			.affiliates
@@ -320,10 +320,10 @@ mod tests {
 					amount: DEPOSIT_AMOUNT,
 					deposit_address: vault_deposit_address.clone(),
 				},
-				broker_fee: Beneficiary {
+				broker_fee: Some(Beneficiary {
 					account: BROKER,
 					bps: MOCK_SWAP_PARAMS.parameters.broker_fee.into()
-				},
+				}),
 				affiliate_fees: bounded_vec![MOCK_SWAP_PARAMS.parameters.affiliates[0].into()],
 				deposit_metadata: None,
 				refund_params: Some(ChannelRefundParametersDecoded {

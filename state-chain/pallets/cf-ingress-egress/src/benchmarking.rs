@@ -314,7 +314,7 @@ mod benchmarks {
 				deposit_metadata: Some(deposit_metadata),
 				tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
 				deposit_details: BenchmarkValue::benchmark_value(),
-				broker_fee: cf_primitives::Beneficiary { account: account("broker", 0, 0), bps: 0 },
+				broker_fee: None,
 				affiliate_fees: Default::default(),
 				refund_params: Some(ChannelRefundParametersDecoded {
 					retry_duration: Default::default(),
