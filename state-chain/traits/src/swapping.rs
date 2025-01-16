@@ -36,6 +36,6 @@ pub trait SwapRequestHandler {
 		broker_fees: Beneficiaries<Self::AccountId>,
 		refund_params: Option<ChannelRefundParametersDecoded>,
 		dca_params: Option<DcaParameters>,
-		origin: SwapOrigin,
+		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId;
 }

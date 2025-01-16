@@ -18,7 +18,7 @@ pub struct MockSwapRequest {
 	pub input_amount: AssetAmount,
 	pub swap_type: SwapRequestType,
 	pub broker_fees: Beneficiaries<u64>,
-	pub origin: SwapOrigin,
+	pub origin: SwapOrigin<u64>,
 }
 
 impl<T> MockPallet for MockSwapRequestHandler<T> {
@@ -47,7 +47,7 @@ where
 		broker_fees: Beneficiaries<Self::AccountId>,
 		_refund_params: Option<ChannelRefundParametersDecoded>,
 		_dca_params: Option<DcaParameters>,
-		origin: SwapOrigin,
+		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId {
 		let id = Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<Vec<MockSwapRequest>>| {
 			let swaps = swaps.get_or_insert(vec![]);

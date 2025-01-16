@@ -211,7 +211,10 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 			bounded_vec![Beneficiary { account: broker_id as u64, bps: BROKER_FEE_BPS }],
 			swap.refund_params.clone(),
 			swap.dca_params.clone(),
-			SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+			SwapOrigin::Vault {
+				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+				broker_id: BROKER,
+			},
 		);
 	}
 }
@@ -264,6 +267,7 @@ fn swap_with_custom_broker_fee(
 			)),
 			channel_id: 1,
 			deposit_block_height: 0,
+			broker_id: BROKER,
 		},
 	);
 }
@@ -342,7 +346,10 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			Default::default(),
 			None,
 			None,
-			SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+			SwapOrigin::Vault {
+				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+				broker_id: BROKER,
+			},
 		);
 
 		assert_swaps_queue_is_empty();
@@ -516,7 +523,10 @@ fn process_all_into_stable_swaps_first() {
 					Default::default(),
 					None,
 					None,
-					SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+					SwapOrigin::Vault {
+						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						broker_id: BROKER,
+					},
 				);
 			});
 
@@ -651,7 +661,10 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: BROKER,
+				},
 			);
 
 			// Change the swap rate so swap output will be 0
@@ -1307,7 +1320,10 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					Default::default(),
 					None,
 					None,
-					SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+					SwapOrigin::Vault {
+						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						broker_id: BROKER,
+					},
 				);
 
 				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);

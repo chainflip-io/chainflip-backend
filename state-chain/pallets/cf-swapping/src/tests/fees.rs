@@ -40,7 +40,10 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					Default::default(),
 					None,
 					None,
-					SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+					SwapOrigin::Vault {
+						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						broker_id: BROKER,
+					},
 				);
 
 				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
@@ -368,7 +371,10 @@ fn input_amount_excludes_network_fee() {
 				bounded_vec![],
 				None,
 				None,
-				SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: BROKER,
+				},
 			);
 		})
 		.then_process_blocks_until(|_| System::block_number() == 3)
@@ -571,7 +577,10 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: BROKER,
+				},
 			);
 
 			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
@@ -589,7 +598,10 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: BROKER,
+				},
 			);
 		})
 		.then_process_blocks_until_block(FEE_SWAP_BLOCK)
