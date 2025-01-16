@@ -17,7 +17,7 @@ import {
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
-import { Vector, bool, Struct, Bytes as TsBytes } from 'scale-ts';
+import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { ISubmittableResult } from '@polkadot/types/types';
@@ -63,7 +63,7 @@ const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
 export const solanaNumberOfNonces = 10;
 
-export const solCcmAdditionalDataCodec = Struct({
+export const solCcmAccounts = Struct({
   cf_receiver: Struct({
     pubkey: TsBytes(32),
     is_writable: bool,
@@ -75,6 +75,10 @@ export const solCcmAdditionalDataCodec = Struct({
     }),
   ),
   fallback_address: TsBytes(32),
+});
+
+export const solVersionedCcmAdditionalDataCodec = Enum({
+  V0: solCcmAccounts,
 });
 
 export function getContractAddress(chain: Chain, contract: string): string {
@@ -807,9 +811,8 @@ export async function observeSolanaCcmEvent(
 
           // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
-            const { remaining_accounts: expectedRemainingAccounts } = solCcmAdditionalDataCodec.dec(
-              messageMetadata.ccmAdditionalData!,
-            );
+            const { remaining_accounts: expectedRemainingAccounts } =
+              solVersionedCcmAdditionalDataCodec.dec(messageMetadata.ccmAdditionalData!).value;
 
             if (
               expectedRemainingAccounts.length !== event.data.remaining_is_writable.length ||
