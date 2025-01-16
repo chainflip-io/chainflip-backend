@@ -42,6 +42,7 @@ import { depositChannelCreation } from '../tests/request_swap_deposit_address_wi
 import { testDCASwaps } from '../tests/DCA_test';
 import { testBtcVaultSwap } from '../tests/btc_vault_swap';
 import { testBrokerLevelScreening } from '../tests/broker_level_screening';
+import { testSolanaVaultSettingsGovernance } from '../tests/solana_vault_settings_governance';
 
 async function main() {
   const testName = process.argv[2];
@@ -71,6 +72,7 @@ async function main() {
     depositChannelCreation,
     testBtcVaultSwap,
     testBrokerLevelScreening,
+    testSolanaVaultSettingsGovernance,
   ];
 
   // Help message

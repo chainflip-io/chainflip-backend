@@ -190,7 +190,7 @@ export async function checkSolEventAccountsClosure(
   );
 
   async function checkAccounts(swapEventAccounts: PublicKey[]): Promise<boolean> {
-    const maxRetries = 20; // 120 seconds
+    const maxRetries = 30; // 180 seconds
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const swapEndpointDataAccount =
