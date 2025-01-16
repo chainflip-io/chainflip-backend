@@ -1,0 +1,387 @@
+use cf_chains::witness_period::{BlockZero, SaturatingStep};
+use codec::{Decode, Encode};
+use core::iter::Step;
+use derive_where::derive_where;
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_std::fmt::Debug;
+
+use super::{super::state_machine::core::*, primitives::ElectionTracker};
+use crate::electoral_systems::{
+	block_height_tracking::ChainProgress,
+	state_machine::{
+		core::{IndexOf, MultiIndexAndValue, Validate},
+		state_machine::StateMachine,
+		state_machine_es::SMInput,
+	},
+};
+
+pub trait BWTypes: 'static {
+	type ChainBlockNumber: Serde
+		+ Copy
+		+ Eq
+		+ Ord
+		+ SaturatingStep
+		+ Step
+		+ BlockZero
+		+ Debug
+		+ 'static;
+	type BlockData: PartialEq + Clone + Debug + 'static;
+	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
+	type ElectionPropertiesHook: Hook<Self::ChainBlockNumber, Self::ElectionProperties>;
+	type SafeModeEnabledHook: Hook<(), bool>;
+}
+
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
+	Default,
+)]
+pub struct BWSettings {
+	pub max_concurrent_elections: u16,
+}
+
+#[derive_where(Debug, Clone, PartialEq, Eq; T::SafeModeEnabledHook: Debug + Clone + Eq, T::ElectionPropertiesHook: Debug + Clone + Eq)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub struct BWState<T: BWTypes> {
+	pub elections: ElectionTracker<T::ChainBlockNumber>,
+	pub generate_election_properties_hook: T::ElectionPropertiesHook,
+	pub safemode_enabled: T::SafeModeEnabledHook,
+	_phantom: sp_std::marker::PhantomData<T>,
+}
+
+impl<T: BWTypes> Validate for BWState<T> {
+	type Error = &'static str;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.elections.is_valid()
+	}
+}
+
+impl<T: BWTypes> Default for BWState<T>
+where
+	T::ElectionPropertiesHook: Default,
+	T::SafeModeEnabledHook: Default,
+{
+	fn default() -> Self {
+		Self {
+			elections: Default::default(),
+			generate_election_properties_hook: Default::default(),
+			safemode_enabled: Default::default(),
+			_phantom: Default::default(),
+		}
+	}
+}
+
+pub struct BWStateMachine<Types: BWTypes> {
+	_phantom: sp_std::marker::PhantomData<Types>,
+}
+
+impl<T: BWTypes> StateMachine for BWStateMachine<T> {
+	type Input = SMInput<
+		MultiIndexAndValue<
+			(T::ChainBlockNumber, T::ElectionProperties, u8),
+			ConstantIndex<(T::ChainBlockNumber, T::ElectionProperties, u8), T::BlockData>,
+		>,
+		ChainProgress<T::ChainBlockNumber>,
+	>;
+	type Settings = BWSettings;
+	type Output = Result<(), &'static str>;
+	type State = BWState<T>;
+
+	fn input_index(s: &Self::State) -> IndexOf<Self::Input> {
+		s.elections
+			.ongoing
+			.clone()
+			.into_iter()
+			.map(|(height, extra)| (height, s.generate_election_properties_hook.run(height), extra))
+			.collect()
+	}
+
+	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
+		log::info!("BW: input {i:?}");
+		match i {
+			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
+				s.elections.next_election = *range.start();
+				s.elections.schedule_range(range);
+			},
+
+			SMInput::Context(ChainProgress::Range(range)) => {
+				s.elections.schedule_range(range);
+			},
+
+			SMInput::Context(ChainProgress::None) => {},
+
+			SMInput::Vote(blockdata) => {
+				// insert blockdata into our cache of blocks
+				s.elections.mark_election_done(blockdata.0 .0);
+				log::info!("got block data: {:?}", blockdata.1);
+			},
+		};
+
+		if !s.safemode_enabled.run(()) {
+			s.elections.start_more_elections(settings.max_concurrent_elections as usize);
+		}
+
+		log::info!("BW: done. current elections: {:?}", s.elections.ongoing);
+
+		Ok(())
+	}
+
+	/// Specifiation for step function
+	#[cfg(test)]
+	fn step_specification(
+		before: &Self::State,
+		input: &Self::Input,
+		settings: &Self::Settings,
+		after: &Self::State,
+	) {
+		use std::collections::BTreeSet;
+
+		use itertools::Itertools;
+		use ChainProgress::*;
+		use SMInput::*;
+
+		use crate::electoral_systems::block_witnesser::helpers::*;
+
+		let safemode_enabled = before.safemode_enabled.run(());
+
+		assert!(
+			// there should always be at most as many elections as given in the settings
+			// or more if we had more elections previously
+			after.elections.ongoing.len() <=
+				sp_std::cmp::max(
+					settings.max_concurrent_elections as usize,
+					before.elections.ongoing.len()
+				),
+			"too many concurrent elections"
+		);
+
+		// all new elections use the current reorg id as index
+		assert!(
+			after.elections.ongoing.iter().all(|(height, ix)| {
+				if before.elections.ongoing.get(&height).is_none() {
+					*ix == after.elections.reorg_id
+				} else {
+					true
+				}
+			}),
+			"new election with wrong index"
+		);
+
+		match input {
+			Vote(MultiIndexAndValue((height, _, _), _)) => {
+				let new_elections = if safemode_enabled {
+					BTreeSet::new()
+				} else {
+					(before.elections.next_election..=before.elections.highest_scheduled)
+						.take(
+							(settings.max_concurrent_elections as usize + 1)
+								.saturating_sub(before.elections.ongoing.len()),
+						)
+						.collect()
+				};
+
+				// the elections after a vote are the ones from before, minus the voted one + all
+				// outstanding ones
+				let after_should =
+					before.elections.ongoing.key_set().without(*height).merge(new_elections);
+
+				assert_eq!(
+					after.elections.ongoing.key_set(),
+					after_should,
+					"wrong ongoing election set after received vote",
+				)
+			},
+
+			Context(Range(range) | FirstConsensus(range)) => {
+				// if the input is `FirstConsensus`, we use the beginning of the range
+				// as the first block we ought to emit an election for.
+				let before_next_election = if let Context(FirstConsensus(_)) = input {
+					*range.start()
+				} else {
+					before.elections.next_election
+				};
+
+				if !safemode_enabled {
+					if *range.start() < before_next_election {
+						assert!(
+							!before.elections.ongoing.values().contains(&after.elections.reorg_id),
+							"if there is a reorg, the new reorg_id must be different than the ids of the previously ongoing elections"
+						)
+					} else {
+						assert_eq!(
+							before.elections.reorg_id, after.elections.reorg_id,
+							"if there is no reorg, the reorg_id should stay the same"
+						);
+					}
+
+					for (height, ix) in &before.elections.ongoing {
+						if height < range.start() {
+							assert!(
+								after.elections.ongoing.iter().contains(&(height, ix)),
+								"ongoing election which wasn't part of reorg should stay open with same index. (after.ongoing = {:?})", after.elections.ongoing
+							);
+						} else {
+							assert!(
+								after.elections.ongoing.get(&height).is_none_or(|index| *index == after.elections.reorg_id),
+								"ongoing election which was part of reorg should either be removed or stay open with new index (after.ongoing = {:?})", after.elections.ongoing
+							)
+						}
+					}
+				} else {
+					// if safe mode is enabled, ongoing elections shouldn't change
+					assert!(
+						before.elections.ongoing == after.elections.ongoing,
+						"if safemode is enabled, ongoing elections shouldn't change (except being closed when they come to consensus)"
+					);
+
+					// but the next_election should still be updated in order to restart the
+					// reorg'ed elections after safemode is disabled
+					if *range.start() < before_next_election {
+						assert!(
+							after.elections.next_election == *range.start(),
+							"if safemode is enabled, and a reorg happens, next_election should be the start of the reorg range"
+						);
+					} else {
+						assert!(
+							after.elections.next_election == before_next_election,
+							"if safemode is enabled, and no (relevant) reorg happens, next_election should not be udpated"
+						);
+					}
+				}
+			},
+
+			Context(None) => (),
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::collections::BTreeMap;
+
+	use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
+	use proptest::{
+		prelude::{any, prop, Arbitrary, BoxedStrategy, Just, Strategy},
+		prop_oneof,
+		sample::select,
+		strategy::LazyJust,
+	};
+
+	use super::*;
+	use crate::prop_do;
+	use hook_test_utils::*;
+
+	fn generate_state<T: BWTypes<SafeModeEnabledHook = ConstantHook<(), bool>>>(
+	) -> impl Strategy<Value = BWState<T>>
+	where
+		T::ChainBlockNumber: Arbitrary,
+		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
+	{
+		prop_do! {
+			let next_election in any::<T::ChainBlockNumber>();
+			let highest_scheduled in any::<T::ChainBlockNumber>();
+			let reorg_id in any::<u8>();
+			let safemode_enabled in any::<bool>();
+			let ongoing in prop::collection::vec((any::<T::ChainBlockNumber>(), any::<u8>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election));
+			LazyJust::new(move || BWState {
+				elections: ElectionTracker {
+					next_election: next_election.clone(),
+					highest_scheduled: highest_scheduled.clone(),
+					ongoing: BTreeMap::from_iter(ongoing.clone()),
+					reorg_id
+				},
+				generate_election_properties_hook: Default::default(),
+				safemode_enabled: ConstantHook::new(safemode_enabled),
+				_phantom: core::marker::PhantomData,
+			})
+		}
+	}
+
+	fn generate_input<T: BWTypes<BlockData = ()>>(
+		indices: IndexOf<<BWStateMachine<T> as StateMachine>::Input>,
+	) -> BoxedStrategy<<BWStateMachine<T> as StateMachine>::Input>
+	where
+		T::ChainBlockNumber: Arbitrary,
+	{
+		let generate_input = |index| {
+			prop_oneof![
+				Just(SMInput::Vote(MultiIndexAndValue(index, ConstantIndex::new(())))),
+				prop_oneof![
+					Just(ChainProgress::None),
+					(any::<T::ChainBlockNumber>(), 0..20usize)
+						.prop_map(|(a, b)| ChainProgress::Range(a..=a.saturating_forward(b))),
+					(any::<T::ChainBlockNumber>(), 0..20usize).prop_map(|(a, b)| {
+						ChainProgress::FirstConsensus(a..=a.saturating_forward(b))
+					})
+				]
+				.prop_map(SMInput::Context)
+			]
+		};
+
+		if indices.len() > 0 {
+			prop_do! {
+				let index in select(indices);
+				generate_input(index.clone())
+				// return SMInput::Vote(MultiIndexAndValue(index, ConstantIndex::new(input)))
+			}
+			.boxed()
+
+			// (0..index.len())
+			// 	.prop_flat_map(move |ix| generate_input(index.clone().into_iter().nth(ix).unwrap()))
+			// 	.boxed()
+		} else {
+			Just(SMInput::Context(ChainProgress::None)).boxed()
+		}
+	}
+
+	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + 'static> BWTypes for N {
+		type ChainBlockNumber = N;
+		type BlockData = ();
+		type ElectionProperties = ();
+		type ElectionPropertiesHook = ConstantHook<N, ()>;
+		type SafeModeEnabledHook = ConstantHook<(), bool>;
+	}
+
+	#[test]
+	pub fn test_bw_statemachine() {
+		BWStateMachine::<u8>::test(
+			file!(),
+			generate_state(),
+			prop_do! {
+				let max_concurrent_elections in 0..10u16;
+				return BWSettings { max_concurrent_elections }
+			},
+			generate_input::<u8>,
+		);
+	}
+
+	struct TestChain {}
+	impl ChainWitnessConfig for TestChain {
+		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+		type ChainBlockNumber = u32;
+	}
+
+	#[test]
+	pub fn test_bw_statemachine2() {
+		BWStateMachine::<BlockWitnessRange<TestChain>>::test(
+			file!(),
+			generate_state(),
+			prop_do! {
+				let max_concurrent_elections in 0..10u16;
+				return BWSettings { max_concurrent_elections }
+			},
+			generate_input::<BlockWitnessRange<TestChain>>,
+		);
+	}
+}

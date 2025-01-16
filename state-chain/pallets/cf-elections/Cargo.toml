@@ -32,6 +32,8 @@ itertools = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 nanorand = { workspace = true, features = ["wyrand"] }
+duplicate = "2.0.0"
+derive-where = "1.2.7"
 
 # Parity deps
 codec = { workspace = true, features = ["derive", "bit-vec"] }
@@ -44,6 +46,7 @@ sp-std = { workspace = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
+cf-chains = { workspace = true, features = ["test"] }
 rand = { workspace = true, features = ["std"] }
 proptest = { version = "1.6"}
 proptest-derive = { version = "0.5.1" }

@@ -1,144 +1,85 @@
-use core::ops::{Add, AddAssign, Range, RangeInclusive, Sub, SubAssign};
+use cf_chains::witness_period::BlockZero;
+use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
-use crate::{
-	electoral_system::{
-		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
-	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
+use super::{
+	primitives::validate_vote_and_height, state_machine::InputHeaders,
+	BlockHeightTrackingProperties, BlockHeightTrackingTypes,
 };
-use cf_chains::btc::BlockNumber;
-use cf_utilities::success_threshold_from_share_count;
-use codec::{Decode, Encode};
-use frame_support::{
-	ensure,
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	sp_runtime::traits::AtLeast32BitUnsigned,
-	Parameter,
-};
-use itertools::Itertools;
-use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
-use sp_std::{
-	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
-	vec::Vec,
+use crate::electoral_systems::state_machine::consensus::{
+	ConsensusMechanism, MultipleVotes, StagedConsensus, SupermajorityConsensus, Threshold,
 };
 
-/// Abstract consensus mechanism.
-///
-/// This trait is an abstraction over simple consensus mechanisms,
-/// where there is the concept of incrementally adding votes,
-/// and checking if the votes result in consensus.
-pub trait ConsensusMechanism: Default {
-	/// type of votes.
-	type Vote;
-
-	/// result type of the consensus.
-	type Result;
-
-	/// additional information required to check consensus
-	type Settings;
-
-	fn insert_vote(&mut self, vote: Self::Vote);
-	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result>;
+pub struct BlockHeightTrackingConsensus<T: BlockHeightTrackingTypes> {
+	votes: Vec<InputHeaders<T>>,
 }
 
-//-----------------------------------------------
-// majority consensus
-
-/// Simple implementation of a (super-)majority consensus
-pub struct SupermajorityConsensus<Vote: PartialEq> {
-	votes: BTreeMap<Vote, u32>,
-}
-
-pub struct Threshold {
-	pub threshold: u32,
-}
-
-impl<Vote: PartialEq> Default for SupermajorityConsensus<Vote> {
+impl<T: BlockHeightTrackingTypes> Default for BlockHeightTrackingConsensus<T> {
 	fn default() -> Self {
 		Self { votes: Default::default() }
 	}
 }
 
-impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensus<Vote> {
-	type Vote = Vote;
-	type Result = Vote;
-	type Settings = Threshold;
+impl<T: BlockHeightTrackingTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
+	type Vote = InputHeaders<T>;
+	type Result = InputHeaders<T>;
+	type Settings = (Threshold, BlockHeightTrackingProperties<T::ChainBlockNumber>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
-		if let Some(count) = self.votes.get_mut(&vote) {
-			*count += 1;
-		} else {
-			self.votes.insert(vote, 1);
-		}
+		self.votes.push(vote);
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-		let best = self.votes.iter().last();
+		let (threshold, properties) = settings;
 
-		if let Some((best_vote, best_count)) = best {
-			if best_count >= &settings.threshold {
-				return Some(best_vote.clone());
+		if properties.witness_from_index.is_zero() {
+			// This is the case for finding an appropriate block number to start witnessing from
+
+			let mut consensus: MultipleVotes<SupermajorityConsensus<_>> = Default::default();
+
+			for vote in &self.votes {
+				consensus.insert_vote(vote.0.iter().map(Clone::clone).collect())
 			}
-		}
 
-		return None;
-	}
-}
-
-//-----------------------------------------------
-// staged consensus
-
-/// Staged consensus.
-///
-/// Votes are indexed by stages, and each stage is evaluated
-/// separately. Evaluation happens in reverse order of the stage index,
-/// i.e. the highest stage which achieves consensus determines the result.
-/// If no stage achieves consensus, the result is inconclusive.
-pub struct StagedConsensus<Stage: ConsensusMechanism, Index: Ord> {
-	stages: BTreeMap<Index, Stage>,
-}
-
-impl<Stage: ConsensusMechanism, Index: Ord> StagedConsensus<Stage, Index> {
-	pub fn new() -> Self {
-		Self { stages: BTreeMap::new() }
-	}
-}
-
-impl<Stage: ConsensusMechanism, Index: Ord> Default for StagedConsensus<Stage, Index> {
-	fn default() -> Self {
-		Self { stages: Default::default() }
-	}
-}
-
-impl<Stage: ConsensusMechanism, Index: Ord + Copy> ConsensusMechanism
-	for StagedConsensus<Stage, Index>
-{
-	type Result = Stage::Result;
-	type Vote = (Index, Stage::Vote);
-	type Settings = Stage::Settings;
-
-	fn insert_vote(&mut self, (index, vote): Self::Vote) {
-		if let Some(stage) = self.stages.get_mut(&index) {
-			stage.insert_vote(vote)
+			consensus
+				.check_consensus(&threshold)
+				.map(|result| {
+					let mut headers = VecDeque::new();
+					headers.push_back(result);
+					InputHeaders(headers)
+				})
+				.map(|result| {
+					log::info!("block_height: initial consensus: {result:?}");
+					result
+				})
 		} else {
-			let mut stage = Stage::default();
-			stage.insert_vote(vote);
-			self.stages.insert(index, stage);
-		}
-	}
+			// This is the actual consensus finding, once the engine is running
 
-	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-		// we check all stages starting with the highest index,
-		// the first one that has consensus wins
-		for (_, stage) in self.stages.iter().rev() {
-			if let Some(result) = stage.check_consensus(settings) {
-				return Some(result);
+			let mut consensus: StagedConsensus<SupermajorityConsensus<Self::Vote>, usize> =
+				StagedConsensus::new();
+
+			for mut vote in self.votes.clone() {
+				// ensure that the vote is valid
+				if let Err(err) = validate_vote_and_height(properties.witness_from_index, &vote.0) {
+					log::warn!("received invalid vote: {err:?} ");
+					continue;
+				}
+
+				// we count a given vote as multiple votes for all nonempty subchains
+				while vote.0.len() > 0 {
+					consensus.insert_vote((vote.0.len(), vote.clone()));
+					vote.0.pop_back();
+				}
 			}
-		}
 
-		None
+			consensus.check_consensus(&threshold).map(|result| {
+				log::info!(
+					"(witness_from: {:?}): successful consensus for ranges: {:?}..={:?}",
+					properties,
+					result.0.front(),
+					result.0.back()
+				);
+				result
+			})
+		}
 	}
 }

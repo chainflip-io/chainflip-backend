@@ -1,137 +1,399 @@
-use crate::electoral_system::ElectoralSystem;
+use core::{
+	iter::Step,
+	ops::{RangeInclusive, Rem, Sub},
+};
 
-#[cfg(test)]
-use proptest::prelude::{BoxedStrategy, Just, Strategy};
-#[cfg(test)]
-use proptest::test_runner::TestRunner;
+use super::{
+	super::state_machine::{
+		core::{Indexed, Validate},
+		state_machine::StateMachine,
+		state_machine_es::SMInput,
+	},
+	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
+	BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
+};
+use crate::{
+	electoral_systems::state_machine::core::{Hook, MultiIndexAndValue},
+	CorruptStorageError,
+};
+use cf_chains::witness_period::{BlockWitnessRange, BlockZero, SaturatingStep};
+use codec::{Decode, Encode};
+use frame_support::{
+	ensure,
+	pallet_prelude::MaxEncodedLen,
+	sp_runtime::traits::{Block, One, Saturating},
+};
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
-/// A type which has an associated index type.
-/// This effectively models dependent sum types.
-pub trait Indexed {
-	type Index;
-	fn has_index(&self, base: &Self::Index) -> bool;
+//------------------------ inputs ---------------------------
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct InputHeaders<Types: BlockHeightTrackingTypes>(
+	pub VecDeque<Header<Types::ChainBlockHash, Types::ChainBlockNumber>>,
+);
+
+impl<T: BlockHeightTrackingTypes> Indexed for InputHeaders<T> {
+	type Index = Vec<BlockHeightTrackingProperties<T::ChainBlockNumber>>;
+
+	fn has_index(&self, base: &Self::Index) -> bool {
+		if base.iter().any(|base| base.witness_from_index.is_zero()) {
+			true
+		} else {
+			match self.0.front() {
+				Some(first) =>
+					base.iter().any(|base| first.block_height == base.witness_from_index),
+				None => false,
+			}
+		}
+	}
 }
 
-pub type IndexOf<Ixd> = <Ixd as Indexed>::Index;
-
-/// A type which can be validated.
-pub trait Validate {
-	type Error: sp_std::fmt::Debug;
-	fn is_valid(&self) -> Result<(), Self::Error>;
+impl<T: BlockHeightTrackingTypes> Validate for InputHeaders<T> {
+	type Error = VoteValidationError;
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		if self.0.is_empty() {
+			Err(VoteValidationError::EmptyVote)
+		} else {
+			ChainBlocks { headers: self.0.clone() }.is_valid()
+		}
+	}
 }
 
-/// A trait for implementing state machines, in particular used for simple electoral systems.
-/// The model currently only supports electoral systems with a single ongoing election at any given
-/// time. (Extending it to multiple ongoing elections is WIP.)
-///
-/// An electoral system is essentialy a state machine: it keeps track of an internal state,
-/// processes votes as input, and produces a result in every `on_finalize` call.
-///
-/// Thus the basic structure is that we have three associated types:
-///  - `State`
-///  - `Input`
-///  - `Output`
-/// and a function `step(&mut State, Input) -> Output`.
-///
-/// ## Mapping to elections
-/// The `Input` type is the type of votes. Election properties are given by the associated type
-/// `Input::Index`, where the function `has_index(vote: &Input, election_properties: &Input::Index)
-/// -> bool` is used to determine whether a given vote is valid for given election properties.
-///
-/// The definition of the state machine requires a function `input_index(&State) -> Input::Index`
-/// which describes for a given state, which index we expect the next input to have (in other words,
-/// for which election properties we want to get a vote next). This means that creation of elections
-/// is handled indirectly: The state machine merely has to transition into a state with the correct
-/// `input_index`, an election with these election properties is going to be created automatically.
-///
-/// ## Idle results
-/// When there is no consensus, the electoral system still has to return sth in its `on_finalize`
-/// function. This value is provided by the `get(&State) -> DisplayState` function. The associated
-/// `DisplayState` type is an arbitrary "summary" of the current state, meant for consumers of the
-/// `on_finalize` result.
-///
-/// Note: it might be that this functionality is going to be modelled differently in the future.
-///
-/// ## Validation
-/// In the case of the BHW, both the `Input`, as well as the `State` contain sequences of headers
-/// which need to have sequential block heights and matching hashes. In order to provide a coherent
-/// interface for checking these, we require theses associated types to implement the trait
-/// `Validate`. We also require `Validate` on the `Output` type.
-///
-/// ## Testing
-/// The state machine trait provides a convenience method `test(states, inputs)` for testing a given
-/// state machine. Here `states` and `inputs` are strategies for generating states and inputs, and
-/// the function runs the `step` function on randomly generated input values, while ensuring that
-/// everything is valid.
-pub trait StateMachine: 'static {
-	type Input: Validate + Indexed;
-	type Output: Validate;
-	type State: Validate;
-	type DisplayState;
+//------------------------ state ---------------------------
 
-	/// To every state, this function associates an input index which
-	/// describes what kind of input we want to receive next.
-	fn input_index(s: &Self::State) -> IndexOf<Self::Input>;
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub enum BHWState<T: BlockHeightTrackingTypes> {
+	Starting,
+	Running {
+		headers: VecDeque<Header<T::ChainBlockHash, T::ChainBlockNumber>>,
+		witness_from: T::ChainBlockNumber,
+	},
+}
 
-	/// The state transition function, it takes the state, and an input,
-	/// and assumes that both state and index are valid, and furthermore
-	/// that the input has the index `input_index(s)`.
-	fn step(s: &mut Self::State, i: Self::Input) -> Self::Output;
+impl<T: BlockHeightTrackingTypes> Default for BHWState<T> {
+	fn default() -> Self {
+		Self::Starting
+	}
+}
 
-	/// Project the current state to a "DisplayState" value.
-	fn get(s: &Self::State) -> Self::DisplayState;
+impl<T: BlockHeightTrackingTypes> Validate for BHWState<T> {
+	type Error = &'static str;
 
-	/// Contains an optional specification of the `step` function.
-	/// Takes a state, input and next state as arguments. During testing it is verified
-	/// that the resulting state after the step function always fulfills this specification.
-	#[cfg(test)]
-	fn step_specification(before: &Self::State, input: &Self::Input, after: &Self::State) -> bool {
-		true
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		match self {
+			BHWState::Starting => Ok(()),
+
+			BHWState::Running { headers, witness_from: _ } =>
+				if headers.len() > 0 {
+					InputHeaders::<T>(headers.clone())
+						.is_valid()
+						.map_err(|_| "blocks should be continuous")
+				} else {
+					Err("Block height tracking state should always be non-empty after start-up.")
+				},
+		}
+	}
+}
+
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
+	Default,
+)]
+pub struct BHWStateWrapper<T: BlockHeightTrackingTypes> {
+	pub state: BHWState<T>,
+	pub block_height_update: T::BlockHeightChangeHook,
+}
+
+impl<T: BlockHeightTrackingTypes> Validate for BHWStateWrapper<T> {
+	type Error = &'static str;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.state.is_valid()
+	}
+}
+
+//------------------------ state machine ---------------------------
+
+pub struct BlockHeightTrackingSM<T: BlockHeightTrackingTypes> {
+	_phantom: core::marker::PhantomData<T>,
+}
+
+impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
+	type State = BHWStateWrapper<T>;
+	type Input = SMInput<
+		MultiIndexAndValue<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>,
+		(),
+	>;
+	type Settings = ();
+	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
+
+	fn input_index(s: &Self::State) -> <Self::Input as Indexed>::Index {
+		let witness_from_index = match s.state {
+			BHWState::Starting => T::ChainBlockNumber::zero(),
+			BHWState::Running { headers: _, witness_from } => witness_from.clone(),
+		};
+		Vec::from([BlockHeightTrackingProperties { witness_from_index }])
 	}
 
-	/// Given strategies `states` and `inputs` for generating arbitrary, valid values, runs the step
-	/// function and ensures that it's result is always valid and additionally fulfills the
-	/// `step_specification`.
+	// specification for step function
 	#[cfg(test)]
-	fn test(
-		states: impl Strategy<Value = Self::State>,
-		inputs: impl Fn(IndexOf<Self::Input>) -> BoxedStrategy<Self::Input>,
-	) where
-		Self::State: sp_std::fmt::Debug + Clone,
-		Self::Input: sp_std::fmt::Debug + Clone,
+	fn step_specification(
+		before: &Self::State,
+		input: &Self::Input,
+		_settings: &Self::Settings,
+		after: &Self::State,
+	) {
+		use cf_chains::witness_period::SaturatingStep;
+
+		use BHWState::*;
+
+		match (&before.state, &after.state) {
+			(Starting, Starting) => assert!(
+				*input == SMInput::Context(()),
+				"BHW should remain in Starting state only if it doesn't get a vote as input."
+			),
+
+			(Starting, Running { .. }) => (),
+
+			(Running { .. }, Starting) =>
+				panic!("BHW should never transit into Starting state once its running."),
+
+			(
+				Running { headers: headers0, witness_from: from0 },
+				Running { headers: headers1, witness_from: from1 },
+			) => {
+				assert!(
+					// there are two different cases:
+					// - in case of a reorg, the `witness_from` is reset to the beginning of the
+					//   headers we have:
+					(*from1 == headers0.front().unwrap().block_height)
+					||
+					// - in the normal case, the `witness_from` should always be the next
+					//   height after the last header that we have
+					(*from1 == headers1.back().unwrap().block_height.saturating_forward(1)),
+					"witness_from should be either next height, or height of first header"
+				);
+
+				assert!(
+					// if the input is *not* the empty context, then `witness_from` should
+					// always change after running the transition function.
+					// This ensures that we always have "fresh" election properties,
+					// and are thus deleting/recreating elections as expected.
+					(*input == SMInput::Context(())) || (*from1 != *from0),
+					"witness_from should always change, except when we get a non-vote input"
+				);
+			},
+		}
+	}
+
+	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {
+		let new_headers = match input {
+			SMInput::Vote(MultiIndexAndValue(_properties, consensus)) => consensus,
+			SMInput::Context(_) => return Ok(ChainProgress::None),
+		};
+
+		match &mut s.state {
+			BHWState::Starting => {
+				let first = new_headers.0.front().unwrap().block_height;
+				let last = new_headers.0.back().unwrap().block_height;
+				s.state = BHWState::Running {
+					headers: new_headers.0.clone(),
+					witness_from: last.saturating_forward(1),
+				};
+				Ok(ChainProgress::Range(first..=last))
+			},
+
+			BHWState::Running { headers, witness_from } => {
+				let mut chainblocks = ChainBlocks { headers: headers.clone() };
+
+				match chainblocks.merge(new_headers.0) {
+					Ok(merge_info) => {
+						log::info!(
+							"added new blocks: {:?}, replacing these blocks: {:?}",
+							merge_info.added,
+							merge_info.removed
+						);
+
+						let _ = trim_to_length(&mut chainblocks.headers, T::BLOCK_BUFFER_SIZE);
+
+						*headers = chainblocks.headers;
+						*witness_from = headers.back().unwrap().block_height.saturating_forward(1);
+
+						let highest_seen = headers.back().unwrap().block_height;
+						s.block_height_update.run(highest_seen);
+
+						// if we merge after a reorg, and the blocks we got are the same
+						// as the ones we previously had, then `into_chain_progress` might
+						// return `None`. In that case we return our current state.
+						Ok(merge_info.into_chain_progress().unwrap_or(ChainProgress::None))
+					},
+					Err(MergeFailure::ReorgWithUnknownRoot {
+						new_block,
+						existing_wrong_parent,
+					}) => {
+						log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
+						*witness_from = headers.front().unwrap().block_height;
+						Ok(ChainProgress::None)
+					},
+
+					Err(MergeFailure::InternalError(reason)) => {
+						log::error!("internal error in block height tracker: {reason}");
+						Err("internal error in block height tracker")
+					},
+				}
+			},
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+
+	use crate::{electoral_systems::state_machine::core::MultiIndexAndValue, prop_do};
+	use cf_chains::{
+		self,
+		witness_period::{BlockWitnessRange, BlockZero, SaturatingStep},
+		ChainWitnessConfig,
+	};
+	use proptest::{
+		prelude::{any, prop, Arbitrary, Just, Strategy},
+		prop_oneof,
+		sample::select,
+	};
+
+	use crate::electoral_systems::{
+		block_height_tracking::state_machine::BHWStateWrapper,
+		state_machine::core::hook_test_utils::ConstantHook,
+	};
+
+	use super::{
+		super::{
+			super::state_machine::{state_machine::StateMachine, state_machine_es::SMInput},
+			primitives::Header,
+			BlockHeightTrackingProperties, BlockHeightTrackingTypes,
+		},
+		BHWState, BlockHeightTrackingSM, InputHeaders,
+	};
+
+	pub fn generate_input<T: BlockHeightTrackingTypes>(
+		properties: BlockHeightTrackingProperties<T::ChainBlockNumber>,
+	) -> impl Strategy<Value = InputHeaders<T>>
+	where
+		T::ChainBlockHash: Arbitrary,
+		T::ChainBlockNumber: Arbitrary + BlockZero,
 	{
-		let mut runner = TestRunner::default();
+		prop_do! {
+			let header_data in prop::collection::vec(any::<T::ChainBlockHash>(), 2..10);
+			let random_index in any::<T::ChainBlockNumber>();
+			let first_height = if properties.witness_from_index.is_zero() { random_index } else { properties.witness_from_index };
+			return {
+				let headers =
+					header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
+						block_height: first_height.clone().saturating_forward(ix),
+						hash: h1.clone(),
+						parent_hash: h0.clone(),
+					});
+				InputHeaders::<T>(headers.collect())
+			}
+		}
+	}
 
-		runner
-			.run(
-				&(states.prop_flat_map(|state| {
-					(Just(state.clone()), inputs(Self::input_index(&state)))
-				})),
-				|(mut state, input)| {
-					// ensure that inputs are well formed
-					assert!(state.is_valid().is_ok(), "input state not valid");
-					assert!(input.is_valid().is_ok(), "input not valid");
-					assert!(input.has_index(&Self::input_index(&state)), "input has wrong index");
+	pub fn generate_state<T: BlockHeightTrackingTypes>() -> impl Strategy<Value = BHWStateWrapper<T>>
+	where
+		T::ChainBlockHash: Arbitrary,
+		T::ChainBlockNumber: Arbitrary + BlockZero,
+		T::BlockHeightChangeHook: Default + sp_std::fmt::Debug,
+	{
+		prop_oneof![
+			Just(BHWState::Starting),
+			prop_do! {
+				let is_reorg_without_known_root in any::<bool>();
+				let n in any::<BlockHeightTrackingProperties<T::ChainBlockNumber>>();
+				let headers in generate_input::<T>(n);
+				return {
+					let witness_from = if is_reorg_without_known_root {
+						headers.0.front().unwrap().block_height.clone()
+					} else {
+						headers.0.back().unwrap().block_height.clone().saturating_forward(1)
+					};
+					BHWState::Running { headers: headers.0, witness_from }
+				}
+			}
+		]
+		.prop_map(|state| BHWStateWrapper { state, block_height_update: Default::default() })
+	}
 
-					// backup state
-					let prev_state = state.clone();
+	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+	struct TestTypes1 {}
+	impl BlockHeightTrackingTypes for TestTypes1 {
+		const BLOCK_BUFFER_SIZE: usize = 6;
+		type ChainBlockNumber = u32;
+		type ChainBlockHash = bool;
+		type BlockHeightChangeHook = ConstantHook<u32, ()>;
+	}
 
-					// run step function and ensure that output is valid
-					assert!(
-						Self::step(&mut state, input.clone()).is_valid().is_ok(),
-						"step function failed"
-					);
+	#[test]
+	pub fn test_dsm() {
+		BlockHeightTrackingSM::<TestTypes1>::test(
+			module_path!(),
+			generate_state(),
+			Just(()),
+			|indices| {
+				prop_oneof![
+					Just(SMInput::Context(())),
+					prop_do! {
+						let index in select(indices);
+						let input in generate_input(index.clone());
+						return SMInput::Vote(MultiIndexAndValue(index, input))
+					}
+				]
+				.boxed()
+			},
+		);
+	}
 
-					// ensure that state is still well formed
-					assert!(state.is_valid().is_ok(), "state after step function is not valid");
-					assert!(
-						Self::step_specification(&prev_state, &input, &state),
-						"step function does not fulfill spec"
-					);
+	struct TestChain {}
+	impl ChainWitnessConfig for TestChain {
+		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+		type ChainBlockNumber = u32;
+	}
 
-					Ok(())
-				},
-			)
-			.unwrap();
+	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+	struct TestTypes2 {}
+	impl BlockHeightTrackingTypes for TestTypes2 {
+		const BLOCK_BUFFER_SIZE: usize = 6;
+		type ChainBlockNumber = BlockWitnessRange<TestChain>;
+		type ChainBlockHash = bool;
+		type BlockHeightChangeHook = ConstantHook<Self::ChainBlockNumber, ()>;
+	}
+
+	#[test]
+	pub fn test_dsm2() {
+		BlockHeightTrackingSM::<TestTypes2>::test(
+			module_path!(),
+			generate_state(),
+			Just(()),
+			|indices| {
+				prop_do! {
+					let index in select(indices);
+					let input in generate_input(index.clone());
+					return SMInput::Vote(MultiIndexAndValue(index, input))
+				}
+				.boxed()
+			},
+		);
 	}
 }
