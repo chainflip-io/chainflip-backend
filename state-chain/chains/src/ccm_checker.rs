@@ -1,14 +1,15 @@
+use std::collections::HashMap;
+
 use crate::{
-	sol::{
-		SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL,
-		MAX_CCM_BYTES_USDC,
-	},
+	sol::{SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC},
 	CcmChannelMetadata,
 };
-use sol_prim::consts::TRANSACTION_BYTES_PER_ACCOUNT;
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sol_prim::consts::{
+	SYSTEM_PROGRAM_ID, TRANSACTION_BYTES_PER_ACCOUNT, TRANSACTION_BYTES_PER_REFERENCE,
+};
 use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
@@ -66,13 +67,28 @@ impl CcmValidityCheck for CcmValidityChecker {
 				.try_into()
 				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
 
-			// TODO: Check for duplicated accounts and accounts that we will already have in our executeCCM such as SYSTEM_PROGRAM_ID.
-			// It will depend on Native vs Token too. For new accounts it takes 33 bytes (account+reference) but for new ones it only
+			// TODO: Check for duplicated accounts and accounts that we will already have in our
+			// executeCCM such as SYSTEM_PROGRAM_ID. It will depend on Native vs Token too. For
+			// new accounts it takes 33 bytes (account+reference) but for new ones it only
 			// takes one. That is regardless of the is_writable and is_readable.
 
-			// Length of CCM = length of message + total no. remaining_accounts * constant;
-			let ccm_length =
-				ccm.message.len() + ccm_accounts.remaining_accounts.len() * TRANSACTION_BYTES_PER_ACCOUNT;
+			// Use a HashMap to keep track of how many times we've seen an account,
+			// TODO: Insert/initialize the accounts that are part of our CCM. Will depend on asset.
+			let mut count_map: HashMap<sol_prim::Address, bool> =
+				[(SYSTEM_PROGRAM_ID, true)].iter().cloned().collect();
+
+			let mut accounts_length = 0;
+
+			for &ccm_address in &ccm_accounts.remaining_accounts {
+				accounts_length += TRANSACTION_BYTES_PER_REFERENCE;
+				let entry = count_map.entry(ccm_address.pubkey.into()).or_insert(false);
+				if !*entry {
+					accounts_length += TRANSACTION_BYTES_PER_ACCOUNT;
+					*entry = true;
+				};
+			};
+
+			let ccm_length = ccm.message.len() + accounts_length;
 			if ccm_length >
 				match asset {
 					SolAsset::Sol => MAX_CCM_BYTES_SOL,
