@@ -350,7 +350,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// For extra safety, re-verify the validity of the CCM message here
 		// and extract the decoded `ccm_accounts` from `ccm_additional_data`.
-		let decoded_cf_params = CcmValidityChecker::check_and_decode(
+		let decoded_ccm_additional_data = CcmValidityChecker::check_and_decode(
 			&CcmChannelMetadata {
 				message: message
 					.clone()
@@ -368,16 +368,17 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		// Always expects the `DecodedCcmAdditionalData::Solana(..)` variant of the decoded cf
 		// params.
-		let ccm_accounts =
-			if let DecodedCcmAdditionalData::Solana(versioned_sol_data) = decoded_cf_params {
-				match versioned_sol_data {
-					VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => Ok(ccm_accounts),
-				}
-			} else {
-				Err(SolanaTransactionBuildingError::InvalidCcm(
-					CcmValidityError::CannotDecodeCcmAdditionalData,
-				))
-			}?;
+		let ccm_accounts = if let DecodedCcmAdditionalData::Solana(versioned_sol_data) =
+			decoded_ccm_additional_data
+		{
+			match versioned_sol_data {
+				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => Ok(ccm_accounts),
+			}
+		} else {
+			Err(SolanaTransactionBuildingError::InvalidCcm(
+				CcmValidityError::CannotDecodeCcmAdditionalData,
+			))
+		}?;
 
 		let sol_api_environment = Environment::api_environment()?;
 		let agg_key = Environment::current_agg_key()?;
