@@ -1,8 +1,9 @@
 use crate::{call_error, internal_error, CfApiError, RpcResult, StorageQueryApi};
 use anyhow::anyhow;
-use cf_node_clients::{error_decoder::ErrorDecoder, signer::PairSigner};
+use cf_node_clients::{
+	error_decoder::ErrorDecoder, signer::PairSigner, ExtrinsicDetails, WaitFor, WaitForResult,
+};
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchInfo, Deserialize, Serialize};
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::{StreamExt, TryFutureExt};
 use jsonrpsee::tokio::sync::RwLock;
@@ -23,22 +24,6 @@ use state_chain_runtime::{
 	Nonce, RuntimeCall,
 };
 use std::{marker::PhantomData, sync::Arc};
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
-pub enum WaitFor {
-	// Wait until the extrinsic is included in a block
-	InBlock,
-	// Wait until the extrinsic is in a finalized block
-	#[default]
-	Finalized,
-}
-
-pub struct ExtrinsicDetails {
-	pub tx_hash: Hash,
-	pub header: state_chain_runtime::Header,
-	pub events: Vec<state_chain_runtime::RuntimeEvent>,
-	pub _dispatch_info: DispatchInfo,
-}
 
 pub struct SignedPoolClient<C, B, BE>
 where
@@ -233,11 +218,8 @@ where
 				_ => None,
 			})
 			.expect("Unexpected state chain node behaviour")
-			.map(|dispatch_info| ExtrinsicDetails {
-				tx_hash,
-				header: signed_block.block.header().clone(),
-				events: extrinsic_events,
-				_dispatch_info: dispatch_info,
+			.map(|dispatch_info| {
+				(tx_hash, extrinsic_events, signed_block.block.header().clone(), dispatch_info)
 			})
 	}
 
@@ -266,6 +248,23 @@ where
 				)),
 			},
 			Err(e) => Err(e.into()),
+		}
+	}
+
+	pub async fn submit(
+		&self,
+		call: RuntimeCall,
+		wait_for: WaitFor,
+		dry_run: bool,
+		at: Option<Hash>,
+	) -> RpcResult<WaitForResult> {
+		match wait_for {
+			WaitFor::NoWait =>
+				Ok(WaitForResult::TransactionHash(self.submit_one(call, dry_run, at).await?)),
+			WaitFor::InBlock =>
+				Ok(WaitForResult::Details(self.submit_watch(call, false, dry_run, at).await?)),
+			WaitFor::Finalized =>
+				Ok(WaitForResult::Details(self.submit_watch(call, true, dry_run, at).await?)),
 		}
 	}
 
@@ -303,7 +302,7 @@ where
 	pub async fn submit_watch(
 		&self,
 		call: RuntimeCall,
-		wait_for: WaitFor,
+		until_finalized: bool,
 		dry_run: bool,
 		at: Option<Hash>,
 	) -> RpcResult<ExtrinsicDetails> {
@@ -331,16 +330,14 @@ where
 		// Periodically poll the transaction pool to check inclusion status
 		while let Some(status) = status_stream.next().await {
 			match status {
-				TransactionStatus::InBlock((block_hash, tx_index)) => {
-					if matches!(wait_for, WaitFor::InBlock) {
+				TransactionStatus::InBlock((block_hash, tx_index)) =>
+					if !until_finalized {
 						return self.get_extrinsic_details(block_hash, tx_index);
-					}
-				},
-				TransactionStatus::Finalized((block_hash, tx_index)) => {
-					if matches!(wait_for, WaitFor::Finalized) {
+					},
+				TransactionStatus::Finalized((block_hash, tx_index)) =>
+					if until_finalized {
 						return self.get_extrinsic_details(block_hash, tx_index);
-					}
-				},
+					},
 				TransactionStatus::Future |
 				TransactionStatus::Ready |
 				TransactionStatus::Broadcast(_) => {

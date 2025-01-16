@@ -11,7 +11,7 @@ use cf_utilities::{
 	UnendingStream,
 };
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
+use frame_support::pallet_prelude::InvalidTransaction;
 use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::H256;
@@ -30,7 +30,7 @@ use crate::state_chain_observer::client::{
 	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
-use cf_node_clients::{error_decoder, signer::PairSigner};
+use cf_node_clients::{error_decoder, signer::PairSigner, ExtrinsicDetails};
 use futures::StreamExt;
 use jsonrpsee::{core::ClientError, types::ErrorObjectOwned};
 
@@ -69,9 +69,6 @@ impl From<ClientError> for DryRunError {
 		}
 	}
 }
-
-pub type ExtrinsicDetails =
-	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
 
 pub type ExtrinsicResult<OtherError> = Result<ExtrinsicDetails, ExtrinsicError<OtherError>>;
 

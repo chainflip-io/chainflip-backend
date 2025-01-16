@@ -1,7 +1,4 @@
-use crate::{
-	signed_client::{SignedPoolClient, WaitFor},
-	RpcResult,
-};
+use crate::{signed_client::SignedPoolClient, RpcResult};
 use jsonrpsee::{core::async_trait, proc_macros::rpc};
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
@@ -17,10 +14,10 @@ pub trait LpSignedApi {
 	async fn register_account(&self) -> RpcResult<state_chain_runtime::Hash>;
 
 	// async fn request_liquidity_deposit_address(
-	//     &self,
-	//     asset: Asset,
-	//     wait_for: Option<WaitFor>,
-	//     boost_fee: Option<BasisPoints>,
+	// 	&self,
+	// 	asset: Asset,
+	// 	wait_for: Option<WaitFor>,
+	// 	boost_fee: Option<BasisPoints>,
 	// ) -> RpcResult<ApiWaitForResult<String>>;
 }
 
@@ -71,17 +68,30 @@ where
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
 	async fn register_account(&self) -> RpcResult<state_chain_runtime::Hash> {
-		let details = self
+		let (tx_hash, _, _, _) = self
 			.signed_pool_client
 			.submit_watch(
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-				WaitFor::InBlock,
+				false,
 				true,
 				None,
 			)
 			.await?;
 
-		//Ok(format!("{:#x}", details.tx_hash))
-		Ok(details.tx_hash)
+		Ok(tx_hash)
 	}
+
+	// async fn request_liquidity_deposit_address(
+	// 	&self,
+	// 	asset: Asset,
+	// 	wait_for: Option<WaitFor>,
+	// 	boost_fee: Option<BasisPoints>,
+	// ) -> RpcResult<ApiWaitForResult<String>> {
+	// 	Ok(self
+	// 		.api
+	// 		.lp_api()
+	// 		.request_liquidity_deposit_address(asset, wait_for.unwrap_or_default(), boost_fee)
+	// 		.await
+	// 		.map(|result| result.map_details(|address| address.to_string()))?)
+	// }
 }

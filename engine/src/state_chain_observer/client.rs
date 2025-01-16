@@ -27,10 +27,7 @@ use tracing::{info, log, warn};
 use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
-	extrinsic_api::{
-		signed::{SignedExtrinsicApi, WaitFor, WaitForResult},
-		unsigned,
-	},
+	extrinsic_api::{signed::SignedExtrinsicApi, unsigned},
 	storage_api::{BlockCompatibility, StorageApi},
 	stream_api::{StateChainStream, StreamApi, FINALIZED, UNFINALIZED},
 };
@@ -41,7 +38,7 @@ use crate::{
 		subxt_state_chain_config::StateChainConfig,
 	},
 };
-use cf_node_clients::signer::PairSigner;
+use cf_node_clients::{signer::PairSigner, WaitFor, WaitForResult};
 use cf_utilities::{
 	cached_stream::{CachedStream, MakeCachedStream},
 	loop_select, make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
@@ -1061,14 +1058,10 @@ pub mod mocks {
 	use state_chain_runtime::AccountId;
 
 	use super::{
-		extrinsic_api::{
-			self,
-			signed::{WaitFor, WaitForResult},
-			unsigned,
-		},
+		extrinsic_api::{self, unsigned},
 		storage_api,
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
-		BlockInfo,
+		BlockInfo, WaitFor, WaitForResult,
 	};
 
 	mock! {

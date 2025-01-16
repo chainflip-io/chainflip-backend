@@ -5,8 +5,10 @@ use cf_chains::{
 use cf_primitives::AffiliateShortId;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_utilities::rpc::NumberOrHex;
-use frame_support::{Deserialize, Serialize};
-use sp_core::{H256, U256};
+use sp_core::{
+	serde::{Deserialize, Serialize},
+	H256, U256,
+};
 use std::fmt;
 
 pub type RefundParameters = ChannelRefundParametersGeneric<AddressString>;

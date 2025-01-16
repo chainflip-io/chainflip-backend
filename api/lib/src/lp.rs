@@ -10,13 +10,14 @@ use cf_chains::{
 	address::{AddressString, EncodedAddress},
 	ForeignChain,
 };
+use cf_node_clients::{WaitFor, WaitForResult};
 use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use cf_rpc_types::lp::{
 	collect_limit_order_returns, collect_order_returns, collect_range_order_returns,
 	ApiWaitForResult, LimitOrRangeOrder, LimitOrder, RangeOrder,
 };
 use chainflip_engine::state_chain_observer::client::{
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
 };
 use frame_support::{pallet_prelude::ConstU32, BoundedVec};

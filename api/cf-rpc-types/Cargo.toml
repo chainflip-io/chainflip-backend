@@ -11,7 +11,6 @@ workspace = true
 anyhow = { workspace = true }
 serde = { workspace = true, default-features = true, features = ["derive"] }
 
-
 # State Chain
 cf-amm = { workspace = true, default-features = true }
 state-chain-runtime = { workspace = true, default-features = true }
@@ -20,7 +19,6 @@ cf-primitives = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
 frame-support = { workspace = true, default-features = true }
-
 pallet-cf-pools = { workspace = true, default-features = true }
 
 

@@ -4,8 +4,10 @@ pub use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_primitives::Asset;
-use frame_support::{Deserialize, Serialize};
-use sp_core::{H256, U256};
+use sp_core::{
+	serde::{Deserialize, Serialize},
+	H256, U256,
+};
 use std::ops::Range;
 
 use pallet_cf_pools::IncreaseOrDecrease;

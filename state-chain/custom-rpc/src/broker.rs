@@ -1,7 +1,4 @@
-use crate::{
-	signed_client::{SignedPoolClient, WaitFor},
-	CfApiError, RpcResult,
-};
+use crate::{signed_client::SignedPoolClient, CfApiError, RpcResult};
 use anyhow::anyhow;
 use cf_chains::{
 	address::AddressString, CcmChannelMetadata, ChannelRefundParametersEncoded,
@@ -144,17 +141,17 @@ where
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
 	async fn register_account(&self) -> RpcResult<String> {
-		let details = self
+		let (tx_hash, _, _, _) = self
 			.signed_pool_client
 			.submit_watch(
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
-				WaitFor::InBlock,
+				false,
 				true,
 				None,
 			)
 			.await?;
 
-		Ok(format!("{:#x}", details.tx_hash))
+		Ok(format!("{:#x}", tx_hash))
 	}
 
 	async fn request_swap_deposit_address(
@@ -173,7 +170,7 @@ where
 			.try_parse_to_encoded_address(destination_asset.into())
 			.map_err(anyhow::Error::msg)?;
 
-		let extrinsic_details = self
+		let (_, events, header, _) = self
 			.signed_pool_client
 			.submit_watch(
 				RuntimeCall::from(
@@ -199,14 +196,14 @@ where
 						dca_parameters,
 					},
 				),
-				WaitFor::InBlock,
+				false,
 				true,
 				None,
 			)
 			.await?;
 
 		Ok(extract_event!(
-			extrinsic_details.events,
+			events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::SwapDepositAddressReady,
 			{
@@ -219,7 +216,7 @@ where
 			},
 			SwapDepositAddress {
 				address: AddressString::from_encoded_address(deposit_address),
-				issued_block: extrinsic_details.header.number,
+				issued_block: header.number,
 				channel_id: *channel_id,
 				source_chain_expiry_block: (*source_chain_expiry_block).into(),
 				channel_opening_fee: (*channel_opening_fee).into(),
@@ -237,7 +234,7 @@ where
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
-		let extrinsic_details = self
+		let (tx_hash, events, _, _) = self
 			.signed_pool_client
 			.submit_watch(
 				RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
@@ -246,14 +243,14 @@ where
 						.try_parse_to_encoded_address(asset.into())
 						.map_err(anyhow::Error::msg)?,
 				}),
-				WaitFor::InBlock,
+				false,
 				false,
 				None,
 			)
 			.await?;
 
 		Ok(extract_event!(
-			extrinsic_details.events,
+			events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::WithdrawalRequested,
 			{
@@ -264,7 +261,7 @@ where
 				..
 			},
 			WithdrawFeesDetail {
-				tx_hash: extrinsic_details.tx_hash,
+				tx_hash,
 				egress_id: *egress_id,
 				egress_amount: (*egress_amount).into(),
 				egress_fee: (*egress_fee).into(),
@@ -316,7 +313,7 @@ where
 								tx_id,
 							},
 						),
-						WaitFor::InBlock,
+						false,
 						true,
 						None,
 					)
@@ -341,18 +338,18 @@ where
 	}
 
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		let extrinsic_details = self
+		let (_, events, _, _) = self
 			.signed_pool_client
 			.submit_watch(
 				RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
-				WaitFor::InBlock,
+				false,
 				true,
 				None,
 			)
 			.await?;
 
 		Ok(extract_event!(
-			&extrinsic_details.events,
+			events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::PrivateBrokerChannelOpened,
 			{ channel_id, .. },
@@ -361,18 +358,18 @@ where
 	}
 
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		let extrinsic_details = self
+		let (_, events, _, _) = self
 			.signed_pool_client
 			.submit_watch(
 				RuntimeCall::from(pallet_cf_swapping::Call::close_private_btc_channel {}),
-				WaitFor::InBlock,
+				false,
 				true,
 				None,
 			)
 			.await?;
 
 		Ok(extract_event!(
-			&extrinsic_details.events,
+			events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::PrivateBrokerChannelClosed,
 			{ channel_id, .. },
@@ -403,21 +400,21 @@ where
 			find_lowest_unused_short_id(&used_ids)?
 		};
 
-		let extrinsic_details = self
+		let (_, events, _, _) = self
 			.signed_pool_client
 			.submit_watch(
 				RuntimeCall::from(pallet_cf_swapping::Call::register_affiliate {
 					affiliate_id,
 					short_id: register_as_id,
 				}),
-				WaitFor::InBlock,
+				false,
 				true,
 				None,
 			)
 			.await?;
 
 		Ok(extract_event!(
-			&extrinsic_details.events,
+			events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::AffiliateRegistrationUpdated,
 			{ affiliate_short_id, .. },

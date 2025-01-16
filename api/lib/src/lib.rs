@@ -31,12 +31,13 @@ pub mod primitives {
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
+pub use cf_node_clients::{WaitFor, WaitForResult};
 pub use chainflip_engine::{
 	settings,
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcApi, RawRpcApi},
 		chain_api::ChainApi,
-		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, WaitFor, WaitForResult},
+		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 		storage_api::StorageApi,
 		BlockInfo,
 	},
