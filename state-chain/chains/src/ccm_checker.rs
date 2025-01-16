@@ -69,11 +69,10 @@ impl CcmValidityCheck for CcmValidityChecker {
 			// executeCCM such as SYSTEM_PROGRAM_ID. It will depend on Native vs Token too. For
 			// new accounts it takes 33 bytes (account+reference) but for new ones it only
 			// takes one. That is regardless of the is_writable and is_readable.
-
-			// Use a HashMap to keep track of how many times we've seen an account,
-			// TODO: Insert/initialize the accounts that are part of our CCM. Will depend on asset.
 			let mut seen_addresses = BTreeSet::new();
-			seen_addresses.insert(SYSTEM_PROGRAM_ID); // Pre-inserting SYSTEM_PROGRAM_ID if needed
+
+			// TODO: Insert/initialize the accounts that are part of our CCM. Will depend on asset.
+			seen_addresses.insert(SYSTEM_PROGRAM_ID);
 			
 			let mut accounts_length = 0;
 			
