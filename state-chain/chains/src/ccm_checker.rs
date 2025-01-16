@@ -1,10 +1,11 @@
 use crate::{
 	sol::{
-		SolAsset, SolCcmAccounts, SolPubkey, CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL,
+		SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL,
 		MAX_CCM_BYTES_USDC,
 	},
 	CcmChannelMetadata,
 };
+use sol_prim::consts::TRANSACTION_BYTES_PER_ACCOUNT;
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -65,9 +66,13 @@ impl CcmValidityCheck for CcmValidityChecker {
 				.try_into()
 				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
 
+			// TODO: Check for duplicated accounts and accounts that we will already have in our executeCCM such as SYSTEM_PROGRAM_ID.
+			// It will depend on Native vs Token too. For new accounts it takes 33 bytes (account+reference) but for new ones it only
+			// takes one. That is regardless of the is_writable and is_readable.
+
 			// Length of CCM = length of message + total no. remaining_accounts * constant;
 			let ccm_length =
-				ccm.message.len() + ccm_accounts.remaining_accounts.len() * CCM_BYTES_PER_ACCOUNT;
+				ccm.message.len() + ccm_accounts.remaining_accounts.len() * TRANSACTION_BYTES_PER_ACCOUNT;
 			if ccm_length >
 				match asset {
 					SolAsset::Sol => MAX_CCM_BYTES_SOL,
