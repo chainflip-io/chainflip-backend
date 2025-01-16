@@ -1413,6 +1413,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-node-clients"
+version = "0.1.0"
+dependencies = [
+ "frame-metadata 16.0.0",
+ "frame-metadata-hash-extension",
+ "frame-system",
+ "pallet-cf-funding",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core 34.0.0",
+ "sp-runtime 39.0.0",
+ "sp-version",
+ "state-chain-runtime",
+ "thiserror",
+]
+
+[[package]]
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
@@ -1430,6 +1447,20 @@ dependencies = [
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2)",
  "strum 0.26.3",
  "strum_macros 0.26.4",
+ "utilities",
+]
+
+[[package]]
+name = "cf-rpc-types"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cf-chains",
+ "cf-primitives",
+ "frame-support",
+ "serde",
+ "sp-core 34.0.0",
+ "state-chain-runtime",
  "utilities",
 ]
 
@@ -1589,8 +1620,8 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "cf-rpc-types",
  "chainflip-engine",
- "chainflip-integrator",
  "chainflip-node",
  "custom-rpc",
  "ed25519-dalek",
@@ -1633,8 +1664,9 @@ version = "1.8.0"
 dependencies = [
  "anyhow",
  "cf-chains",
+ "cf-node-clients",
+ "cf-rpc-types",
  "chainflip-api",
- "chainflip-integrator",
  "clap",
  "custom-rpc",
  "futures",
@@ -1687,8 +1719,8 @@ dependencies = [
  "bs58 0.5.1",
  "cf-amm",
  "cf-chains",
+ "cf-node-clients",
  "cf-primitives",
- "chainflip-integrator",
  "chainflip-node",
  "chrono",
  "clap",
@@ -1809,35 +1841,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.18",
- "utilities",
-]
-
-[[package]]
-name = "chainflip-integrator"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cf-chains",
- "cf-primitives",
- "frame-metadata 16.0.0",
- "frame-metadata-hash-extension",
- "frame-support",
- "frame-system",
- "futures",
- "hex",
- "insta",
- "jsonrpsee 0.23.2",
- "log",
- "pallet-cf-funding",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "serde_json",
- "sp-core 34.0.0",
- "sp-runtime 39.0.0",
- "sp-version",
- "state-chain-runtime",
- "thiserror",
  "utilities",
 ]
 
@@ -2588,8 +2591,9 @@ dependencies = [
  "anyhow",
  "cf-amm",
  "cf-chains",
+ "cf-node-clients",
  "cf-primitives",
- "chainflip-integrator",
+ "cf-rpc-types",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",

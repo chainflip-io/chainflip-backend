@@ -1,5 +1,5 @@
 [package]
-name = "chainflip-integrator"
+name = "cf-node-clients"
 version = "0.1.0"
 authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 edition = "2021"
@@ -13,23 +13,11 @@ scale-info = { workspace = true, features = ["derive"] }
 
 # Chainflip Runtime
 state-chain-runtime = { workspace = true, default-features = true }
-
-anyhow = { workspace = true }
-futures = { workspace = true }
-jsonrpsee = { workspace = true, features = ["full"] }
-hex = { workspace = true, default-features = true }
-serde = { workspace = true, default-features = true, features = ["derive"] }
 thiserror = { workspace = true }
-log = { workspace = true }
-
-cf-chains = { workspace = true, default-features = true }
-cf-primitives = { workspace = true, default-features = true }
-cf-utilities = { workspace = true, default-features = true }
 
 sp-core = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-version = { workspace = true }
-frame-support = { workspace = true, default-features = true }
 frame-system = { workspace = true, default-features = true }
 frame-metadata = { workspace = true, default-features = true, features = [
     "current",
@@ -37,7 +25,6 @@ frame-metadata = { workspace = true, default-features = true, features = [
 frame-metadata-hash-extension = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["json"] }
-serde_json = { workspace = true }
 pallet-cf-funding = { workspace = true, default-features = true }
+
 

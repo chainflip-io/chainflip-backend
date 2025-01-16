@@ -12,6 +12,7 @@ use cf_chains::{
 	sol::SolAddress,
 	Chain,
 };
+use cf_node_clients::error_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountId, AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
@@ -19,7 +20,6 @@ use cf_primitives::{
 	SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
-use chainflip_integrator::error_decoder;
 use core::ops::Range;
 use futures::{stream, stream::StreamExt, FutureExt};
 use jsonrpsee::{
@@ -79,6 +79,7 @@ use std::{
 
 pub mod broker;
 pub mod crypto;
+pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
 pub mod signed_client;

@@ -1,3 +1,7 @@
+use cf_rpc_types::broker::{
+	GetOpenDepositChannelsQuery, RefundParameters, SwapDepositAddress, TransactionInId,
+	WithdrawFeesDetail,
+};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -16,10 +20,6 @@ use chainflip_api::{
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, ChannelId, DepositMonitorApi, OperatorApi,
 	SignedExtrinsicApi, StateChainApi,
-};
-use chainflip_integrator::{
-	GetOpenDepositChannelsQuery, RefundParameters, SwapDepositAddress, TransactionInId,
-	WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;

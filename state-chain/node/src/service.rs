@@ -1,7 +1,8 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 use custom_rpc::{
 	broker::{BrokerSignedApiServer, BrokerSignedRpc},
-	crypto::broker_crypto,
+	crypto::{broker_crypto, lp_crypto},
+	lp::{LpSignedApiServer, LpSignedRpc},
 	monitoring::MonitoringApiServer,
 	signed_client::SignedPoolClient,
 	CustomApiServer, CustomRpc,
@@ -254,21 +255,47 @@ pub fn new_full<
 		let chain_spec = config.chain_spec.cloned_box();
 		let keystore = keystore_container.local_keystore().clone();
 
-		let mut keys = keystore.sr25519_public_keys(broker_crypto::BROKER_ID_KEY);
-		// Check if a broker key is found in the node keystore
-		let broker_pair = if keys.is_empty() {
-			None
-		} else if keys.len() > 1 {
-			log::warn!(
-				"Found more than one broker key in the node keystore. Disabling broker API ..."
-			);
-			None
-		} else {
-			let pub_key = broker_crypto::Public::from(keys.pop().unwrap());
-			log::warn!("borker_pub_key {:?}", pub_key);
+		// try to get the broker key pair from the node keystore
+		let broker_key_pair =
+			match keystore.sr25519_public_keys(broker_crypto::BROKER_KEY_TYPE_ID).as_slice() {
+				[pub_key] => {
+					let pub_key = broker_crypto::Public::from(*pub_key);
+					log::info!("broker public key {:?}", pub_key);
 
-			let keypair: broker_crypto::Pair = keystore.key_pair(&pub_key)?.unwrap();
-			Some(keypair.into_inner())
+					keystore
+						.key_pair(&pub_key)
+						.ok()
+						.flatten()
+						.map(|pair: broker_crypto::Pair| pair.into_inner())
+				},
+				[] => None, // No BROKER_KEY_TYPE_ID keys found
+				_ => {
+					log::warn!(
+					"Found more than one broker keys in the node keystore. Disabling broker API ..."
+				);
+					None
+				},
+			};
+
+		// try to get the lp key pair from the node keystore
+		let lp_key_pair = match keystore.sr25519_public_keys(lp_crypto::LP_KEY_TYPE_ID).as_slice() {
+			[pub_key] => {
+				let pub_key = broker_crypto::Public::from(*pub_key);
+				log::info!("lp provider public key {:?}", pub_key);
+
+				keystore
+					.key_pair(&pub_key)
+					.ok()
+					.flatten()
+					.map(|pair: broker_crypto::Pair| pair.into_inner())
+			},
+			[] => None, // No LP_KEY_TYPE_ID keys found
+			_ => {
+				log::warn!(
+					"Found more than one lp provider keys in the node keystore. Disabling LP API ..."
+				);
+				None
+			},
 		};
 
 		Box::new(move |deny_unsafe, subscription_executor| {
@@ -326,8 +353,21 @@ pub fn new_full<
 				}))?;
 
 				// Add broker RPCs if broker key was found
-				if let Some(pair) = broker_pair.clone() {
+				if let Some(pair) = broker_key_pair.clone() {
 					module.merge(BrokerSignedApiServer::into_rpc(BrokerSignedRpc {
+						client: client.clone(),
+						signed_pool_client: SignedPoolClient::new(
+							client.clone(),
+							pool.clone(),
+							executor.clone(),
+							pair.clone(),
+						),
+					}))?;
+				}
+
+				// Add lp RPCs if lp key was found
+				if let Some(pair) = lp_key_pair.clone() {
+					module.merge(LpSignedApiServer::into_rpc(LpSignedRpc {
 						client: client.clone(),
 						signed_pool_client: SignedPoolClient::new(
 							client.clone(),

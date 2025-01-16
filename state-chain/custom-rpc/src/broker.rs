@@ -10,11 +10,14 @@ use cf_chains::{
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters,
 };
-use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
-use chainflip_integrator::{
-	extract_event, find_lowest_unused_short_id, GetOpenDepositChannelsQuery, RefundParameters,
-	SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
+use cf_rpc_types::{
+	broker::{
+		find_lowest_unused_short_id, GetOpenDepositChannelsQuery, RefundParameters,
+		SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
+	},
+	extract_event,
 };
+use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
 use jsonrpsee::{core::async_trait, proc_macros::rpc};
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
@@ -94,7 +97,7 @@ pub trait BrokerSignedApi {
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
 }
 
-/// An Broker signed RPC extension for the state chain node.
+/// A Broker signed RPC extension for the state chain node.
 pub struct BrokerSignedRpc<C, B, BE>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,

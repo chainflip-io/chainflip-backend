@@ -21,7 +21,8 @@ serde = { workspace = true, default-features = true, features = ["derive"] }
 thiserror = { workspace = true }
 log = { workspace = true }
 
-chainflip-integrator = { workspace = true, default-features = true }
+cf-rpc-types = { workspace = true, default-features = true }
+cf-node-clients = { workspace = true, default-features = true }
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }

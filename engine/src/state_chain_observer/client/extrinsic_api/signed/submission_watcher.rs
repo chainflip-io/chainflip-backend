@@ -30,7 +30,7 @@ use crate::state_chain_observer::client::{
 	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
-use chainflip_integrator::{error_decoder, signer::PairSigner};
+use cf_node_clients::{error_decoder, signer::PairSigner};
 use futures::StreamExt;
 use jsonrpsee::{core::ClientError, types::ErrorObjectOwned};
 

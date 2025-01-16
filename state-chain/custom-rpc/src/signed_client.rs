@@ -1,6 +1,6 @@
 use crate::{call_error, internal_error, CfApiError, RpcResult, StorageQueryApi};
 use anyhow::anyhow;
-use chainflip_integrator::{error_decoder::ErrorDecoder, signer::PairSigner};
+use cf_node_clients::{error_decoder::ErrorDecoder, signer::PairSigner};
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, Deserialize, Serialize};
 use frame_system_rpc_runtime_api::AccountNonceApi;

@@ -22,6 +22,7 @@ $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chai
 RUST_LOG=runtime=debug $BINARY_ROOT_PATH/chainflip-node --chain=$CHAIN \
   --base-path=/tmp/chainflip/$NODE_NAME/chaindata \
   --node-key-file=$KEYS_DIR/$NODE_NAME/node_key_file \
+  --max-runtime-instances 32 \
   --validator \
   --force-authoring \
   --rpc-cors=all \

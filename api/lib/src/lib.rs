@@ -47,14 +47,17 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
+use cf_rpc_types::{
+	broker::{
+		find_lowest_unused_short_id, RefundParameters, SwapDepositAddress, TransactionInId,
+		WithdrawFeesDetail,
+	},
+	extract_event,
+};
 use cf_utilities::task_scope::Scope;
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
-};
-use chainflip_integrator::{
-	extract_event, find_lowest_unused_short_id, RefundParameters, SwapDepositAddress,
-	TransactionInId, WithdrawFeesDetail,
 };
 
 lazy_static::lazy_static! {

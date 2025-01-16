@@ -41,13 +41,13 @@ use crate::{
 		subxt_state_chain_config::StateChainConfig,
 	},
 };
+use cf_node_clients::signer::PairSigner;
 use cf_utilities::{
 	cached_stream::{CachedStream, MakeCachedStream},
 	loop_select, make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
 	task_scope::{Scope, UnwrapOrCancel},
 	try_cached_stream::{MakeTryCachedStream, TryCachedStream},
 };
-use chainflip_integrator::signer::PairSigner;
 
 pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
 
