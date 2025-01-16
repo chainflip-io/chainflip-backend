@@ -22,6 +22,7 @@ cf-primitives = { workspace = true }
 cf-traits = { workspace = true }
 cfe-events = { workspace = true }
 cf-runtime-utilities = { workspace = true }
+generic-typeinfo-derive = { path = '../../generic-typeinfo-derive'}
 
 log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
