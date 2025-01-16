@@ -105,10 +105,11 @@ mod test {
 			signing_key::SolSigningKey, sol_tx_core::sol_test_values::*, SolAddress, SolHash,
 			SolLegacyMessage, SolLegacyTransaction,
 		},
-		ChannelRefundParametersDecoded, ForeignChainAddress,
+		ChannelRefundParameters,
 	};
 	use cf_primitives::{
-		AccountId, AffiliateAndFee, AffiliateShortId, BasisPoints, DcaParameters, MAX_AFFILIATES,
+		chains::Solana, AccountId, AffiliateAndFee, AffiliateShortId, BasisPoints, DcaParameters,
+		MAX_AFFILIATES,
 	};
 	use sol_prim::consts::{const_address, MAX_TRANSACTION_LENGTH};
 	use sp_core::ConstU32;
@@ -162,10 +163,10 @@ mod test {
 		))
 	}
 
-	fn channel_refund_parameters() -> ChannelRefundParametersDecoded {
-		ChannelRefundParametersDecoded {
+	fn channel_refund_parameters() -> ChannelRefundParameters<SolAddress> {
+		ChannelRefundParameters {
 			min_price: sp_core::U256::default(),
-			refund_address: ForeignChainAddress::Sol(DESTINATION_ADDRESS_SOL),
+			refund_address: DESTINATION_ADDRESS_SOL,
 			retry_duration: 10u32,
 		}
 	}
@@ -184,7 +185,7 @@ mod test {
 	}
 
 	fn cf_parameter(with_ccm: bool) -> Vec<u8> {
-		build_cf_parameters(
+		build_cf_parameters::<Solana>(
 			channel_refund_parameters(),
 			Some(dca_parameters()),
 			BOOST_FEE,
