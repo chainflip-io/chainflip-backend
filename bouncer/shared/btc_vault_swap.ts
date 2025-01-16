@@ -19,7 +19,6 @@ interface BtcVaultSwapDetails {
   chain: string;
   nulldata_payload: string;
   deposit_address: string;
-  expires_at: number;
 }
 
 interface BtcVaultSwapExtraParameters {
@@ -67,19 +66,6 @@ export async function buildAndSendBtcVaultSwap(
   )) as unknown as BtcVaultSwapDetails;
 
   assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
-
-  // Calculate expected expiry time assuming block time is 6 secs, expires_at = time left to next rotation
-  const epochDuration = (await chainflip.rpc(`cf_epoch_duration`)) as number;
-  const epochStartedAt = (await chainflip.rpc(`cf_current_epoch_started_at`)) as number;
-  const currentBlockNumber = (await chainflip.rpc.chain.getHeader()).number.toNumber();
-  const blocksUntilNextRotation = epochDuration + epochStartedAt - currentBlockNumber;
-  const expectedExpiresAt = Date.now() + blocksUntilNextRotation * 6000;
-  // Check that expires_at field is correct (within 20 secs drift)
-  assert(
-    Math.abs(expectedExpiresAt - BtcVaultSwapDetails.expires_at) <= 20 * 1000,
-    `BtcVaultSwapDetails expiry timestamp is not within a 20 secs drift of the expected expiry time.
-      expectedExpiresAt = ${expectedExpiresAt} and actualExpiresAt = ${BtcVaultSwapDetails.expires_at}`,
-  );
 
   const txid = await sendVaultTransaction(
     BtcVaultSwapDetails.nulldata_payload,
