@@ -1869,6 +1869,7 @@ fn can_request_swap_via_extrinsic() {
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: BROKER,
 				},
 			},]
 		);
@@ -1932,7 +1933,8 @@ fn vault_swaps_support_affiliate_fees() {
 					Beneficiary { account: AFFILIATE_1, bps: AFFILIATE_FEE }
 				],
 				origin: SwapOrigin::Vault {
-					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default())
+					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: BROKER,
 				},
 			},]
 		);
@@ -1983,7 +1985,8 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 				swap_type: SwapRequestType::Regular { output_address, ccm_deposit_metadata: None },
 				broker_fees: Default::default(),
 				origin: SwapOrigin::Vault {
-					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default())
+					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: NOT_A_BROKER,
 				},
 			},]
 		);
@@ -2043,6 +2046,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: BROKER,
 				},
 			},]
 		);
@@ -2252,7 +2256,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 				None,
 				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
 				0,
-				DepositOrigin::Vault { tx_id: H256::default() },
+				DepositOrigin::Vault { tx_id: H256::default(), broker_id: BROKER },
 			)
 			.err(),
 			Some(DepositFailedReason::BelowMinimumDeposit)
@@ -2274,7 +2278,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 			None,
 			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
 			0,
-			DepositOrigin::Vault { tx_id: H256::default() },
+			DepositOrigin::Vault { tx_id: H256::default(), broker_id: BROKER },
 		)
 		.is_ok());
 	});

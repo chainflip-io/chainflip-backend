@@ -670,14 +670,16 @@ impl IntoTransactionInIdForAnyChain<NoneChainCrypto> for () {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SwapOrigin {
+pub enum SwapOrigin<AccountId> {
 	DepositChannel {
 		deposit_address: address::EncodedAddress,
 		channel_id: ChannelId,
 		deposit_block_height: u64,
+		broker_id: AccountId,
 	},
 	Vault {
 		tx_id: TransactionInIdForAnyChain,
+		broker_id: AccountId,
 	},
 	Internal,
 }

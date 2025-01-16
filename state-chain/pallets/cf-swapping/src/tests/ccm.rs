@@ -7,7 +7,10 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 	let ccm_deposit_metadata = generate_ccm_deposit();
 	let output_address = (*EVM_OUTPUT_ADDRESS).clone();
 	let encoded_output_address = MockAddressConverter::to_encoded_address(output_address.clone());
-	let origin = SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) };
+	let origin = SwapOrigin::Vault {
+		tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+		broker_id: BROKER,
+	};
 
 	Swapping::init_swap_request(
 		input_asset,
@@ -106,7 +109,10 @@ fn can_process_ccms_via_swap_deposit_address() {
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: BROKER,
+				},
 			);
 
 			// Principal swap is scheduled first

@@ -1233,7 +1233,10 @@ mod vault_swaps {
 							ccm_deposit_metadata: None
 						},
 						broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 5 }],
-						origin: SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(tx_id) },
+						origin: SwapOrigin::Vault {
+							tx_id: TransactionInIdForAnyChain::Evm(tx_id),
+							broker_id: BROKER
+						},
 					},]
 				);
 

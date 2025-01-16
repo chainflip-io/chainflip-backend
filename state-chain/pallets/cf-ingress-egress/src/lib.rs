@@ -160,9 +160,11 @@ mod deposit_origin {
 			deposit_address: <T::TargetChain as Chain>::ChainAccount,
 			channel_id: ChannelId,
 			deposit_block_height: u64,
+			broker_id: T::AccountId,
 		},
 		Vault {
 			tx_id: TransactionInIdFor<T, I>,
+			broker_id: T::AccountId,
 		},
 	}
 
@@ -171,16 +173,18 @@ mod deposit_origin {
 			deposit_address: <T::TargetChain as Chain>::ChainAccount,
 			channel_id: ChannelId,
 			deposit_block_height: <T::TargetChain as Chain>::ChainBlockNumber,
+			broker_id: T::AccountId,
 		) -> Self {
 			DepositOrigin::DepositChannel {
 				deposit_address,
 				channel_id,
 				deposit_block_height: deposit_block_height.into(),
+				broker_id,
 			}
 		}
 
-		pub(super) fn vault(tx_id: TransactionInIdFor<T, I>) -> Self {
-			DepositOrigin::Vault { tx_id }
+		pub(super) fn vault(tx_id: TransactionInIdFor<T, I>, broker_id: T::AccountId) -> Self {
+			DepositOrigin::Vault { tx_id, broker_id }
 		}
 	}
 
@@ -193,15 +197,18 @@ mod deposit_origin {
 		}
 	}
 
-	impl<T: Config<I>, I: 'static> From<DepositOrigin<T, I>> for SwapOrigin {
-		fn from(origin: DepositOrigin<T, I>) -> SwapOrigin {
+	impl<T: Config<I>, I: 'static> From<DepositOrigin<T, I>> for SwapOrigin<T::AccountId> {
+		fn from(origin: DepositOrigin<T, I>) -> SwapOrigin<T::AccountId> {
 			match origin {
-				DepositOrigin::Vault { tx_id } =>
-					SwapOrigin::Vault { tx_id: tx_id.into_transaction_in_id_for_any_chain() },
+				DepositOrigin::Vault { tx_id, broker_id } => SwapOrigin::Vault {
+					tx_id: tx_id.into_transaction_in_id_for_any_chain(),
+					broker_id,
+				},
 				DepositOrigin::DepositChannel {
 					deposit_address,
 					channel_id,
 					deposit_block_height,
+					broker_id,
 				} => SwapOrigin::DepositChannel {
 					deposit_address: T::AddressConverter::to_encoded_address(
 						<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
@@ -210,6 +217,7 @@ mod deposit_origin {
 					),
 					channel_id,
 					deposit_block_height,
+					broker_id,
 				},
 			}
 		}
@@ -1841,6 +1849,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_address.clone(),
 				deposit_channel.channel_id,
 				block_height,
+				owner.clone(),
 			),
 		) {
 			// Update boost status
@@ -1940,8 +1949,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Err(Error::<T, I>::InvalidDepositAddress.into())
 		}
 
-		let deposit_origin =
-			DepositOrigin::deposit_channel(deposit_address.clone(), channel_id, block_height);
+		let deposit_origin = DepositOrigin::deposit_channel(
+			deposit_address.clone(),
+			channel_id,
+			block_height,
+			deposit_channel_details.owner.clone(),
+		);
 
 		match Self::process_full_witness_deposit_inner(
 			Some(deposit_address.clone()),
@@ -2202,7 +2215,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let boost_status =
 			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
 
-		let origin = DepositOrigin::vault(tx_id.clone());
+		let origin = DepositOrigin::vault(tx_id.clone(), broker.clone());
 
 		if let Some(new_boost_status) = Self::process_prewitness_deposit_inner(
 			amount,
@@ -2449,10 +2462,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			};
 
-		let deposit_origin = DepositOrigin::vault(tx_id.clone());
-
 		let broker = broker_fee.account.clone();
 		let broker_fees = Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone());
+
+		let deposit_origin = DepositOrigin::vault(tx_id.clone(), broker.clone());
 
 		if T::SwapLimitsProvider::validate_broker_fees(&broker_fees).is_err() {
 			emit_deposit_failed_event(DepositFailedReason::InvalidBrokerFees);
