@@ -64,7 +64,7 @@ impl<N: Ord + SaturatingStep + Copy> ElectionTracker<N> {
 		// range are going to be restarted once there is the capacity to do so.
 		if *range.start() < self.next_election {
 			self.next_election = *range.start();
-			self.reorg_id = generate_new_index(self.ongoing.values());
+			self.reorg_id = generate_new_reorg_id(self.ongoing.values());
 		}
 
 		// QUESTION: currently, the following check ensures that
@@ -98,7 +98,7 @@ impl<N: BlockZero + Ord> Default for ElectionTracker<N> {
 }
 
 /// Generates an element which is not in `indices`.
-fn generate_new_index<'a, N: BlockZero + SaturatingStep + Ord + 'static>(
+fn generate_new_reorg_id<'a, N: BlockZero + SaturatingStep + Ord + 'static>(
 	mut indices: impl Iterator<Item = &'a N> + Clone,
 ) -> N {
 	let mut index = N::zero();
@@ -111,13 +111,13 @@ fn generate_new_index<'a, N: BlockZero + SaturatingStep + Ord + 'static>(
 #[cfg(test)]
 mod tests {
 
-	use super::generate_new_index;
+	use super::generate_new_reorg_id;
 	use proptest::prelude::*;
 
 	proptest! {
 		#[test]
 		fn indices_are_new(xs in prop::collection::vec(any::<u8>(), 0..3)) {
-			assert!(!xs.contains(&generate_new_index(xs.iter())));
+			assert!(!xs.contains(&generate_new_reorg_id(xs.iter())));
 		}
 	}
 }

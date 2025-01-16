@@ -29,7 +29,7 @@ pub mod primitives;
 pub mod state_machine;
 
 pub trait BlockHeightTrackingTypes: Ord + PartialEq + Clone + Debug + 'static {
-	const SAFETY_MARGIN: usize;
+	const BLOCK_BUFFER_SIZE: usize;
 	type ChainBlockNumber: SaturatingStep
 		+ BlockZero
 		+ Debug

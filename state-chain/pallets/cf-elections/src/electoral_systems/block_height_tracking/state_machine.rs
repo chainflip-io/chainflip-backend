@@ -227,7 +227,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 							merge_info.removed
 						);
 
-						let _ = trim_to_length(&mut chainblocks.headers, T::SAFETY_MARGIN);
+						let _ = trim_to_length(&mut chainblocks.headers, T::BLOCK_BUFFER_SIZE);
 
 						*headers = chainblocks.headers;
 						*witness_from = headers.back().unwrap().block_height.saturating_forward(1);
@@ -339,7 +339,7 @@ mod tests {
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 	struct TestTypes1 {}
 	impl BlockHeightTrackingTypes for TestTypes1 {
-		const SAFETY_MARGIN: usize = 6;
+		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = u32;
 		type ChainBlockHash = bool;
 		type BlockHeightChangeHook = ConstantHook<u32, ()>;
@@ -374,7 +374,7 @@ mod tests {
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 	struct TestTypes2 {}
 	impl BlockHeightTrackingTypes for TestTypes2 {
-		const SAFETY_MARGIN: usize = 6;
+		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
 		type BlockHeightChangeHook = ConstantHook<Self::ChainBlockNumber, ()>;

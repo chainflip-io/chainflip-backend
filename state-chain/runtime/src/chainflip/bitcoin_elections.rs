@@ -86,7 +86,7 @@ pub struct BitcoinBlockHeightTrackingTypes {}
 
 /// Associating the SM related types to the struct
 impl BlockHeightTrackingTypes for BitcoinBlockHeightTrackingTypes {
-	const SAFETY_MARGIN: usize = 6;
+	const BLOCK_BUFFER_SIZE: usize = 6;
 	type ChainBlockNumber = btc::BlockNumber;
 	type ChainBlockHash = btc::Hash;
 	type BlockHeightChangeHook = BitcoinBlockHeightChangeHook;
