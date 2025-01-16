@@ -63,7 +63,7 @@ const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
 export const solanaNumberOfNonces = 10;
 
-export const solCcmAccounts = Struct({
+const solCcmAccountsCodec = Struct({
   cf_receiver: Struct({
     pubkey: TsBytes(32),
     is_writable: bool,
@@ -78,7 +78,7 @@ export const solCcmAccounts = Struct({
 });
 
 export const solVersionedCcmAdditionalDataCodec = Enum({
-  V0: solCcmAccounts,
+  V0: solCcmAccountsCodec,
 });
 
 export function getContractAddress(chain: Chain, contract: string): string {
