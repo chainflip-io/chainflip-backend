@@ -546,9 +546,8 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Associates for a given broker an affiliate broker account with short id (u8) so that
-	/// it can be used in place of the full account id in order to save space (e.g. in UTXO encoding
-	/// for BTC)
+	/// Stores the details of an affiliate account against the account id of a broker and the
+	/// derived affiliate id.
 	#[pallet::storage]
 	pub type AffiliateAccountDetails<T: Config> = StorageDoubleMap<
 		_,
@@ -1084,7 +1083,7 @@ pub mod pallet {
 			{
 				if beneficiary.bps > 0 {
 					beneficiaries.try_push(beneficiary).expect(
-						"We are pushing affiiliates + 1 which is exactly the maximum Beneficiaries size",
+						"We are pushing affiliates + 1 which is exactly the maximum Beneficiaries size",
 					);
 				}
 			}
