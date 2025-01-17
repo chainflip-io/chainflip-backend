@@ -47,13 +47,10 @@ pub use sol_tx_core::{
 // tx. Batches of 5 fetches get to ~1000 bytes, max ~1090 for tokens.
 pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
-pub const CCM_BYTES_PER_ACCOUNT: usize = 33usize;
-
 // Bytes left that are available for the user when building the native and token ccm transfers.
-// Leaving some bytes for safety but without preventing an extra account to be included.
-// The cf_receiver is accounted as part of the bytes required to build the call.
-pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 527usize; // 705 bytes left
-pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 740usize; // 492 bytes left
+// All function parameters are already accounted for excepte additional_accounts and message.
+pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize; // 694 bytes left
+pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize; // 481 bytes left
 
 // Use serialized transaction
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
