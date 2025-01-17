@@ -1,4 +1,11 @@
 let id = 0;
+
+// export const brokerEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
+export const brokerApiEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:9944';
+
+// export const lpApiEndpoint = 'http://127.0.0.1:10589';
+export const lpApiEndpoint = 'http://127.0.0.1:9944';
+
 export async function jsonRpc(
   method: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,13 +42,10 @@ export async function jsonRpc(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function lpApiRpc(method: string, params: any[]): Promise<any> {
-  // The port for the lp api is defined in `chainflip-lp-api.service`
-  return jsonRpc(method, params, 'http://127.0.0.1:10589');
+  return jsonRpc(method, params, lpApiEndpoint);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function brokerApiRpc(method: string, params: any[]): Promise<any> {
-  // const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
-  const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:9944';
-  return jsonRpc(method, params, brokerUrl);
+  return jsonRpc(method, params, brokerApiEndpoint);
 }

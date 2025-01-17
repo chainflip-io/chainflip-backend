@@ -20,12 +20,13 @@ import { sendBtc } from '../shared/send_btc';
 import { createLpPool } from '../shared/create_lp_pool';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { getChainflipApi } from '../shared/utils/substrate';
+import {lpApiEndpoint} from "../shared/json_rpc";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function call(method: string, params: any, id: string) {
   return axios({
     method: 'post',
-    baseURL: 'http://127.0.0.1:10589',
+    baseURL: lpApiEndpoint,
     headers: { 'Content-Type': 'application/json' },
     data: {
       jsonrpc: '2.0',
