@@ -848,13 +848,13 @@ impl From<CcmAddress> for AccountMeta {
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct CcmAccounts {
 	pub cf_receiver: CcmAddress,
-	pub remaining_accounts: Vec<CcmAddress>,
+	pub additional_accounts: Vec<CcmAddress>,
 	pub fallback_address: Pubkey,
 }
 
 impl CcmAccounts {
-	pub fn remaining_account_metas(self) -> Vec<AccountMeta> {
-		self.remaining_accounts.into_iter().map(|acc| acc.into()).collect::<Vec<_>>()
+	pub fn additional_account_metas(self) -> Vec<AccountMeta> {
+		self.additional_accounts.into_iter().map(|acc| acc.into()).collect::<Vec<_>>()
 	}
 }
 
@@ -912,7 +912,7 @@ pub mod rpc_types {
 fn ccm_extra_accounts_encoding() {
 	let extra_accounts = CcmAccounts {
 		cf_receiver: CcmAddress { pubkey: Pubkey([0x11; 32]), is_writable: false },
-		remaining_accounts: vec![
+		additional_accounts: vec![
 			CcmAddress { pubkey: Pubkey([0x22; 32]), is_writable: true },
 			CcmAddress { pubkey: Pubkey([0x33; 32]), is_writable: true },
 		],
@@ -923,7 +923,7 @@ fn ccm_extra_accounts_encoding() {
 
 	// Scale encoding format:
 	// cf_receiver(32 bytes, bool),
-	// size_of_vec(compact encoding), remaining_accounts_0(32 bytes, bool), remaining_accounts_1,
+	// size_of_vec(compact encoding), additional_accounts_0(32 bytes, bool), additional_accounts_1,
 	// etc..
 	assert_eq!(
 		encoded,
@@ -967,6 +967,7 @@ impl FromStr for Hash {
 #[cfg(any(test, feature = "runtime-integration-tests"))]
 pub mod sol_test_values {
 	use crate::{
+		ccm_checker::VersionedSolanaCcmAdditionalData,
 		sol::{
 			api::{DurableNonceAndAccount, VaultSwapAccountAndSender},
 			signing_key::SolSigningKey,
@@ -1111,7 +1112,7 @@ pub mod sol_test_values {
 				pubkey: const_address("8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH").into(),
 				is_writable: true,
 			},
-			remaining_accounts: vec![SolCcmAddress {
+			additional_accounts: vec![SolCcmAddress {
 				pubkey: const_address("CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx").into(),
 				is_writable: false,
 			}],
@@ -1126,9 +1127,11 @@ pub mod sol_test_values {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(), // CCM message
 				gas_budget: 0u128,                                         // unused
-				ccm_additional_data: codec::Encode::encode(&ccm_accounts())
-					.try_into()
-					.expect("Test data cannot be too long"), // Extra addresses
+				ccm_additional_data: codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V0(
+					ccm_accounts(),
+				))
+				.try_into()
+				.expect("Test data cannot be too long"), // Extra addresses
 			},
 		}
 	}
@@ -1666,7 +1669,7 @@ mod tests {
 					SYSTEM_PROGRAM_ID,
 					SYS_VAR_INSTRUCTIONS,
 				)
-				.with_remaining_accounts(extra_accounts.remaining_account_metas()),
+				.with_additional_accounts(extra_accounts.additional_account_metas()),
 		];
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
@@ -1729,7 +1732,7 @@ mod tests {
 				TOKEN_PROGRAM_ID,
 				USDC_TOKEN_MINT_PUB_KEY,
 				SYS_VAR_INSTRUCTIONS,
-			).with_remaining_accounts(extra_accounts.remaining_account_metas()),
+			).with_additional_accounts(extra_accounts.additional_account_metas()),
 		];
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);

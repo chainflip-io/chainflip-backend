@@ -160,27 +160,38 @@ mod deposit_origin {
 			deposit_address: <T::TargetChain as Chain>::ChainAccount,
 			channel_id: ChannelId,
 			deposit_block_height: u64,
+			broker_id: T::AccountId,
 		},
 		Vault {
 			tx_id: TransactionInIdFor<T, I>,
+			broker_id: Option<T::AccountId>,
 		},
 	}
 
 	impl<T: Config<I>, I: 'static> DepositOrigin<T, I> {
-		pub(super) fn deposit_channel(
+		pub fn deposit_channel(
 			deposit_address: <T::TargetChain as Chain>::ChainAccount,
 			channel_id: ChannelId,
 			deposit_block_height: <T::TargetChain as Chain>::ChainBlockNumber,
+			broker_id: T::AccountId,
 		) -> Self {
 			DepositOrigin::DepositChannel {
 				deposit_address,
 				channel_id,
 				deposit_block_height: deposit_block_height.into(),
+				broker_id,
 			}
 		}
 
-		pub(super) fn vault(tx_id: TransactionInIdFor<T, I>) -> Self {
-			DepositOrigin::Vault { tx_id }
+		pub fn vault(tx_id: TransactionInIdFor<T, I>, broker_id: Option<T::AccountId>) -> Self {
+			DepositOrigin::Vault { tx_id, broker_id }
+		}
+
+		pub fn broker_id(&self) -> Option<&T::AccountId> {
+			match self {
+				Self::DepositChannel { ref broker_id, .. } => Some(broker_id),
+				Self::Vault { ref broker_id, .. } => broker_id.as_ref(),
+			}
 		}
 	}
 
@@ -193,15 +204,18 @@ mod deposit_origin {
 		}
 	}
 
-	impl<T: Config<I>, I: 'static> From<DepositOrigin<T, I>> for SwapOrigin {
-		fn from(origin: DepositOrigin<T, I>) -> SwapOrigin {
+	impl<T: Config<I>, I: 'static> From<DepositOrigin<T, I>> for SwapOrigin<T::AccountId> {
+		fn from(origin: DepositOrigin<T, I>) -> SwapOrigin<T::AccountId> {
 			match origin {
-				DepositOrigin::Vault { tx_id } =>
-					SwapOrigin::Vault { tx_id: tx_id.into_transaction_in_id_for_any_chain() },
+				DepositOrigin::Vault { tx_id, broker_id } => SwapOrigin::Vault {
+					tx_id: tx_id.into_transaction_in_id_for_any_chain(),
+					broker_id,
+				},
 				DepositOrigin::DepositChannel {
 					deposit_address,
 					channel_id,
 					deposit_block_height,
+					broker_id,
 				} => SwapOrigin::DepositChannel {
 					deposit_address: T::AddressConverter::to_encoded_address(
 						<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
@@ -210,6 +224,7 @@ mod deposit_origin {
 					),
 					channel_id,
 					deposit_block_height,
+					broker_id,
 				},
 			}
 		}
@@ -383,7 +398,7 @@ pub mod pallet {
 		pub destination_address: EncodedAddress,
 		pub deposit_metadata: Option<CcmDepositMetadata>,
 		pub tx_id: TransactionInIdFor<T, I>,
-		pub broker_fee: Beneficiary<T::AccountId>,
+		pub broker_fee: Option<Beneficiary<T::AccountId>>,
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
 		pub refund_params: Option<ChannelRefundParametersDecoded>,
 		pub dca_params: Option<DcaParameters>,
@@ -1832,7 +1847,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Some(deposit_address.clone()),
 			None, // source address is unknown
 			action,
-			&owner,
 			boost_fee,
 			boost_status,
 			Some(deposit_channel.channel_id),
@@ -1841,6 +1855,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_address.clone(),
 				deposit_channel.channel_id,
 				block_height,
+				owner.clone(),
 			),
 		) {
 			// Update boost status
@@ -1940,8 +1955,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Err(Error::<T, I>::InvalidDepositAddress.into())
 		}
 
-		let deposit_origin =
-			DepositOrigin::deposit_channel(deposit_address.clone(), channel_id, block_height);
+		let deposit_origin = DepositOrigin::deposit_channel(
+			deposit_address.clone(),
+			channel_id,
+			block_height,
+			deposit_channel_details.owner.clone(),
+		);
 
 		match Self::process_full_witness_deposit_inner(
 			Some(deposit_address.clone()),
@@ -1949,7 +1968,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*amount,
 			deposit_details.clone(),
 			None, // source address is unknown
-			&deposit_channel_details.owner,
 			deposit_channel_details.boost_status,
 			deposit_channel_details.boost_fee,
 			Some(channel_id),
@@ -1986,14 +2004,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn assemble_broker_fees(
-		broker_fee: Beneficiary<T::AccountId>,
+		broker_fee: Option<Beneficiary<T::AccountId>>,
 		affiliate_fees: Affiliates<AffiliateShortId>,
 	) -> Beneficiaries<T::AccountId> {
-		let primary_broker = broker_fee.account.clone();
-
-		if T::AccountRoleRegistry::has_account_role(&primary_broker, AccountRole::Broker) {
-			[broker_fee]
-				.into_iter()
+		broker_fee
+			.as_ref()
+			.filter(|Beneficiary { account, .. }| {
+				if T::AccountRoleRegistry::has_account_role(account, AccountRole::Broker) {
+					true
+				} else {
+					Self::deposit_event(Event::<T, I>::UnknownBroker {
+						broker_id: account.clone(),
+					});
+					false
+				}
+			})
+			.map(|primary_broker_fee| {
+				let primary_broker = primary_broker_fee.account.clone();
+				core::iter::once(primary_broker_fee.clone())
 				.chain(affiliate_fees.into_iter().filter_map(
 					|Beneficiary { account: short_affiliate_id, bps }| {
 						if let Some(affiliate_id) = T::AffiliateRegistry::get_account_id(
@@ -2018,10 +2046,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.expect(
 					"must fit since affiliates are limited to 1 fewer element than beneficiaries",
 				)
-		} else {
-			Self::deposit_event(Event::<T, I>::UnknownBroker { broker_id: primary_broker });
-			Default::default()
-		}
+			})
+			.unwrap_or_default()
 	}
 
 	fn process_prewitness_deposit_inner(
@@ -2031,7 +2057,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_address: Option<TargetChainAccount<T, I>>,
 		source_address: Option<ForeignChainAddress>,
 		action: ChannelAction<T::AccountId>,
-		broker: &T::AccountId,
 		boost_fee: u16,
 		boost_status: BoostStatus<TargetChainAmount<T, I>>,
 		channel_id: Option<u64>,
@@ -2044,8 +2069,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return None;
 		}
 
-		if let Some(tx_id) = deposit_details.deposit_id() {
-			if TransactionsMarkedForRejection::<T, I>::mutate(broker, &tx_id, |opt| {
+		if let (Some(tx_id), Some(broker_id)) = (deposit_details.deposit_id(), origin.broker_id()) {
+			if TransactionsMarkedForRejection::<T, I>::mutate(broker_id, &tx_id, |opt| {
 				match opt.as_mut() {
 					// Transaction has been reported, mark it as pre-witnessed.
 					Some(status @ TransactionPrewitnessedStatus::Unseen) => {
@@ -2181,8 +2206,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
-		let broker = broker_fee.account.clone();
-
+		let origin = DepositOrigin::vault(
+			tx_id.clone(),
+			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
+		);
 		let broker_fees = Self::assemble_broker_fees(broker_fee, affiliate_fees);
 
 		let (channel_metadata, source_address) = match deposit_metadata {
@@ -2202,8 +2229,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let boost_status =
 			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
 
-		let origin = DepositOrigin::vault(tx_id.clone());
-
 		if let Some(new_boost_status) = Self::process_prewitness_deposit_inner(
 			amount,
 			asset,
@@ -2211,7 +2236,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_address,
 			source_address,
 			action,
-			&broker,
 			boost_fee,
 			boost_status,
 			channel_id,
@@ -2228,7 +2252,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_amount: TargetChainAmount<T, I>,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		source_address: Option<ForeignChainAddress>,
-		broker: &T::AccountId,
 		boost_status: BoostStatus<TargetChainAmount<T, I>>,
 		max_boost_fee_bps: BasisPoints,
 		channel_id: Option<u64>,
@@ -2242,10 +2265,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// TODO: track these funds somewhere, for example add them to the withheld fees.
 				return Err(DepositFailedReason::BelowMinimumDeposit);
 			}
-			if let Some(tx_id) = deposit_details.deposit_id() {
+			if let (Some(tx_id), Some(broker_id)) =
+				(deposit_details.deposit_id(), origin.broker_id())
+			{
 				// Only consider rejecting a transaction if we haven't already boosted it,
 				// since by boosting the protocol is committing to accept the deposit.
-				if TransactionsMarkedForRejection::<T, I>::take(broker, &tx_id).is_some() {
+				if TransactionsMarkedForRejection::<T, I>::take(broker_id, &tx_id).is_some() {
 					let refund_address = match &action {
 						ChannelAction::Swap { refund_params, .. } => refund_params
 							.as_ref()
@@ -2449,9 +2474,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			};
 
-		let deposit_origin = DepositOrigin::vault(tx_id.clone());
-
-		let broker = broker_fee.account.clone();
+		let deposit_origin = DepositOrigin::vault(
+			tx_id.clone(),
+			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
+		);
 		let broker_fees = Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone());
 
 		if T::SwapLimitsProvider::validate_broker_fees(&broker_fees).is_err() {
@@ -2514,7 +2540,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_amount,
 			deposit_details.clone(),
 			source_address,
-			&broker,
 			boost_status,
 			boost_fee,
 			channel_id,

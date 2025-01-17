@@ -12,7 +12,7 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	ccm_checker::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker, CcmValidityError,
-		DecodedCcmAdditionalData,
+		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
 	},
 	sol::{
 		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
@@ -351,7 +351,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// For extra safety, re-verify the validity of the CCM message here
 		// and extract the decoded `ccm_accounts` from `ccm_additional_data`.
-		let decoded_cf_params = CcmValidityChecker::check_and_decode(
+		let decoded_ccm_additional_data = CcmValidityChecker::check_and_decode(
 			&CcmChannelMetadata {
 				message: message
 					.clone()
@@ -369,9 +369,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		// Always expects the `DecodedCcmAdditionalData::Solana(..)` variant of the decoded cf
 		// params.
-		let ccm_accounts = if let DecodedCcmAdditionalData::Solana(ccm_accounts) = decoded_cf_params
+		let ccm_accounts = if let DecodedCcmAdditionalData::Solana(versioned_sol_data) =
+			decoded_ccm_additional_data
 		{
-			Ok(ccm_accounts)
+			match versioned_sol_data {
+				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => Ok(ccm_accounts),
+			}
 		} else {
 			Err(SolanaTransactionBuildingError::InvalidCcm(
 				CcmValidityError::CannotDecodeCcmAdditionalData,

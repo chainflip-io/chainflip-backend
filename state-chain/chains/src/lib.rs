@@ -670,16 +670,28 @@ impl IntoTransactionInIdForAnyChain<NoneChainCrypto> for () {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SwapOrigin {
+pub enum SwapOrigin<AccountId> {
 	DepositChannel {
 		deposit_address: address::EncodedAddress,
 		channel_id: ChannelId,
 		deposit_block_height: u64,
+		broker_id: AccountId,
 	},
 	Vault {
 		tx_id: TransactionInIdForAnyChain,
+		broker_id: Option<AccountId>,
 	},
 	Internal,
+}
+
+impl<AccountId> SwapOrigin<AccountId> {
+	pub fn broker_id(&self) -> Option<&AccountId> {
+		match self {
+			Self::DepositChannel { ref broker_id, .. } => Some(broker_id),
+			Self::Vault { ref broker_id, .. } => broker_id.as_ref(),
+			Self::Internal => None,
+		}
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]

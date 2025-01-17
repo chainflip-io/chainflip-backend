@@ -6,7 +6,7 @@ use super::*;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	assets::{any::Asset, sol::Asset as SolAsset},
-	ccm_checker::CcmValidityError,
+	ccm_checker::{CcmValidityError, VersionedSolanaCcmAdditionalData},
 	sol::{
 		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
 		sol_tx_core::sol_test_values,
@@ -378,10 +378,7 @@ fn vault_swap_deposit_witness(
 		deposit_metadata,
 		tx_id: Default::default(),
 		deposit_details: (),
-		broker_fee: cf_primitives::Beneficiary {
-			account: sp_runtime::AccountId32::new([0; 32]),
-			bps: 0,
-		},
+		broker_fee: None,
 		affiliate_fees: Default::default(),
 		refund_params: Some(REFUND_PARAMS),
 		dca_params: None,
@@ -490,14 +487,14 @@ fn solana_ccm_fails_with_invalid_input() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 0u128,
-					ccm_additional_data: SolCcmAccounts {
+					ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 						cf_receiver: SolCcmAddress { pubkey: receiver.into(), is_writable: true },
-						remaining_accounts: vec![
+						additional_accounts: vec![
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
 							SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 						],
 						fallback_address: FALLBACK_ADDRESS.into(),
-					}
+					})
 					.encode()
 					.try_into()
 					.unwrap(),
@@ -706,14 +703,14 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 1_000_000_000u128,
-					ccm_additional_data: SolCcmAccounts {
+					ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 						cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x10; 32]), is_writable: true },
-						remaining_accounts: vec![
+						additional_accounts: vec![
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
 							SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 						],
 						fallback_address: FALLBACK_ADDRESS.into(),
-					}
+					})
 					.encode()
 					.try_into()
 					.unwrap(),

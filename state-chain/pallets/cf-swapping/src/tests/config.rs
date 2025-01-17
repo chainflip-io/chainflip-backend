@@ -123,7 +123,10 @@ fn max_swap_amount_can_be_removed() {
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: Some(BROKER),
+				},
 			);
 		};
 
@@ -221,7 +224,10 @@ fn can_swap_below_max_amount() {
 			Default::default(),
 			None,
 			None,
-			SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+			SwapOrigin::Vault {
+				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+				broker_id: Some(BROKER),
+			},
 		);
 
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0u128);

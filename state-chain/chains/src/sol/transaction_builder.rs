@@ -321,7 +321,7 @@ impl SolanaTransactionBuilder {
 					system_program_id(),
 					sys_var_instructions(),
 				)
-				.with_remaining_accounts(ccm_accounts.remaining_account_metas()),
+				.with_additional_accounts(ccm_accounts.additional_account_metas()),
 		];
 
 		Self::build(instructions, durable_nonce, agg_key.into(), compute_price, compute_limit)
@@ -376,7 +376,7 @@ impl SolanaTransactionBuilder {
 			token_program_id(),
 			token_mint_pubkey,
 			sys_var_instructions(),
-		).with_remaining_accounts(ccm_accounts.remaining_account_metas())];
+		).with_additional_accounts(ccm_accounts.additional_account_metas())];
 
 		Self::build(instructions, durable_nonce, agg_key.into(), compute_price, compute_limit)
 	}
@@ -446,7 +446,7 @@ impl SolanaTransactionBuilder {
 					agg_key,
 					swap_endpoint_data_account,
 				)
-				.with_remaining_accounts(swap_and_sender_vec),
+				.with_additional_accounts(swap_and_sender_vec),
 		];
 
 		Self::build(

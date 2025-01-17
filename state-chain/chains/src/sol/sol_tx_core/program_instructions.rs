@@ -251,11 +251,11 @@ pub trait ProgramInstruction: BorshSerialize {
 }
 
 pub trait InstructionExt {
-	fn with_remaining_accounts(self, accounts: Vec<AccountMeta>) -> Self;
+	fn with_additional_accounts(self, accounts: Vec<AccountMeta>) -> Self;
 }
 
 impl InstructionExt for Instruction {
-	fn with_remaining_accounts(mut self, accounts: Vec<AccountMeta>) -> Self {
+	fn with_additional_accounts(mut self, accounts: Vec<AccountMeta>) -> Self {
 		self.accounts.extend(accounts);
 		self
 	}

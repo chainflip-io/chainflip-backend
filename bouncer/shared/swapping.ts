@@ -8,7 +8,7 @@ import {
   chainFromAsset,
   getContractAddress,
   ccmSupportedChains,
-  solCcmAdditionalDataCodec,
+  solVersionedCcmAdditionalDataCodec,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -22,11 +22,11 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
 
   const fallbackAddress = Keypair.generate().publicKey.toBytes();
 
-  const remainingAccounts = [];
-  const numRemainingAccounts = Math.floor(Math.random() * maxAccounts);
+  const additionalAccounts = [];
+  const numAdditionalAccounts = Math.floor(Math.random() * maxAccounts);
 
-  for (let i = 0; i < numRemainingAccounts; i++) {
-    remainingAccounts.push({
+  for (let i = 0; i < numAdditionalAccounts; i++) {
+    additionalAccounts.push({
       pubkey: Keypair.generate().publicKey.toBytes(),
       is_writable: Math.random() < 0.5,
     });
@@ -37,11 +37,16 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
       pubkey: new PublicKey(cfReceiverAddress).toBytes(),
       is_writable: false,
     },
-    remaining_accounts: remainingAccounts,
+    additional_accounts: additionalAccounts,
     fallback_address: fallbackAddress,
   };
 
-  return u8aToHex(solCcmAdditionalDataCodec.enc(ccmAdditionalData));
+  return u8aToHex(
+    solVersionedCcmAdditionalDataCodec.enc({
+      tag: 'V0',
+      value: ccmAdditionalData,
+    }),
+  );
 }
 
 // Generate random bytes. Setting a minimum length of 10 because very short messages can end up
