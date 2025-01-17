@@ -785,7 +785,7 @@ pub mod pallet {
 		/// The affiliate fee is too large to fit in a u8.
 		AffiliateFeeTooHigh,
 		/// The affiliate id is not registered with the broker.
-		AffiliateNotRegistered,
+		AffiliateNotRegisteredForBroker,
 		/// Bitcoin vault swaps only support up to 2 affiliates.
 		TooManyAffiliates,
 		/// The Bonder does not have enough Funds to cover the bond.
@@ -1281,7 +1281,7 @@ pub mod pallet {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let details = AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_id)
-				.ok_or(Error::<T>::AffiliateNotRegistered)?;
+				.ok_or(Error::<T>::AffiliateNotRegisteredForBroker)?;
 
 			Self::trigger_withdrawal(&affiliate_id, Asset::Usdc, details.withdrawal_address)?;
 			Ok(())
