@@ -590,7 +590,7 @@ impl
 				destination_address: swap_details.destination_address,
 				deposit_metadata: swap_details.deposit_metadata,
 				tx_id: (swap_details.swap_account, swap_details.creation_slot),
-				broker_fee: swap_details.broker_fee,
+				broker_fee: Some(swap_details.broker_fee),
 				affiliate_fees: swap_details.affiliate_fees,
 				dca_params: swap_details.dca_params,
 				refund_params: Some(swap_details.refund_params),
