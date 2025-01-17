@@ -40,7 +40,6 @@ pub trait WeightInfo {
 	fn open_private_btc_channel() -> Weight;
 	fn close_private_btc_channel() -> Weight;
 	fn register_affiliate() -> Weight;
-	fn register_affiliate_withdrawal_address() -> Weight;
 	fn affiliate_withdrawal_request() -> Weight;
 }
 
@@ -210,10 +209,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(14_000_000, 4072)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
-	/// TODO: needs to get generated ob benchmark hardware
-	fn register_affiliate_withdrawal_address() -> Weight {
-		Weight::from_parts(100, 0)
 	}
 	/// TODO: needs to get generated ob benchmark hardware
 	fn affiliate_withdrawal_request() -> Weight {
@@ -386,10 +381,6 @@ impl WeightInfo for () {
 		Weight::from_parts(14_000_000, 4072)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
-	/// TODO: needs to get generated ob benchmark hardware
-	fn register_affiliate_withdrawal_address() -> Weight {
-		Weight::from_parts(100, 0)
 	}
 	/// TODO: needs to get generated ob benchmark hardware
 	fn affiliate_withdrawal_request() -> Weight {

@@ -1279,18 +1279,12 @@ pub mod pallet {
 			affiliate_id: T::AccountId,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-			if let Some(affiliate_details) =
-				AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_id)
-			{
-				Self::trigger_withdrawal(
-					&affiliate_id,
-					Asset::Usdc,
-					affiliate_details.withdrawal_address,
-				)?;
-				Ok(())
-			} else {
-				return Err(Error::<T>::AffiliateNotRegistered.into());
-			}
+
+			let details = AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_id)
+				.ok_or(Error::<T>::AffiliateNotRegistered)?;
+
+			Self::trigger_withdrawal(&affiliate_id, Asset::Usdc, details.withdrawal_address)?;
+			Ok(())
 		}
 	}
 
