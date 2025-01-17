@@ -546,6 +546,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Associates for a given broker an affiliate broker account with short id (u8) so that
+	/// it can be used in place of the full account id in order to save space (e.g. in UTXO encoding
+	/// for BTC)
 	#[pallet::storage]
 	pub type AffiliateAccountDetails<T: Config> = StorageDoubleMap<
 		_,
@@ -796,6 +799,8 @@ pub mod pallet {
 		AffiliateWithdrawalAddressDosentExist,
 		/// The affiliate is already registered.
 		AffiliateAlreadyRegistered,
+		/// The affiliate account id could not be derived.
+		AffiliateAccountIdDerivationFailed,
 	}
 
 	#[pallet::genesis_config]
@@ -1042,6 +1047,8 @@ pub mod pallet {
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
 
+			let _ = AffiliateAccountDetails::<T>::clear_prefix(&account_id, u32::MAX, None);
+
 			let _ = AffiliateIdMapping::<T>::clear_prefix(&account_id, u32::MAX, None);
 
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
@@ -1203,8 +1210,15 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Associates `short_id` with `affiliate_id` for a given broker. Overwrites the record
-		/// under `short_id` if already taken by another affiliate.
+		/// Registers an affiliate for a broker. Sets the withdrawal address for the affiliate which
+		/// will be used to withdraw the affiliate's fees. The withdrawal address can not be changed
+		/// once set. The broker will be able to trigger a withdrawal
+		/// request to the affiliate's withdrawal address. A short id is taken and can only be used
+		/// at a time. The affiliate account is derived from the broker account id.
+		///
+		/// ## Events
+		///
+		/// - [AffiliateRegistrationUpdated](Event::AffiliateRegistrationUpdated)
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
@@ -1228,7 +1242,12 @@ pub mod pallet {
 				Error::<T>::ExpectedEthereumAddress
 			);
 
-			let affiliate_id = Self::derivative_account_id(broker_id.clone(), short_id);
+			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
+				(b"chainflip/affiliate", &broker_id, short_id)
+					.using_encoded(blake2_256)
+					.as_ref(),
+			))
+			.map_err(|_| Error::<T>::AffiliateAccountIdDerivationFailed)?;
 
 			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
 
@@ -1354,12 +1373,6 @@ pub mod pallet {
 					}
 				})
 				.collect()
-		}
-
-		fn derivative_account_id(who: T::AccountId, index: AffiliateShortId) -> T::AccountId {
-			let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
-			Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
-				.expect("infinite length input; no invalid inputs for type; qed")
 		}
 
 		fn trigger_withdrawal(
