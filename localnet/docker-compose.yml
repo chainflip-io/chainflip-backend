@@ -95,10 +95,10 @@ services:
       - geth
       - redis
 
-  polkadot1:
-    container_name: polkadot1
+  polkadot:
+    container_name: polkadot
     platform: linux/amd64
-    image: docker.io/parity/polkadot:v1.16.2
+    image: docker.io/parity/polkadot:v1.10.0
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -109,98 +109,17 @@ services:
     command:
       - --alice
       - --blocks-pruning=archive
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/polkadot-dev.chainspec.v1.3.4.json
       - --force-authoring
-      - --name=PolkaDocker1
+      - --name=PolkaDocker
       - --rpc-cors=all
       - --rpc-external
       - --rpc-methods=unsafe
       - --state-pruning=archive
       - --rpc-max-connections=100000
       - --wasmtime-instantiation-strategy=recreate-instance-copy-on-write
-      - --unsafe-force-node-key-generation
     ports:
       - 9947:9944
-      - 30333:30333
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl",
-          "-H 'Content-Type: application/json;'",
-          "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9947"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-  polkadot2:
-    container_name: polkadot2
-    platform: linux/amd64
-    image: docker.io/parity/polkadot:v1.16.2
-    pull_policy: if_not_present
-    stop_grace_period: 5s
-    stop_signal: SIGINT
-    volumes:
-      - "../ci/docker/development/polkadot:/chainspecs:ro"
-    environment:
-      - RUST_BACKTRACE=full
-    command:
-      - --bob
-      - --chain=/chainspecs/polkadot.raw.json
-      - --force-authoring
-      - --name=PolkaDocker2
-      - --wasmtime-instantiation-strategy=recreate-instance-copy-on-write
-      - --unsafe-force-node-key-generation
-    ports:
-      - 9948:9944
-      - 30335:30333
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl",
-          "-H 'Content-Type: application/json;'",
-          "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9947"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-
-  assethub:
-    container_name: assethub
-    platform: linux/amd64
-    image: docker.io/parity/polkadot-parachain:1.16.2
-    pull_policy: if_not_present
-    stop_grace_period: 5s
-    stop_signal: SIGINT
-    volumes:
-      - "../ci/docker/development/polkadot:/chainspecs:ro"
-    environment:
-      - RUST_BACKTRACE=full
-    command:
-      - --alice
-      - --collator
-      - --blocks-pruning=archive
-      - --chain=/chainspecs/assethub.raw.json
-      - --force-authoring
-      - --name=AssetHubDocker
-      - --rpc-cors=all
-      - --rpc-external
-      - --rpc-methods=unsafe
-      - --state-pruning=archive
-      - --rpc-max-connections=100000
-      - --unsafe-force-node-key-generation
-      - --
-      - --chain=/chainspecs/polkadot.raw.json
-    ports:
-      - 9955:9944
-      - 40333:30333
     healthcheck:
       test:
         [

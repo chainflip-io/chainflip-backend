@@ -14,7 +14,7 @@ export const testSwapAfterDisconnection = new ExecutableTest(
 // Testing a swap after temporarily disconnecting external nodes
 async function main() {
   const networkName = 'chainflip-localnet_default';
-  const allExternalNodes = ['bitcoin', 'geth', 'polkadot1'];
+  const allExternalNodes = ['bitcoin', 'geth', 'polkadot'];
 
   await Promise.all(
     allExternalNodes.map((container) => disconnectContainerFromNetwork(container, networkName)),
