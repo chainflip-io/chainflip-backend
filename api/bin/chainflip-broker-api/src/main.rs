@@ -1,4 +1,4 @@
-use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
+use cf_chains::{address::EncodedAddress, RefundParametersRpc, VaultSwapExtraParametersRpc};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
@@ -138,20 +138,14 @@ pub trait Rpc {
 		&self,
 		affiliate_id: AccountId32,
 		short_id: Option<AffiliateShortId>,
+		withdrawal_address: EncodedAddress,
 	) -> RpcResult<AffiliateShortId>;
 
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
 
-	#[method(name = "register_affiliate_withdrawal_address", aliases = ["broker_registerAffiliateWithdrawalAddress"])]
-	async fn register_affiliate_withdrawal_address(
-		&self,
-		short_id: AffiliateShortId,
-		withdrawal_address: AddressString,
-	) -> RpcResult<()>;
-
 	#[method(name = "affiliate_withdrawal_request", aliases = ["broker_affiliateWithdrawalRequest"])]
-	async fn affiliate_withdrawal_request(&self, short_id: AffiliateShortId) -> RpcResult<()>;
+	async fn affiliate_withdrawal_request(&self, affiliate_id: AccountId32) -> RpcResult<()>;
 }
 
 pub struct RpcServerImpl {
@@ -308,8 +302,13 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		affiliate_id: AccountId32,
 		short_id: Option<AffiliateShortId>,
+		withdrawal_address: EncodedAddress,
 	) -> RpcResult<AffiliateShortId> {
-		Ok(self.api.broker_api().register_affiliate(affiliate_id.clone(), short_id).await?)
+		Ok(self
+			.api
+			.broker_api()
+			.register_affiliate(affiliate_id.clone(), short_id, withdrawal_address)
+			.await?)
 	}
 
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
@@ -320,20 +319,8 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn register_affiliate_withdrawal_address(
-		&self,
-		short_id: AffiliateShortId,
-		withdrawal_address: AddressString,
-	) -> RpcResult<()> {
-		self.api
-			.broker_api()
-			.register_affiliate_withdrawal_address(short_id, withdrawal_address)
-			.await?;
-		Ok(())
-	}
-
-	async fn affiliate_withdrawal_request(&self, short_id: AffiliateShortId) -> RpcResult<()> {
-		self.api.broker_api().affiliate_withdrawal_request(short_id).await?;
+	async fn affiliate_withdrawal_request(&self, affiliate_id: AccountId32) -> RpcResult<()> {
+		self.api.broker_api().affiliate_withdrawal_request(affiliate_id).await?;
 		Ok(())
 	}
 }
