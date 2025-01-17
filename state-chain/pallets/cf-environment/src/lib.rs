@@ -14,7 +14,7 @@ use cf_chains::{
 	eth::Address as EvmAddress,
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
-		SolAddress, SolApiEnvironment, SolHash, Solana,
+		SolAddress, SolApiEnvironment, SolHash, Solana, NONCE_NUMBER_CRITICAL_NONCES,
 	},
 	Chain,
 };
@@ -779,8 +779,15 @@ impl<T: Config> Pallet<T> {
 		nonce_accounts
 	}
 
-	pub fn get_number_of_available_sol_nonce_accounts() -> usize {
-		SolanaAvailableNonceAccounts::<T>::decode_len().unwrap_or(0)
+	// Get the number of available nonce accounts. We want to leave a number of available nonces
+	// at all time for critical operations such as vault rotations or governance actions.
+	pub fn get_number_of_available_sol_nonce_accounts(critical: bool) -> usize {
+		let number_nonces = SolanaAvailableNonceAccounts::<T>::decode_len().unwrap_or(0);
+		if !critical {
+			number_nonces.saturating_sub(NONCE_NUMBER_CRITICAL_NONCES)
+		} else {
+			number_nonces
+		}
 	}
 
 	pub fn update_sol_nonce(nonce_account: SolAddress, durable_nonce: SolHash) {

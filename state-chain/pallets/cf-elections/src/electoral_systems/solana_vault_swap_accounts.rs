@@ -21,7 +21,6 @@ use crate::{
 use cf_chains::sol::{
 	MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
-	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH,
 	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
 };
 
@@ -37,7 +36,7 @@ use sp_std::vec::Vec;
 pub trait SolanaVaultSwapAccountsHook<Account, SwapDetails, E> {
 	fn maybe_fetch_and_close_accounts(accounts: Vec<Account>) -> Result<(), E>;
 	fn initiate_vault_swap(swap_details: SwapDetails);
-	fn get_number_of_available_sol_nonce_accounts() -> usize;
+	fn get_number_of_available_sol_nonce_accounts(critical: bool) -> usize;
 }
 
 pub trait FromSolOrNot {
@@ -192,13 +191,11 @@ impl<
 					ElectoralAccess::new_election(Default::default(), known_accounts, ())?;
 			}
 
-			let no_of_available_nonces = Hook::get_number_of_available_sol_nonce_accounts();
+			let no_of_available_nonces = Hook::get_number_of_available_sol_nonce_accounts(false);
 			let mut known_accounts = election_access.properties()?;
 			// We need to have at least two nonces available since we need to have one nonce
 			// reserved for solana rotation
-			if no_of_available_nonces > NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH &&
-				!known_accounts.witnessed_open_accounts.is_empty()
-			{
+			if no_of_available_nonces > 0 && !known_accounts.witnessed_open_accounts.is_empty() {
 				known_accounts.witnessed_open_accounts.sort_by_key(|a| Reverse(a.1));
 				// Native Vault swaps assets need to be fetched from the Swap Endpoint's Vault.
 				// Therefore initiating a fetch is a high priority action after a native Vault

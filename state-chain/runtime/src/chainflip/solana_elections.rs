@@ -610,8 +610,8 @@ impl
 			})
 	}
 
-	fn get_number_of_available_sol_nonce_accounts() -> usize {
-		Environment::get_number_of_available_sol_nonce_accounts()
+	fn get_number_of_available_sol_nonce_accounts(critical: bool) -> usize {
+		Environment::get_number_of_available_sol_nonce_accounts(critical)
 	}
 }
 

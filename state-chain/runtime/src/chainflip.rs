@@ -55,7 +55,7 @@ use cf_chains::{
 			SolanaEnvironment,
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
-		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH,
+		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
@@ -946,9 +946,8 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 		// we need to leave one nonce for the fetch tx and one nonce reserved for rotation tx since
 		// rotation tx can fail to build if all nonce accounts are occupied
 		Some(
-			Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(
-				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH.saturating_add(1),
-			),
+			Environment::get_number_of_available_sol_nonce_accounts(false)
+				.saturating_sub(NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER),
 		)
 	}
 
@@ -961,15 +960,11 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 	fn maybe_fetches_limit() -> Option<usize> {
 		// only fetch if we have more than once nonce account available since one nonce is
 		// reserved for rotations. See above
-		Some(
-			if Environment::get_number_of_available_sol_nonce_accounts() >
-				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH
-			{
-				cf_chains::sol::MAX_SOL_FETCHES_PER_TX
-			} else {
-				0
-			},
-		)
+		Some(if Environment::get_number_of_available_sol_nonce_accounts(false) > 0 {
+			cf_chains::sol::MAX_SOL_FETCHES_PER_TX
+		} else {
+			0
+		})
 	}
 }
 
