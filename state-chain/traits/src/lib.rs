@@ -831,8 +831,6 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 			})
 			.collect::<Result<Vec<_>, DispatchError>>()
 	}
-
-	fn get_all(role: AccountRole) -> Vec<T::AccountId>;
 }
 
 pub trait DeregistrationCheck {
