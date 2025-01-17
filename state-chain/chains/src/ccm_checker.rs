@@ -6,10 +6,10 @@ use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sol_prim::consts::{
-	SYSTEM_PROGRAM_ID, TRANSACTION_BYTES_PER_ACCOUNT, TRANSACTION_BYTES_PER_REFERENCE,
+	ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
 };
 use sp_runtime::DispatchError;
-use sp_std::{vec::Vec, collections::btree_set::BTreeSet};
+use sp_std::vec::Vec;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
@@ -65,28 +65,23 @@ impl CcmValidityCheck for CcmValidityChecker {
 				.try_into()
 				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
 
-			// TODO: Check for duplicated accounts and accounts that we will already have in our
-			// executeCCM such as SYSTEM_PROGRAM_ID. It will depend on Native vs Token too. For
-			// new accounts it takes 33 bytes (account+reference) but for new ones it only
-			// takes one. That is regardless of the is_writable and is_readable.
-			let mut seen_addresses = BTreeSet::new();
-
-			// TODO: Insert/initialize the accounts that are part of our CCM. Will depend on asset.
-			seen_addresses.insert(SYSTEM_PROGRAM_ID);
-			
-			let mut accounts_length = 0;
-			
-			for &ccm_address in &ccm_accounts.remaining_accounts {
-				accounts_length += TRANSACTION_BYTES_PER_REFERENCE;
-				
-				if !seen_addresses.contains(&ccm_address.pubkey.into()) {
-					// First time we see this address
-					accounts_length += TRANSACTION_BYTES_PER_ACCOUNT;
-					seen_addresses.insert(ccm_address.pubkey.into());
-				}
-			}
-
-			let ccm_length = ccm.message.len() + accounts_length;
+			// Length of CCM = length of message + total no. remaining_accounts * bytes_per_account;
+			// Accounts could technically be duplicated and they would only take 1 byte instead of
+			// 33. However:
+			// - It doesn't make sense for additional_accounts to have duplicated since it'll all be
+			//   the same instruction.
+			// - Accounts used by Chainflip (e.g. SYSTEM_PROGRAM or TOKEN_PROGRAM) are already being
+			//   passed to the receiver in the CPI so there's need to pass them in the
+			//   additional_accounts.
+			// - Chainflip specific accounts (agg_key, data_account) and nonce accounts are the only
+			//   accounts that are part of the transaction that the user won't have access to. Those
+			//   accounts are either blacklisted or should be irrelevant for the user.
+			// Therefore we can safely assume that accounts are not duplicated when calculating the
+			// tranasction length.
+			let ccm_length = ccm.message.len() +
+				ccm_accounts.remaining_accounts.len() *
+					(ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION +
+						ACCOUNT_KEY_LENGTH_IN_TRANSACTION);
 			if ccm_length >
 				match asset {
 					SolAsset::Sol => MAX_CCM_BYTES_SOL,
