@@ -25,6 +25,7 @@ chainflip-api = { workspace = true }
 cf-chains = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }
+cf-rpc-types = { workspace = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

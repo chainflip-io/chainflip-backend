@@ -21,14 +21,13 @@ pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
 pub mod primitives {
-	pub use cf_primitives::*;
-	pub use pallet_cf_governance::ProposalId;
-	pub use state_chain_runtime::{self, BlockNumber, Hash};
-	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
 		CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	};
+	pub use cf_primitives::*;
+	pub use pallet_cf_governance::ProposalId;
+	pub use state_chain_runtime::{self, BlockNumber, Hash};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
 pub use cf_node_clients::{WaitFor, WaitForResult};
@@ -53,7 +52,7 @@ use cf_rpc_types::{
 		find_lowest_unused_short_id, RefundParameters, SwapDepositAddress, TransactionInId,
 		WithdrawFeesDetail,
 	},
-	extract_event,
+	extract_event, RedemptionAmount,
 };
 use cf_utilities::task_scope::Scope;
 use chainflip_engine::state_chain_observer::client::{
@@ -213,7 +212,7 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
 	async fn request_redemption(
 		&self,
-		amount: primitives::RedemptionAmount,
+		amount: RedemptionAmount,
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
 	) -> Result<H256> {

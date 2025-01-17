@@ -1,6 +1,7 @@
 use super::*;
 use cf_chains::{address::ToHumanreadableAddress, instances::ChainInstanceFor, Chain};
-use cf_primitives::{chains::assets::any, AssetAmount, EpochIndex, FlipBalance};
+use cf_primitives::{AssetAmount, EpochIndex, FlipBalance};
+use cf_rpc_types::SwapChannelInfo;
 use cf_utilities::task_scope;
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
@@ -11,20 +12,12 @@ use frame_support::sp_runtime::DigestItem;
 use jsonrpsee::core::ClientError;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_validator::RotationPhase;
-use serde::Deserialize;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
 use state_chain_runtime::runtime_apis::FailingWitnessValidators;
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
 
 type RpcResult<T> = Result<T, ClientError>;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SwapChannelInfo<C: Chain> {
-	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
-	source_asset: any::Asset,
-	destination_asset: any::Asset,
-}
 
 pub struct PreUpdateStatus {
 	pub rotation: bool,

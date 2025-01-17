@@ -5,12 +5,13 @@ use crate::settings::{
 use anyhow::{Context, Result};
 use api::{
 	lp::LpApi,
-	primitives::{EpochIndex, RedemptionAmount, FLIP_DECIMALS},
+	primitives::{EpochIndex, FLIP_DECIMALS},
 	queries::QueryApi,
 	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
 use cf_chains::eth::Address as EthereumAddress;
+use cf_rpc_types::RedemptionAmount;
 use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
@@ -21,6 +22,7 @@ use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
 use std::{io::Write, path::PathBuf, sync::Arc};
+
 mod settings;
 
 #[tokio::main]

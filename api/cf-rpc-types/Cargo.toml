@@ -20,5 +20,6 @@ cf-utilities = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
 frame-support = { workspace = true, default-features = true }
 pallet-cf-pools = { workspace = true, default-features = true }
+pallet-cf-funding = { workspace = true, default-features = true }
 
 

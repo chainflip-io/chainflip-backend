@@ -1,6 +1,12 @@
 use anyhow::anyhow;
 use cf_primitives::{BasisPoints, BlockNumber, EgressId};
-use cf_rpc_types::lp::{ApiWaitForResult, LimitOrRangeOrder, LimitOrder, RangeOrder, Side, Tick};
+use cf_rpc_types::{
+	lp::{
+		ApiWaitForResult, LimitOrRangeOrder, LimitOrder, OpenSwapChannels, OrderIdJson, RangeOrder,
+		RangeOrderSizeJson, Side, Tick,
+	},
+	RedemptionAmount,
+};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -12,7 +18,7 @@ use chainflip_api::{
 	lp::LpApi,
 	primitives::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
-		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
+		AccountRole, Asset, ForeignChain, Hash,
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
@@ -28,8 +34,7 @@ use jsonrpsee::{
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
 	PendingSubscriptionSink,
 };
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
-use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
 use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
 use std::{
 	ops::Range,
@@ -37,60 +42,6 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::log;
-
-/// Contains RPC interface types that differ from internal types.
-pub mod rpc_types {
-	use super::*;
-	use anyhow::anyhow;
-	use cf_utilities::rpc::NumberOrHex;
-	use chainflip_api::{lp::PoolPairsMap, queries::SwapChannelInfo};
-	use serde::{Deserialize, Serialize};
-
-	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-	pub struct OrderIdJson(NumberOrHex);
-	impl TryFrom<OrderIdJson> for OrderId {
-		type Error = anyhow::Error;
-
-		fn try_from(value: OrderIdJson) -> Result<Self, Self::Error> {
-			value.0.try_into().map_err(|_| anyhow!("Failed to convert order id to u64"))
-		}
-	}
-
-	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-	pub enum RangeOrderSizeJson {
-		AssetAmounts { maximum: PoolPairsMap<NumberOrHex>, minimum: PoolPairsMap<NumberOrHex> },
-		Liquidity { liquidity: NumberOrHex },
-	}
-	impl TryFrom<RangeOrderSizeJson> for RangeOrderSize {
-		type Error = anyhow::Error;
-
-		fn try_from(value: RangeOrderSizeJson) -> Result<Self, Self::Error> {
-			Ok(match value {
-				RangeOrderSizeJson::AssetAmounts { maximum, minimum } =>
-					RangeOrderSize::AssetAmounts {
-						maximum: maximum
-							.try_map(TryInto::try_into)
-							.map_err(|_| anyhow!("Failed to convert maximums to u128"))?,
-						minimum: minimum
-							.try_map(TryInto::try_into)
-							.map_err(|_| anyhow!("Failed to convert minimums to u128"))?,
-					},
-				RangeOrderSizeJson::Liquidity { liquidity } => RangeOrderSize::Liquidity {
-					liquidity: liquidity
-						.try_into()
-						.map_err(|_| anyhow!("Failed to convert liquidity to u128"))?,
-				},
-			})
-		}
-	}
-
-	#[derive(Serialize, Deserialize, Clone)]
-	pub struct OpenSwapChannels {
-		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
-		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
-		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
-	}
-}
 
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {

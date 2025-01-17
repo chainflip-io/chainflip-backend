@@ -1,16 +1,21 @@
-pub use cf_amm::{
-	common::{PoolPairsMap, Side},
-	math::{Amount, Tick},
-	range_orders::Liquidity,
-};
-use cf_primitives::Asset;
+use cf_primitives::*;
 use sp_core::{
 	serde::{Deserialize, Serialize},
 	H256, U256,
 };
 use std::ops::Range;
 
-use pallet_cf_pools::IncreaseOrDecrease;
+use anyhow::anyhow;
+use cf_primitives::chains::{Bitcoin, Ethereum, Polkadot};
+use cf_utilities::rpc::NumberOrHex;
+
+use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
+
+use crate::SwapChannelInfo;
+pub use cf_amm::{
+	common::{PoolPairsMap, Side},
+	math::Tick,
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +76,50 @@ pub struct LimitOrder {
 pub enum LimitOrRangeOrder {
 	LimitOrder(LimitOrder),
 	RangeOrder(RangeOrder),
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub struct OrderIdJson(NumberOrHex);
+impl TryFrom<OrderIdJson> for OrderId {
+	type Error = anyhow::Error;
+
+	fn try_from(value: OrderIdJson) -> Result<Self, Self::Error> {
+		value.0.try_into().map_err(|_| anyhow!("Failed to convert order id to u64"))
+	}
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum RangeOrderSizeJson {
+	AssetAmounts { maximum: PoolPairsMap<NumberOrHex>, minimum: PoolPairsMap<NumberOrHex> },
+	Liquidity { liquidity: NumberOrHex },
+}
+impl TryFrom<RangeOrderSizeJson> for RangeOrderSize {
+	type Error = anyhow::Error;
+
+	fn try_from(value: RangeOrderSizeJson) -> Result<Self, Self::Error> {
+		Ok(match value {
+			RangeOrderSizeJson::AssetAmounts { maximum, minimum } => RangeOrderSize::AssetAmounts {
+				maximum: maximum
+					.try_map(TryInto::try_into)
+					.map_err(|_| anyhow!("Failed to convert maximums to u128"))?,
+				minimum: minimum
+					.try_map(TryInto::try_into)
+					.map_err(|_| anyhow!("Failed to convert minimums to u128"))?,
+			},
+			RangeOrderSizeJson::Liquidity { liquidity } => RangeOrderSize::Liquidity {
+				liquidity: liquidity
+					.try_into()
+					.map_err(|_| anyhow!("Failed to convert liquidity to u128"))?,
+			},
+		})
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct OpenSwapChannels {
+	pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
+	pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
+	pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
 }
 
 pub fn collect_range_order_returns(
