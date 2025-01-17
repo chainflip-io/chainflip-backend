@@ -1,13 +1,13 @@
 use crate::{
-	sol::{
-		SolAsset, SolCcmAccounts, SolPubkey, CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL,
-		MAX_CCM_BYTES_USDC,
-	},
+	sol::{SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC},
 	CcmChannelMetadata,
 };
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sol_prim::consts::{
+	ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
+};
 use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
@@ -74,9 +74,29 @@ impl CcmValidityCheck for CcmValidityChecker {
 			.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?
 			{
 				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => {
-					// Length of CCM = length of message + total no. additional_accounts * constant;
+					// Calculate the length of the user's data to ensure the built CCM transaction
+					// will not exceed the maximum allowed length in Solana.
+					// data length = message length + #accounts * (bytes_per_account +
+					// bytes_per_reference);
+					//
+					// Accounts could be duplicated and then they would only take one reference byte
+					// but:
+					// - It doesn't make sense for additional_accounts to have duplicated accounts
+					//   since it'll all be in the same instruction anyway.
+					// - Accounts used by Chainflip (e.g. SYSTEM_PROGRAM or TOKEN_PROGRAM) are
+					//   already being passed to the receiver in the CPI so there's need to add them
+					//   to the list.
+					// - Chainflip specific accounts (agg_key, data_account) and nonce accounts are
+					//   the only accounts that are part of the transaction that the user won't have
+					//   access to. Those accounts are either blacklisted or should be irrelevant
+					//   for the user.
+					// Therefore we can assume that accounts are not duplicated when calculating the
+					// transaction length. If any account is in fact duplicated it will effectively
+					// reduce the allowed maximum length for the user's metadata.
 					let ccm_length = ccm.message.len() +
-						ccm_accounts.additional_accounts.len() * CCM_BYTES_PER_ACCOUNT;
+						ccm_accounts.additional_accounts.len() *
+							(ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION +
+								ACCOUNT_KEY_LENGTH_IN_TRANSACTION);
 					if ccm_length >
 						match asset {
 							SolAsset::Sol => MAX_CCM_BYTES_SOL,

@@ -43,3 +43,5 @@ pub const TOKEN_ACCOUNT_RENT: u64 = 2039280u64;
 pub const NONCE_ACCOUNT_LENGTH: u64 = 80u64;
 
 pub const SOL_USDC_DECIMAL: u8 = 6u8;
+pub const ACCOUNT_KEY_LENGTH_IN_TRANSACTION: usize = 32usize;
+pub const ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION: usize = 1usize;
