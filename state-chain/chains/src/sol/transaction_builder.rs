@@ -321,7 +321,7 @@ impl SolanaTransactionBuilder {
 					system_program_id(),
 					sys_var_instructions(),
 				)
-				.with_remaining_accounts(ccm_accounts.remaining_account_metas()),
+				.with_additional_accounts(ccm_accounts.additional_account_metas()),
 		];
 
 		Self::build(instructions, durable_nonce, agg_key.into(), compute_price, compute_limit)
@@ -376,7 +376,7 @@ impl SolanaTransactionBuilder {
 			token_program_id(),
 			token_mint_pubkey,
 			sys_var_instructions(),
-		).with_remaining_accounts(ccm_accounts.remaining_account_metas())];
+		).with_additional_accounts(ccm_accounts.additional_account_metas())];
 
 		Self::build(instructions, durable_nonce, agg_key.into(), compute_price, compute_limit)
 	}
@@ -430,7 +430,7 @@ impl SolanaTransactionBuilder {
 
 		let instructions = vec![SwapEndpointProgram::with_id(swap_endpoint_program)
 			.close_event_accounts(vault_program_data_account, agg_key, swap_endpoint_data_account)
-			.with_remaining_accounts(swap_and_sender_vec)];
+			.with_additional_accounts(swap_and_sender_vec)];
 
 		Self::build(
 			instructions,

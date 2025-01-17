@@ -556,7 +556,7 @@ pub mod pallet {
 			input_asset: Asset,
 			input_amount: AssetAmount, // includes broker fee
 			output_asset: Asset,
-			origin: SwapOrigin,
+			origin: SwapOrigin<T::AccountId>,
 			request_type: SwapRequestTypeEncoded,
 			broker_fees: Beneficiaries<T::AccountId>,
 			refund_parameters: Option<ChannelRefundParametersEncoded>,
@@ -1908,7 +1908,7 @@ pub mod pallet {
 			broker_fees: Beneficiaries<Self::AccountId>,
 			refund_params: Option<ChannelRefundParametersDecoded>,
 			dca_params: Option<DcaParameters>,
-			origin: SwapOrigin,
+			origin: SwapOrigin<Self::AccountId>,
 		) -> SwapRequestId {
 			let request_id = SwapRequestIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
