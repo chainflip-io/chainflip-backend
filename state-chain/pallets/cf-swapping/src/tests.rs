@@ -1790,9 +1790,11 @@ mod private_channels {
 }
 
 #[cfg(test)]
-mod affiliate_withdrawal {
+mod affiliates {
 
 	use super::*;
+
+	use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
 
 	#[test]
 	fn register_address_and_request_withdrawal_success() {
@@ -1846,6 +1848,37 @@ mod affiliate_withdrawal {
 					affiliate_account_id
 				),
 				Error::<Test>::NoFundsAvailable
+			);
+		});
+	}
+
+	#[test]
+	fn withdrawal_can_only_get_triggered_by_associated_broker() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			const BALANCE: AssetAmount = 200;
+			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				SHORT_ID,
+				withdrawal_address
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
+
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE)
+				.unwrap();
+
+			assert_noop!(
+				Swapping::affiliate_withdrawal_request(
+					OriginTrait::signed(ALICE),
+					affiliate_account_id
+				),
+				Error::<Test>::AffiliateNotRegisteredForBroker
 			);
 		});
 	}
