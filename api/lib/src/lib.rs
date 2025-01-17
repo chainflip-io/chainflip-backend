@@ -552,7 +552,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		extract_event!(
 			&events,
 			state_chain_runtime::RuntimeEvent::Swapping,
-			pallet_cf_swapping::Event::AffiliateRegistrationUpdated,
+			pallet_cf_swapping::Event::AffiliateRegistration,
 			{ affiliate_short_id, .. },
 			*affiliate_short_id
 		)

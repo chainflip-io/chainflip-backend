@@ -1759,7 +1759,7 @@ mod private_channels {
 					.expect("Affiliate must be registered!");
 
 				System::assert_has_event(RuntimeEvent::Swapping(
-					Event::<Test>::AffiliateRegistrationUpdated {
+					Event::<Test>::AffiliateRegistration {
 						broker_id: BROKER,
 						affiliate_short_id: SHORT_ID,
 						affiliate_id: affiliate_account_id,
@@ -1821,7 +1821,7 @@ mod affiliates {
 
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::AffiliateRegistrationUpdated { .. }),
+				RuntimeEvent::Swapping(Event::AffiliateRegistration { .. }),
 				RuntimeEvent::Swapping(Event::WithdrawalRequested { .. }),
 			);
 		});

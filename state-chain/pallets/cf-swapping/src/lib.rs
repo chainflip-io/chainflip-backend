@@ -707,7 +707,7 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
 		},
-		AffiliateRegistrationUpdated {
+		AffiliateRegistration {
 			broker_id: T::AccountId,
 			affiliate_short_id: AffiliateShortId,
 			affiliate_id: T::AccountId,
@@ -1202,7 +1202,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [AffiliateRegistrationUpdated](Event::AffiliateRegistrationUpdated)
+		/// - [AffiliateRegistration](Event::AffiliateRegistration)
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
@@ -1241,7 +1241,7 @@ pub mod pallet {
 				AffiliateDetails { short_id, withdrawal_address },
 			);
 
-			Self::deposit_event(Event::<T>::AffiliateRegistrationUpdated {
+			Self::deposit_event(Event::<T>::AffiliateRegistration {
 				broker_id,
 				affiliate_short_id: short_id,
 				affiliate_id,
