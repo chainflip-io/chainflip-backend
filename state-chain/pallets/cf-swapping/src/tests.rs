@@ -1734,9 +1734,15 @@ mod private_channels {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 
+			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+
 			// Only brokers can register affiliates
 			assert_noop!(
-				Swapping::register_affiliate(OriginTrait::signed(ALICE), BOB, SHORT_ID),
+				Swapping::register_affiliate(
+					OriginTrait::signed(ALICE),
+					SHORT_ID,
+					withdrawal_address.clone(),
+				),
 				BadOrigin
 			);
 			assert_eq!(Swapping::get_short_id(&BROKER, &BOB), None);
@@ -1745,39 +1751,32 @@ mod private_channels {
 			{
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
-					ALICE,
 					SHORT_ID,
+					withdrawal_address.clone(),
 				));
+
+				let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+					.expect("Affiliate must be registered!");
 
 				System::assert_has_event(RuntimeEvent::Swapping(
 					Event::<Test>::AffiliateRegistrationUpdated {
 						broker_id: BROKER,
 						affiliate_short_id: SHORT_ID,
-						affiliate_id: ALICE,
-						previous_affiliate_id: None,
+						affiliate_id: affiliate_account_id,
 					},
 				));
-				assert_eq!(Swapping::get_short_id(&BROKER, &ALICE), Some(SHORT_ID));
+				assert_eq!(Swapping::get_short_id(&BROKER, &affiliate_account_id), Some(SHORT_ID));
 			}
 
-			// Overwriting an existing affiliate registration entry.
 			{
-				assert_ok!(Swapping::register_affiliate(
-					OriginTrait::signed(BROKER),
-					BOB,
-					SHORT_ID,
-				));
-
-				System::assert_has_event(RuntimeEvent::Swapping(
-					Event::<Test>::AffiliateRegistrationUpdated {
-						broker_id: BROKER,
-						affiliate_short_id: SHORT_ID,
-						affiliate_id: BOB,
-						previous_affiliate_id: Some(ALICE),
-					},
-				));
-				assert_eq!(Swapping::get_short_id(&BROKER, &BOB), Some(SHORT_ID));
-				assert_eq!(Swapping::get_short_id(&BROKER, &ALICE), None);
+				assert_noop!(
+					Swapping::register_affiliate(
+						OriginTrait::signed(BROKER),
+						SHORT_ID,
+						withdrawal_address.clone(),
+					),
+					Error::<Test>::AffiliateAlreadyRegistered
+				);
 			}
 		});
 	}
@@ -1802,48 +1801,26 @@ mod affiliate_withdrawal {
 			const BALANCE: AssetAmount = 200;
 			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
 
-			MockBalance::credit_account(&ALICE, Asset::Usdc, BALANCE);
-
-			assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), ALICE, SHORT_ID,));
-
-			assert_ok!(Swapping::register_affiliate_withdrawal_address(
+			assert_ok!(Swapping::register_affiliate(
 				OriginTrait::signed(BROKER),
 				SHORT_ID,
-				withdrawal_address.clone(),
+				withdrawal_address.clone()
 			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
 
 			assert_ok!(Swapping::affiliate_withdrawal_request(
 				OriginTrait::signed(BROKER),
-				SHORT_ID
+				affiliate_account_id
 			));
 
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::AffiliateRegistrationUpdated { .. }),
-				RuntimeEvent::Swapping(Event::AffiliateWithdrawalAddressRegistered { .. }),
 				RuntimeEvent::Swapping(Event::WithdrawalRequested { .. }),
-			);
-		});
-	}
-
-	#[test]
-	fn can_only_register_withdrawal_address_onces() {
-		new_test_ext().execute_with(|| {
-			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
-			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
-			assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), ALICE, SHORT_ID,));
-			assert_ok!(Swapping::register_affiliate_withdrawal_address(
-				OriginTrait::signed(BROKER),
-				SHORT_ID,
-				withdrawal_address.clone(),
-			));
-			assert_noop!(
-				Swapping::register_affiliate_withdrawal_address(
-					OriginTrait::signed(BROKER),
-					SHORT_ID,
-					withdrawal_address.clone(),
-				),
-				Error::<Test>::AddressAlreadyRegistered
 			);
 		});
 	}
@@ -1854,21 +1831,20 @@ mod affiliate_withdrawal {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
 
-			assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), ALICE, SHORT_ID,));
-
-			assert_noop!(
-				Swapping::affiliate_withdrawal_request(OriginTrait::signed(BROKER), SHORT_ID),
-				Error::<Test>::AffiliateWithdrawalAddressDosentExist
-			);
-
-			assert_ok!(Swapping::register_affiliate_withdrawal_address(
+			assert_ok!(Swapping::register_affiliate(
 				OriginTrait::signed(BROKER),
 				SHORT_ID,
-				withdrawal_address.clone(),
+				withdrawal_address
 			));
 
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
 			assert_noop!(
-				Swapping::affiliate_withdrawal_request(OriginTrait::signed(BROKER), SHORT_ID),
+				Swapping::affiliate_withdrawal_request(
+					OriginTrait::signed(BROKER),
+					affiliate_account_id
+				),
 				Error::<Test>::NoFundsAvailable
 			);
 		});

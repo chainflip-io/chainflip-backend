@@ -3,17 +3,19 @@
 
 use cf_amm::common::Side;
 use cf_chains::{
-	address::{AddressConverter, AddressError, ForeignChainAddress},
+	address::{AddressConverter, AddressError, EncodedAddress, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
 	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersDecoded,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
-	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
+	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
+	ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
 	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
 	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
+use sp_io::hashing::blake2_256;
+
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
@@ -37,6 +39,7 @@ use sp_arithmetic::{
 	traits::{UniqueSaturatedInto, Zero},
 	Rounding,
 };
+use sp_runtime::traits::TrailingZeroInput;
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 #[cfg(test)]
 mod mock;
@@ -68,6 +71,12 @@ impl<T: Config> Get<BlockNumberFor<T>> for DefaultSwapRetryDelay<T> {
 struct FeeTaken {
 	pub remaining_amount: AssetAmount,
 	pub fee: AssetAmount,
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+pub struct AffiliateDetails {
+	short_id: AffiliateShortId,
+	withdrawal_address: EncodedAddress,
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
@@ -537,10 +546,16 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// An optional withdrawal address for affiliate broker.
 	#[pallet::storage]
-	pub type AffiliateWithdrawalAddress<T: Config> =
-		StorageMap<_, Identity, T::AccountId, EncodedAddress, OptionQuery>;
+	pub type AffiliateAccountDetails<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		T::AccountId,
+		Twox64Concat,
+		T::AccountId,
+		AffiliateDetails,
+		OptionQuery,
+	>;
 
 	/// The bond for a broker to open a private channel.
 	#[pallet::storage]
@@ -694,7 +709,6 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			affiliate_short_id: AffiliateShortId,
 			affiliate_id: T::AccountId,
-			previous_affiliate_id: Option<T::AccountId>,
 		},
 		BrokerBondSet {
 			bond: T::Amount,
@@ -780,6 +794,8 @@ pub mod pallet {
 		/// The withdrawal address of a affiliate was not present when we try to trigger the
 		/// withdrawal.
 		AffiliateWithdrawalAddressDosentExist,
+		/// The affiliate is already registered.
+		AffiliateAlreadyRegistered,
 	}
 
 	#[pallet::genesis_config]
@@ -1193,43 +1209,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
 			origin: OriginFor<T>,
-			affiliate_id: T::AccountId,
-			short_id: AffiliateShortId,
-		) -> DispatchResult {
-			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-
-			let previous_affiliate_id = AffiliateIdMapping::<T>::take(&broker_id, short_id);
-
-			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
-
-			Self::deposit_event(Event::<T>::AffiliateRegistrationUpdated {
-				broker_id,
-				affiliate_short_id: short_id,
-				affiliate_id,
-				previous_affiliate_id,
-			});
-
-			Ok(())
-		}
-
-		/// Registers a withdrawal address for an affiliate. This is a one-time operation. Once the
-		/// address is set up, it's not possible to change it any more.
-		/// Note: This extrinsic is secured by the broker that has registered the affiliate account.
-		///
-		/// ## Events
-		///
-		/// - [PrivateBrokerChannelClosed](Event::PrivateBrokerChannelClosed)
-		#[pallet::call_index(15)]
-		#[pallet::weight(T::WeightInfo::register_affiliate_withdrawal_address())]
-		pub fn register_affiliate_withdrawal_address(
-			origin: OriginFor<T>,
 			short_id: AffiliateShortId,
 			withdrawal_address: EncodedAddress,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let affiliate_account = AffiliateIdMapping::<T>::get(broker_id, short_id)
-				.ok_or(Error::<T>::AffiliateNotRegistered)?;
+			ensure!(
+				!AffiliateIdMapping::<T>::contains_key(&broker_id, short_id),
+				Error::<T>::AffiliateAlreadyRegistered
+			);
 
 			ensure!(
 				T::AddressConverter::decode_and_validate_address_for_asset(
@@ -1240,18 +1228,22 @@ pub mod pallet {
 				Error::<T>::ExpectedEthereumAddress
 			);
 
-			ensure!(
-				!AffiliateWithdrawalAddress::<T>::contains_key(&affiliate_account),
-				Error::<T>::AddressAlreadyRegistered
+			let affiliate_id = Self::derivative_account_id(broker_id.clone(), short_id);
+
+			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
+
+			AffiliateAccountDetails::<T>::insert(
+				&broker_id,
+				&affiliate_id,
+				AffiliateDetails { short_id, withdrawal_address },
 			);
 
-			AffiliateWithdrawalAddress::<T>::insert(&affiliate_account, withdrawal_address.clone());
-
-			Self::deposit_event(Event::<T>::AffiliateWithdrawalAddressRegistered {
-				account_id: affiliate_account,
-				short_id,
-				address: withdrawal_address,
+			Self::deposit_event(Event::<T>::AffiliateRegistrationUpdated {
+				broker_id,
+				affiliate_short_id: short_id,
+				affiliate_id,
 			});
+
 			Ok(())
 		}
 
@@ -1265,11 +1257,21 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::affiliate_withdrawal_request())]
 		pub fn affiliate_withdrawal_request(
 			origin: OriginFor<T>,
-			short_id: AffiliateShortId,
+			affiliate_id: T::AccountId,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-			Self::withdrawal_to_affiliate(&broker_id, short_id)?;
-			Ok(())
+			if let Some(affiliate_details) =
+				AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_id)
+			{
+				Self::trigger_withdrawal(
+					&affiliate_id,
+					Asset::Usdc,
+					affiliate_details.withdrawal_address,
+				)?;
+				Ok(())
+			} else {
+				return Err(Error::<T>::AffiliateNotRegistered.into());
+			}
 		}
 	}
 
@@ -1354,6 +1356,12 @@ pub mod pallet {
 				.collect()
 		}
 
+		fn derivative_account_id(who: T::AccountId, index: AffiliateShortId) -> T::AccountId {
+			let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
+			Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+				.expect("infinite length input; no invalid inputs for type; qed")
+		}
+
 		fn trigger_withdrawal(
 			account_id: &T::AccountId,
 			asset: Asset,
@@ -1386,21 +1394,6 @@ pub mod pallet {
 				destination_address,
 				egress_id,
 			});
-
-			Ok(())
-		}
-
-		fn withdrawal_to_affiliate(
-			broker_id: &T::AccountId,
-			affiliate_short_id: AffiliateShortId,
-		) -> DispatchResult {
-			let affiliate_account = AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
-				.ok_or(Error::<T>::AffiliateNotRegistered)?;
-
-			let withdrawal_address = AffiliateWithdrawalAddress::<T>::get(&affiliate_account)
-				.ok_or(Error::<T>::AffiliateWithdrawalAddressDosentExist)?;
-
-			Self::trigger_withdrawal(&affiliate_account, Asset::Usdc, withdrawal_address)?;
 
 			Ok(())
 		}
@@ -1481,20 +1474,6 @@ pub mod pallet {
 			}
 
 			Ok(())
-		}
-
-		pub fn trigger_commission_distribution() {
-			for broker in T::AccountRoleRegistry::get_all(AccountRole::Broker) {
-				for (short_id, _) in AffiliateIdMapping::<T>::iter_prefix(&broker) {
-					if let Err(error) = Self::withdrawal_to_affiliate(&broker, short_id) {
-						Self::deposit_event(Event::<T>::AffiliateWithdrawalRequestFailed {
-							broker: broker.clone(),
-							short_id,
-							error,
-						});
-					}
-				}
-			}
 		}
 
 		#[transactional]

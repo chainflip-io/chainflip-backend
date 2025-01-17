@@ -23,8 +23,8 @@ use cf_chains::{
 	RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
-	AccountId, AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, Beneficiary,
-	SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, SwapId, FLIPPERINOS_PER_FLIP,
+	GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, SwapType};
@@ -40,7 +40,7 @@ use pallet_cf_broadcast::{
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepositWitness};
 use pallet_cf_pools::{HistoricalEarnedFees, OrderId, RangeOrderSize};
 use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
-use sp_core::{bounded::BoundedVec, H160, U256};
+use sp_core::{H160, U256};
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
@@ -901,94 +901,5 @@ fn can_handle_failed_vault_transfer() {
 			assert!(PendingApiCalls::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
-		});
-}
-
-#[test]
-fn can_distribute_commissions_to_affiliate_automatically_when_new_epoch_starts() {
-	const EPOCH_BLOCKS: u32 = 100;
-	const MAX_AUTHORITIES: AuthorityCount = 5;
-	const DECIMALS: u128 = 10u128.pow(18);
-	const GAS_BUDGET: AssetAmount = 50 * DECIMALS;
-	const DEPOSIT_AMOUNT: AssetAmount = 50_000 * DECIMALS;
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
-		.build()
-		.execute_with(|| {
-			let (mut testnet, _, _) =
-				crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
-
-			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
-
-			let message = CcmChannelMetadata {
-				message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
-				gas_budget: GAS_BUDGET,
-				ccm_additional_data: Default::default(),
-			};
-
-			assert_ok!(Swapping::register_affiliate(
-				RuntimeOrigin::signed(ZION.clone()),
-				DORIS,
-				AffiliateShortId(0),
-			));
-
-			assert_ok!(Swapping::register_affiliate_withdrawal_address(
-				RuntimeOrigin::signed(ZION.clone()),
-				AffiliateShortId(0),
-				EncodedAddress::Eth([0x02; 20]),
-			));
-
-			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
-				RuntimeOrigin::signed(ZION.clone()),
-				Asset::Flip,
-				Asset::Usdc,
-				EncodedAddress::Eth([0x02; 20]),
-				10,
-				Some(message),
-				0u16,
-				BoundedVec::try_from(vec![Beneficiary { account: DORIS, bps: 100 }]).unwrap(),
-				None,
-				None,
-			));
-
-			let ingress_fee = sp_std::cmp::min(
-				Swapping::calculate_input_for_gas_output::<Ethereum>(
-					EthAsset::Flip,
-					EthereumChainTracking::estimate_ingress_fee(EthAsset::Flip),
-				)
-				.unwrap(),
-				u128::MAX,
-			);
-
-			witness_call(RuntimeCall::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Call::process_deposits {
-					deposit_witnesses: vec![DepositWitness {
-						deposit_address:
-							<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
-								EthAsset::Flip,
-								pallet_cf_ingress_egress::ChannelIdCounter::<
-									Runtime,
-									EthereumInstance,
-								>::get(),
-							)
-							.unwrap(),
-						asset: EthAsset::Flip,
-						amount: (DEPOSIT_AMOUNT + ingress_fee),
-						deposit_details: Default::default(),
-					}],
-					block_height: 0,
-				},
-			));
-
-			// Move 10 blocks settle the swap in the system
-			testnet.move_forward_blocks(10);
-
-			assert!(AssetBalances::get_balance(&DORIS, Asset::Usdc) > 0);
-
-			// Move to next epoch to trigger distribution.
-			testnet.move_to_the_next_epoch();
-
-			assert!(AssetBalances::get_balance(&DORIS, Asset::Usdc) == 0);
-			assert_eq!(Validator::current_epoch(), 2);
 		});
 }

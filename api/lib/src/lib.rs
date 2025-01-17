@@ -1,5 +1,6 @@
 use std::{fmt, sync::Arc};
 
+use crate::primitives::EncodedAddress;
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
@@ -518,6 +519,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		&self,
 		affiliate_id: AccountId32,
 		short_id: Option<AffiliateShortId>,
+		withdrawal_address: EncodedAddress,
 	) -> Result<AffiliateShortId> {
 		let register_as_id = if let Some(short_id) = short_id {
 			short_id
@@ -540,8 +542,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 		let (_, events, ..) = self
 			.submit_signed_extrinsic_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
-				affiliate_id,
 				short_id: register_as_id,
+				withdrawal_address,
 			})
 			.await?
 			.until_in_block()
@@ -556,37 +558,10 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		)
 	}
 
-	async fn register_affiliate_withdrawal_address(
-		&self,
-		short_id: AffiliateShortId,
-		withdrawal_address: AddressString,
-	) -> Result<()> {
+	async fn affiliate_withdrawal_request(&self, affiliate_id: AccountId32) -> Result<()> {
 		let (_, events, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::register_affiliate_withdrawal_address {
-					short_id,
-					withdrawal_address: withdrawal_address
-						.try_parse_to_encoded_address(Asset::Eth.into())
-						.map_err(anyhow::Error::msg)?,
-				},
-			)
-			.await?
-			.until_in_block()
-			.await?;
-
-		extract_event!(
-			&events,
-			state_chain_runtime::RuntimeEvent::Swapping,
-			pallet_cf_swapping::Event::AffiliateWithdrawalAddressRegistered,
-			{ .. },
-			()
-		)
-	}
-
-	async fn affiliate_withdrawal_request(&self, short_id: AffiliateShortId) -> Result<()> {
-		let (_, events, ..) = self
-			.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::affiliate_withdrawal_request { short_id },
+				pallet_cf_swapping::Call::affiliate_withdrawal_request { affiliate_id },
 			)
 			.await?
 			.until_in_block()
