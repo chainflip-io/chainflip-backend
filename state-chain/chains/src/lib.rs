@@ -679,19 +679,9 @@ pub enum SwapOrigin<AccountId> {
 	},
 	Vault {
 		tx_id: TransactionInIdForAnyChain,
-		broker_id: Option<AccountId>,
+		broker_id: AccountId,
 	},
 	Internal,
-}
-
-impl<AccountId> SwapOrigin<AccountId> {
-	pub fn broker_id(&self) -> Option<&AccountId> {
-		match self {
-			Self::DepositChannel { ref broker_id, .. } => Some(broker_id),
-			Self::Vault { ref broker_id, .. } => broker_id.as_ref(),
-			Self::Internal => None,
-		}
-	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]

@@ -1825,7 +1825,7 @@ fn submit_vault_swap_request(
 			destination_address,
 			deposit_metadata,
 			tx_id,
-			broker_fee: Some(broker_fee),
+			broker_fee,
 			affiliate_fees,
 			refund_params: Some(refund_params),
 			dca_params,
@@ -1869,7 +1869,7 @@ fn can_request_swap_via_extrinsic() {
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
+					broker_id: BROKER,
 				},
 			},]
 		);
@@ -1934,7 +1934,7 @@ fn vault_swaps_support_affiliate_fees() {
 				],
 				origin: SwapOrigin::Vault {
 					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
+					broker_id: BROKER,
 				},
 			},]
 		);
@@ -1986,7 +1986,7 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 				broker_fees: Default::default(),
 				origin: SwapOrigin::Vault {
 					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(NOT_A_BROKER),
+					broker_id: NOT_A_BROKER,
 				},
 			},]
 		);
@@ -2046,7 +2046,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
+					broker_id: BROKER,
 				},
 			},]
 		);
@@ -2231,7 +2231,7 @@ fn assembling_broker_fees() {
 			Beneficiary { account: 50, bps: 5 },
 		];
 
-		assert_eq!(IngressEgress::assemble_broker_fees(Some(broker_fee), affiliate_fees), expected);
+		assert_eq!(IngressEgress::assemble_broker_fees(broker_fee, affiliate_fees), expected);
 	});
 }
 
@@ -2250,12 +2250,13 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 				DEPOSIT_AMOUNT,
 				Default::default(),
 				None,
+				&BROKER,
 				BoostStatus::NotBoosted,
 				0,
 				None,
 				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
 				0,
-				DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
+				DepositOrigin::Vault { tx_id: H256::default(), broker_id: BROKER },
 			)
 			.err(),
 			Some(DepositFailedReason::BelowMinimumDeposit)
@@ -2267,6 +2268,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 			DEPOSIT_AMOUNT,
 			Default::default(),
 			None,
+			&BROKER,
 			BoostStatus::Boosted {
 				prewitnessed_deposit_id: 0,
 				pools: vec![],
@@ -2276,7 +2278,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 			None,
 			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
 			0,
-			DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
+			DepositOrigin::Vault { tx_id: H256::default(), broker_id: BROKER },
 		)
 		.is_ok());
 	});

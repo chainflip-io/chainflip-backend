@@ -1197,7 +1197,7 @@ mod vault_swaps {
 				),
 				deposit_metadata: None,
 				tx_id,
-				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
+				broker_fee: Beneficiary { account: BROKER, bps: 5 },
 				affiliate_fees: Default::default(),
 				refund_params: Some(ChannelRefundParametersDecoded {
 					retry_duration: 2,
@@ -1235,7 +1235,7 @@ mod vault_swaps {
 						broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 5 }],
 						origin: SwapOrigin::Vault {
 							tx_id: TransactionInIdForAnyChain::Evm(tx_id),
-							broker_id: Some(BROKER)
+							broker_id: BROKER
 						},
 					},]
 				);

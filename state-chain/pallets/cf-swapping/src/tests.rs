@@ -213,7 +213,7 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 			swap.dca_params.clone(),
 			SwapOrigin::Vault {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-				broker_id: Some(BROKER),
+				broker_id: BROKER,
 			},
 		);
 	}
@@ -348,7 +348,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			None,
 			SwapOrigin::Vault {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-				broker_id: Some(BROKER),
+				broker_id: BROKER,
 			},
 		);
 
@@ -525,7 +525,7 @@ fn process_all_into_stable_swaps_first() {
 					None,
 					SwapOrigin::Vault {
 						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-						broker_id: Some(BROKER),
+						broker_id: BROKER,
 					},
 				);
 			});
@@ -663,7 +663,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				None,
 				SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
+					broker_id: BROKER,
 				},
 			);
 
@@ -1322,7 +1322,7 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					None,
 					SwapOrigin::Vault {
 						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-						broker_id: Some(BROKER),
+						broker_id: BROKER,
 					},
 				);
 

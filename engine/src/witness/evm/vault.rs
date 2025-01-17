@@ -254,6 +254,7 @@ macro_rules! vault_deposit_witness {
 				deposit_address: None,
 			}
 		} else {
+			use cf_primitives::Beneficiary;
 			VaultDepositWitness {
 				input_asset: $source_asset.try_into().expect("invalid asset for chain"),
 				output_asset: $dest_asset,
@@ -262,7 +263,10 @@ macro_rules! vault_deposit_witness {
 				deposit_metadata: $metadata,
 				tx_id: $tx_id,
 				deposit_details: DepositDetails { tx_hashes: Some(vec![$tx_id]) },
-				broker_fee: None,
+				broker_fee: Beneficiary {
+					account: sp_runtime::AccountId32::new([0; 32]),
+					bps: 0,
+				},
 				affiliate_fees: Default::default(),
 				boost_fee: 0,
 				dca_params: None,

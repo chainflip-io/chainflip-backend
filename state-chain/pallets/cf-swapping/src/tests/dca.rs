@@ -687,7 +687,7 @@ fn test_minimum_chunk_size() {
 			Some(dca_params),
 			SwapOrigin::Vault {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-				broker_id: Some(BROKER),
+				broker_id: BROKER,
 			},
 		);
 

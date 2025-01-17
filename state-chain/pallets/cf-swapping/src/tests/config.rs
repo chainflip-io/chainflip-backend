@@ -125,7 +125,7 @@ fn max_swap_amount_can_be_removed() {
 				None,
 				SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
+					broker_id: BROKER,
 				},
 			);
 		};
@@ -226,7 +226,7 @@ fn can_swap_below_max_amount() {
 			None,
 			SwapOrigin::Vault {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-				broker_id: Some(BROKER),
+				broker_id: BROKER,
 			},
 		);
 
