@@ -815,34 +815,34 @@ export async function observeSolanaCcmEvent(
               solVersionedCcmAdditionalDataCodec.dec(messageMetadata.ccmAdditionalData!).value;
 
             if (
-              expectedAdditionalAccounts.length !== event.data.additional_is_writable.length ||
-              expectedAdditionalAccounts.length !== event.data.additional_pubkeys.length
+              expectedAdditionalAccounts.length !== event.data.remaining_is_writable.length ||
+              expectedAdditionalAccounts.length !== event.data.remaining_pubkeys.length
             ) {
               throw new Error(
-                `Unexpected additional accounts length: ${expectedAdditionalAccounts.length}, expecting ${event.data.additional_is_writable.length}, ${event.data.additional_pubkeys.length}`,
+                `Unexpected additional accounts length: ${expectedAdditionalAccounts.length}, expecting ${event.data.remaining_is_writable.length}, ${event.data.remaining_pubkeys.length}`,
               );
             }
 
             for (let index = 0; index < expectedAdditionalAccounts.length; index++) {
               if (
                 expectedAdditionalAccounts[index].is_writable.toString() !==
-                event.data.additional_is_writable[index].toString()
+                event.data.remaining_is_writable[index].toString()
               ) {
                 throw new Error(
-                  `Unexpected additional account is_writable: ${event.data.additional_is_writable[index]}, expecting ${expectedAdditionalAccounts[index].is_writable}`,
+                  `Unexpected additional account is_writable: ${event.data.remaining_is_writable[index]}, expecting ${expectedAdditionalAccounts[index].is_writable}`,
                 );
               }
               const expectedPubkey = new PublicKey(
                 expectedAdditionalAccounts[index].pubkey,
               ).toString();
-              if (expectedPubkey !== event.data.additional_pubkeys[index].toString()) {
+              if (expectedPubkey !== event.data.remaining_pubkeys[index].toString()) {
                 throw new Error(
-                  `Unexpected additional account pubkey: ${event.data.additional_pubkeys[index].toString()}, expecting ${expectedPubkey}`,
+                  `Unexpected additional account pubkey: ${event.data.remaining_pubkeys[index].toString()}, expecting ${expectedPubkey}`,
                 );
               }
             }
 
-            if (event.data.additional_is_signer.some((value: boolean) => value === true)) {
+            if (event.data.remaining_is_signer.some((value: boolean) => value === true)) {
               throw new Error(`Expected all additional accounts to be read-only`);
             }
 
