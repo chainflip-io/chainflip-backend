@@ -1,4 +1,6 @@
-use crate::{BitcoinChainTracking, BitcoinIngressEgress, Runtime};
+use std::cmp::PartialEq;
+use std::collections::BTreeMap;
+use crate::{BitcoinChainTracking, BitcoinIngressEgress, Block, Runtime};
 use cf_chains::{
 	btc::{self, BitcoinFeeInfo, BitcoinTrackedData},
 	Bitcoin,
@@ -10,6 +12,7 @@ use sp_core::Get;
 use cf_chains::instances::BitcoinInstance;
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::__private::sp_tracing::event;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
@@ -43,6 +46,7 @@ use pallet_cf_ingress_egress::{
 use scale_info::TypeInfo;
 
 use sp_std::vec::Vec;
+use cf_chains::btc::BlockNumber;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing),
@@ -304,54 +308,150 @@ impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>
 		BitcoinIngressEgress::active_deposit_channels_at(block_witness_root)
 	}
 }
+type Age = BlockNumber;
+#[derive(PartialEq)]
+enum BtcEvent {
+	PreWitness(DepositWitness<Bitcoin>),
+	Witness(DepositWitness<Bitcoin>),
+}
+pub struct BitcoinDepositChannelWitessingProcessor {
+	pub blocks_data: BTreeMap<BlockNumber, (BlockData, Age)>,
+	pub reorg_events: BTreeMap<BlockNumber, Vec<BtcEvent>>,
+	pub rules: Vec<fn(Age, &BlockData) -> Vec<BtcEvent>>,
+}
 
-pub struct BitcoinDepositChannelWitessingProcessor;
+
+impl BitcoinDepositChannelWitessingProcessor {
+	/// Insert a new BlockData, replacing the old one if another BlockData for the same height was already present
+	/// NB! Replacement should never happen since when we detect a reorg we remove the block being re-orged
+	fn insert(&mut self, n: BlockNumber, block_data: BlockData) {
+		self.blocks_data.insert(n, (block_data, 0));
+	}
+
+	/// remove all the old BlockData and reorg_events based on the last block_height
+	/// TODO! if we skip blocks we don't delete all the entries, handle this case
+	fn clean_old(&mut self, n: BlockNumber) {
+		self.blocks_data.remove(n - SAFETY_MARGIN);
+		self.reorg_events.remove(n - BUFFER_EVENTS);
+	}
+
+	/// This function is responsible to process all the rules (in the correct order or with the correct logic) and return a list of Events
+	/// I.E. if we end up with both a PreWitness and a Witness event for the same deposit we remove the PreWitness one
+	/// TODO! implement this logic to remove PreWitness event in case a Witness is present
+	fn process_rules(&self, last_height: BlockNumber) -> Vec<BtcEvent> {
+		let mut last_events = vec![];
+		for (block, (data, last_age)) in self.blocks_data {
+			for age in last_age+1..=last_height-block {
+				last_events = last_events.iter().chain(self.process_rules_for_age(age, &data)).collect();
+			}
+			*last_age = last_height - block;
+		}
+		last_events
+	}
+
+	/// This function is responsible to call all the rules on a given block and a given age of that block, it also compares the produced events against reorg_events and filter out duplicates
+	fn process_rules_for_age(&self, age: Age, data: &BlockData) -> Vec<BtcEvent> {
+		let mut events = vec![];
+		for rule in self.rules {
+			events = events.iter().chain(rule(age, data).iter()).collect();
+		}
+		events.into_iter().filter(|last_event| {
+			for (_, events) in self.reorg_events {
+				for event in events {
+					if last_event == event {
+						return false;
+					}
+				}
+			}
+			true
+		}).collect::<Vec<_>>()
+	}
+
+	/// This function is responsible to execute all the previously produced events
+	fn execute_events(events: Vec<BtcEvent>){
+		for event in events {
+			match event {
+				BtcEvent::PreWitness(deposit) => {
+					let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(
+						deposit,
+						deposit.block_number,
+					);
+				}
+				BtcEvent::Witness(deposit) => {
+					BitcoinIngressEgress::process_channel_deposit_full_witness(
+						deposit,
+						deposit_block_number,
+					);
+				}
+			}
+		}
+	}
+}
 
 impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 	for BitcoinDepositChannelWitessingProcessor
 {
 	fn process_block_data(
-		current_block: btc::BlockNumber,
-		earliest_unprocessed_block: btc::BlockNumber,
-		witnesses: Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)>,
-	) -> Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)> {
-		ProcessedUpTo::<Runtime, BitcoinInstance>::put(
-			earliest_unprocessed_block.saturating_sub(1),
-		);
-
-		// TODO: Handle reorgs, in particular when data is already processed.
-		// We need to ensure that we don't process the same data twice. We could use a wrapper for
-		// the BlockData type here that can include some extra status data in it.
-
-		if witnesses.is_empty() {
-			log::info!("No witnesses to process for block: {:?}", current_block);
-		} else {
-			log::info!("Processing witnesses: {:?} for block {:?}", witnesses, current_block);
-		}
-		for (deposit_block_number, deposits) in witnesses.clone() {
-			for deposit in deposits {
-				if deposit_block_number == current_block {
-					log::info!("Prewitness deposit submitted by election: {:?}", deposit);
-					let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(
-						deposit,
-						deposit_block_number,
-					);
-				} else if let Some(safety_margin) =
-					WitnessSafetyMargin::<Runtime, BitcoinInstance>::get()
-				{
-					if deposit_block_number <= (current_block - safety_margin) {
-						log::info!("deposit election submitted by election: {:?}", deposit);
-						BitcoinIngressEgress::process_channel_deposit_full_witness(
-							deposit,
-							deposit_block_number,
-						);
+		&mut self,
+		chain_progress: ChainProgress<btc::BlockNumber>,
+	) {
+		match chain_progress {
+			ChainProgress::Progress(last_height)=> {
+				let last_events = self.process_rules(last_height);
+				self.execute(last_events);
+				self.clean_old(last_height);
+			},
+			ChainProgress::Reorg(range) => {
+				for n in range {
+					let block_data = self.blocks_data.remove(n);
+					if let Some((data, last_age)) = block_data {
+						// We need to get only events already processed
+						for age in 0..=last_age {
+							self.reorg_events.insert(n, self.process_rules_for_age(age, &data));
+						}
 					}
 				}
-			}
+			},
+			_ => {}
 		}
 
-		// Do we need to return anything here?
-		witnesses
+		// ProcessedUpTo::<Runtime, BitcoinInstance>::put(
+		// 	earliest_unprocessed_block.saturating_sub(1),
+		// );
+		//
+		// // TODO: Handle reorgs, in particular when data is already processed.
+		// // We need to ensure that we don't process the same data twice. We could use a wrapper for
+		// // the BlockData type here that can include some extra status data in it.
+		//
+		// if witnesses.is_empty() {
+		// 	log::info!("No witnesses to process for block: {:?}", current_block);
+		// } else {
+		// 	log::info!("Processing witnesses: {:?} for block {:?}", witnesses, current_block);
+		// }
+		// for (deposit_block_number, deposits) in witnesses.clone() {
+		// 	for deposit in deposits {
+		// 		if deposit_block_number == current_block {
+		// 			log::info!("Prewitness deposit submitted by election: {:?}", deposit);
+		// 			let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(
+		// 				deposit,
+		// 				deposit_block_number,
+		// 			);
+		// 		} else if let Some(safety_margin) =
+		// 			WitnessSafetyMargin::<Runtime, BitcoinInstance>::get()
+		// 		{
+		// 			if deposit_block_number <= (current_block - safety_margin) {
+		// 				log::info!("deposit election submitted by election: {:?}", deposit);
+		// 				BitcoinIngressEgress::process_channel_deposit_full_witness(
+		// 					deposit,
+		// 					deposit_block_number,
+		// 				);
+		// 			}
+		// 		}
+		// 	}
+		// }
+		//
+		// // Do we need to return anything here?
+		// witnesses
 	}
 }
 

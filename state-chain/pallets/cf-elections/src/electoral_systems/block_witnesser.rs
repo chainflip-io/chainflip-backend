@@ -21,6 +21,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::bounded::alloc::collections::BTreeSet;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use crate::electoral_systems::block_height_tracking::ChainProgress;
 
 pub mod consensus;
 pub mod helpers;
@@ -65,14 +66,9 @@ pub trait ProcessBlockData<ChainBlockNumber, BlockData> {
 	/// for the same block twice, in the case of a reorg. It is up to the implementor of this trait
 	/// to handle this case.
 	fn process_block_data(
-		chain_block_number: ChainBlockNumber,
-		// Any data associated with any blocks *before*
-		// this block has been processed, and can therefore be safely removed.
-		// This is a min(earliest open election, earliest unprocessed block data). Since any blocks
-		// before this have already been processed.
-		earliest_unprocessed_block: ChainBlockNumber,
-		block_data: Vec<(ChainBlockNumber, BlockData)>,
-	) -> Vec<(ChainBlockNumber, BlockData)>;
+		&mut self,
+		chain_progress: ChainProgress<ChainBlockNumber>,
+	);
 }
 
 /// Allows external/runtime/implementation to return the properties that the election should use.
