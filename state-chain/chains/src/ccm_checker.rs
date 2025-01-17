@@ -65,19 +65,21 @@ impl CcmValidityCheck for CcmValidityChecker {
 				.try_into()
 				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
 
-			// Length of CCM = length of message + total no. remaining_accounts * bytes_per_account;
-			// Accounts could technically be duplicated and they would only take 1 byte instead of
-			// 33. However:
-			// - It doesn't make sense for additional_accounts to have duplicated since it'll all be
-			//   the same instruction.
+			// Calculate the length of the user's data to ensure the built CCM transaction will
+			// not exceed the maximum allowed length in Solana.
+			// data length = message length + #accounts * (bytes_per_account + bytes_per_reference);
+			//
+			// Accounts could be duplicated and then they would only take one reference byte but:
+			// - It doesn't make sense for additional_accounts to have duplicated accounts since
+			//   it'll all be in the same instruction anyway.
 			// - Accounts used by Chainflip (e.g. SYSTEM_PROGRAM or TOKEN_PROGRAM) are already being
-			//   passed to the receiver in the CPI so there's need to pass them in the
-			//   additional_accounts.
+			//   passed to the receiver in the CPI so there's need to add them to the list.
 			// - Chainflip specific accounts (agg_key, data_account) and nonce accounts are the only
 			//   accounts that are part of the transaction that the user won't have access to. Those
 			//   accounts are either blacklisted or should be irrelevant for the user.
-			// Therefore we can safely assume that accounts are not duplicated when calculating the
-			// tranasction length.
+			// Therefore we can assume that accounts are not duplicated when calculating the
+			// transaction length. If any account is in fact duplicated it will effectively reduce
+			// the allowed maximum length for the user's metadata.
 			let ccm_length = ccm.message.len() +
 				ccm_accounts.remaining_accounts.len() *
 					(ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION +
