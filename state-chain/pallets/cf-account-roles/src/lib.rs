@@ -216,13 +216,6 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::Broker => ensure_broker::<T>(origin),
 		}
 	}
-
-	fn get_all(role: AccountRole) -> Vec<T::AccountId> {
-		AccountRoles::<T>::iter()
-			.filter(|(_, role_)| role == *role_)
-			.map(|(account, _)| account)
-			.collect()
-	}
 }
 
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
