@@ -126,6 +126,7 @@ where
 			)
 		>::default();
 
+		let mut authority_count = 1;
 		cf_utilities::loop_select! {
 			let _ = submit_interval.tick() => {
 				stream::iter(core::mem::take(&mut pending_submissions).into_iter()).chunks(MAXIMUM_VOTES_PER_EXTRINSIC as usize /*We use the same constant as if it is reasonable for the extrinsic maximum this should also be reasonable for the RPC maximum*/).map(|votes| {
@@ -136,12 +137,22 @@ where
 						(votes, filtered_votes)
 					}
 				}).buffer_unordered(MAXIMUM_CONCURRENT_FILTER_REQUESTS).flat_map(|(mut votes, filtered_votes)| {
+					// We set a probabilty of double 1 / authority count, to ensure in most cases we submit a full vote.
+
+					println!("authority_count when submitting vote: {authority_count:?}");
+					let submit_full_vote = rng.gen_bool(1.0 / core::cmp::max(authority_count / 2, 1) as f64);
+
 					stream::iter(filtered_votes.into_iter().filter_map(move |election_identifier| {
-						votes.remove(&election_identifier).map(|(_partial_vote, vote)| {
+						votes.remove(&election_identifier).map(|(partial_vote, vote)| {
 							(
 								election_identifier,
-								// TODO: Only provide PartialVote most of the time, ideally this behaviour is configured by governance on a per-electoral system based.
-								AuthorityVote::Vote(vote),
+								if submit_full_vote {
+									println!("Submitting full vote");
+									AuthorityVote::Vote(vote)
+								} else {
+									println!("Submitting partial vote");
+									AuthorityVote::PartialVote(partial_vote)
+								}
 							)
 						})
 					}))
@@ -191,6 +202,7 @@ where
 				});
 
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
+					authority_count = electoral_data.authority_count;
 					if electoral_data.contributing {
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
