@@ -150,10 +150,6 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_parts(100, 0)
 	}
 
-	fn register_affiliate_withdrawal_address() -> Weight {
-		Weight::from_parts(100, 0)
-	}
-
 	fn affiliate_withdrawal_request() -> Weight {
 		Weight::from_parts(100, 0)
 	}

@@ -1826,7 +1826,7 @@ mod affiliate_withdrawal {
 	}
 
 	#[test]
-	fn fail_due_to_no_withdrawal_address_and_then_due_to_insufficient_funds() {
+	fn fail_due_to_insufficient_funds() {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
