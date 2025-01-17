@@ -907,13 +907,13 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
 	async fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
-	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
+	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>, aliases = ["lp_subscribe_order_fills"])]
 	async fn cf_subscribe_lp_order_fills(&self);
 
 	#[subscription(name = "subscribe_transaction_screening_events", aliases = ["broker_subscribe_transaction_screening_events"], item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn cf_subscribe_transaction_screening_events(&self);
 
-	#[method(name = "lp_get_order_fills")]
+	#[method(name = "lp_get_order_fills", aliases = ["lp_order_fills"])]
 	fn cf_lp_get_order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
 
 	#[method(name = "scheduled_swaps")]
@@ -1248,7 +1248,7 @@ macro_rules! pass_through_and_flatten {
 	};
 }
 
-fn flatten_into_error<R, E1, E2>(res: Result<Result<R, E1>, E2>) -> Result<R, E2>
+pub fn flatten_into_error<R, E1, E2>(res: Result<Result<R, E1>, E2>) -> Result<R, E2>
 where
 	E2: From<E1>,
 {

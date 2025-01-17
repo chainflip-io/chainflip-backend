@@ -16,6 +16,7 @@ source $LOCALNET_INIT_DIR/env/arb.env
 source $LOCALNET_INIT_DIR/env/node.env
 export ETH_INIT_AGG_KEY=$(jq -r '.eth_agg_key' $LOCALNET_INIT_DIR/keyshare/$NODE_COUNT/agg_keys.json)
 export DOT_INIT_AGG_KEY=$(jq -r '.dot_agg_key' $LOCALNET_INIT_DIR/keyshare/$NODE_COUNT/agg_keys.json)
+$BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/LP_API) --key-type=lqpr --scheme=sr25519
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/BROKER_1) --key-type=brok --scheme=sr25519
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/$NODE_NAME/signing_key_file) --key-type=aura --scheme=sr25519
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/$NODE_NAME/signing_key_file) --key-type=gran --scheme=ed25519

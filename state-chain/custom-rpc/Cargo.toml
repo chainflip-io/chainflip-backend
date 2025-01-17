@@ -33,6 +33,8 @@ pallet-cf-witnesser = { workspace = true, default-features = true }
 pallet-cf-swapping = { workspace = true, default-features = true }
 pallet-cf-ingress-egress = { workspace = true, default-features = true }
 pallet-cf-lp = { workspace = true, default-features = true }
+pallet-cf-funding = { workspace = true, default-features = true }
+pallet-cf-environment = { workspace = true, default-features = true }
 
 subxt = { workspace = true, features = ["substrate-compat"] }
 sp-api = { workspace = true, default-features = true }
