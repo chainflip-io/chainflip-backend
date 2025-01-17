@@ -94,7 +94,7 @@ impl CcmValidityCheck for CcmValidityChecker {
 					// transaction length. If any account is in fact duplicated it will effectively
 					// reduce the allowed maximum length for the user's metadata.
 					let ccm_length = ccm.message.len() +
-						ccm_accounts.remaining_accounts.len() *
+						ccm_accounts.additional_accounts.len() *
 							(ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION +
 								ACCOUNT_KEY_LENGTH_IN_TRANSACTION);
 					if ccm_length >
