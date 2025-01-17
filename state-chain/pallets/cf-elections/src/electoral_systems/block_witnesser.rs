@@ -5,6 +5,7 @@ use crate::{
 		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
 		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
+	electoral_systems::block_height_tracking::ChainProgress,
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, SharedDataHash,
 };
@@ -21,7 +22,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::bounded::alloc::collections::BTreeSet;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
-use crate::electoral_systems::block_height_tracking::ChainProgress;
+// use crate::mock::pallet_cf_elections;
 
 pub mod consensus;
 pub mod helpers;
@@ -61,15 +62,15 @@ pub struct BlockWitnesser<Chain, BlockData, Properties, ValidatorId, OnConsensus
 	)>,
 }
 
-pub trait ProcessBlockData<ChainBlockNumber, BlockData> {
-	/// Process the block data and return the unprocessed data. It's possible to have received data
-	/// for the same block twice, in the case of a reorg. It is up to the implementor of this trait
-	/// to handle this case.
-	fn process_block_data(
-		&mut self,
-		chain_progress: ChainProgress<ChainBlockNumber>,
-	);
-}
+// pub trait ProcessBlockData<ChainBlockNumber, BlockData> {
+// 	/// Process the block data and return the unprocessed data. It's possible to have received data
+// 	/// for the same block twice, in the case of a reorg. It is up to the implementor of this trait
+// 	/// to handle this case.
+// 	fn process_block_data(
+// 		&mut self,
+// 		chain_progress: ChainProgress<ChainBlockNumber>,
+// 	);
+// }
 
 /// Allows external/runtime/implementation to return the properties that the election should use.
 /// This means each instantiation of the block witnesser can control how the properties are
