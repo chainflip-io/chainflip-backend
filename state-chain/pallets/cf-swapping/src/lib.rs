@@ -715,16 +715,6 @@ pub mod pallet {
 		BrokerBondSet {
 			bond: T::Amount,
 		},
-		AffiliateWithdrawalAddressRegistered {
-			account_id: T::AccountId,
-			short_id: AffiliateShortId,
-			address: EncodedAddress,
-		},
-		AffiliateWithdrawalRequestFailed {
-			broker: T::AccountId,
-			short_id: AffiliateShortId,
-			error: DispatchError,
-		},
 		MinimumNetworkFeeSet {
 			min_fee: AssetAmount,
 		},
@@ -789,17 +779,12 @@ pub mod pallet {
 		TooManyAffiliates,
 		/// The Bonder does not have enough Funds to cover the bond.
 		InsufficientFunds,
-		/// The withdrawal address for an affiliate is already registered.
-		AddressAlreadyRegistered,
-		/// Validation of affiliate withdrawal address failed.
-		ExpectedEthereumAddress,
-		/// The withdrawal address of a affiliate was not present when we try to trigger the
-		/// withdrawal.
-		AffiliateWithdrawalAddressDosentExist,
 		/// The affiliate is already registered.
 		AffiliateAlreadyRegistered,
 		/// The affiliate account id could not be derived.
 		AffiliateAccountIdDerivationFailed,
+		/// The withdrawal address is not a valid Ethereum address.
+		InvalidWithdrawalAddress,
 	}
 
 	#[pallet::genesis_config]
@@ -1238,7 +1223,7 @@ pub mod pallet {
 					Asset::Eth,
 				)
 				.is_ok(),
-				Error::<T>::ExpectedEthereumAddress
+				Error::<T>::InvalidWithdrawalAddress
 			);
 
 			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
