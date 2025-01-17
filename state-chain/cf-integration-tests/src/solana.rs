@@ -492,7 +492,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					gas_budget: 0u128,
 					ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 						cf_receiver: SolCcmAddress { pubkey: receiver.into(), is_writable: true },
-						remaining_accounts: vec![
+						additional_accounts: vec![
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
 							SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 						],
@@ -708,7 +708,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 					gas_budget: 1_000_000_000u128,
 					ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 						cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x10; 32]), is_writable: true },
-						remaining_accounts: vec![
+						additional_accounts: vec![
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
 							SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 						],

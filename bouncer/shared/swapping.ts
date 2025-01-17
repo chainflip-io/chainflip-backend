@@ -22,11 +22,11 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
 
   const fallbackAddress = Keypair.generate().publicKey.toBytes();
 
-  const remainingAccounts = [];
-  const numRemainingAccounts = Math.floor(Math.random() * maxAccounts);
+  const additionalAccounts = [];
+  const numAdditionalAccounts = Math.floor(Math.random() * maxAccounts);
 
-  for (let i = 0; i < numRemainingAccounts; i++) {
-    remainingAccounts.push({
+  for (let i = 0; i < numAdditionalAccounts; i++) {
+    additionalAccounts.push({
       pubkey: Keypair.generate().publicKey.toBytes(),
       is_writable: Math.random() < 0.5,
     });
@@ -37,7 +37,7 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
       pubkey: new PublicKey(cfReceiverAddress).toBytes(),
       is_writable: false,
     },
-    remaining_accounts: remainingAccounts,
+    additional_accounts: additionalAccounts,
     fallback_address: fallbackAddress,
   };
 
