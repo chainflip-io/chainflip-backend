@@ -81,6 +81,8 @@ pub enum ChainProgress<ChainBlockNumber> {
 	FirstConsensus(RangeInclusive<ChainBlockNumber>),
 	// there was no update to the witnessed block headers
 	None,
+	Progress(ChainBlockNumber),
+	Reorg(RangeInclusive<ChainBlockNumber>),
 }
 
 impl<N: Ord> Validate for ChainProgress<N> {
