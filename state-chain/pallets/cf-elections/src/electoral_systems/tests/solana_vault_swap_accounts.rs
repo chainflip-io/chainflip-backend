@@ -1,6 +1,5 @@
 use cf_chains::sol::{
-	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
-	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH,
+	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS, NONCE_NUMBER_CRITICAL_NONCES,
 };
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -48,7 +47,7 @@ impl SolanaVaultSwapAccountsHook<Account, SwapDetails, ()> for MockHook {
 		INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
 	}
 
-	fn get_number_of_available_sol_nonce_accounts() -> usize {
+	fn get_number_of_available_sol_nonce_accounts(_critical: bool) -> usize {
 		GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
 		NO_OF_SOL_NONCES.with(|hook_called| hook_called.get())
 	}
@@ -61,7 +60,7 @@ impl MockHook {
 	pub fn init_swap_called() -> u8 {
 		INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get())
 	}
-	pub fn get_number_of_available_sol_nonce_accounts_called() -> u8 {
+	pub fn get_number_of_available_sol_nonce_accounts_called(_critical: bool) -> u8 {
 		GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get())
 	}
 }
@@ -103,7 +102,7 @@ fn on_finalize_accounts_limit_reached() {
 				);
 				assert_eq!(MockHook::init_swap_called(), 0, "Hook should not have been called!");
 				assert_eq!(
-					MockHook::get_number_of_available_sol_nonce_accounts_called(),
+					MockHook::get_number_of_available_sol_nonce_accounts_called(false),
 					0,
 					"Hook should not have been called!"
 				);
@@ -152,7 +151,7 @@ fn on_finalize_time_limit_reached() {
 				);
 				assert_eq!(MockHook::init_swap_called(), 0, "Hook should not have been called!");
 				assert_eq!(
-					MockHook::get_number_of_available_sol_nonce_accounts_called(),
+					MockHook::get_number_of_available_sol_nonce_accounts_called(false),
 					0,
 					"Hook should not have been called!"
 				);
@@ -217,7 +216,7 @@ fn on_finalize_close_accounts_error() {
 				);
 				assert_eq!(MockHook::init_swap_called(), 0, "Hook should not have been called!");
 				assert_eq!(
-					MockHook::get_number_of_available_sol_nonce_accounts_called(),
+					MockHook::get_number_of_available_sol_nonce_accounts_called(false),
 					0,
 					"Hook should not have been called!"
 				);
@@ -257,8 +256,7 @@ fn on_finalize_close_accounts_error() {
 
 #[test]
 fn on_finalize_nonces_below_threshold() {
-	NO_OF_SOL_NONCES
-		.with(|hook_called| hook_called.set(NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_FETCH - 1));
+	NO_OF_SOL_NONCES.with(|hook_called| hook_called.set(NONCE_NUMBER_CRITICAL_NONCES - 1));
 	TestSetup::default()
 		.with_unsynchronised_state(0)
 		.build()
@@ -272,7 +270,7 @@ fn on_finalize_nonces_below_threshold() {
 				);
 				assert_eq!(MockHook::init_swap_called(), 0, "Hook should not have been called!");
 				assert_eq!(
-					MockHook::get_number_of_available_sol_nonce_accounts_called(),
+					MockHook::get_number_of_available_sol_nonce_accounts_called(false),
 					0,
 					"Hook should not have been called!"
 				);
@@ -323,7 +321,7 @@ fn on_finalize_invalid_swap() {
 				);
 				assert_eq!(MockHook::init_swap_called(), 0, "Hook should not have been called!");
 				assert_eq!(
-					MockHook::get_number_of_available_sol_nonce_accounts_called(),
+					MockHook::get_number_of_available_sol_nonce_accounts_called(false),
 					0,
 					"Hook should not have been called!"
 				);
