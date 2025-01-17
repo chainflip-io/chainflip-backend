@@ -146,13 +146,13 @@ impl<It: Iterator<Item = Item>, Item> ArrayCollect for It {
 pub trait SliceToArray {
 	type Item: Copy;
 
-	fn as_array<const L: usize>(&self) -> [Self::Item; L];
+	fn copy_to_array<const L: usize>(&self) -> [Self::Item; L];
 }
 
 impl<Item: Copy> SliceToArray for [Item] {
 	type Item = Item;
 
-	fn as_array<const L: usize>(&self) -> [Self::Item; L] {
+	fn copy_to_array<const L: usize>(&self) -> [Self::Item; L] {
 		self.iter().copied().collect_array::<L>()
 	}
 }
@@ -215,15 +215,15 @@ fn test_collect_array_panics_on_invalid_length() {
 fn test_as_array() {
 	let a = [1, 2, 3, 4];
 
-	assert_eq!(a[1..3].as_array::<2>(), [2, 3]);
+	assert_eq!(a[1..3].copy_to_array::<2>(), [2, 3]);
 }
 
 #[test]
 fn test_as_array_panics_on_invalid_length() {
 	let a = [1, 2, 3, 4];
 
-	assert_panics!(a[1..3].as_array::<5>());
-	assert_panics!(a[1..3].as_array::<1>());
+	assert_panics!(a[1..3].copy_to_array::<5>());
+	assert_panics!(a[1..3].copy_to_array::<1>());
 }
 
 pub fn format_iterator<'a, It: 'a + IntoIterator>(it: It) -> itertools::Format<'a, It::IntoIter>

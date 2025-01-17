@@ -211,12 +211,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		while !amount.is_zero() {
 			let (output_amount, remaining_amount) = match (
 				self.limit_orders.current_sqrt_price::<SD>().filter(|sqrt_price| {
-					sqrt_price_limit.map_or(true, |sqrt_price_limit| {
+					sqrt_price_limit.is_none_or(|sqrt_price_limit| {
 						!SD::sqrt_price_op_more_than(*sqrt_price, sqrt_price_limit)
 					})
 				}),
 				self.range_orders.current_sqrt_price::<SD>().filter(|sqrt_price| {
-					sqrt_price_limit.map_or(true, |sqrt_price_limit| {
+					sqrt_price_limit.is_none_or(|sqrt_price_limit| {
 						SD::sqrt_price_op_more_than(sqrt_price_limit, *sqrt_price)
 					})
 				}),

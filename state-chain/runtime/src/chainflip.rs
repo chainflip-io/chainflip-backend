@@ -436,7 +436,7 @@ impl EvmEnvironmentProvider<Ethereum> for EvmEnvironment {
 	fn token_address(asset: assets::eth::Asset) -> Option<EvmAddress> {
 		match asset {
 			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS),
-			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
+			erc20 => Environment::supported_eth_assets(erc20),
 		}
 	}
 
@@ -468,7 +468,7 @@ impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
 	fn token_address(asset: assets::arb::Asset) -> Option<EvmAddress> {
 		match asset {
 			assets::arb::Asset::ArbEth => Some(ETHEREUM_ETH_ADDRESS),
-			assets::arb::Asset::ArbUsdc => Environment::supported_arb_assets(asset).map(Into::into),
+			assets::arb::Asset::ArbUsdc => Environment::supported_arb_assets(asset),
 		}
 	}
 

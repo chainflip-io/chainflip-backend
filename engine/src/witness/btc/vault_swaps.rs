@@ -54,7 +54,7 @@ fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 
 fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 	fn data_from_script<const LEN: usize>(script: &ScriptBuf, bytes_to_skip: usize) -> [u8; LEN] {
-		script.bytes().skip(bytes_to_skip).take(LEN).collect_vec().as_array()
+		script.bytes().skip(bytes_to_skip).take(LEN).collect_vec().copy_to_array()
 	}
 
 	let pubkey = if script.is_p2pkh() {
