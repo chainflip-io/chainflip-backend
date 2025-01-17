@@ -112,7 +112,7 @@ impl TryFrom<Vec<u8>> for PolkadotAccountId {
 		if value.len() != 32 {
 			return Err(())
 		}
-		Ok(Self(value.as_array()))
+		Ok(Self(value.copy_to_array()))
 	}
 }
 

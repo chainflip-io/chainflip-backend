@@ -49,7 +49,7 @@ fn utility_fetch(channel_id: ChannelId, vault_account: PolkadotAccountId) -> Pol
 	let layers = channel_id
 		.to_be_bytes()
 		.chunks(2)
-		.map(|chunk| u16::from_be_bytes(chunk.as_array::<2>()))
+		.map(|chunk| u16::from_be_bytes(chunk.copy_to_array::<2>()))
 		.skip_while(|layer| *layer == 0u16)
 		.collect::<Vec<u16>>();
 

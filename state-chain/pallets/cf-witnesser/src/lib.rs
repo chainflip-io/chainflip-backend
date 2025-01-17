@@ -194,7 +194,7 @@ pub mod pallet {
 				let current_epoch = T::EpochInfo::epoch_index();
 				WitnessedCallsScheduledForDispatch::<T>::mutate(|witnessed_calls_storage| {
 					witnessed_calls_storage
-						.extract_if(|(_, call, _)| {
+						.extract_if(.., |(_, call, _)| {
 							let next_weight =
 								used_weight.saturating_add(call.get_dispatch_info().weight);
 							if remaining_weight.all_gte(next_weight) &&

@@ -7,9 +7,9 @@ pub mod migrations;
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchResult, DispatchResultWithPostInfo, GetDispatchInfo},
+	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
-	pallet_prelude::Weight,
+	pallet_prelude::{DispatchResultWithPostInfo, Weight},
 	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
 	traits::{EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable, UnixTime},
@@ -236,6 +236,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [NotMember](Error::NotMember)
+		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(0)]
 		#[pallet::weight((T::WeightInfo::propose_governance_extrinsic(), DispatchClass::Operational))]
 		pub fn propose_governance_extrinsic(
@@ -297,6 +298,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [UpgradeConditionsNotMet](Error::UpgradeConditionsNotMet)
+		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn chainflip_runtime_upgrade(
@@ -333,6 +335,7 @@ pub mod pallet {
 		/// - [NotMember](Error::NotMember)
 		/// - [ProposalNotFound](Error::ProposalNotFound)
 		/// - [AlreadyApproved](Error::AlreadyApproved)
+		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::WeightInfo::approve(), DispatchClass::Operational))]
 		pub fn approve(
@@ -356,6 +359,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(clippy::useless_conversion)]
 		#[allow(clippy::boxed_local)]
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
@@ -404,6 +408,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [CallHashNotWhitelisted](Error::CallHashNotWhitelisted)
+		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(6)]
 		#[pallet::weight((T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight), DispatchClass::Operational))]
 		pub fn submit_govkey_call(

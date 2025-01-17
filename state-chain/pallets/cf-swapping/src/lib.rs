@@ -1384,7 +1384,7 @@ pub mod pallet {
 					let final_output = swap.final_output.unwrap();
 					swap.refund_params()
 						.as_ref()
-						.map_or(true, |params| final_output >= params.min_output)
+						.is_none_or(|params| final_output >= params.min_output)
 				});
 
 			if violating.is_empty() {
@@ -2284,7 +2284,7 @@ pub(crate) mod utilities {
 			.map(|swap| swap.swap_id());
 
 		maybe_swap_id_to_remove.and_then(|swap_id_to_remove| {
-			swaps.extract_if(|swap| swap.swap_id == swap_id_to_remove).next()
+			swaps.extract_if(.., |swap| swap.swap_id == swap_id_to_remove).next()
 		})
 	}
 }

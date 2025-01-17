@@ -1455,7 +1455,6 @@ where
 			additional_orders,
 			at,
 		)
-		.map(Into::into)
 	}
 
 	fn cf_pool_swap_rate_v3(
