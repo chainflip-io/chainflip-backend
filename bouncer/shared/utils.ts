@@ -68,7 +68,7 @@ const solCcmAccountsCodec = Struct({
     pubkey: TsBytes(32),
     is_writable: bool,
   }),
-  remaining_accounts: Vector(
+  additional_accounts: Vector(
     Struct({
       pubkey: TsBytes(32),
       is_writable: bool,
@@ -811,39 +811,39 @@ export async function observeSolanaCcmEvent(
 
           // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
-            const { remaining_accounts: expectedRemainingAccounts } =
+            const { additional_accounts: expectedAdditionalAccounts } =
               solVersionedCcmAdditionalDataCodec.dec(messageMetadata.ccmAdditionalData!).value;
 
             if (
-              expectedRemainingAccounts.length !== event.data.remaining_is_writable.length ||
-              expectedRemainingAccounts.length !== event.data.remaining_pubkeys.length
+              expectedAdditionalAccounts.length !== event.data.remaining_is_writable.length ||
+              expectedAdditionalAccounts.length !== event.data.remaining_pubkeys.length
             ) {
               throw new Error(
-                `Unexpected remaining accounts length: ${expectedRemainingAccounts.length}, expecting ${event.data.remaining_is_writable.length}, ${event.data.remaining_pubkeys.length}`,
+                `Unexpected additional accounts length: ${expectedAdditionalAccounts.length}, expecting ${event.data.remaining_is_writable.length}, ${event.data.remaining_pubkeys.length}`,
               );
             }
 
-            for (let index = 0; index < expectedRemainingAccounts.length; index++) {
+            for (let index = 0; index < expectedAdditionalAccounts.length; index++) {
               if (
-                expectedRemainingAccounts[index].is_writable.toString() !==
+                expectedAdditionalAccounts[index].is_writable.toString() !==
                 event.data.remaining_is_writable[index].toString()
               ) {
                 throw new Error(
-                  `Unexpected remaining account is_writable: ${event.data.remaining_is_writable[index]}, expecting ${expectedRemainingAccounts[index].is_writable}`,
+                  `Unexpected additional account is_writable: ${event.data.remaining_is_writable[index]}, expecting ${expectedAdditionalAccounts[index].is_writable}`,
                 );
               }
               const expectedPubkey = new PublicKey(
-                expectedRemainingAccounts[index].pubkey,
+                expectedAdditionalAccounts[index].pubkey,
               ).toString();
               if (expectedPubkey !== event.data.remaining_pubkeys[index].toString()) {
                 throw new Error(
-                  `Unexpected remaining account pubkey: ${event.data.remaining_pubkeys[index].toString()}, expecting ${expectedPubkey}`,
+                  `Unexpected additional account pubkey: ${event.data.remaining_pubkeys[index].toString()}, expecting ${expectedPubkey}`,
                 );
               }
             }
 
             if (event.data.remaining_is_signer.some((value: boolean) => value === true)) {
-              throw new Error(`Expected all remaining accounts to be read-only`);
+              throw new Error(`Expected all additional accounts to be read-only`);
             }
 
             if (sourceAddress !== null) {

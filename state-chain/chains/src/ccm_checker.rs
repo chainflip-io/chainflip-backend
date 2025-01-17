@@ -74,9 +74,9 @@ impl CcmValidityCheck for CcmValidityChecker {
 			.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?
 			{
 				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => {
-					// Length of CCM = length of message + total no. remaining_accounts * constant;
+					// Length of CCM = length of message + total no. additional_accounts * constant;
 					let ccm_length = ccm.message.len() +
-						ccm_accounts.remaining_accounts.len() * CCM_BYTES_PER_ACCOUNT;
+						ccm_accounts.additional_accounts.len() * CCM_BYTES_PER_ACCOUNT;
 					if ccm_length >
 						match asset {
 							SolAsset::Sol => MAX_CCM_BYTES_SOL,
@@ -106,7 +106,7 @@ pub fn check_ccm_for_blacklisted_accounts(
 	blacklisted_accounts.into_iter().try_for_each(|blacklisted_account| {
 		(ccm_accounts.cf_receiver.pubkey != blacklisted_account &&
 			!ccm_accounts
-				.remaining_accounts
+				.additional_accounts
 				.iter()
 				.any(|acc| acc.pubkey == blacklisted_account))
 		.then_some(())
@@ -155,7 +155,7 @@ mod test {
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				remaining_accounts: vec![],
+				additional_accounts: vec![],
 				fallback_address: SolPubkey([0xf0; 32]),
 			})
 			.encode()
@@ -175,7 +175,7 @@ mod test {
 		let mut invalid_ccm = ccm();
 		invalid_ccm.ccm_additional_data = VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-			remaining_accounts: vec![SolCcmAddress {
+			additional_accounts: vec![SolCcmAddress {
 				pubkey: SolPubkey([0x01; 32]),
 				is_writable: true,
 			}],
@@ -198,7 +198,7 @@ mod test {
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 				fallback_address: SolPubkey([0xf0; 32]),
-				remaining_accounts: vec![],
+				additional_accounts: vec![],
 			})
 			.encode()
 			.try_into()
@@ -217,7 +217,7 @@ mod test {
 		let mut invalid_ccm = ccm();
 		invalid_ccm.ccm_additional_data = VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-			remaining_accounts: vec![SolCcmAddress {
+			additional_accounts: vec![SolCcmAddress {
 				pubkey: SolPubkey([0x01; 32]),
 				is_writable: true,
 			}],
@@ -318,7 +318,7 @@ mod test {
 				pubkey: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT.into(),
 				is_writable: true,
 			},
-			remaining_accounts: vec![
+			additional_accounts: vec![
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x01; 32]), is_writable: false },
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],
@@ -334,7 +334,7 @@ mod test {
 				pubkey: crate::sol::SolPubkey([0x01; 32]),
 				is_writable: true,
 			},
-			remaining_accounts: vec![
+			additional_accounts: vec![
 				SolCcmAddress {
 					pubkey: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT.into(),
 					is_writable: false,
@@ -354,7 +354,7 @@ mod test {
 				pubkey: sol_test_values::agg_key().into(),
 				is_writable: true,
 			},
-			remaining_accounts: vec![
+			additional_accounts: vec![
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x01; 32]), is_writable: false },
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],
@@ -370,7 +370,7 @@ mod test {
 				pubkey: crate::sol::SolPubkey([0x01; 32]),
 				is_writable: true,
 			},
-			remaining_accounts: vec![
+			additional_accounts: vec![
 				SolCcmAddress { pubkey: sol_test_values::agg_key().into(), is_writable: false },
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],
