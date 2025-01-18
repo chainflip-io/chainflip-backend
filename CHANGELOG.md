@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.6] - 2025-01-18
+
+### Fixes
+
+- Use min compute price in SOL chain tracking
+
 ## [1.7.5] - 2024-12-11
 
 ### Fixes
