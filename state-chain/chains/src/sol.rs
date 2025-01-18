@@ -155,7 +155,7 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
 
 	/// This is equivalent to a priority fee
-	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
+	pub const MIN_COMPUTE_PRICE: SolAmount = 10_000_000u64;
 
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
 	pub const MAX_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 600_000u32;
