@@ -141,6 +141,7 @@ where
 
 					println!("authority_count when submitting vote: {authority_count:?}");
 					let submit_full_vote = rng.gen_bool(1.0 / core::cmp::max(authority_count / 2, 1) as f64);
+					let submit_full_vote = false;
 
 					stream::iter(filtered_votes.into_iter().filter_map(move |election_identifier| {
 						votes.remove(&election_identifier).map(|(partial_vote, vote)| {
@@ -202,7 +203,7 @@ where
 				});
 
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
-					authority_count = electoral_data.authority_count;
+					authority_count = core::cmp::max(electoral_data.authority_count, 1);
 					if electoral_data.contributing {
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
@@ -232,6 +233,7 @@ where
 						}
 
 						for (unprovided_shared_data_hash, reference_details) in electoral_data.unprovided_shared_data_hashes {
+							println!("Unprovided shared data hash: {unprovided_shared_data_hash:?}");
 							if let Some((shared_data, _)) = shared_data_cache.get(&unprovided_shared_data_hash) {
 								if (reference_details.created..reference_details.expires).contains(&block_info.number) {
 									// Increase probability until expiry
@@ -244,6 +246,7 @@ where
 									let final_probability = 1.0 / (core::cmp::max(1, core::cmp::min(reference_details.count, electoral_data.authority_count)) as f64);
 
 									if rng.gen_bool((1.0 - lerp_factor) * initial_probability + lerp_factor * final_probability) {
+										println!("Submitting shared data Hash: {unprovided_shared_data_hash:?}");
 										self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::provide_shared_data {
 											shared_data: shared_data.clone(),
 										}).await;
