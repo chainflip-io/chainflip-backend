@@ -5,8 +5,6 @@ use frame_support::pallet_prelude::Weight;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
-use codec::{Decode, Encode};
-
 pub mod old {
 	use super::*;
 

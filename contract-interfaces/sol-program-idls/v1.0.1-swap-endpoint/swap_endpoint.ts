@@ -42,6 +42,78 @@ export type SwapEndpoint = {
       "args": []
     },
     {
+      "name": "fetchSwapEndpointNativeAssets",
+      "discriminator": [
+        133,
+        121,
+        179,
+        232,
+        138,
+        188,
+        83,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "dataAccount"
+        },
+        {
+          "name": "nativeVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  101,
+                  110,
+                  100,
+                  112,
+                  111,
+                  105,
+                  110,
+                  116,
+                  95,
+                  110,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "aggKey",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "initialize",
       "discriminator": [
         175,
@@ -100,8 +172,43 @@ export type SwapEndpoint = {
           "name": "dataAccount"
         },
         {
-          "name": "aggKey",
-          "writable": true
+          "name": "nativeVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  101,
+                  110,
+                  100,
+                  112,
+                  111,
+                  105,
+                  110,
+                  116,
+                  95,
+                  110,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "from",
@@ -365,6 +472,19 @@ export type SwapEndpoint = {
         36,
         210
       ]
+    },
+    {
+      "name": "payeeDoesntMatchSender",
+      "discriminator": [
+        16,
+        123,
+        0,
+        234,
+        46,
+        151,
+        175,
+        168
+      ]
     }
   ],
   "errors": [
@@ -490,6 +610,22 @@ export type SwapEndpoint = {
           },
           {
             "name": "payee",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "payeeDoesntMatchSender",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "payee",
+            "type": "pubkey"
+          },
+          {
+            "name": "sender",
             "type": "pubkey"
           }
         ]

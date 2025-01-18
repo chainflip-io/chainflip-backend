@@ -24,7 +24,7 @@ use crate::{
 		sol_tx_core::{
 			address_derivation::{
 				derive_associated_token_account, derive_fetch_account,
-				derive_token_supported_account,
+				derive_swap_endpoint_native_vault_account, derive_token_supported_account,
 			},
 			compute_budget::ComputeBudgetInstruction,
 			program_instructions::{
@@ -407,7 +407,7 @@ impl SolanaTransactionBuilder {
 
 	/// Creates an instruction to close a number of open event swap accounts created via program
 	/// swap.
-	pub fn close_vault_swap_accounts(
+	pub fn fetch_and_close_vault_swap_accounts(
 		vault_swap_accounts: Vec<VaultSwapAccountAndSender>,
 		vault_program_data_account: SolAddress,
 		swap_endpoint_program: SolAddress,
@@ -428,9 +428,26 @@ impl SolanaTransactionBuilder {
 			})
 			.collect();
 
-		let instructions = vec![SwapEndpointProgram::with_id(swap_endpoint_program)
-			.close_event_accounts(vault_program_data_account, agg_key, swap_endpoint_data_account)
-			.with_additional_accounts(swap_and_sender_vec)];
+		let swap_endpoint_native_vault_pda =
+			derive_swap_endpoint_native_vault_account(swap_endpoint_program)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+		let instructions = vec![
+			SwapEndpointProgram::with_id(swap_endpoint_program).fetch_swap_endpoint_native_assets(
+				swap_endpoint_native_vault_pda.bump,
+				vault_program_data_account,
+				swap_endpoint_native_vault_pda.address,
+				agg_key,
+				system_program_id(),
+			),
+			SwapEndpointProgram::with_id(swap_endpoint_program)
+				.close_event_accounts(
+					vault_program_data_account,
+					agg_key,
+					swap_endpoint_data_account,
+				)
+				.with_additional_accounts(swap_and_sender_vec),
+		];
 
 		Self::build(
 			instructions,
@@ -518,7 +535,7 @@ pub mod test {
 	use crate::{
 		sol::{
 			sol_tx_core::{address_derivation::derive_deposit_address, sol_test_values::*},
-			SolanaDepositFetchId,
+			SolanaDepositFetchId, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 		},
 		TransferAssetParams,
 	};
@@ -690,10 +707,10 @@ pub mod test {
 	}
 
 	#[test]
-	fn can_close_vault_swap_accounts() {
+	fn can_fetch_and_close_vault_swap_accounts() {
 		let env = api_env();
 		let vault_swap_accounts = vec![EVENT_AND_SENDER_ACCOUNTS[0]];
-		let transaction = SolanaTransactionBuilder::close_vault_swap_accounts(
+		let transaction = SolanaTransactionBuilder::fetch_and_close_vault_swap_accounts(
 			vault_swap_accounts,
 			env.vault_program_data_account,
 			env.swap_endpoint_program,
@@ -704,8 +721,8 @@ pub mod test {
 		)
 		.unwrap();
 
-		// Serialized tx built in `close_vault_swap_accounts` test
-		let expected_serialized_tx = hex_literal::hex!("01ef4d3377e34a95eb29dda4ff8eba6a03a08e5283321ab0629d0fba948eb641d78956ff656a8e36628c040ce38707bb8382418dca4b8ebd43816d05c1b6c6ba0b0100050af79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17e5cc1f4d51a40626e11c783b75a45a4922615ecd7f5320b9d4d46481a196a317eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921c1f0efc91eeb48bb80c90cf97775cd5d843a96f16500266cee2c20d053152d2665730decf59d4cd6db8437dab77302287431eb7562b5997601851a0eab6946f00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000001ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc1622938a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050302070004040000000600090340420f000000000006000502307500000805090003010408a5663d01b94dbd79").to_vec();
+		// Serialized tx built in `fetch_and_close_vault_swap_accounts` test
+		let expected_serialized_tx = hex_literal::hex!("01c61c13feebb5e71f76606f6b487d2b76e1047588004ad9036b3ba3fb34de4d6bce6d17fe19d320adec39f043374510217550f58c447506c95ea7e7ff684a210d0100050bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17e5cc1f4d51a40626e11c783b75a45a4922615ecd7f5320b9d4d46481a196a317eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921c1f0efc91eeb48bb80c90cf97775cd5d843a96f16500266cee2c20d053152d2665730decf59d4cd6db8437dab77302287431eb7562b5997601851a0eab6946fc8bb64258728f7a98b57a72fade81639eb845674b3d259b51991a97a1821a31900000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000001ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc1622938a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005060302080004040000000700090340420f0000000000070005023075000009040a050006098579b3e88abc5343fe09050a0003010408a5663d01b94dbd79").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -714,9 +731,17 @@ pub mod test {
 	fn can_close_max_vault_swap_accounts() {
 		let env = api_env();
 
-		// We can close 11 accounts without reaching the transaction length limit.
-		let transaction = SolanaTransactionBuilder::close_vault_swap_accounts(
-			EVENT_AND_SENDER_ACCOUNTS.to_vec(),
+		// Take the max amount of event accounts we will use
+		let event_accounts = EVENT_AND_SENDER_ACCOUNTS
+			.iter()
+			.take(MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES)
+			.copied()
+			.collect::<Vec<_>>();
+
+		// We must be able to close MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES accounts without
+		// reaching the transaction length limit.
+		let transaction = SolanaTransactionBuilder::fetch_and_close_vault_swap_accounts(
+			event_accounts,
 			env.vault_program_data_account,
 			env.swap_endpoint_program,
 			env.swap_endpoint_program_data_account,
@@ -726,7 +751,7 @@ pub mod test {
 		)
 		.unwrap();
 
-		let expected_serialized_tx = hex_literal::hex!("0180568a598edecde53b1de53cb14f73e6e046a2db48a5c5a687ec135b2d9aac8d58a9472f4fb6ae6fb180f2b912a5e6272e1c8a1ba2e346dda2581a8a0040f80a0100051ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb05a557a331e51b8bf444d3bacdf6f48d8fd583aa79f9b956dd68f13a67ad096412741ecfad8423dea0c173b354b32309c3e97bb1dc68e0d858c3caebc1a1701a178480c19a99c9f2b95d40ebcb55057a49f0df00e123da6ae5e85a77c282f7c117e5cc1f4d51a40626e11c783b75a45a4922615ecd7f5320b9d4d46481a196a317eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921c11d80c98e8c11e79fd97b6c10ad733782bdbe25a710b807bbf14dedaa314861c1f0efc91eeb48bb80c90cf97775cd5d843a96f16500266cee2c20d053152d2266d68abb283ba2f4cecb092e3cfed2cb1774468ebbc264426c268ff405aa5a837de225793278f0575804f7d969e1980caaa5c5ddb2aebfd8496b14e71c9fad657d7f5b3e6c340824caca3b6c34c03e2fe0e636430b2b729ddfe32146ba4b3795c4b1e73c84b8d3f9e006c22fe8b865b9900e296345d88cdaaa7077ef17d9a31665730decf59d4cd6db8437dab77302287431eb7562b5997601851a0eab6946f74dd7ddee33a59ae7431bb31fbeb738cbfd097a66fd6706cffe7fc7efb239ec67fab67806fbb92ffd9504f4411b7f4561a0efb16685e4a22c41373fedc50b4bf86554fe5208d48fc8198310804e59837443fdaab12ea97be0fa38049910da82987410536ffebba5f49e67bafd3aa4b6cc860a594641e801500e058f74bac504da054544b2425f722e18c810bbc6cb6b9045d0db0a62d529af30efde8c37255bda7e867ab720f01897e5ede67fc232e41729d0be2a530391619743822ff6d95bea9dff663e1d13345d96daede8066cd30a1474635f2d64052d1a50ac04aed3f99bd9ce2f9674b65bfaefb62c9b8252fd0080357b1cbff44d0dad8568535dbc230c78bf2e7aee8e16631746542ef634cee3ac9bdc044c491f06862590ff1029865ce904f76d0a0ffedad66f8e2c94bccc731cac372fef8bb12cd2c473d95acf366d33096c9d0fa193639345c07abfe81175fc4d153cf0ab7b5668006538f195382df0e412e53b45bf52f91fa8e70ea872687428e4cb372306b9e6073f8d3c270c400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000001ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc1622938a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900041903051b0004040000001a00090340420f00000000001a00050220bf02001c191d0007040c0a01141312060b17100e02090d0f08151103161808a5663d01b94dbd79").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01d5df3e90f947aa1a4608e35bcbfcd5a286c89fa7ff8ec1eeeebe05c90be49f4acc4f811408f04c5f69403d4a52a3a1946c498e5dd26e10b21304cc6f69c35b0b01000513f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb05a557a331e51b8bf444d3bacdf6f48d8fd583aa79f9b956dd68f13a67ad096417e5cc1f4d51a40626e11c783b75a45a4922615ecd7f5320b9d4d46481a196a317eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921c11d80c98e8c11e79fd97b6c10ad733782bdbe25a710b807bbf14dedaa314861c1f0efc91eeb48bb80c90cf97775cd5d843a96f16500266cee2c20d053152d257d7f5b3e6c340824caca3b6c34c03e2fe0e636430b2b729ddfe32146ba4b3795c4b1e73c84b8d3f9e006c22fe8b865b9900e296345d88cdaaa7077ef17d9a31665730decf59d4cd6db8437dab77302287431eb7562b5997601851a0eab6946fa7e867ab720f01897e5ede67fc232e41729d0be2a530391619743822ff6d95bea9dff663e1d13345d96daede8066cd30a1474635f2d64052d1a50ac04aed3f99bd9ce2f9674b65bfaefb62c9b8252fd0080357b1cbff44d0dad8568535dbc230c8bb64258728f7a98b57a72fade81639eb845674b3d259b51991a97a1821a319d33096c9d0fa193639345c07abfe81175fc4d153cf0ab7b5668006538f19538200000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000001ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc1622938a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900050e0303100004040000000f00090340420f00000000000f000502905f01001104120c000e098579b3e88abc5343fe110d120005020806010b0a0904070d08a5663d01b94dbd79").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}

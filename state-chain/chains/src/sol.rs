@@ -27,10 +27,8 @@ pub use crate::assets::sol::Asset as SolAsset;
 use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
 	consts::{
-		LAMPORTS_PER_SIGNATURE, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
-		MAX_TRANSACTION_LENGTH, MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
-		MICROLAMPORTS_PER_LAMPORT,
-		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES, TOKEN_ACCOUNT_RENT,
+		LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT,
+		TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
@@ -51,6 +49,15 @@ pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 // All function parameters are already accounted for excepte additional_accounts and message.
 pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize; // 694 bytes left
 pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize; // 481 bytes left
+
+// Nonce management values
+pub const NONCE_NUMBER_CRITICAL_NONCES: usize = 1;
+pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER: usize = 1;
+
+// Values used when closing vault swap accounts.
+pub const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES: usize = 5;
+pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
+pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 3;
 
 // Use serialized transaction
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]

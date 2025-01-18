@@ -32,7 +32,7 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
     });
   }
 
-  const ccmAccounts = {
+  const ccmAdditionalData = {
     cf_receiver: {
       pubkey: new PublicKey(cfReceiverAddress).toBytes(),
       is_writable: false,
@@ -44,7 +44,7 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
   return u8aToHex(
     solVersionedCcmAdditionalDataCodec.enc({
       tag: 'V0',
-      value: ccmAccounts,
+      value: ccmAdditionalData,
     }),
   );
 }
@@ -129,7 +129,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
   return newCcmArbitraryBytes(length);
 }
 // Minimum overhead to ensure simple CCM transactions succeed
-const OVERHEAD_COMPUTE_UNITS = 10000;
+const OVERHEAD_COMPUTE_UNITS = 20000;
 
 export async function newCcmMetadata(
   destAsset: Asset,
