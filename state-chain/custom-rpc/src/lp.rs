@@ -222,35 +222,36 @@ where
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<String>> {
-		let wait_for_result = self
-			.signed_pool_client
-			.submit_wait_for_result(
-				RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
-					asset,
-					boost_fee: boost_fee.unwrap_or_default(),
-				}),
-				wait_for.unwrap_or_default(),
-				false,
-				None,
-			)
-			.await?;
-
-		Ok(match wait_for_result {
-			WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-			WaitForResult::Details(details) => {
-				let (tx_hash, events, ..) = details;
-				extract_event!(
-					events,
-					state_chain_runtime::RuntimeEvent::LiquidityProvider,
-					pallet_cf_lp::Event::LiquidityDepositAddressReady,
-					{ deposit_address, .. },
-					ApiWaitForResult::TxDetails {
-						tx_hash,
-						response: deposit_address.to_string()
-					}
-				)?
+		Ok(
+			match self
+				.signed_pool_client
+				.submit_wait_for_result(
+					RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
+						asset,
+						boost_fee: boost_fee.unwrap_or_default(),
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+					None,
+				)
+				.await?
+			{
+				WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+				WaitForResult::Details(details) => {
+					let (tx_hash, events, ..) = details;
+					extract_event!(
+						events,
+						state_chain_runtime::RuntimeEvent::LiquidityProvider,
+						pallet_cf_lp::Event::LiquidityDepositAddressReady,
+						{ deposit_address, .. },
+						ApiWaitForResult::TxDetails {
+							tx_hash,
+							response: deposit_address.to_string()
+						}
+					)?
+				},
 			},
-		})
+		)
 	}
 
 	async fn register_liquidity_refund_address(
@@ -287,64 +288,39 @@ where
 			Err(anyhow!("Withdrawal amount must be greater than 0"))?;
 		}
 
-		// Ok(into_api_wait_for_result(
-		// 	self
-		// 		.signed_pool_client
-		// 		.submit(
-		// 			RuntimeCall::from(pallet_cf_lp::Call::withdraw_asset {
-		// 				amount,
-		// 				asset,
-		// 				destination_address: destination_address
-		// 					.try_parse_to_encoded_address(asset.into())
-		// 					.map_err(anyhow::Error::msg)?,
-		// 			}),
-		// 			wait_for.unwrap_or_default(),
-		// 			false,
-		// 			None,
-		// 		)
-		// 		.await?
-		// 	, |events: Vec<state_chain_runtime::RuntimeEvent>| -> anyhow::Result<EgressId> {
-		// 		extract_event!(
-		// 			events,
-		// 			state_chain_runtime::RuntimeEvent::LiquidityProvider,
-		// 			pallet_cf_lp::Event::WithdrawalEgressScheduled,
-		// 			{ egress_id, .. },
-		// 			*egress_id
-		// 		)
-		// 	}?))
-
-		let wait_for_result = self
-			.signed_pool_client
-			.submit_wait_for_result(
-				RuntimeCall::from(pallet_cf_lp::Call::withdraw_asset {
-					amount,
-					asset,
-					destination_address: destination_address
-						.try_parse_to_encoded_address(asset.into())
-						.map_err(anyhow::Error::msg)?,
-				}),
-				wait_for.unwrap_or_default(),
-				false,
-				None,
-			)
-			.await?;
-
-		Ok(match wait_for_result {
-			WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-			WaitForResult::Details(details) => {
-				let (tx_hash, events, ..) = details;
-				extract_event!(
-					events,
-					state_chain_runtime::RuntimeEvent::LiquidityProvider,
-					pallet_cf_lp::Event::WithdrawalEgressScheduled,
-					{ egress_id, .. },
-					ApiWaitForResult::TxDetails {
-						tx_hash,
-						response: *egress_id
-					}
-				)?
+		Ok(
+			match self
+				.signed_pool_client
+				.submit_wait_for_result(
+					RuntimeCall::from(pallet_cf_lp::Call::withdraw_asset {
+						amount,
+						asset,
+						destination_address: destination_address
+							.try_parse_to_encoded_address(asset.into())
+							.map_err(anyhow::Error::msg)?,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+					None,
+				)
+				.await?
+			{
+				WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+				WaitForResult::Details(details) => {
+					let (tx_hash, events, ..) = details;
+					extract_event!(
+						events,
+						state_chain_runtime::RuntimeEvent::LiquidityProvider,
+						pallet_cf_lp::Event::WithdrawalEgressScheduled,
+						{ egress_id, .. },
+						ApiWaitForResult::TxDetails {
+							tx_hash,
+							response: *egress_id
+						}
+					)?
+				},
 			},
-		})
+		)
 	}
 
 	async fn transfer_asset(
