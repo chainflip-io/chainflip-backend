@@ -7,7 +7,7 @@
 // For example: ./commands/setup_lp_account.ts //LP_3
 
 import { runWithTimeoutAndExit } from '../shared/utils';
-import { setupLpAccount } from '../shared/setup_lp_account';
+import { setupLpAccount } from '../shared/setup_account';
 
 async function main() {
   const lpKey = process.argv[2];

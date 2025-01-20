@@ -155,8 +155,8 @@ packages:
   '@chainflip/extrinsics@1.6.1':
     resolution: {integrity: sha512-sm3v2QguNW4/RiIZYHd+VRSxup2q4cVBY0VjbQJw6xYqhNCzZlt+Hl38Kni+TCHQu3hP/WgIF72yvvSs7/PBdg==}
 
-  '@chainflip/rpc@1.6.10':
-    resolution: {integrity: sha512-Drn4EseSJRIdR5Jsi7uxAD3KEv0bK+zYL+AiMqQ/hZTRnWoVQArKm7xsJxFTOiGscQXTlqRO/igTcGaghYUmmQ==}
+  '@chainflip/rpc@1.6.12':
+    resolution: {integrity: sha512-cZM05jcOVijtxutN3ini5R52lYu7vbmszi5n5PEwGi2ueNn4pyikRDlIg6zSwtpMcCDYk17l3HK88Iam1w5/BA==}
 
   '@chainflip/solana@1.0.2':
     resolution: {integrity: sha512-8M+z0yjVCZBMpdCTGuBRt/Ns9NBJCNFvnSOjDu/kyaBRvxdUvECJOIseL0ENLBd0J/YmO9TcrZ30M0po3a96BA==}
@@ -3151,6 +3151,9 @@ packages:
   zod@3.23.8:
     resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
 
+  zod@3.24.1:
+    resolution: {integrity: sha512-muH7gBL9sI1nciMZV67X5fTKKBLtwpZ5VBp1vsOQzj1MhrBZ4wlVCm3gedKZWLp0Oyel8sIGfeiz54Su+OVT+A==}
+
 snapshots:
 
   '@adraffy/ens-normalize@1.10.1': {}
@@ -3170,7 +3173,7 @@ snapshots:
     dependencies:
       '@chainflip/bitcoin': 1.1.1(typescript@5.5.3)
       '@chainflip/extrinsics': 1.6.1
-      '@chainflip/rpc': 1.6.10
+      '@chainflip/rpc': 1.6.12
       '@chainflip/solana': 1.0.2
       '@chainflip/utils': 0.4.0
       axios: 1.7.2
@@ -3186,10 +3189,10 @@ snapshots:
 
   '@chainflip/extrinsics@1.6.1': {}
 
-  '@chainflip/rpc@1.6.10':
+  '@chainflip/rpc@1.6.12':
     dependencies:
       '@chainflip/utils': 0.4.0
-      zod: 3.23.8
+      zod: 3.24.1
 
   '@chainflip/solana@1.0.2':
     dependencies:
@@ -6958,3 +6961,5 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   zod@3.23.8: {}
+
+  zod@3.24.1: {}
