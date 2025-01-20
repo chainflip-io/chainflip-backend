@@ -1,4 +1,4 @@
-use cf_chains::{address::EncodedAddress, RefundParametersRpc, VaultSwapExtraParametersRpc};
+use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
@@ -137,7 +137,7 @@ pub trait Rpc {
 	async fn register_affiliate(
 		&self,
 		short_id: AffiliateShortId,
-		withdrawal_address: EncodedAddress,
+		withdrawal_address: AddressString,
 	) -> RpcResult<AccountId32>;
 
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
@@ -303,7 +303,7 @@ impl RpcServer for RpcServerImpl {
 	async fn register_affiliate(
 		&self,
 		short_id: AffiliateShortId,
-		withdrawal_address: EncodedAddress,
+		withdrawal_address: AddressString,
 	) -> RpcResult<AccountId32> {
 		Ok(self.api.broker_api().register_affiliate(short_id, withdrawal_address).await?)
 	}
