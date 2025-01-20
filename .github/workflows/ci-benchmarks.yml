@@ -12,7 +12,7 @@ jobs:
       matrix:
         profile: [release, production]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-11-23"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2025-01-10"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

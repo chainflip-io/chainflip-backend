@@ -787,7 +787,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				log::warn!("Expected broadcast with id {} to still be pending.", broadcast_id);
 			}
 			while let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
-				if pending_broadcasts.first().map_or(true, |id| *id > *broadcast_barrier_id) {
+				if pending_broadcasts.first().is_none_or(|id| *id > *broadcast_barrier_id) {
 					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
 						broadcast_barriers.pop_first();
 					});

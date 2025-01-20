@@ -633,7 +633,7 @@ impl ScriptPubkey {
 			buf.push(version);
 			buf.extend_from_slice(data);
 			let checksum =
-				sha2_256(&sha2_256(&buf))[..CHECKSUM_LENGTH].as_array::<CHECKSUM_LENGTH>();
+				sha2_256(&sha2_256(&buf))[..CHECKSUM_LENGTH].copy_to_array::<CHECKSUM_LENGTH>();
 			buf.extend(checksum);
 			bs58::encode(buf).with_alphabet(bs58::Alphabet::BITCOIN).into_string()
 		}
@@ -655,11 +655,11 @@ impl ScriptPubkey {
 			let (payload, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
 
 			if &sha2_256(&sha2_256(payload))[..CHECKSUM_LENGTH] == checksum {
-				let [version, hash @ ..] = payload.as_array::<PAYLOAD_LENGTH>();
+				let [version, hash @ ..] = payload.copy_to_array::<PAYLOAD_LENGTH>();
 				if version == network.p2pkh_address_version() {
-					Some(ScriptPubkey::P2PKH(hash.as_array()))
+					Some(ScriptPubkey::P2PKH(hash.copy_to_array()))
 				} else if version == network.p2sh_address_version() {
-					Some(ScriptPubkey::P2SH(hash.as_array()))
+					Some(ScriptPubkey::P2SH(hash.copy_to_array()))
 				} else {
 					None
 				}
@@ -679,11 +679,11 @@ impl ScriptPubkey {
 				let program = Vec::from_base32(&data[1..]).ok()?;
 				match (version, variant, program.len() as u32) {
 					(SEGWIT_VERSION_ZERO, Variant::Bech32, 20) =>
-						Some(ScriptPubkey::P2WPKH(program.as_array())),
+						Some(ScriptPubkey::P2WPKH(program.copy_to_array())),
 					(SEGWIT_VERSION_ZERO, Variant::Bech32, 32) =>
-						Some(ScriptPubkey::P2WSH(program.as_array())),
+						Some(ScriptPubkey::P2WSH(program.copy_to_array())),
 					(SEGWIT_VERSION_TAPROOT, Variant::Bech32m, 32) =>
-						Some(ScriptPubkey::Taproot(program.as_array())),
+						Some(ScriptPubkey::Taproot(program.copy_to_array())),
 					(
 						SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX,
 						Variant::Bech32m,

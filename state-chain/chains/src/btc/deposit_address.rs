@@ -81,10 +81,9 @@ impl DepositAddress {
 	}
 
 	pub fn script_pubkey(&self) -> ScriptPubkey {
-		let pubkey = self
-			.script_path
-			.clone()
-			.map_or(self.pubkey_x, |script_path| script_path.tweaked_pubkey_bytes[1..].as_array());
+		let pubkey = self.script_path.clone().map_or(self.pubkey_x, |script_path| {
+			script_path.tweaked_pubkey_bytes[1..].copy_to_array()
+		});
 		ScriptPubkey::Taproot(pubkey)
 	}
 }

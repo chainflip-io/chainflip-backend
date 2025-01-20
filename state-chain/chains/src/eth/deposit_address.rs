@@ -80,7 +80,7 @@ pub fn get_create_2_address(
 	)
 	.collect::<Vec<_>>();
 
-	H160(Keccak256::hash(&create_2_args)[12..].as_array())
+	H160(Keccak256::hash(&create_2_args)[12..].copy_to_array())
 }
 
 /// Get the CREATE2 salt for a given channel_id, equivalent to the big-endian u32, left-padded to 32

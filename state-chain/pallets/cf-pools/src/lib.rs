@@ -921,6 +921,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [UnsupportedCall](pallet_cf_pools::Error::UnsupportedCall)
+		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::schedule_limit_order_update())]
 		pub fn schedule_limit_order_update(
@@ -1739,16 +1740,13 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::PoolDoesNotExist)?
 			.pool_state;
 
-		pool_state
-			.required_asset_ratio_for_range_order(tick_range)
-			.map_err(|error| {
-				match error {
-					range_orders::RequiredAssetRatioError::InvalidTickRange =>
-						Error::<T>::InvalidTickRange,
-				}
-				.into()
-			})
-			.map(Into::into)
+		pool_state.required_asset_ratio_for_range_order(tick_range).map_err(|error| {
+			match error {
+				range_orders::RequiredAssetRatioError::InvalidTickRange =>
+					Error::<T>::InvalidTickRange,
+			}
+			.into()
+		})
 	}
 
 	pub fn pool_orderbook(
@@ -2028,7 +2026,6 @@ impl<T: Config> Pallet<T> {
 				}
 				.into()
 			})
-			.map(Into::into)
 	}
 
 	/// Process changes to limit order:

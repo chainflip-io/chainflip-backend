@@ -783,7 +783,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		// container, there is a fixed limit to how far the price can move in one iteration of the
 		// loop, we don't have this restriction here.
 		while let Some((tick_at_delta, delta)) = (!amount.is_zero() &&
-			sqrt_price_limit.map_or(true, |sqrt_price_limit| {
+			sqrt_price_limit.is_none_or(|sqrt_price_limit| {
 				SD::sqrt_price_op_more_than(sqrt_price_limit, self.current_sqrt_price)
 			}))
 		.then_some(())

@@ -1776,7 +1776,7 @@ pub mod pallet {
 										block_number < reference_details.expires &&
 										unprovided_shared_data_hashes
 											.get(&shared_data_hash)
-											.map_or(true, |previous_reference_details| {
+											.is_none_or(|previous_reference_details| {
 												reference_details.created <
 													previous_reference_details.created
 											}) {

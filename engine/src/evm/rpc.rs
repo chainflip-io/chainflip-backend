@@ -144,7 +144,7 @@ impl EvmRpcSigningClient {
 
 		let wallet = read_clean_and_decode_hex_str_file(
 			&private_key_file,
-			"{chain_name} Private Key",
+			format!("{chain_name} Private Key").as_str(),
 			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
 		)?;
 
