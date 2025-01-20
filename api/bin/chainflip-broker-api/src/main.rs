@@ -145,7 +145,10 @@ pub trait Rpc {
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
 
 	#[method(name = "affiliate_withdrawal_request", aliases = ["broker_affiliateWithdrawalRequest"])]
-	async fn affiliate_withdrawal_request(&self, affiliate_id: AccountId32) -> RpcResult<()>;
+	async fn affiliate_withdrawal_request(
+		&self,
+		affiliate_short_id: AffiliateShortId,
+	) -> RpcResult<()>;
 }
 
 pub struct RpcServerImpl {
@@ -319,8 +322,11 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn affiliate_withdrawal_request(&self, affiliate_id: AccountId32) -> RpcResult<()> {
-		self.api.broker_api().affiliate_withdrawal_request(affiliate_id).await?;
+	async fn affiliate_withdrawal_request(
+		&self,
+		affiliate_short_id: AffiliateShortId,
+	) -> RpcResult<()> {
+		self.api.broker_api().affiliate_withdrawal_request(affiliate_short_id).await?;
 		Ok(())
 	}
 }

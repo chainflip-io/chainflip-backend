@@ -558,10 +558,13 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		)
 	}
 
-	async fn affiliate_withdrawal_request(&self, affiliate_id: AccountId32) -> Result<()> {
+	async fn affiliate_withdrawal_request(
+		&self,
+		affiliate_short_id: AffiliateShortId,
+	) -> Result<()> {
 		let (_, events, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::affiliate_withdrawal_request { affiliate_id },
+				pallet_cf_swapping::Call::affiliate_withdrawal_request { affiliate_short_id },
 			)
 			.await?
 			.until_in_block()
