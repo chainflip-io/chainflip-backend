@@ -38,16 +38,6 @@ export async function stopBoosting<T = any>(
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  const observeStoppedBoosting = observeEvent(
-    `${chainFromAsset(asset).toLowerCase()}IngressEgress:StoppedBoosting`,
-    {
-      test: (event) =>
-        event.data.boosterId === lp.address &&
-        event.data.boostPool.asset === asset &&
-        event.data.boostPool.tier === boostTier.toString(),
-    },
-  ).event;
-
   const extrinsicResult: any = await extrinsicSubmitter.submit(
     chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].stopBoosting(
       shortChainFromAsset(asset).toUpperCase(),
@@ -57,6 +47,16 @@ export async function stopBoosting<T = any>(
   );
   if (!extrinsicResult?.dispatchError) {
     console.log('waiting for stop boosting event');
+    const observeStoppedBoosting = observeEvent(
+      `${chainFromAsset(asset).toLowerCase()}IngressEgress:StoppedBoosting`,
+      {
+        test: (event) =>
+          event.data.boosterId === lp.address &&
+          event.data.boostPool.asset === asset &&
+          event.data.boostPool.tier === boostTier.toString(),
+        historicalCheckBlocks: 10,
+      },
+    ).event;
     return observeStoppedBoosting;
   }
   console.log('Already stopped boosting');

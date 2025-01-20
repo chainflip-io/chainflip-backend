@@ -1,5 +1,6 @@
-import { SwapContext } from './swap_context';
 import { ConsoleLogColors, getTimeStamp, runWithTimeout } from './utils';
+import { SwapContext } from './swap_context';
+import { runningTests } from './executable_test_task_tracker';
 
 export enum TestStatus {
   Ready = 'ready',
@@ -38,15 +39,19 @@ export class ExecutableTest {
 
   private runFunction: (...args: unknown[]) => Promise<void>;
 
-  timeoutSeconds: number;
+  private timeoutSeconds: number;
 
-  debug = false;
+  public debug = false;
 
   public swapContext: SwapContext;
 
   public filePath = '';
 
   public fileName = '';
+
+  private awaitingTaskIdCounter = 0;
+
+  private awaitingTasks = new Map<number, { name: string; location: string }>();
 
   constructor(
     public name: string,
@@ -65,6 +70,7 @@ export class ExecutableTest {
     if (this.status === TestStatus.Running) {
       throw new Error(`${this.name} Test is already running`);
     }
+    runningTests.add(this);
     console.log(ConsoleLogColors.LightBlue, `=== Running ${this.name} test ===`);
     this.status = TestStatus.Running;
     await runWithTimeout(this.runFunction(...args), this.timeoutSeconds).catch((error) => {
@@ -72,16 +78,28 @@ export class ExecutableTest {
       if (this.swapContext.allSwaps.size > 0) {
         this.swapContext.print_report();
       }
+
       // Print a timestamped error message with the test name
       console.error(
         ConsoleLogColors.RedSolid,
         `=== ${this.name} test failed (${getTimeStamp()}) ===`,
       );
+
+      // Print a list of any tasks that we were waiting for
+      if (this.awaitingTasks.size > 0) {
+        console.error('Timeout waiting for:');
+        for (const [, task] of this.awaitingTasks) {
+          console.error(`  ${task.name} at ${task.location}`);
+        }
+      }
+
       this.status = TestStatus.Failed;
       // Rethrow the error to be caught by the caller
+      runningTests.delete(this);
       throw error;
     });
     this.status = TestStatus.Complete;
+    runningTests.delete(this);
     console.log(ConsoleLogColors.Green, `=== ${this.name} test complete ===`);
   }
 
@@ -121,5 +139,19 @@ export class ExecutableTest {
       this.log(`Execution time: ${executionTime}/${this.timeoutSeconds}s`);
     }
     process.exit(0);
+  }
+
+  /// Track a task that we are waiting for, returning a task ID
+  startAwaiting(name: string, location: string): number {
+    const taskId = this.awaitingTaskIdCounter++;
+    this.awaitingTasks.set(taskId, { name, location });
+    return taskId;
+  }
+
+  /// Stop tracking a task that we were waiting for
+  stopAwaiting(taskId: number | undefined) {
+    if (taskId !== undefined) {
+      this.awaitingTasks.delete(taskId);
+    }
   }
 }

@@ -33,6 +33,7 @@ import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 import { execWithLog } from './utils/exec_with_log';
 import { send } from './send';
+import { startAwaitTask } from './executable_test_task_tracker';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -687,15 +688,19 @@ export async function observeBalanceIncrease(
   address: string,
   oldBalance: string,
 ): Promise<number> {
+  const task = startAwaitTask(`Balance Increase ${dstCcy}`);
+
   for (let i = 0; i < 2400; i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > Number(oldBalance)) {
+      task.stopAwaiting();
       return newBalance;
     }
 
     await sleep(3000);
   }
 
+  task.stopAwaiting();
   return Promise.reject(new Error('Failed to observe balance increase'));
 }
 
@@ -735,6 +740,8 @@ export async function observeEVMEvent(
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<ContractEvent | undefined> {
+  const task = startAwaitTask(`Observe EVM Event ${eventName}`);
+
   const web3 = new Web3(getEvmEndpoint(chain));
   const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
@@ -751,7 +758,10 @@ export async function observeEVMEvent(
   const parameterNames = eventAbi.inputs.map((input: any) => input.name);
 
   for (let i = 0; i < 1200; i++) {
-    if (stopObserve()) return undefined;
+    if (stopObserve()) {
+      task.stopAwaiting();
+      return undefined;
+    }
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
       const events = await contract.getPastEvents(eventName, {
@@ -759,8 +769,10 @@ export async function observeEVMEvent(
         toBlock: currentBlockNumber,
       });
       for (let j = 0; j < events.length; j++) {
-        if (Object.keys(events[j].returnValues).length / 2 !== parameterNames.length)
+        if (Object.keys(events[j].returnValues).length / 2 !== parameterNames.length) {
+          task.stopAwaiting();
           throw new Error('Unexpected event length');
+        }
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
           if (
@@ -769,6 +781,7 @@ export async function observeEVMEvent(
           ) {
             break;
           } else if (k === parameterNames.length - 1) {
+            task.stopAwaiting();
             return {
               name: events[j].event,
               address: events[j].address,
@@ -783,6 +796,7 @@ export async function observeEVMEvent(
     await sleep(2500);
   }
 
+  task.stopAwaiting();
   throw new Error(`Failed to observe the ${eventName} event`);
 }
 
@@ -795,6 +809,7 @@ export async function observeSolanaCcmEvent(
   const connection = getSolConnection();
   const idl = cfTesterIdl;
   const cfTesterAddress = new PublicKey(getContractAddress('Solana', 'CFTESTER'));
+  const task = startAwaitTask(`Observe Solana Event ${eventName}`);
 
   for (let i = 0; i < 300; i++) {
     const txSignatures = await connection.getSignaturesForAddress(cfTesterAddress);
@@ -820,6 +835,7 @@ export async function observeSolanaCcmEvent(
               expectedAdditionalAccounts.length !== event.data.remaining_is_writable.length ||
               expectedAdditionalAccounts.length !== event.data.remaining_pubkeys.length
             ) {
+              task.stopAwaiting();
               throw new Error(
                 `Unexpected additional accounts length: ${expectedAdditionalAccounts.length}, expecting ${event.data.remaining_is_writable.length}, ${event.data.remaining_pubkeys.length}`,
               );
@@ -830,6 +846,7 @@ export async function observeSolanaCcmEvent(
                 expectedAdditionalAccounts[index].is_writable.toString() !==
                 event.data.remaining_is_writable[index].toString()
               ) {
+                task.stopAwaiting();
                 throw new Error(
                   `Unexpected additional account is_writable: ${event.data.remaining_is_writable[index]}, expecting ${expectedAdditionalAccounts[index].is_writable}`,
                 );
@@ -838,6 +855,7 @@ export async function observeSolanaCcmEvent(
                 expectedAdditionalAccounts[index].pubkey,
               ).toString();
               if (expectedPubkey !== event.data.remaining_pubkeys[index].toString()) {
+                task.stopAwaiting();
                 throw new Error(
                   `Unexpected additional account pubkey: ${event.data.remaining_pubkeys[index].toString()}, expecting ${expectedPubkey}`,
                 );
@@ -845,21 +863,25 @@ export async function observeSolanaCcmEvent(
             }
 
             if (event.data.remaining_is_signer.some((value: boolean) => value === true)) {
+              task.stopAwaiting();
               throw new Error(`Expected all additional accounts to be read-only`);
             }
 
             if (sourceAddress !== null) {
               const hexSourceAddress = '0x' + (event.data.source_address as Buffer).toString('hex');
               if (hexSourceAddress !== sourceAddress) {
+                task.stopAwaiting();
                 throw new Error(
                   `Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`,
                 );
               }
             } else if (event.data.source_address.toString() !== Buffer.from([]).toString()) {
+              task.stopAwaiting();
               throw new Error(
                 `Unexpected source address: ${event.data.source_address}, expecting empty ${Buffer.from([0])}`,
               );
             }
+            task.stopAwaiting();
             return {
               name: event.name,
               address: cfTesterAddress.toString(),
@@ -872,6 +894,7 @@ export async function observeSolanaCcmEvent(
     }
     await sleep(10000);
   }
+  task.stopAwaiting();
   throw new Error(`Failed to observe Solana's ${eventName} event`);
 }
 
@@ -1069,6 +1092,7 @@ export async function submitChainflipExtrinsic(
   errorOnFail = true,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
+  const task = startAwaitTask('Submit Chainflip Extrinsic');
   await using chainflipApi = await getChainflipApi();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1092,8 +1116,10 @@ export async function submitChainflipExtrinsic(
     } else {
       error = extrinsicResult.dispatchError.toString();
     }
+    task.stopAwaiting();
     throw new Error(`Extrinsic failed: ${error}`);
   }
+  task.stopAwaiting();
   return extrinsicResult;
 }
 
@@ -1131,12 +1157,15 @@ export async function tryUntilSuccess(
   maxAttempts: number,
   logTag?: string,
 ) {
+  const task = startAwaitTask('tryUntilSuccess');
   for (let i = 0; i < maxAttempts; i++) {
     if (await closure()) {
+      task.stopAwaiting();
       return;
     }
     await sleep(pollTime);
   }
+  task.stopAwaiting();
   throw new Error('tryUntilSuccess failed: ' + logTag);
 }
 
@@ -1174,6 +1203,7 @@ export async function startEngines(
 
 // Check that all Solana Nonces are available
 export async function checkAvailabilityAllSolanaNonces() {
+  const task = startAwaitTask('Check Availability All Solana Nonces');
   console.log('=== Checking Solana Nonce Availability ===');
 
   // Check that all Solana nonces are available
@@ -1186,6 +1216,7 @@ export async function checkAvailabilityAllSolanaNonces() {
     if (availableNonces.length === solanaNumberOfNonces) {
       break;
     } else if (attempt === maxRetries - 1) {
+      task.stopAwaiting();
       throw new Error(
         `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces}`,
       );
@@ -1193,6 +1224,7 @@ export async function checkAvailabilityAllSolanaNonces() {
       await sleep(6000);
     }
   }
+  task.stopAwaiting();
 }
 
 export function createStateChainKeypair(uri: string) {
