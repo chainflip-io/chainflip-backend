@@ -29,7 +29,7 @@ pub struct SolRetryRpcClient {
 const SOLANA_RPC_TIMEOUT: Duration = Duration::from_secs(4);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-const MAX_BROADCAST_RETRIES: Attempt = 20;
+const MAX_BROADCAST_RETRIES: Attempt = 30;
 const GET_STATUS_BROADCAST_DELAY: u64 = 500u64;
 const GET_STATUS_BROADCAST_RETRIES: u64 = 10;
 
