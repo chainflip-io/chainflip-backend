@@ -10,7 +10,6 @@ use cf_chains::{
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{AffiliateShortId, DcaParameters};
-use custom_rpc::CustomApiClient;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -517,34 +516,13 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 	async fn register_affiliate(
 		&self,
-		affiliate_id: AccountId32,
-		short_id: Option<AffiliateShortId>,
+		short_id: AffiliateShortId,
 		withdrawal_address: EncodedAddress,
-	) -> Result<AffiliateShortId> {
-		let register_as_id = if let Some(short_id) = short_id {
-			short_id
-		} else {
-			let affiliates =
-				self.raw_rpc_client().cf_get_affiliates(self.account_id(), None).await?;
-
-			// Check if the affiliate is already registered
-			if let Some((existing_short_id, _)) =
-				affiliates.iter().find(|(_, id)| id == &affiliate_id)
-			{
-				return Ok(*existing_short_id);
-			}
-
-			// Auto assign the lowest unused short id
-			let used_ids: Vec<AffiliateShortId> =
-				affiliates.into_iter().map(|(short_id, _)| short_id).collect();
-			find_lowest_unused_short_id(&used_ids)?
-		};
-
-		let (_, events, ..) = self
-			.submit_signed_extrinsic_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
-				short_id: register_as_id,
-				withdrawal_address,
-			})
+	) -> Result<AccountId32> {
+		let (_, events, ..) =
+			self.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::register_affiliate { short_id, withdrawal_address },
+			)
 			.await?
 			.until_in_block()
 			.await?;
@@ -553,8 +531,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			&events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::AffiliateRegistration,
-			{ affiliate_short_id, .. },
-			*affiliate_short_id
+			{ affiliate_id, .. },
+			affiliate_id.clone()
 		)
 	}
 
@@ -718,26 +696,6 @@ pub fn generate_ethereum_key(
 	))
 }
 
-fn find_lowest_unused_short_id(used_ids: &[AffiliateShortId]) -> Result<AffiliateShortId> {
-	let used_id_len = used_ids.len();
-	if used_ids.is_empty() {
-		Ok(AffiliateShortId::from(0))
-	} else if used_id_len > u8::MAX as usize {
-		bail!("No unused affiliate short IDs available")
-	} else {
-		let mut used_ids = used_ids.to_vec();
-		used_ids.sort_unstable();
-		Ok(AffiliateShortId::from(
-			used_ids
-				.iter()
-				.enumerate()
-				.find(|(index, assigned_id)| &AffiliateShortId::from(*index as u8) != *assigned_id)
-				.map(|(index, _)| index)
-				.unwrap_or(used_id_len) as u8,
-		))
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -842,28 +800,5 @@ mod tests {
 				.unwrap(),
 			);
 		}
-	}
-
-	#[test]
-	fn test_find_lowest_unused_short_id() {
-		fn test_lowest(used_ids: &mut Vec<AffiliateShortId>, expected: AffiliateShortId) {
-			assert_eq!(find_lowest_unused_short_id(used_ids).unwrap(), expected);
-			assert_eq!(
-				used_ids.iter().find(|id| *id == &expected),
-				None,
-				"Should not overwrite existing IDs"
-			);
-			used_ids.push(expected);
-		}
-
-		let mut used_ids = vec![AffiliateShortId::from(1), AffiliateShortId::from(3)];
-		test_lowest(&mut used_ids, AffiliateShortId::from(0));
-		test_lowest(&mut used_ids, AffiliateShortId::from(2));
-		test_lowest(&mut used_ids, AffiliateShortId::from(4));
-		test_lowest(&mut used_ids, AffiliateShortId::from(5));
-		let mut used_ids: Vec<AffiliateShortId> =
-			(0..u8::MAX).map(AffiliateShortId::from).collect();
-		test_lowest(&mut used_ids, AffiliateShortId::from(255));
-		assert!(find_lowest_unused_short_id(&used_ids).is_err());
 	}
 }

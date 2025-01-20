@@ -1816,7 +1816,7 @@ mod affiliates {
 
 			assert_ok!(Swapping::affiliate_withdrawal_request(
 				OriginTrait::signed(BROKER),
-				affiliate_account_id
+				SHORT_ID,
 			));
 
 			assert_event_sequence!(
@@ -1839,14 +1839,8 @@ mod affiliates {
 				withdrawal_address
 			));
 
-			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
-				.expect("Affiliate must be registered!");
-
 			assert_noop!(
-				Swapping::affiliate_withdrawal_request(
-					OriginTrait::signed(BROKER),
-					affiliate_account_id
-				),
+				Swapping::affiliate_withdrawal_request(OriginTrait::signed(BROKER), SHORT_ID),
 				Error::<Test>::NoFundsAvailable
 			);
 		});
@@ -1874,10 +1868,7 @@ mod affiliates {
 				.unwrap();
 
 			assert_noop!(
-				Swapping::affiliate_withdrawal_request(
-					OriginTrait::signed(ALICE),
-					affiliate_account_id
-				),
+				Swapping::affiliate_withdrawal_request(OriginTrait::signed(ALICE), SHORT_ID),
 				Error::<Test>::AffiliateNotRegisteredForBroker
 			);
 		});

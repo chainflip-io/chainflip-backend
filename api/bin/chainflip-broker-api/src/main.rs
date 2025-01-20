@@ -136,10 +136,9 @@ pub trait Rpc {
 	#[method(name = "register_affiliate", aliases = ["broker_registerAffiliate"])]
 	async fn register_affiliate(
 		&self,
-		affiliate_id: AccountId32,
-		short_id: Option<AffiliateShortId>,
+		short_id: AffiliateShortId,
 		withdrawal_address: EncodedAddress,
-	) -> RpcResult<AffiliateShortId>;
+	) -> RpcResult<AccountId32>;
 
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
@@ -303,15 +302,10 @@ impl RpcServer for RpcServerImpl {
 
 	async fn register_affiliate(
 		&self,
-		affiliate_id: AccountId32,
-		short_id: Option<AffiliateShortId>,
+		short_id: AffiliateShortId,
 		withdrawal_address: EncodedAddress,
-	) -> RpcResult<AffiliateShortId> {
-		Ok(self
-			.api
-			.broker_api()
-			.register_affiliate(affiliate_id.clone(), short_id, withdrawal_address)
-			.await?)
+	) -> RpcResult<AccountId32> {
+		Ok(self.api.broker_api().register_affiliate(short_id, withdrawal_address).await?)
 	}
 
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
