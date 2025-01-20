@@ -155,6 +155,7 @@ pub struct SubmissionWatcher<
 
 pub enum SubmissionLogicError {
 	NonceTooLow,
+	StateDiscarded,
 }
 
 impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
@@ -282,6 +283,13 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 							self.runtime_version = new_runtime_version;
 						},
+						ClientError::Call(obj)
+							if obj.code() == 1002 &&
+								obj.message().contains("State already discarded") =>
+						{
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed as the state is stale: {obj:?}");
+							break Ok(Err(SubmissionLogicError::StateDiscarded))
+						},
 						err =>
 							break Err(anyhow!(
 								"Unhandled error while submitting signed extrinsic {:?}: {}",
@@ -300,7 +308,9 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				self.base_rpc_client.next_account_nonce(self.signer.account_id.clone()).await?;
 			match self.submit_extrinsic_at_nonce(request, nonce).await? {
 				Ok(tx_hash) => break tx_hash,
-				Err(SubmissionLogicError::NonceTooLow) => {},
+				Err(SubmissionLogicError::NonceTooLow | SubmissionLogicError::StateDiscarded) => {
+					// In either of these cases we want to refresh the account nonce and try again.
+				},
 			}
 		})
 	}
