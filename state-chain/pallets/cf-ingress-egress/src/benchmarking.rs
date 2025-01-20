@@ -3,7 +3,6 @@
 use super::*;
 use crate::{BoostStatus, DisabledEgressAssets};
 use cf_chains::{
-	address::EncodedAddress,
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	DepositChannel,
 };
@@ -310,15 +309,15 @@ mod benchmarks {
 				input_asset: BenchmarkValue::benchmark_value(),
 				output_asset: Asset::Eth,
 				deposit_amount: 1_000u32.into(),
-				destination_address: EncodedAddress::benchmark_value(),
+				destination_address: BenchmarkValue::benchmark_value(),
 				deposit_metadata: Some(deposit_metadata),
 				tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
 				deposit_details: BenchmarkValue::benchmark_value(),
 				broker_fee: None,
 				affiliate_fees: Default::default(),
-				refund_params: Some(ChannelRefundParametersDecoded {
+				refund_params: Some(ChannelRefundParameters {
 					retry_duration: Default::default(),
-					refund_address: ForeignChainAddress::Eth(Default::default()),
+					refund_address: BenchmarkValue::benchmark_value(),
 					min_price: Default::default(),
 				}),
 				dca_params: None,
