@@ -2689,18 +2689,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		available_amount: TargetChainAmount<T, I>,
 		origin: &DepositOrigin<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
-		if matches!(origin, &DepositOrigin::DepositChannel { .. }) {
-			Self::withhold_ingress_or_egress_fee(
+		match origin {
+			DepositOrigin::DepositChannel { .. } => Self::withhold_ingress_or_egress_fee(
 				IngressOrEgress::IngressDepositChannel,
 				asset,
 				available_amount,
-			)
-		} else {
-			Self::withhold_ingress_or_egress_fee(
+			),
+			DepositOrigin::VaultSwap { .. } => Self::withhold_ingress_or_egress_fee(
 				IngressOrEgress::IngressVaultSwap,
 				asset,
 				available_amount,
-			)
+			),
 		}
 	}
 
