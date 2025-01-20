@@ -956,6 +956,8 @@ pub trait AuthoritiesCfeVersions {
 pub trait AdjustedFeeEstimationApi<C: Chain> {
 	fn estimate_ingress_fee(asset: C::ChainAsset) -> C::ChainAmount;
 
+	fn estimate_ingress_fee_vault_swap() -> Option<C::ChainAmount>;
+
 	fn estimate_egress_fee(asset: C::ChainAsset) -> C::ChainAmount;
 
 	fn estimate_ccm_fee(

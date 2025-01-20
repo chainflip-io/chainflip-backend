@@ -208,8 +208,9 @@ pub struct CcmData {
 #[derive(Encode, Decode, Eq, PartialEq, Ord, PartialOrd, TypeInfo, Serialize, Deserialize)]
 pub enum FeeTypes {
 	Network,
-	Ingress,
+	IngressDepositChannel,
 	Egress,
+	IngressVaultSwap,
 }
 
 /// Struct that represents the estimated output of a Swap.

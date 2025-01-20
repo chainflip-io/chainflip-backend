@@ -26,6 +26,12 @@ impl<C: Chain> FeeEstimationApi<C> for TrackedDataProvider<C> {
 			.estimate_ingress_fee(asset)
 	}
 
+	fn estimate_ingress_fee_vault_swap(&self) -> Option<<C as Chain>::ChainAmount> {
+		Self::get_value::<C::TrackedData>(TRACKED_DATA_KEY)
+			.expect("TrackedData must be set explicitly in mocks")
+			.estimate_ingress_fee_vault_swap()
+	}
+
 	fn estimate_egress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount {
 		Self::get_value::<C::TrackedData>(TRACKED_DATA_KEY)
 			.expect("TrackedData must be set explicitly in mocks")
