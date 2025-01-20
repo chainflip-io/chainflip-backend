@@ -222,10 +222,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T>::affiliate_withdrawal_request(
-				caller,
-				affiliate_account_id.clone()
-			));
+			assert_ok!(Pallet::<T>::affiliate_withdrawal_request(caller, IDX.into()));
 		}
 
 		assert_eq!(
