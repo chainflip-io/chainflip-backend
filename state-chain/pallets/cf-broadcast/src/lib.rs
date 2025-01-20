@@ -624,6 +624,9 @@ pub mod pallet {
 		}
 
 		/// Re-sign and optionally re-send some broadcast requests.
+		/// This is intended for cases where a transaction is valid, but the signature has become
+		/// invalid due to a rotation, and so we need to resign the payload with the new key so that
+		/// it can be broadcast.
 		///
 		/// Requires governance origin.
 		#[pallet::call_index(5)]
