@@ -165,7 +165,8 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
-	pub const COMPUTE_UNITS_PER_CLOSE_VAULT_SWAP_ACCOUNTS: SolComputeLimit = 10_000u32;
+	// TODO: To update value after having added the fetch
+	pub const COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS: SolComputeLimit = 10_000u32;
 	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 10_000u32;
 	pub const COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS: SolComputeLimit = 50_000u32;
 	pub const COMPUTE_UNITS_PER_ENABLE_TOKEN_SUPPORT: SolComputeLimit = 50_000u32;
@@ -275,6 +276,17 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		);
 
 		self.calculate_transaction_fee(compute_units_per_fetch)
+	}
+
+	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Solana as Chain>::ChainAmount> {
+		use compute_units_costs::*;
+
+		// Some of the fetches might be batches but we need to estimate pessimistically.
+		let compute_units_per_fetch_and_close = compute_limit_with_buffer(
+			COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS + COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
+		);
+
+		Some(self.calculate_transaction_fee(compute_units_per_fetch_and_close))
 	}
 
 	fn estimate_ccm_fee(

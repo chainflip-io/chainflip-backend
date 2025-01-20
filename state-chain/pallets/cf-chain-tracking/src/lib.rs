@@ -196,6 +196,13 @@ impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pall
 		)
 	}
 
+	fn estimate_ingress_fee_vault_swap() -> Option<<T::TargetChain as Chain>::ChainAmount> {
+		CurrentChainState::<T, I>::get()
+			.expect(NO_CHAIN_STATE)
+			.tracked_data
+			.estimate_ingress_fee_vault_swap()
+	}
+
 	fn estimate_egress_fee(
 		asset: <T::TargetChain as Chain>::ChainAsset,
 	) -> <T::TargetChain as Chain>::ChainAmount {

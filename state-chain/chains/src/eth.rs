@@ -138,6 +138,10 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 		self.calculate_transaction_fee(gas_cost_per_fetch)
 	}
 
+	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+		Some(0)
+	}
+
 	fn estimate_egress_fee(
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,

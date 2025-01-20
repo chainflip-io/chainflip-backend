@@ -301,6 +301,10 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 		self.median_tip + fetch::EXTRINSIC_FEE
 	}
 
+	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Polkadot as Chain>::ChainAmount> {
+		None
+	}
+
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Polkadot as Chain>::ChainAsset,

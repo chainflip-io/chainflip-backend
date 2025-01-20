@@ -435,7 +435,8 @@ pub mod pallet {
 	}
 
 	pub enum IngressOrEgress {
-		Ingress,
+		IngressDepositChannel,
+		IngressVaultSwap,
 		Egress,
 		EgressCcm { gas_budget: GasAmount, message_length: usize },
 	}
@@ -2689,13 +2690,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		origin: &DepositOrigin<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
 		if matches!(origin, &DepositOrigin::DepositChannel { .. }) {
-			Self::withhold_ingress_or_egress_fee(IngressOrEgress::Ingress, asset, available_amount)
+			Self::withhold_ingress_or_egress_fee(
+				IngressOrEgress::IngressDepositChannel,
+				asset,
+				available_amount,
+			)
 		} else {
-			// No ingress fee for vault swaps.
-			AmountAndFeesWithheld {
-				amount_after_fees: available_amount,
-				fees_withheld: 0u32.into(),
-			}
+			Self::withhold_ingress_or_egress_fee(
+				IngressOrEgress::IngressVaultSwap,
+				asset,
+				available_amount,
+			)
 		}
 	}
 
@@ -2711,14 +2716,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		available_amount: TargetChainAmount<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
 		let fee_estimate = match ingress_or_egress {
-			IngressOrEgress::Ingress => T::ChainTracking::estimate_ingress_fee(asset),
-			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
-			IngressOrEgress::EgressCcm{gas_budget, message_length} =>
-			T::ChainTracking::estimate_ccm_fee(asset, gas_budget, message_length)
+			IngressOrEgress::IngressDepositChannel => T::ChainTracking::estimate_ingress_fee(asset),
+			IngressOrEgress::IngressVaultSwap => T::ChainTracking::estimate_ingress_fee_vault_swap()
 			.unwrap_or_else(|| {
-				log::warn!("Unable to get the ccm fee estimate for ${gas_budget:?} ${asset:?}. Ignoring ccm egress fees.");
+				log::warn!("Unable to get the ingress fee for Vault swaps for ${asset:?}. Ignoring ingres fees.");
 				<T::TargetChain as Chain>::ChainAmount::zero()
-			})
+			}),
+			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
+			IngressOrEgress::EgressCcm { gas_budget, message_length } =>
+				T::ChainTracking::estimate_ccm_fee(asset, gas_budget, message_length)
+				.unwrap_or_else(|| {
+					log::warn!("Unable to get the ccm fee estimate for ${gas_budget:?} ${asset:?}. Ignoring ccm egress fees.");
+					<T::TargetChain as Chain>::ChainAmount::zero()
+				})
 		};
 
 		let fees_withheld = if asset == <T::TargetChain as Chain>::GAS_ASSET {
