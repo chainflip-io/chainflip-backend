@@ -77,7 +77,7 @@ pub struct BWSettings {
 	pub max_concurrent_elections: u16,
 }
 
-#[derive_where(Debug, Clone, PartialEq, Eq; T::SafeModeEnabledHook: Debug + Clone + Eq, T::ElectionPropertiesHook: Debug + Clone + Eq)]
+#[derive_where(Debug, Clone, PartialEq, Eq; T::SafeModeEnabledHook: Debug + Clone + Eq, T::ElectionPropertiesHook: Debug + Clone + Eq, 	T::BlockProcessor: Debug + Clone + Eq)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct BWState<T: BWTypes> {
 	pub elections: ElectionTracker<T::ChainBlockNumber>,
@@ -99,6 +99,7 @@ impl<T: BWTypes> Default for BWState<T>
 where
 	T::ElectionPropertiesHook: Default,
 	T::SafeModeEnabledHook: Default,
+	T::BlockProcessor: Default,
 {
 	fn default() -> Self {
 		Self {
@@ -167,7 +168,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 				// insert blockdata into our cache of blocks
 				s.elections.mark_election_done(blockdata.0 .0);
 				log::info!("got block data: {:?}", blockdata.1);
-				s.block_processor.insert(blockdata);
+				s.block_processor.insert(blockdata.0 .0, blockdata.1.data);
 				// T::BlockProcessor::insert(blockdata);
 			},
 		};
