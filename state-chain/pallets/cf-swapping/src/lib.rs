@@ -1198,7 +1198,7 @@ pub mod pallet {
 		/// will be used to withdraw the affiliate's fees. The withdrawal address can not be changed
 		/// once set. The broker will be able to trigger a withdrawal
 		/// request to the affiliate's withdrawal address. A short id is taken and can only be used
-		/// at a time. The affiliate account is derived from the broker account id.
+		/// once. The affiliate account is derived from the broker account id.
 		///
 		/// ## Events
 		///
