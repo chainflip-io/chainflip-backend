@@ -4,6 +4,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{
 	address::EncodedAddress,
+	cf_parameters::VaultSwapParameters,
 	evm::{DepositDetails, H256},
 	Arbitrum, CcmDepositMetadata,
 };
@@ -24,7 +25,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::{common::cf_parameters::VaultSwapParameters, evm::erc20_deposits::usdc::UsdcEvents},
+	witness::evm::erc20_deposits::usdc::UsdcEvents,
 };
 
 use super::{
@@ -191,7 +192,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_id: H256,
-		vault_swap_parameters: VaultSwapParameters,
+		vault_swap_parameters: Option<VaultSwapParameters>,
 	) -> state_chain_runtime::RuntimeCall {
 		let deposit = vault_deposit_witness!(
 			source_asset,

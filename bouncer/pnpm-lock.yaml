@@ -3205,6 +3205,9 @@ packages:
   zod@3.23.8:
     resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
 
+  zod@3.24.1:
+    resolution: {integrity: sha512-muH7gBL9sI1nciMZV67X5fTKKBLtwpZ5VBp1vsOQzj1MhrBZ4wlVCm3gedKZWLp0Oyel8sIGfeiz54Su+OVT+A==}
+
 snapshots:
 
   '@adraffy/ens-normalize@1.10.1': {}
@@ -3244,7 +3247,7 @@ snapshots:
   '@chainflip/rpc@1.8.0-assethub.1':
     dependencies:
       '@chainflip/utils': 0.4.0
-      zod: 3.23.8
+      zod: 3.24.1
 
   '@chainflip/solana@1.0.3(bufferutil@4.0.8)(utf-8-validate@5.0.10)':
     dependencies:
@@ -7070,3 +7073,5 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   zod@3.23.8: {}
+
+  zod@3.24.1: {}

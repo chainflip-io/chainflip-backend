@@ -5,13 +5,14 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress, Chain,
-	ChainCrypto, ForeignChainAddress,
+	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
+	sol::SolInstructionRpc, CcmChannelMetadata, Chain, ChainCrypto, ForeignChainAddress,
+	VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
-	PrewitnessedDepositId, SemVer,
+	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount,
+	NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -28,7 +29,7 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, Percent};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
@@ -44,9 +45,37 @@ pub enum VaultSwapDetails<BtcAddress> {
 		nulldata_payload: Vec<u8>,
 		deposit_address: BtcAddress,
 	},
+	Ethereum {
+		#[serde(flatten)]
+		details: EvmVaultSwapDetails,
+	},
+	Arbitrum {
+		#[serde(flatten)]
+		details: EvmVaultSwapDetails,
+	},
+	Solana {
+		#[serde(flatten)]
+		instruction: SolInstructionRpc,
+	},
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+pub struct EvmVaultSwapDetails {
+	#[serde(with = "sp_core::bytes")]
+	pub calldata: Vec<u8>, // The encoded calldata payload including function selector
+	pub value: sp_core::U256, // The ETH amount, or 0 for ERC-20 tokens
+	pub to: sp_core::H160,    // The vault address for either Ethereum or Arbitrum
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
+	pub fn ethereum(details: EvmVaultSwapDetails) -> Self {
+		VaultSwapDetails::Ethereum { details }
+	}
+
+	pub fn arbitrum(details: EvmVaultSwapDetails) -> Self {
+		VaultSwapDetails::Arbitrum { details }
+	}
+
 	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>
 	where
 		F: FnOnce(BtcAddress) -> T,
@@ -54,6 +83,9 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 		match self {
 			VaultSwapDetails::Bitcoin { nulldata_payload, deposit_address } =>
 				VaultSwapDetails::Bitcoin { nulldata_payload, deposit_address: f(deposit_address) },
+			VaultSwapDetails::Solana { instruction } => VaultSwapDetails::Solana { instruction },
+			VaultSwapDetails::Ethereum { details } => VaultSwapDetails::Ethereum { details },
+			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
 		}
 	}
 }
@@ -73,8 +105,8 @@ pub enum ChainflipAccountStateWithPassive {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct ValidatorInfo {
-	pub balance: u128,
-	pub bond: u128,
+	pub balance: AssetAmount,
+	pub bond: AssetAmount,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
@@ -85,7 +117,7 @@ pub struct ValidatorInfo {
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
+	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
@@ -123,6 +155,7 @@ pub struct BoostPoolDetails {
 	pub pending_boosts:
 		BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, OwedAmount<AssetAmount>>>,
 	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<PrewitnessedDepositId>>,
+	pub network_fee_deduction_percent: Percent,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -133,7 +166,7 @@ pub struct RuntimeApiPenalty {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct AuctionState {
-	pub blocks_per_epoch: u32,
+	pub epoch_duration: u32,
 	pub current_epoch_started_at: u32,
 	pub redemption_period_as_percentage: u8,
 	pub min_funding: u128,
@@ -161,12 +194,25 @@ pub struct LiquidityProviderInfo {
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
+	pub btc_vault_deposit_address: Option<String>,
+	pub affiliates: Vec<(AffiliateShortId, AccountId32)>,
+	pub bond: AssetAmount,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+pub struct CcmData {
+	pub gas_budget: GasAmount,
+	pub message_length: u32,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, Ord, PartialOrd, TypeInfo, Serialize, Deserialize)]
+pub enum FeeTypes {
+	Network,
+	Ingress,
+	Egress,
 }
 
 /// Struct that represents the estimated output of a Swap.
-#[obake::versioned]
-#[obake(version("1.0.0"))]
-#[obake(version("2.0.0"))]
 #[derive(Encode, Decode, TypeInfo)]
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
@@ -174,26 +220,13 @@ pub struct SimulatedSwapInformation {
 	pub network_fee: AssetAmount,
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
-	#[obake(cfg(">=2.0"))]
 	pub broker_fee: AssetAmount,
-}
-
-impl From<SimulatedSwapInformation!["1.0.0"]> for SimulatedSwapInformation {
-	fn from(value: SimulatedSwapInformation!["1.0.0"]) -> Self {
-		Self {
-			intermediary: value.intermediary,
-			output: value.output,
-			network_fee: value.network_fee,
-			ingress_fee: value.ingress_fee,
-			egress_fee: value.egress_fee,
-			broker_fee: Default::default(),
-		}
-	}
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
 pub enum DispatchErrorWithMessage {
 	Module(Vec<u8>),
+	RawMessage(Vec<u8>),
 	Other(DispatchError),
 }
 impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
@@ -201,6 +234,8 @@ impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
 		match error.into() {
 			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) =>
 				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
+			DispatchError::Other(message) =>
+				DispatchErrorWithMessage::RawMessage(message.as_bytes().to_vec()),
 			error => DispatchErrorWithMessage::Other(error),
 		}
 	}
@@ -210,7 +245,8 @@ impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
 impl core::fmt::Display for DispatchErrorWithMessage {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
 		match self {
-			DispatchErrorWithMessage::Module(message) => write!(
+			DispatchErrorWithMessage::Module(message) |
+			DispatchErrorWithMessage::RawMessage(message) => write!(
 				f,
 				"{}",
 				str::from_utf8(message).unwrap_or("<Error message is not valid UTF-8>")
@@ -277,7 +313,7 @@ pub struct TransactionScreeningEvents {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -311,19 +347,23 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 		) -> Result<PoolPriceV2, DispatchErrorWithMessage>;
-		#[changed_in(2)]
-		fn cf_pool_simulate_swap(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation!["1.0.0"], DispatchErrorWithMessage>;
+		#[changed_in(3)]
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
+			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			broker_commission: BasisPoints,
+			dca_parameters: Option<DcaParameters>,
+			ccm_data: Option<CcmData>,
+			exclude_fees: BTreeSet<FeeTypes>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(
@@ -416,8 +456,8 @@ decl_runtime_apis!(
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
-			min_output_amount: AssetAmount,
-			retry_duration: BlockNumber,
+			extra_parameters: VaultSwapExtraParametersEncoded,
+			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId32>,
 			dca_parameters: Option<DcaParameters>,

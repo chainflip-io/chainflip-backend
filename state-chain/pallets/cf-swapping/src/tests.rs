@@ -42,7 +42,7 @@ use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
 use sp_std::iter;
 
-const GAS_BUDGET: AssetAmount = 1_000u128;
+const GAS_BUDGET: AssetAmount = 100_000u128;
 const INPUT_AMOUNT: AssetAmount = 40_000;
 const SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(1);
 const INIT_BLOCK: u64 = 1;
@@ -66,7 +66,7 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<ChannelRefundParameters>,
+	refund_params: Option<ChannelRefundParametersDecoded>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
@@ -99,10 +99,10 @@ struct TestRefundParams {
 }
 
 impl TestRefundParams {
-	fn into_channel_params(self, input_amount: AssetAmount) -> ChannelRefundParameters {
+	fn into_channel_params(self, input_amount: AssetAmount) -> ChannelRefundParametersDecoded {
 		use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 
-		ChannelRefundParameters {
+		ChannelRefundParametersDecoded {
 			retry_duration: self.retry_duration,
 			refund_address: ForeignChainAddress::Eth([10; 20].into()),
 			min_price: sqrt_price_to_price(bounded_sqrt_price(
@@ -131,13 +131,21 @@ fn create_test_swap(
 			state: SwapRequestState::UserSwap {
 				output_address: ForeignChainAddress::Eth(H160::zero()),
 				dca_state: DcaState::create_with_first_chunk(amount, dca_params).0,
-				ccm: None,
+				ccm_deposit_metadata: None,
 				broker_fees: Default::default(),
 			},
 		},
 	);
 
-	Swap::new(id.into(), id.into(), input_asset, output_asset, amount, None, [FeeType::NetworkFee])
+	Swap::new(
+		id.into(),
+		id.into(),
+		input_asset,
+		output_asset,
+		amount,
+		None,
+		[FeeType::NetworkFee { min_fee_enforced: true }],
+	)
 }
 
 // Returns some test data
@@ -188,19 +196,11 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 
 fn insert_swaps(swaps: &[TestSwapParams]) {
 	for (broker_id, swap) in swaps.iter().enumerate() {
-		let request_type = if swap.is_ccm {
-			SwapRequestType::Ccm {
-				output_address: swap.output_address.clone(),
-				ccm_swap_metadata: CcmDepositMetadata {
-					source_chain: ForeignChain::Ethereum,
-					source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-					channel_metadata: generate_ccm_channel(),
-				}
-				.into_swap_metadata(swap.input_amount, swap.input_asset, swap.output_asset)
-				.unwrap(),
-			}
-		} else {
-			SwapRequestType::Regular { output_address: swap.output_address.clone() }
+		let ccm_deposit_metadata = if swap.is_ccm { Some(generate_ccm_deposit()) } else { None };
+
+		let request_type = SwapRequestType::Regular {
+			output_address: swap.output_address.clone(),
+			ccm_deposit_metadata,
 		};
 
 		Swapping::init_swap_request(
@@ -211,7 +211,10 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 			bounded_vec![Beneficiary { account: broker_id as u64, bps: BROKER_FEE_BPS }],
 			swap.refund_params.clone(),
 			swap.dca_params.clone(),
-			SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+			SwapOrigin::Vault {
+				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+				broker_id: Some(BROKER),
+			},
 		);
 	}
 }
@@ -251,7 +254,10 @@ fn swap_with_custom_broker_fee(
 		from,
 		amount,
 		to,
-		SwapRequestType::Regular { output_address: ForeignChainAddress::Eth(Default::default()) },
+		SwapRequestType::Regular {
+			output_address: ForeignChainAddress::Eth(Default::default()),
+			ccm_deposit_metadata: None,
+		},
 		broker_fees,
 		None,
 		None,
@@ -261,6 +267,7 @@ fn swap_with_custom_broker_fee(
 			)),
 			channel_id: 1,
 			deposit_block_height: 0,
+			broker_id: BROKER,
 		},
 	);
 }
@@ -332,11 +339,17 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			Asset::Eth,
 			10,
 			Asset::Dot,
-			SwapRequestType::Regular { output_address: ForeignChainAddress::Eth([2; 20].into()) },
+			SwapRequestType::Regular {
+				output_address: ForeignChainAddress::Eth([2; 20].into()),
+				ccm_deposit_metadata: None,
+			},
 			Default::default(),
 			None,
 			None,
-			SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+			SwapOrigin::Vault {
+				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+				broker_id: Some(BROKER),
+			},
 		);
 
 		assert_swaps_queue_is_empty();
@@ -467,7 +480,7 @@ fn swap_by_deposit_happy_path() {
 					OUTPUT_ASSET,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee],
+					[FeeType::NetworkFee { min_fee_enforced: true }],
 				)]
 			);
 
@@ -505,11 +518,15 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					SwapRequestType::Regular {
 						output_address: ForeignChainAddress::Eth([1; 20].into()),
+						ccm_deposit_metadata: None,
 					},
 					Default::default(),
 					None,
 					None,
-					SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+					SwapOrigin::Vault {
+						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						broker_id: Some(BROKER),
+					},
 				);
 			});
 
@@ -523,7 +540,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee]
+					[FeeType::NetworkFee { min_fee_enforced: true }]
 				),
 				Swap::new(
 					2.into(),
@@ -532,7 +549,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee]
+					[FeeType::NetworkFee { min_fee_enforced: true }]
 				),
 				Swap::new(
 					3.into(),
@@ -541,7 +558,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee]
+					[FeeType::NetworkFee { min_fee_enforced: true }]
 				),
 				Swap::new(
 					4.into(),
@@ -550,7 +567,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee]
+					[FeeType::NetworkFee { min_fee_enforced: true }]
 				),
 			]
 		);
@@ -561,8 +578,9 @@ fn process_all_into_stable_swaps_first() {
 		assert_swaps_queue_is_empty();
 
 		let usdc_amount_swapped_after_fee =
-			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE).remaining_amount;
-		let usdc_amount_deposited_after_fee = Swapping::take_network_fee(AMOUNT).remaining_amount;
+			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE, false).remaining_amount;
+		let usdc_amount_deposited_after_fee =
+			Swapping::take_network_fee(AMOUNT, false).remaining_amount;
 
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(
@@ -621,7 +639,6 @@ fn process_all_into_stable_swaps_first() {
 #[test]
 fn can_handle_ccm_with_zero_swap_outputs() {
 	const PRINCIPAL_SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const GAS_SWAP_BLOCK: u64 = PRINCIPAL_SWAP_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	const PRINCIPAL_AMOUNT: AssetAmount = 9000;
 
@@ -635,23 +652,19 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 
 			Swapping::init_swap_request(
 				INPUT_ASSET,
-				PRINCIPAL_AMOUNT + GAS_BUDGET,
+				PRINCIPAL_AMOUNT,
 				OUTPUT_ASSET,
-				SwapRequestType::Ccm {
-					ccm_swap_metadata: ccm
-						.clone()
-						.into_swap_metadata(
-							PRINCIPAL_AMOUNT + GAS_BUDGET,
-							INPUT_ASSET,
-							OUTPUT_ASSET,
-						)
-						.unwrap(),
+				SwapRequestType::Regular {
+					ccm_deposit_metadata: Some(ccm.clone()),
 					output_address: eth_address,
 				},
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: Some(BROKER),
+				},
 			);
 
 			// Change the swap rate so swap output will be 0
@@ -676,23 +689,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				}),
 			);
 		})
-		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
 		.then_execute_with(|_| {
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					swap_request_id: SwapRequestId(1),
-					swap_id: SwapId(2),
-					network_fee: 0,
-					broker_fee: 0,
-					input_amount: GAS_BUDGET,
-					input_asset: Asset::Usdc,
-					output_asset: Asset::Eth,
-					output_amount: ZERO_AMOUNT,
-					intermediate_amount: None,
-				}),
-			);
-
 			// CCM are processed and egressed even if principal output is zero.
 			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
 			assert_swaps_queue_is_empty();
@@ -775,7 +772,15 @@ fn swap_excess_are_confiscated() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1.into(), 1.into(), from, to, MAX_SWAP, None, [FeeType::NetworkFee])]
+			vec![Swap::new(
+				1.into(),
+				1.into(),
+				from,
+				to,
+				MAX_SWAP,
+				None,
+				[FeeType::NetworkFee { min_fee_enforced: true }]
+			)]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
 	});
@@ -1310,11 +1315,15 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					to,
 					SwapRequestType::Regular {
 						output_address: ForeignChainAddress::Eth(H160::zero()),
+						ccm_deposit_metadata: None,
 					},
 					Default::default(),
 					None,
 					None,
-					SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+					SwapOrigin::Vault {
+						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						broker_id: Some(BROKER),
+					},
 				);
 
 				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
@@ -1344,7 +1353,7 @@ fn test_buy_back_flip() {
 
 		// Get some network fees, just like we did a swap.
 		let FeeTaken { remaining_amount, fee: network_fee } =
-			Swapping::take_network_fee(SWAP_AMOUNT);
+			Swapping::take_network_fee(SWAP_AMOUNT, false);
 
 		// Sanity check the network fee.
 		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
@@ -1374,31 +1383,6 @@ fn test_buy_back_flip() {
 				.first()
 				.expect("Should have scheduled a swap usdc -> flip"),
 			&Swap::new(1.into(), 1.into(), STABLE_ASSET, Asset::Flip, network_fee, None, [],)
-		);
-	});
-}
-
-#[test]
-fn test_network_fee_calculation() {
-	new_test_ext().execute_with(|| {
-		// Show we can never overflow and panic
-		utilities::calculate_network_fee(Permill::from_percent(100), AssetAmount::MAX);
-		// 200 bps (2%) of 100 = 2
-		assert_eq!(utilities::calculate_network_fee(Permill::from_percent(2u32), 100), (98, 2));
-		// 2220 bps = 22 % of 199 = 43,78
-		assert_eq!(
-			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 199),
-			(155, 44)
-		);
-		// 2220 bps = 22 % of 234 = 51,26
-		assert_eq!(
-			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 233),
-			(181, 52)
-		);
-		// 10 bps = 0,1% of 3000 = 3
-		assert_eq!(
-			utilities::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
-			(2997, 3)
 		);
 	});
 }

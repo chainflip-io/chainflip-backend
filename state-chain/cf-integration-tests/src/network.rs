@@ -708,7 +708,7 @@ impl Network {
 	/// Move to the last block of the epoch - next block will start Authority rotation
 	pub fn move_to_the_end_of_epoch(&mut self) {
 		let current_block = System::block_number();
-		let target = Validator::current_epoch_started_at() + Validator::blocks_per_epoch();
+		let target = Validator::current_epoch_started_at() + Validator::epoch_duration();
 		if target > current_block {
 			self.move_forward_blocks(target - current_block - 1)
 		}

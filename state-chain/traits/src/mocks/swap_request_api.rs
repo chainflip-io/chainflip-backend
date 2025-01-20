@@ -1,5 +1,5 @@
 use crate::{swapping::SwapRequestType, EgressApi, SwapRequestHandler};
-use cf_chains::{Chain, ChannelRefundParameters, SwapOrigin};
+use cf_chains::{Chain, ChannelRefundParametersDecoded, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -18,7 +18,7 @@ pub struct MockSwapRequest {
 	pub input_amount: AssetAmount,
 	pub swap_type: SwapRequestType,
 	pub broker_fees: Beneficiaries<u64>,
-	pub origin: SwapOrigin,
+	pub origin: SwapOrigin<u64>,
 }
 
 impl<T> MockPallet for MockSwapRequestHandler<T> {
@@ -45,9 +45,9 @@ where
 		output_asset: Asset,
 		swap_type: SwapRequestType,
 		broker_fees: Beneficiaries<Self::AccountId>,
-		_refund_params: Option<ChannelRefundParameters>,
+		_refund_params: Option<ChannelRefundParametersDecoded>,
 		_dca_params: Option<DcaParameters>,
-		origin: SwapOrigin,
+		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId {
 		let id = Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<Vec<MockSwapRequest>>| {
 			let swaps = swaps.get_or_insert(vec![]);
@@ -64,13 +64,12 @@ where
 		});
 
 		match swap_type {
-			SwapRequestType::Regular { output_address } |
-			SwapRequestType::Ccm { output_address, .. } => {
+			SwapRequestType::Regular { output_address, ccm_deposit_metadata } => {
 				let _ = E::schedule_egress(
 					output_asset.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 					input_amount.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 					output_address.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
-					None,
+					ccm_deposit_metadata,
 				);
 			},
 			_ => { /* do nothing */ },

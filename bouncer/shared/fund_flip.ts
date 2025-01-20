@@ -15,7 +15,12 @@ import { approveErc20 } from './approve_erc20';
 import { observeEvent } from './utils/substrate';
 
 export async function fundFlip(scAddress: string, flipAmount: string) {
-  await approveErc20('Flip', getContractAddress('Ethereum', 'GATEWAY'), flipAmount);
+  // Doing effectively infinite approvals to prevent race conditions between tests
+  await approveErc20(
+    'Flip',
+    getContractAddress('Ethereum', 'GATEWAY'),
+    '100000000000000000000000000',
+  );
 
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals('Flip'));
 

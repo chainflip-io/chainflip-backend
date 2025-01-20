@@ -40,7 +40,7 @@ export class ExecutableTest {
 
   timeoutSeconds: number;
 
-  debug = false;
+  public debug = false;
 
   public swapContext: SwapContext;
 

@@ -9,7 +9,10 @@ fn can_update_all_config_items() {
 		let new_flip_buy_interval = BlockNumberFor::<Test>::from(5678u32);
 		const NEW_MAX_SWAP_RETRY_DURATION: u32 = 69_u32;
 		const MAX_SWAP_REQUEST_DURATION: u32 = 420_u32;
-		const NEW_MINIMUM_CHUNK_SIZE: AssetAmount = 1;
+		const NEW_MINIMUM_CHUNK_SIZE: AssetAmount = 10_000;
+		const NEW_MINIMUM_NETWORK_FEE: AssetAmount = 10;
+
+		NetworkFee::set(Permill::from_perthousand(1));
 
 		// Check that the default values are different from the new ones
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
@@ -19,6 +22,7 @@ fn can_update_all_config_items() {
 		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_ne!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 		assert_ne!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE);
+		assert_ne!(MinimumNetworkFeePerChunk::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
 
 		// Update all config items at the same time, and updates 2 separate max swap amounts.
 		assert_ok!(Swapping::update_pallet_config(
@@ -37,8 +41,11 @@ fn can_update_all_config_items() {
 				PalletConfigUpdate::SetMaxSwapRetryDuration { blocks: NEW_MAX_SWAP_RETRY_DURATION },
 				PalletConfigUpdate::SetMaxSwapRequestDuration { blocks: MAX_SWAP_REQUEST_DURATION },
 				PalletConfigUpdate::SetMinimumChunkSize {
-					asset: Asset::Eth,
+					asset: Asset::Usdc,
 					size: NEW_MINIMUM_CHUNK_SIZE
+				},
+				PalletConfigUpdate::SetMinimumNetworkFeePerChunk {
+					min_fee: NEW_MINIMUM_NETWORK_FEE
 				},
 			]
 			.try_into()
@@ -52,34 +59,36 @@ fn can_update_all_config_items() {
 		assert_eq!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
 		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_eq!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
-		assert_eq!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE);
+		assert_eq!(MinimumChunkSize::<Test>::get(Asset::Usdc), NEW_MINIMUM_CHUNK_SIZE);
+		assert_eq!(MinimumNetworkFeePerChunk::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
 
 		// Check that the events were emitted
 		assert_events_eq!(
 			Test,
-			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
+			RuntimeEvent::Swapping(Event::MaximumSwapAmountSet {
 				asset: Asset::Btc,
 				amount: NEW_MAX_SWAP_AMOUNT_BTC,
 			}),
-			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
+			RuntimeEvent::Swapping(Event::MaximumSwapAmountSet {
 				asset: Asset::Dot,
 				amount: NEW_MAX_SWAP_AMOUNT_DOT,
 			}),
-			RuntimeEvent::Swapping(crate::Event::SwapRetryDelaySet {
+			RuntimeEvent::Swapping(Event::SwapRetryDelaySet {
 				swap_retry_delay: new_swap_retry_delay
 			}),
-			RuntimeEvent::Swapping(crate::Event::BuyIntervalSet {
-				buy_interval: new_flip_buy_interval
-			}),
-			RuntimeEvent::Swapping(crate::Event::MaxSwapRetryDurationSet {
+			RuntimeEvent::Swapping(Event::BuyIntervalSet { buy_interval: new_flip_buy_interval }),
+			RuntimeEvent::Swapping(Event::MaxSwapRetryDurationSet {
 				blocks: NEW_MAX_SWAP_RETRY_DURATION
 			}),
-			RuntimeEvent::Swapping(crate::Event::MaxSwapRequestDurationSet {
+			RuntimeEvent::Swapping(Event::MaxSwapRequestDurationSet {
 				blocks: MAX_SWAP_REQUEST_DURATION
 			}),
-			RuntimeEvent::Swapping(crate::Event::MinimumChunkSizeSet {
-				asset: Asset::Eth,
+			RuntimeEvent::Swapping(Event::MinimumChunkSizeSet {
+				asset: Asset::Usdc,
 				amount: NEW_MINIMUM_CHUNK_SIZE
+			}),
+			RuntimeEvent::Swapping(Event::MinimumNetworkFeeSet {
+				min_fee: NEW_MINIMUM_NETWORK_FEE
 			}),
 		);
 
@@ -109,11 +118,15 @@ fn max_swap_amount_can_be_removed() {
 				to,
 				SwapRequestType::Regular {
 					output_address: ForeignChainAddress::Eth([1; 20].into()),
+					ccm_deposit_metadata: None,
 				},
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: Some(BROKER),
+				},
 			);
 		};
 
@@ -135,9 +148,25 @@ fn max_swap_amount_can_be_removed() {
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
 			vec![
-				Swap::new(1.into(), 1.into(), from, to, max_swap, None, [FeeType::NetworkFee]),
+				Swap::new(
+					1.into(),
+					1.into(),
+					from,
+					to,
+					max_swap,
+					None,
+					[FeeType::NetworkFee { min_fee_enforced: true }]
+				),
 				// New swap takes the full amount.
-				Swap::new(2.into(), 2.into(), from, to, amount, None, [FeeType::NetworkFee]),
+				Swap::new(
+					2.into(),
+					2.into(),
+					from,
+					to,
+					amount,
+					None,
+					[FeeType::NetworkFee { min_fee_enforced: true }]
+				),
 			]
 		);
 		// No no funds are confiscated.
@@ -188,18 +217,32 @@ fn can_swap_below_max_amount() {
 			from,
 			amount,
 			to,
-			SwapRequestType::Regular { output_address: ForeignChainAddress::Eth([1; 20].into()) },
+			SwapRequestType::Regular {
+				output_address: ForeignChainAddress::Eth([1; 20].into()),
+				ccm_deposit_metadata: None,
+			},
 			Default::default(),
 			None,
 			None,
-			SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
+			SwapOrigin::Vault {
+				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+				broker_id: Some(BROKER),
+			},
 		);
 
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0u128);
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1.into(), 1.into(), from, to, amount, None, [FeeType::NetworkFee]),]
+			vec![Swap::new(
+				1.into(),
+				1.into(),
+				from,
+				to,
+				amount,
+				None,
+				[FeeType::NetworkFee { min_fee_enforced: true }]
+			),]
 		);
 	});
 }

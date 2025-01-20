@@ -1,9 +1,9 @@
 use crate::{
 	mock_btc::*,
 	tests::{ALICE, BROKER},
-	BoostPoolId, DepositChannelLookup, DepositIgnoredReason, DepositWitness, ReportExpiresAt,
-	ScheduledTxForReject, TransactionPrewitnessedStatus, TransactionRejectionDetails,
-	TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
+	BoostPoolId, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness,
+	Event, ReportExpiresAt, ScheduledTransactionsForRejection, TransactionPrewitnessedStatus,
+	TransactionRejectionDetails, TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
 };
 
 use frame_support::{
@@ -135,16 +135,21 @@ fn process_marked_transaction_and_expect_refund() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
-				deposit_address: _address,
-				asset: btc::Asset::Btc,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionRejectedByBroker,
+			RuntimeEvent::IngressEgress(Event::DepositFailed {
+				details: DepositFailedDetails::DepositChannel {
+					deposit_witness: DepositWitness {
+						deposit_address: _,
+						asset: btc::Asset::Btc,
+						amount: DEFAULT_DEPOSIT_AMOUNT,
+						deposit_details: _,
+					},
+				},
+				reason: DepositFailedReason::TransactionRejectedByBroker,
+				block_height: _,
 			})
 		);
 
-		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), Some(1));
+		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::decode_len(), Some(1));
 	});
 }
 
@@ -189,7 +194,7 @@ fn finalize_boosted_tx_if_marked_after_prewitness() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised {
+			RuntimeEvent::IngressEgress(Event::DepositFinalised {
 				deposit_address: _,
 				asset: btc::Asset::Btc,
 				..
@@ -238,12 +243,17 @@ fn reject_tx_if_marked_before_prewitness() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
-				deposit_address: _,
-				asset: btc::Asset::Btc,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionRejectedByBroker,
+			RuntimeEvent::IngressEgress(Event::DepositFailed {
+				details: DepositFailedDetails::DepositChannel {
+					deposit_witness: DepositWitness {
+						deposit_address: _,
+						asset: btc::Asset::Btc,
+						amount: DEFAULT_DEPOSIT_AMOUNT,
+						deposit_details: _,
+					},
+				},
+				reason: DepositFailedReason::TransactionRejectedByBroker,
+				block_height: _,
 			})
 		);
 	});
@@ -276,7 +286,7 @@ fn marked_transactions_expire_if_not_witnessed() {
 		assert!(!TransactionsMarkedForRejection::<Test, ()>::contains_key(BROKER, tx_id));
 
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
-			crate::Event::TransactionRejectionRequestExpired { account_id: BROKER, tx_id },
+			Event::TransactionRejectionRequestExpired { account_id: BROKER, tx_id },
 		));
 	});
 }
@@ -368,7 +378,7 @@ fn send_funds_back_after_they_have_been_rejected() {
 	new_test_ext().execute_with(|| {
 		let deposit_details = helpers::generate_btc_deposit(Hash::random());
 
-		ScheduledTxForReject::<Test, ()>::append(TransactionRejectionDetails {
+		ScheduledTransactionsForRejection::<Test, ()>::append(TransactionRejectionDetails {
 			refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS))),
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			asset: btc::Asset::Btc,
@@ -377,11 +387,11 @@ fn send_funds_back_after_they_have_been_rejected() {
 
 		IngressEgress::on_finalize(1);
 
-		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), None);
+		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::decode_len(), None);
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::TransactionRejectedByBroker {
+			RuntimeEvent::IngressEgress(Event::TransactionRejectedByBroker {
 				broadcast_id: _,
 				tx_id: _,
 			})
@@ -428,12 +438,17 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
-				deposit_address: _,
-				asset: btc::Asset::Btc,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionRejectedByBroker,
+			RuntimeEvent::IngressEgress(Event::DepositFailed {
+				details: DepositFailedDetails::DepositChannel {
+					deposit_witness: DepositWitness {
+						deposit_address: _,
+						asset: btc::Asset::Btc,
+						amount: DEFAULT_DEPOSIT_AMOUNT,
+						deposit_details: _,
+					},
+				},
+				reason: DepositFailedReason::TransactionRejectedByBroker,
+				block_height: _,
 			})
 		);
 	});

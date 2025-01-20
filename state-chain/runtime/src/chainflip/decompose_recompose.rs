@@ -4,7 +4,6 @@ use crate::{
 use cf_chains::{arb::ArbitrumTrackedData, btc::BitcoinFeeInfo, instances::AssethubInstance};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
-use sp_runtime::FixedU64;
 use sp_std::{mem, prelude::*};
 
 impl WitnessDataExtraction for RuntimeCall {
@@ -37,10 +36,10 @@ impl WitnessDataExtraction for RuntimeCall {
 				let fee_info = mem::take(&mut new_chain_state.tracked_data.median_tip);
 				Some(fee_info.encode())
 			},
-			// In Arbitrum the amount of gas for calls keep changing accross time. In order to get
-			// that value (gas multiplier) we need to use a call to the NodeInterface which
-			// simulates a transaction to get that value. However, that estimation can't be done at
-			// a particular block but rather when the node receives the RPC call.
+			// In Arbitrum the gas calculations are complex and we need to use a call to the
+			// NodeInterface which simulates a transaction to get that value. However, that
+			// estimation can't be done at a particular block but rather when the node receives
+			// the RPC call.
 			RuntimeCall::ArbitrumChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				ArbitrumInstance,
@@ -53,7 +52,7 @@ impl WitnessDataExtraction for RuntimeCall {
 					ArbitrumTrackedData {
 						// Use the floor value of 0.01 gwei for Arbitrum One
 						base_fee: 10000000,
-						gas_limit_multiplier: FixedU64::from(1),
+						l1_base_fee_estimate: 1u128,
 					},
 				);
 				Some(tracked_data.encode())
@@ -107,7 +106,7 @@ impl WitnessDataExtraction for RuntimeCall {
 			>::update_chain_state {
 				new_chain_state,
 			}) =>
-				if let Some(tracked_data) = arb_select_median_base_and_multiplier(data) {
+				if let Some(tracked_data) = arb_select_median_base_fees(data) {
 					new_chain_state.tracked_data = tracked_data;
 				},
 			RuntimeCall::AssethubChainTracking(pallet_cf_chain_tracking::Call::<
@@ -139,7 +138,7 @@ fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
 		.map(BitcoinFeeInfo::new)
 }
 
-fn arb_select_median_base_and_multiplier(data: &mut [Vec<u8>]) -> Option<ArbitrumTrackedData> {
+fn arb_select_median_base_fees(data: &mut [Vec<u8>]) -> Option<ArbitrumTrackedData> {
 	let decode_all_results: Result<Vec<_>, _> = data
 		.iter_mut()
 		.map(|entry| ArbitrumTrackedData::decode(&mut entry.as_slice()))
@@ -147,11 +146,11 @@ fn arb_select_median_base_and_multiplier(data: &mut [Vec<u8>]) -> Option<Arbitru
 
 	match decode_all_results {
 		Ok(entries) => {
-			let (base_values, multiplier_values): (Vec<_>, Vec<_>) =
-				entries.into_iter().map(|t| (t.base_fee, t.gas_limit_multiplier)).unzip();
+			let (base_values, l1_base_fee_estimates): (Vec<_>, Vec<_>) =
+				entries.into_iter().map(|t| (t.base_fee, t.l1_base_fee_estimate)).unzip();
 			Some(ArbitrumTrackedData {
 				base_fee: select_median(base_values)?,
-				gas_limit_multiplier: select_median(multiplier_values)?,
+				l1_base_fee_estimate: select_median(l1_base_fee_estimates)?,
 			})
 		},
 		Err(decode_err) => {
@@ -280,8 +279,8 @@ mod tests {
 		test_medians::<Ethereum>();
 		test_medians::<Bitcoin>();
 		test_medians::<Polkadot>();
-		// we dont test medians for Arbitrum since there is no priority fee in arbitrum
-		// we dont test medians for Solana as we use a different method for Solana block height
+		// we don't test medians for Arbitrum since there is no priority fee in arbitrum
+		// we don't test medians for Solana as we use a different method for Solana block height
 		// tracking
 		test_medians::<Assethub>();
 	}
@@ -410,24 +409,23 @@ mod tests {
 	}
 
 	#[test]
-	fn arb_select_median_base_and_multiplier_empty_votes() {
-		assert!(arb_select_median_base_and_multiplier(&mut []).is_none());
+	fn arb_select_median_base_fees_empty_votes() {
+		assert!(arb_select_median_base_fees(&mut []).is_none());
 	}
 
 	#[test]
-	fn arb_select_median_base_and_multiplier_test() {
+	fn arb_select_median_base_fees_test() {
 		let mut votes = [(1, 1), (9999, 1000), (7, 1002), (7, 4000), (3, 0)]
 			.into_iter()
-			.map(|(base_fee, multiplier)| ArbitrumTrackedData {
+			.map(|(base_fee, l1_base_fee_estimate)| ArbitrumTrackedData {
 				base_fee,
-				gas_limit_multiplier: FixedU64::from(multiplier),
+				l1_base_fee_estimate,
 			})
 			.map(|data| data.encode())
 			.collect::<Vec<_>>();
 
-		let actual = arb_select_median_base_and_multiplier(&mut votes).unwrap();
-		let expected =
-			ArbitrumTrackedData { base_fee: 7, gas_limit_multiplier: FixedU64::from(1000) };
+		let actual = arb_select_median_base_fees(&mut votes).unwrap();
+		let expected = ArbitrumTrackedData { base_fee: 7, l1_base_fee_estimate: 1000u128 };
 
 		assert_eq!(actual, expected);
 	}

@@ -24,7 +24,6 @@ nanorand = { workspace = true, features = ["wyrand"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
 ethabi = { workspace = true }
 bitvec = { workspace = true }
-obake = { workspace = true }
 
 # Chainflip local dependencies
 cf-amm = { workspace = true }
@@ -70,9 +69,11 @@ pallet-session = { workspace = true, features = ["historical"] }
 # Substrate dependencies
 frame-benchmarking = { workspace = true, optional = true }
 frame-executive = { workspace = true }
+frame-metadata-hash-extension = { workspace = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 frame-system-benchmarking = { workspace = true, optional = true }
+frame-try-runtime = { workspace = true, optional = true }
 
 pallet-aura = { workspace = true }
 pallet-grandpa = { workspace = true }
@@ -84,6 +85,7 @@ sp-block-builder = { workspace = true }
 sp-consensus-aura = { workspace = true, features = ["serde"] }
 sp-consensus-grandpa = { workspace = true, features = ["serde"] }
 sp-core = { workspace = true, features = ["serde"] }
+sp-genesis-builder = { workspace = true }
 sp-inherents = { workspace = true }
 sp-offchain = { workspace = true }
 sp-runtime = { workspace = true, features = ["serde"] }
@@ -91,10 +93,6 @@ sp-session = { workspace = true }
 sp-std = { workspace = true }
 sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true }
-
-sp-genesis-builder = { workspace = true }
-
-frame-try-runtime = { workspace = true, optional = true }
 
 # Used for RPCs
 frame-system-rpc-runtime-api = { workspace = true }
@@ -207,6 +205,7 @@ std = [
   "sp-version/std",
   "dep:cf-test-utilities",
   "dep:substrate-wasm-builder",
+  "frame-metadata-hash-extension/std",
 ]
 try-runtime = [
   "cf-runtime-utilities/try-runtime",
@@ -243,3 +242,4 @@ try-runtime = [
   "pallet-authorship/try-runtime",
   "sp-runtime/try-runtime",
 ]
+metadata-hash = ["substrate-wasm-builder/metadata-hash"]

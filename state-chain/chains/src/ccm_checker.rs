@@ -9,6 +9,10 @@ use crate::{
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sol_prim::consts::{
+	ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
+};
+use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -16,6 +20,20 @@ pub enum CcmValidityError {
 	CannotDecodeCcmAdditionalData,
 	CcmIsTooLong,
 	CcmAdditionalDataContainsInvalidAccounts,
+	RedundantDataSupplied,
+}
+impl From<CcmValidityError> for DispatchError {
+	fn from(value: CcmValidityError) -> Self {
+		match value {
+			CcmValidityError::CannotDecodeCcmAdditionalData =>
+				"Invalid Ccm: Cannot decode additional data".into(),
+			CcmValidityError::CcmIsTooLong => "Invalid Ccm: message too long".into(),
+			CcmValidityError::CcmAdditionalDataContainsInvalidAccounts =>
+				"Invalid Ccm: additional data contains invalid accounts".into(),
+			CcmValidityError::RedundantDataSupplied =>
+				"Invalid Ccm: Additional data supplied but they will not be used".into(),
+		}
+	}
 }
 
 pub trait CcmValidityCheck {
@@ -27,10 +45,15 @@ pub trait CcmValidityCheck {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Decode, PartialEq, Eq)]
 pub enum DecodedCcmAdditionalData {
-	Solana(SolCcmAccounts),
 	NotRequired,
+	Solana(VersionedSolanaCcmAdditionalData),
+}
+
+#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
+pub enum VersionedSolanaCcmAdditionalData {
+	V0(SolCcmAccounts),
 }
 
 pub struct CcmValidityChecker;
@@ -46,32 +69,65 @@ impl CcmValidityCheck for CcmValidityChecker {
 	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
 		match ForeignChain::from(egress_asset) {
 			ForeignChain::Solana => {
-				// Check if the cf_parameter can be decoded
-				let ccm_accounts =
-					SolCcmAccounts::decode(&mut &ccm.ccm_additional_data.clone()[..])
-						.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 				let asset: SolAsset = egress_asset.try_into().expect(
 					"Only Solana chain's asset will be checked. This conversion must succeed.",
 				);
 
-				// Length of CCM = length of message + total no. remaining_accounts * constant;
-				let ccm_length = ccm.message.len() +
-					ccm_accounts.remaining_accounts.len() * CCM_BYTES_PER_ACCOUNT;
-				if ccm_length >
-					match asset {
-						SolAsset::Sol => MAX_CCM_BYTES_SOL,
-						SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
-					} {
-					return Err(CcmValidityError::CcmIsTooLong)
-				}
+				// Check if the cf_parameter can be decoded
+				match VersionedSolanaCcmAdditionalData::decode(
+					&mut &ccm.ccm_additional_data.clone()[..],
+				)
+				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?
+				{
+					VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => {
+						// Calculate the length of the user's data to ensure the built CCM
+						// transaction will not exceed the maximum allowed length in Solana.
+						// data length = message length + #accounts * (bytes_per_account +
+						// bytes_per_reference);
+						//
+						// Accounts could be duplicated and then they would only take one reference
+						// byte but:
+						// - It doesn't make sense for additional_accounts to have duplicated
+						//   accounts since it'll all be in the same instruction anyway.
+						// - Accounts used by Chainflip (e.g. SYSTEM_PROGRAM or TOKEN_PROGRAM) are
+						//   already being passed to the receiver in the CPI so there's need to add
+						//   them to the list.
+						// - Chainflip specific accounts (agg_key, data_account) and nonce accounts
+						//   are the only accounts that are part of the transaction that the user
+						//   won't have access to. Those accounts are either blacklisted or should
+						//   be irrelevant for the user.
+						// Therefore we can assume that accounts are not duplicated when calculating
+						// the transaction length. If any account is in fact duplicated it
+						// will effectively reduce the allowed maximum length for the user's
+						// metadata.
+						let ccm_length = ccm.message.len() +
+							ccm_accounts.additional_accounts.len() *
+								(ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION +
+									ACCOUNT_KEY_LENGTH_IN_TRANSACTION);
+						if ccm_length >
+							match asset {
+								SolAsset::Sol => MAX_CCM_BYTES_SOL,
+								SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
+							} {
+							return Err(CcmValidityError::CcmIsTooLong)
+						}
 
-				Ok(DecodedCcmAdditionalData::Solana(ccm_accounts))
+						Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(
+							ccm_accounts,
+						)))
+					},
+				}
 			},
 			ForeignChain::Assethub =>
 				<AssethubRuntimeCall as codec::Decode>::decode(&mut ccm.message.as_ref())
 					.map(|_| DecodedCcmAdditionalData::NotRequired)
 					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData),
-			_ => Ok(DecodedCcmAdditionalData::NotRequired),
+			_ =>
+				if !ccm.ccm_additional_data.is_empty() {
+					Err(CcmValidityError::RedundantDataSupplied)
+				} else {
+					Ok(DecodedCcmAdditionalData::NotRequired)
+				},
 		}
 	}
 }
@@ -84,7 +140,7 @@ pub fn check_ccm_for_blacklisted_accounts(
 	blacklisted_accounts.into_iter().try_for_each(|blacklisted_account| {
 		(ccm_accounts.cf_receiver.pubkey != blacklisted_account &&
 			!ccm_accounts
-				.remaining_accounts
+				.additional_accounts
 				.iter()
 				.any(|acc| acc.pubkey == blacklisted_account))
 		.then_some(())
@@ -106,7 +162,9 @@ mod test {
 		let ccm = sol_test_values::ccm_parameter().channel_metadata;
 		assert_eq!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol),
-			Ok(DecodedCcmAdditionalData::Solana(sol_test_values::ccm_accounts()))
+			Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(
+				sol_test_values::ccm_accounts()
+			)))
 		);
 	}
 
@@ -129,11 +187,11 @@ mod test {
 		let ccm = || CcmChannelMetadata {
 			message: vec![0x01; MAX_CCM_BYTES_SOL].try_into().unwrap(),
 			gas_budget: 0,
-			ccm_additional_data: SolCcmAccounts {
+			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				remaining_accounts: vec![],
+				additional_accounts: vec![],
 				fallback_address: SolPubkey([0xf0; 32]),
-			}
+			})
 			.encode()
 			.try_into()
 			.unwrap(),
@@ -149,14 +207,14 @@ mod test {
 		);
 
 		let mut invalid_ccm = ccm();
-		invalid_ccm.ccm_additional_data = SolCcmAccounts {
+		invalid_ccm.ccm_additional_data = VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-			remaining_accounts: vec![SolCcmAddress {
+			additional_accounts: vec![SolCcmAddress {
 				pubkey: SolPubkey([0x01; 32]),
 				is_writable: true,
 			}],
 			fallback_address: SolPubkey([0xf0; 32]),
-		}
+		})
 		.encode()
 		.try_into()
 		.unwrap();
@@ -171,11 +229,11 @@ mod test {
 		let ccm = || CcmChannelMetadata {
 			message: vec![0x01; MAX_CCM_BYTES_USDC].try_into().unwrap(),
 			gas_budget: 0,
-			ccm_additional_data: SolCcmAccounts {
+			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 				fallback_address: SolPubkey([0xf0; 32]),
-				remaining_accounts: vec![],
-			}
+				additional_accounts: vec![],
+			})
 			.encode()
 			.try_into()
 			.unwrap(),
@@ -191,20 +249,46 @@ mod test {
 		);
 
 		let mut invalid_ccm = ccm();
-		invalid_ccm.ccm_additional_data = SolCcmAccounts {
+		invalid_ccm.ccm_additional_data = VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-			remaining_accounts: vec![SolCcmAddress {
+			additional_accounts: vec![SolCcmAddress {
 				pubkey: SolPubkey([0x01; 32]),
 				is_writable: true,
 			}],
 			fallback_address: SolPubkey([0xf0; 32]),
-		}
+		})
 		.encode()
 		.try_into()
 		.unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::SolUsdc),
 			CcmValidityError::CcmIsTooLong
+		);
+	}
+
+	#[test]
+	fn can_check_for_redundant_data() {
+		let ccm = sol_test_values::ccm_parameter().channel_metadata;
+
+		// Ok for Solana Chain
+		assert_ok!(CcmValidityChecker::check_and_decode(&ccm, Asset::Sol));
+
+		// Fails for non-solana chains
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Btc),
+			CcmValidityError::RedundantDataSupplied,
+		);
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Dot),
+			CcmValidityError::RedundantDataSupplied,
+		);
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth),
+			CcmValidityError::RedundantDataSupplied,
+		);
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::ArbEth),
+			CcmValidityError::RedundantDataSupplied,
 		);
 	}
 
@@ -225,6 +309,7 @@ mod test {
 		);
 
 		// Always valid on other chains.
+		ccm.ccm_additional_data.clear();
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth),
 			DecodedCcmAdditionalData::NotRequired
@@ -267,7 +352,7 @@ mod test {
 				pubkey: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT.into(),
 				is_writable: true,
 			},
-			remaining_accounts: vec![
+			additional_accounts: vec![
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x01; 32]), is_writable: false },
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],
@@ -283,7 +368,7 @@ mod test {
 				pubkey: crate::sol::SolPubkey([0x01; 32]),
 				is_writable: true,
 			},
-			remaining_accounts: vec![
+			additional_accounts: vec![
 				SolCcmAddress {
 					pubkey: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT.into(),
 					is_writable: false,
@@ -303,7 +388,7 @@ mod test {
 				pubkey: sol_test_values::agg_key().into(),
 				is_writable: true,
 			},
-			remaining_accounts: vec![
+			additional_accounts: vec![
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x01; 32]), is_writable: false },
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],
@@ -319,7 +404,7 @@ mod test {
 				pubkey: crate::sol::SolPubkey([0x01; 32]),
 				is_writable: true,
 			},
-			remaining_accounts: vec![
+			additional_accounts: vec![
 				SolCcmAddress { pubkey: sol_test_values::agg_key().into(), is_writable: false },
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],

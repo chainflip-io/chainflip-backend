@@ -6,7 +6,7 @@ use cf_chains::{
 		deposit_address::DepositAddress, vault_swap_encoding::UtxoEncodedData, ScriptPubkey, Utxo,
 		UtxoId,
 	},
-	ChannelRefundParameters, ForeignChainAddress,
+	ChannelRefundParametersDecoded, ForeignChainAddress,
 };
 use cf_primitives::{AccountId, Beneficiary, ChannelId, DcaParameters};
 use cf_utilities::SliceToArray;
@@ -147,10 +147,10 @@ pub fn try_extract_vault_swap_witness(
 			deposit_address: vault_address.clone(),
 		},
 		deposit_metadata: None, // No ccm for BTC (yet?)
-		broker_fee: Beneficiary {
+		broker_fee: Some(Beneficiary {
 			account: broker_id.clone(),
 			bps: data.parameters.broker_fee.into(),
-		},
+		}),
 		affiliate_fees: data
 			.parameters
 			.affiliates
@@ -159,11 +159,11 @@ pub fn try_extract_vault_swap_witness(
 			.collect_vec()
 			.try_into()
 			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
-		refund_params: ChannelRefundParameters {
+		refund_params: Some(ChannelRefundParametersDecoded {
 			retry_duration: data.parameters.retry_duration.into(),
 			refund_address: ForeignChainAddress::Btc(refund_address),
 			min_price,
-		},
+		}),
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks.into(),
 			chunk_interval: data.parameters.chunk_interval.into(),
@@ -177,7 +177,6 @@ pub fn try_extract_vault_swap_witness(
 
 #[cfg(test)]
 mod tests {
-
 	use std::sync::LazyLock;
 
 	use bitcoin::{
@@ -204,7 +203,7 @@ mod tests {
 	static MOCK_SWAP_PARAMS: LazyLock<UtxoEncodedData> = LazyLock::new(|| UtxoEncodedData {
 		output_asset: cf_primitives::Asset::Dot,
 		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
-		parameters: SharedCfParameters {
+		parameters: BtcCfParameters {
 			retry_duration: 5,
 			min_output_amount: u128::MAX,
 			number_of_chunks: 0x0ffff,
@@ -321,20 +320,20 @@ mod tests {
 					amount: DEPOSIT_AMOUNT,
 					deposit_address: vault_deposit_address.clone(),
 				},
-				broker_fee: Beneficiary {
+				broker_fee: Some(Beneficiary {
 					account: BROKER,
 					bps: MOCK_SWAP_PARAMS.parameters.broker_fee.into()
-				},
+				}),
 				affiliate_fees: bounded_vec![MOCK_SWAP_PARAMS.parameters.affiliates[0].into()],
 				deposit_metadata: None,
-				refund_params: ChannelRefundParameters {
+				refund_params: Some(ChannelRefundParametersDecoded {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),
 					)),
-				},
+				}),
 				dca_params: Some(DcaParameters {
 					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks.into(),
 					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval.into(),

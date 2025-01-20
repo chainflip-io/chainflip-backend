@@ -20,6 +20,8 @@ pub mod set_agg_key_with_agg_key;
 pub mod set_comm_key_with_agg_key;
 pub mod set_gov_key_with_agg_key;
 pub mod transfer_fallback;
+pub mod vault_swaps;
+pub use vault_swaps::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EvmReplayProtection {
@@ -109,25 +111,34 @@ pub trait EvmCall {
 
 	/// The function names and parameters, not including sigData.
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)>;
-	/// The function values to be used as call parameters, no including sigData.
+	/// The function values to be used as call parameters, not including sigData.
 	fn function_call_args(&self) -> Vec<Token>;
 
-	fn get_function() -> ethabi::Function {
+	fn get_function(with_sig_data: bool) -> ethabi::Function {
+		let inputs = if with_sig_data {
+			let mut params = vec![("sigData", SigData::param_type())];
+			params.extend(Self::function_params());
+			params
+		} else {
+			Self::function_params()
+		}
+		.into_iter()
+		.map(|(n, t)| ethabi_param(n, t))
+		.collect();
+
 		#[allow(deprecated)]
 		ethabi::Function {
 			name: Self::FUNCTION_NAME.into(),
-			inputs: core::iter::once(("sigData", SigData::param_type()))
-				.chain(Self::function_params())
-				.map(|(n, t)| ethabi_param(n, t))
-				.collect(),
+			inputs,
 			outputs: vec![],
 			constant: None,
 			state_mutability: ethabi::StateMutability::NonPayable,
 		}
 	}
+
 	/// Encodes the call and signature into EVM Abi format.
 	fn abi_encoded(&self, sig_data: &SigData) -> Vec<u8> {
-		Self::get_function()
+		Self::get_function(true)
 			.encode_input(
 				&core::iter::once(sig_data.tokenize())
 					.chain(self.function_call_args())
@@ -140,15 +151,24 @@ pub trait EvmCall {
 				"#,
 			)
 	}
+	/// Encode the call without the signature into EVM Abi format. For use with vault swaps.
+	fn abi_encoded_payload(&self) -> Vec<u8> {
+		Self::get_function(false).encode_input(&self.function_call_args()).expect(
+			r#"
+					This can only fail if the parameter types don't match the function signature.
+					Therefore, as long as the tests pass, it can't fail at runtime.
+				"#,
+		)
+	}
 	/// Generates the message hash for this call.
 	fn msg_hash(&self) -> <Keccak256 as Hash>::Output {
 		Keccak256::hash(&ethabi::encode(
-			&core::iter::once(Self::get_function().tokenize())
+			&core::iter::once(Self::get_function(true).tokenize())
 				.chain(self.function_call_args())
 				.collect::<Vec<_>>(),
 		))
 	}
-	fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+	fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
 		None
 	}
 }
@@ -173,8 +193,8 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		self.replay_protection.chain_id
 	}
 
-	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
-		self.call.gas_budget()
+	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+		self.call.ccm_transfer_data()
 	}
 
 	pub fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
@@ -210,6 +230,10 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		self.call.abi_encoded(
 			&self.expect_sig_data_defensive("`chain_encoded` is only called on signed api calls."),
 		)
+	}
+
+	pub fn chain_encoded_payload(&self) -> Vec<u8> {
+		self.call.abi_encoded_payload()
 	}
 
 	pub fn is_signed(&self) -> bool {
@@ -322,7 +346,7 @@ mod tests {
 
 		assert_eq!(builder.chain_id(), 1);
 		assert_eq!(builder.replay_protection(), replay_protection);
-		assert_eq!(builder.gas_budget(), None);
+		assert_eq!(builder.ccm_transfer_data(), None);
 		assert!(!builder.is_signed());
 
 		let threshold_signature =

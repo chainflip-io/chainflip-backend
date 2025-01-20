@@ -100,6 +100,10 @@ codec = { workspace = true, default-features = true, features = [
   "derive",
   "full",
 ] }
+frame-metadata = { workspace = true, default-features = true, features = [
+  "current",
+] }
+frame-metadata-hash-extension = { workspace = true }
 frame-support = { workspace = true, default-features = true }
 frame-system = { workspace = true, default-features = true }
 sc-rpc-api = { workspace = true, default-features = true }
@@ -113,13 +117,13 @@ sp-runtime = { workspace = true, default-features = true }
 sp-version = { workspace = true, default-features = true }
 substrate-frame-rpc-system = { workspace = true }
 
-frame-metadata = { workspace = true, default-features = true, features = [
-  "current",
-] }
 serde_bytes = { workspace = true, default-features = true }
 bs58 = { workspace = true, default-features = true }
 base64 = { workspace = true }
 rocksdb = { workspace = true, features = ["lz4"] }
+
+# Used only with feature client-mocks
+mockall = { workspace = true, features = ["nightly"], optional = true }
 
 [dev-dependencies]
 csv = { workspace = true }
@@ -138,5 +142,6 @@ substrate-build-script-utils = { workspace = true }
 engine-upgrade-utils = { workspace = true }
 
 [features]
+client-mocks = ["mockall"]
 integration-test = []
 std = []

@@ -211,13 +211,6 @@ impl<T: Config> Pallet<T> {
 		amount_owed: &mut AssetAmount,
 		available: &mut AssetAmount,
 	) -> Result<(), DispatchError> {
-		if *amount_owed > *available {
-			Self::deposit_event(Event::VaultDeficitDetected {
-				chain,
-				amount_owed: *amount_owed,
-				available: *available,
-			});
-		}
 		let amount_reconciled = match chain {
 			ForeignChain::Ethereum | ForeignChain::Arbitrum => match owner {
 				ExternalOwner::Account(address) =>
@@ -303,6 +296,14 @@ impl<T: Config> Pallet<T> {
 
 				owed_assets.retain(|(_, amount)| *amount > 0);
 				if !owed_assets.is_empty() {
+					Self::deposit_event(Event::VaultDeficitDetected {
+						chain,
+						amount_owed: owed_assets
+							.iter()
+							.map(|(_, amount)| amount)
+							.sum::<AssetAmount>(),
+						available: *total_withheld,
+					});
 					Liabilities::<T>::insert(
 						chain.gas_asset(),
 						owed_assets.into_iter().collect::<BTreeMap<_, _>>(),

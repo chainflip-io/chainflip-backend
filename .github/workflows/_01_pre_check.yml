@@ -8,7 +8,7 @@ jobs:
   cargo-fmt:
     runs-on: namespace-profile-rust-builder
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-11-23"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -23,7 +23,7 @@ jobs:
   audit:
     runs-on: namespace-profile-default
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-11-23"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -38,7 +38,7 @@ jobs:
   cargo-clippy:
     runs-on: namespace-profile-rust-builder
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-11-23"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -91,7 +91,7 @@ jobs:
 
       - name: Check workflow files 📝
         run: |
-          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/v1.7.4/scripts/download-actionlint.bash)
           ./actionlint -color -shellcheck=
         shell: bash
 

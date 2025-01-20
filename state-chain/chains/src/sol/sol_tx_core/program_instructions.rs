@@ -251,11 +251,11 @@ pub trait ProgramInstruction: BorshSerialize {
 }
 
 pub trait InstructionExt {
-	fn with_remaining_accounts(self, accounts: Vec<AccountMeta>) -> Self;
+	fn with_additional_accounts(self, accounts: Vec<AccountMeta>) -> Self;
 }
 
 impl InstructionExt for Instruction {
-	fn with_remaining_accounts(mut self, accounts: Vec<AccountMeta>) -> Self {
+	fn with_additional_accounts(mut self, accounts: Vec<AccountMeta>) -> Self {
 		self.accounts.extend(accounts);
 		self
 	}
@@ -738,6 +738,31 @@ solana_program!(
 				bpf_loader_upgradeable: { signer: false, writable: false },
 			]
 		},
+		set_program_swaps_parameters => SetProgramSwapsParameters {
+			args: [
+				min_native_swap_amount: u64,
+				max_dst_address_len: u16,
+				max_ccm_message_len: u32,
+				max_cf_parameters_len: u32,
+				max_event_accounts: u32,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				gov_key: { signer: true, writable: false },
+			]
+		},
+		enable_token_support => EnableTokenSupport {
+			args: [
+				min_swap_amount: u64,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				gov_key: { signer: true, writable: true },
+				token_supported_account: { signer: false, writable: true },
+				mint: { signer: false, writable: false },
+				system_program: { signer: false, writable: false },
+			]
+		},
 	},
 	types: [
 		DepositChannelHistoricalFetch {
@@ -781,7 +806,7 @@ pub mod swap_endpoints {
 				],
 				account_metas: [
 					data_account: { signer: false, writable: false },
-					agg_key: { signer: false, writable: true },
+					native_vault: { signer: false, writable: true },
 					from: { signer: true, writable: true },
 					event_data_account: { signer: true, writable: true },
 					swap_endpoint_data_account: { signer: false, writable: true },
@@ -802,6 +827,17 @@ pub mod swap_endpoints {
 					token_supported_account: { signer: false, writable: false },
 					token_program: { signer: false, writable: false },
 					mint: { signer: false, writable: false },
+					system_program: { signer: false, writable: false },
+				]
+			},
+			fetch_swap_endpoint_native_assets => FetchSwapEndpointNativeAssets {
+				args: [
+					bump: u8,
+				],
+				account_metas: [
+					data_account: { signer: false, writable: false },
+					native_vault: { signer: false, writable: true },
+					agg_key: { signer: true, writable: true },
 					system_program: { signer: false, writable: false },
 				]
 			},
@@ -855,6 +891,12 @@ pub mod swap_endpoints {
 			},
 		]
 	);
+
+	impl From<crate::CcmChannelMetadata> for types::CcmParams {
+		fn from(ccm: crate::CcmChannelMetadata) -> Self {
+			types::CcmParams { message: ccm.message.to_vec(), gas_amount: ccm.gas_budget as u64 }
+		}
+	}
 
 	pub const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
 		types::SwapEvent::discriminator();

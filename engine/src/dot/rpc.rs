@@ -40,7 +40,7 @@ macro_rules! refresh_connection_on_error {
 				);
 
 				let new_client =
-					OnlineClient::<PolkadotConfig>::from_url(&$self.polkadot_network_ws_url).await?;
+					OnlineClient::<PolkadotConfig>::from_insecure_url(&$self.polkadot_network_ws_url).await?;
 				let result = new_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {e}", stringify!($method)));
 				let mut online_client_guard = $self.online_client.write().await;
 				*online_client_guard = new_client;
@@ -53,8 +53,12 @@ macro_rules! refresh_connection_on_error {
 
 impl DotRpcClient {
 	pub async fn new(polkadot_network_ws_url: &str, http_client: DotHttpRpcClient) -> Result<Self> {
+		if subxt::utils::validate_url_is_secure(polkadot_network_ws_url).is_err() {
+			warn!("Using insecure Polkadot websocket endpoint: {polkadot_network_ws_url}");
+		}
+
 		let online_client = Arc::new(RwLock::new(
-			OnlineClient::<PolkadotConfig>::from_url(polkadot_network_ws_url).await?,
+			OnlineClient::<PolkadotConfig>::from_insecure_url(polkadot_network_ws_url).await?,
 		));
 		Ok(Self {
 			online_client,
@@ -186,7 +190,11 @@ async fn create_online_client(
 	ws_endpoint: &SecretUrl,
 	expected_genesis_hash: Option<PolkadotHash>,
 ) -> Result<OnlineClient<PolkadotConfig>> {
-	let client = OnlineClient::<PolkadotConfig>::from_url(ws_endpoint).await?;
+	if subxt::utils::validate_url_is_secure(ws_endpoint.as_ref()).is_err() {
+		warn!("Using insecure Polkadot websocket endpoint: {ws_endpoint}");
+	}
+
+	let client = OnlineClient::<PolkadotConfig>::from_insecure_url(ws_endpoint).await?;
 
 	if let Some(expected_genesis_hash) = expected_genesis_hash {
 		let genesis_hash = client.genesis_hash();

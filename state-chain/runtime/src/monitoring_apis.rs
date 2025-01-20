@@ -31,7 +31,7 @@ pub struct BtcUtxos {
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct EpochState {
-	pub blocks_per_epoch: u32,
+	pub epoch_duration: u32,
 	pub current_epoch_started_at: u32,
 	pub current_epoch_index: u32,
 	pub min_active_bid: Option<u128>,

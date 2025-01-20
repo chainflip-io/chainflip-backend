@@ -216,7 +216,7 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 			properties
 				.witnessed_open_accounts
 				.into_iter()
-				.map(|VaultSwapAccountAndSender { vault_swap_account, .. }| vault_swap_account)
+				.map(|(VaultSwapAccountAndSender { vault_swap_account, .. }, _)| vault_swap_account)
 				.collect::<HashSet<_>>(),
 			properties.closure_initiated_accounts,
 			settings.usdc_token_mint_pubkey,

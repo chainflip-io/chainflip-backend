@@ -10,6 +10,8 @@ use sol_prim::consts::{ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID};
 // Prefix seeds used in the Vault program to prevent seed collisions
 const DEPOSIT_CHANNEL_PREFIX_SEED: &[u8] = b"channel";
 const HISTORICAL_FETCH_PREFIX_SEED: &[u8] = b"hist_fetch";
+const SUPPORTED_TOKEN_PREFIX_SEED: &[u8] = b"supported_token";
+const SWAP_ENDPOINT_NATIVE_VAULT_SEED: &[u8] = b"swap_endpoint_native_vault";
 
 /// Derive address for a given channel ID
 pub fn derive_deposit_address(
@@ -43,6 +45,26 @@ pub fn derive_fetch_account(
 	DerivedAddressBuilder::from_address(vault_program)?
 		.chain_seed(HISTORICAL_FETCH_PREFIX_SEED)?
 		.chain_seed(deposit_channel_address)?
+		.finish()
+}
+
+/// Derive the token supported account required for vault swaps.
+pub fn derive_token_supported_account(
+	vault_program: SolAddress,
+	mint_pubkey: SolAddress,
+) -> Result<PdaAndBump, AddressDerivationError> {
+	DerivedAddressBuilder::from_address(vault_program)?
+		.chain_seed(SUPPORTED_TOKEN_PREFIX_SEED)?
+		.chain_seed(mint_pubkey)?
+		.finish()
+}
+
+/// Derive the Swap Endpoint's native vault account where SOL is stored before fetching.
+pub fn derive_swap_endpoint_native_vault_account(
+	swap_endpoint_program: SolAddress,
+) -> Result<PdaAndBump, AddressDerivationError> {
+	DerivedAddressBuilder::from_address(swap_endpoint_program)?
+		.chain_seed(SWAP_ENDPOINT_NATIVE_VAULT_SEED)?
 		.finish()
 }
 
@@ -234,6 +256,36 @@ mod tests {
 				address: SolAddress::from_str("CkGQUU19izDobt5NLGmj2h6DBMFRkmj6WN6onNtQVwzn")
 					.unwrap(),
 				bump: 255u8
+			}
+		);
+	}
+
+	#[test]
+	fn can_derive_token_support_account() {
+		let vault_program = sol_test_values::VAULT_PROGRAM;
+		let token_mint_pubkey = sol_test_values::USDC_TOKEN_MINT_PUB_KEY;
+		let usdc_support_account = derive_token_supported_account(vault_program, token_mint_pubkey)
+			.unwrap()
+			.address;
+
+		assert_eq!(
+			usdc_support_account,
+			SolAddress::from_str("9nJKeYP6yUriVUp9moYZHYAFmo3cCRpc2NMZ7tCMsGF6").unwrap()
+		);
+	}
+
+	#[test]
+	fn can_derive_swap_endpoint_native_vault_account() {
+		let swap_endpoint_program = sol_test_values::SWAP_ENDPOINT_PROGRAM;
+		let swap_endpoint_native_vault =
+			derive_swap_endpoint_native_vault_account(swap_endpoint_program).unwrap();
+
+		assert_eq!(
+			swap_endpoint_native_vault,
+			PdaAndBump {
+				address: SolAddress::from_str("EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN")
+					.unwrap(),
+				bump: 254u8
 			}
 		);
 	}

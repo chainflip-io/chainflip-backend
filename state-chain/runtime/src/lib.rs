@@ -11,6 +11,7 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::{
+		address_derivation::btc::derive_btc_vault_deposit_address,
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -18,6 +19,7 @@ use crate::{
 		},
 		Offence,
 	},
+	migrations::solana_transaction_data_migration::NoopUpgrade,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
 		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, OpenDepositChannels,
@@ -25,8 +27,8 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		BoostPoolDetails, BrokerInfo, CcmData, DispatchErrorWithMessage, FailingWitnessValidators,
+		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvents,
 		ValidatorInfo, VaultSwapDetails,
 	},
@@ -44,29 +46,27 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{
-		api::BitcoinApi,
-		vault_swap_encoding::{
-			encode_swap_params_in_nulldata_payload, SharedCfParameters, UtxoEncodedData,
-		},
-		BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey,
+	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
+	ccm_checker::{
+		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
+		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
 	},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	hub,
-	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
-	TransactionBuilder,
+	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot,
+	Solana, TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
-	AffiliateAndFee, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
-	DcaParameters, EpochIndex, NetworkEnvironment, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
+	NetworkEnvironment, STABLE_ASSET,
 };
 use cf_traits::{
-	AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter, BalanceApi,
-	DummyEgressSuccessWitnesser, DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider,
-	NoLimit, SwapLimits, SwapLimitsProvider,
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
+	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit, SwapLimits,
+	SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -80,7 +80,7 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::{BatchExecutionError, FeeType, Swap};
+use pallet_cf_swapping::{BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap};
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
@@ -90,7 +90,7 @@ use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 pub use frame_support::{
 	debug, parameter_types,
@@ -214,7 +214,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_version: 180,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 12,
+	transaction_version: 13,
 	state_version: 1,
 };
 
@@ -290,6 +290,8 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinKeyProvider = BitcoinThresholdSigner;
 	type RuntimeSafeMode = RuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
+	type SolEnvironment = SolEnvironment;
+	type SolanaBroadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -308,7 +310,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
 	type ChannelIdAllocator = BitcoinIngressEgress;
@@ -406,7 +408,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -434,7 +436,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -462,7 +464,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 }
@@ -490,7 +492,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -518,7 +520,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -578,6 +580,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type DeregistrationCheck = Bonder<Self>;
 	type WeightInfo = ();
 }
 
@@ -674,10 +677,6 @@ impl pallet_aura::Config for Runtime {
 	type SlotDuration = ConstU64<SLOT_DURATION>;
 }
 
-parameter_types! {
-	pub storage BlocksPerEpoch: u64 = Validator::blocks_per_epoch().into();
-}
-
 type KeyOwnerIdentification<T, Id> =
 	<T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::IdentificationTuple;
 type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReportingAdapter<
@@ -769,10 +768,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
-	type UpgradeCondition = (
-		pallet_cf_validator::NotDuringRotation<Runtime>,
-		(pallet_cf_swapping::NoPendingSwaps<Runtime>, pallet_cf_environment::NoUsedNonce<Runtime>),
-	);
+	type UpgradeCondition = pallet_cf_validator::NotDuringRotation<Runtime>;
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 	type CompatibleCfeVersions = Environment;
 	type AuthoritiesCfeVersions = Validator;
@@ -1242,6 +1238,7 @@ pub type SignedExtra = (
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+	frame_metadata_hash_extension::CheckMetadataHash<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
@@ -1333,12 +1330,14 @@ type AllMigrations = (
 	// This ClearEvents should only be run at the start of all migrations. This is in case another
 	// migration needs to trigger an event like a Broadcast for example.
 	pallet_cf_cfe_interface::migrations::ClearEvents<Runtime>,
-	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
+	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFEs EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	MigrationsForV1_8,
 	migrations::housekeeping::Migration,
+	// Can be removed once Solana address re-use is activated.
+	migrations::solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
 	migrations::reap_old_accounts::Migration,
 );
 
@@ -1356,6 +1355,7 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, AssethubInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
@@ -1385,13 +1385,93 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_8 = VersionedMigration<
-	2,
-	3,
-	migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
-	pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-	DbWeight,
->;
+macro_rules! instanced_migrations {
+	(
+		module: $module:ident,
+		migration: $migration:ty,
+		from: $from:literal,
+		to: $to:literal,
+		include_instances: [$( $include:ident ),+ $(,)?],
+		exclude_instances: [$( $exclude:ident ),+ $(,)?] $(,)?
+	) => {
+		(
+			$(
+				VersionedMigration<
+					$from,
+					$to,
+					$migration,
+					$module::Pallet<Runtime, $include>,
+					DbWeight,
+				>,
+			)+
+			$(
+				VersionedMigration<
+					$from,
+					$to,
+					NoopUpgrade,
+					$module::Pallet<Runtime, $exclude>,
+					DbWeight,
+				>,
+			)+
+		)
+	}
+}
+
+type MigrationsForV1_8 = (
+	VersionedMigration<
+		2,
+		3,
+		migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+	// Only the Solana Transaction type has changed
+	instanced_migrations! {
+		module: pallet_cf_broadcast,
+		migration: migrations::solana_transaction_data_migration::SolanaTransactionDataMigration,
+		from: 10,
+		to: 11,
+		include_instances: [
+			SolanaInstance
+		],
+		exclude_instances: [
+			EthereumInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+			ArbitrumInstance,
+		],
+	},
+	instanced_migrations! {
+		module: pallet_cf_chain_tracking,
+		migration: migrations::arbitrum_chain_tracking_migration::ArbitrumChainTrackingMigration,
+		from: 3,
+		to: 4,
+		include_instances: [
+			ArbitrumInstance
+		],
+		exclude_instances: [
+			EthereumInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+			SolanaInstance,
+		],
+	},
+	instanced_migrations! {
+		module: pallet_cf_broadcast,
+		migration: migrations::api_calls_gas_migration::EthApiCallsGasMigration,
+		from: 11,
+		to: 12,
+		include_instances: [
+			EthereumInstance,
+			ArbitrumInstance
+		],
+		exclude_instances: [
+			PolkadotInstance,
+			BitcoinInstance,
+			SolanaInstance,
+		],
+	},
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -1476,7 +1556,7 @@ impl_runtime_apis! {
 			Environment::current_release_version()
 		}
 		fn cf_epoch_duration() -> u32 {
-			Validator::blocks_per_epoch()
+			Validator::epoch_duration()
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
@@ -1580,7 +1660,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			AuctionState {
-				blocks_per_epoch: Validator::blocks_per_epoch(),
+				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
@@ -1617,6 +1697,8 @@ impl_runtime_apis! {
 			input_amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
+			ccm_data: Option<CcmData>,
+			exclude_fees: BTreeSet<FeeTypes>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
@@ -1698,12 +1780,35 @@ impl_runtime_apis! {
 				}
 			}
 
-			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, input_asset, input_amount);
+			let include_fee = |fee_type: FeeTypes| !exclude_fees.contains(&fee_type);
+
+			let (amount_to_swap, ingress_fee) = if include_fee(FeeTypes::Ingress) {
+				remove_fees(IngressOrEgress::Ingress, input_asset, input_amount)
+			} else {
+				(input_amount, 0u128)
+			};
 
 			// Estimate swap result for a chunk, then extrapolate the result.
 			// If no DCA parameter is given, swap the entire amount with 1 chunk.
 			let number_of_chunks: u128 = dca_parameters.map(|dca|dca.number_of_chunks).unwrap_or(1u32).into();
 			let amount_per_chunk = amount_to_swap / number_of_chunks;
+
+			let mut fees_vec = vec![];
+
+			if include_fee(FeeTypes::Network) {
+				fees_vec.push(FeeType::NetworkFee { min_fee_enforced: true });
+			}
+
+			if broker_commission > 0 {
+				fees_vec.push(FeeType::BrokerFee(
+					vec![Beneficiary {
+						account: AccountId::new([0xbb; 32]),
+						bps: broker_commission,
+					}]
+					.try_into()
+					.expect("Beneficiary with a length of 1 must be within length bound.")
+				));
+			}
 
 			let swap_output_per_chunk = Swapping::try_execute_without_violations(
 				vec![
@@ -1714,24 +1819,14 @@ impl_runtime_apis! {
 						output_asset,
 						amount_per_chunk,
 						None,
-						vec![
-							FeeType::NetworkFee,
-							FeeType::BrokerFee(
-								vec![Beneficiary {
-									account: AccountId::new([0xbb; 32]),
-									bps: broker_commission,
-								}]
-								.try_into()
-								.expect("Beneficiary with a length of 1 must be within length bound.")
-							)
-						],
+						fees_vec,
 					)
 				],
-			).map_err(|e| DispatchErrorWithMessage::Other(match e {
+			).map_err(|e| match e {
 				BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
 				BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
 				BatchExecutionError::DispatchError { error } => error,
-			}))?;
+			})?;
 
 			let (
 				network_fee,
@@ -1748,7 +1843,21 @@ impl_runtime_apis! {
 				)
 			};
 
-			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, output_asset, output);
+			let (output, egress_fee) = if include_fee(FeeTypes::Egress) {
+				let egress = match ccm_data {
+					Some(CcmData { gas_budget, message_length}) => {
+						IngressOrEgress::EgressCcm {
+							gas_budget,
+							message_length: message_length as usize,
+						}
+					},
+					None => IngressOrEgress::Egress,
+				};
+				remove_fees(egress, output_asset, output)
+			} else {
+				(output, 0u128)
+			};
+
 
 			Ok(SimulatedSwapInformation {
 				intermediary,
@@ -1961,11 +2070,16 @@ impl_runtime_apis! {
 		fn cf_broker_info(
 			account_id: AccountId,
 		) -> BrokerInfo {
-			let earned_fees = Asset::all().map(|asset|
-				(asset, AssetBalances::get_balance(&account_id, asset))
-			).collect();
-
-			BrokerInfo { earned_fees }
+			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
+			BrokerInfo {
+				earned_fees: Asset::all().map(|asset|
+					(asset, AssetBalances::get_balance(&account_id, asset))
+				).collect(),
+				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
+					.map(derive_btc_vault_deposit_address),
+				affiliates: pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&account_id).collect(),
+				bond: account_info.bond()
+			}
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
@@ -2007,14 +2121,12 @@ impl_runtime_apis! {
 					let channel_asset: Asset = details.deposit_channel.asset.into();
 
 					match details.action {
-						ChannelAction::Swap { destination_asset, .. }
-							if destination_asset == to && channel_asset == from =>
+						ChannelAction::Swap { destination_asset, channel_metadata, .. }
+							// Ignoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
+							if destination_asset == to && channel_asset == from && channel_metadata.is_none() =>
 						{
 							filtered_swaps.push(deposit.amount.into());
 						},
-						ChannelAction::CcmTransfer { .. } => {
-							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
-						}
 						_ => {
 							// ignore other deposit actions
 						}
@@ -2159,6 +2271,8 @@ impl_runtime_apis! {
 			fn boost_pools_details<I: 'static>(asset: TargetChainAsset::<Runtime, I>) -> BTreeMap<u16, BoostPoolDetails>
 				where Runtime: pallet_cf_ingress_egress::Config<I> {
 
+				let network_fee_deduction_percent = pallet_cf_ingress_egress::NetworkFeeDeductionFromBoostPercent::<Runtime, I>::get();
+
 				pallet_cf_ingress_egress::BoostPools::<Runtime, I>::iter_prefix(asset).map(|(tier, pool)| {
 					(
 						tier,
@@ -2171,6 +2285,7 @@ impl_runtime_apis! {
 								)
 							}).collect(),
 							pending_withdrawals: pool.get_pending_withdrawals().clone(),
+							network_fee_deduction_percent,
 						}
 					)
 				}).collect()
@@ -2212,96 +2327,165 @@ impl_runtime_apis! {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
-			min_output_amount: AssetAmount,
-			retry_duration: BlockNumber,
+			extra_parameters: VaultSwapExtraParametersEncoded,
+			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
-			// Validate params
-			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
+			let source_chain = ForeignChain::from(source_asset);
+			let destination_chain = ForeignChain::from(destination_asset);
+
+			// Validate parameters.
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
 			}
-			ChainAddressConverter::try_from_encoded_address(destination_address.clone())
-				.and_then(|address| {
-					if ForeignChain::from(destination_asset) != address.chain() {
-						Err(())
-					} else {
-						Ok(())
-					}
-				})
-				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
+			// Conversion implicitly verifies address validity.
+			frame_support::ensure!(
+				ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+					.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
+					.chain() == destination_chain
+				,
+				"Destination address and asset are on different chains."
+			);
+
+			// Validate boost fee.
+			let boost_fee: u8 = boost_fee
+				.try_into()
+				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
+
+			// Validate refund duration.
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
+				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
+				VaultSwapExtraParametersEncoded::Ethereum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
+			})?;
+
+			// Validate CCM.
+			if let Some(ccm) = channel_metadata.as_ref() {
+				if source_chain == ForeignChain::Bitcoin {
+					return Err(DispatchErrorWithMessage::from("Vault swaps with CCM are not supported for the Bitcoin Chain"));
+				}
+				if !destination_chain.ccm_support() {
+					return Err(DispatchErrorWithMessage::from("Destination chain does not support CCM"));
+				}
+
+				// Ensure CCM message is valid
+				match CcmValidityChecker::check_and_decode(ccm, destination_asset)
+				{
+					Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(ccm_accounts))) => {
+						// Ensure the CCM parameters do not contain blacklisted accounts.
+						// Load up environment variables.
+						let api_environment =
+							SolEnvironment::api_environment().map_err(|_| "Failed to load Solana API environment")?;
+
+						let agg_key: SolPubkey = SolEnvironment::current_agg_key()
+							.map_err(|_| "Failed to load Solana Agg key")?
+							.into();
+
+						let on_chain_key: SolPubkey = SolEnvironment::current_on_chain_key()
+							.map(|key| key.into())
+							.unwrap_or_else(|_| agg_key);
+
+						check_ccm_for_blacklisted_accounts(
+							&ccm_accounts,
+							vec![api_environment.token_vault_pda_account.into(), agg_key, on_chain_key],
+						)
+						.map_err(DispatchError::from)?;
+					},
+					Ok(DecodedCcmAdditionalData::NotRequired) => {},
+					Err(_) => return Err(DispatchErrorWithMessage::from("Solana Ccm additional data is invalid")),
+				};
+			}
 
 			// Encode swap
-			match ForeignChain::from(source_asset) {
-				ForeignChain::Bitcoin => {
-					use cf_chains::btc::deposit_address::DepositAddress;
+			match (source_chain, extra_parameters) {
+				(
+					ForeignChain::Bitcoin,
+					VaultSwapExtraParameters::Bitcoin {
+						min_output_amount,
+						retry_duration,
+					}
+				) => {
+					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
 
-					let private_channel_id =
-						pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
-							.ok_or(
-								pallet_cf_swapping::Error::<Runtime>::NoPrivateChannelExistsForBroker,
-							)?;
-					let params = UtxoEncodedData {
-							output_asset: destination_asset,
-							output_address: destination_address,
-							parameters: SharedCfParameters {
-								retry_duration: retry_duration.try_into()
-									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
-								min_output_amount,
-								number_of_chunks: dca_parameters
-									.as_ref()
-									.map(|params| params.number_of_chunks)
-									.unwrap_or(1)
-									.try_into()
-									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-								chunk_interval: dca_parameters
-									.as_ref()
-									.map(|params| params.chunk_interval)
-									.unwrap_or(SWAP_DELAY_BLOCKS)
-									.try_into()
-									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-								boost_fee: boost_fee.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
-								broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
-								affiliates: affiliate_fees.into_iter().map(|beneficiary|
-										Result::<AffiliateAndFee, DispatchErrorWithMessage>::Ok(
-											AffiliateAndFee {
-												affiliate: Swapping::get_short_id(&broker_id, &beneficiary.account)
-													.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
-												fee: beneficiary.bps.try_into()
-													.map_err(|_| pallet_cf_swapping::Error::<Runtime>::AffiliateFeeTooHigh)?
-											}
-										)
-									)
-									.collect::<Result<Vec<AffiliateAndFee>,_>>()?
-									.try_into()
-									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::TooManyAffiliates)?,
-							},
-						};
-
-					let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
-						.expect("We should always have a key for the current epoch.");
-					let deposit_address = DepositAddress::new(
-						key.current,
-						private_channel_id.try_into().map_err(
-							// TODO: Ensure this can't happen.
-							|_| {
-								DispatchErrorWithMessage::Other(
-									"Private channel id out of bounds.".into(),
-								)
-							},
-						)?,
+					crate::chainflip::vault_swaps::bitcoin_vault_swap(
+						broker_id,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						min_output_amount,
+						retry_duration,
+						boost_fee,
+						affiliate_fees,
+						dca_parameters,
 					)
-					.script_pubkey()
-					.to_address(&Environment::network_environment().into());
-
-					Ok(VaultSwapDetails::Bitcoin {
-						nulldata_payload: encode_swap_params_in_nulldata_payload(params),
-						deposit_address,
-					})
 				},
-				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
+				(
+					ForeignChain::Ethereum,
+					VaultSwapExtraParametersEncoded::Ethereum(extra_params)
+				) => {
+					crate::chainflip::vault_swaps::evm_vault_swap(
+						broker_id,
+						source_asset,
+						extra_params.input_amount,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						extra_params.refund_parameters,
+						boost_fee,
+						affiliate_fees,
+						dca_parameters,
+						channel_metadata,
+					)
+				},
+				(
+					ForeignChain::Arbitrum,
+					VaultSwapExtraParametersEncoded::Arbitrum(extra_params)
+				) => {
+					crate::chainflip::vault_swaps::evm_vault_swap(
+						broker_id,
+						source_asset,
+						extra_params.input_amount,
+						destination_asset,
+						destination_address,
+						broker_commission,
+						extra_params.refund_parameters,
+						boost_fee,
+						affiliate_fees,
+						dca_parameters,
+						channel_metadata,
+					)
+				},
+				(
+					ForeignChain::Solana,
+					VaultSwapExtraParameters::Solana {
+						from,
+						event_data_account,
+						input_amount,
+						refund_parameters,
+						from_token_account,
+					}
+				) => crate::chainflip::vault_swaps::solana_vault_swap(
+					broker_id,
+					input_amount,
+					source_asset,
+					destination_asset,
+					destination_address,
+					broker_commission,
+					refund_parameters,
+					channel_metadata,
+					boost_fee,
+					affiliate_fees,
+					dca_parameters,
+					from,
+					event_data_account,
+					from_token_account,
+				),
+				_ => Err(DispatchErrorWithMessage::from(
+					"Incompatible or unsupported source_asset and extra_parameters"
+				)),
 			}
 		}
 
@@ -2449,7 +2633,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			EpochState {
-				blocks_per_epoch: Validator::blocks_per_epoch(),
+				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
 				min_active_bid,

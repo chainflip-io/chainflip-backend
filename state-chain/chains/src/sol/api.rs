@@ -1,6 +1,6 @@
 use crate::RejectCall;
 use cf_runtime_utilities::log_or_panic;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use core::marker::PhantomData;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -12,19 +12,20 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	ccm_checker::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker, CcmValidityError,
-		DecodedCcmAdditionalData,
+		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
 	},
 	sol::{
 		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolHash, SolTransaction, SolanaCrypto,
+		SolAsset, SolHash, SolTrackedData, SolTransaction, SolanaCrypto,
 	},
-	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
-	CloseSolanaVaultSwapAccounts, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall,
-	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey,
-	SetGovKeyWithAggKey, Solana, TransferAssetParams, TransferFallback, TransferFallbackError,
+	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
+	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
+	FetchAndCloseSolanaVaultSwapAccounts, FetchAssetParams, ForeignChainAddress,
+	SetAggKeyWithAggKey, SetGovKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
+	TransferFallbackError,
 };
 
-use cf_primitives::{EgressId, ForeignChain};
+use cf_primitives::{EgressId, ForeignChain, GasAmount};
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
@@ -36,6 +37,8 @@ pub struct AllNonceAccounts;
 pub struct ApiEnvironment;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct CurrentAggKey;
+#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+pub struct CurrentOnChainKey;
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
 
@@ -63,6 +66,7 @@ pub struct VaultSwapAccountAndSender {
 pub trait SolanaEnvironment:
 	ChainEnvironment<ApiEnvironment, SolApiEnvironment>
 	+ ChainEnvironment<CurrentAggKey, SolAddress>
+	+ ChainEnvironment<CurrentOnChainKey, SolAddress>
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
@@ -83,6 +87,11 @@ pub trait SolanaEnvironment:
 
 	fn current_agg_key() -> Result<SolAddress, SolanaTransactionBuildingError> {
 		<Self as ChainEnvironment<CurrentAggKey, SolAddress>>::lookup(CurrentAggKey)
+			.ok_or(SolanaTransactionBuildingError::CannotLookupCurrentAggKey)
+	}
+
+	fn current_on_chain_key() -> Result<SolAddress, SolanaTransactionBuildingError> {
+		<Self as ChainEnvironment<CurrentOnChainKey, SolAddress>>::lookup(CurrentOnChainKey)
 			.ok_or(SolanaTransactionBuildingError::CannotLookupCurrentAggKey)
 	}
 
@@ -141,6 +150,8 @@ pub enum SolanaTransactionType {
 		fallback: TransferAssetParams<Solana>,
 	},
 	CloseEventAccounts,
+	SetProgramSwapParameters,
+	SetTokenSwapParameters,
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
@@ -153,6 +164,56 @@ pub struct SolanaApi<Environment: 'static> {
 	#[doc(hidden)]
 	#[codec(skip)]
 	pub _phantom: PhantomData<Environment>,
+}
+
+#[derive(
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub enum SolanaGovCall {
+	SetProgramSwapsParameters {
+		min_native_swap_amount: u64,
+		max_dst_address_len: u16,
+		max_ccm_message_len: u32,
+		max_cf_parameters_len: u32,
+		max_event_accounts: u32,
+	},
+	SetTokenSwapParameters {
+		min_swap_amount: u64,
+		token_mint_pubkey: SolAddress,
+	},
+}
+
+impl SolanaGovCall {
+	pub fn to_api_call<E: SolanaEnvironment>(
+		&self,
+	) -> Result<SolanaApi<E>, SolanaTransactionBuildingError> {
+		match self {
+			SolanaGovCall::SetProgramSwapsParameters {
+				min_native_swap_amount,
+				max_dst_address_len,
+				max_ccm_message_len,
+				max_cf_parameters_len,
+				max_event_accounts,
+			} => SolanaApi::set_program_swaps_parameters(
+				*min_native_swap_amount,
+				*max_dst_address_len,
+				*max_ccm_message_len,
+				*max_cf_parameters_len,
+				*max_event_accounts,
+			),
+			SolanaGovCall::SetTokenSwapParameters { min_swap_amount, token_mint_pubkey } =>
+				SolanaApi::set_token_swap_parameters(*min_swap_amount, *token_mint_pubkey),
+		}
+	}
 }
 
 impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
@@ -284,13 +345,13 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Solana as Chain>::ChainAmount,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// For extra safety, re-verify the validity of the CCM message here
 		// and extract the decoded `ccm_accounts` from `ccm_additional_data`.
-		let decoded_cf_params = CcmValidityChecker::check_and_decode(
+		let decoded_ccm_additional_data = CcmValidityChecker::check_and_decode(
 			&CcmChannelMetadata {
 				message: message
 					.clone()
@@ -308,9 +369,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		// Always expects the `DecodedCcmAdditionalData::Solana(..)` variant of the decoded cf
 		// params.
-		let ccm_accounts = if let DecodedCcmAdditionalData::Solana(ccm_accounts) = decoded_cf_params
+		let ccm_accounts = if let DecodedCcmAdditionalData::Solana(versioned_sol_data) =
+			decoded_ccm_additional_data
 		{
-			Ok(ccm_accounts)
+			match versioned_sol_data {
+				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => Ok(ccm_accounts),
+			}
 		} else {
 			Err(SolanaTransactionBuildingError::InvalidCcm(
 				CcmValidityError::CannotDecodeCcmAdditionalData,
@@ -336,6 +400,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			to: ccm_accounts.fallback_address.into(),
 		};
 
+		let compute_limit =
+			SolTrackedData::calculate_ccm_compute_limit(gas_budget, transfer_param.asset);
+
 		// Build the transaction
 		let transaction = match transfer_param.asset {
 			SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
@@ -350,7 +417,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				agg_key,
 				durable_nonce,
 				compute_price,
-				gas_budget,
+				compute_limit,
 			),
 			SolAsset::SolUsdc => {
 				let ata =
@@ -377,7 +444,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					durable_nonce,
 					compute_price,
 					SOL_USDC_DECIMAL,
-					gas_budget,
+					compute_limit,
 				)
 			},
 		}
@@ -404,7 +471,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		})
 	}
 
-	pub fn batch_close_vault_swap_accounts(
+	pub fn fetch_and_batch_close_vault_swap_accounts(
 		vault_swap_accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Lookup environment variables, such as aggkey and durable nonce.
@@ -414,7 +481,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let durable_nonce = Environment::nonce_account()?;
 
 		// Build the transaction
-		let transaction = SolanaTransactionBuilder::close_vault_swap_accounts(
+		let transaction = SolanaTransactionBuilder::fetch_and_close_vault_swap_accounts(
 			vault_swap_accounts,
 			sol_api_environment.vault_program_data_account,
 			sol_api_environment.swap_endpoint_program,
@@ -426,6 +493,73 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		Ok(Self {
 			call_type: SolanaTransactionType::CloseEventAccounts,
+			transaction,
+			signer: None,
+			_phantom: Default::default(),
+		})
+	}
+
+	pub fn set_program_swaps_parameters(
+		min_native_swap_amount: u64,
+		max_dst_address_len: u16,
+		max_ccm_message_len: u32,
+		max_cf_parameters_len: u32,
+		max_event_accounts: u32,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		// Lookup environment variables, such as aggkey and durable nonce.
+		let agg_key = Environment::current_agg_key()?;
+		let sol_api_environment = Environment::api_environment()?;
+		let compute_price = Environment::compute_price()?;
+		let durable_nonce = Environment::nonce_account()?;
+
+		// Build the transaction
+		let transaction = SolanaTransactionBuilder::set_program_swaps_parameters(
+			min_native_swap_amount,
+			max_dst_address_len,
+			max_ccm_message_len,
+			max_cf_parameters_len,
+			max_event_accounts,
+			sol_api_environment.vault_program,
+			sol_api_environment.vault_program_data_account,
+			// Assumed that the agg_key is the gov_key in the on-chain programs.
+			// This assumption is valid until we change the key to some independent Governance key.
+			agg_key,
+			durable_nonce,
+			compute_price,
+		)?;
+
+		Ok(Self {
+			call_type: SolanaTransactionType::SetProgramSwapParameters,
+			transaction,
+			signer: None,
+			_phantom: Default::default(),
+		})
+	}
+	pub fn set_token_swap_parameters(
+		min_swap_amount: u64,
+		token_mint_pubkey: SolAddress,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		// Lookup environment variables, such as aggkey and durable nonce.
+		let agg_key = Environment::current_agg_key()?;
+		let sol_api_environment = Environment::api_environment()?;
+		let compute_price = Environment::compute_price()?;
+		let durable_nonce = Environment::nonce_account()?;
+
+		// Build the transaction
+		let transaction = SolanaTransactionBuilder::enable_token_support(
+			min_swap_amount,
+			sol_api_environment.vault_program,
+			sol_api_environment.vault_program_data_account,
+			token_mint_pubkey,
+			// Assumed that the agg_key is the gov_key in the on-chain programs.
+			// This assumption is valid until we change the key to some independent Governance key.
+			agg_key,
+			durable_nonce,
+			compute_price,
+		)?;
+
+		Ok(Self {
+			call_type: SolanaTransactionType::SetTokenSwapParameters,
 			transaction,
 			signer: None,
 			_phantom: Default::default(),
@@ -499,7 +633,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Solana as Chain>::ChainAmount,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -541,11 +675,11 @@ impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
 	}
 }
 
-impl<Env: 'static + SolanaEnvironment> CloseSolanaVaultSwapAccounts for SolanaApi<Env> {
+impl<Env: 'static + SolanaEnvironment> FetchAndCloseSolanaVaultSwapAccounts for SolanaApi<Env> {
 	fn new_unsigned(
 		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
-		Self::batch_close_vault_swap_accounts(accounts)
+		Self::fetch_and_batch_close_vault_swap_accounts(accounts)
 	}
 }
 

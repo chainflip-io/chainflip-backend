@@ -1700,6 +1700,7 @@ dependencies = [
  "ethereum",
  "ethers",
  "frame-metadata 16.0.0",
+ "frame-metadata-hash-extension",
  "frame-support",
  "frame-system",
  "fs_extra",
@@ -1781,15 +1782,17 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "cf-chains",
- "cf-primitives",
+ "chainflip-api",
  "chainflip-engine",
  "clap",
  "config",
+ "custom-rpc",
  "frame-support",
  "futures",
  "hex",
  "insta",
  "jsonrpsee 0.23.2",
+ "log",
  "mockall 0.13.1",
  "pallet-cf-broadcast",
  "pallet-cf-environment",
@@ -1845,6 +1848,7 @@ dependencies = [
  "custom-rpc",
  "frame-benchmarking",
  "frame-benchmarking-cli",
+ "frame-metadata-hash-extension",
  "frame-system",
  "futures",
  "hex",
@@ -2571,6 +2575,7 @@ dependencies = [
  "sc-client-api",
  "sc-rpc",
  "sc-rpc-api",
+ "sc-rpc-spec-v2",
  "serde",
  "serde_json",
  "sp-api",
@@ -4125,6 +4130,21 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+]
+
+[[package]]
+name = "frame-metadata-hash-extension"
+version = "0.5.0"
+source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2+2#d4792faaa7ab3fbb9798dcc629564d182853690e"
+dependencies = [
+ "array-bytes",
+ "docify",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime 39.0.0",
 ]
 
 [[package]]
@@ -6930,6 +6950,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "merkleized-metadata"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f313fcff1d2a4bcaa2deeaa00bf7530d77d5f7bd0467a117dde2e29a75a7a17a"
+dependencies = [
+ "array-bytes",
+ "blake3",
+ "frame-metadata 16.0.0",
+ "parity-scale-codec",
+ "scale-decode",
+ "scale-info",
+]
+
+[[package]]
 name = "merlin"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7615,27 +7649,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.89",
-]
-
-[[package]]
-name = "obake"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c016d34f5be5713bfcaa23668b736865921606c2ddff17e158f0815e4cde091b"
-dependencies = [
- "obake_macros",
-]
-
-[[package]]
-name = "obake_macros"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47056b8eb01b867a9fdc29f69c05799b9eafb50f73e440cafe624949e27cc7dc"
-dependencies = [
- "proc-macro2",
- "quote",
- "semver 1.0.23",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -8462,9 +8475,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "3.7.0"
+version = "3.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8be4817d39f3272f69c59fe05d0535ae6456c2dc2fa1ba02910296c7e0a5c590"
+checksum = "306800abfa29c7f16596b5970a588435e3d5b3149683d00c12b699cc19f895ee"
 dependencies = [
  "arrayvec 0.7.6",
  "bitvec",
@@ -8472,20 +8485,19 @@ dependencies = [
  "bytes",
  "impl-trait-for-tuples",
  "parity-scale-codec-derive",
- "rustversion",
  "serde",
 ]
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "3.7.0"
+version = "3.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8781a75c6205af67215f382092b6e0a4ff3734798523e69073d4bcd294ec767b"
+checksum = "d830939c76d294956402033aee57a6da7b438f2294eb94864c37b0569053a42c"
 dependencies = [
  "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -13240,6 +13252,7 @@ dependencies = [
  "ethabi",
  "frame-benchmarking",
  "frame-executive",
+ "frame-metadata-hash-extension",
  "frame-support",
  "frame-system",
  "frame-system-benchmarking",
@@ -13249,7 +13262,6 @@ dependencies = [
  "hex-literal",
  "log",
  "nanorand",
- "obake",
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-account-roles",
@@ -13495,13 +13507,22 @@ name = "substrate-wasm-builder"
 version = "24.0.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2+2#d4792faaa7ab3fbb9798dcc629564d182853690e"
 dependencies = [
+ "array-bytes",
  "build-helper",
  "cargo_metadata 0.15.4",
  "console",
  "filetime",
+ "frame-metadata 16.0.0",
+ "merkleized-metadata",
+ "parity-scale-codec",
  "parity-wasm",
  "polkavm-linker",
+ "sc-executor",
+ "sp-core 34.0.0",
+ "sp-io 38.0.0",
  "sp-maybe-compressed-blob",
+ "sp-tracing 17.0.0",
+ "sp-version",
  "strum 0.26.3",
  "tempfile",
  "toml 0.8.19",

@@ -1,17 +1,59 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
 import { SwapParams } from '../shared/perform_swap';
-import { newCcmMetadata, testSwap, testVaultSwap } from '../shared/swapping';
+import {
+  newCcmMetadata,
+  newVaultSwapCcmMetadata,
+  testSwap,
+  testVaultSwap,
+} from '../shared/swapping';
 import { btcAddressTypes } from '../shared/new_btc_address';
-import { ccmSupportedChains, chainFromAsset, VaultSwapParams } from '../shared/utils';
+import {
+  ccmSupportedChains,
+  chainFromAsset,
+  VaultSwapParams,
+  vaultSwapSupportedChains,
+} from '../shared/utils';
+import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
 
+// This timeout needs to be increased when running 3-nodes
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
+export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1200);
+
+export async function initiateSwap(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  functionCall: typeof testSwap | typeof testVaultSwap,
+  ccmSwap: boolean = false,
+): Promise<SwapParams | VaultSwapParams> {
+  let ccmSwapMetadata;
+  if (ccmSwap) {
+    ccmSwapMetadata =
+      functionCall === testSwap
+        ? await newCcmMetadata(destAsset)
+        : await newVaultSwapCcmMetadata(sourceAsset, destAsset);
+  }
+
+  if (destAsset === 'Btc') {
+    const btcAddressTypesArray = Object.values(btcAddressTypes);
+    return functionCall(
+      sourceAsset,
+      destAsset,
+      btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
+      ccmSwapMetadata,
+      testAllSwaps.swapContext,
+    );
+  }
+  return functionCall(sourceAsset, destAsset, undefined, ccmSwapMetadata, testAllSwaps.swapContext);
+}
 
 async function main() {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
   let finished: number = 0;
   let total: number = 0;
+
+  // Open a private BTC channel to be used for btc vault swaps
+  await openPrivateBtcChannel('//BROKER_1');
 
   function appendSwap(
     sourceAsset: Asset,
@@ -19,28 +61,7 @@ async function main() {
     functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
-    if (destAsset === 'Btc') {
-      const btcAddressTypesArray = Object.values(btcAddressTypes);
-      allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-          testAllSwaps.swapContext,
-        ),
-      );
-    } else {
-      allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          undefined,
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-          testAllSwaps.swapContext,
-        ),
-      );
-    }
+    allSwaps.push(initiateSwap(sourceAsset, destAsset, functionCall, ccmSwap));
   }
 
   function randomElement<Value>(items: Value[]): Value {
@@ -59,11 +80,12 @@ async function main() {
 
       const sourceChain = chainFromAsset(sourceAsset);
       const destChain = chainFromAsset(destAsset);
-      if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
+      if (vaultSwapSupportedChains.includes(sourceChain)) {
         // Vault Swaps
         appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-        if (ccmSupportedChains.includes(destChain)) {
+        // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
+        if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
           // CCM Vault swaps
           appendSwap(sourceAsset, destAsset, testVaultSwap, true);
         }
@@ -76,15 +98,6 @@ async function main() {
     });
   });
 
-  // Not doing BTC due to encoding complexity in vault_swap. Will be fixed once SDK supports it.
-  appendSwap('Sol', 'Eth', testVaultSwap);
-  appendSwap('Sol', 'Usdc', testVaultSwap, true);
-  appendSwap('Sol', 'ArbEth', testVaultSwap);
-  appendSwap('Sol', 'ArbEth', testVaultSwap, true);
-  appendSwap('Sol', 'Dot', testVaultSwap);
-  appendSwap('SolUsdc', 'Eth', testVaultSwap);
-  appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
-
   // Swaps from/to assethub paired with random chains
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
   const assets = Object.values(Assets);
@@ -96,15 +109,6 @@ async function main() {
   appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
   appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
 
-  total = allSwaps.length;
 
-  await Promise.all(
-    allSwaps.map((promise) =>
-      promise.then(async (result) => {
-        finished += 1;
-        console.log(`Finished ${finished} of ${total} swaps.`);
-        return result;
-      }),
-    ),
-  );
+  await Promise.all(allSwaps);
 }

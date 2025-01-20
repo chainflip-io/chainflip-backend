@@ -1,7 +1,7 @@
 use super::*;
 
-use cf_chains::{DepositOriginType, FeeEstimationApi};
-use cf_primitives::{AssetAmount, BasisPoints, PrewitnessedDepositId};
+use cf_chains::{ChannelRefundParametersDecoded, DepositOriginType, FeeEstimationApi};
+use cf_primitives::{AssetAmount, BasisPoints, PrewitnessedDepositId, SwapRequestId};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
@@ -10,6 +10,7 @@ use cf_traits::{
 	AccountRoleRegistry, BalanceApi, SafeMode, SetSafeMode,
 };
 use frame_support::assert_noop;
+use sp_runtime::Percent;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 use crate::{BoostPoolId, BoostPoolTier, BoostPools, Event, PalletSafeMode};
@@ -199,7 +200,9 @@ fn basic_passive_boosting() {
 
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
 		assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE);
-		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 30);
+		const MAX_BOOST_FEE_BPS: u16 = 30;
+		let (channel_id, deposit_address) =
+			request_deposit_address_eth(LP_ACCOUNT, MAX_BOOST_FEE_BPS);
 		let prewitnessed_deposit_id = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 		// All of BOOSTER_AMOUNT_1 should be used:
 		const POOL_1_FEE: AssetAmount =
@@ -225,6 +228,7 @@ fn basic_passive_boosting() {
 				prewitnessed_deposit_id,
 				deposit_details: Default::default(),
 				ingress_fee: INGRESS_FEE,
+				max_boost_fee_bps: MAX_BOOST_FEE_BPS,
 				boost_fee: POOL_1_FEE + POOL_2_FEE,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
 				origin_type: DepositOriginType::DepositChannel,
@@ -253,7 +257,12 @@ fn basic_passive_boosting() {
 				block_height: Default::default(),
 				deposit_details: Default::default(),
 				ingress_fee: 0,
-				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
+				max_boost_fee_bps: MAX_BOOST_FEE_BPS,
+				action: DepositAction::BoostersCredited {
+					prewitnessed_deposit_id,
+					network_fee_from_boost: 0,
+					network_fee_swap_request_id: None,
+				},
 				channel_id: Some(channel_id),
 				origin_type: DepositOriginType::DepositChannel,
 			}));
@@ -1040,6 +1049,105 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 	});
 }
 
+#[test]
+fn taking_network_fee_from_boost_fee() {
+	// The focus of this test is to ensure that when network fee portion is non-zero,
+	// we get a non-zero amount of the input asset, and we schedule a swap to FLIP as
+	// network fee.
+
+	use crate::NetworkFeeDeductionFromBoostPercent;
+
+	new_test_ext().execute_with(|| {
+		const ASSET: EthAsset = EthAsset::Eth;
+		const BOOSTER_AMOUNT: AssetAmount = 1_000_000;
+		const DEPOSIT_AMOUNT: AssetAmount = 100_000;
+
+		setup();
+
+		assert_ok!(IngressEgress::add_boost_funds(
+			RuntimeOrigin::signed(BOOSTER_1),
+			ASSET,
+			BOOSTER_AMOUNT,
+			TIER_5_BPS
+		));
+
+		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
+		let deposit_address = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS).1;
+
+		// First check that with a zero network fee portion, no network fee is collected:
+		{
+			assert_eq!(
+				NetworkFeeDeductionFromBoostPercent::<Test, ()>::get(),
+				Percent::from_percent(0)
+			);
+			let _ = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
+
+			// After full deposit all of boost fee should be credited to the pool:
+			witness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
+			assert_eq!(get_available_amount(ASSET, TIER_5_BPS), BOOSTER_AMOUNT + 50);
+
+			assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests(), vec![]);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(Event::DepositFinalised {
+					action: DepositAction::BoostersCredited {
+						network_fee_from_boost: 0,
+						network_fee_swap_request_id: None,
+						..
+					},
+					..
+				})
+			);
+
+			System::reset_events();
+		}
+
+		// Now check that non-zero network fee portion results in network fee collected:
+		{
+			assert_ok!(Pallet::<Test, ()>::update_pallet_config(
+				RuntimeOrigin::root(),
+				bounded_vec![PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
+					deduction_percent: Percent::from_percent(20)
+				}]
+			));
+			assert_eq!(
+				NetworkFeeDeductionFromBoostPercent::<Test, ()>::get(),
+				Percent::from_percent(20)
+			);
+			let _ = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
+
+			// Only some of the full boost fee is credited to the pool:
+			witness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
+			assert_eq!(get_available_amount(ASSET, TIER_5_BPS), BOOSTER_AMOUNT + 50 + 40);
+
+			assert_eq!(
+				MockSwapRequestHandler::<Test>::get_swap_requests(),
+				vec![MockSwapRequest {
+					input_asset: ASSET.into(),
+					output_asset: Asset::Flip,
+					input_amount: 10,
+					swap_type: SwapRequestType::NetworkFee,
+					broker_fees: Default::default(),
+					origin: SwapOrigin::Internal
+				}]
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(Event::DepositFinalised {
+					action: DepositAction::BoostersCredited {
+						network_fee_from_boost: 10,
+						network_fee_swap_request_id: Some(SwapRequestId(0)),
+						..
+					},
+					..
+				})
+			);
+		}
+	});
+}
+
 mod vault_swaps {
 
 	use crate::BoostedVaultTransactions;
@@ -1089,13 +1197,13 @@ mod vault_swaps {
 				),
 				deposit_metadata: None,
 				tx_id,
-				broker_fee: Beneficiary { account: BROKER, bps: 5 },
+				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
 				affiliate_fees: Default::default(),
-				refund_params: ChannelRefundParameters {
+				refund_params: Some(ChannelRefundParametersDecoded {
 					retry_duration: 2,
 					refund_address: ForeignChainAddress::Eth([2; 20].into()),
 					min_price: Default::default(),
-				},
+				}),
 				dca_params: None,
 				boost_fee: 5,
 			};
@@ -1120,9 +1228,15 @@ mod vault_swaps {
 						output_asset: OUTPUT_ASSET,
 						// Note that ingress fee is not charged:
 						input_amount: DEPOSIT_AMOUNT - BOOST_FEE,
-						swap_type: SwapRequestType::Regular { output_address },
+						swap_type: SwapRequestType::Regular {
+							output_address,
+							ccm_deposit_metadata: None
+						},
 						broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 5 }],
-						origin: SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(tx_id) },
+						origin: SwapOrigin::Vault {
+							tx_id: TransactionInIdForAnyChain::Evm(tx_id),
+							broker_id: Some(BROKER)
+						},
 					},]
 				);
 
@@ -1196,7 +1310,9 @@ mod vault_swaps {
 					RuntimeEvent::IngressEgress(Event::DepositFinalised {
 						channel_id: Some(CHANNEL_ID),
 						action: DepositAction::BoostersCredited {
-							prewitnessed_deposit_id: PREWITNESS_DEPOSIT_ID
+							prewitnessed_deposit_id: PREWITNESS_DEPOSIT_ID,
+							network_fee_from_boost: 0,
+							network_fee_swap_request_id: None
 						},
 						..
 					})

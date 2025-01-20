@@ -27,7 +27,7 @@ impl UncheckedOnRuntimeUpgrade for SolanaVaultSwapsMigration {
 			match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 					SolAddress(bs58_array("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")),
-					SolAddress(bs58_array("5mFsKrqCH5v9Q9uF5o6qrsUi1GV2myuhc23NAi5YFs4M")),
+					SolAddress(bs58_array("GfGZCo8KmAQvhZofu3Emt66ZfgjKds6ULhps1DAvN8cm")),
 				),
 				cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 					SolAddress(bs58_array("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")),
@@ -84,7 +84,7 @@ impl UncheckedOnRuntimeUpgrade for SolanaVaultSwapsMigration {
 				match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 					cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 						SolAddress(bs58_array("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")),
-						SolAddress(bs58_array("5mFsKrqCH5v9Q9uF5o6qrsUi1GV2myuhc23NAi5YFs4M")),
+						SolAddress(bs58_array("GfGZCo8KmAQvhZofu3Emt66ZfgjKds6ULhps1DAvN8cm")),
 					),
 					cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 						SolAddress(bs58_array("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")),

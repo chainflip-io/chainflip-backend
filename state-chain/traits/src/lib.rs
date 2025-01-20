@@ -21,13 +21,13 @@ use cf_chains::{
 	address::ForeignChainAddress,
 	assets::any::AssetMap,
 	sol::{SolAddress, SolHash},
-	ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
-	Ethereum,
+	ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
+	ChannelRefundParametersDecoded, Ethereum,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, FlipBalance, ForeignChain, Ipv6Addr, NetworkEnvironment, SemVer,
+	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, SemVer,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -42,7 +42,12 @@ use frame_support::{
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	iter::Sum,
+	marker::PhantomData,
+	prelude::*,
+};
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -743,7 +748,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParametersDecoded>,
 		dca_params: Option<DcaParameters>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
@@ -828,6 +833,25 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	}
 }
 
+pub trait DeregistrationCheck {
+	type AccountId;
+	type Error: Into<DispatchError>;
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error>;
+}
+
+impl<A: DeregistrationCheck, B: DeregistrationCheck<AccountId = A::AccountId>> DeregistrationCheck
+	for (A, B)
+{
+	type AccountId = A::AccountId;
+	type Error = DispatchError;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), DispatchError> {
+		A::check(account_id)
+			.map_err(Into::into)
+			.and_then(|()| B::check(account_id).map_err(Into::into))
+	}
+}
+
 #[derive(
 	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug,
 )]
@@ -868,7 +892,7 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
+		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
@@ -933,6 +957,12 @@ pub trait AdjustedFeeEstimationApi<C: Chain> {
 	fn estimate_ingress_fee(asset: C::ChainAsset) -> C::ChainAmount;
 
 	fn estimate_egress_fee(asset: C::ChainAsset) -> C::ChainAmount;
+
+	fn estimate_ccm_fee(
+		asset: C::ChainAsset,
+		gas_budget: GasAmount,
+		message_length: usize,
+	) -> Option<C::ChainAmount>;
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {
@@ -1128,4 +1158,7 @@ pub trait AffiliateRegistry {
 		broker_id: &Self::AccountId,
 		affiliate_id: &Self::AccountId,
 	) -> Option<AffiliateShortId>;
+
+	/// Return the reverse mapping from account id to affiliate short id.
+	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
 }

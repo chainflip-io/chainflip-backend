@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
 	// Any remaining arguments are assumed to be path filters.
 	let filter = PathFilter(std::env::args().skip(3).collect::<Vec<_>>());
 
-	let client = subxt::OnlineClient::<SubstrateConfig>::from_url(url).await.unwrap();
+	let client = subxt::OnlineClient::<SubstrateConfig>::from_insecure_url(url).await.unwrap();
 
 	match hash_opt {
 		HashOption::Latest => {

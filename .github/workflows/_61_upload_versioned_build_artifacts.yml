@@ -1,5 +1,9 @@
 on:
   workflow_call:
+    inputs:
+      is_release:
+        type: boolean
+        default: true
 
 permissions:
   id-token: write
@@ -20,6 +24,7 @@ jobs:
           merge-multiple: false
 
       - name: Download runtime 📥
+        if: inputs.is_release == true
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-node-runtime-production
@@ -33,9 +38,13 @@ jobs:
         id: version
         run: |
           chmod +x artifacts/chainflip-backend-bin/chainflip-node
-          VERSION=$(./ci/scripts/extract_version.sh "$(artifacts/chainflip-backend-bin/chainflip-node --version)" full)
+          if [[ ${{ inputs.is_release }} == true ]]; then
+            VERSION=$(./ci/scripts/extract_version.sh "$(artifacts/chainflip-backend-bin/chainflip-node --version)" full)
+          else
+            VERSION=${{ github.sha }}
+          fi
           echo "Version: $VERSION"
-          echo "binary_version=$VERSION" >> $GITHUB_ENV
+          echo "s3_prefix=$VERSION" >> $GITHUB_ENV
 
       - name: Compress Artifacts into Zip Files 📦
         run: |
@@ -50,4 +59,9 @@ jobs:
 
       - name: Upload engine shared libraries S3 🚀
         run: |
-          aws s3 sync ./artifacts/ s3://artifacts.chainflip.io/${{ env.binary_version }}/
+          aws s3 sync ./artifacts/ s3://artifacts.chainflip.io/${{ env.s3_prefix }}/
+
+      - name: Upload runtime S3 (main Alias) 🚀
+        if: inputs.is_release == false
+        run: |
+          aws s3 cp ./artifacts/ s3://artifacts.chainflip.io/main/ --recursive

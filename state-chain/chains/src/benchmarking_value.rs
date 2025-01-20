@@ -324,7 +324,7 @@ macro_rules! impl_bounded_vec_benchmark_value {
 	};
 }
 
-impl_bounded_vec_benchmark_value!(u8, 10000);
+impl_bounded_vec_benchmark_value!(u8, 15000);
 impl_bounded_vec_benchmark_value!(u8, 1000);
 
 #[cfg(feature = "runtime-benchmarks")]

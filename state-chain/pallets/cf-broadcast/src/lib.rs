@@ -59,7 +59,7 @@ pub enum PalletConfigUpdate {
 	BroadcastTimeout { blocks: u32 },
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -624,6 +624,9 @@ pub mod pallet {
 		}
 
 		/// Re-sign and optionally re-send some broadcast requests.
+		/// This is intended for cases where a transaction is valid, but the signature has become
+		/// invalid due to a rotation, and so we need to resign the payload with the new key so that
+		/// it can be broadcast.
 		///
 		/// Requires governance origin.
 		#[pallet::call_index(5)]

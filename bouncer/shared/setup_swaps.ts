@@ -4,7 +4,7 @@ import { rangeOrder } from '../shared/range_order';
 import { Asset } from './utils';
 
 export const deposits = new Map<Asset, number>([
-  ['Dot', 100000],
+  ['Dot', 200000],
   ['Eth', 1000],
   ['ArbEth', 1000],
   ['Btc', 100],

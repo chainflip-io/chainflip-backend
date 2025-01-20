@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
+use crate::{mock::*, BlockEmissions, Event, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
 use cf_primitives::SECONDS_PER_BLOCK;
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -192,7 +192,7 @@ fn burn_flip() {
 		assert_eq!(egresses.first().expect("should exist").amount(), FLIP_TO_BURN);
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::Emissions(crate::Event::NetworkFeeBurned { amount: FLIP_TO_BURN, .. }),
+			RuntimeEvent::Emissions(Event::NetworkFeeBurned { amount: FLIP_TO_BURN, .. }),
 		);
 	});
 }
@@ -206,7 +206,7 @@ fn dont_burn_flip_below_threshold() {
 		MockEgressHandler::<Ethereum>::set_fee(FLIP_TO_BURN / BURN_FEE_MULTIPLE);
 		Pallet::<Test>::burn_flip_network_fee();
 		assert_has_event::<Test>(
-			crate::Event::FlipBurnSkipped {
+			Event::FlipBurnSkipped {
 				reason: crate::Error::<Test>::FlipBalanceBelowBurnThreshold.into(),
 			}
 			.into(),
@@ -230,7 +230,7 @@ fn dont_burn_flip_below_threshold() {
 		Pallet::<Test>::burn_flip_network_fee();
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::Emissions(crate::Event::NetworkFeeBurned {
+			RuntimeEvent::Emissions(Event::NetworkFeeBurned {
 				amount,
 				..
 			}) if *amount == FLIP_TO_BURN - LOW_FEE,

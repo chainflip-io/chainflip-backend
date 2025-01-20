@@ -1,8 +1,7 @@
+use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
-	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
-	try_parse_number_or_hex,
 };
 use chainflip_api::{
 	self,
@@ -10,19 +9,18 @@ use chainflip_api::{
 		state_chain_runtime::runtime_apis::{
 			ChainAccounts, TransactionScreeningEvents, VaultSwapDetails,
 		},
-		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber,
-		CcmChannelMetadata, DcaParameters,
+		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
+		DcaParameters,
 	},
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, ChannelId, DepositMonitorApi,
-	OperatorApi, RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress,
-	TransactionInId, WithdrawFeesDetail,
+	AccountId32, AddressString, BlockUpdate, BrokerApi, ChannelId, DepositMonitorApi, OperatorApi,
+	SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
-use futures::{FutureExt, StreamExt};
+use futures::{stream, FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, ClientError, SubscriptionResult},
+	core::{async_trait, ClientError},
 	proc_macros::rpc,
 	server::ServerBuilder,
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
@@ -92,7 +90,7 @@ pub trait Rpc {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters>,
+		refund_parameters: Option<RefundParametersRpc>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress>;
 
@@ -110,8 +108,8 @@ pub trait Rpc {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		min_output_amount: NumberOrHex,
-		retry_duration: BlockNumber,
+		extra_parameters: VaultSwapExtraParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
@@ -127,7 +125,7 @@ pub trait Rpc {
 	) -> RpcResult<ChainAccounts>;
 
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
-	async fn subscribe_transaction_screening_events(&self) -> SubscriptionResult;
+	async fn subscribe_transaction_screening_events(&self);
 
 	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId>;
@@ -182,7 +180,7 @@ impl RpcServer for RpcServerImpl {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters>,
+		refund_parameters: Option<RefundParametersRpc>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
 		Ok(self
@@ -216,8 +214,8 @@ impl RpcServer for RpcServerImpl {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		min_output_amount: NumberOrHex,
-		retry_duration: BlockNumber,
+		extra_parameters: VaultSwapExtraParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
@@ -231,8 +229,8 @@ impl RpcServer for RpcServerImpl {
 				destination_asset,
 				destination_address,
 				broker_commission,
-				try_parse_number_or_hex(min_output_amount)?,
-				retry_duration,
+				extra_parameters,
+				channel_metadata,
 				boost_fee,
 				affiliate_fees,
 				dca_parameters,
@@ -260,59 +258,32 @@ impl RpcServer for RpcServerImpl {
 		};
 
 		self.api
-			.state_chain_client
-			.base_rpc_client
-			.raw_rpc_client
+			.raw_client()
 			.cf_get_open_deposit_channels(account_id, None)
 			.await
 			.map_err(BrokerApiError::ClientError)
 	}
 
-	async fn subscribe_transaction_screening_events(
-		&self,
-		pending_sink: PendingSubscriptionSink,
-	) -> SubscriptionResult {
-		let state_chain_client = self.api.state_chain_client.clone();
-		let sink = pending_sink.accept().await.map_err(|e| e.to_string())?;
-		tokio::spawn(async move {
-			// Note we construct the subscription here rather than relying on the custom-rpc
-			// subscription. This is because we want to use finalized blocks.
-			// TODO: allow custom rpc subscriptions to use finalized blocks.
-			let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
-			while let Some(block) = finalized_block_stream.next().await {
-				match state_chain_client
-					.base_rpc_client
-					.raw_rpc_client
-					.cf_get_transaction_screening_events(Some(block.hash))
-					.await
-				{
-					Ok(events) => {
-						// We only want to send a notification if there have been events.
-						// If other chains are added, they have to be considered here as
-						// well.
-						if events.btc_events.is_empty() {
-							continue;
-						}
+	async fn subscribe_transaction_screening_events(&self, pending_sink: PendingSubscriptionSink) {
+		// pipe results through from custom-rpc subscription
+		match self.api.raw_client().cf_subscribe_transaction_screening_events().await {
+			Ok(subscription) => {
+				let stream = stream::unfold(subscription, move |mut sub| async move {
+					match sub.next().await {
+						Some(Ok(block_update)) => Some((block_update, sub)),
+						_ => None,
+					}
+				})
+				.boxed();
 
-						let block_update = BlockUpdate {
-							block_hash: block.hash,
-							block_number: block.number,
-							data: events,
-						};
-
-						if sink
-							.send(sc_rpc::utils::to_sub_message(&sink, &block_update))
-							.await
-							.is_err()
-						{
-							break;
-						}
-					},
-					Err(_) => break,
-				}
-			}
-		});
-		Ok(())
+				tokio::spawn(async move {
+					sc_rpc::utils::pipe_from_stream(pending_sink, stream).await;
+				});
+			},
+			Err(e) => {
+				pending_sink.reject(BrokerApiError::ClientError(e)).await;
+			},
+		}
 	}
 
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
@@ -332,7 +303,11 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
-		Ok(self.api.raw_client().get_affiliates().await?)
+		Ok(self
+			.api
+			.raw_client()
+			.cf_get_affiliates(self.api.state_chain_client.account_id(), None)
+			.await?)
 	}
 }
 

@@ -1,4 +1,5 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
+import { Keyring } from '@polkadot/api';
 import { encodeAddress } from '../polkadot/util-crypto';
 import { DcaParams, newSwap, FillOrKillParamsX128 } from './new_swap';
 import { send, sendViaCfTester } from './send';
@@ -21,6 +22,9 @@ import {
   VaultSwapParams,
   TransactionOriginId,
   TransactionOrigin,
+  defaultAssetAmounts,
+  newAddress,
+  getContractAddress,
   isPolkadotAsset,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -28,6 +32,7 @@ import { SwapContext, SwapStatus } from './swap_context';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { executeEvmVaultSwap } from './evm_vault_swap';
 import { executeSolVaultSwap } from './sol_vault_swap';
+import { buildAndSendBtcVaultSwap } from './btc_vault_swap';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
@@ -78,9 +83,11 @@ export async function requestNewSwap(
 
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
-          event.data.channelMetadata.message === messageMetadata.message &&
-          event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
-          event.data.channelMetadata.ccmAdditionalData === messageMetadata.ccmAdditionalData
+        event.data.channelMetadata.message ===
+        (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
+        event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
+        event.data.channelMetadata.ccmAdditionalData ===
+        (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
@@ -140,7 +147,7 @@ export async function doPerformSwap(
     sourceAsset,
     destAsset,
     { type: TransactionOrigin.DepositChannel, channelId },
-    messageMetadata ? SwapRequestType.Ccm : SwapRequestType.Regular,
+    SwapRequestType.Regular,
   );
 
   const ccmEventEmitted = messageMetadata
@@ -197,12 +204,11 @@ export async function performSwap(
 
   if (log)
     console.log(
-      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
-        messageMetadata
-          ? messageMetadata.message.substring(0, 6) +
-            '...' +
-            messageMetadata.message.substring(messageMetadata.message.length - 4)
-          : ''
+      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${messageMetadata
+        ? messageMetadata.message.substring(0, 6) +
+        '...' +
+        messageMetadata.message.substring(messageMetadata.message.length - 4)
+        : ''
       }`,
     );
 
@@ -241,7 +247,7 @@ export async function performAndTrackSwap(
 
   if (broadcastId) await observeBroadcastSuccess(broadcastId, tag);
   else throw new Error('Failed to retrieve broadcastId!');
-  console.log(`${tag} broadcast executed succesfully, swap is complete!`);
+  console.log(`${tag} broadcast executed successfully, swap is complete!`);
 }
 
 export async function executeVaultSwap(
@@ -253,11 +259,25 @@ export async function executeVaultSwap(
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
+  brokerFees?: {
+    account: string;
+    commissionBps: number;
+  },
+  affiliateFees: {
+    accountAddress: string;
+    accountShortId: number;
+    commissionBps: number;
+  }[] = [],
 ) {
   let sourceAddress: string;
   let transactionId: TransactionOriginId;
 
   const srcChain = chainFromAsset(sourceAsset);
+
+  const brokerFeesValue = brokerFees ?? {
+    account: new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
+    commissionBps: 1,
+  };
 
   if (evmChains.includes(srcChain)) {
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
@@ -268,31 +288,47 @@ export async function executeVaultSwap(
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
-    const receipt = await executeEvmVaultSwap(
+    const txHash = await executeEvmVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
+      brokerFeesValue,
       messageMetadata,
       amount,
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
       wallet,
+      affiliateFees.map((f) => ({ account: f.accountShortId, commissionBps: f.commissionBps })),
     );
-    transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash: receipt.hash };
+    transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
+  } else if (srcChain === 'Bitcoin') {
+    const txId = await buildAndSendBtcVaultSwap(
+      Number(amount ?? defaultAssetAmounts(sourceAsset)),
+      destAsset,
+      destAddress,
+      fillOrKillParams === undefined
+        ? await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND')
+        : fillOrKillParams.refundAddress,
+      brokerFeesValue,
+      affiliateFees.map((f) => ({ account: f.accountAddress, bps: f.commissionBps })),
+    );
+    transactionId = { type: TransactionOrigin.VaultSwapBitcoin, txId };
+    // Unused for now
+    sourceAddress = '';
   } else {
-    // Temporary until we implement the Solana encoding in the SDK/BrokerApi
-    if (boostFeeBps || fillOrKillParams || dcaParams) {
-      throw new Error(
-        'BoostFeeBps, FillOrKillParams and DcaParams are not supported for Solana vault swaps for now',
-      );
-    }
     const { slot, accountAddress } = await executeSolVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
+      brokerFeesValue,
       messageMetadata,
+      undefined,
+      boostFeeBps,
+      fillOrKillParams,
+      dcaParams,
+      affiliateFees.map((f) => ({ account: f.accountAddress, bps: f.commissionBps })),
     );
     transactionId = {
       type: TransactionOrigin.VaultSwapSolana,
@@ -316,6 +352,15 @@ export async function performVaultSwap(
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
+  brokerFees?: {
+    account: string;
+    commissionBps: number;
+  },
+  affiliateFees: {
+    accountAddress: string;
+    accountShortId: number;
+    commissionBps: number;
+  }[] = [],
 ): Promise<VaultSwapParams> {
   const tag = swapTag ?? '';
 
@@ -337,15 +382,12 @@ export async function performVaultSwap(
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
+      brokerFees,
+      affiliateFees,
     );
     swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapInitiated);
 
-    await observeSwapRequested(
-      sourceAsset,
-      destAsset,
-      transactionId,
-      messageMetadata ? SwapRequestType.Ccm : SwapRequestType.Regular,
-    );
+    await observeSwapRequested(sourceAsset, destAsset, transactionId, SwapRequestType.Regular);
 
     swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapScheduled);
 
@@ -359,6 +401,18 @@ export async function performVaultSwap(
     ]);
     if (log) {
       console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    }
+    if (sourceAsset === 'Sol') {
+      // Native Vault swaps are fetched proactively. SPL-tokens don't need a fetch.
+      const swapEndpointNativeVaultAddress = getContractAddress(
+        'Solana',
+        'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT',
+      );
+      if (log)
+        console.log(
+          `${tag} Waiting for Swap Endpoint Native Vault Swap Fetch ${swapEndpointNativeVaultAddress}`,
+        );
+      await observeFetch(sourceAsset, swapEndpointNativeVaultAddress);
     }
     swapContext?.updateStatus(swapTag, SwapStatus.Success);
     return {

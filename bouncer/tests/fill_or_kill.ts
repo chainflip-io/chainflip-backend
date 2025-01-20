@@ -14,9 +14,8 @@ import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
 import { getBalance } from '../shared/get_balance';
 import { observeEvent } from '../shared/utils/substrate';
-import { CcmDepositMetadata, FillOrKillParamsX128 } from '../shared/new_swap';
+import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
-import { newCcmMetadata } from '../shared/swapping';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testFillOrKill = new ExecutableTest('FoK', main, 600);
@@ -75,14 +74,6 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
       `Swapping via vault from ${inputAsset} to ${destAsset} with unrealistic min price`,
     );
 
-    // Randomly use CCM to test different encodings
-    let ccmMetadata: CcmDepositMetadata | undefined;
-    if (Math.random() < 0.5) {
-      ccmMetadata = newCcmMetadata(inputAsset, destAsset, undefined, 100);
-      ccmMetadata.ccmAdditionalData =
-        Math.random() < 0.5 ? ccmMetadata.ccmAdditionalData : undefined;
-    }
-
     const { transactionId } = await executeVaultSwap(
       inputAsset,
       destAsset,
@@ -130,8 +121,12 @@ async function main() {
     testMinPriceRefund(Assets.Dot, 100),
     testMinPriceRefund(Assets.Btc, 0.1),
     testMinPriceRefund(Assets.Usdc, 1000),
+    testMinPriceRefund(Assets.Sol, 10),
+    testMinPriceRefund(Assets.SolUsdc, 1000),
     testMinPriceRefund(Assets.Flip, 500, true),
     testMinPriceRefund(Assets.Eth, 1, true),
     testMinPriceRefund(Assets.ArbEth, 5, true),
+    testMinPriceRefund(Assets.Sol, 10, true),
+    testMinPriceRefund(Assets.Sol, 1000, true),
   ]);
 }

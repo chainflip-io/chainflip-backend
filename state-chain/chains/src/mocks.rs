@@ -83,8 +83,8 @@ impl MockEthereumTransactionMetadata {
 }
 
 impl IntoForeignChainAddress<MockEthereum> for u64 {
-	fn into_foreign_chain_address(address: u64) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(H160::repeat_byte(address as u8))
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Eth(H160::repeat_byte(self as u8))
 	}
 }
 
@@ -207,6 +207,15 @@ impl FeeEstimationApi<MockEthereum> for MockTrackedData {
 		&self,
 		_asset: <MockEthereum as Chain>::ChainAsset,
 	) -> <MockEthereum as Chain>::ChainAmount {
+		unimplemented!("Unused for now.")
+	}
+
+	fn estimate_ccm_fee(
+		&self,
+		_asset: <MockEthereum as Chain>::ChainAsset,
+		_gas_budget: GasAmount,
+		_message_length: usize,
+	) -> Option<<MockEthereum as Chain>::ChainAmount> {
 		unimplemented!("Unused for now.")
 	}
 }

@@ -5,9 +5,9 @@ use core::cmp::max;
 use crate::{
 	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
 	BroadcastId, ChainBlockNumberFor, Config, DelayedBroadcastRetryQueue, Error,
-	Event as BroadcastEvent, FailedBroadcasters, Instance1, PalletConfigUpdate, PalletOffence,
-	PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts,
-	TransactionMetadata, TransactionOutIdToBroadcastId,
+	Event as BroadcastEvent, Event, FailedBroadcasters, Instance1, PalletConfigUpdate,
+	PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks,
+	RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -203,7 +203,7 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::TransactionFeeDeficitRecorded {
+			RuntimeEvent::Broadcaster(Event::TransactionFeeDeficitRecorded {
 				beneficiary: Default::default(),
 				amount: expected_refund
 			})
@@ -233,7 +233,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 
 		assert_eq!(
 			System::events().pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted { broadcast_id })
+			RuntimeEvent::Broadcaster(Event::BroadcastAborted { broadcast_id })
 		);
 	});
 }
@@ -277,7 +277,7 @@ fn broadcasts_aborted_after_all_report_failures() {
 		));
 
 		// All validator reported broadcast failure - abort the broadcast.
-		System::assert_last_event(RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted {
+		System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastAborted {
 			broadcast_id,
 		}));
 	});
@@ -515,7 +515,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 		let mut events = System::events();
 		assert_eq!(
 			events.pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
+			RuntimeEvent::Broadcaster(Event::BroadcastSuccess {
 				broadcast_id,
 				transaction_out_id: api_call.tx_out_id,
 				transaction_ref: 2,
@@ -523,7 +523,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 		);
 		assert_eq!(
 			events.pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::BroadcastCallbackExecuted {
+			RuntimeEvent::Broadcaster(Event::BroadcastCallbackExecuted {
 				broadcast_id,
 				result: Ok(())
 			})
@@ -599,7 +599,7 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::TransactionFeeDeficitRefused {
+			RuntimeEvent::Broadcaster(Event::TransactionFeeDeficitRefused {
 				beneficiary: Default::default(),
 			})
 		);
@@ -766,12 +766,10 @@ fn broadcast_barrier_for_polkadot() {
 
 			// tx3 is ready for broadcast but since there is a broadcast pause, broadcast request is
 			// not issued, the broadcast is rescheduled instead.
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
-					broadcast_id: broadcast_id_3,
-					retry_block: System::block_number() + 1,
-				},
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastRetryScheduled {
+				broadcast_id: broadcast_id_3,
+				retry_block: System::block_number() + 1,
+			}));
 
 			// report successful broadcast of tx1
 			witness_broadcast(tx_out_id1);
@@ -864,21 +862,17 @@ fn broadcast_barrier_for_ethereum() {
 
 			// tx3 is ready for broadcast but since there is a broadcast pause, broadcast request is
 			// not issued, the broadcast is rescheduled instead.
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
-					broadcast_id: broadcast_id_3,
-					retry_block: System::block_number() + 1,
-				},
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastRetryScheduled {
+				broadcast_id: broadcast_id_3,
+				retry_block: System::block_number() + 1,
+			}));
 
 			// tx4 will be created but not broadcasted yet
 			let broadcast_id_4 = initiate_and_sign_broadcast(&api_call4, TxType::Normal);
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
-					broadcast_id: broadcast_id_4,
-					retry_block: System::block_number() + 1,
-				},
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastRetryScheduled {
+				broadcast_id: broadcast_id_4,
+				retry_block: System::block_number() + 1,
+			}));
 
 			// report successful broadcast of tx2
 			witness_broadcast(tx_out_id2);
@@ -938,14 +932,12 @@ fn api_call(i: u8) -> ([u8; 4], MockApiCall<MockEthereumChainCrypto>) {
 }
 
 fn assert_transaction_broadcast_request_event(broadcast_id: BroadcastId, tx_out_id: [u8; 4]) {
-	System::assert_last_event(RuntimeEvent::Broadcaster(
-		crate::Event::<Test, Instance1>::TransactionBroadcastRequest {
-			transaction_out_id: tx_out_id,
-			broadcast_id,
-			transaction_payload: Default::default(),
-			nominee: MockNominator::get_last_nominee().unwrap(),
-		},
-	));
+	System::assert_last_event(RuntimeEvent::Broadcaster(Event::TransactionBroadcastRequest {
+		transaction_out_id: tx_out_id,
+		broadcast_id,
+		transaction_payload: Default::default(),
+		nominee: MockNominator::get_last_nominee().unwrap(),
+	}));
 }
 
 fn initiate_and_sign_broadcast(
@@ -1024,9 +1016,9 @@ fn broadcast_can_be_aborted_due_to_time_out() {
 		.then_process_next_block()
 		.then_execute_with(|broadcast_id| {
 			// Broadcast should be aborted
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastAborted {
+				broadcast_id,
+			}));
 			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 			assert!(
 				FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(broadcast_id).is_none()
@@ -1067,10 +1059,7 @@ fn broadcast_timeout_works_when_external_chain_advances_multiple_blocks() {
 		.then_execute_with(|(broadcast_ids, _)| {
 			// All broadcast should be aborted
 			for broadcast_id in broadcast_ids {
-				System::assert_has_event(RuntimeEvent::Broadcaster(crate::Event::<
-					Test,
-					Instance1,
-				>::BroadcastAborted {
+				System::assert_has_event(RuntimeEvent::Broadcaster(Event::BroadcastAborted {
 					broadcast_id,
 				}));
 				assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
@@ -1097,9 +1086,9 @@ fn aborted_broadcasts_can_still_succeed() {
 		.then_execute_at_next_block(|ctx| ctx)
 		.then_execute_with(|(broadcast_id, transaction_out_id, _)| {
 			// Broadcast should be aborted
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastAborted {
+				broadcast_id,
+			}));
 			assert!(
 				FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(broadcast_id).is_none()
 			);
@@ -1116,13 +1105,11 @@ fn aborted_broadcasts_can_still_succeed() {
 			));
 
 			// Storage should be cleaned, event emitted.
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastSuccess {
-					broadcast_id,
-					transaction_out_id,
-					transaction_ref: 2,
-				},
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastSuccess {
+				broadcast_id,
+				transaction_out_id,
+				transaction_ref: 2,
+			}));
 			assert_broadcast_storage_cleaned_up(broadcast_id);
 		});
 }
@@ -1144,12 +1131,10 @@ fn broadcast_retry_delay_works() {
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
 			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::get(next_block)
 				.contains(&broadcast_id));
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
-					broadcast_id,
-					retry_block: next_block,
-				},
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastRetryScheduled {
+				broadcast_id,
+				retry_block: next_block,
+			}));
 		})
 		.then_execute_at_next_block(|_| {})
 		.then_execute_with(|_| {
@@ -1166,12 +1151,10 @@ fn broadcast_retry_delay_works() {
 			assert!(
 				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target).contains(&broadcast_id),
 			);
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
-					broadcast_id,
-					retry_block: target,
-				},
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastRetryScheduled {
+				broadcast_id,
+				retry_block: target,
+			}));
 		})
 		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
@@ -1213,12 +1196,10 @@ fn broadcast_timeout_delay_works() {
 			assert!(
 				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target).contains(&broadcast_id),
 			);
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
-					broadcast_id,
-					retry_block: target,
-				},
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastRetryScheduled {
+				broadcast_id,
+				retry_block: target,
+			}));
 		});
 }
 
@@ -1243,9 +1224,9 @@ fn aborted_broadcasts_will_not_retry() {
 				RuntimeOrigin::signed(nominee),
 				broadcast_id
 			));
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastAborted {
+				broadcast_id,
+			}));
 		})
 		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
@@ -1278,13 +1259,11 @@ fn succeeded_broadcasts_will_not_retry() {
 				MOCK_TX_METADATA,
 				3
 			));
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastSuccess {
-					broadcast_id,
-					transaction_out_id,
-					transaction_ref: 3,
-				},
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastSuccess {
+				broadcast_id,
+				transaction_out_id,
+				transaction_ref: 3,
+			}));
 			broadcast_id
 		})
 		.then_execute_at_block(target, |broadcast_id| broadcast_id)
@@ -1400,13 +1379,11 @@ fn broadcast_is_retried_without_initial_nominee() {
 			));
 
 			// Storage should be cleaned, event emitted.
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastSuccess {
-					broadcast_id,
-					transaction_out_id,
-					transaction_ref: 5,
-				},
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastSuccess {
+				broadcast_id,
+				transaction_out_id,
+				transaction_ref: 5,
+			}));
 			assert_broadcast_storage_cleaned_up(broadcast_id);
 		});
 }
@@ -1423,9 +1400,9 @@ fn broadcast_re_signing() {
 				RuntimeOrigin::signed(nominee),
 				broadcast_id
 			));
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
-			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastAborted {
+				broadcast_id,
+			}));
 			broadcast_id
 		})
 		.then_execute_at_next_block(|broadcast_id| {
@@ -1558,7 +1535,7 @@ fn changing_broadcast_timeout() {
 		// check that update event was emitted
 		assert_eq!(
 			last_event::<Test>(),
-			RuntimeEvent::Broadcaster(crate::Event::PalletConfigUpdated { update: UPDATE }),
+			RuntimeEvent::Broadcaster(Event::PalletConfigUpdated { update: UPDATE }),
 		);
 	});
 }

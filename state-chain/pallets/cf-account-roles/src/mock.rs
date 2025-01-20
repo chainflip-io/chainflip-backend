@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_account_roles, Config};
+use cf_traits::mocks::deregistration_check::MockDeregistrationCheck;
 use frame_support::derive_impl;
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -24,6 +25,7 @@ impl frame_system::Config for Test {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
+	type DeregistrationCheck = MockDeregistrationCheck<Self::AccountId>;
 	type WeightInfo = ();
 }
 

@@ -70,7 +70,7 @@ use cf_primitives::{
 pub struct ExtBuilder {
 	pub genesis_accounts: Vec<(AccountId, AccountRole, FlipBalance)>,
 	root: Option<AccountId>,
-	blocks_per_epoch: BlockNumber,
+	epoch_duration: BlockNumber,
 	max_authorities: AuthorityCount,
 	min_authorities: AuthorityCount,
 }
@@ -82,7 +82,7 @@ impl Default for ExtBuilder {
 			min_authorities: 1,
 			genesis_accounts: Default::default(),
 			root: Default::default(),
-			blocks_per_epoch: Default::default(),
+			epoch_duration: Default::default(),
 		}
 	}
 }
@@ -106,8 +106,8 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn blocks_per_epoch(mut self, blocks_per_epoch: BlockNumber) -> Self {
-		self.blocks_per_epoch = blocks_per_epoch;
+	pub fn epoch_duration(mut self, epoch_duration: BlockNumber) -> Self {
+		self.epoch_duration = epoch_duration;
 		self
 	}
 
@@ -187,7 +187,7 @@ impl ExtBuilder {
 					})
 					.collect(),
 				genesis_backups: Default::default(),
-				blocks_per_epoch: self.blocks_per_epoch,
+				epoch_duration: self.epoch_duration,
 				bond: self
 					.genesis_accounts
 					.iter()
@@ -272,7 +272,7 @@ impl ExtBuilder {
 					block_height: 0,
 					tracked_data: ArbitrumTrackedData {
 						base_fee: 100000u32.into(),
-						gas_limit_multiplier: 1.into(),
+						l1_base_fee_estimate: 1u128,
 					},
 				},
 			},

@@ -1,5 +1,4 @@
 use super::*;
-use crate::address::IntoForeignChainAddress;
 use cf_primitives::chains::assets::any::AssetMap;
 use frame_support::traits::ConstBool;
 
@@ -69,11 +68,5 @@ impl ChainCrypto for NoneChainCrypto {
 		_rotation_broadcast_id: BroadcastId,
 	) -> Vec<BroadcastId> {
 		unimplemented!()
-	}
-}
-
-impl IntoForeignChainAddress<NoneChain> for ForeignChainAddress {
-	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
-		address
 	}
 }

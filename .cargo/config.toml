@@ -2,7 +2,7 @@
 CF_ETH_CONTRACT_ABI_ROOT = { value = "contract-interfaces/eth-contract-abis", relative = true }
 CF_ETH_CONTRACT_ABI_TAG = "v1.1.2"
 CF_SOL_PROGRAM_IDL_ROOT = { value = "contract-interfaces/sol-program-idls", relative = true }
-CF_SOL_PROGRAM_IDL_TAG = "v1.0.0-swap-endpoint"
+CF_SOL_PROGRAM_IDL_TAG = "v1.0.1-swap-endpoint"
 CF_ARB_CONTRACT_ABI_ROOT = { value = "contract-interfaces/arb-contract-abis", relative = true }
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
@@ -42,6 +42,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2024-0370: Unmaintained transitive dependency. Only affects macro generation efficiency.
 # - RUSTSEC-2024-0388: Unmaintained transitive dependency `derivative` used by substrate.
 # - RUSTSEC-2024-0384: Unmaintained transitive dependency `instant` used by substrate.
+# - RUSTSEC-2024-0421: Transitive dependency `idna` used by libp2p, among others.
 cf-audit = '''
 audit -D unmaintained -D unsound
     --ignore RUSTSEC-2021-0139
@@ -53,4 +54,5 @@ audit -D unmaintained -D unsound
     --ignore RUSTSEC-2024-0370
     --ignore RUSTSEC-2024-0388
     --ignore RUSTSEC-2024-0384
+    --ignore RUSTSEC-2024-0421
 '''

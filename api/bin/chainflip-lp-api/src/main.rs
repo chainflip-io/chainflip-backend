@@ -1,3 +1,4 @@
+use crate::rpc_types::CloseOrderJson;
 use anyhow::anyhow;
 use cf_primitives::{BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
@@ -14,21 +15,17 @@ use chainflip_api::{
 	},
 	primitives::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
-		state_chain_runtime::{Runtime, RuntimeEvent},
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	AccountId32, AddressString, BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
-	SignedExtrinsicApi, StateChainApi, StorageApi, WaitFor,
+	AccountId32, AddressString, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
+	SignedExtrinsicApi, StateChainApi, WaitFor,
 };
 use clap::Parser;
-use custom_rpc::{
-	order_fills::{order_fills_from_block_updates, OrderFills},
-	CustomApiClient,
-};
-use futures::{try_join, FutureExt, StreamExt};
+use custom_rpc::{order_fills::OrderFills, CustomApiClient};
+use futures::{stream, FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, ClientError, SubscriptionResult},
+	core::{async_trait, ClientError},
 	proc_macros::rpc,
 	server::ServerBuilder,
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
@@ -38,7 +35,6 @@ use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, M
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
 use std::{
-	collections::BTreeMap,
 	ops::Range,
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
@@ -49,6 +45,7 @@ use tracing::log;
 pub mod rpc_types {
 	use super::*;
 	use anyhow::anyhow;
+	use cf_primitives::chains::assets::any;
 	use cf_utilities::rpc::NumberOrHex;
 	use chainflip_api::{lp::PoolPairsMap, queries::SwapChannelInfo};
 	use serde::{Deserialize, Serialize};
@@ -96,6 +93,26 @@ pub mod rpc_types {
 		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
 		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
 		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
+	}
+
+	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+	#[serde(untagged)]
+	pub enum CloseOrderJson {
+		Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderIdJson },
+		Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderIdJson },
+	}
+
+	impl TryFrom<CloseOrderJson> for CloseOrder {
+		type Error = anyhow::Error;
+
+		fn try_from(value: CloseOrderJson) -> Result<Self, Self::Error> {
+			Ok(match value {
+				CloseOrderJson::Limit { base_asset, quote_asset, side, id } =>
+					CloseOrder::Limit { base_asset, quote_asset, side, id: id.try_into()? },
+				CloseOrderJson::Range { base_asset, quote_asset, id } =>
+					CloseOrder::Range { base_asset, quote_asset, id: id.try_into()? },
+			})
+		}
 	}
 }
 
@@ -199,7 +216,7 @@ pub trait Rpc {
 	) -> RpcResult<Hash>;
 
 	#[subscription(name = "subscribe_order_fills", item = BlockUpdate<OrderFills>)]
-	async fn subscribe_order_fills(&self) -> SubscriptionResult;
+	async fn subscribe_order_fills(&self);
 
 	#[method(name = "order_fills")]
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
@@ -213,7 +230,7 @@ pub trait Rpc {
 	#[method(name = "cancel_orders_batch")]
 	async fn cancel_orders_batch(
 		&self,
-		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 }
@@ -486,45 +503,34 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn subscribe_order_fills(
-		&self,
-		pending_sink: PendingSubscriptionSink,
-	) -> SubscriptionResult {
-		let state_chain_client = self.api.state_chain_client.clone();
-		let sink = pending_sink.accept().await.map_err(|e| e.to_string())?;
-		tokio::spawn(async move {
-			// Note we construct the subscription here rather than relying on the custom-rpc
-			// subscription. This is because we want to use finalized blocks.
-			// TODO: allow custom rpc subscriptions to use finalized blocks.
-			let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
-			while let Some(block) = finalized_block_stream.next().await {
-				match order_fills(state_chain_client.clone(), block).await {
-					Ok(order_fills) => {
-						if sink
-							.send(sc_rpc::utils::to_sub_message(&sink, &order_fills))
-							.await
-							.is_err()
-						{
-							break;
-						}
-					},
-					Err(_) => break,
-				}
-			}
-		});
-		Ok(())
+	async fn subscribe_order_fills(&self, pending_sink: PendingSubscriptionSink) {
+		// pipe results from custom-rpc subscription
+		match self.api.raw_client().cf_subscribe_lp_order_fills().await {
+			Ok(subscription) => {
+				let stream = stream::unfold(subscription, move |mut sub| async move {
+					match sub.next().await {
+						Some(Ok(block_update)) => Some((block_update, sub)),
+						_ => None,
+					}
+				})
+				.boxed();
+
+				tokio::spawn(async move {
+					sc_rpc::utils::pipe_from_stream(pending_sink, stream).await;
+				});
+			},
+			Err(e) => {
+				pending_sink.reject(LpApiError::ClientError(e)).await;
+			},
+		}
 	}
 
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>> {
-		let state_chain_client = &self.api.state_chain_client;
-
-		let block = if let Some(at) = at {
-			state_chain_client.block(at).await?
-		} else {
-			state_chain_client.latest_finalized_block()
-		};
-
-		Ok(order_fills(state_chain_client.clone(), block).await?)
+		self.api
+			.raw_client()
+			.cf_lp_get_order_fills(at)
+			.await
+			.map_err(LpApiError::ClientError)
 	}
 
 	async fn cancel_all_orders(
@@ -601,48 +607,23 @@ impl RpcServer for RpcServerImpl {
 
 	async fn cancel_orders_batch(
 		&self,
-		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
 		Ok(self
 			.api
 			.lp_api()
-			.cancel_orders_batch(orders, wait_for.unwrap_or_default())
+			.cancel_orders_batch(
+				orders
+					.into_iter()
+					.map(TryInto::try_into)
+					.collect::<Result<Vec<_>, _>>()?
+					.try_into()
+					.expect("Impossible to fail, given the same MAX_ORDERS_DELETE"),
+				wait_for.unwrap_or_default(),
+			)
 			.await?)
 	}
-}
-
-async fn order_fills<StateChainClient>(
-	state_chain_client: Arc<StateChainClient>,
-	block: BlockInfo,
-) -> RpcResult<BlockUpdate<OrderFills>>
-where
-	StateChainClient: StorageApi,
-{
-	let (previous_pools, pools, events) = try_join!(
-		state_chain_client
-			.storage_map::<pallet_cf_pools::Pools<Runtime>, BTreeMap<_, _>>(block.parent_hash),
-		state_chain_client
-			.storage_map::<pallet_cf_pools::Pools<Runtime>, BTreeMap<_, _>>(block.hash),
-		state_chain_client.storage_value::<frame_system::Events<Runtime>>(block.hash)
-	)?;
-
-	let lp_events = events
-		.into_iter()
-		.filter_map(|event_record| {
-			if let RuntimeEvent::LiquidityPools(pools_event) = event_record.event {
-				Some(pools_event)
-			} else {
-				None
-			}
-		})
-		.collect();
-
-	Ok(BlockUpdate::<OrderFills> {
-		block_hash: block.hash,
-		block_number: block.number,
-		data: order_fills_from_block_updates(&previous_pools, &pools, lp_events),
-	})
 }
 
 #[derive(Parser, Debug, Clone, Default)]

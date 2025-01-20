@@ -40,8 +40,9 @@ import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
 import { testCancelOrdersBatch } from '../tests/create_and_delete_multiple_orders';
 import { depositChannelCreation } from '../tests/request_swap_deposit_address_with_affiliates';
 import { testDCASwaps } from '../tests/DCA_test';
-import { testBtcVaultSwap } from '../tests/btc_vault_swap';
+import { testVaultSwapFeeCollection } from '../tests/vault_swap_fee_collection';
 import { testBrokerLevelScreening } from '../tests/broker_level_screening';
+import { testSolanaVaultSettingsGovernance } from '../tests/solana_vault_settings_governance';
 
 async function main() {
   const testName = process.argv[2];
@@ -69,8 +70,9 @@ async function main() {
     testDeltaBasedIngress,
     testCancelOrdersBatch,
     depositChannelCreation,
-    testBtcVaultSwap,
+    testVaultSwapFeeCollection,
     testBrokerLevelScreening,
+    testSolanaVaultSettingsGovernance,
   ];
 
   // Help message

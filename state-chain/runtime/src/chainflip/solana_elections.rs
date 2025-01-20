@@ -13,8 +13,8 @@ use cf_chains::{
 		},
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
-	CcmDepositMetadata, Chain, ChannelRefundParameters, CloseSolanaVaultSwapAccounts,
-	FeeEstimationApi, ForeignChain, Solana,
+	CcmDepositMetadata, Chain, ChannelRefundParametersDecoded, FeeEstimationApi,
+	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
 };
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
 use cf_runtime_utilities::log_or_panic;
@@ -33,7 +33,7 @@ use pallet_cf_elections::{
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
-		solana_vault_swap_accounts::SolanaVaultSwapAccountsHook,
+		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
@@ -444,6 +444,23 @@ impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
 			tracked_data.estimate_egress_fee(asset)
 		})
 	}
+
+	fn estimate_ccm_fee(
+		asset: <Solana as Chain>::ChainAsset,
+		gas_budget: cf_primitives::GasAmount,
+		message_length: usize,
+	) -> Option<<Solana as Chain>::ChainAmount> {
+		Some(Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
+			tracked_data
+				.estimate_ccm_fee(asset, gas_budget, message_length)
+				.unwrap_or_else(|| {
+					log_or_panic!(
+						"Obtained None when estimating Solana Ccm fee. This should not happen"
+					);
+					Default::default()
+				})
+		}))
+	}
 }
 
 pub struct SolanaIngress;
@@ -524,7 +541,7 @@ pub struct SolanaVaultSwapDetails {
 	pub swap_account: SolAddress,
 	pub creation_slot: u64,
 	pub broker_fee: Beneficiary<AccountId>,
-	pub refund_params: ChannelRefundParameters,
+	pub refund_params: ChannelRefundParametersDecoded,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: u8,
 	pub affiliate_fees: Affiliates<AffiliateShortId>,
@@ -573,29 +590,28 @@ impl
 				destination_address: swap_details.destination_address,
 				deposit_metadata: swap_details.deposit_metadata,
 				tx_id: (swap_details.swap_account, swap_details.creation_slot),
-				broker_fee: swap_details.broker_fee,
+				broker_fee: Some(swap_details.broker_fee),
 				affiliate_fees: swap_details.affiliate_fees,
 				dca_params: swap_details.dca_params,
-				refund_params: swap_details.refund_params,
+				refund_params: Some(swap_details.refund_params),
 				boost_fee: swap_details.boost_fee.into(),
 			},
 		);
 	}
 
-	fn close_accounts(
+	fn maybe_fetch_and_close_accounts(
 		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<(), SolanaTransactionBuildingError> {
-		<SolanaApi<SolEnvironment> as CloseSolanaVaultSwapAccounts>::new_unsigned(accounts).map(
-			|apicall| {
+		<SolanaApi<SolEnvironment> as FetchAndCloseSolanaVaultSwapAccounts>::new_unsigned(accounts)
+			.map(|apicall| {
 				let _ = <SolanaBroadcaster as Broadcaster<Solana>>::threshold_sign_and_broadcast(
 					apicall,
 				);
-			},
-		)
+			})
 	}
 
-	fn get_number_of_available_sol_nonce_accounts() -> usize {
-		Environment::get_number_of_available_sol_nonce_accounts()
+	fn get_number_of_available_sol_nonce_accounts(critical: bool) -> usize {
+		Environment::get_number_of_available_sol_nonce_accounts(critical)
 	}
 }
 
@@ -614,5 +630,11 @@ impl BenchmarkValue for SolanaVaultSwapsSettings {
 			swap_endpoint_data_account_address: BenchmarkValue::benchmark_value(),
 			usdc_token_mint_pubkey: BenchmarkValue::benchmark_value(),
 		}
+	}
+}
+
+impl FromSolOrNot for SolanaVaultSwapDetails {
+	fn sol_or_not(s: &SolanaVaultSwapDetails) -> bool {
+		s.from == SolAsset::Sol
 	}
 }

@@ -19,6 +19,7 @@ use super::{Chain, ChainCrypto};
 
 pub mod api;
 pub mod benchmarking;
+pub mod instruction_builder;
 pub mod sol_tx_core;
 pub mod transaction_builder;
 
@@ -26,37 +27,43 @@ pub use crate::assets::sol::Asset as SolAsset;
 use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
 	consts::{
-		LAMPORTS_PER_SIGNATURE, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
-		MAX_TRANSACTION_LENGTH, MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
-		MICROLAMPORTS_PER_LAMPORT,
-		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES, TOKEN_ACCOUNT_RENT,
+		LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT,
+		TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
 	Signature as SolSignature, SlotNumber as SolBlockNumber,
 };
 pub use sol_tx_core::{
-	AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts, CcmAddress as SolCcmAddress,
-	Hash as RawSolHash, Instruction as SolInstruction, Message as SolMessage, Pubkey as SolPubkey,
+	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
+	CcmAddress as SolCcmAddress, Hash as RawSolHash, Instruction as SolInstruction,
+	InstructionRpc as SolInstructionRpc, Message as SolMessage, Pubkey as SolPubkey,
 	Transaction as SolTransaction,
 };
 
-// Due to transaction size limit in Solana, we have a limit on number of fetches in a solana hetch
+// Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch
 // tx. Batches of 5 fetches get to ~1000 bytes, max ~1090 for tokens.
 pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
-pub const CCM_BYTES_PER_ACCOUNT: usize = 33usize;
-
 // Bytes left that are available for the user when building the native and token ccm transfers.
-// Leaving some bytes for safety but without preventing an extra account to be included.
-// The cf_receiver is accounted as part of the bytes required to build the call.
-pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 527usize; // 705 bytes left
-pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 740usize; // 492 bytes left
+// All function parameters are already accounted for excepte additional_accounts and message.
+pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize; // 694 bytes left
+pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize; // 481 bytes left
+
+// Nonce management values
+pub const NONCE_NUMBER_CRITICAL_NONCES: usize = 1;
+pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER: usize = 1;
+
+// Values used when closing vault swap accounts.
+pub const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES: usize = 5;
+pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
+pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 3;
 
 // Use serialized transaction
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SolanaTransactionData {
 	pub serialized_transaction: Vec<u8>,
+	pub skip_preflight: bool,
 }
 
 /// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
@@ -160,15 +167,18 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
 	pub const COMPUTE_UNITS_PER_CLOSE_VAULT_SWAP_ACCOUNTS: SolComputeLimit = 10_000u32;
 	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 10_000u32;
+	pub const COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS: SolComputeLimit = 50_000u32;
+	pub const COMPUTE_UNITS_PER_ENABLE_TOKEN_SUPPORT: SolComputeLimit = 50_000u32;
 
 	/// This is equivalent to a priority fee
 	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
 
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
 	pub const MAX_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 600_000u32;
-	// Minimum compute units required for CCM transfers to ensure their inclusion
-	pub const MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER: SolComputeLimit = 20_000u32;
-	pub const MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER: SolComputeLimit = 50_000u32;
+	// Compute units overhead for Ccm transfers. These also act as minimum compute units
+	// to ensure transaction inclusion.
+	pub const CCM_COMPUTE_UNITS_OVERHEAD_NATIVE: SolComputeLimit = 40_000u32;
+	pub const CCM_COMPUTE_UNITS_OVERHEAD_TOKEN: SolComputeLimit = 80_000u32;
 }
 
 #[derive(
@@ -189,6 +199,23 @@ pub struct SolTrackedData {
 }
 
 impl SolTrackedData {
+	pub fn calculate_ccm_compute_limit(
+		gas_budget: cf_primitives::GasAmount,
+		asset: SolAsset,
+	) -> SolComputeLimit {
+		use compute_units_costs::*;
+
+		let compute_limit: SolComputeLimit = match gas_budget.try_into() {
+			Ok(limit) => limit,
+			Err(_) => return MAX_COMPUTE_UNITS_PER_CCM_TRANSFER,
+		};
+		let compute_limit_with_overhead = compute_limit.saturating_add(match asset {
+			SolAsset::Sol => CCM_COMPUTE_UNITS_OVERHEAD_NATIVE,
+			SolAsset::SolUsdc => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
+		});
+		sp_std::cmp::min(MAX_COMPUTE_UNITS_PER_CCM_TRANSFER, compute_limit_with_overhead)
+	}
+
 	// Calculate the estimated fee for broadcasting a transaction given its compute units
 	// and the current priority fee.
 	pub fn calculate_transaction_fee(
@@ -249,6 +276,20 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 
 		self.calculate_transaction_fee(compute_units_per_fetch)
 	}
+
+	fn estimate_ccm_fee(
+		&self,
+		asset: <Solana as Chain>::ChainAsset,
+		gas_budget: cf_primitives::GasAmount,
+		_message_length: usize,
+	) -> Option<<Solana as Chain>::ChainAmount> {
+		let gas_limit = SolTrackedData::calculate_ccm_compute_limit(gas_budget, asset);
+		let ccm_fee = self.calculate_transaction_fee(gas_limit);
+		Some(match asset {
+			assets::sol::Asset::Sol => ccm_fee,
+			assets::sol::Asset::SolUsdc => ccm_fee.saturating_add(TOKEN_ACCOUNT_RENT),
+		})
+	}
 }
 
 impl FeeRefundCalculator<Solana> for SolanaTransactionData {
@@ -289,11 +330,7 @@ impl address::ToHumanreadableAddress for SolAddress {
 	}
 }
 
-impl crate::ChannelLifecycleHooks for AccountBump {
-	fn maybe_recycle(self) -> Option<Self> {
-		Some(self)
-	}
-}
+impl crate::ChannelLifecycleHooks for AccountBump {}
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct SolanaDepositFetchId {
@@ -359,6 +396,17 @@ pub mod signing_key {
 		pub fn secret(&self) -> &ed25519_dalek::SigningKey {
 			&self.0
 		}
+
+		/// Utility for printing out pub and private keys for a keypair. Used to easily save
+		/// generate keypair.
+		pub fn print_pub_and_private_keys(&self) {
+			println!(
+				"Pubkey: {:?} \nhex: {:?} \nraw bytes: {:?}",
+				cf_utilities::bs58_string(self.pubkey().0),
+				hex::encode(self.to_bytes()),
+				self.to_bytes()
+			);
+		}
 	}
 
 	impl Signer for SolSigningKey {
@@ -407,3 +455,45 @@ pub struct SolApiEnvironment {
 }
 
 impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use crate::sol::compute_units_costs::*;
+
+	#[test]
+	fn can_calculate_gas_limit() {
+		const TEST_EGRESS_BUDGET: u128 = 80_000u128;
+
+		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
+			let default_compute_limit = match asset {
+				SolAsset::Sol => CCM_COMPUTE_UNITS_OVERHEAD_NATIVE,
+				SolAsset::SolUsdc => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
+			};
+
+			let mut tx_compute_limit: u32 =
+				SolTrackedData::calculate_ccm_compute_limit(TEST_EGRESS_BUDGET, *asset);
+			assert_eq!(tx_compute_limit, TEST_EGRESS_BUDGET as u32 + default_compute_limit);
+
+			// Test SolComputeLimit saturation
+			assert_eq!(
+				SolTrackedData::calculate_ccm_compute_limit(
+					MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128 - default_compute_limit as u128 + 1,
+					*asset,
+				),
+				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER
+			);
+
+			// Test upper cap
+			tx_compute_limit = SolTrackedData::calculate_ccm_compute_limit(
+				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128 - 1,
+				*asset,
+			);
+			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
+
+			// Test lower cap
+			let tx_compute_limit = SolTrackedData::calculate_ccm_compute_limit(0, *asset);
+			assert_eq!(tx_compute_limit, default_compute_limit);
+		}
+	}
+}

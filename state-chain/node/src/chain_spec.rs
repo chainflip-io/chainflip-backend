@@ -609,7 +609,7 @@ fn testnet_genesis(
 	genesis_funding_amount: u128,
 	minimum_funding: u128,
 	redemption_tax: u128,
-	blocks_per_epoch: BlockNumber,
+	epoch_duration: BlockNumber,
 	redemption_ttl_secs: u64,
 	current_authority_emission_inflation_perbill: u32,
 	backup_node_emission_inflation_perbill: u32,
@@ -723,7 +723,7 @@ fn testnet_genesis(
 					}
 				})
 				.collect::<_>(),
-			blocks_per_epoch,
+			epoch_duration,
 			redemption_period_as_percentage,
 			backup_reward_node_percentage: Percent::from_percent(33),
 			bond: all_accounts
@@ -861,7 +861,7 @@ fn testnet_genesis(
 				block_height: 0,
 				tracked_data: ArbitrumTrackedData {
 					base_fee: 100000000u32.into(),
-					gas_limit_multiplier: 1.into(),
+					l1_base_fee_estimate: 1u128,
 				},
 			},
 		},

@@ -10,7 +10,7 @@ pub use weights::WeightInfo;
 pub mod migrations;
 
 use cf_primitives::AccountRole;
-use cf_traits::AccountRoleRegistry;
+use cf_traits::{AccountRoleRegistry, DeregistrationCheck};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::{DispatchResult, StorageVersion},
@@ -31,12 +31,16 @@ type VanityName = BoundedVec<u8, ConstU32<MAX_LENGTH_FOR_VANITY_NAME>>;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::DeregistrationCheck;
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+		type DeregistrationCheck: DeregistrationCheck<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 		type WeightInfo: WeightInfo;
 	}
 
@@ -181,6 +185,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
+		T::DeregistrationCheck::check(account_id).map_err(Into::into)?;
 		AccountRoles::<T>::try_mutate(account_id, |role| {
 			role.replace(AccountRole::Unregistered)
 				.filter(|r| *r == account_role)

@@ -18,7 +18,7 @@ use cf_chains::{
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ChannelRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ChannelRefundParametersDecoded,
 	DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall, ForeignChain, ForeignChainAddress,
 	RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
@@ -53,7 +53,7 @@ use state_chain_runtime::{
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
-const ETH_REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
+const ETH_REFUND_PARAMS: ChannelRefundParametersDecoded = ChannelRefundParametersDecoded {
 	retry_duration: 5,
 	refund_address: ForeignChainAddress::Eth(sp_core::H160([100u8; 20])),
 	min_price: sp_core::U256::zero(),
@@ -431,15 +431,13 @@ fn can_process_ccm_via_swap_deposit_address() {
 		}) if swap_request_id == SwapRequestIdCounter::<Runtime>::get() => swap_request_id
 		);
 
-		const PRINCIPAL_AMOUNT: AssetAmount = DEPOSIT_AMOUNT - GAS_BUDGET;
-
-		let principal_swap_id = assert_events_match!(
+		assert_events_match!(
 		Runtime,
 		RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
 			swap_request_id: swap_request_id_in_event,
 			swap_id,
-			input_amount: PRINCIPAL_AMOUNT,
-			swap_type: SwapType::CcmPrincipal,
+			input_amount: DEPOSIT_AMOUNT,
+			swap_type: SwapType::Swap,
 			execute_at: 3,
 			..
 		}) if swap_request_id == SwapRequestIdCounter::<Runtime>::get() &&
@@ -462,39 +460,6 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Weight::from_parts(1_000_000_000_000, 0),
 		);
 
-		let _source_asset_swap_amount = PRINCIPAL_AMOUNT + ingress_fee;
-
-		let (.., gas_swap_id) = assert_events_match!(
-			Runtime,
-			RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::AssetSwapped {
-					from: Asset::Flip,
-					to: Asset::Usdc,
-					input_amount: _source_asset_swap_amount,
-
-					..
-				},
-			) => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapExecuted {
-					swap_request_id: executed_swap_request_id,
-					swap_id,
-					..
-				},
-			) if executed_swap_request_id == swap_request_id &&
-				 swap_id == principal_swap_id => (),
-			RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
-				swap_request_id: swap_request_id_in_event,
-				swap_id,
-				input_amount: GAS_BUDGET,
-				swap_type: SwapType::CcmGas,
-				execute_at: 5,
-				..
-			}) if swap_request_id == SwapRequestIdCounter::<Runtime>::get() &&
-				swap_request_id_in_event == swap_request_id => swap_id
-
-		);
-
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(4);
 		System::set_block_number(5);
@@ -515,27 +480,11 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Runtime,
 			RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::AssetSwapped {
-					from: Asset::Flip,
-					to: Asset::Usdc,
-					input_amount: GAS_BUDGET,
-					..
-				},
-			) => (),
-			RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::AssetSwapped {
 					from: Asset::Usdc,
 					to: Asset::Eth,
 					..
 				},
 			) => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapExecuted {
-					swap_request_id: executed_swap_request_id,
-					swap_id,
-					..
-				},
-			) if executed_swap_request_id == swap_request_id &&
-				 swap_id == gas_swap_id => (),
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapEgressScheduled {
 					swap_request_id: swap_request_id_in_event,
@@ -581,12 +530,9 @@ fn vault_swap_deposit_witness(
 		deposit_metadata: Some(ccm_deposit_metadata_mock()),
 		tx_id: Default::default(),
 		deposit_details: DepositDetails { tx_hashes: None },
-		broker_fee: cf_primitives::Beneficiary {
-			account: sp_runtime::AccountId32::new([0; 32]),
-			bps: 0,
-		},
+		broker_fee: None,
 		affiliate_fees: Default::default(),
-		refund_params: ETH_REFUND_PARAMS,
+		refund_params: Some(ETH_REFUND_PARAMS),
 		dca_params: None,
 		boost_fee: 0,
 		deposit_address: Some(H160::from([0x03; 20])),
@@ -743,46 +689,23 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 			.unwrap()
 		};
 
-		// Each unit of gas costs 1 * 1_000_000 + 500_000 = 1_500_000
 		assert_eq!(
 			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_499_999)),
-			Some(U256::from(0))
+			Some(U256::from(1_499_999) + U256::from(120_000))
 		);
 		assert_eq!(
 			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_500_000)),
-			Some(U256::from(1))
-		);
-		// 1_000_000_000_000 / (1 * 1_000_000 + 500_000) = 666_666
-		assert_eq!(
-			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000_000u128)),
-			Some(U256::from(666_666))
-		);
-
-		// Can handle divide by zero case. Practically this should never happen.
-		let chain_state = ChainState::<Ethereum> {
-			block_height: 2,
-			tracked_data: EthereumTrackedData { base_fee: 0u128, priority_fee: 0u128 },
-		};
-
-		witness_call(RuntimeCall::EthereumChainTracking(
-			pallet_cf_chain_tracking::Call::update_chain_state {
-				new_chain_state: chain_state.clone(),
-			},
-		));
-
-		assert_eq!(
-			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000u128)),
-			Some(U256::from(0))
+			Some(U256::from(1_500_000) + U256::from(120_000))
 		);
 	});
 }
 
 #[test]
 fn can_resign_failed_ccm() {
-	const EPOCH_BLOCKS: u32 = 1000;
+	const EPOCH_DURATION_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_DURATION_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -885,7 +808,7 @@ fn can_handle_failed_vault_transfer() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -930,6 +853,7 @@ fn can_handle_failed_vault_transfer() {
 					amount,
 					destination_address,
 					broadcast_id,
+					egress_details: None,
 				},
 			));
 			testnet.move_forward_blocks(11);

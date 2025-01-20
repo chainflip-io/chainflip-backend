@@ -11,6 +11,7 @@ mod offences;
 pub mod pending_rotation_broadcasts;
 mod signer_nomination;
 pub mod solana_elections;
+pub mod vault_swaps;
 
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
@@ -50,15 +51,18 @@ use cf_chains::{
 	hub::{api::AssethubApi, OutputAccountId},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
-			DurableNonceAndAccount, RecoverDurableNonce, SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
+			SolanaEnvironment,
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
+		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
 	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParameters, ForeignChain,
-	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
-	Solana, TransactionBuilder,
+	ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParameters,
+	ChannelRefundParametersDecoded, ForeignChain, ReplayProtectionProvider,
+	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
+	TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
@@ -71,7 +75,7 @@ use cf_traits::{
 	ScheduledEgressDetails,
 };
 
-use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance};
+use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -168,9 +172,6 @@ impl cf_traits::WaivedFees for WaivedFees {
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 /// Arbitrum has smaller variability so we are willing to pay at most 1.5x the base fee.
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
-// We arbitrarily set the MAX_GAS_LIMIT
-const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
-const ARBITRUM_MAX_GAS_LIMIT: u128 = 25_000_000;
 
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
@@ -198,21 +199,19 @@ impl_transaction_builder_for_evm_chain!(
 	EthTransactionBuilder,
 	EthereumApi<EvmEnvironment>,
 	EthereumChainTracking,
-	ETHEREUM_BASE_FEE_MULTIPLIER,
-	ETHEREUM_MAX_GAS_LIMIT
+	ETHEREUM_BASE_FEE_MULTIPLIER
 );
 impl_transaction_builder_for_evm_chain!(
 	Arbitrum,
 	ArbTransactionBuilder,
 	ArbitrumApi<EvmEnvironment>,
 	ArbitrumChainTracking,
-	ARBITRUM_BASE_FEE_MULTIPLIER,
-	ARBITRUM_MAX_GAS_LIMIT
+	ARBITRUM_BASE_FEE_MULTIPLIER
 );
 
 #[macro_export]
 macro_rules! impl_transaction_builder_for_evm_chain {
-	( $chain: ident, $transaction_builder: ident, $chain_api: ident <$env: ident>, $chain_tracking: ident, $base_fee_multiplier: expr, $max_gas_limit: expr ) => {
+	( $chain: ident, $transaction_builder: ident, $chain_api: ident <$env: ident>, $chain_tracking: ident, $base_fee_multiplier: expr ) => {
 		impl TransactionBuilder<$chain, $chain_api<$env>> for $transaction_builder {
 			fn build_transaction(
 				signed_call: &$chain_api<$env>,
@@ -250,28 +249,21 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 				)
 			}
 
-			/// Calculate the gas limit for a this evm chain's call, using the current gas price.
-			/// Currently for only CCM calls, the gas limit is calculated as:
-			/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
-			/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
-			/// The max_fee_per_gas will still have the default this evm chain's base fee multiplier applied.
+			/// Calculate the gas limit for this evm chain's call. This is only for CCM calls.
 			fn calculate_gas_limit(call: &$chain_api<$env>) -> Option<U256> {
-				if let Some(gas_budget) = call.gas_budget() {
-					let current_fee_per_gas = $chain_tracking::chain_state()
+				if let (Some((gas_budget, message_length, transfer_asset)), Some(native_asset)) =
+					(call.ccm_transfer_data(), <$env as EvmEnvironmentProvider<$chain>>::token_address($chain::GAS_ASSET)) {
+						let gas_limit = $chain_tracking::chain_state()
 						.or_else(||{
 							log::warn!("No chain data for {}. This should never happen. Please check Chain Tracking data.", $chain::NAME);
 							None
 						})?
 						.tracked_data
-						.max_fee_per_gas(One::one());
-					Some(gas_budget
-						.checked_div(current_fee_per_gas)
-						.unwrap_or_else(||{
-							log::warn!("Current gas price for {} is 0. This should never happen. Please check Chain Tracking data.", $chain::NAME);
-							Default::default()
-						}).min($max_gas_limit)
-						.into())
+						.calculate_ccm_gas_limit(transfer_asset ==  native_asset, gas_budget, message_length);
+
+						Some(gas_limit.into())
 				} else {
+					log::warn!("CCM calls should have all the data. This should never happen. Please check {}", $chain::NAME);
 					None
 				}
 			}
@@ -351,12 +343,12 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		_payload: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		_maybe_current_onchain_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
 	) -> RequiresSignatureRefresh<BitcoinCrypto, BitcoinApi<BtcEnvironment>> {
-		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
-		// checked here. We also dont need to check for the signature here because even if we are in
-		// the next epoch and the key has changed, the old signature for the btc tx is still valid
-		// since its based on those old input UTXOs. In fact, we never have to resign btc txs and
-		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
-		// to check anything here and just rebroadcast.
+		// The payload for a Bitcoin transaction will never change and so it doesn't need to be
+		// checked here. We also don't need to check for the signature here because even if we are
+		// in the next epoch and the key has changed, the old signature for the btc tx is still
+		// valid since its based on those old input UTXOs. In fact, we never have to resign btc
+		// txs and the btc tx is always valid as long as the input UTXOs are valid. Therefore, we
+		// don't have to check anything here and just rebroadcast.
 		RequiresSignatureRefresh::False
 	}
 }
@@ -366,7 +358,15 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	fn build_transaction(
 		signed_call: &SolanaApi<SolEnvironment>,
 	) -> <Solana as Chain>::Transaction {
-		SolanaTransactionData { serialized_transaction: signed_call.chain_encoded() }
+		SolanaTransactionData {
+			serialized_transaction: signed_call.chain_encoded(),
+			// skip_preflight when broadcasting ccm transfers to consume the nonce even if the
+			// transaction reverts
+			skip_preflight: matches!(
+				signed_call.call_type,
+				SolanaTransactionType::CcmTransfer { .. }
+			),
+		}
 	}
 
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
@@ -624,6 +624,12 @@ impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
 	}
 }
 
+impl ChainEnvironment<CurrentOnChainKey, SolAddress> for SolEnvironment {
+	fn lookup(_s: CurrentOnChainKey) -> Option<SolAddress> {
+		SolanaBroadcaster::current_on_chain_key()
+	}
+}
+
 impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	fn lookup(_s: ComputePrice) -> Option<u64> {
 		SolanaChainTrackingProvider::priority_fee()
@@ -760,7 +766,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints,
-				refund_parameters: Option<ChannelRefundParameters>,
+				refund_parameters: Option<ChannelRefundParametersDecoded>,
 				dca_parameters: Option<DcaParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
@@ -793,7 +799,7 @@ macro_rules! impl_egress_api_for_anychain {
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
-				maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <AnyChain as Chain>::ChainAmount)>,
+				maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
@@ -803,7 +809,7 @@ macro_rules! impl_egress_api_for_anychain {
 							destination_address
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
-								maybe_ccm_with_gas_budget.map(|(metadata, gas_budget)| (metadata, gas_budget.try_into().expect("Chain's Amount must be compatible with u128."))),
+							maybe_ccm_deposit_metadata,
 						)
 						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
 						.map_err(Into::into),
@@ -1016,18 +1022,22 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 	fn maybe_transfers_limit() -> Option<usize> {
 		// we need to leave one nonce for the fetch tx and one nonce reserved for rotation tx since
 		// rotation tx can fail to build if all nonce accounts are occupied
-		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(2))
+		Some(
+			Environment::get_number_of_available_sol_nonce_accounts(false)
+				.saturating_sub(NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER),
+		)
 	}
 
 	fn maybe_ccm_limit() -> Option<usize> {
-		// Substract extra nonces from the limit to make sure CCMs won't block regular batches.
-		Some(Self::maybe_transfers_limit()?.saturating_sub(4))
+		// Subtract one extra nonce compared to the regular transfer limit to make sure that
+		// CCMs will never block regular transfers.
+		Some(Self::maybe_transfers_limit()?.saturating_sub(1))
 	}
 
 	fn maybe_fetches_limit() -> Option<usize> {
-		// only fetch if we have more than once nonce account available since one nonce nonce is
+		// only fetch if we have more than once nonce account available since one nonce is
 		// reserved for rotations. See above
-		Some(if Environment::get_number_of_available_sol_nonce_accounts() > 1 {
+		Some(if Environment::get_number_of_available_sol_nonce_accounts(false) > 0 {
 			cf_chains::sol::MAX_SOL_FETCHES_PER_TX
 		} else {
 			0
