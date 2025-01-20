@@ -12,7 +12,7 @@ import { prepareSwap } from '../shared/swapping';
 export const testVaultSwapFeeCollection = new ExecutableTest(
   'Vault-Swap-Fee-Collection',
   main,
-  220,
+  230,
 );
 
 // Fee to use for the broker and affiliates
@@ -71,8 +71,6 @@ async function testFeeCollection(inputAsset: Asset) {
     undefined, // dcaParams
     { account: broker.address, commissionBps },
     [{ accountAddress: affiliate.address, accountShortId: affiliateShotId, commissionBps }],
-    // Important that we use our oun broker account and not the broker API account.
-    false, // allowUseBrokerApi
   );
 
   // Check that both the broker and affiliate earned fees

@@ -1,5 +1,4 @@
 import assert from 'assert';
-import { Keyring } from '@polkadot/api';
 import * as anchor from '@coral-xyz/anchor';
 import { InternalAsset as Asset, Chains } from '@chainflip/cli';
 import {

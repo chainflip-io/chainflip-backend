@@ -5,9 +5,7 @@ import {
   approveVault,
   Asset as SCAsset,
   Chains,
-  Chain,
 } from '@chainflip/cli';
-import { Keyring } from '@polkadot/api';
 import { HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import BigNumber from 'bignumber.js';
@@ -44,6 +42,7 @@ interface EvmVaultSwapExtraParameters {
   refund_parameters: ChannelRefundParameters;
 }
 
+// Uses the SDK to execute a EVM vault swap.
 export async function executeEvmVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -59,12 +58,9 @@ export async function executeEvmVaultSwap(
   dcaParams?: DcaParams,
   wallet?: HDNodeWallet,
   affiliateFees: {
-    accountAddress: string;
-    accountShortId: number;
+    account: number; // Account Short ID
     commissionBps: number;
   }[] = [],
-  // Will use Broker API 50% of the time if true, SDK otherwise.
-  allowUseBrokerApi = true,
 ): Promise<string> {
   const srcChain = chainFromAsset(sourceAsset);
   const destChain = chainFromAsset(destAsset);
@@ -76,14 +72,6 @@ export async function executeEvmVaultSwap(
     refundAddress,
     minPriceX128: '0',
   };
-
-  if (allowUseBrokerApi) {
-    if (
-      new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address !== brokerFees.account
-    ) {
-      throw new Error('Cannot use different Broker account when using Broker API for a vault swap');
-    }
-  }
 
   const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
 
@@ -99,54 +87,84 @@ export async function executeEvmVaultSwap(
 
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
 
-  if (!allowUseBrokerApi || Math.random() > 0.5) {
-    // Use SDK
-    const networkOptions = {
-      signer: evmWallet,
-      network: 'localnet',
-      vaultContractAddress: getContractAddress(srcChain, 'VAULT'),
-      srcTokenContractAddress: getContractAddress(srcChain, sourceAsset),
-    } as const;
-    const txOptions = {
-      // This is run with fresh addresses to prevent nonce issues. Will be 1 for ERC20s.
-      gasLimit: srcChain === Chains.Arbitrum ? 32000000n : 5000000n,
-    } as const;
+  const networkOptions = {
+    signer: evmWallet,
+    network: 'localnet',
+    vaultContractAddress: getContractAddress(srcChain, 'VAULT'),
+    srcTokenContractAddress: getContractAddress(srcChain, sourceAsset),
+  } as const;
+  const txOptions = {
+    // This is run with fresh addresses to prevent nonce issues. Will be 1 for ERC20s.
+    gasLimit: srcChain === Chains.Arbitrum ? 32000000n : 5000000n,
+  } as const;
 
-    const mappedAffiliateFees = affiliateFees.map((f) => ({
-      account: f.accountShortId,
-      commissionBps: f.commissionBps,
-    }));
+  const receipt = await executeSwap(
+    {
+      destChain,
+      destAsset: stateChainAssetFromAsset(destAsset),
+      // It is important that this is large enough to result in
+      // an amount larger than existential (e.g. on Polkadot):
+      amount: fineAmount,
+      destAddress,
+      srcAsset: stateChainAssetFromAsset(sourceAsset),
+      srcChain,
+      ccmParams: messageMetadata && {
+        gasBudget: messageMetadata.gasBudget.toString(),
+        message: messageMetadata.message,
+        ccmAdditionalData: messageMetadata.ccmAdditionalData,
+      },
+      brokerFees,
+      // The SDK will encode these parameters and the ccmAdditionalData
+      // into the `cfParameters` field for the vault swap.
+      boostFeeBps,
+      fillOrKillParams: fokParams,
+      dcaParams,
+      affiliateFees,
+    } as ExecuteSwapParams,
+    networkOptions,
+    txOptions,
+  );
+  return receipt.hash;
+}
 
-    const receipt = await executeSwap(
-      {
-        destChain,
-        destAsset: stateChainAssetFromAsset(destAsset),
-        // It is important that this is large enough to result in
-        // an amount larger than existential (e.g. on Polkadot):
-        amount: fineAmount,
-        destAddress,
-        srcAsset: stateChainAssetFromAsset(sourceAsset),
-        srcChain,
-        ccmParams: messageMetadata && {
-          gasBudget: messageMetadata.gasBudget.toString(),
-          message: messageMetadata.message,
-          ccmAdditionalData: messageMetadata.ccmAdditionalData,
-        },
-        brokerFees,
-        // The SDK will encode these parameters and the ccmAdditionalData
-        // into the `cfParameters` field for the vault swap.
-        boostFeeBps,
-        fillOrKillParams: fokParams,
-        dcaParams,
-        affiliateFees: mappedAffiliateFees,
-      } as ExecuteSwapParams,
-      networkOptions,
-      txOptions,
+export async function executeEvmVaultSwapViaBrokerApi(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  brokerCommissionBps: number = 0,
+  messageMetadata?: CcmDepositMetadata,
+  amount?: string,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
+  wallet?: HDNodeWallet,
+  affiliateFees: {
+    accountAddress: string;
+    commissionBps: number;
+  }[] = [],
+) {
+  const srcChain = chainFromAsset(sourceAsset);
+  const destChain = chainFromAsset(destAsset);
+  const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
+  const refundAddress = await newAddress(sourceAsset, randomBytes(32).toString('hex'));
+  const fokParams = fillOrKillParams ?? {
+    retryDurationBlocks: 0,
+    refundAddress,
+    minPriceX128: '0',
+  };
+  const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
+
+  if (erc20Assets.includes(sourceAsset)) {
+    // Doing effectively infinite approvals to make sure it doesn't fail.
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    await approveEvmTokenVault(
+      sourceAsset,
+      (BigInt(amountToFineAmount(amountToSwap, assetDecimals(sourceAsset))) * 100n).toString(),
+      evmWallet,
     );
-    return receipt.hash;
   }
 
-  // Use the broker API
   await using chainflip = await getChainflipApi();
   const brokerUri = '//BROKER_1';
   const broker = createStateChainKeypair(brokerUri);
@@ -166,12 +184,10 @@ export async function executeEvmVaultSwap(
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_get_vault_swap_details`,
     broker.address,
-    { chain: chainFromAsset(sourceAsset), asset: stateChainAssetFromAsset(sourceAsset) },
-    { chain: chainFromAsset(destAsset), asset: stateChainAssetFromAsset(destAsset) },
-    chainFromAsset(destAsset) === Chains.Polkadot
-      ? decodeDotAddressForContract(destAddress)
-      : destAddress,
-    0, // broker_commission
+    { chain: srcChain, asset: stateChainAssetFromAsset(sourceAsset) },
+    { chain: destChain, asset: stateChainAssetFromAsset(destAsset) },
+    destChain === Chains.Polkadot ? decodeDotAddressForContract(destAddress) : destAddress,
+    brokerCommissionBps,
     extraParameters,
     messageMetadata && {
       message: messageMetadata.message as `0x${string}`,
@@ -179,7 +195,7 @@ export async function executeEvmVaultSwap(
       ccm_additional_data: messageMetadata.ccmAdditionalData,
     },
     boostFeeBps ?? 0,
-    affiliateFees.map((f) => ({ account: f.accountAddress, commissionBps: f.commissionBps })),
+    affiliateFees,
     dcaParams && {
       number_of_chunks: dcaParams.numberOfChunks,
       chunk_interval: dcaParams.chunkIntervalBlocks,
@@ -214,7 +230,7 @@ export async function approveEvmTokenVault(
   await approveVault(
     {
       amount,
-      srcChain: chain as Chain,
+      srcChain: chain,
       srcAsset: stateChainAssetFromAsset(sourceAsset) as SCAsset,
     },
     {

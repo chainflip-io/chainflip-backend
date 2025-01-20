@@ -268,14 +268,13 @@ export async function executeVaultSwap(
     accountShortId: number;
     commissionBps: number;
   }[] = [],
-  allowUseBrokerApi = true,
 ) {
   let sourceAddress: string;
   let transactionId: TransactionOriginId;
 
   const srcChain = chainFromAsset(sourceAsset);
 
-  const usableBrokerFees = brokerFees ?? {
+  const brokerFeesValue = brokerFees ?? {
     account: new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
     commissionBps: 1,
   };
@@ -293,15 +292,14 @@ export async function executeVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
-      usableBrokerFees,
+      brokerFeesValue,
       messageMetadata,
       amount,
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
       wallet,
-      affiliateFees,
-      allowUseBrokerApi,
+      affiliateFees.map((f) => ({ account: f.accountShortId, commissionBps: f.commissionBps })),
     );
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
@@ -313,7 +311,7 @@ export async function executeVaultSwap(
       fillOrKillParams === undefined
         ? await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND')
         : fillOrKillParams.refundAddress,
-      usableBrokerFees,
+      brokerFeesValue,
       affiliateFees.map((f) => ({ account: f.accountAddress, bps: f.commissionBps })),
     );
     transactionId = { type: TransactionOrigin.VaultSwapBitcoin, txId };
@@ -324,7 +322,7 @@ export async function executeVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
-      usableBrokerFees,
+      brokerFeesValue,
       messageMetadata,
       undefined,
       boostFeeBps,
@@ -363,7 +361,6 @@ export async function performVaultSwap(
     accountShortId: number;
     commissionBps: number;
   }[] = [],
-  allowUseBrokerApi = true,
 ): Promise<VaultSwapParams> {
   const tag = swapTag ?? '';
 
@@ -387,7 +384,6 @@ export async function performVaultSwap(
       dcaParams,
       brokerFees,
       affiliateFees,
-      allowUseBrokerApi,
     );
     swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapInitiated);
 
