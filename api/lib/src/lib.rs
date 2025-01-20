@@ -1,6 +1,5 @@
 use std::{fmt, sync::Arc};
 
-use crate::primitives::EncodedAddress;
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
@@ -517,12 +516,14 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	async fn register_affiliate(
 		&self,
 		short_id: AffiliateShortId,
-		withdrawal_address: EncodedAddress,
+		withdrawal_address: AddressString,
 	) -> Result<AccountId32> {
-		let (_, events, ..) =
-			self.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::register_affiliate { short_id, withdrawal_address },
-			)
+		let (_, events, ..) = self
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
+				short_id,
+				withdrawal_address: withdrawal_address
+					.try_parse_to_encoded_address(ForeignChain::Ethereum)?,
+			})
 			.await?
 			.until_in_block()
 			.await?;

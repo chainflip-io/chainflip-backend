@@ -1220,7 +1220,7 @@ pub mod pallet {
 			ensure!(
 				T::AddressConverter::decode_and_validate_address_for_asset(
 					withdrawal_address.clone(),
-					Asset::Eth,
+					Asset::Usdc,
 				)
 				.is_ok(),
 				Error::<T>::InvalidWithdrawalAddress
