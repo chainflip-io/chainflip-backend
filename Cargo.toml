@@ -20,6 +20,7 @@ members = [
   "state-chain/cfe-events",
   "state-chain/chains",
   "state-chain/custom-rpc",
+  "state-chain/generic-typeinfo-derive",
   "state-chain/node",
   "state-chain/pallets/cf-account-roles",
   "state-chain/pallets/cf-asset-balances",

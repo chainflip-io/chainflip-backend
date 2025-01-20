@@ -33,6 +33,7 @@ use frame_support::{
 	Twox64Concat,
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
+use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
@@ -109,8 +110,7 @@ pub mod pallet {
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
 
 	/// All data contained in a Broadcast
-	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
-	#[scale_info(skip_type_params(T, I))]
+	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
 	pub struct BroadcastData<T: Config<I>, I: 'static> {
 		pub broadcast_id: BroadcastId,
 		pub transaction_payload: TransactionFor<T, I>,
@@ -122,6 +122,9 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
+		/// Name of the chain that this Config is implemented for
+		const NAME: &'static str;
+
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
