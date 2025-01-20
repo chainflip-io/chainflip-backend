@@ -285,7 +285,9 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						},
 						ClientError::Call(obj)
 							if obj.code() == 1002 &&
-								obj.message().contains("State already discarded") =>
+								obj.message()
+									.to_lowercase()
+									.contains("state already discarded") =>
 						{
 							warn!(target: "state_chain_client", request_id = request.id, "Submission failed as the state is stale: {obj:?}");
 							break Ok(Err(SubmissionLogicError::StateDiscarded))
