@@ -1730,6 +1730,22 @@ mod private_channels {
 	}
 
 	#[test]
+	fn default_broker_bond() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(BrokerBond::<Test>::get(), FLIPPERINOS_PER_FLIP * 100);
+		});
+	}
+}
+
+#[cfg(test)]
+mod affiliates {
+
+	use super::*;
+
+	use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
+	use sp_runtime::DispatchError::BadOrigin;
+
+	#[test]
 	fn register_affiliate() {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
@@ -1782,21 +1798,6 @@ mod private_channels {
 	}
 
 	#[test]
-	fn default_broker_bond() {
-		new_test_ext().execute_with(|| {
-			assert_eq!(BrokerBond::<Test>::get(), FLIPPERINOS_PER_FLIP * 100);
-		});
-	}
-}
-
-#[cfg(test)]
-mod affiliates {
-
-	use super::*;
-
-	use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
-
-	#[test]
 	fn register_address_and_request_withdrawal_success() {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
@@ -1824,6 +1825,12 @@ mod affiliates {
 				RuntimeEvent::Swapping(Event::AffiliateRegistration { .. }),
 				RuntimeEvent::Swapping(Event::WithdrawalRequested { .. }),
 			);
+
+			assert_eq!(MockBalance::get_balance(&affiliate_account_id, Asset::Usdc), 0);
+
+			let egresses = MockEgressHandler::<Ethereum>::get_scheduled_egresses();
+			assert_eq!(egresses.len(), 1);
+			assert_eq!(egresses.first().unwrap().amount(), BALANCE);
 		});
 	}
 
