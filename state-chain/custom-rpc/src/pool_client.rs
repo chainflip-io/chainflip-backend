@@ -118,31 +118,10 @@ where
 		}
 	}
 
-	// async fn clear_nonce(&self) {
-	// 	let mut current_nonce = self.nonce.write().await;
-	// 	*current_nonce = None;
-	// }
-
-	// async fn set_nonce(&self, new_nonce: Nonce) {
-	// 	let mut current_nonce = self.nonce.write().await;
-	// 	*current_nonce = Some(new_nonce);
-	// }
-
-	// async fn current_nonce(&self, at_block: Hash) -> RpcResult<Nonce> {
-	// 	let current_nonce = self.nonce.read().await;
-	//
-	// 	match *current_nonce {
-	// 		Some(old_nonce) => Ok(old_nonce),
-	// 		None => {
-	// 			// If nonce is not set, reset it from account
-	// 			let account_nonce = self
-	// 				.client
-	// 				.runtime_api()
-	// 				.account_nonce(at_block, self.pair_signer.account_id.clone())?;
-	// 			Ok(account_nonce)
-	// 		},
-	// 	}
-	// }
+	async fn clear_nonce(&self) {
+		let mut current_nonce = self.nonce.write().await;
+		*current_nonce = None;
+	}
 
 	fn create_signed_extrinsic(&self, call: RuntimeCall, nonce: Nonce) -> RpcResult<B::Extrinsic> {
 		let finalized_block_hash = self.client.info().finalized_hash;
@@ -251,7 +230,14 @@ where
 		}
 	}
 
-	pub async fn submit(
+	/// Signs and submits and a `RuntimeCall` to the transaction pool.
+	/// Depending on the `wait_for` param:
+	/// * `WaitFor::NoWait`: submits extrinsic and returns the transaction hash without watching for
+	///   its progress
+	/// * `WaitFor::InBlock`: submits extrinsic and waits until the transaction is in a block
+	/// * `WaitFor::Finalized`: submits extrinsic and waits until the transaction is in a finalized
+	///   block
+	pub async fn submit_wait_for_result(
 		&self,
 		call: RuntimeCall,
 		wait_for: WaitFor,
@@ -294,11 +280,10 @@ where
 	}
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
-	/// `wait_for` param determines whether to wait until the extrinsic is in a best block or a
-	/// finalized block. Once the extrinsic is in a block, `ExtrinsicDetails` is returned.
-	/// If an error occurs, it
-	/// NB: This is a blocking call, if wait_for == InBlock it takes around 1 block (6 secs)
-	/// and if wait_for == Finalized it takes around >12 secs
+	/// `until_finalized` param determines whether to wait until the extrinsic is in a block or in
+	/// a finalized block. Once the extrinsic is in a block, `ExtrinsicDetails` is returned.
+	/// NB: This is a blocking call, if until_finalized == false it takes around 1 block (6 secs)
+	/// and if until_finalized == true it takes around >12 secs
 	pub async fn submit_watch(
 		&self,
 		call: RuntimeCall,
@@ -312,71 +297,81 @@ where
 			self.dry_run_extrinsic(call.clone(), at)?;
 		}
 
-		let extrinsic = self.create_signed_extrinsic(call, self.next_nonce(at_block).await?)?;
-
-		// Validates transaction using runtime, submits to transaction pool and watches its status
-		let mut status_stream = match self
-			.pool
-			.submit_and_watch(at_block, TransactionSource::External, extrinsic)
-			.await
-		{
-			Ok(stream) => stream,
-			Err(e) => {
-				log::error!(" ------ submit_and_watch error: {:?}", e);
-				return Err(e.into());
-			},
-		};
-
-		// Periodically poll the transaction pool to check inclusion status
-		while let Some(status) = status_stream.next().await {
-			match status {
-				TransactionStatus::InBlock((block_hash, tx_index)) =>
-					if !until_finalized {
-						return self.get_extrinsic_details(block_hash, tx_index);
-					},
-				TransactionStatus::Finalized((block_hash, tx_index)) =>
-					if until_finalized {
-						return self.get_extrinsic_details(block_hash, tx_index);
-					},
-				TransactionStatus::Future |
-				TransactionStatus::Ready |
-				TransactionStatus::Broadcast(_) => {
-					//log::warn!("Transaction in progress status: {:?}", status);
-					continue
+		loop {
+			match self
+				.pool
+				.submit_and_watch(
+					at_block,
+					TransactionSource::External,
+					self.create_signed_extrinsic(call.clone(), self.next_nonce(at_block).await?)?,
+				)
+				.await
+			{
+				Ok(mut status_stream) => {
+					// Periodically poll the transaction pool to check inclusion status
+					while let Some(status) = status_stream.next().await {
+						match status {
+							TransactionStatus::InBlock((block_hash, tx_index)) =>
+								if !until_finalized {
+									return self.get_extrinsic_details(block_hash, tx_index);
+								},
+							TransactionStatus::Finalized((block_hash, tx_index)) =>
+								if until_finalized {
+									return self.get_extrinsic_details(block_hash, tx_index);
+								},
+							TransactionStatus::Future |
+							TransactionStatus::Ready |
+							TransactionStatus::Broadcast(_) => {
+								//log::warn!("Transaction in progress status: {:?}", status);
+								continue
+							},
+							TransactionStatus::Invalid => {
+								//log::warn!("Transaction failed status: {:?}", status);
+								return Err(CfApiError::OtherError(anyhow!(
+									"transaction is no longer valid in the current state. "
+								)))
+							},
+							TransactionStatus::Dropped => {
+								log::warn!("Transaction failed status: {:?}", status);
+								return Err(CfApiError::OtherError(anyhow!(
+									"transaction was dropped from the pool because of the limit"
+								)))
+							},
+							TransactionStatus::Usurped(_hash) => {
+								log::warn!("Transaction failed status: {:?}", status);
+								return Err(CfApiError::OtherError(anyhow!(
+									"Transaction has been replaced in the pool, "
+								)))
+							},
+							TransactionStatus::FinalityTimeout(_block_hash) => {
+								log::warn!("Transaction failed status: {:?}", status);
+								//return Err(CfApiError::OtherError(anyhow!("Maximum number of
+								// finality watchers has been reached")))
+								continue
+							},
+							TransactionStatus::Retracted(_block_hash) => {
+								log::warn!("Transaction failed status: {:?}", status);
+								Err(CfApiError::OtherError(anyhow!("The block this transaction was included in has been retracted.")))?
+							},
+						}
+					}
+					return Err(CfApiError::OtherError(anyhow!("transaction unexpected error")))
 				},
-				TransactionStatus::Invalid => {
-					//log::warn!("Transaction failed status: {:?}", status);
-					return Err(CfApiError::OtherError(anyhow!(
-						"transaction is no longer valid in the current state. "
-					)))
+				Err(sc_transaction_pool::error::Error::Pool(
+					sc_transaction_pool_api::error::Error::TooLowPriority { .. },
+				)) => {
+					// This occurs when a transaction with the same nonce is in the transaction pool
+					// (and the priority is <= priority of that existing tx)
+					log::warn!(
+						"TooLowPriority error. More likely occurs when a transaction with the same \
+					     nonce is in the transaction pool. Resetting the pool_client managed nonce..."
+					);
+					self.clear_nonce().await;
 				},
-				TransactionStatus::Dropped => {
-					log::warn!("Transaction failed status: {:?}", status);
-					return Err(CfApiError::OtherError(anyhow!(
-						"transaction was dropped from the pool because of the limit"
-					)))
+				Err(e) => {
+					return Err(e.into());
 				},
-				TransactionStatus::Usurped(_hash) => {
-					log::warn!("Transaction failed status: {:?}", status);
-					return Err(CfApiError::OtherError(anyhow!(
-						"Transaction has been replaced in the pool, "
-					)))
-				},
-				TransactionStatus::FinalityTimeout(_block_hash) => {
-					log::warn!("Transaction failed status: {:?}", status);
-					//return Err(CfApiError::OtherError(anyhow!("Maximum number of finality
-					// watchers has been reached")))
-					continue
-				},
-				TransactionStatus::Retracted(_block_hash) => {
-					log::warn!("Transaction failed status: {:?}", status);
-					return Err(CfApiError::OtherError(anyhow!(
-						"The block this transaction was included in has been retracted."
-					)))
-				},
-			}
+			};
 		}
-
-		Err(CfApiError::OtherError(anyhow!("transaction unexpected error")))
 	}
 }

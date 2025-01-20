@@ -82,7 +82,7 @@ pub mod crypto;
 pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
-pub mod signed_client;
+pub mod pool_client;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochState {

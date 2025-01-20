@@ -1,4 +1,4 @@
-use crate::{signed_client::SignedPoolClient, CfApiError, RpcResult};
+use crate::{pool_client::SignedPoolClient, CfApiError, RpcResult};
 use anyhow::anyhow;
 use cf_chains::{
 	address::AddressString, CcmChannelMetadata, ChannelRefundParametersEncoded,

@@ -1,4 +1,4 @@
-use crate::{signed_client::SignedPoolClient, CfApiError, RpcResult, StorageQueryApi};
+use crate::{pool_client::SignedPoolClient, CfApiError, RpcResult, StorageQueryApi};
 use anyhow::anyhow;
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
@@ -224,7 +224,7 @@ where
 	) -> RpcResult<ApiWaitForResult<String>> {
 		let wait_for_result = self
 			.signed_pool_client
-			.submit(
+			.submit_wait_for_result(
 				RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
 					asset,
 					boost_fee: boost_fee.unwrap_or_default(),
@@ -315,7 +315,7 @@ where
 
 		let wait_for_result = self
 			.signed_pool_client
-			.submit(
+			.submit_wait_for_result(
 				RuntimeCall::from(pallet_cf_lp::Call::withdraw_asset {
 					amount,
 					asset,
@@ -386,7 +386,7 @@ where
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
 		Ok(into_api_wait_for_result(
 			self.signed_pool_client
-				.submit(
+				.submit_wait_for_result(
 					RuntimeCall::from(pallet_cf_pools::Call::update_range_order {
 						base_asset,
 						quote_asset,
@@ -414,7 +414,7 @@ where
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
 		Ok(into_api_wait_for_result(
 			self.signed_pool_client
-				.submit(
+				.submit_wait_for_result(
 					RuntimeCall::from(pallet_cf_pools::Call::set_range_order {
 						base_asset,
 						quote_asset,
@@ -602,7 +602,7 @@ where
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
 		Ok(into_api_wait_for_result(
 			self.signed_pool_client
-				.submit(
+				.submit_wait_for_result(
 					RuntimeCall::from(pallet_cf_pools::Call::cancel_orders_batch { orders }),
 					wait_for.unwrap_or_default(),
 					false,
@@ -643,7 +643,7 @@ where
 		Ok(into_api_wait_for_result(
 			if let Some(dispatch_at) = dispatch_at {
 				self.signed_pool_client
-					.submit(
+					.submit_wait_for_result(
 						RuntimeCall::from(pallet_cf_pools::Call::schedule_limit_order_update {
 							call: Box::new(call),
 							dispatch_at,
@@ -655,7 +655,7 @@ where
 					.await?
 			} else {
 				self.signed_pool_client
-					.submit(RuntimeCall::from(call), wait_for, false, None)
+					.submit_wait_for_result(RuntimeCall::from(call), wait_for, false, None)
 					.await?
 			},
 			collect_limit_order_returns,

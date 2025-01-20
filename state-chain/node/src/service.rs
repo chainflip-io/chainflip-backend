@@ -4,7 +4,7 @@ use custom_rpc::{
 	crypto::{broker_crypto, lp_crypto},
 	lp::{LpSignedApiServer, LpSignedRpc},
 	monitoring::MonitoringApiServer,
-	signed_client::SignedPoolClient,
+	pool_client::SignedPoolClient,
 	CustomApiServer, CustomRpc,
 };
 use futures::FutureExt;
