@@ -2,6 +2,7 @@ import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
 import { deferredPromise, sleep } from '../utils';
+import { startAwaitTask } from '../executable_test_task_tracker';
 
 // @ts-expect-error polyfilling
 Symbol.asyncDispose ??= Symbol('asyncDispose');
@@ -387,6 +388,8 @@ export function observeEvents<T = any>(
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
 
+  const task = startAwaitTask(`Observing Event ${eventName}`);
+
   const controller = abortable ? new AbortController() : undefined;
 
   const findEvent = async () => {
@@ -407,6 +410,7 @@ export function observeEvents<T = any>(
     }
     if (foundEvents.length > 0) {
       // No need to continue if we found event(s) in the past
+      task.stopAwaiting();
       return foundEvents;
     }
 
@@ -424,10 +428,12 @@ export function observeEvents<T = any>(
         }
       }
       if (foundEvents.length > 0) {
+        task.stopAwaiting();
         return foundEvents;
       }
     }
 
+    task.stopAwaiting();
     return null;
   };
 
