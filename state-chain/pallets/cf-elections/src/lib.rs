@@ -102,6 +102,9 @@
 //! or reconstructed from the others is also configured via that trait.
 
 #![feature(try_find)]
+#![feature(step_trait)]
+#![feature(trait_alias)]
+#![feature(associated_type_defaults)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
@@ -270,7 +273,10 @@ pub mod pallet {
 		/// specifically in Solana's chain/fee tracking trait impls as those traits do not allow
 		/// errors to be returned, this is ok, but should be avoided in future.
 		#[derive(Debug, PartialEq, Eq)]
-		pub struct CorruptStorageError {}
+		pub struct CorruptStorageError {
+			// force usage of new() to log
+			_no_construct: (),
+		}
 		impl CorruptStorageError {
 			/// We use this function to create this error type (and make the struct impossible to
 			/// create without it) so it is easier to find all locations we create the error, and so
@@ -282,7 +288,7 @@ pub mod pallet {
 					"Election pallet CorruptStorageError at '{}'.",
 					core::panic::Location::caller()
 				);
-				Self {}
+				Self { _no_construct: () }
 			}
 		}
 	}
@@ -620,6 +626,7 @@ pub mod pallet {
 				));
 				ElectionProperties::<T, I>::insert(election_identifier, properties);
 				ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
+				log::debug!("Created new election with identifier {unique_monotonic_identifier:?}");
 				Ok(election_identifier)
 			}
 
@@ -693,6 +700,7 @@ pub mod pallet {
 				ElectionProperties::<T, I>::remove(composite_election_identifier);
 				ElectionState::<T, I>::remove(unique_monotonic_identifier);
 				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
+				log::debug!("Deleted election with identifier {unique_monotonic_identifier:?}");
 			}
 
 			fn refresh_election(
@@ -1613,6 +1621,7 @@ pub mod pallet {
 								}
 							}
 
+							log::info!("calling on_finalize for ElectionSystemRunner");
 							T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
 
 							Ok(())
