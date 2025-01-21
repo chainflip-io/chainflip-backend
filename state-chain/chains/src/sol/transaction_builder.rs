@@ -553,6 +553,7 @@ pub mod test {
 		crate::FetchAssetParams {
 			deposit_fetch_id: SolanaDepositFetchId { channel_id, address, bump },
 			asset,
+			amount: 123456,
 		}
 	}
 

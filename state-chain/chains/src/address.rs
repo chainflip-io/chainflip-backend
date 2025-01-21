@@ -8,7 +8,7 @@ use crate::{
 	Chain,
 };
 use cf_primitives::{
-	chains::{Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
+	chains::{Arbitrum, Assethub, Bitcoin, Ethereum, Polkadot, Solana},
 	ChannelId, ForeignChain, NetworkEnvironment,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -26,6 +26,7 @@ pub enum AddressDerivationError {
 	BitcoinChannelIdTooLarge,
 	MissingSolanaApiEnvironment,
 	SolanaDerivationError(sol::AddressDerivationError),
+	MissingAssethubVault,
 }
 
 impl From<sol::AddressDerivationError> for AddressDerivationError {
@@ -68,6 +69,7 @@ pub enum ForeignChainAddress {
 	Btc(<Bitcoin as Chain>::ChainAccount),
 	Arb(<Arbitrum as Chain>::ChainAccount),
 	Sol(<Solana as Chain>::ChainAccount),
+	Hub(<Assethub as Chain>::ChainAccount),
 }
 
 impl ForeignChainAddress {
@@ -78,6 +80,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Btc(_) => ForeignChain::Bitcoin,
 			ForeignChainAddress::Arb(_) => ForeignChain::Arbitrum,
 			ForeignChainAddress::Sol(_) => ForeignChain::Solana,
+			ForeignChainAddress::Hub(_) => ForeignChain::Assethub,
 		}
 	}
 	pub fn raw_bytes(self) -> Vec<u8> {
@@ -87,6 +90,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Sol(source_address) => source_address.0.to_vec(),
 			ForeignChainAddress::Dot(source_address) => source_address.aliased_ref().to_vec(),
 			ForeignChainAddress::Btc(script_pubkey) => script_pubkey.bytes(),
+			ForeignChainAddress::Hub(source_address) => source_address.aliased_ref().to_vec(),
 		}
 	}
 
@@ -104,6 +108,7 @@ pub enum EncodedAddress {
 	Btc(Vec<u8>),
 	Arb([u8; 20]),
 	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
+	Hub([u8; 32]),
 }
 
 pub trait AddressConverter: Sized {
@@ -132,6 +137,7 @@ impl core::fmt::Display for EncodedAddress {
 					.unwrap_or("The address cant be decoded from the utf8 encoded bytes")
 			),
 			EncodedAddress::Sol(addr) => core::fmt::Display::fmt(&SolAddress(*addr), f),
+			EncodedAddress::Hub(addr) => write!(f, "0x{}", hex::encode(&addr[..])),
 		}
 	}
 }
@@ -158,7 +164,7 @@ impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
 		match address {
-			ForeignChainAddress::Dot(addr) => Ok(addr),
+			ForeignChainAddress::Dot(addr) | ForeignChainAddress::Hub(addr) => Ok(addr),
 			_ => Err(AddressError::InvalidAddress),
 		}
 	}
@@ -203,6 +209,12 @@ impl IntoForeignChainAddress<Polkadot> for PolkadotAccountId {
 	}
 }
 
+impl IntoForeignChainAddress<Assethub> for PolkadotAccountId {
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Hub(self)
+	}
+}
+
 impl IntoForeignChainAddress<Bitcoin> for ScriptPubkey {
 	fn into_foreign_chain_address(self) -> ForeignChainAddress {
 		ForeignChainAddress::Btc(self)
@@ -223,6 +235,7 @@ impl EncodedAddress {
 			EncodedAddress::Btc(inner) => &inner[..],
 			EncodedAddress::Arb(inner) => &inner[..],
 			EncodedAddress::Sol(inner) => &inner[..],
+			EncodedAddress::Hub(inner) => &inner[..],
 		}
 	}
 	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Result<Self, &'static str> {
@@ -255,6 +268,14 @@ impl EncodedAddress {
 			ForeignChain::Solana => Ok(EncodedAddress::Sol(
 				bytes.try_into().map_err(|_| "Invalid Solana address length")?,
 			)),
+			ForeignChain::Assethub => {
+				if bytes.len() != 32 {
+					return Err("Invalid Assethub address length")
+				}
+				let mut address = [0u8; 32];
+				address.copy_from_slice(&bytes);
+				Ok(EncodedAddress::Hub(address))
+			},
 		}
 	}
 
@@ -265,6 +286,7 @@ impl EncodedAddress {
 			EncodedAddress::Btc(_) => ForeignChain::Bitcoin,
 			EncodedAddress::Arb(_) => ForeignChain::Arbitrum,
 			EncodedAddress::Sol(_) => ForeignChain::Solana,
+			EncodedAddress::Hub(_) => ForeignChain::Assethub,
 		}
 	}
 	pub fn into_vec(self) -> Vec<u8> {
@@ -274,6 +296,7 @@ impl EncodedAddress {
 			EncodedAddress::Sol(bytes) => bytes.to_vec(),
 			EncodedAddress::Dot(bytes) => bytes.to_vec(),
 			EncodedAddress::Btc(byte_vec) => byte_vec,
+			EncodedAddress::Hub(bytes) => bytes.to_vec(),
 		}
 	}
 
@@ -297,6 +320,7 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		),
 		ForeignChainAddress::Arb(address) => EncodedAddress::Arb(address.0),
 		ForeignChainAddress::Sol(address) => EncodedAddress::Sol(address.into()),
+		ForeignChainAddress::Hub(address) => EncodedAddress::Hub(*address.aliased_ref()),
 	}
 }
 
@@ -318,6 +342,8 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 			.map_err(|_| ())?,
 		)),
 		EncodedAddress::Sol(address_bytes) => Ok(ForeignChainAddress::Sol(address_bytes.into())),
+		EncodedAddress::Hub(address_bytes) =>
+			Ok(ForeignChainAddress::Hub(PolkadotAccountId::from_aliased(address_bytes))),
 	}
 }
 
@@ -397,6 +423,7 @@ pub enum ForeignChainAddressHumanreadable {
 	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
 	Arb(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 	Sol(<SolAddress as ToHumanreadableAddress>::Humanreadable),
+	Hub(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
 }
 
 #[cfg(feature = "std")]
@@ -408,6 +435,7 @@ impl std::fmt::Display for ForeignChainAddressHumanreadable {
 			ForeignChainAddressHumanreadable::Dot(address) => write!(f, "{}", address),
 			ForeignChainAddressHumanreadable::Btc(address) => write!(f, "{}", address),
 			ForeignChainAddressHumanreadable::Sol(address) => write!(f, "{}", address),
+			ForeignChainAddressHumanreadable::Hub(address) => write!(f, "{}", address),
 		}
 	}
 }
@@ -439,6 +467,8 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 				ForeignChainAddressHumanreadable::Arb(address.to_humanreadable(network_environment)),
 			ForeignChainAddress::Sol(address) =>
 				ForeignChainAddressHumanreadable::Sol(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Hub(address) =>
+				ForeignChainAddressHumanreadable::Hub(address.to_humanreadable(network_environment)),
 		}
 	}
 }
@@ -514,6 +544,8 @@ pub fn clean_foreign_chain_address(
 			Ok(sol_address) => EncodedAddress::Sol(sol_address.into()),
 			Err(_) => EncodedAddress::Sol(clean_hex_address(address)?),
 		},
+		ForeignChain::Assethub =>
+			EncodedAddress::Hub(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 	})
 }
 

@@ -1,4 +1,5 @@
 use crate::{
+	hub::AssethubRuntimeCall,
 	sol::{SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC},
 	CcmChannelMetadata,
 };
@@ -55,65 +56,75 @@ pub enum VersionedSolanaCcmAdditionalData {
 pub struct CcmValidityChecker;
 
 impl CcmValidityCheck for CcmValidityChecker {
-	/// Checks to see if a given CCM is valid. Currently this only applies to Solana chain.
-	/// For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected length.
-	/// Returns the decoded `cf_parameter`.
+	/// Checks to see if a given CCM is valid. Currently this only applies to Solana and Assethub
+	/// chains. For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected
+	/// length. For Assethub Chain: Decodes the message into a supported extrinsic of the
+	/// PolkadotXcm pallet. Returns the decoded `cf_parameter`.
 	fn check_and_decode(
 		ccm: &CcmChannelMetadata,
 		egress_asset: Asset,
 	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
-		if ForeignChain::from(egress_asset) == ForeignChain::Solana {
-			let asset: SolAsset = egress_asset
-				.try_into()
-				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
+		match ForeignChain::from(egress_asset) {
+			ForeignChain::Solana => {
+				let asset: SolAsset = egress_asset.try_into().expect(
+					"Only Solana chain's asset will be checked. This conversion must succeed.",
+				);
 
-			// Check if the cf_parameter can be decoded
-			match VersionedSolanaCcmAdditionalData::decode(
-				&mut &ccm.ccm_additional_data.clone()[..],
-			)
-			.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?
-			{
-				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => {
-					// Calculate the length of the user's data to ensure the built CCM transaction
-					// will not exceed the maximum allowed length in Solana.
-					// data length = message length + #accounts * (bytes_per_account +
-					// bytes_per_reference);
-					//
-					// Accounts could be duplicated and then they would only take one reference byte
-					// but:
-					// - It doesn't make sense for additional_accounts to have duplicated accounts
-					//   since it'll all be in the same instruction anyway.
-					// - Accounts used by Chainflip (e.g. SYSTEM_PROGRAM or TOKEN_PROGRAM) are
-					//   already being passed to the receiver in the CPI so there's need to add them
-					//   to the list.
-					// - Chainflip specific accounts (agg_key, data_account) and nonce accounts are
-					//   the only accounts that are part of the transaction that the user won't have
-					//   access to. Those accounts are either blacklisted or should be irrelevant
-					//   for the user.
-					// Therefore we can assume that accounts are not duplicated when calculating the
-					// transaction length. If any account is in fact duplicated it will effectively
-					// reduce the allowed maximum length for the user's metadata.
-					let ccm_length = ccm.message.len() +
-						ccm_accounts.additional_accounts.len() *
-							(ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION +
-								ACCOUNT_KEY_LENGTH_IN_TRANSACTION);
-					if ccm_length >
-						match asset {
-							SolAsset::Sol => MAX_CCM_BYTES_SOL,
-							SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
-						} {
-						return Err(CcmValidityError::CcmIsTooLong)
-					}
+				// Check if the cf_parameter can be decoded
+				match VersionedSolanaCcmAdditionalData::decode(
+					&mut &ccm.ccm_additional_data.clone()[..],
+				)
+				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?
+				{
+					VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => {
+						// Calculate the length of the user's data to ensure the built CCM
+						// transaction will not exceed the maximum allowed length in Solana.
+						// data length = message length + #accounts * (bytes_per_account +
+						// bytes_per_reference);
+						//
+						// Accounts could be duplicated and then they would only take one reference
+						// byte but:
+						// - It doesn't make sense for additional_accounts to have duplicated
+						//   accounts since it'll all be in the same instruction anyway.
+						// - Accounts used by Chainflip (e.g. SYSTEM_PROGRAM or TOKEN_PROGRAM) are
+						//   already being passed to the receiver in the CPI so there's need to add
+						//   them to the list.
+						// - Chainflip specific accounts (agg_key, data_account) and nonce accounts
+						//   are the only accounts that are part of the transaction that the user
+						//   won't have access to. Those accounts are either blacklisted or should
+						//   be irrelevant for the user.
+						// Therefore we can assume that accounts are not duplicated when calculating
+						// the transaction length. If any account is in fact duplicated it
+						// will effectively reduce the allowed maximum length for the user's
+						// metadata.
+						let ccm_length = ccm.message.len() +
+							ccm_accounts.additional_accounts.len() *
+								(ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION +
+									ACCOUNT_KEY_LENGTH_IN_TRANSACTION);
+						if ccm_length >
+							match asset {
+								SolAsset::Sol => MAX_CCM_BYTES_SOL,
+								SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
+							} {
+							return Err(CcmValidityError::CcmIsTooLong)
+						}
 
-					Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(
-						ccm_accounts,
-					)))
+						Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(
+							ccm_accounts,
+						)))
+					},
+				}
+			},
+			ForeignChain::Assethub =>
+				<AssethubRuntimeCall as codec::Decode>::decode(&mut ccm.message.as_ref())
+					.map(|_| DecodedCcmAdditionalData::NotRequired)
+					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData),
+			_ =>
+				if !ccm.ccm_additional_data.is_empty() {
+					Err(CcmValidityError::RedundantDataSupplied)
+				} else {
+					Ok(DecodedCcmAdditionalData::NotRequired)
 				},
-			}
-		} else if !ccm.ccm_additional_data.is_empty() {
-			Err(CcmValidityError::RedundantDataSupplied)
-		} else {
-			Ok(DecodedCcmAdditionalData::NotRequired)
 		}
 	}
 }

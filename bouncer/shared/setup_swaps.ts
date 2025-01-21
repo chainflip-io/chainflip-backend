@@ -14,6 +14,9 @@ export const deposits = new Map<Asset, number>([
   ['Flip', 100000],
   ['Sol', 1000],
   ['SolUsdc', 1000000],
+  ['HubDot', 100000],
+  ['HubUsdc', 250000],
+  ['HubUsdt', 250000],
 ]);
 
 const price = new Map<Asset, number>([
@@ -27,6 +30,9 @@ const price = new Map<Asset, number>([
   ['Flip', 10],
   ['Sol', 100],
   ['SolUsdc', 1],
+  ['HubDot', 10],
+  ['HubUsdc', 1],
+  ['HubUsdt', 1],
 ]);
 
 export async function setupSwaps(): Promise<void> {
@@ -42,6 +48,9 @@ export async function setupSwaps(): Promise<void> {
     createLpPool('ArbUsdc', price.get('ArbUsdc')!),
     createLpPool('Sol', price.get('Sol')!),
     createLpPool('SolUsdc', price.get('SolUsdc')!),
+    createLpPool('HubDot', price.get('HubDot')!),
+    createLpPool('HubUsdc', price.get('HubUsdc')!),
+    createLpPool('HubUsdt', price.get('HubUsdt')!),
   ]);
 
   const lp1Deposits = Promise.all([
@@ -55,6 +64,9 @@ export async function setupSwaps(): Promise<void> {
     depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_1'),
     depositLiquidity('Sol', deposits.get('Sol')!, false, '//LP_1'),
     depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, '//LP_1'),
+    depositLiquidity('HubDot', deposits.get('HubDot')!, false, '//LP_1'),
+    depositLiquidity('HubUsdc', deposits.get('HubUsdc')!, false, '//LP_1'),
+    depositLiquidity('HubUsdt', deposits.get('HubUsdt')!, false, '//LP_1'),
   ]);
 
   const lpApiDeposits = Promise.all([
@@ -68,6 +80,9 @@ export async function setupSwaps(): Promise<void> {
     depositLiquidity('ArbUsdc', 1000, false, '//LP_API'),
     depositLiquidity('Sol', 500, false, '//LP_API'),
     depositLiquidity('SolUsdc', 1000, false, '//LP_API'),
+    depositLiquidity('HubDot', 2000, false, '//LP_API'),
+    depositLiquidity('HubUsdc', 1000, false, '//LP_API'),
+    depositLiquidity('HubUsdt', 1000, false, '//LP_API'),
   ]);
 
   await Promise.all([lp1Deposits, lpApiDeposits]);
@@ -82,6 +97,9 @@ export async function setupSwaps(): Promise<void> {
     rangeOrder('ArbUsdc', deposits.get('ArbUsdc')! * 0.9999),
     rangeOrder('Sol', deposits.get('Sol')! * 0.9999),
     rangeOrder('SolUsdc', deposits.get('SolUsdc')! * 0.9999),
+    rangeOrder('HubDot', deposits.get('HubDot')! * 0.9999),
+    rangeOrder('HubUsdc', deposits.get('HubUsdc')! * 0.9999),
+    rangeOrder('HubUsdt', deposits.get('HubUsdt')! * 0.9999),
   ]);
 
   console.log('Range orders placed');
