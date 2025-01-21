@@ -136,12 +136,18 @@ pub trait Rpc {
 	#[method(name = "register_affiliate", aliases = ["broker_registerAffiliate"])]
 	async fn register_affiliate(
 		&self,
-		affiliate_id: AccountId32,
-		short_id: Option<AffiliateShortId>,
-	) -> RpcResult<AffiliateShortId>;
+		short_id: AffiliateShortId,
+		withdrawal_address: AddressString,
+	) -> RpcResult<AccountId32>;
 
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
+
+	#[method(name = "affiliate_withdrawal_request", aliases = ["broker_affiliateWithdrawalRequest"])]
+	async fn affiliate_withdrawal_request(
+		&self,
+		affiliate_short_id: AffiliateShortId,
+	) -> RpcResult<()>;
 }
 
 pub struct RpcServerImpl {
@@ -296,10 +302,10 @@ impl RpcServer for RpcServerImpl {
 
 	async fn register_affiliate(
 		&self,
-		affiliate_id: AccountId32,
-		short_id: Option<AffiliateShortId>,
-	) -> RpcResult<AffiliateShortId> {
-		Ok(self.api.broker_api().register_affiliate(affiliate_id.clone(), short_id).await?)
+		short_id: AffiliateShortId,
+		withdrawal_address: AddressString,
+	) -> RpcResult<AccountId32> {
+		Ok(self.api.broker_api().register_affiliate(short_id, withdrawal_address).await?)
 	}
 
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
@@ -308,6 +314,14 @@ impl RpcServer for RpcServerImpl {
 			.raw_client()
 			.cf_get_affiliates(self.api.state_chain_client.account_id(), None)
 			.await?)
+	}
+
+	async fn affiliate_withdrawal_request(
+		&self,
+		affiliate_short_id: AffiliateShortId,
+	) -> RpcResult<()> {
+		self.api.broker_api().affiliate_withdrawal_request(affiliate_short_id).await?;
+		Ok(())
 	}
 }
 

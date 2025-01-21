@@ -38,7 +38,7 @@ fn to_affiliate_and_fees(
 			Ok(AffiliateAndFee {
 				affiliate: *mapping
 					.get(&beneficiary.account)
-					.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
+					.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegisteredForBroker)?,
 				fee: beneficiary
 					.bps
 					.try_into()

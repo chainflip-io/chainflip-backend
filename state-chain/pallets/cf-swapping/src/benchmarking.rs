@@ -181,21 +181,54 @@ mod benchmarks {
 
 		const IDX: u8 = 0;
 		let caller = OriginFor::<T>::signed(broker_id.clone());
-		let affiliate_id = frame_benchmarking::account::<T::AccountId>("affiliate", 0, 0);
+
+		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
 
 		#[block]
 		{
 			assert_ok!(Pallet::<T>::register_affiliate(
 				caller.clone(),
-				affiliate_id.clone(),
 				IDX.into(),
+				withdrawal_address.clone()
 			));
 		}
 
-		assert_eq!(
-			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX)),
-			Some(affiliate_id),
+		assert!(
+			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX)).is_some(),
 			"Affiliate must have been registered"
+		);
+	}
+
+	#[benchmark]
+	fn affiliate_withdrawal_request() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		const IDX: u8 = 0;
+		let caller = OriginFor::<T>::signed(broker_id.clone());
+		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+
+		assert_ok!(Pallet::<T>::register_affiliate(
+			caller.clone(),
+			IDX.into(),
+			withdrawal_address.clone()
+		));
+
+		let affiliate_account_id =
+			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX))
+				.expect("Affiliate must be registered!");
+
+		T::BalanceApi::credit_account(&affiliate_account_id, Asset::Usdc, 200);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::affiliate_withdrawal_request(caller, IDX.into()));
+		}
+
+		assert_eq!(
+			T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc),
+			0,
+			"Expect account balance to be 0 after distribution."
 		);
 	}
 

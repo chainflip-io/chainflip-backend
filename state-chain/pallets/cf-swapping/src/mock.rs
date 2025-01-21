@@ -149,6 +149,10 @@ impl WeightInfo for MockWeightInfo {
 	fn register_affiliate() -> Weight {
 		Weight::from_parts(100, 0)
 	}
+
+	fn affiliate_withdrawal_request() -> Weight {
+		Weight::from_parts(100, 0)
+	}
 }
 
 pub struct AlwaysValid;
