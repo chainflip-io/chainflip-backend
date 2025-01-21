@@ -210,8 +210,8 @@ impl IntoForeignChainAddress<Polkadot> for PolkadotAccountId {
 }
 
 impl IntoForeignChainAddress<Assethub> for PolkadotAccountId {
-	fn into_foreign_chain_address(address: PolkadotAccountId) -> ForeignChainAddress {
-		ForeignChainAddress::Hub(address)
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Hub(self)
 	}
 }
 
@@ -235,6 +235,7 @@ impl EncodedAddress {
 			EncodedAddress::Btc(inner) => &inner[..],
 			EncodedAddress::Arb(inner) => &inner[..],
 			EncodedAddress::Sol(inner) => &inner[..],
+			EncodedAddress::Hub(inner) => &inner[..],
 		}
 	}
 	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Result<Self, &'static str> {
@@ -285,6 +286,7 @@ impl EncodedAddress {
 			EncodedAddress::Btc(_) => ForeignChain::Bitcoin,
 			EncodedAddress::Arb(_) => ForeignChain::Arbitrum,
 			EncodedAddress::Sol(_) => ForeignChain::Solana,
+			EncodedAddress::Hub(_) => ForeignChain::Assethub,
 		}
 	}
 	pub fn into_vec(self) -> Vec<u8> {
@@ -294,6 +296,7 @@ impl EncodedAddress {
 			EncodedAddress::Sol(bytes) => bytes.to_vec(),
 			EncodedAddress::Dot(bytes) => bytes.to_vec(),
 			EncodedAddress::Btc(byte_vec) => byte_vec,
+			EncodedAddress::Hub(bytes) => bytes.to_vec(),
 		}
 	}
 
@@ -432,6 +435,7 @@ impl std::fmt::Display for ForeignChainAddressHumanreadable {
 			ForeignChainAddressHumanreadable::Dot(address) => write!(f, "{}", address),
 			ForeignChainAddressHumanreadable::Btc(address) => write!(f, "{}", address),
 			ForeignChainAddressHumanreadable::Sol(address) => write!(f, "{}", address),
+			ForeignChainAddressHumanreadable::Hub(address) => write!(f, "{}", address),
 		}
 	}
 }

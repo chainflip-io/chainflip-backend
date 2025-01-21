@@ -1,9 +1,6 @@
 use crate::{
 	hub::AssethubRuntimeCall,
-	sol::{
-		SolAsset, SolCcmAccounts, SolPubkey, CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL,
-		MAX_CCM_BYTES_USDC,
-	},
+	sol::{SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC},
 	CcmChannelMetadata,
 };
 use cf_primitives::{Asset, ForeignChain};

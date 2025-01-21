@@ -76,7 +76,6 @@ enum DepositDetails {
 	Ethereum { tx_hashes: Vec<H256> },
 	Polkadot { extrinsic_index: PolkadotExtrinsicIndex },
 	Arbitrum { tx_hashes: Vec<H256> },
-	Assethub { extrinsic_index: PolkadotExtrinsicIndex },
 }
 
 struct BroadcastDetails<I: cf_chains::instances::ChainInstanceAlias + Chain + 'static>
@@ -206,6 +205,7 @@ impl IntoDepositDetailsAnyChain for u32 {
 		Some(DepositDetails::Polkadot { extrinsic_index: self })
 	}
 }
+//todo: impl IntoDepositDetailsAnyChain for Assethub
 impl IntoDepositDetailsAnyChain for Vec<H256> {
 	fn into_any_chain(self) -> Option<DepositDetails> {
 		Some(DepositDetails::Arbitrum { tx_hashes: self })
@@ -346,17 +346,15 @@ impl BroadcastIntoWitnessInformation for BroadcastDetails<Polkadot> {
 	}
 }
 
-impl From<DepositInfo<Assethub>> for WitnessInformation {
-	fn from((value, height, _): DepositInfo<Assethub>) -> Self {
-		Self::Deposit {
-			deposit_chain_block_height: height as u64,
-			deposit_address: hex_encode_bytes(value.deposit_address.aliased_ref()),
-			amount: value.amount.into(),
-			asset: value.asset.into(),
-			deposit_details: Some(DepositDetails::Assethub {
-				extrinsic_index: value.deposit_details,
-			}),
-		}
+impl BroadcastIntoWitnessInformation for BroadcastDetails<Assethub> {
+	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
+		Ok(WitnessInformation::Broadcast {
+			broadcast_id: self.broadcast_id,
+			tx_out_id: TransactionId::Assethub {
+				signature: DotSignature(*self.tx_out_id.aliased_ref()),
+			},
+			tx_ref: TransactionRef::Assethub { transaction_id: self.tx_ref },
+		})
 	}
 }
 
@@ -507,6 +505,10 @@ where
 			deposit_witnesses,
 			block_height,
 		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
+		AssethubIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
 		EthereumIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
 			save_vault_deposit_witness(
 				store,
@@ -552,12 +554,16 @@ where
 				chainflip_network,
 			)
 			.await?,
-		AssethubIngressEgress(IngressEgressCall::process_deposits {
-			deposit_witnesses,
-			block_height,
-		}) =>
-			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
-				.await?,
+		AssethubIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
+			save_vault_deposit_witness(
+				store,
+				*deposit,
+				block_height,
+				state_chain_client,
+				chainflip_network,
+			)
+			.await?,
+
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,

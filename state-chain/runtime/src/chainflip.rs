@@ -59,10 +59,9 @@ use cf_chains::{
 		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
 	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParameters,
-	ChannelRefundParametersDecoded, ForeignChain, ReplayProtectionProvider,
-	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
-	TransactionBuilder,
+	ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
+	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
+	Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
