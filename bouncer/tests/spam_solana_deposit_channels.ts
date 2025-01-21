@@ -12,7 +12,7 @@ export const spamSolanaDepositChannels = new ExecutableTest(
   1300,
 );
 
-async function sendBatchOfSwaps(batchSize: number): Promise<string[]> {
+async function requestBatchOfSwaps(batchSize: number): Promise<string[]> {
   const inputAsset = 'Sol';
   const destAsset = 'Flip';
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
@@ -41,13 +41,13 @@ async function sendBatchOfSwaps(batchSize: number): Promise<string[]> {
 // Opens 1000 deposit channels
 // Execute: ./commands/run_test.ts spam_solana_deposit_channels.ts
 async function main() {
-  const batches = 100;
-  const batchSize = 5;
+  const batches = 200;
+  const batchSize = 10;
   const solAmount = '0.001';
 
   for (let i = 1; i <= batches; i++) {
     console.log(`Opening batch ${i} of ${batches}`);
-    const depositAddresses = await sendBatchOfSwaps(batchSize);
+    const depositAddresses = await requestBatchOfSwaps(batchSize);
     console.log(`Sent funds to ${depositAddresses.length} deposit channels`);
     for (const depositAddress of depositAddresses) {
       await sendSol(depositAddress, solAmount);
