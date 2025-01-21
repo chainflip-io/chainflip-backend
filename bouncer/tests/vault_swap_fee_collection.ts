@@ -1,7 +1,7 @@
 import assert from 'assert';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
-import { createStateChainKeypair, defaultAssetAmounts } from '../shared/utils';
+import { createStateChainKeypair, defaultAssetAmounts, newAddress } from '../shared/utils';
 import { getEarnedBrokerFees } from './broker_fee_collection';
 import { openPrivateBtcChannel, registerAffiliate } from '../shared/btc_vault_swap';
 import { setupBrokerAccount } from '../shared/setup_account';
@@ -34,7 +34,9 @@ async function testFeeCollection(inputAsset: Asset) {
   }
   const affiliateShotId = 0;
   testVaultSwapFeeCollection.debugLog('Registering affiliate');
-  await registerAffiliate(brokerUri, affiliateUri, affiliateShotId);
+  let eth_withdrawal_address = await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND');
+  console.log('Eth withdrawal address:', eth_withdrawal_address);
+  await registerAffiliate(brokerUri, affiliateShotId, eth_withdrawal_address);
 
   // Setup
   const feeAsset = Assets.Usdc;
