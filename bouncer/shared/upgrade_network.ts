@@ -97,6 +97,8 @@ async function startDepositMonitor(localnetInitPath: string) {
     DOCKER_COMPOSE_CMD: 'docker compose',
     additional_docker_compose_up_args: '--quiet-pull',
   });
+
+  await sleep(10000);
 }
 
 async function compatibleUpgrade(
