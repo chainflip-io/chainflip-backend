@@ -288,7 +288,7 @@ where
 				//  - taking the consensus amount from either:
 				//     - the unsynchronized state map
 				//     - the election state
-				//    where we use the one which refers to a higher block number.
+				//    where we use the one which is higher.
 				let new_properties = channels
 					.iter()
 					.map(|(account, (channel_details, _))| {
@@ -301,13 +301,12 @@ where
 							.copied()
 							.unwrap_or_else(|| properties.get(account).unwrap().1);
 
-						let last_consensus_amount = if ingressed_amount.block_number >=
-							pending_ingressed_amount.block_number
-						{
-							ingressed_amount
-						} else {
-							pending_ingressed_amount
-						};
+						let last_consensus_amount =
+							if ingressed_amount.amount >= pending_ingressed_amount.amount {
+								ingressed_amount
+							} else {
+								pending_ingressed_amount
+							};
 
 						(account.clone(), (*channel_details, last_consensus_amount))
 					})
