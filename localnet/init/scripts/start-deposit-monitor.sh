@@ -10,8 +10,8 @@ if [[ $CI == true ]]; then
 else
   export CFDM_BROKER_API_URL='ws://host.docker.internal:10997'
 fi
-$DOCKER_COMPOSE_CMD -f $LOCALNET_INIT_DIR/../docker-compose.yml -p "chainflip-localnet" up $DEPOSIT_MONITOR_CONTAINER $additional_docker_compose_up_args -d \
-  > /tmp/chainflip/chainflip-deposit-monitor.$DATETIME.log 2>&1
+$DOCKER_COMPOSE_CMD -f $LOCALNET_INIT_DIR/../docker-compose.yml -p "chainflip-localnet" up $DEPOSIT_MONITOR_CONTAINER $additional_docker_compose_up_args -d 
+# \ > /tmp/chainflip/chainflip-deposit-monitor.$DATETIME.log 2>&1
 
 while true; do
   echo "🩺 Checking deposit-monitor's health ..."
