@@ -4,16 +4,13 @@ export const runningTests = new Set<ExecutableTest>();
 
 // Look at the call stack and find a known test file, matching against the list of all running test. Returns the test and the location of the call.
 function getTestFromStack(): { test: ExecutableTest; location: string } | undefined {
-  const originalFunc = Error.prepareStackTrace;
-
   try {
     const fakeError = new Error();
 
     if (fakeError.stack !== undefined) {
       const stack = fakeError.stack.split('\n');
       for (let i = 1; i < stack.length; i++) {
-        const fileName = stack[i].split(':')[0];
-        const lineNumber = stack[i].split(':')[1];
+        const [fileName, lineNumber] = stack[i].split(':');
         for (const test of runningTests) {
           if (fileName?.includes(test.fileName)) {
             return { test, location: `${test.filePath}:${lineNumber}` };
@@ -22,11 +19,9 @@ function getTestFromStack(): { test: ExecutableTest; location: string } | undefi
       }
     }
   } catch (e) {
-    Error.prepareStackTrace = originalFunc;
     console.error(e);
   }
 
-  Error.prepareStackTrace = originalFunc;
   return undefined;
 }
 
