@@ -11,7 +11,6 @@ use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cmp::Ordering;
 use frame_support::{
-	ensure,
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	sp_runtime::traits::Zero,
 	storage::bounded_btree_map::BoundedBTreeMap,
@@ -94,63 +93,6 @@ where
 			[(channel, channel_details)].into_iter().collect(),
 			Default::default(),
 		)?;
-
-		Ok(())
-	}
-
-	/// Refreshes the election for the given identifier with updated properties if `state`
-	/// is different from the election properties.
-	///
-	/// NOTE: This assumes that the accounts in the properties are a superset of the accounts in the
-	/// state. This holds because whenever we  
-	///
-	/// NOTE: This does not check whether the election has consensus or not, because if the state
-	/// does not reflect the properties this means that we did have consensus at some point,
-	/// and anyways would like to recreate from that state.
-	pub fn recreate_election_if_state_changed<
-		ElectionAccess: ElectionWriteAccess<ElectoralSystem = Self>,
-	>(
-		election_identifier: ElectionIdentifier<<Self as ElectoralSystem>::ElectionIdentifierExtra>,
-		election_access: &mut ElectionAccess,
-		state: <Self as ElectoralSystem>::ElectionState,
-	) -> Result<(), CorruptStorageError> {
-		let properties = election_access.properties()?;
-
-		ensure!(
-			state.keys().all(|account| properties.contains_key(account)),
-			CorruptStorageError::new()
-		);
-
-		// if the keys in state and channels don't match up, or if the balances don't match up
-		// then we refresh the election
-		if state.iter().any(|(account, state_balance)| match properties.get(account) {
-			Some((_, property_balance)) => state_balance.amount != property_balance.amount,
-			None => true,
-		}) || properties.keys().any(|account| !state.contains_key(account))
-		{
-			// compute new properties by taking account and ingressed amount from the state (which
-			// should be more up-to-date) and extracting the corresponding channel details from
-			// the properties.
-			let new_properties = state
-				.into_iter()
-				.map(|(account, ingressed_amount)| {
-					properties.get(&account).map(move |(channel_details, _)| {
-						(account, (*channel_details, ingressed_amount))
-					})
-				})
-				.collect::<Option<BTreeMap<_, _>>>()
-				.ok_or(CorruptStorageError::new())?;
-
-			election_access.refresh(
-				// This value is meaningless. We increment as it is required to use a new
-				// higher value to refresh the election.
-				election_identifier
-					.extra()
-					.checked_add(1)
-					.ok_or_else(CorruptStorageError::new)?,
-				new_properties,
-			)?;
-		}
 
 		Ok(())
 	}
@@ -325,21 +267,65 @@ where
 				}
 			}
 
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
-
 			for closed_channel in closed_channels {
 				pending_ingress_totals.remove(&closed_channel);
 				channels.remove(&closed_channel);
 			}
 
 			if channels.is_empty() {
+				let election_access = electoral_access.election_mut(election_identifier)?;
 				election_access.delete();
 			} else {
-				Self::recreate_election_if_state_changed(
-					election_identifier,
-					&mut election_access,
-					pending_ingress_totals,
-				)?;
+				let properties = {
+					let mut election_access = electoral_access.election_mut(election_identifier)?;
+					election_access.set_state(pending_ingress_totals.clone())?;
+					election_access.properties()?
+				};
+
+				// calculate new properties by:
+				//  - taking accounts and channel_details from `channels`, keeping the preexisting
+				//    logic ƒor closing channels
+				//  - taking the consensus amount from either:
+				//     - the unsynchronized state map
+				//     - the election state
+				//    where we use the one which refers to a higher block number.
+				let new_properties = channels
+					.iter()
+					.map(|(account, (channel_details, _))| {
+						let ingressed_amount = electoral_access
+							.unsynchronised_state_map(&(account.clone(), channel_details.asset))
+							.unwrap()
+							.unwrap_or_else(|| properties.get(account).unwrap().1);
+						let pending_ingressed_amount = pending_ingress_totals
+							.get(account)
+							.copied()
+							.unwrap_or_else(|| properties.get(account).unwrap().1);
+
+						let last_consensus_amount = if ingressed_amount.block_number >=
+							pending_ingressed_amount.block_number
+						{
+							ingressed_amount
+						} else {
+							pending_ingressed_amount
+						};
+
+						(account.clone(), (*channel_details, last_consensus_amount))
+					})
+					.collect::<BTreeMap<_, _>>();
+
+				// recreate this election if the properties changed
+				if new_properties != properties {
+					log::info!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
+
+					electoral_access.new_election(
+						Default::default(),
+						new_properties,
+						pending_ingress_totals,
+					)?;
+					electoral_access.election_mut(election_identifier)?.delete();
+				} else {
+					log::info!("recreate election: keeping old because properties didn't change: {properties:?}");
+				}
 			}
 		}
 
