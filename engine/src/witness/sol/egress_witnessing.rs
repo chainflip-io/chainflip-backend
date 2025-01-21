@@ -15,7 +15,7 @@ pub async fn get_finalized_fee_and_success_status(
 	signature: SolSignature,
 ) -> Result<(u64, bool)> {
 	match sol_client
-		.get_signature_statuses(&[signature], false)
+		.get_signature_statuses(&[signature], true)
 		.await
 		.value
 		.iter()
