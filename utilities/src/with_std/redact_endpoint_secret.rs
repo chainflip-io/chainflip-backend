@@ -1,3 +1,4 @@
+use core::net::IpAddr;
 use regex::Regex;
 use serde::Deserialize;
 use std::fmt::{Debug, Display};
@@ -61,7 +62,7 @@ pub fn redact_secret_endpoint(endpoint: &str) -> String {
 		r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 	let re = Regex::new(&format!("({})|({})", REGEX_ETH_SECRET, REGEX_BTC_SECRET)).unwrap();
 	if re.is_match(endpoint) {
-		// A 32 character hex string was found, redact it
+		// A secret was found, redact it
 		let mut endpoint_redacted = endpoint.to_string();
 		// Just redact the first match so we do not get stuck in a loop if there is a mistake in the
 		// regex
@@ -76,17 +77,24 @@ pub fn redact_secret_endpoint(endpoint: &str) -> String {
 		}
 		endpoint_redacted
 	} else {
-		// No secret was found, so just redact almost all of the url
+		// No secret was found
 		if let Ok(url) = Url::parse(endpoint) {
-			format!(
-				"{}****",
-				endpoint
-					.split_at(usize::min(
-						url.scheme().len() + SCHEMA_PADDING_LEN + MAX_SECRET_CHARACTERS_REVEALED,
-						endpoint.len()
-					))
-					.0
-			)
+			if is_local_url(&url) {
+				// Don't redact anything if it is a local address
+				endpoint.to_string()
+			} else {
+				// Redact almost all of the url
+				format!(
+					"{}****",
+					endpoint
+						.split_at(usize::min(
+							url.scheme().len() +
+								SCHEMA_PADDING_LEN + MAX_SECRET_CHARACTERS_REVEALED,
+							endpoint.len()
+						))
+						.0
+				)
+			}
 		} else {
 			// Not a valid url, so just redact most of the string
 			format!(
@@ -94,6 +102,18 @@ pub fn redact_secret_endpoint(endpoint: &str) -> String {
 				endpoint.split_at(usize::min(MAX_SECRET_CHARACTERS_REVEALED, endpoint.len())).0
 			)
 		}
+	}
+}
+
+fn is_local_url(url: &Url) -> bool {
+	match url.host_str() {
+		Some("localhost") => true,
+		Some(host) => match host.parse::<IpAddr>() {
+			Ok(IpAddr::V4(ipv4)) => ipv4.is_loopback() || ipv4.is_private(),
+			Ok(IpAddr::V6(ipv6)) => ipv6.is_loopback() || ipv6.is_unique_local(),
+			_ => false,
+		},
+		None => false,
 	}
 }
 
@@ -161,6 +181,32 @@ mod tests {
 				)
 			),
 			"btc.getblock.io/de7****/mainnet"
+		);
+
+		assert_eq!(
+			format!(
+				"{}",
+				SecretUrl("wss://192.168.0.123/ws/v3/d52c362116b640b98a166d08d3170a42".to_string())
+			),
+			"wss://192.168.0.123/ws/v3/d52****"
+		);
+
+		// Local addresses without secrets should not be redacted
+		assert_eq!(
+			format!("{}", SecretUrl("ws://10.0.0.17".to_string())),
+			"ws://10.0.0.17".to_string()
+		);
+		assert_eq!(
+			format!("{}", SecretUrl("wss://127.0.0.1".to_string())),
+			"wss://127.0.0.1".to_string()
+		);
+		assert_eq!(
+			format!("{}", SecretUrl("https://192.168.0.123".to_string())),
+			"https://192.168.0.123".to_string()
+		);
+		assert_eq!(
+			format!("{}", SecretUrl("http://localhost".to_string())),
+			"http://localhost".to_string()
 		);
 	}
 }
