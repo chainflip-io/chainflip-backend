@@ -12,19 +12,14 @@ export const spamSolanaDepositChannels = new ExecutableTest(
   1300,
 );
 
-// Opens 1000 deposit channels
-// Execute: ./commands/run_test.ts spam_solana_deposit_channels.ts
-async function main() {
-  const amountOfDepositSwapsToOpen = 1000;
+async function sendBatchOfSwaps(batchSize: number): Promise<string[]> {
   const inputAsset = 'Sol';
   const destAsset = 'Flip';
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
-  const solAmount = '0.001';
+  const swapRequests = [];
 
-  for (let i = 0; i < amountOfDepositSwapsToOpen; i++) {
-    console.log(`Opening deposit channel ${i + 1} of ${amountOfDepositSwapsToOpen}`);
-    // Wait for 10 seconds to make sure the previous deposit channel is closed
-    const swapRequest = await requestNewSwap(
+  for (let i = 0; i < batchSize; i++) {
+    const swapRequest = requestNewSwap(
       inputAsset,
       destAsset,
       destAddress,
@@ -34,9 +29,29 @@ async function main() {
       false,
       0,
     );
-    console.log(`Swap request: ${JSON.stringify(swapRequest)}`);
-    await sendSol(swapRequest.depositAddress, solAmount);
-    console.log(`Sent ${solAmount} Sol to ${swapRequest.depositAddress}`);
+
+    swapRequests.push(swapRequest);
   }
-  console.log(`Opened ${amountOfDepositSwapsToOpen} deposit channels`);
+
+  const swapParameters = await Promise.all(swapRequests);
+
+  return swapParameters.map((val) => val.depositAddress);
+}
+
+// Opens 1000 deposit channels
+// Execute: ./commands/run_test.ts spam_solana_deposit_channels.ts
+async function main() {
+  const batches = 100;
+  const batchSize = 5;
+  const solAmount = '0.001';
+
+  for (let i = 1; i <= batches; i++) {
+    console.log(`Opening batch ${i} of ${batches}`);
+    const depositAddresses = await sendBatchOfSwaps(batchSize);
+    console.log(`Sent funds to ${depositAddresses.length} deposit channels`);
+    for (const depositAddress of depositAddresses) {
+      await sendSol(depositAddress, solAmount);
+      console.log(`Sent ${solAmount} Sol to ${depositAddress}`);
+    }
+  }
 }
