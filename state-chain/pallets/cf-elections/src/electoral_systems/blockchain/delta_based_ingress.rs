@@ -53,6 +53,7 @@ where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
+	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	pub fn open_channel<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
@@ -100,6 +101,7 @@ where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
+	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	type ValidatorId = ValidatorId;
@@ -155,7 +157,10 @@ where
 			<Self::Vote as VoteStorage>::Vote,
 		),
 	) -> bool {
-		current_partial_vote != proposed_partial_vote
+		proposed_partial_vote.into_iter().any(|(account, new_balance)| {
+			new_balance.amount !=
+				current_partial_vote.get(&account).map(|total| total.amount).unwrap_or_default()
+		})
 	}
 
 	fn generate_vote_properties(
