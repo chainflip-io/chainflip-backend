@@ -204,5 +204,9 @@ mod tests {
 			format!("{}", SecretUrl("https://192.168.0.123".to_string())),
 			"https://192.168.0.123".to_string()
 		);
+		assert_eq!(
+			format!("{}", SecretUrl("http://localhost".to_string())),
+			"http://localhost".to_string()
+		);
 	}
 }
