@@ -60,8 +60,7 @@ WORKDIR /
 COPY rust-toolchain.toml .
 RUN rustup update \
     && cargo install cargo-deb \
-    # Temporary solution pending resolution of https://github.com/rustsec/rustsec/issues/1296
-    && cargo install cargo-audit --locked --force --git https://github.com/rustsec/rustsec.git \
+    && cargo install cargo-audit --locked \
     && rm rust-toolchain.toml
 
 RUN rustc --version && \
