@@ -1,5 +1,4 @@
 mod egress_witnessing;
-mod fee_tracking;
 mod nonce_witnessing;
 mod program_swaps_witnessing;
 mod sol_deposits;
@@ -28,9 +27,9 @@ use pallet_cf_elections::{
 };
 use state_chain_runtime::{
 	chainflip::solana_elections::{
-		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystemRunner,
-		SolanaFeeTracking, SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking,
-		SolanaVaultSwapTracking, TransactionSuccessDetails,
+		SolanaBlockHeightTracking, SolanaChainTrackingProvider, SolanaEgressWitnessing,
+		SolanaElectoralSystemRunner, SolanaFeeTracking, SolanaIngressTracking, SolanaLiveness,
+		SolanaNonceTracking, SolanaVaultSwapTracking, TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
@@ -64,13 +63,10 @@ impl VoterApi<SolanaBlockHeightTracking> for SolanaBlockHeightTrackingVoter {
 	}
 }
 
+// This will be removed soon, but we have to delete the electoral system, which requires a
+// migration. So we're leaving a dummy implementation here for now. PRO-1960
 #[derive(Clone)]
-struct SolanaFeeTrackingVoter {
-	client: SolRetryRpcClient,
-}
-
-// TODO: decide on a reasonable value for this.
-const MIN_PRIORITIZATION_FEE: u64 = 0;
+struct SolanaFeeTrackingVoter;
 
 #[async_trait::async_trait]
 impl VoterApi<SolanaFeeTracking> for SolanaFeeTrackingVoter {
@@ -80,9 +76,10 @@ impl VoterApi<SolanaFeeTracking> for SolanaFeeTrackingVoter {
 		_properties: <SolanaFeeTracking as ElectoralSystem>::ElectionProperties,
 	) -> Result<<<SolanaFeeTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>
 	{
-		Ok(fee_tracking::get_median_prioritization_fee(&self.client)
-			.await
-			.unwrap_or(MIN_PRIORITIZATION_FEE))
+		// Note, this won't actually be submitted, because no elections will be created (they have
+		// been disabled inside the UnsafeMedian electoral system) this is just to provide
+		// something so we compile.
+		Ok(SolanaChainTrackingProvider::priority_fee())
 	}
 }
 
@@ -251,7 +248,7 @@ where
 					state_chain_client,
 					CompositeVoter::<SolanaElectoralSystemRunner, _>::new((
 						SolanaBlockHeightTrackingVoter { client: client.clone() },
-						SolanaFeeTrackingVoter { client: client.clone() },
+						SolanaFeeTrackingVoter,
 						SolanaIngressTrackingVoter { client: client.clone() },
 						SolanaNonceTrackingVoter { client: client.clone() },
 						SolanaEgressWitnessingVoter { client: client.clone() },

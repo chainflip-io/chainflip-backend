@@ -566,7 +566,7 @@ impl ChainEnvironment<CurrentOnChainKey, SolAddress> for SolEnvironment {
 
 impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	fn lookup(_s: ComputePrice) -> Option<u64> {
-		SolanaChainTrackingProvider::priority_fee()
+		Some(SolanaChainTrackingProvider::priority_fee())
 	}
 }
 
