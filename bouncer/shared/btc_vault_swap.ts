@@ -118,7 +118,7 @@ export async function registerAffiliate(
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
 
-  const registeredEvent = observeEvent('swapping:AffiliateRegistrationUpdated', {
+  const registeredEvent = observeEvent('swapping:AffiliateRegistration', {
     test: (event) =>
       event.data.brokerId === broker.address &&
       Number(event.data.affiliateShortId) === affiliateShortId,
