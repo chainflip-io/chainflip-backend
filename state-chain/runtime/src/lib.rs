@@ -59,6 +59,7 @@ use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
 };
+use cf_utilities::bs58_array;
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
 use frame_support::{derive_impl, instances::*};
@@ -1283,6 +1284,121 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
+// v-- START: DO NOT MERGE TO MAIN --v //
+use cf_primitives::chains::assets::sol::Asset as SolAsset;
+use cf_traits::DepositApi;
+use sp_runtime::AccountId32;
+use sp_std::collections::btree_set::BTreeSet;
+
+pub struct IngressMigration;
+
+const CHANNEL_ADDRESS: SolAddress =
+	SolAddress(bs58_array("9rwJYe6GpwpRDjNKCoxxwRwXhtTJa7Pecqo375CmeHqZ"));
+const CHANNEL_ACCOUNT: [u8; 32] =
+	hex_literal::hex!("a846a1d39894d3fdb63ec07ef9aed03e2632f508480fbeb047e902371250f46c");
+const CHANNEL_ID: u64 = 14716;
+
+pub fn should_run() -> bool {
+	cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() ==
+		cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN &&
+		!pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::contains_key(
+			CHANNEL_ADDRESS,
+		)
+}
+
+pub fn reopen<T: pallet_cf_ingress_egress::Config<I, AccountId = AccountId32>, I: 'static>(
+	channel_id: u64,
+	asset: <T::TargetChain as cf_chains::Chain>::ChainAsset,
+) -> Result<(), DispatchError> {
+	let channel =
+		cf_chains::DepositChannel::<T::TargetChain>::generate_new::<T::AddressDerivation>(
+			channel_id, asset,
+		)
+		.map_err(|_| DispatchError::Other("Failed to generate new deposit channel"))?;
+	pallet_cf_ingress_egress::DepositChannelPool::<T, I>::insert(
+		channel.channel_id,
+		channel.clone(),
+	);
+
+	let (channel_id, address, ..) =
+		pallet_cf_ingress_egress::Pallet::<T, I>::request_liquidity_deposit_address(
+			AccountId32::new(CHANNEL_ACCOUNT),
+			asset,
+			Default::default(),
+			cf_chains::ForeignChainAddress::Sol(SolAddress(bs58_array(
+				"Hqn5iCLXYm2pP2iqzVAsvsNAFw1kuvEGXxG3JAqwfsEq",
+			))),
+		)?;
+
+	frame_support::ensure!(channel_id == channel.channel_id, "Channel IDs don't match");
+	frame_support::ensure!(
+		<<T::TargetChain as cf_chains::Chain>::ChainAccount>::try_from(address)
+			.map_err(|_| "Failed to convert address")? ==
+			channel.address,
+		"Addresses don't match"
+	);
+
+	Ok(())
+}
+
+impl frame_support::traits::OnRuntimeUpgrade for IngressMigration {
+	fn on_runtime_upgrade() -> Weight {
+		if should_run() {
+			let previous_safe_mode =
+				pallet_cf_environment::RuntimeSafeMode::<Runtime>::mutate(|safe_mode| {
+					core::mem::replace(&mut safe_mode.ingress_egress_solana.deposits_enabled, true)
+				});
+			let _ = reopen::<Runtime, SolanaInstance>(CHANNEL_ID, SolAsset::Sol).map_err(|e| {
+				log::warn!("⛔️ Failed to reopen channel: {:?}", e);
+			});
+			let _ = pallet_cf_environment::RuntimeSafeMode::<Runtime>::mutate(|safe_mode| {
+				core::mem::replace(
+					&mut safe_mode.ingress_egress_solana.deposits_enabled,
+					previous_safe_mode,
+				)
+			});
+		}
+		Weight::zero()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		let open_channels_pre_upgrade =
+			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
+				.map(|(addr, details)| (addr.0, details.deposit_channel.channel_id))
+				.collect::<BTreeSet<_>>();
+		Ok((
+			should_run(),
+			open_channels_pre_upgrade,
+			pallet_cf_environment::RuntimeSafeMode::<Runtime>::get(),
+		)
+			.encode())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let (should_have_run, open_channels_pre_upgrade, safe_mode) =
+			<(bool, BTreeSet<([u8; 32], u64)>, RuntimeSafeMode)>::decode(&mut &state[..])
+				.map_err(|_| "Failed to decode pre-upgrade state")?;
+		assert_eq!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::get(), safe_mode);
+		let open_channels_post_upgrade =
+			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
+				.map(|(addr, details)| (addr.0, details.deposit_channel.channel_id))
+				.collect::<BTreeSet<_>>();
+		let diff = open_channels_post_upgrade
+			.difference(&open_channels_pre_upgrade)
+			.collect::<Vec<_>>();
+		if should_have_run {
+			assert!(diff.len() == 1);
+			assert_eq!(diff[0].clone(), (CHANNEL_ADDRESS.0, CHANNEL_ID));
+		} else {
+			assert!(diff.is_empty());
+		}
+		Ok(())
+	}
+}
+// ^-- END: DO NOT MERGE TO MAIN --^ //
+
 type MigrationsForV1_7 = (
 	// Only the Solana Transaction type has changed
 	VersionedMigration<
@@ -1310,6 +1426,8 @@ type MigrationsForV1_7 = (
 		1,
 	>,
 	VersionedMigration<SolanaElections, chainflip::solana_elections::old::Migration, 1, 2>,
+	// DO NOT MERGE TO MAIN:
+	IngressMigration,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
