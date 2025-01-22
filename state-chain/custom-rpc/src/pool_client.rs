@@ -1,11 +1,11 @@
-use crate::{call_error, internal_error, CfApiError, RpcResult, StorageQueryApi};
+use crate::{internal_error, CfApiError, RpcResult, StorageQueryApi};
 use anyhow::anyhow;
 use cf_node_clients::{
 	error_decoder::ErrorDecoder, signer::PairSigner, ExtrinsicDetails, WaitFor, WaitForResult,
 };
 use codec::{Decode, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
-use futures::{StreamExt, TryFutureExt};
+use futures::StreamExt;
 use jsonrpsee::tokio::sync::RwLock;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
@@ -166,6 +166,13 @@ where
 				block_hash,
 			)?;
 
+		//let block_runtime_version = self.client.runtime_version_at(block_hash)?;
+
+		// let runtime_version = StorageQueryApi::new(&self.client)
+		// 	.get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>, _>(
+		// 		block_hash,
+		// 	)?;
+
 		let extrinsic_events = block_events
 			.iter()
 			.filter_map(|event_record| match event_record.as_ref() {
@@ -202,12 +209,60 @@ where
 			})
 	}
 
+	async fn handle_transaction_pool_error(
+		&self,
+		pool_error: sc_transaction_pool::error::Error,
+	) -> RpcResult<()> {
+		match pool_error {
+			sc_transaction_pool::error::Error::Pool(
+				sc_transaction_pool_api::error::Error::TooLowPriority { .. },
+			) => {
+				// This occurs when a transaction with the same nonce is in the transaction pool
+				// and the priority is <= priority of that existing tx
+				log::warn!(
+					"TooLowPriority error. More likely occurs when a transaction with the same none \
+					 is in the transaction pool. Resetting the pool_client managed nonce and resubmitting ..."
+				);
+				self.clear_nonce().await;
+			},
+			sc_transaction_pool::error::Error::Pool(
+				sc_transaction_pool_api::error::Error::InvalidTransaction(
+					sp_runtime::transaction_validity::InvalidTransaction::Stale,
+				),
+			) => {
+				// This occurs when the nonce has already been *consumed* i.e a
+				// transaction with that nonce is in a block
+				log::warn!(
+					"InvalidTransaction::Stale error, more likely none too low. Resetting \
+					 the pool_client managed nonce and resubmitting..."
+				);
+				self.clear_nonce().await;
+			},
+			sc_transaction_pool::error::Error::Pool(
+				sc_transaction_pool_api::error::Error::InvalidTransaction(
+					sp_runtime::transaction_validity::InvalidTransaction::BadProof,
+				),
+			) => {
+				// This occurs when the extra details used to sign the extrinsic such as the
+				// runtimeVersion are different from the verification side
+				log::warn!(
+					"InvalidTransaction::BadProof error, more likely due to RuntimeVersion mismatch. \
+					 Resubmitting with the new runtime_version ..."
+				);
+			},
+			_ => {
+				return Err(pool_error.into());
+			},
+		}
+		Ok(())
+	}
+
 	/// Uses the `BlockBuilder` trait `apply_extrinsic` function to dry run the extrinsic
 	/// This is the same function used by Polkadot System api rpc call `system_dryRun`.
 	/// Meant to be used to quickly test if an extrinsic would result in a failure. Note that this
-	/// always uses the current account nonce at the provided `block_hash`.
-	fn dry_run_extrinsic(&self, call: RuntimeCall, at: Option<Hash>) -> RpcResult<()> {
-		let at_block = at.unwrap_or_else(|| self.client.info().best_hash);
+	/// always uses the current account nonce at the best block.
+	fn dry_run_extrinsic(&self, call: RuntimeCall) -> RpcResult<()> {
+		let best_block = self.client.info().best_hash;
 
 		// For apply_extrinsic call, always uses the current stored account nonce.
 		// Using the signed_pool_client managed nonce, might result in apply_extrinsic Future error
@@ -215,11 +270,11 @@ where
 		let account_nonce = self
 			.client
 			.runtime_api()
-			.account_nonce(at_block, self.pair_signer.account_id.clone())?;
+			.account_nonce(best_block, self.pair_signer.account_id.clone())?;
 
 		let extrinsic = self.create_signed_extrinsic(call, account_nonce)?;
 
-		match self.client.runtime_api().apply_extrinsic(at_block, extrinsic)? {
+		match self.client.runtime_api().apply_extrinsic(best_block, extrinsic)? {
 			Ok(dispatch_result) => match dispatch_result {
 				Ok(_) => Ok(()),
 				Err(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
@@ -242,41 +297,36 @@ where
 		call: RuntimeCall,
 		wait_for: WaitFor,
 		dry_run: bool,
-		at: Option<Hash>,
 	) -> RpcResult<WaitForResult> {
 		match wait_for {
 			WaitFor::NoWait =>
-				Ok(WaitForResult::TransactionHash(self.submit_one(call, dry_run, at).await?)),
+				Ok(WaitForResult::TransactionHash(self.submit_one(call, dry_run).await?)),
 			WaitFor::InBlock =>
-				Ok(WaitForResult::Details(self.submit_watch(call, false, dry_run, at).await?)),
+				Ok(WaitForResult::Details(self.submit_watch(call, false, dry_run).await?)),
 			WaitFor::Finalized =>
-				Ok(WaitForResult::Details(self.submit_watch(call, true, dry_run, at).await?)),
+				Ok(WaitForResult::Details(self.submit_watch(call, true, dry_run).await?)),
 		}
 	}
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool without watching for its progress.
 	/// if successful, it returns the transaction hash otherwise returns a CallError
-	pub async fn submit_one(
-		&self,
-		call: RuntimeCall,
-		dry_run: bool,
-		at: Option<Hash>,
-	) -> RpcResult<Hash> {
-		let at_block = at.unwrap_or_else(|| self.client.info().best_hash);
-
+	pub async fn submit_one(&self, call: RuntimeCall, dry_run: bool) -> RpcResult<Hash> {
 		if dry_run {
-			self.dry_run_extrinsic(call.clone(), at)?;
+			self.dry_run_extrinsic(call.clone())?;
 		}
+		loop {
+			let at_block = self.client.info().best_hash;
 
-		let extrinsic = self.create_signed_extrinsic(call, self.next_nonce(at_block).await?)?;
+			let extrinsic =
+				self.create_signed_extrinsic(call.clone(), self.next_nonce(at_block).await?)?;
 
-		let tx_hash = self
-			.pool
-			.submit_one(at_block, TransactionSource::External, extrinsic)
-			.map_err(call_error)
-			.await?;
-
-		Ok(tx_hash)
+			match self.pool.submit_one(at_block, TransactionSource::External, extrinsic).await {
+				Ok(tx_hash) => return Ok(tx_hash),
+				Err(e) => {
+					self.handle_transaction_pool_error(e).await?;
+				},
+			}
+		}
 	}
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
@@ -289,22 +339,19 @@ where
 		call: RuntimeCall,
 		until_finalized: bool,
 		dry_run: bool,
-		at: Option<Hash>,
 	) -> RpcResult<ExtrinsicDetails> {
-		let at_block = at.unwrap_or_else(|| self.client.info().best_hash);
-
 		if dry_run {
-			self.dry_run_extrinsic(call.clone(), at)?;
+			self.dry_run_extrinsic(call.clone())?;
 		}
 
 		loop {
+			let at_block = self.client.info().best_hash;
+			let extrinsic =
+				self.create_signed_extrinsic(call.clone(), self.next_nonce(at_block).await?)?;
+
 			match self
 				.pool
-				.submit_and_watch(
-					at_block,
-					TransactionSource::External,
-					self.create_signed_extrinsic(call.clone(), self.next_nonce(at_block).await?)?,
-				)
+				.submit_and_watch(at_block, TransactionSource::External, extrinsic)
 				.await
 			{
 				Ok(mut status_stream) => {
@@ -321,10 +368,7 @@ where
 								},
 							TransactionStatus::Future |
 							TransactionStatus::Ready |
-							TransactionStatus::Broadcast(_) => {
-								//log::warn!("Transaction in progress status: {:?}", status);
-								continue
-							},
+							TransactionStatus::Broadcast(_) => continue,
 							TransactionStatus::Invalid => {
 								//log::warn!("Transaction failed status: {:?}", status);
 								return Err(CfApiError::OtherError(anyhow!(
@@ -357,19 +401,8 @@ where
 					}
 					return Err(CfApiError::OtherError(anyhow!("transaction unexpected error")))
 				},
-				Err(sc_transaction_pool::error::Error::Pool(
-					sc_transaction_pool_api::error::Error::TooLowPriority { .. },
-				)) => {
-					// This occurs when a transaction with the same nonce is in the transaction pool
-					// (and the priority is <= priority of that existing tx)
-					log::warn!(
-						"TooLowPriority error. More likely occurs when a transaction with the same \
-					     nonce is in the transaction pool. Resetting the pool_client managed nonce..."
-					);
-					self.clear_nonce().await;
-				},
 				Err(e) => {
-					return Err(e.into());
+					self.handle_transaction_pool_error(e).await?;
 				},
 			};
 		}

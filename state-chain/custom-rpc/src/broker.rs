@@ -147,7 +147,6 @@ where
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 				false,
 				true,
-				None,
 			)
 			.await?;
 
@@ -198,7 +197,6 @@ where
 				),
 				false,
 				true,
-				None,
 			)
 			.await?;
 
@@ -245,7 +243,6 @@ where
 				}),
 				false,
 				false,
-				None,
 			)
 			.await?;
 
@@ -315,7 +312,6 @@ where
 						),
 						false,
 						true,
-						None,
 					)
 					.await,
 		}?;
@@ -344,7 +340,6 @@ where
 				RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
 				false,
 				true,
-				None,
 			)
 			.await?;
 
@@ -364,7 +359,6 @@ where
 				RuntimeCall::from(pallet_cf_swapping::Call::close_private_btc_channel {}),
 				false,
 				true,
-				None,
 			)
 			.await?;
 
@@ -409,7 +403,6 @@ where
 				}),
 				false,
 				true,
-				None,
 			)
 			.await?;
 

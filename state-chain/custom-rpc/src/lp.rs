@@ -209,7 +209,6 @@ where
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
 				false,
 				true,
-				None,
 			)
 			.await?;
 
@@ -232,7 +231,6 @@ where
 					}),
 					wait_for.unwrap_or_default(),
 					false,
-					None,
 				)
 				.await?
 			{
@@ -269,7 +267,6 @@ where
 				}),
 				false,
 				false,
-				None,
 			)
 			.await?;
 
@@ -301,7 +298,6 @@ where
 					}),
 					wait_for.unwrap_or_default(),
 					false,
-					None,
 				)
 				.await?
 			{
@@ -344,7 +340,6 @@ where
 				}),
 				false,
 				false,
-				None,
 			)
 			.await?;
 
@@ -372,7 +367,6 @@ where
 					}),
 					wait_for.unwrap_or_default(),
 					false,
-					None,
 				)
 				.await?,
 			collect_range_order_returns,
@@ -400,7 +394,6 @@ where
 					}),
 					wait_for.unwrap_or_default(),
 					false,
-					None,
 				)
 				.await?,
 			collect_range_order_returns,
@@ -501,7 +494,6 @@ where
 				}),
 				false,
 				true,
-				None,
 			)
 			.await?;
 
@@ -582,7 +574,6 @@ where
 					RuntimeCall::from(pallet_cf_pools::Call::cancel_orders_batch { orders }),
 					wait_for.unwrap_or_default(),
 					false,
-					None,
 				)
 				.await?,
 			collect_order_returns,
@@ -626,12 +617,11 @@ where
 						}),
 						wait_for,
 						false,
-						None,
 					)
 					.await?
 			} else {
 				self.signed_pool_client
-					.submit_wait_for_result(RuntimeCall::from(call), wait_for, false, None)
+					.submit_wait_for_result(RuntimeCall::from(call), wait_for, false)
 					.await?
 			},
 			collect_limit_order_returns,
