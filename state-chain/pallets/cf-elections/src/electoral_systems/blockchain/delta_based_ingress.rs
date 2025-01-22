@@ -294,12 +294,12 @@ where
 				if new_properties != properties {
 					log::info!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
 
+					electoral_access.election_mut(election_identifier)?.delete();
 					electoral_access.new_election(
 						Default::default(),
 						new_properties,
 						pending_ingress_totals,
 					)?;
-					electoral_access.election_mut(election_identifier)?.delete();
 				} else {
 					log::info!("recreate election: keeping old because properties didn't change: {properties:?}");
 				}
