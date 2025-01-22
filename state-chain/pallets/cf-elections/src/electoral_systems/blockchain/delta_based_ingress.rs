@@ -185,6 +185,7 @@ where
 
 			let mut closed_channels = Vec::new();
 			let mut new_properties: Self::ElectionProperties = BTreeMap::new();
+			let old_properties = channels.clone();
 			for (account, (details, old_consensus_ingress_total)) in &channels {
 				let (
 					option_ingress_total_before_chain_tracking,
@@ -270,28 +271,25 @@ where
 				new_properties.remove(&closed_channel);
 			}
 
+			let mut election_access = electoral_access.election_mut(election_identifier)?;
+
 			if channels.is_empty() {
-				let election_access = electoral_access.election_mut(election_identifier)?;
 				election_access.delete();
 			} else {
-				let properties = {
-					let mut election_access = electoral_access.election_mut(election_identifier)?;
-					election_access.set_state(pending_ingress_totals.clone())?;
-					election_access.properties()?
-				};
+				election_access.set_state(pending_ingress_totals.clone())?;
 
 				// recreate this election if the properties changed
-				if new_properties != properties {
-					log::debug!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
+				if new_properties != old_properties {
+					log::debug!("recreate election: recreate since properties changed from: {old_properties:?}, to: {new_properties:?}");
 
-					electoral_access.election_mut(election_identifier)?.delete();
+					election_access.delete();
 					electoral_access.new_election(
 						Default::default(),
 						new_properties,
 						pending_ingress_totals,
 					)?;
 				} else {
-					log::debug!("recreate election: keeping old because properties didn't change: {properties:?}");
+					log::debug!("recreate election: keeping old because properties didn't change: {old_properties:?}");
 				}
 			}
 		}
