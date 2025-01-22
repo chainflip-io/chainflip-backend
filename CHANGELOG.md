@@ -2,6 +2,15 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.7] - 2025-01-22
+
+### Fixes
+
+- Search full tx history for get_signature_statuses
+- Retry submission on StateDiscarded error ([#5575](https://github.com/chainflip-io/chainflip-backend/issues/5575))
+- Only submit liveness when haven't yet submitted
+- Solana witnessing efficiency improvements ([#5580](https://github.com/chainflip-io/chainflip-backend/issues/5580))
+
 ## [1.7.6] - 2025-01-18
 
 ### Fixes
