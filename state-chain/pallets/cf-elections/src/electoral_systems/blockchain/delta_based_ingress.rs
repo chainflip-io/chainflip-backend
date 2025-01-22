@@ -52,6 +52,7 @@ where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
+	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	pub fn open_channel<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
@@ -100,6 +101,7 @@ where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
+	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	type ValidatorId = ValidatorId;
@@ -143,6 +145,7 @@ where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
+	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
@@ -153,14 +156,10 @@ where
 	}
 
 	fn is_vote_needed(
-		(_, current_partial_vote, _): (
-			VotePropertiesOf<Self>,
-			PartialVoteOf<Self>,
-			AuthorityVoteOf<Self>,
-		),
-		(proposed_partial_vote, _): (PartialVoteOf<Self>, VoteOf<Self>),
+		(_, _, _): (VotePropertiesOf<Self>, PartialVoteOf<Self>, AuthorityVoteOf<Self>),
+		(_, proposed_vote): (PartialVoteOf<Self>, VoteOf<Self>),
 	) -> bool {
-		current_partial_vote != proposed_partial_vote
+		!proposed_vote.is_empty()
 	}
 
 	fn generate_vote_properties(
@@ -186,7 +185,9 @@ where
 			};
 
 			let mut closed_channels = Vec::new();
-			for (account, (details, _)) in &channels {
+			let mut new_properties: Self::ElectionProperties = BTreeMap::new();
+			let old_properties = channels.clone();
+			for (account, (details, old_consensus_ingress_total)) in &channels {
 				// We currently split the ingressed amount into two parts:
 				// 1. The consensus amount that is *before* chain tracking. i.e. Chain tracking is
 				//    *ahead*.
@@ -208,8 +209,14 @@ where
 					option_ingress_total_before_chain_tracking,
 					option_ingress_total_after_chain_tracking,
 				) = match option_consensus.as_ref().and_then(|consensus| consensus.get(account)) {
-					None => (None, None),
+					None => {
+						new_properties
+							.insert(account.clone(), (*details, *old_consensus_ingress_total));
+						(None, None)
+					},
 					Some(consensus_ingress_total) => {
+						new_properties
+							.insert(account.clone(), (*details, *consensus_ingress_total));
 						if consensus_ingress_total.block_number <= *chain_tracking {
 							(Some(*consensus_ingress_total), None)
 						} else {
@@ -278,29 +285,32 @@ where
 				}
 			}
 
-			let mut election_access = ElectoralAccess::election_mut(election_identifier);
-			if !closed_channels.is_empty() {
-				for closed_channel in closed_channels {
-					pending_ingress_totals.remove(&closed_channel);
-					channels.remove(&closed_channel);
-				}
+			for closed_channel in closed_channels {
+				pending_ingress_totals.remove(&closed_channel);
+				channels.remove(&closed_channel);
+				new_properties.remove(&closed_channel);
+			}
 
-				if channels.is_empty() {
-					election_access.delete();
-				} else {
-					election_access.set_state(pending_ingress_totals)?;
-					election_access.refresh(
-						// This value is meaningless. We increment as it is required to use a new
-						// higher value to refresh the election.
-						election_identifier
-							.extra()
-							.checked_add(1)
-							.ok_or_else(CorruptStorageError::new)?,
-						channels,
-					)?;
-				}
+			let mut election_access = ElectoralAccess::election_mut(election_identifier);
+
+			if channels.is_empty() {
+				election_access.delete();
 			} else {
-				election_access.set_state(pending_ingress_totals)?;
+				election_access.set_state(pending_ingress_totals.clone())?;
+
+				// recreate this election if the properties changed
+				if new_properties != old_properties {
+					log::debug!("recreate election: recreate since properties changed from: {old_properties:?}, to: {new_properties:?}");
+
+					election_access.delete();
+					electoral_access.new_election(
+						Default::default(),
+						new_properties,
+						pending_ingress_totals,
+					)?;
+				} else {
+					log::debug!("recreate election: keeping old because properties didn't change: {old_properties:?}");
+				}
 			}
 		}
 

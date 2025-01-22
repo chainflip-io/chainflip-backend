@@ -378,6 +378,8 @@ pub mod pallet {
 		/// Not all vote data was cleared. *You should continue clearing votes until you receive
 		/// the AllVotesCleared event*.
 		AllVotesNotCleared,
+		/// Received vote for an unknown election
+		UnknownElection(ElectionIdentifierOf<T::ElectoralSystemRunner>),
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1227,8 +1229,16 @@ pub mod pallet {
 			);
 
 			for (election_identifier, authority_vote) in authority_votes {
-				let unique_monotonic_identifier =
-					Self::ensure_election_exists(election_identifier)?;
+				// if an identifier refers to a non existent election, skip this vote,
+				// but continue processing others.
+				let unique_monotonic_identifier = if let Ok(unique_monotonic_identifier) =
+					Self::ensure_election_exists(election_identifier)
+				{
+					unique_monotonic_identifier
+				} else {
+					Self::deposit_event(Event::UnknownElection(election_identifier));
+					continue;
+				};
 
 				let (partial_vote, option_vote) = match authority_vote {
 					AuthorityVote::PartialVote(partial_vote) => (partial_vote, None),
