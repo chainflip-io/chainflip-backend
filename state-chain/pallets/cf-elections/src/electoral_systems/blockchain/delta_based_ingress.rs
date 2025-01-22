@@ -190,13 +190,20 @@ where
 			};
 
 			let mut closed_channels = Vec::new();
-			for (account, (details, _)) in &channels {
+			let mut new_properties: Self::ElectionProperties = BTreeMap::new();
+			for (account, (details, old_consensus_ingress_total)) in &channels {
 				let (
 					option_ingress_total_before_chain_tracking,
 					option_ingress_total_after_chain_tracking,
 				) = match option_consensus.as_ref().and_then(|consensus| consensus.get(account)) {
-					None => (None, None),
+					None => {
+						new_properties
+							.insert(account.clone(), (*details, *old_consensus_ingress_total));
+						(None, None)
+					},
 					Some(consensus_ingress_total) => {
+						new_properties
+							.insert(account.clone(), (*details, *consensus_ingress_total));
 						if consensus_ingress_total.block_number <= *chain_tracking {
 							(Some(*consensus_ingress_total), None)
 						} else {
@@ -270,6 +277,7 @@ where
 			for closed_channel in closed_channels {
 				pending_ingress_totals.remove(&closed_channel);
 				channels.remove(&closed_channel);
+				new_properties.remove(&closed_channel);
 			}
 
 			if channels.is_empty() {
@@ -281,36 +289,6 @@ where
 					election_access.set_state(pending_ingress_totals.clone())?;
 					election_access.properties()?
 				};
-
-				// calculate new properties by:
-				//  - taking accounts and channel_details from `channels`, keeping the preexisting
-				//    logic ƒor closing channels
-				//  - taking the consensus amount from either:
-				//     - the unsynchronized state map
-				//     - the election state
-				//    where we use the one which is higher.
-				let new_properties = channels
-					.iter()
-					.map(|(account, (channel_details, _))| {
-						let ingressed_amount = electoral_access
-							.unsynchronised_state_map(&(account.clone(), channel_details.asset))
-							.unwrap()
-							.unwrap_or_else(|| properties.get(account).unwrap().1);
-						let pending_ingressed_amount = pending_ingress_totals
-							.get(account)
-							.copied()
-							.unwrap_or_else(|| properties.get(account).unwrap().1);
-
-						let last_consensus_amount =
-							if ingressed_amount.amount >= pending_ingressed_amount.amount {
-								ingressed_amount
-							} else {
-								pending_ingressed_amount
-							};
-
-						(account.clone(), (*channel_details, last_consensus_amount))
-					})
-					.collect::<BTreeMap<_, _>>();
 
 				// recreate this election if the properties changed
 				if new_properties != properties {
