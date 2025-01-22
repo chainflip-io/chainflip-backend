@@ -150,20 +150,14 @@ where
 	}
 
 	fn is_vote_needed(
-		(_, current_partial_vote, _): (
+		(_, _, _): (
 			VotePropertiesOf<Self>,
 			<Self::Vote as VoteStorage>::PartialVote,
 			AuthorityVoteOf<Self>,
 		),
-		(proposed_partial_vote, _): (
-			<Self::Vote as VoteStorage>::PartialVote,
-			<Self::Vote as VoteStorage>::Vote,
-		),
+		(_, _): (<Self::Vote as VoteStorage>::PartialVote, <Self::Vote as VoteStorage>::Vote),
 	) -> bool {
-		proposed_partial_vote.into_iter().any(|(account, new_balance)| {
-			new_balance.amount !=
-				current_partial_vote.get(&account).map(|total| total.amount).unwrap_or_default()
-		})
+		true
 	}
 
 	fn generate_vote_properties(
@@ -253,11 +247,7 @@ where
 							)?;
 						},
 						Ordering::Greater => {
-							Sink::on_ingress_reverted(
-								account.clone(),
-								details.asset,
-								ingress_total.amount - previous_amount,
-							);
+							log::warn!("Deposit channels on Solana chain has reverted! Account: {:?}, Asset: {:?}, Previous ingressed total: {:?}, new ingressed total: {:?}", account, details.asset, previous_amount, ingress_total.amount);
 						},
 						Ordering::Equal => (),
 					}
@@ -292,7 +282,7 @@ where
 
 				// recreate this election if the properties changed
 				if new_properties != properties {
-					log::info!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
+					log::debug!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
 
 					electoral_access.election_mut(election_identifier)?.delete();
 					electoral_access.new_election(
@@ -301,7 +291,7 @@ where
 						pending_ingress_totals,
 					)?;
 				} else {
-					log::info!("recreate election: keeping old because properties didn't change: {properties:?}");
+					log::debug!("recreate election: keeping old because properties didn't change: {properties:?}");
 				}
 			}
 		}
