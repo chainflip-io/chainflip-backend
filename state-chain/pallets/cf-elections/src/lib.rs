@@ -380,7 +380,7 @@ pub mod pallet {
 		/// the AllVotesCleared event*.
 		AllVotesNotCleared,
 		/// Received vote for an unknown election
-		UnknownElection(ElectionIdentifierOf<T::ElectoralSystem>),
+		UnknownElection(CompositeElectionIdentifierOf<T::ElectoralSystemRunner>),
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]

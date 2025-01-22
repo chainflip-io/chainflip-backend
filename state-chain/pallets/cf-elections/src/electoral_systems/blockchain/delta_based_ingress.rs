@@ -53,7 +53,6 @@ where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
-	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	pub fn open_channel<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
@@ -90,7 +89,7 @@ where
 			Default::default(), /* We use the lowest value, so we can refresh the elections the
 			                     * maximum number of times */
 			[(channel, channel_details)].into_iter().collect(),
-			Default::default(),
+			(),
 		)?;
 
 		Ok(())
@@ -101,7 +100,6 @@ where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
-	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	type ValidatorId = ValidatorId;
@@ -124,7 +122,7 @@ where
 
 	// Stores the any pending total ingressed values that are waiting for
 	// the safety margin to pass.
-	type ElectionState = BTreeMap<Sink::Account, ChannelTotalIngressedFor<Sink>>;
+	type ElectionState = ();
 	type Vote = vote_storage::individual::Individual<
 		(),
 		vote_storage::individual::identity::Identity<
@@ -157,10 +155,7 @@ where
 			<Self::Vote as VoteStorage>::Vote,
 		),
 	) -> bool {
-		proposed_partial_vote.into_iter().any(|(account, new_balance)| {
-			new_balance.amount !=
-				current_partial_vote.get(&account).map(|total| total.amount).unwrap_or_default()
-		})
+		current_partial_vote != proposed_partial_vote
 	}
 
 	fn generate_vote_properties(
@@ -176,114 +171,86 @@ where
 		chain_tracking: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
-			let (mut channels, mut pending_ingress_totals, option_consensus) = {
+			let (mut properties, option_consensus) = {
 				let election_access = ElectoralAccess::election_mut(election_identifier);
-				(
-					election_access.properties()?,
-					election_access.state()?,
-					election_access.check_consensus()?.has_consensus(),
-				)
+				(election_access.properties()?, election_access.check_consensus()?.has_consensus())
 			};
 
+			let mut new_totals = Vec::new();
 			let mut closed_channels = Vec::new();
-			for (account, (details, _)) in &channels {
-				let (
-					option_ingress_total_before_chain_tracking,
-					option_ingress_total_after_chain_tracking,
-				) = match option_consensus.as_ref().and_then(|consensus| consensus.get(account)) {
-					None => (None, None),
-					Some(consensus_ingress_total) => {
-						if consensus_ingress_total.block_number <= *chain_tracking {
-							(Some(*consensus_ingress_total), None)
-						} else {
-							match pending_ingress_totals.remove(account) {
-								None => (None, Some(*consensus_ingress_total)),
-								Some(pending_ingress_total) => {
-									if pending_ingress_total.block_number <
-										consensus_ingress_total.block_number &&
-										pending_ingress_total.amount <
-											consensus_ingress_total.amount
-									{
-										if pending_ingress_total.block_number <= *chain_tracking {
-											(
-												Some(pending_ingress_total),
-												Some(*consensus_ingress_total),
-											)
-										} else {
-											(None, Some(pending_ingress_total))
-										}
-									} else {
-										(None, Some(*consensus_ingress_total))
-									}
-								},
-							}
-						}
-					},
-				};
 
-				if let Some(ingress_total) = option_ingress_total_before_chain_tracking {
-					let previous_amount = ElectoralAccess::unsynchronised_state_map(&(
-						account.clone(),
-						details.asset,
-					))?
-					.map_or(Zero::zero(), |previous_total_ingressed| {
-						previous_total_ingressed.amount
-					});
-					match previous_amount.cmp(&ingress_total.amount) {
+			for (
+				account,
+				(
+					OpenChannelDetails { asset, close_block },
+					ChannelTotalIngressed { amount: initial_amount, .. },
+				),
+			) in &properties
+			{
+				if let Some(
+					new_total @ ChannelTotalIngressed {
+						block_number: ingress_block,
+						amount: ingress_amount,
+					},
+				) = option_consensus
+					.as_ref()
+					.and_then(|consensus| consensus.get(account))
+					.filter(|totals| totals.block_number <= *chain_tracking)
+				{
+					match initial_amount.cmp(&ingress_amount) {
 						Ordering::Less => {
 							Sink::on_ingress(
 								account.clone(),
-								details.asset,
-								ingress_total.amount - previous_amount,
-								ingress_total.block_number,
+								*asset,
+								*ingress_amount - *initial_amount,
+								*ingress_block,
 								(),
 							);
 							ElectoralAccess::set_unsynchronised_state_map(
-								(account.clone(), details.asset),
-								Some(ingress_total),
+								(account.clone(), *asset),
+								Some(*new_total),
 							);
+							new_totals.push((account.clone(), *new_total));
 						},
 						Ordering::Greater => {
-							log::warn!("Deposit channels on Solana chain has reverted! Account: {:?}, Asset: {:?}, Previous ingressed total: {:?}, new ingressed total: {:?}", account, details.asset, previous_amount, ingress_total.amount);
+							log::warn!(
+								"{:?} balance in Solana deposit address {:?} has reduced from {:?} to {:?}!",
+								asset,
+								account,
+								initial_amount,
+								ingress_amount,
+							);
 						},
 						Ordering::Equal => (),
 					}
-					if ingress_total.block_number >= details.close_block {
+					if chain_tracking >= close_block {
 						Sink::on_channel_closed(account.clone());
 						closed_channels.push(account.clone());
 					}
 				}
-				if let Some(ingress_total_after_chain_tracking) =
-					option_ingress_total_after_chain_tracking
-				{
-					pending_ingress_totals
-						.insert(account.clone(), ingress_total_after_chain_tracking);
-				}
 			}
 
-			let mut election_access = ElectoralAccess::election_mut(election_identifier);
-			if !closed_channels.is_empty() {
-				for closed_channel in closed_channels {
-					pending_ingress_totals.remove(&closed_channel);
-					channels.remove(&closed_channel);
-				}
+			let election_access = ElectoralAccess::election_mut(election_identifier);
+			for closed_channel in &closed_channels {
+				properties.remove(closed_channel);
+			}
 
-				if channels.is_empty() {
-					election_access.delete();
-				} else {
-					election_access.set_state(pending_ingress_totals)?;
-					election_access.refresh(
-						// This value is meaningless. We increment as it is required to use a new
-						// higher value to refresh the election.
-						election_identifier
-							.extra()
-							.checked_add(1)
-							.ok_or_else(CorruptStorageError::new)?,
-						channels,
-					)?;
-				}
+			if properties.is_empty() {
+				election_access.delete();
 			} else {
-				election_access.set_state(pending_ingress_totals)?;
+				// If any channel totals have increased, we create a new election with updated
+				// properties.
+				if !new_totals.is_empty() {
+					for (account, new_total) in new_totals {
+						if !closed_channels.contains(&account) {
+							properties.get_mut(&account).map(|(_, total)| {
+								let _old_total = core::mem::replace(total, new_total);
+							});
+						}
+					}
+					election_access.delete();
+					ElectoralAccess::new_election(Default::default(), properties, ())?;
+				}
 			}
 		}
 
