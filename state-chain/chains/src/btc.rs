@@ -141,6 +141,10 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 		self.btc_fee_info.fee_per_input_utxo()
 	}
 
+	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Bitcoin as Chain>::ChainAmount> {
+		Some(self.btc_fee_info.fee_per_input_utxo())
+	}
+
 	// When a user wants to receive some BTC, we need to create a transaction which typically spends
 	// a UTXO from the vault and creates two output UTXOs: One going to the user and one sending the
 	// remaining BTC back into the vault.

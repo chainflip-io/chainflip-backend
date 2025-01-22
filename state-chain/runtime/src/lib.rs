@@ -1683,9 +1683,12 @@ impl_runtime_apis! {
 
 			let include_fee = |fee_type: FeeTypes| !exclude_fees.contains(&fee_type);
 
-			let (amount_to_swap, ingress_fee) = if include_fee(FeeTypes::Ingress) {
-				remove_fees(IngressOrEgress::Ingress, input_asset, input_amount)
-			} else {
+			// Default to using the DepositChannel fee unless specified.
+			let (amount_to_swap, ingress_fee) = if include_fee(FeeTypes::IngressDepositChannel) {
+				remove_fees(IngressOrEgress::IngressDepositChannel, input_asset, input_amount)
+			} else if include_fee(FeeTypes::IngressVaultSwap) {
+				remove_fees(IngressOrEgress::IngressVaultSwap, input_asset, input_amount)
+			}else {
 				(input_amount, 0u128)
 			};
 

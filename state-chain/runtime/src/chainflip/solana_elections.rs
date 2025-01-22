@@ -435,6 +435,17 @@ impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
 		})
 	}
 
+	fn estimate_ingress_fee_vault_swap() -> Option<<Solana as Chain>::ChainAmount> {
+		Some(Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
+			tracked_data.estimate_ingress_fee_vault_swap().unwrap_or_else(|| {
+				log_or_panic!(
+					"Obtained None when estimating Solana Ingress Vault Swap fee. This should not happen"
+				);
+				Default::default()
+			})
+		}))
+	}
+
 	fn estimate_egress_fee(asset: <Solana as Chain>::ChainAsset) -> <Solana as Chain>::ChainAmount {
 		Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
 			tracked_data.estimate_egress_fee(asset)

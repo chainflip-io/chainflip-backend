@@ -167,6 +167,10 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 		self.calculate_transaction_fee(gas_cost_per_fetch)
 	}
 
+	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Arbitrum as Chain>::ChainAmount> {
+		Some(0)
+	}
+
 	fn estimate_egress_fee(
 		&self,
 		asset: <Arbitrum as Chain>::ChainAsset,
