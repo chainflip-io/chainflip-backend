@@ -1168,6 +1168,7 @@ mod vault_swaps {
 			const OUTPUT_ASSET: Asset = Asset::Flip;
 
 			const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * TIER_5_BPS as u128 / 10_000;
+			const INGRESS_FEE: AssetAmount = 1000000;
 			const PREWITNESS_DEPOSIT_ID: PrewitnessedDepositId = 1;
 			const CHANNEL_ID: ChannelId = 1;
 
@@ -1226,8 +1227,7 @@ mod vault_swaps {
 					vec![MockSwapRequest {
 						input_asset: INPUT_ASSET,
 						output_asset: OUTPUT_ASSET,
-						// Note that ingress fee is not charged:
-						input_amount: DEPOSIT_AMOUNT - BOOST_FEE,
+						input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 						swap_type: SwapRequestType::Regular {
 							output_address,
 							ccm_deposit_metadata: None
