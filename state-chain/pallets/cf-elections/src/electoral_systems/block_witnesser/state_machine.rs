@@ -63,8 +63,6 @@ pub trait BlockWitnesserProcessor<ChainBlockNumber, BlockData, Event> {
 		age: ChainBlockNumber,
 		data: &BlockData,
 	) -> Vec<Event>;
-	/// This function is responsible to execute all the previously produced events
-	fn execute_events(&self, events: Vec<Event>);
 }
 
 #[derive(
@@ -147,40 +145,37 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
 		// log::warn!("BW: input {i:?}");
-		// log::warn!("Ongoing elections: {:?}", s.elections.ongoing);
 		match i {
 			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
 				s.elections.highest_election = range.start().saturating_backward(1);
 				s.elections.schedule_range(range);
+				s.block_processor.process_block_data(ChainProgressInner::Progress(*range.start()));
 			},
 
 			SMInput::Context(ChainProgress::Range(range)) => {
 				if *range.start() <= s.elections.highest_scheduled {
 					//Reorg
 					s.block_processor.process_block_data(ChainProgressInner::Reorg(range.clone()));
-					// T::BlockProcessor::process_block_data(ChainProgressInner::Reorg(range.
-					// clone()));
+				} else {
+					s.block_processor.process_block_data(ChainProgressInner::Progress(*range.end()));
 				}
-				s.block_processor.process_block_data(ChainProgressInner::Progress(*range.end()));
 				s.elections.schedule_range(range);
 			},
 
 			SMInput::Context(ChainProgress::None) => {
-				//call the block processor with the last block
-				s.block_processor.process_block_data(ChainProgressInner::Progress(
-					s.elections.highest_scheduled,
-				));
-				// T::BlockProcessor::process_block_data(ChainProgressInner::Progress(s.elections.
-				// highest_scheduled));
+				// This doesn't need to be run in case there is no update
+				// s.block_processor.process_block_data(ChainProgressInner::Progress(
+				// 	s.elections.highest_scheduled,
+				// ));
 			},
 
 			SMInput::Vote(blockdata) => {
-				// insert blockdata into our cache of blocks
 				s.elections.mark_election_done(blockdata.0 .0);
 				log::info!("got block data: {:?}", blockdata.1);
-				// warn!("RULES: {:?}", s.block_processor.rules);
 				s.block_processor.insert(blockdata.0 .0, blockdata.1.data);
-				// T::BlockProcessor::insert(blockdata);
+				s.block_processor.process_block_data(ChainProgressInner::Progress(
+					s.elections.highest_scheduled,
+				));
 			},
 		};
 
