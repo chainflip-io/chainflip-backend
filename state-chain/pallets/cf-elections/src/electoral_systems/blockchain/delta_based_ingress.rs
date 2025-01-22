@@ -197,7 +197,7 @@ where
 					.and_then(|consensus| consensus.get(account))
 					.filter(|totals| totals.block_number <= *chain_tracking)
 				{
-					match initial_amount.cmp(&ingress_amount) {
+					match initial_amount.cmp(ingress_amount) {
 						Ordering::Less => {
 							Sink::on_ingress(
 								account.clone(),
@@ -243,7 +243,7 @@ where
 				if !new_totals.is_empty() {
 					for (account, new_total) in new_totals {
 						if !closed_channels.contains(&account) {
-							properties.get_mut(&account).map(|(_, total)| {
+							properties.get_mut(&account).into_iter().for_each(|(_, total)| {
 								let _old_total = core::mem::replace(total, new_total);
 							});
 						}
