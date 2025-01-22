@@ -346,6 +346,17 @@ where
 									f.ty::<TargetChainAmount<T, I>>().name("minimum_deposit")
 								}),
 						)
+					})
+					.variant(append_chain_to_name!(SetDepositChannelLifetime), |v| {
+						v.index(2).fields(
+							Fields::named()
+								.field(|f| f.ty::<TargetChainBlockNumber<T, I>>().name("lifetime")),
+						)
+					})
+					.variant("SetNetworkFeeDeductionFromBoost", |v| {
+						v.index(3).fields(
+							Fields::named().field(|f| f.ty::<Percent>().name("deduction_percent")),
+						)
 					}),
 			)
 	}

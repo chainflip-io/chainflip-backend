@@ -71,10 +71,16 @@ impl<
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
 				ElectoralAccess::set_unsynchronised_state(consensus)?;
-				ElectoralAccess::new_election((), (), ())?;
+				// TEMP: This is temporarily commented out.
+				// Currently we only use this for SolanaFeeTracking. We will be removing
+				// SolanaFeeTracking entirely, so for now, we just don't need to create elections,
+				// and the fee is provided as a hardcoded value. See
+				// SolanaChainTrackingProvider::priority_fee().
+				// ElectoralAccess::new_election((), (), ())?;
 			}
 		} else {
-			ElectoralAccess::new_election((), (), ())?;
+			// See comment above.
+			// elections ElectoralAccess::new_election((), (), ())?;
 		}
 
 		Ok(())

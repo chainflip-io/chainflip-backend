@@ -11,6 +11,7 @@ use cf_chains::{
 			SolanaApi, SolanaTransactionBuildingError, SolanaTransactionType,
 			VaultSwapAccountAndSender,
 		},
+		compute_units_costs::MIN_COMPUTE_PRICE,
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
 	CcmDepositMetadata, Chain, ChannelRefundParametersDecoded, FeeEstimationApi,
@@ -233,7 +234,7 @@ impl MedianChangeHook<<Solana as Chain>::ChainBlockNumber> for SolanaBlockHeight
 		if let Err(err) = SolanaChainTracking::inner_update_chain_state(cf_chains::ChainState {
 			block_height,
 			tracked_data: SolTrackedData {
-				priority_fee: SolanaChainTrackingProvider::priority_fee().unwrap_or_default(),
+				priority_fee: SolanaChainTrackingProvider::priority_fee(),
 			},
 		}) {
 			log::error!("Failed to update chain state: {:?}", err);
@@ -394,13 +395,8 @@ impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
 }
 
 impl SolanaChainTrackingProvider {
-	pub fn priority_fee() -> Option<<Solana as Chain>::ChainAmount> {
-		DerivedElectoralAccess::<
-			_,
-			SolanaFeeTracking,
-			RunnerStorageAccess<Runtime, SolanaInstance>,
-			>::unsynchronised_state()
-			.ok()
+	pub fn priority_fee() -> <Solana as Chain>::ChainAmount {
+		MIN_COMPUTE_PRICE
 	}
 
 	fn with_tracked_data_then_apply_fee_multiplier<

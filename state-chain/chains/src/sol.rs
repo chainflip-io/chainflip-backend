@@ -170,8 +170,8 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS: SolComputeLimit = 50_000u32;
 	pub const COMPUTE_UNITS_PER_ENABLE_TOKEN_SUPPORT: SolComputeLimit = 50_000u32;
 
-	/// This is equivalent to a priority fee
-	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
+	/// This is equivalent to a priority fee, in micro-lamports/compute unit.
+	pub const MIN_COMPUTE_PRICE: SolAmount = 10_000_000;
 
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
 	pub const MAX_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 600_000u32;
