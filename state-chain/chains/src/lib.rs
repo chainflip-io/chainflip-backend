@@ -33,7 +33,6 @@ use frame_support::{
 	StorageHasher,
 };
 use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
-use saturating_cast::SaturatingCast;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{ConstU32, H256, U256};
@@ -86,7 +85,7 @@ pub mod witness_period {
 	use saturating_cast::SaturatingCast;
 	use scale_info::TypeInfo;
 	use serde::{Deserialize, Serialize};
-	use sp_runtime::traits::{Block, Zero};
+	use sp_runtime::traits::Zero;
 	use sp_std::ops::RangeInclusive;
 
 	// So we can store a range-like object in storage, since this has encode and decode.
@@ -265,7 +264,7 @@ pub mod witness_period {
 		type Parameters = ();
 		type Strategy = impl Strategy<Value = Self>;
 
-		fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
+		fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
 			any::<C::ChainBlockNumber>().prop_map(|height| {
 				BlockWitnessRange::<C>::try_new(block_witness_root(C::WITNESS_PERIOD, height))
 					.unwrap()

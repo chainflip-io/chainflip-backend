@@ -7,7 +7,7 @@ pub mod assets;
 macro_rules! chains {
 	( $( $chain:ident = $index:literal),+ ) => {
 		$(
-			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Ord, PartialOrd)]
 			pub struct $chain;
 
 			impl AsRef<ForeignChain> for $chain {

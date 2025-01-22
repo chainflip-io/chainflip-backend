@@ -15,7 +15,6 @@ use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	sp_runtime::Saturating,
 	Parameter,
 };
 use scale_info::TypeInfo;

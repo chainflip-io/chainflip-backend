@@ -2,6 +2,7 @@ use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::iter::Step;
 use derive_where::derive_where;
+use log::warn;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
@@ -53,13 +54,17 @@ pub trait BlockWitnesserProcessor<ChainBlockNumber, BlockData, Event> {
 	/// correct logic) and return a list of Events I.E. if we end up with both a PreWitness and a
 	/// Witness event for the same deposit we remove the PreWitness one TODO! implement this logic
 	/// to remove PreWitness event in case a Witness is present
-	fn process_rules(&self, last_height: ChainBlockNumber) -> Vec<Event>;
+	fn process_rules(&mut self, last_height: ChainBlockNumber) -> Vec<Event>;
 	/// This function is responsible to call all the rules on a given block and a given age of that
 	/// block, it also compares the produced events against reorg_events and filter out duplicates
-	fn process_rules_for_age_and_block(&self, age: ChainBlockNumber, data: BlockData)
-		-> Vec<Event>;
+	fn process_rules_for_age_and_block(
+		&self,
+		block: ChainBlockNumber,
+		age: ChainBlockNumber,
+		data: &BlockData,
+	) -> Vec<Event>;
 	/// This function is responsible to execute all the previously produced events
-	fn execute_events(events: Vec<Event>);
+	fn execute_events(&self, events: Vec<Event>);
 }
 
 #[derive(
@@ -141,7 +146,8 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 	}
 
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
-		log::info!("BW: input {i:?}");
+		// log::warn!("BW: input {i:?}");
+		// log::warn!("Ongoing elections: {:?}", s.elections.ongoing);
 		match i {
 			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
 				s.elections.highest_election = range.start().saturating_backward(1);
@@ -155,6 +161,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 					// T::BlockProcessor::process_block_data(ChainProgressInner::Reorg(range.
 					// clone()));
 				}
+				s.block_processor.process_block_data(ChainProgressInner::Progress(*range.end()));
 				s.elections.schedule_range(range);
 			},
 
@@ -171,6 +178,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 				// insert blockdata into our cache of blocks
 				s.elections.mark_election_done(blockdata.0 .0);
 				log::info!("got block data: {:?}", blockdata.1);
+				// warn!("RULES: {:?}", s.block_processor.rules);
 				s.block_processor.insert(blockdata.0 .0, blockdata.1.data);
 				// T::BlockProcessor::insert(blockdata);
 			},
@@ -181,7 +189,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 			s.safemode_enabled.run(()),
 		);
 
-		log::info!("BW: done. current elections: {:?}", s.elections.ongoing);
+		// log::warn!("BW: done. current elections: {:?}", s.elections.ongoing);
 
 		Ok(())
 	}

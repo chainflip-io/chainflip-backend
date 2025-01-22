@@ -1,17 +1,17 @@
-use crate::{BitcoinChainTracking, BitcoinIngressEgress, Block, Runtime};
+use crate::{BitcoinChainTracking, BitcoinIngressEgress, Block, ConstU32, Runtime};
 use cf_chains::{
 	btc::{self, BitcoinFeeInfo, BitcoinTrackedData},
+	instances::BitcoinInstance,
 	Bitcoin,
 };
 use cf_traits::Chainflip;
+use core::ops::RangeInclusive;
 use serde::{Deserialize, Serialize};
 use sp_core::Get;
-use std::{cmp::PartialEq, collections::BTreeMap, ops::RangeInclusive};
+use sp_std::collections::btree_map::BTreeMap;
 
-use cf_chains::instances::BitcoinInstance;
-
-use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::__private::sp_tracing::event;
+use log::warn;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
@@ -26,7 +26,6 @@ use pallet_cf_elections::{
             state_machine::{
 				BWSettings, BWState, BWStateMachine, BWTypes, BlockWitnesserProcessor,
 			},
-			BlockElectionPropertiesGenerator, BlockWitnesser,
 		},
 		composite::{
 			tuple_2_impls::{DerivedElectoralAccess, Hooks},
@@ -40,14 +39,20 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
+use sp_core::{Decode, Encode, MaxEncodedLen};
 
 use pallet_cf_ingress_egress::{
 	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo, WitnessSafetyMargin,
 };
 use scale_info::TypeInfo;
+use sp_runtime::BoundedVec;
 
 use cf_chains::btc::BlockNumber;
-use sp_std::vec::Vec;
+use pallet_cf_elections::electoral_systems::block_witnesser::primitives::ChainProgressInner;
+use sp_std::{vec, vec::Vec};
+
+const SAFETY_MARGIN: BlockNumber = 10;
+const BUFFER_EVENTS: BlockNumber = 10;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing),
@@ -61,15 +66,6 @@ pub struct OpenChannelDetails<ChainBlockNumber> {
 	pub open_block: ChainBlockNumber,
 	pub close_block: ChainBlockNumber,
 }
-
-pub type OldBitcoinDepositChannelWitnessing = BlockWitnesser<
-	Bitcoin,
-	Vec<DepositWitness<Bitcoin>>,
-	Vec<DepositChannelDetails<Runtime, BitcoinInstance>>,
-	<Runtime as Chainflip>::ValidatorId,
-	BitcoinDepositChannelWitessingProcessor,
-	BitcoinDepositChannelWitnessingGenerator,
->;
 
 // ------------------------ block height tracking ---------------------------
 /// The electoral system for block height tracking
@@ -301,46 +297,126 @@ impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>
 
 type Age = BlockNumber;
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ChainProgressInner<ChainBlockNumber> {
-	Progress(ChainBlockNumber),
-	Reorg(RangeInclusive<ChainBlockNumber>),
+pub enum BtcEvent {
+	PreWitness(BlockNumber, DepositWitness<Bitcoin>),
+	Witness(BlockNumber, DepositWitness<Bitcoin>),
 }
-#[derive(PartialEq)]
-enum BtcEvent {
-	PreWitness(DepositWitness<Bitcoin>),
-	Witness(DepositWitness<Bitcoin>),
-}
-fn pre_witness_rule(age: Age, block_data: &BlockData) -> Vec<BtcEvent> {
-	if age == 0 {
-		return block_data
-			.iter()
-			.map(|deposit_witness| BtcEvent::PreWitness(deposit_witness))
-			.collect::<Vec<_>>();
+impl BtcEvent {
+	pub fn deposit_witness(&self) -> &DepositWitness<Bitcoin> {
+		match self {
+			BtcEvent::PreWitness(_, dw) | BtcEvent::Witness(_, dw) => dw,
+		}
 	}
-	vec![]
-}
-fn full_witness_rule(age: Age, block_data: &BlockData) -> Vec<BtcEvent> {
-	if age == SAFETY_MARGIN {
-		return block_data
-			.iter()
-			.map(|deposit_witness| BtcEvent::Witness(deposit_witness))
-			.collect::<Vec<_>>();
+	pub fn equal_inner(&self, other: &BtcEvent) -> bool {
+		self.deposit_witness() == other.deposit_witness()
 	}
-	vec![]
-}
-#[derive(Default)]
-pub struct DepositChannelWitessingProcessor<ChainBlockNumber, BlockData, Event> {
-	pub blocks_data: BTreeMap<ChainBlockNumber, (BlockData, Age)>,
-	pub reorg_events: BTreeMap<ChainBlockNumber, Vec<Event>>,
-	pub rules: Vec<fn(Age, &BlockData) -> Vec<Event>>,
 }
 
-impl DepositChannelWitessingProcessor<BlockNumber, BlockData, BtcEvent> {
-	fn new() -> Self {
-		DepositChannelWitessingProcessor {
-			blocks_data: BTreeMap::new(),
-			reorg_events: BTreeMap::new(),
-			rules: vec![pre_witness_rule, full_witness_rule],
+/// Returns one event per deposit witness. If multiple events share the same deposit witness:
+/// - prefer the `Witness` variant (override any `PreWitness`),
+/// - otherwise keep the single `PreWitness`.
+pub fn deduplicate_btc_events(events: Vec<BtcEvent>) -> Vec<BtcEvent> {
+	// Map: deposit_witness -> chosen BtcEvent
+	let mut chosen: BTreeMap<DepositWitness<Bitcoin>, BtcEvent> = BTreeMap::new();
+
+	for event in events {
+		let deposit: DepositWitness<Bitcoin> = event.deposit_witness().clone();
+
+		match chosen.get(&deposit) {
+			None => {
+				// No event yet for this deposit, store it
+				chosen.insert(deposit, event);
+			},
+			Some(existing) => {
+				// There's already an event for this deposit
+				match (existing, &event) {
+					// If we already have a Witness, do nothing
+					(BtcEvent::Witness(_, _), BtcEvent::PreWitness(_, _)) => (),
+					// If we have a PreWitness and the new event is a Witness, override it
+					(BtcEvent::PreWitness(_, _), BtcEvent::Witness(_, _)) => {
+						chosen.insert(deposit, event);
+					},
+					// This should be impossible to reach!
+					(_, _) => (),
+				}
+			},
+		}
+	}
+
+	chosen.into_values().collect()
+}
+
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	MaxEncodedLen,
+	Default,
+)]
+enum BtcRuleType {
+	PreWitness,
+	Witness,
+	#[default]
+	None,
+}
+fn apply_rule(
+	block: BlockNumber,
+	rule: &BtcRuleType,
+	age: Age,
+	block_data: &BlockData,
+) -> Vec<BtcEvent> {
+	match rule {
+		BtcRuleType::PreWitness =>
+			if age == 0 {
+				block_data
+					.iter()
+					.map(|deposit_witness| BtcEvent::PreWitness(block, deposit_witness.clone()))
+					.collect()
+			} else {
+				vec![]
+			},
+		BtcRuleType::Witness =>
+			if age == SAFETY_MARGIN - 1 {
+				block_data
+					.iter()
+					.map(|deposit_witness| BtcEvent::Witness(block, deposit_witness.clone()))
+					.collect()
+			} else {
+				vec![]
+			},
+		_ => {
+			vec![]
+		},
+	}
+}
+
+#[derive(
+	Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen,
+)]
+pub struct DepositChannelWitessingProcessor<ChainBlockNumber: Ord, BlockData, Event> {
+	pub blocks_data: BTreeMap<ChainBlockNumber, (BlockData, Age)>,
+	pub reorg_events: BTreeMap<ChainBlockNumber, Vec<Event>>,
+	pub rules: BoundedVec<BtcRuleType, ConstU32<10>>,
+}
+impl<ChainBlockNumber: Ord, BlockData, Event> Default
+	for DepositChannelWitessingProcessor<ChainBlockNumber, BlockData, Event>
+{
+	fn default() -> Self {
+		Self {
+			blocks_data: Default::default(),
+			reorg_events: Default::default(),
+			rules: {
+				let mut result = BoundedVec::<BtcRuleType, ConstU32<10>>::new();
+				result.try_push(BtcRuleType::PreWitness).expect("cannot fail");
+				result.try_push(BtcRuleType::Witness).expect("cannot fail");
+				result
+			},
 		}
 	}
 }
@@ -351,18 +427,18 @@ impl BlockWitnesserProcessor<BlockNumber, BlockData, BtcEvent>
 	fn process_block_data(&mut self, chain_progress: ChainProgressInner<BlockNumber>) {
 		match chain_progress {
 			ChainProgressInner::Progress(last_height) => {
-				let last_events = self.process_rules(last_height);
-				self.execute(last_events);
+				let last_events = deduplicate_btc_events(self.process_rules(last_height));
+				self.execute_events(last_events);
 				self.clean_old(last_height);
 			},
 			ChainProgressInner::Reorg(range) => {
 				for n in range {
-					let block_data = self.blocks_data.remove(n);
+					let block_data = self.blocks_data.remove(&n);
 					if let Some((data, last_age)) = block_data {
 						// We need to get only events already processed
 						for age in 0..=last_age {
 							self.reorg_events
-								.insert(n, self.process_rules_for_age_and_block(age, &data));
+								.insert(n, self.process_rules_for_age_and_block(n, age, &data));
 						}
 					}
 				}
@@ -371,39 +447,49 @@ impl BlockWitnesserProcessor<BlockNumber, BlockData, BtcEvent>
 	}
 
 	fn insert(&mut self, n: BlockNumber, block_data: BlockData) {
+		// warn!("Inserting new blockdata for block: {n:#?}: {block_data:#?}");
 		self.blocks_data.insert(n, (block_data, 0));
 	}
 
 	fn clean_old(&mut self, n: BlockNumber) {
-		self.blocks_data.remove(n - SAFETY_MARGIN);
-		self.reorg_events.remove(n - BUFFER_EVENTS);
+		self.blocks_data.retain(|key, (data, age)| *age <= SAFETY_MARGIN);
+		self.reorg_events.remove(&(n - BUFFER_EVENTS));
 	}
 
-	fn process_rules(&self, last_height: BlockNumber) -> Vec<BtcEvent> {
-		let mut last_events = vec![];
-		for (block, (data, last_age)) in self.blocks_data {
-			for age in last_age + 1..=last_height - block {
+	fn process_rules(&mut self, last_height: BlockNumber) -> Vec<BtcEvent> {
+		warn!("Processing rules... last_height: {last_height:#?}");
+		let mut last_events: Vec<BtcEvent> = vec![];
+		for (block, (data, last_age)) in self.blocks_data.clone() {
+			warn!("Rules for block {block:?}, age: {last_age:?}, data: {data:?}");
+			for age in last_age..=last_height - block {
 				last_events = last_events
-					.iter()
-					.chain(self.process_rules_for_age_and_block(age, &data))
+					.into_iter()
+					.chain(self.process_rules_for_age_and_block(block, age, &data))
 					.collect();
 			}
-			*last_age = last_height - block;
+			self.blocks_data.insert(block, (data.clone(), last_height - block + 1));
 		}
+		warn!("Rules produced these events: {last_events:#?}");
+
 		last_events
 	}
 
-	fn process_rules_for_age_and_block(&self, age: BlockNumber, data: BlockData) -> Vec<BtcEvent> {
-		let mut events = vec![];
-		for rule in self.rules {
-			events = events.iter().chain(rule(age, data).iter()).collect();
+	fn process_rules_for_age_and_block(
+		&self,
+		block: BlockNumber,
+		age: BlockNumber,
+		data: &BlockData,
+	) -> Vec<BtcEvent> {
+		let mut events: Vec<BtcEvent> = vec![];
+		for rule in &self.rules {
+			events = events.into_iter().chain(apply_rule(block, rule, age, data)).collect();
 		}
 		events
 			.into_iter()
 			.filter(|last_event| {
-				for (_, events) in self.reorg_events {
+				for (_, events) in &self.reorg_events {
 					for event in events {
-						if last_event == event {
+						if last_event.equal_inner(event) {
 							return false;
 						}
 					}
@@ -413,20 +499,17 @@ impl BlockWitnesserProcessor<BlockNumber, BlockData, BtcEvent>
 			.collect::<Vec<_>>()
 	}
 
-	fn execute_events(events: Vec<BtcEvent>) {
+	fn execute_events(&self, events: Vec<BtcEvent>) {
+		warn!("Executing these events: {events:#?}");
 		for event in events {
 			match event {
-				BtcEvent::PreWitness(deposit) => {
-					let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(
-						deposit,
-						deposit.block_number,
-					);
+				BtcEvent::PreWitness(block, deposit) => {
+					let _ =
+						BitcoinIngressEgress::process_channel_deposit_prewitness(deposit, block);
 				},
-				BtcEvent::Witness(deposit) => {
-					BitcoinIngressEgress::process_channel_deposit_full_witness(
-						deposit,
-						deposit_block_number,
-					);
+				BtcEvent::Witness(block, deposit) => {
+					BitcoinIngressEgress::process_channel_deposit_full_witness(deposit, block);
+					warn!("Witness executed");
 				},
 			}
 		}
@@ -484,7 +567,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 		unsynchronised_settings: (
 			Default::default(),
 			// TODO: Write a migration to set this too.
-			BWSettings { max_concurrent_elections: 5 },
+			BWSettings { max_concurrent_elections: 15 },
 		),
 		settings: (Default::default(), Default::default()),
 	}
