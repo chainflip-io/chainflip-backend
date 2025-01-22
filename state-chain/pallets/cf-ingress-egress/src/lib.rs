@@ -2695,7 +2695,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				asset,
 				available_amount,
 			),
-			DepositOrigin::VaultSwap { .. } => Self::withhold_ingress_or_egress_fee(
+			DepositOrigin::Vault { .. } => Self::withhold_ingress_or_egress_fee(
 				IngressOrEgress::IngressVaultSwap,
 				asset,
 				available_amount,
