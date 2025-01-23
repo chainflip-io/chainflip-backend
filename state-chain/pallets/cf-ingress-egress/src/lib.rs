@@ -1623,7 +1623,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					T::FetchesTransfersLimitProvider::maybe_fetches_limit();
 				// Filter out disabled assets and requests that are not ready to be egressed.
 				requests
-					.extract_if(|request| {
+					.extract_if(.., |request| {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
 							match request {
 								FetchOrTransfer::Fetch {
@@ -1734,7 +1734,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
-				ccms.extract_if(|ccm| {
+				ccms.extract_if(.., |ccm| {
 					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) &&
 						Self::should_fetch_or_transfer(&mut maybe_no_of_transfers_remaining)
 				})

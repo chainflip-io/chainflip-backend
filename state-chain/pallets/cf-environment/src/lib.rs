@@ -665,7 +665,7 @@ impl<T: Config> Pallet<T> {
 		fn filter_stale_utxos<T: Config>(available_utxos: &mut Vec<Utxo>, aggkey: &AggKey) {
 			if let Some(previous) = aggkey.previous {
 				let stale = available_utxos
-					.extract_if(|utxo| {
+					.extract_if(.., |utxo| {
 						utxo.deposit_address.pubkey_x != aggkey.current &&
 							utxo.deposit_address.pubkey_x != previous
 					})

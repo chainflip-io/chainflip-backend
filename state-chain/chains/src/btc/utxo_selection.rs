@@ -145,7 +145,7 @@ pub fn select_utxos_for_consolidation(
 		let prev_key_utxos = previous_key
 			.map(|prev_key| {
 				spendable
-					.extract_if(|utxo: &mut Utxo| utxo.deposit_address.pubkey_x == prev_key)
+					.extract_if(.., |utxo: &mut Utxo| utxo.deposit_address.pubkey_x == prev_key)
 					.take(consolidation_parameter.consolidation_size as usize)
 					.collect::<Vec<_>>()
 			})

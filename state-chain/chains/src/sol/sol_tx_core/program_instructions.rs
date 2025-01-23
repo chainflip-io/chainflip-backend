@@ -246,7 +246,7 @@ pub trait ProgramInstruction: BorshSerialize {
 	}
 
 	fn function_discriminator() -> [u8; 8] {
-		Self::FN_DISCRIMINATOR_HASH[..8].as_array::<8>()
+		Self::FN_DISCRIMINATOR_HASH[..8].copy_to_array::<8>()
 	}
 }
 

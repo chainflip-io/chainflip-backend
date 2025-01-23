@@ -131,7 +131,7 @@ impl TryFrom<ForeignChainAddress> for u64 {
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
 		match address {
-			ForeignChainAddress::Eth(addr) => Ok(u64::from_be_bytes(addr.0[12..].as_array())),
+			ForeignChainAddress::Eth(addr) => Ok(u64::from_be_bytes(addr.0[12..].copy_to_array())),
 			_ => Err(()),
 		}
 	}
