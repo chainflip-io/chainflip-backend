@@ -20,6 +20,7 @@ use pallet_cf_elections::{
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
+			primitives::SafeModeStatus,
 			state_machine::{BWSettings, BWState, BWStateMachine, BWTypes},
 			BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData,
 		},
@@ -197,12 +198,17 @@ type BlockData = Vec<DepositWitness<Bitcoin>>;
 )]
 pub struct BitcoinSafemodeEnabledHook {}
 
-impl Hook<(), bool> for BitcoinSafemodeEnabledHook {
-	fn run(&self, _input: ()) -> bool {
-		!<<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
+impl Hook<(), SafeModeStatus> for BitcoinSafemodeEnabledHook {
+	fn run(&self, _input: ()) -> SafeModeStatus {
+		if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
 			PalletSafeMode<BitcoinInstance>,
 		>>::get()
 		.deposits_enabled
+		{
+			SafeModeStatus::Disabled
+		} else {
+			SafeModeStatus::Enabled
+		}
 	}
 }
 

@@ -8006,6 +8006,7 @@ dependencies = [
  "serde",
  "sp-core 34.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2)",
+ "tokio",
  "utilities",
 ]
 

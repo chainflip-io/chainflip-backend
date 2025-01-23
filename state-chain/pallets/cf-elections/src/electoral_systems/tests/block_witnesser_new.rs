@@ -35,6 +35,7 @@ use crate::{
 use cf_chains::{mocks::MockEthereum, Chain};
 use codec::{Decode, Encode, MaxEncodedLen};
 use consensus::BWConsensus;
+use primitives::SafeModeStatus;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::Get;
@@ -194,9 +195,9 @@ type ElectionProperties = Properties;
 )]
 pub struct MockSafemodeEnabledHook {}
 
-impl Hook<(), bool> for MockSafemodeEnabledHook {
-	fn run(&self, _input: ()) -> bool {
-		false
+impl Hook<(), SafeModeStatus> for MockSafemodeEnabledHook {
+	fn run(&self, _input: ()) -> SafeModeStatus {
+		SafeModeStatus::Disabled
 	}
 }
 

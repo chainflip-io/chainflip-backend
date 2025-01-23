@@ -1,6 +1,7 @@
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::{iter::Step, ops::RangeInclusive};
+use frame_support::ensure;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_map::BTreeMap;
@@ -10,13 +11,17 @@ use crate::electoral_systems::state_machine::core::Validate;
 /// Keeps track of ongoing elections for the block witnesser.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct ElectionTracker<N: Ord> {
-	/// The next block height for which an election is going to be started once
-	/// there is the capacity to do so and that height has been witnessed
-	/// (`highest_scheduled >= next_election`).
-	pub next_election: N,
+	/// The highest block height for which an election was started in the past.
+	/// New elections are going to be started if there is the capacity to do so
+	/// and that height has been witnessed (`highest_witnessed > highest_election`).
+	pub highest_election: N,
 
 	/// The highest block height that has been seen.
-	pub highest_scheduled: N,
+	pub highest_witnessed: N,
+
+	/// The highest block height that we had previously started elections for and
+	/// that was subsequently touched by a reorg.
+	pub highest_priority: N,
 
 	/// Map containing all currently active elections.
 	/// The associated u8 "reord_id" is somewhat an artifact of the fact that
@@ -35,18 +40,36 @@ pub struct ElectionTracker<N: Ord> {
 	pub reorg_id: u8,
 }
 
-impl<N: Ord + SaturatingStep + Copy> ElectionTracker<N> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub enum SafeModeStatus {
+	Enabled,
+	Disabled,
+}
+
+impl<N: Ord + SaturatingStep + Step + Copy> ElectionTracker<N> {
 	/// Given the current state, if there are less than `max_ongoing`
 	/// ongoing elections we push more elections into ongoing.
-	pub fn start_more_elections(&mut self, max_ongoing: usize) {
+	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
+		// In case of a reorg we still want to recreate elections for blocks which we had
+		// elections for previously AND were touched by the reorg
+		let start_up_to = match safemode {
+			SafeModeStatus::Disabled => self.highest_witnessed,
+			SafeModeStatus::Enabled => self.highest_priority,
+		};
+
 		// filter out all elections which are ongoing, but shouldn't be, because
 		// they are in the scheduled range (for example because there was a reorg)
-		self.ongoing.retain(|height, _| *height < self.next_election);
+		self.ongoing.retain(|height, _| *height <= self.highest_election);
 
 		// schedule
-		while self.next_election <= self.highest_scheduled && self.ongoing.len() < max_ongoing {
-			self.ongoing.insert(self.next_election, self.reorg_id);
-			self.next_election = self.next_election.saturating_forward(1);
+		for last_height in self.highest_election..start_up_to {
+			let height = last_height.saturating_forward(1);
+			if self.ongoing.len() < max_ongoing {
+				self.ongoing.insert(height, self.reorg_id);
+				self.highest_election = height;
+			} else {
+				break;
+			}
 		}
 	}
 
@@ -62,8 +85,16 @@ impl<N: Ord + SaturatingStep + Copy> ElectionTracker<N> {
 		// Check whether there is a reorg concerning elections we have started previously.
 		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
 		// range are going to be restarted once there is the capacity to do so.
-		if *range.start() < self.next_election {
-			self.next_election = *range.start();
+		if *range.start() <= self.highest_election {
+			// we set this value such that even in case of a reorg we create elections for up to
+			// this block
+			self.highest_priority = sp_std::cmp::max(self.highest_election, self.highest_priority);
+
+			// the next election we start is going to be the first block involved in the reorg
+			self.highest_election = range.start().saturating_backward(1);
+
+			// and it's going to have a fresh `reorg_id` which forces the ES to recreate this
+			// election
 			self.reorg_id = generate_new_reorg_id(self.ongoing.values());
 		}
 
@@ -72,8 +103,8 @@ impl<N: Ord + SaturatingStep + Copy> ElectionTracker<N> {
 		// It's difficult to imagine a situation where the highest block number
 		// after a reorg is lower than it was previously, and also, even if, in that
 		// case we simply keep the higher number that doesn't seem to be too much of a problem.
-		if self.highest_scheduled < *range.end() {
-			self.highest_scheduled = *range.end();
+		if self.highest_witnessed < *range.end() {
+			self.highest_witnessed = *range.end();
 		}
 	}
 }
@@ -89,8 +120,9 @@ impl<N: Ord> Validate for ElectionTracker<N> {
 impl<N: BlockZero + Ord> Default for ElectionTracker<N> {
 	fn default() -> Self {
 		Self {
-			highest_scheduled: BlockZero::zero(),
-			next_election: BlockZero::zero(),
+			highest_witnessed: BlockZero::zero(),
+			highest_priority: BlockZero::zero(),
+			highest_election: BlockZero::zero(),
 			ongoing: Default::default(),
 			reorg_id: 0,
 		}
