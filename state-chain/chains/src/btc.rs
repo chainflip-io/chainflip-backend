@@ -7,7 +7,7 @@ pub mod vault_swap_encoding;
 extern crate alloc;
 use self::deposit_address::DepositAddress;
 use crate::{
-	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, DepositChannel,
+	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, ChainWitnessConfig, DepositChannel,
 	DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
 };
 use alloc::{collections::VecDeque, string::String};
@@ -109,8 +109,8 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	Decode,
 	MaxEncodedLen,
 	TypeInfo,
-	Serialize,
-	Deserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[codec(mel_bound())]
 pub struct BitcoinTrackedData {
@@ -229,6 +229,11 @@ impl BitcoinFeeInfo {
 		// MINIMUM_BTC_TX_SIZE_IN_BYTES bytes
 		self.sats_per_kilobyte.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 	}
+}
+
+impl ChainWitnessConfig for Bitcoin {
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+	type ChainBlockNumber = BlockNumber;
 }
 
 impl Chain for Bitcoin {
@@ -369,7 +374,19 @@ fn verify_single_threshold_signature(
 
 // TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId
 // which could be made generic, if even necessary at all.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen, Default)]
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	Default,
+	serde::Serialize,
+	serde::Deserialize,
+)]
 pub struct UtxoId {
 	// TxId of the transaction in which this utxo was created.
 	pub tx_id: Hash,
@@ -391,7 +408,7 @@ pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
 }
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Utxo {
 	pub id: UtxoId,
 	pub amount: BtcAmount,
@@ -992,7 +1009,17 @@ pub enum BitcoinOp {
 	PushVersion { version: u8 },
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
+)]
 pub struct BitcoinScript {
 	bytes: Vec<u8>,
 }

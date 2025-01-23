@@ -2,6 +2,7 @@
 #![feature(step_trait)]
 #![feature(extract_if)]
 #![feature(split_array)]
+#![feature(impl_trait_in_assoc_type)]
 use crate::{
 	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, none::NoneChainCrypto,
 	sol::SolanaCrypto,
@@ -34,6 +35,7 @@ use frame_support::{
 	StorageHasher,
 };
 use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
+use saturating_cast::SaturatingCast;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{ConstU32, H256, U256};
@@ -72,9 +74,61 @@ pub mod instances;
 pub mod mocks;
 
 pub mod witness_period {
-	use core::ops::{Rem, Sub};
+	use super::Chain;
+	use crate::ChainWitnessConfig;
+	use codec::{Decode, Encode};
+	use core::{
+		iter::Step,
+		ops::{Rem, Sub},
+	};
+	use derive_where::derive_where;
+	use frame_support::{
+		ensure,
+		sp_runtime::traits::{One, Saturating},
+	};
+	use saturating_cast::SaturatingCast;
+	use scale_info::TypeInfo;
+	use serde::{Deserialize, Serialize};
+	use sp_runtime::traits::{Block, Zero};
+	use sp_std::ops::RangeInclusive;
 
-	use frame_support::sp_runtime::traits::{One, Saturating};
+	// So we can store a range-like object in storage, since this has encode and decode.
+	#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+	#[derive_where(
+		Debug,
+		Clone,
+		Copy,
+		PartialEq,
+		Eq,
+		Default,
+		PartialOrd,
+		Ord;
+		C::ChainBlockNumber
+	)]
+	pub struct BlockWitnessRange<C: ChainWitnessConfig> {
+		root: C::ChainBlockNumber,
+		_phantom: sp_std::marker::PhantomData<C>,
+	}
+
+	impl<C: ChainWitnessConfig> BlockWitnessRange<C> {
+		pub fn try_new(root: C::ChainBlockNumber) -> Result<Self, ()> {
+			ensure!(C::WITNESS_PERIOD >= C::ChainBlockNumber::one(), ());
+			ensure!(is_block_witness_root(C::WITNESS_PERIOD, root), ());
+			Ok(Self { root, _phantom: Default::default() })
+		}
+	}
+
+	impl<C: ChainWitnessConfig> BlockWitnessRange<C> {
+		pub fn into_range_inclusive(self) -> RangeInclusive<C::ChainBlockNumber> {
+			self.root..=
+				self.root
+					.saturating_add(C::WITNESS_PERIOD.saturating_sub(C::ChainBlockNumber::one()))
+		}
+
+		pub fn root(&self) -> &C::ChainBlockNumber {
+			&self.root
+		}
+	}
 
 	fn block_witness_floor<
 		I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One,
@@ -112,6 +166,125 @@ pub mod witness_period {
 		let floored_block_number = block_witness_floor(witness_period, block_number);
 		floored_block_number..=floored_block_number.saturating_add(witness_period - One::one())
 	}
+
+	impl<C: ChainWitnessConfig> Step for BlockWitnessRange<C> {
+		fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
+			if start.root > end.root {
+				(0, None)
+			} else {
+				let distance = end.root - start.root;
+				debug_assert!(distance % C::WITNESS_PERIOD == Zero::zero());
+				let steps: u64 = (distance / C::WITNESS_PERIOD).into();
+				let steps_usize: usize = steps.saturating_cast();
+				let overflow_check = if steps_usize.saturating_cast::<u64>() == steps {
+					Some(steps_usize)
+				} else {
+					None
+				};
+				(steps_usize, overflow_check)
+			}
+		}
+
+		fn forward_checked(mut start: Self, count: usize) -> Option<Self> {
+			(0..count)
+				.for_each(|_| start.root = start.root.clone().saturating_add(C::WITNESS_PERIOD));
+			Some(start)
+		}
+
+		fn backward_checked(mut start: Self, count: usize) -> Option<Self> {
+			(0..count)
+				.for_each(|_| start.root = start.root.clone().saturating_sub(C::WITNESS_PERIOD));
+			Some(start)
+		}
+	}
+
+	pub trait SaturatingStep {
+		fn saturating_forward(self, count: usize) -> Self;
+	}
+
+	impl<C: ChainWitnessConfig> SaturatingStep for BlockWitnessRange<C> {
+		/// NOTE: This function is going to run for a very long time if count is very high
+		/// QUESTION: maybe don't loop `count` times?
+		fn saturating_forward(self, count: usize) -> Self {
+			let mut start = self;
+			(0..count)
+				.for_each(|_| start.root = start.root.clone().saturating_add(C::WITNESS_PERIOD));
+			start
+		}
+	}
+
+	#[duplicate::duplicate_item(Integer; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ])]
+	impl SaturatingStep for Integer {
+		fn saturating_forward(self, count: usize) -> Self {
+			self.saturating_add(count.saturating_cast::<Integer>())
+		}
+	}
+
+	pub trait BlockZero {
+		fn zero() -> Self;
+		fn is_zero(&self) -> bool;
+	}
+
+	impl<C: ChainWitnessConfig> BlockZero for BlockWitnessRange<C> {
+		fn zero() -> Self {
+			Self { root: Zero::zero(), _phantom: Default::default() }
+		}
+
+		fn is_zero(&self) -> bool {
+			self.root.is_zero()
+		}
+	}
+
+	#[duplicate::duplicate_item(Integer; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ])]
+	impl BlockZero for Integer {
+		fn zero() -> Self {
+			0
+		}
+
+		fn is_zero(&self) -> bool {
+			*self == 0
+		}
+	}
+
+	#[cfg(feature = "test")]
+	use proptest::prelude::{any, Arbitrary, Strategy};
+
+	#[cfg(feature = "test")]
+	impl<C: ChainWitnessConfig> Arbitrary for BlockWitnessRange<C>
+	where
+		C::ChainBlockNumber: Arbitrary,
+	{
+		type Parameters = ();
+		type Strategy = impl Strategy<Value = Self>;
+
+		fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
+			any::<C::ChainBlockNumber>().prop_map(|height| {
+				BlockWitnessRange::<C>::try_new(block_witness_root(C::WITNESS_PERIOD, height))
+					.unwrap()
+			})
+		}
+	}
+}
+
+/// Definition of a chain as required by electoral system based witnessing
+pub trait ChainWitnessConfig {
+	type ChainBlockNumber: FullCodec
+		+ Default
+		+ Member
+		+ Parameter
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ AtLeast32BitUnsigned
+		// this is used primarily for tests. We use u32 because it's the smallest block number we
+		// use (and so we can always .into() into a larger type)
+		+ Into<u64>
+		+ MaxEncodedLen
+		+ Display
+		+ Unpin
+		+ Step
+		+ BenchmarkValue;
+
+	const WITNESS_PERIOD: Self::ChainBlockNumber;
 }
 
 /// A trait representing all the types and constants that need to be implemented for supported
