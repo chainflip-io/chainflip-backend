@@ -775,7 +775,7 @@ pub mod pallet {
 		NoPrivateChannelExistsForBroker,
 		/// The affiliate fee is too large to fit in a u8.
 		AffiliateFeeTooHigh,
-		/// The affiliate id is not registered with the broker.
+		/// The affiliate id is not registered for the broker.
 		AffiliateNotRegisteredForBroker,
 		/// Bitcoin vault swaps only support up to 2 affiliates.
 		TooManyAffiliates,
@@ -785,8 +785,6 @@ pub mod pallet {
 		AffiliateAlreadyRegistered,
 		/// The affiliate account id could not be derived.
 		AffiliateAccountIdDerivationFailed,
-		/// The withdrawal address is not a valid Ethereum address.
-		InvalidWithdrawalAddress,
 	}
 
 	#[pallet::genesis_config]
