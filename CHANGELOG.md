@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.8] - 2025-01-23
+
+### Fixes
+
+- Don't emit new runtime event to avoid breaking change to engines.
+
 ## [1.7.7] - 2025-01-22
 
 ### Fixes
