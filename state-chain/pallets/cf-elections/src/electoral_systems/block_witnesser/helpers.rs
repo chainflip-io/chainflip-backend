@@ -1,6 +1,19 @@
 use core::{iter::Step, ops::RangeInclusive};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
+pub trait Implies {
+	fn implies(self, other: Self) -> Self;
+}
+impl Implies for bool {
+	fn implies(self, other: Self) -> Self {
+		// false implies false (false <= false)
+		// false implies true  (false <= true)
+		// true implies true   (true <= true)
+		// true !implies false (! true <= false)
+		self <= other
+	}
+}
+
 // ------------ my helpers ---------------
 pub trait KeySet<K> {
 	fn key_set(&self) -> BTreeSet<K>;
@@ -68,4 +81,24 @@ macro_rules! prop_do {
     ($var:ident <<= $expr:expr; $($expr2:tt)+) => {
         $expr.prop_flat_map(move |$var| prop_do!($($expr2)+))
     };
+}
+
+#[macro_export]
+macro_rules! asserts {
+	($description:tt in $expr:expr; $($tail:tt)*) => {
+		assert!($expr, $description);
+		asserts!{$($tail)*}
+	};
+	($description:tt in $expr:expr, where {$($tt:tt)*} $($tail:tt)*) => {
+		{
+			$($tt)*
+			assert!($expr, $description);
+		}
+		asserts!{$($tail)*}
+	};
+	(let $ident:ident = $expr:expr; $($tail:tt)*) => {
+		let $ident = $expr;
+		asserts!{$($tail)*}
+	};
+	() => {}
 }

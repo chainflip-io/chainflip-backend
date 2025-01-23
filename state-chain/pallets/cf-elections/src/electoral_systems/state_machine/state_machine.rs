@@ -4,6 +4,8 @@ use super::core::{IndexOf, Indexed, Validate};
 use proptest::prelude::{BoxedStrategy, Just, Strategy};
 #[cfg(test)]
 use proptest::test_runner::TestRunner;
+#[cfg(test)]
+use sp_std::fmt::Debug;
 
 /// A trait for implementing state machines, in particular used for simple electoral systems.
 /// The model currently only supports electoral systems with a single ongoing election at any given
@@ -86,9 +88,9 @@ pub trait StateMachine: 'static {
 		settings: impl Strategy<Value = Self::Settings>,
 		inputs: impl Fn(IndexOf<Self::Input>) -> BoxedStrategy<Self::Input>,
 	) where
-		Self::State: sp_std::fmt::Debug + Clone,
-		Self::Input: sp_std::fmt::Debug + Clone,
-		Self::Settings: sp_std::fmt::Debug + Clone,
+		Self::State: sp_std::fmt::Debug + Clone + Send,
+		Self::Input: sp_std::fmt::Debug + Clone + Send,
+		Self::Settings: sp_std::fmt::Debug + Clone + Send,
 		<Self::Input as Indexed>::Index: Ord,
 	{
 		use proptest::test_runner::{Config, FileFailurePersistence};
@@ -98,6 +100,7 @@ pub trait StateMachine: 'static {
 			failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 				"proptest-regressions",
 			))),
+			cases: 256 * 16, // 256 is the default
 			..Default::default()
 		});
 
@@ -106,38 +109,79 @@ pub trait StateMachine: 'static {
 				&((states, settings).prop_flat_map(|(state, settings)| {
 					(Just(state.clone()), inputs(Self::input_index(&state)), Just(settings))
 				})),
-				|(mut state, input, settings)| {
-					// ensure that inputs are well formed
-					assert!(
-						state.is_valid().is_ok(),
-						"input state not valid {:?}",
-						state.is_valid()
-					);
-					assert!(input.is_valid().is_ok(), "input not valid {:?}", input.is_valid());
-					assert!(input.has_index(&Self::input_index(&state)), "input has wrong index");
+				run_with_timeout(
+					10,
+					|(mut state, input, settings): (Self::State, Self::Input, Self::Settings)| {
+						println!("running test");
+						// ensure that inputs are well formed
+						assert!(
+							state.is_valid().is_ok(),
+							"input state not valid {:?}",
+							state.is_valid()
+						);
+						assert!(input.is_valid().is_ok(), "input not valid {:?}", input.is_valid());
+						assert!(
+							input.has_index(&Self::input_index(&state)),
+							"input has wrong index"
+						);
 
-					// backup state
-					let prev_state = state.clone();
+						// backup state
+						let prev_state = state.clone();
 
-					// run step function and ensure that output is valid
-					assert!(
-						Self::step(&mut state, input.clone(), &settings).is_valid().is_ok(),
-						"step function failed"
-					);
+						// run step function and ensure that output is valid
+						assert!(
+							Self::step(&mut state, input.clone(), &settings).is_valid().is_ok(),
+							"step function failed"
+						);
 
-					// ensure that state is still well formed
-					assert!(
-						state.is_valid().is_ok(),
-						"state after step function is not valid ({:?})",
-						state
-					);
+						// ensure that state is still well formed
+						assert!(
+							state.is_valid().is_ok(),
+							"state after step function is not valid ({:?})",
+							state
+						);
 
-					// ensure that step function computed valid state
-					Self::step_specification(&prev_state, &input, &settings, &state);
+						// ensure that step function computed valid state
+						Self::step_specification(&prev_state, &input, &settings, &state);
 
-					Ok(())
-				},
+						println!("done test");
+						Ok(())
+					},
+				),
 			)
 			.unwrap();
+	}
+}
+
+#[cfg(test)]
+pub fn run_with_timeout<
+	A: Send + Clone + Debug + 'static,
+	B: Send + 'static,
+	F: Fn(A) -> B + Send + Clone + 'static,
+>(
+	seconds: u64,
+	f: F,
+) -> impl Fn(A) -> B {
+	move |a| {
+		let f1 = f.clone();
+		let a1 = a.clone();
+		tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			// .unhandled_panic(UnhandledPanic::ShutdownRuntime)
+			.build()
+			.unwrap()
+			.block_on(async move {
+				let f2 = f1.clone();
+				let a2 = a1.clone();
+				let a3 = a1.clone();
+				tokio::time::timeout(
+					std::time::Duration::from_secs(seconds),
+					tokio::task::spawn_blocking(move || f2(a2)),
+				)
+				.await
+				.map_err(move |_| format!("task failed with input {:?}", a3))
+				.unwrap()
+			})
+			.unwrap()
 	}
 }

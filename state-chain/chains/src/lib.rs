@@ -186,20 +186,21 @@ pub mod witness_period {
 		}
 
 		fn forward_checked(mut start: Self, count: usize) -> Option<Self> {
-			(0..count)
-				.for_each(|_| start.root = start.root.clone().saturating_add(C::WITNESS_PERIOD));
+			start.root =
+				start.root.clone().saturating_add(C::WITNESS_PERIOD * (count as u32).into());
 			Some(start)
 		}
 
 		fn backward_checked(mut start: Self, count: usize) -> Option<Self> {
-			(0..count)
-				.for_each(|_| start.root = start.root.clone().saturating_sub(C::WITNESS_PERIOD));
+			start.root =
+				start.root.clone().saturating_sub(C::WITNESS_PERIOD * (count as u32).into());
 			Some(start)
 		}
 	}
 
 	pub trait SaturatingStep {
 		fn saturating_forward(self, count: usize) -> Self;
+		fn saturating_backward(self, count: usize) -> Self;
 	}
 
 	impl<C: ChainWitnessConfig> SaturatingStep for BlockWitnessRange<C> {
@@ -207,8 +208,15 @@ pub mod witness_period {
 		/// QUESTION: maybe don't loop `count` times?
 		fn saturating_forward(self, count: usize) -> Self {
 			let mut start = self;
-			(0..count)
-				.for_each(|_| start.root = start.root.clone().saturating_add(C::WITNESS_PERIOD));
+			start.root =
+				start.root.clone().saturating_add(C::WITNESS_PERIOD * (count as u32).into());
+			start
+		}
+
+		fn saturating_backward(self, count: usize) -> Self {
+			let mut start = self;
+			start.root =
+				start.root.clone().saturating_sub(C::WITNESS_PERIOD * (count as u32).into());
 			start
 		}
 	}
@@ -217,6 +225,9 @@ pub mod witness_period {
 	impl SaturatingStep for Integer {
 		fn saturating_forward(self, count: usize) -> Self {
 			self.saturating_add(count.saturating_cast::<Integer>())
+		}
+		fn saturating_backward(self, count: usize) -> Self {
+			self.saturating_sub(count.saturating_cast::<Integer>())
 		}
 	}
 

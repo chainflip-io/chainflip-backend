@@ -50,6 +50,7 @@ cf-chains = { workspace = true, features = ["test"] }
 rand = { workspace = true, features = ["std"] }
 proptest = { version = "1.6"}
 proptest-derive = { version = "0.5.1" }
+tokio = {workspace = true}
 
 [features]
 default = ["std"]
