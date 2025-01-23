@@ -366,6 +366,10 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 			// already executed amount.
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
+			if is_ccm {
+				ccm::assert_ccm_egressed(Asset::Eth, CHUNK_OUTPUT, GAS_BUDGET);
+			}
+
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {

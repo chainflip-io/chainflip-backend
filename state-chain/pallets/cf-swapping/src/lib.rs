@@ -1472,7 +1472,7 @@ pub mod pallet {
 
 			match &mut request.state {
 				SwapRequestState::UserSwap {
-					ccm_deposit_metadata: _,
+					ccm_deposit_metadata,
 					output_address,
 					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
 					broker_fees: _,
@@ -1494,7 +1494,7 @@ pub mod pallet {
 							*accumulated_output_amount,
 							request.output_asset,
 							output_address.clone(),
-							None,  /* ccm */
+							ccm_deposit_metadata.clone(),
 							false, /* refund */
 						);
 					}
