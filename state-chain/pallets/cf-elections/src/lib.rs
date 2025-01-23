@@ -1268,7 +1268,6 @@ pub mod pallet {
 				{
 					unique_monotonic_identifier
 				} else {
-					Self::deposit_event(Event::UnknownElection(election_identifier));
 					continue;
 				};
 
