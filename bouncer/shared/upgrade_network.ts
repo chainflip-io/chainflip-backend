@@ -88,6 +88,19 @@ async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string,
   }
 }
 
+async function startDepositMonitor(localnetInitPath: string) {
+  console.log('Starting up deposit-monitor.');
+
+  execWithLog(`${localnetInitPath}/scripts/start-deposit-monitor.sh`, 'start-deposit-monitor', {
+    LOCALNET_INIT_DIR: `${localnetInitPath}`,
+    DEPOSIT_MONITOR_CONTAINER: 'deposit-monitor',
+    DOCKER_COMPOSE_CMD: 'docker compose',
+    additional_docker_compose_up_args: '--quiet-pull',
+  });
+
+  await sleep(10000);
+}
+
 async function compatibleUpgrade(
   localnetInitPath: string,
   binaryPath: string,
@@ -129,6 +142,8 @@ async function compatibleUpgrade(
   );
 
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
+
+  await startDepositMonitor(localnetInitPath);
 }
 
 async function incompatibleUpgradeNoBuild(
@@ -219,8 +234,10 @@ async function incompatibleUpgradeNoBuild(
   await sleep(4000);
 
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
-
   console.log('Started new broker and lp-api.');
+
+  await startDepositMonitor(localnetInitPath);
+  console.log('Started new deposit monitor.');
 }
 
 async function incompatibleUpgrade(
@@ -336,18 +353,6 @@ export async function upgradeNetworkPrebuilt(
     throw new Error(
       "The version we're upgrading to is older than the version we're upgrading from. Ensure you selected the correct binaries.",
     );
-  }
-
-  // Temp: until localnet/bouncer initialises to a version where the deposit-monitor is started already.
-  if (cleanOldVersion.startsWith('1.7')) {
-    console.log('Starting up deposit-monitor.');
-
-    execWithLog(`${localnetInitPath}/scripts/start-deposit-monitor.sh`, 'start-deposit-monitor', {
-      LOCALNET_INIT_DIR: `${localnetInitPath}`,
-      DEPOSIT_MONITOR_CONTAINER: 'deposit-monitor',
-      DOCKER_COMPOSE_CMD: 'docker compose',
-      additional_docker_compose_up_args: '--quiet-pull',
-    });
   }
 
   if (cleanOldVersion === nodeVersion) {
