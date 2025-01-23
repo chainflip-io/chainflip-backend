@@ -34,9 +34,11 @@ async function testFeeCollection(inputAsset: Asset) {
   }
   const affiliateShotId = 0;
   testVaultSwapFeeCollection.debugLog('Registering affiliate');
-  let eth_withdrawal_address = await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND');
-  console.log('Eth withdrawal address:', eth_withdrawal_address);
-  await registerAffiliate(brokerUri, affiliateShotId, eth_withdrawal_address);
+  await registerAffiliate(
+    brokerUri,
+    affiliateShotId,
+    await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND'),
+  );
 
   // Setup
   const feeAsset = Assets.Usdc;
