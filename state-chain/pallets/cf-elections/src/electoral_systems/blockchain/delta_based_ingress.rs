@@ -188,8 +188,8 @@ where
 				// 2. The pending amount that is *after* chain tracking. i.e. Chain tracking is
 				//    *behind*.
 				// The engines currently do not necessarily agree on a particular value at the point
-				// of an election because of Solana's speed, and inability to query for data at
-				// a particular block height. Thus, there are two approaches:
+				// of an election because of the inability to query for data at
+				// a particular block height on Solana. Thus, there are two approaches:
 				// 1. Wait until all the engines agree on a particular value, which is guaranteed to
 				//    *eventually* occur, given deposits are on the Solana blockchain, which is a
 				//    source of truth for the engines.
