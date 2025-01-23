@@ -760,6 +760,8 @@ pub mod pallet {
 		TooManyAffiliates,
 		/// The Bonder does not have enough Funds to cover the bond.
 		InsufficientFunds,
+		/// Private channel already exists.
+		MoreThanOnePrivateChannel,
 	}
 
 	#[pallet::genesis_config]
@@ -1144,7 +1146,7 @@ pub mod pallet {
 
 			ensure!(
 				!BrokerPrivateBtcChannels::<T>::contains_key(&broker_id),
-				Error::<T>::PrivateChannelExistsForBroker
+				Error::<T>::MoreThanOnePrivateChannel
 			);
 
 			ensure!(

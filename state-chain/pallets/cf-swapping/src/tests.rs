@@ -1681,7 +1681,7 @@ mod private_channels {
 			{
 				assert_noop!(
 					Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)),
-					Error::<Test>::PrivateChannelExistsForBroker
+					Error::<Test>::MoreThanOnePrivateChannel
 				);
 			}
 
