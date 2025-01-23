@@ -303,7 +303,7 @@ where
 					log::debug!("recreate election: recreate since properties changed from: {old_properties:?}, to: {new_properties:?}");
 
 					election_access.delete();
-					electoral_access.new_election(
+					ElectoralAccess::new_election(
 						Default::default(),
 						new_properties,
 						pending_ingress_totals,
