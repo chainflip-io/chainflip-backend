@@ -8,7 +8,7 @@ use cf_chains::{
 	ChannelRefundParametersEncoded, ForeignChain,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{AffiliateShortId, DcaParameters};
+use cf_primitives::{AffiliateShortId, DcaParameters, NetworkEnvironment};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -521,8 +521,15 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		let (_, events, ..) = self
 			.submit_signed_extrinsic_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
 				short_id,
-				withdrawal_address: withdrawal_address
-					.try_parse_to_encoded_address(ForeignChain::Ethereum)?,
+				withdrawal_address: EthereumAddress::try_from(
+					withdrawal_address.try_parse_to_foreign_chain_address(
+						ForeignChain::Ethereum,
+						NetworkEnvironment::Mainnet,
+					)?,
+				)
+				.map_err(|_| {
+					anyhow!("Invalid withdrawal address. Address must be a valid Ethereum address.")
+				})?,
 			})
 			.await?
 			.until_in_block()

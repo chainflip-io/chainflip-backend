@@ -1750,14 +1750,14 @@ mod affiliates {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 
-			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+			let withdrawal_address: EthereumAddress = Default::default();
 
 			// Only brokers can register affiliates
 			assert_noop!(
 				Swapping::register_affiliate(
 					OriginTrait::signed(ALICE),
 					SHORT_ID,
-					withdrawal_address.clone(),
+					withdrawal_address,
 				),
 				BadOrigin
 			);
@@ -1768,7 +1768,7 @@ mod affiliates {
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
 					SHORT_ID,
-					withdrawal_address.clone(),
+					withdrawal_address,
 				));
 
 				let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
@@ -1789,7 +1789,7 @@ mod affiliates {
 					Swapping::register_affiliate(
 						OriginTrait::signed(BROKER),
 						SHORT_ID,
-						withdrawal_address.clone(),
+						withdrawal_address,
 					),
 					Error::<Test>::AffiliateAlreadyRegistered
 				);
@@ -1802,12 +1802,12 @@ mod affiliates {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 			const BALANCE: AssetAmount = 200;
-			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+			let withdrawal_address: EthereumAddress = Default::default();
 
 			assert_ok!(Swapping::register_affiliate(
 				OriginTrait::signed(BROKER),
 				SHORT_ID,
-				withdrawal_address.clone()
+				withdrawal_address,
 			));
 
 			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
@@ -1838,7 +1838,7 @@ mod affiliates {
 	fn fail_due_to_insufficient_funds() {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
-			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+			let withdrawal_address: EthereumAddress = Default::default();
 
 			assert_ok!(Swapping::register_affiliate(
 				OriginTrait::signed(BROKER),
@@ -1858,7 +1858,7 @@ mod affiliates {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 			const BALANCE: AssetAmount = 200;
-			let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+			let withdrawal_address: EthereumAddress = Default::default();
 
 			assert_ok!(Swapping::register_affiliate(
 				OriginTrait::signed(BROKER),

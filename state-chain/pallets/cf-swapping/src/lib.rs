@@ -3,7 +3,7 @@
 
 use cf_amm::common::Side;
 use cf_chains::{
-	address::{AddressConverter, AddressError, EncodedAddress, ForeignChainAddress},
+	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
 	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersDecoded,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
@@ -14,6 +14,8 @@ use cf_primitives::{
 	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
 	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
+
+use cf_chains::eth::Address as EthereumAddress;
 use sp_io::hashing::blake2_256;
 
 use cf_runtime_utilities::log_or_panic;
@@ -76,7 +78,7 @@ struct FeeTaken {
 #[derive(Encode, Decode, TypeInfo)]
 pub struct AffiliateDetails {
 	short_id: AffiliateShortId,
-	withdrawal_address: EncodedAddress,
+	withdrawal_address: EthereumAddress,
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
@@ -925,7 +927,15 @@ pub mod pallet {
 			ensure!(T::SafeMode::get().withdrawals_enabled, Error::<T>::WithdrawalsDisabled);
 
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-			Self::trigger_withdrawal(&account_id, asset, destination_address)?;
+
+			let destination_address_internal =
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
+
+			Self::trigger_withdrawal(&account_id, asset, destination_address_internal)?;
 
 			Ok(())
 		}
@@ -1208,22 +1218,13 @@ pub mod pallet {
 		pub fn register_affiliate(
 			origin: OriginFor<T>,
 			short_id: AffiliateShortId,
-			withdrawal_address: EncodedAddress,
+			withdrawal_address: EthereumAddress,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			ensure!(
 				!AffiliateIdMapping::<T>::contains_key(&broker_id, short_id),
 				Error::<T>::AffiliateAlreadyRegistered
-			);
-
-			ensure!(
-				T::AddressConverter::decode_and_validate_address_for_asset(
-					withdrawal_address.clone(),
-					Asset::Usdc,
-				)
-				.is_ok(),
-				Error::<T>::InvalidWithdrawalAddress
 			);
 
 			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
@@ -1270,7 +1271,11 @@ pub mod pallet {
 			let details = AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_id)
 				.ok_or(Error::<T>::AffiliateNotRegisteredForBroker)?;
 
-			Self::trigger_withdrawal(&affiliate_id, Asset::Usdc, details.withdrawal_address)?;
+			Self::trigger_withdrawal(
+				&affiliate_id,
+				Asset::Usdc,
+				ForeignChainAddress::Eth(details.withdrawal_address),
+			)?;
 			Ok(())
 		}
 	}
@@ -1359,15 +1364,8 @@ pub mod pallet {
 		fn trigger_withdrawal(
 			account_id: &T::AccountId,
 			asset: Asset,
-			destination_address: EncodedAddress,
+			destination_address: ForeignChainAddress,
 		) -> DispatchResult {
-			let destination_address_internal =
-				T::AddressConverter::decode_and_validate_address_for_asset(
-					destination_address.clone(),
-					asset,
-				)
-				.map_err(address_error_to_pallet_error::<T>)?;
-
 			let earned_fees = T::BalanceApi::get_balance(account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
 			T::BalanceApi::try_debit_account(account_id, asset, earned_fees)?;
@@ -1376,7 +1374,7 @@ pub mod pallet {
 				T::EgressHandler::schedule_egress(
 					asset,
 					earned_fees,
-					destination_address_internal,
+					destination_address.clone(),
 					None,
 				)
 				.map_err(Into::into)?;
@@ -1385,7 +1383,7 @@ pub mod pallet {
 				egress_amount,
 				egress_asset: asset,
 				egress_fee: fee_withheld,
-				destination_address,
+				destination_address: T::AddressConverter::to_encoded_address(destination_address),
 				egress_id,
 			});
 

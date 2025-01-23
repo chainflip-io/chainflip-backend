@@ -2,7 +2,9 @@
 
 use super::*;
 
-use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
+use cf_chains::{
+	address::EncodedAddress, benchmarking_value::BenchmarkValue, eth::Address as EthereumAddress,
+};
 use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
@@ -182,14 +184,14 @@ mod benchmarks {
 		const IDX: u8 = 0;
 		let caller = OriginFor::<T>::signed(broker_id.clone());
 
-		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+		let withdrawal_address: EthereumAddress = Default::default();
 
 		#[block]
 		{
 			assert_ok!(Pallet::<T>::register_affiliate(
 				caller.clone(),
 				IDX.into(),
-				withdrawal_address.clone()
+				withdrawal_address,
 			));
 		}
 
@@ -206,13 +208,11 @@ mod benchmarks {
 
 		const IDX: u8 = 0;
 		let caller = OriginFor::<T>::signed(broker_id.clone());
-		let withdrawal_address: EncodedAddress = EncodedAddress::Eth(Default::default());
+		let withdrawal_address: EthereumAddress = Default::default();
 
-		assert_ok!(Pallet::<T>::register_affiliate(
-			caller.clone(),
-			IDX.into(),
-			withdrawal_address.clone()
-		));
+		assert_ok!(
+			Pallet::<T>::register_affiliate(caller.clone(), IDX.into(), withdrawal_address,)
+		);
 
 		let affiliate_account_id =
 			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX))
