@@ -1259,18 +1259,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::affiliate_withdrawal_request())]
 		pub fn affiliate_withdrawal_request(
 			origin: OriginFor<T>,
-			affiliate_short_id: AffiliateShortId,
+			affiliate_account_id: T::AccountId,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let affiliate_id = AffiliateIdMapping::<T>::get(&broker_id, affiliate_short_id)
-				.ok_or(Error::<T>::AffiliateNotRegisteredForBroker)?;
-
-			let details = AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_id)
+			let details = AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_account_id)
 				.ok_or(Error::<T>::AffiliateNotRegisteredForBroker)?;
 
 			Self::trigger_withdrawal(
-				&affiliate_id,
+				&affiliate_account_id,
 				Asset::Usdc,
 				ForeignChainAddress::Eth(details.withdrawal_address),
 			)?;

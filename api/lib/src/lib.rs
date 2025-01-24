@@ -546,11 +546,11 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 	async fn affiliate_withdrawal_request(
 		&self,
-		affiliate_short_id: AffiliateShortId,
+		affiliate_account_id: AccountId32,
 	) -> Result<WithdrawFeesDetail> {
 		let (tx_hash, events, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::affiliate_withdrawal_request { affiliate_short_id },
+				pallet_cf_swapping::Call::affiliate_withdrawal_request { affiliate_account_id },
 			)
 			.await?
 			.until_in_block()
