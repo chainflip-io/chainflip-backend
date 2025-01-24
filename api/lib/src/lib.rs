@@ -547,8 +547,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	async fn affiliate_withdrawal_request(
 		&self,
 		affiliate_short_id: AffiliateShortId,
-	) -> Result<()> {
-		let (_, events, ..) = self
+	) -> Result<WithdrawFeesDetail> {
+		let (tx_hash, events, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::affiliate_withdrawal_request { affiliate_short_id },
 			)
@@ -557,11 +557,23 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.await?;
 
 		extract_event!(
-			&events,
+			events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::WithdrawalRequested,
-			{ .. },
-			()
+			{
+				egress_amount,
+				egress_fee,
+				destination_address,
+				egress_id,
+				..
+			},
+			WithdrawFeesDetail {
+				tx_hash,
+				egress_id: *egress_id,
+				egress_amount: (*egress_amount).into(),
+				egress_fee: (*egress_fee).into(),
+				destination_address: AddressString::from_encoded_address(destination_address),
+			}
 		)
 	}
 }

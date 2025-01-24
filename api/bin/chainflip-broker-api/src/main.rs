@@ -147,7 +147,7 @@ pub trait Rpc {
 	async fn affiliate_withdrawal_request(
 		&self,
 		affiliate_short_id: AffiliateShortId,
-	) -> RpcResult<()>;
+	) -> RpcResult<WithdrawFeesDetail>;
 }
 
 pub struct RpcServerImpl {
@@ -319,9 +319,8 @@ impl RpcServer for RpcServerImpl {
 	async fn affiliate_withdrawal_request(
 		&self,
 		affiliate_short_id: AffiliateShortId,
-	) -> RpcResult<()> {
-		self.api.broker_api().affiliate_withdrawal_request(affiliate_short_id).await?;
-		Ok(())
+	) -> RpcResult<WithdrawFeesDetail> {
+		Ok(self.api.broker_api().affiliate_withdrawal_request(affiliate_short_id).await?)
 	}
 }
 
