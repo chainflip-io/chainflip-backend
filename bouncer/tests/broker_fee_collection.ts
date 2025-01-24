@@ -1,8 +1,7 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-// eslint-disable-next-line no-restricted-imports
-import { KeyringPair } from '@polkadot/keyring/types';
+
 import Keyring from '../polkadot/keyring';
 import {
   brokerMutex,
@@ -46,11 +45,11 @@ export async function submitBrokerWithdrawal(
 
 const feeAsset = Assets.Usdc;
 
-export async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> {
+export async function getEarnedBrokerFees(address: string): Promise<bigint> {
   await using chainflip = await getChainflipApi();
   // NOTE: All broker fees are collected in USDC now:
   const feeStr = (
-    await chainflip.query.assetBalances.freeBalances(brokerKeypair.address, Assets.Usdc)
+    await chainflip.query.assetBalances.freeBalances(address, Assets.Usdc)
   ).toString();
   return BigInt(feeStr);
 }

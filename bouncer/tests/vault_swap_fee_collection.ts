@@ -34,11 +34,13 @@ async function testFeeCollection(inputAsset: Asset) {
   }
   const affiliateShotId = 0;
   testVaultSwapFeeCollection.debugLog('Registering affiliate');
-  await registerAffiliate(
+  const event = await registerAffiliate(
     brokerUri,
-    affiliateShotId,
     await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND'),
   );
+
+  const shortId = event.data.shortId as number;
+  const affiliateId = event.data.affiliateId as string;
 
   // Setup
   const feeAsset = Assets.Usdc;
@@ -55,8 +57,8 @@ async function testFeeCollection(inputAsset: Asset) {
   );
 
   // Amounts before swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker);
-  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(affiliate);
+  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker.address);
+  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(affiliateId);
   testVaultSwapFeeCollection.debugLog('Earned broker fees before:', earnedBrokerFeesBefore);
   testVaultSwapFeeCollection.debugLog('Earned affiliate fees before:', earnedAffiliateFeesBefore);
 
@@ -74,12 +76,12 @@ async function testFeeCollection(inputAsset: Asset) {
     undefined, // fillOrKillParams
     undefined, // dcaParams
     { account: broker.address, commissionBps },
-    [{ accountAddress: affiliate.address, accountShortId: affiliateShotId, commissionBps }],
+    [{ accountAddress: affiliateId, accountShortId: affiliateShotId, commissionBps }],
   );
 
   // Check that both the broker and affiliate earned fees
-  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker);
-  const earnedAffiliateFeesAfter = await getEarnedBrokerFees(affiliate);
+  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker.address);
+  const earnedAffiliateFeesAfter = await getEarnedBrokerFees(affiliateId);
   testVaultSwapFeeCollection.debugLog('Earned broker fees after:', earnedBrokerFeesAfter);
   testVaultSwapFeeCollection.debugLog('Earned affiliate fees after:', earnedAffiliateFeesAfter);
   assert(
