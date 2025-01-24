@@ -555,7 +555,7 @@ pub mod pallet {
 		_,
 		Identity,
 		T::AccountId,
-		Twox64Concat,
+		Identity,
 		T::AccountId,
 		AffiliateDetails,
 		OptionQuery,
@@ -788,6 +788,9 @@ pub mod pallet {
 		/// The affiliate short id is out of bounds. That means the broker has registered more than
 		/// 255 affiliates.
 		AffiliateShortIdOutOfBounds,
+		/// The affiliate has not withdrawn their earned fees. This is a pre-requisite for
+		/// deregistration of a broker.
+		AffiliateEarnedFeesNotWithdrawn,
 	}
 
 	#[pallet::genesis_config]
@@ -1042,8 +1045,17 @@ pub mod pallet {
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
 
-			let _ = AffiliateAccountDetails::<T>::clear_prefix(&account_id, u32::MAX, None);
+			// Check the affiliate's balance before we allow deregistration
+			for affiliate_account_id in AffiliateAccountDetails::<T>::iter_key_prefix(&account_id) {
+				ensure!(
+					T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc).is_zero(),
+					Error::<T>::AffiliateEarnedFeesNotWithdrawn
+				);
+			}
 
+			// Clear the affiliate account details and affiliate id mapping.
+			// With this the broker has no longer access to the affiliate's account.
+			let _ = AffiliateAccountDetails::<T>::clear_prefix(&account_id, u32::MAX, None);
 			let _ = AffiliateIdMapping::<T>::clear_prefix(&account_id, u32::MAX, None);
 
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
