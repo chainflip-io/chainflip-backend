@@ -9,7 +9,6 @@ use cf_chains::{
 };
 use cf_utilities::{make_periodic_tick, task_scope::Scope};
 use core::time::Duration;
-use std::pin::Pin;
 
 use anyhow::{anyhow, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
@@ -32,8 +31,6 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 const MAX_BROADCAST_RETRIES: Attempt = 5;
 const GET_STATUS_BROADCAST_DELAY: u64 = 500u64;
 const GET_STATUS_BROADCAST_RETRIES: u64 = 10;
-
-const GET_SIGNATURE_STATUS_RETRY_LIMIT: Attempt = 10;
 
 impl SolRetryRpcClient {
 	pub async fn new(
@@ -154,61 +151,27 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			)
 			.await
 	}
-
-	/// Gets signature status with `search_transaction_history`. If `search_transaction_history` is
-	/// set to false, it will retry with `search_transaction_history` set to true if it fails
-	/// `GET_SIGNATURE_STATUS_RETRY_LIMIT` times.
 	async fn get_signature_statuses(
 		&self,
 		signatures: &[SolSignature],
 		search_transaction_history: bool,
 	) -> Response<Vec<Option<TransactionStatus>>> {
 		let signatures = signatures.to_owned();
-
-		let sig_status_generator = move |search_transaction_history| {
-			let signatures = signatures.clone();
-			(
+		self.rpc_retry_client
+			.request(
 				RequestLog::new(
 					"getSignatureStatuses".to_string(),
 					Some(format!("{:?}, {:?}", signatures, search_transaction_history)),
 				),
-				Box::pin(move |client: SolRpcClient| {
+				Box::pin(move |client| {
 					let signatures = signatures.clone();
+					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.get_signature_statuses(&signatures, search_transaction_history).await
-					}) as Pin<Box<dyn futures::Future<Output = anyhow::Result<_>> + Send>>
+					})
 				}),
 			)
-		};
-
-		let get_signature_status_no_retry_limit = |search_transaction_history| {
-			let (request_log, sig_status_call) = sig_status_generator(search_transaction_history);
-			self.rpc_retry_client.request(request_log, sig_status_call)
-		};
-
-		if search_transaction_history {
-			get_signature_status_no_retry_limit(search_transaction_history).await
-		} else {
-			let (request_log, sig_status_call) = sig_status_generator(search_transaction_history);
-			match self
-				.rpc_retry_client
-				.request_with_limit(
-					request_log,
-					sig_status_call,
-					// We expect it to work without search history, but if it doesn't we retry with
-					// search history enabled we have seen that the fallback to enabling search
-					// history. We've seen this works in the wild.
-					GET_SIGNATURE_STATUS_RETRY_LIMIT,
-				)
-				.await
-			{
-				Ok(ok) => ok,
-				Err(e) => {
-					tracing::warn!("Failed to get signature statuses without search history: {e:?} Attempting with search history enabled");
-					get_signature_status_no_retry_limit(true).await
-				},
-			}
-		}
+			.await
 	}
 	async fn get_transaction(
 		&self,
