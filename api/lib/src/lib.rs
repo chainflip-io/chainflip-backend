@@ -8,7 +8,7 @@ use cf_chains::{
 	ChannelRefundParametersEncoded, ForeignChain,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{AffiliateShortId, DcaParameters, NetworkEnvironment};
+use cf_primitives::{DcaParameters, NetworkEnvironment};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -513,14 +513,9 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		)
 	}
 
-	async fn register_affiliate(
-		&self,
-		short_id: AffiliateShortId,
-		withdrawal_address: AddressString,
-	) -> Result<AccountId32> {
+	async fn register_affiliate(&self, withdrawal_address: AddressString) -> Result<AccountId32> {
 		let (_, events, ..) = self
 			.submit_signed_extrinsic_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
-				short_id,
 				withdrawal_address: EthereumAddress::try_from(
 					withdrawal_address.try_parse_to_foreign_chain_address(
 						ForeignChain::Ethereum,

@@ -188,11 +188,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T>::register_affiliate(
-				caller.clone(),
-				IDX.into(),
-				withdrawal_address,
-			));
+			assert_ok!(Pallet::<T>::register_affiliate(caller.clone(), withdrawal_address,));
 		}
 
 		assert!(
@@ -210,9 +206,7 @@ mod benchmarks {
 		let caller = OriginFor::<T>::signed(broker_id.clone());
 		let withdrawal_address: EthereumAddress = Default::default();
 
-		assert_ok!(
-			Pallet::<T>::register_affiliate(caller.clone(), IDX.into(), withdrawal_address,)
-		);
+		assert_ok!(Pallet::<T>::register_affiliate(caller.clone(), withdrawal_address,));
 
 		let affiliate_account_id =
 			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX))

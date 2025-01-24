@@ -1754,11 +1754,7 @@ mod affiliates {
 
 			// Only brokers can register affiliates
 			assert_noop!(
-				Swapping::register_affiliate(
-					OriginTrait::signed(ALICE),
-					SHORT_ID,
-					withdrawal_address,
-				),
+				Swapping::register_affiliate(OriginTrait::signed(ALICE), withdrawal_address,),
 				BadOrigin
 			);
 			assert_eq!(Swapping::get_short_id(&BROKER, &BOB), None);
@@ -1767,7 +1763,6 @@ mod affiliates {
 			{
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
-					SHORT_ID,
 					withdrawal_address,
 				));
 
@@ -1777,22 +1772,11 @@ mod affiliates {
 				System::assert_has_event(RuntimeEvent::Swapping(
 					Event::<Test>::AffiliateRegistration {
 						broker_id: BROKER,
-						affiliate_short_id: SHORT_ID,
+						short_id: SHORT_ID,
 						affiliate_id: affiliate_account_id,
 					},
 				));
 				assert_eq!(Swapping::get_short_id(&BROKER, &affiliate_account_id), Some(SHORT_ID));
-			}
-
-			{
-				assert_noop!(
-					Swapping::register_affiliate(
-						OriginTrait::signed(BROKER),
-						SHORT_ID,
-						withdrawal_address,
-					),
-					Error::<Test>::AffiliateAlreadyRegistered
-				);
 			}
 		});
 	}
@@ -1806,7 +1790,6 @@ mod affiliates {
 
 			assert_ok!(Swapping::register_affiliate(
 				OriginTrait::signed(BROKER),
-				SHORT_ID,
 				withdrawal_address,
 			));
 
@@ -1842,7 +1825,6 @@ mod affiliates {
 
 			assert_ok!(Swapping::register_affiliate(
 				OriginTrait::signed(BROKER),
-				SHORT_ID,
 				withdrawal_address
 			));
 
@@ -1868,7 +1850,6 @@ mod affiliates {
 
 			assert_ok!(Swapping::register_affiliate(
 				OriginTrait::signed(BROKER),
-				SHORT_ID,
 				withdrawal_address
 			));
 

@@ -711,7 +711,7 @@ pub mod pallet {
 		},
 		AffiliateRegistration {
 			broker_id: T::AccountId,
-			affiliate_short_id: AffiliateShortId,
+			short_id: AffiliateShortId,
 			affiliate_id: T::AccountId,
 		},
 		BrokerBondSet {
@@ -785,6 +785,9 @@ pub mod pallet {
 		AffiliateAlreadyRegistered,
 		/// The affiliate account id could not be derived.
 		AffiliateAccountIdDerivationFailed,
+		/// The affiliate short id is out of bounds. That means the broker has registered more than
+		/// 255 affiliates.
+		AffiliateShortIdOutOfBounds,
 	}
 
 	#[pallet::genesis_config]
@@ -1215,10 +1218,16 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
 			origin: OriginFor<T>,
-			short_id: AffiliateShortId,
 			withdrawal_address: EthereumAddress,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let next_id: u8 = AffiliateIdMapping::<T>::iter_prefix_values(&broker_id)
+				.count()
+				.try_into()
+				.map_err(|_| Error::<T>::AffiliateShortIdOutOfBounds)?;
+
+			let short_id = AffiliateShortId::from(next_id);
 
 			ensure!(
 				!AffiliateIdMapping::<T>::contains_key(&broker_id, short_id),
@@ -1242,7 +1251,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::AffiliateRegistration {
 				broker_id,
-				affiliate_short_id: short_id,
+				short_id,
 				affiliate_id,
 			});
 
