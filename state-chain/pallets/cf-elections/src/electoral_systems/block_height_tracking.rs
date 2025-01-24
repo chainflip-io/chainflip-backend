@@ -11,11 +11,7 @@ use super::state_machine::{
 use crate::CorruptStorageError;
 use cf_chains::witness_period::{BlockWitnessRange, BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
-use frame_support::{
-	ensure,
-	pallet_prelude::MaxEncodedLen,
-	sp_runtime::traits::{Block, One, Saturating},
-};
+use frame_support::{ensure, pallet_prelude::MaxEncodedLen, sp_runtime::traits::One};
 use primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};

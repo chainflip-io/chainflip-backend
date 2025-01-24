@@ -51,7 +51,8 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Permill, Saturating},
-	transactional,
+	transactional, OrdNoBound, PartialOrdNoBound,
+	__private::sp_tracing::warn,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -397,10 +398,10 @@ pub mod pallet {
 		Decode,
 		TypeInfo,
 		MaxEncodedLen,
-		Ord,
-		PartialOrd,
 		Serialize,
 		Deserialize,
+		Ord,
+		PartialOrd,
 	)]
 	pub struct DepositWitness<C: Chain> {
 		pub deposit_address: C::ChainAccount,
@@ -1894,6 +1895,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				owner.clone(),
 			),
 		) {
+			warn!("Prewitness: {new_boost_status:#?}");
 			// Update boost status
 			DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
 				if let Some(details) = details {
@@ -1901,6 +1903,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			});
 		}
+		warn!("Prewitness concluded, if no logs above it failed, nothing was boosted!!!");
 		Ok(())
 	}
 
@@ -2136,6 +2139,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		{
 			match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {
 				Ok(BoostOutput { used_pools, total_fee: boost_fee_amount }) => {
+					warn!("Try boosting successfull");
 					let amount_after_boost_fee = amount.saturating_sub(boost_fee_amount);
 
 					// Note that ingress fee is deducted at the time of boosting rather than the
@@ -2180,6 +2184,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					});
 				},
 				Err(_) => {
+					warn!("Try boosting failed!!!!");
 					Self::deposit_event(Event::InsufficientBoostLiquidity {
 						prewitnessed_deposit_id,
 						asset,

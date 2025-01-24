@@ -140,6 +140,12 @@ fn generate_new_reorg_id<'a, N: BlockZero + SaturatingStep + Ord + 'static>(
 	index
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub enum ChainProgressInner<ChainBlockNumber> {
+	Progress(ChainBlockNumber),
+	Reorg(RangeInclusive<ChainBlockNumber>),
+}
+
 #[cfg(test)]
 mod tests {
 

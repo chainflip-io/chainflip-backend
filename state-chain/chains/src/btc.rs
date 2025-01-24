@@ -386,6 +386,8 @@ fn verify_single_threshold_signature(
 	Default,
 	serde::Serialize,
 	serde::Deserialize,
+	Ord,
+	PartialOrd,
 )]
 pub struct UtxoId {
 	// TxId of the transaction in which this utxo was created.
@@ -408,7 +410,19 @@ pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
 }
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+	Ord,
+	PartialOrd,
+)]
 pub struct Utxo {
 	pub id: UtxoId,
 	pub amount: BtcAmount,
@@ -1019,6 +1033,8 @@ pub enum BitcoinOp {
 	Eq,
 	serde::Serialize,
 	serde::Deserialize,
+	Ord,
+	PartialOrd,
 )]
 pub struct BitcoinScript {
 	bytes: Vec<u8>,

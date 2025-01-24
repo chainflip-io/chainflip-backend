@@ -2,9 +2,10 @@ use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::iter::Step;
 use derive_where::derive_where;
+use log::warn;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::fmt::Debug;
+use sp_std::{fmt::Debug, vec::Vec};
 
 use super::{
 	super::state_machine::core::*,
@@ -12,6 +13,7 @@ use super::{
 };
 use crate::electoral_systems::{
 	block_height_tracking::ChainProgress,
+	block_witnesser::primitives::ChainProgressInner,
 	state_machine::{
 		core::{IndexOf, MultiIndexAndValue, Validate},
 		state_machine::StateMachine,
@@ -33,6 +35,47 @@ pub trait BWTypes: 'static {
 	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
 	type ElectionPropertiesHook: Hook<Self::ChainBlockNumber, Self::ElectionProperties>;
 	type SafeModeEnabledHook: Hook<(), SafeModeStatus>;
+	type BlockProcessor: BlockWitnesserProcessor<Self::BWProcessorTypes> + Debug + Clone;
+	type BWProcessorTypes: BWProcessorTypes<
+		ChainBlockNumber = Self::ChainBlockNumber,
+		BlockData = Self::BlockData,
+	>;
+}
+
+pub trait BWProcessorTypes {
+	type ChainBlockNumber: Ord + Serde;
+	type BlockData: Serde;
+	type Event: Serde;
+	type Rules: Hook<(Self::ChainBlockNumber, Self::ChainBlockNumber, Self::BlockData), Vec<Self::Event>>
+		+ Default;
+	type Execute: Hook<Self::Event, ()> + Default;
+}
+
+pub trait BlockWitnesserProcessor<T: BWProcessorTypes> {
+	fn process_block_data(
+		&mut self,
+		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
+	) -> Vec<T::Event>;
+	/// Insert a new BlockData, replacing the old one if another BlockData for the same height was
+	/// already present NB! Replacement should never happen since when we detect a reorg we remove
+	/// the block being re-orged
+	fn insert(&mut self, n: T::ChainBlockNumber, block_data: T::BlockData);
+	/// remove all the old BlockData and reorg_events based on the last block_height
+	/// TODO! if we skip blocks we don't delete all the entries, handle this case
+	fn clean_old(&mut self, n: T::ChainBlockNumber);
+	/// This function is responsible to process all the rules (in the correct order or with the
+	/// correct logic) and return a list of Events I.E. if we end up with both a PreWitness and a
+	/// Witness event for the same deposit we remove the PreWitness one TODO! implement this logic
+	/// to remove PreWitness event in case a Witness is present
+	fn process_rules(&mut self, last_height: T::ChainBlockNumber) -> Vec<T::Event>;
+	/// This function is responsible to call all the rules on a given block and a given age of that
+	/// block, it also compares the produced events against reorg_events and filter out duplicates
+	fn process_rules_for_age_and_block(
+		&self,
+		block: T::ChainBlockNumber,
+		age: T::ChainBlockNumber,
+		data: &T::BlockData,
+	) -> Vec<T::Event>;
 }
 
 #[derive(
@@ -53,12 +96,13 @@ pub struct BWSettings {
 	pub max_concurrent_elections: u16,
 }
 
-#[derive_where(Debug, Clone, PartialEq, Eq; T::SafeModeEnabledHook: Debug + Clone + Eq, T::ElectionPropertiesHook: Debug + Clone + Eq)]
+#[derive_where(Debug, Clone, PartialEq, Eq; T::SafeModeEnabledHook: Debug + Clone + Eq, T::ElectionPropertiesHook: Debug + Clone + Eq, 	T::BlockProcessor: Debug + Clone + Eq)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct BWState<T: BWTypes> {
 	pub elections: ElectionTracker<T::ChainBlockNumber>,
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
 	pub safemode_enabled: T::SafeModeEnabledHook,
+	pub block_processor: T::BlockProcessor,
 	_phantom: sp_std::marker::PhantomData<T>,
 }
 
@@ -74,12 +118,14 @@ impl<T: BWTypes> Default for BWState<T>
 where
 	T::ElectionPropertiesHook: Default,
 	T::SafeModeEnabledHook: Default,
+	T::BlockProcessor: Default,
 {
 	fn default() -> Self {
 		Self {
 			elections: Default::default(),
 			generate_election_properties_hook: Default::default(),
 			safemode_enabled: Default::default(),
+			block_processor: Default::default(),
 			_phantom: Default::default(),
 		}
 	}
@@ -111,23 +157,35 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 	}
 
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
-		log::info!("BW: input {i:?}");
+		// log::warn!("BW: input {i:?}");
 		match i {
 			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
 				s.elections.highest_election = range.start().saturating_backward(1);
-				s.elections.schedule_range(range);
+				s.elections.schedule_range(range.clone());
+				s.block_processor
+					.process_block_data(ChainProgressInner::Progress(*range.start()));
 			},
 
 			SMInput::Context(ChainProgress::Range(range)) => {
+				if *range.start() <= s.elections.highest_witnessed {
+					//Reorg
+					s.block_processor.process_block_data(ChainProgressInner::Reorg(range.clone()));
+				} else {
+					s.block_processor
+						.process_block_data(ChainProgressInner::Progress(*range.end()));
+				}
 				s.elections.schedule_range(range);
 			},
 
 			SMInput::Context(ChainProgress::None) => {},
 
 			SMInput::Vote(blockdata) => {
-				// insert blockdata into our cache of blocks
 				s.elections.mark_election_done(blockdata.0 .0);
 				log::info!("got block data: {:?}", blockdata.1);
+				s.block_processor.insert(blockdata.0 .0, blockdata.1.data);
+				s.block_processor.process_block_data(ChainProgressInner::Progress(
+					s.elections.highest_witnessed,
+				));
 			},
 		};
 
@@ -136,7 +194,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 			s.safemode_enabled.run(()),
 		);
 
-		log::info!("BW: done. current elections: {:?}", s.elections.ongoing);
+		// log::warn!("BW: done. current elections: {:?}", s.elections.ongoing);
 
 		Ok(())
 	}

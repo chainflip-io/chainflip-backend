@@ -15,6 +15,8 @@ use super::*;
 	Eq,
 	serde::Serialize,
 	serde::Deserialize,
+	Ord,
+	PartialOrd,
 )]
 pub struct TapscriptPath {
 	pub salt: u32,
@@ -46,6 +48,8 @@ impl TapscriptPath {
 	Eq,
 	serde::Serialize,
 	serde::Deserialize,
+	Ord,
+	PartialOrd,
 )]
 pub struct DepositAddress {
 	pub pubkey_x: [u8; 32],

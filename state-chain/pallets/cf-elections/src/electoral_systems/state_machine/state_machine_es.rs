@@ -39,6 +39,7 @@ impl<A, B> IntoResult for Result<A, B> {
 /// be indexed but not the context.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SMInput<Vote, Context> {
+	//Todo! Rename to consensus
 	Vote(Vote),
 	Context(Context),
 }

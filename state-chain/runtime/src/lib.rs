@@ -1,3 +1,4 @@
+#![feature(btree_extract_if)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "256"]
 pub mod chainflip;
@@ -1395,6 +1396,7 @@ type MigrationsForV1_8 = (
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
+extern crate core;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benches {
