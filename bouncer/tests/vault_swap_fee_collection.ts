@@ -32,14 +32,14 @@ async function testFeeCollection(inputAsset: Asset) {
   if (inputAsset === Assets.Btc) {
     await openPrivateBtcChannel(brokerUri);
   }
-  const affiliateShotId = 0;
+
   testVaultSwapFeeCollection.debugLog('Registering affiliate');
   const event = await registerAffiliate(
     brokerUri,
     await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND'),
   );
 
-  const shortId = event.data.shortId as number;
+  const affiliateShotId = event.data.shortId as number;
   const affiliateId = event.data.affiliateId as string;
 
   // Setup
