@@ -35,34 +35,47 @@ pub trait BWTypes: 'static {
 	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
 	type ElectionPropertiesHook: Hook<Self::ChainBlockNumber, Self::ElectionProperties>;
 	type SafeModeEnabledHook: Hook<(), SafeModeStatus>;
-	type Event: PartialEq + Clone + Debug + 'static;
-	type BlockProcessor: BlockWitnesserProcessor<Self::ChainBlockNumber, Self::BlockData, Self::Event>
-		+ Debug
-		+ Clone;
+	type BlockProcessor: BlockWitnesserProcessor<Self::BWProcessorTypes> + Debug + Clone;
+	type BWProcessorTypes: BWProcessorTypes<
+		ChainBlockNumber = Self::ChainBlockNumber,
+		BlockData = Self::BlockData,
+	>;
 }
 
-pub trait BlockWitnesserProcessor<ChainBlockNumber, BlockData, Event> {
-	fn process_block_data(&mut self, chain_progress: ChainProgressInner<ChainBlockNumber>);
+pub trait BWProcessorTypes {
+	type ChainBlockNumber: Ord + Serde;
+	type BlockData: Serde;
+	type Event: Serde;
+	type Rules: Hook<(Self::ChainBlockNumber, Self::ChainBlockNumber, Self::BlockData), Vec<Self::Event>>
+		+ Default;
+	type Execute: Hook<Self::Event, ()> + Default;
+}
+
+pub trait BlockWitnesserProcessor<T: BWProcessorTypes> {
+	fn process_block_data(
+		&mut self,
+		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
+	) -> Vec<T::Event>;
 	/// Insert a new BlockData, replacing the old one if another BlockData for the same height was
 	/// already present NB! Replacement should never happen since when we detect a reorg we remove
 	/// the block being re-orged
-	fn insert(&mut self, n: ChainBlockNumber, block_data: BlockData);
+	fn insert(&mut self, n: T::ChainBlockNumber, block_data: T::BlockData);
 	/// remove all the old BlockData and reorg_events based on the last block_height
 	/// TODO! if we skip blocks we don't delete all the entries, handle this case
-	fn clean_old(&mut self, n: ChainBlockNumber);
+	fn clean_old(&mut self, n: T::ChainBlockNumber);
 	/// This function is responsible to process all the rules (in the correct order or with the
 	/// correct logic) and return a list of Events I.E. if we end up with both a PreWitness and a
 	/// Witness event for the same deposit we remove the PreWitness one TODO! implement this logic
 	/// to remove PreWitness event in case a Witness is present
-	fn process_rules(&mut self, last_height: ChainBlockNumber) -> Vec<Event>;
+	fn process_rules(&mut self, last_height: T::ChainBlockNumber) -> Vec<T::Event>;
 	/// This function is responsible to call all the rules on a given block and a given age of that
 	/// block, it also compares the produced events against reorg_events and filter out duplicates
 	fn process_rules_for_age_and_block(
 		&self,
-		block: ChainBlockNumber,
-		age: ChainBlockNumber,
-		data: &BlockData,
-	) -> Vec<Event>;
+		block: T::ChainBlockNumber,
+		age: T::ChainBlockNumber,
+		data: &T::BlockData,
+	) -> Vec<T::Event>;
 }
 
 #[derive(
@@ -157,7 +170,8 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 					//Reorg
 					s.block_processor.process_block_data(ChainProgressInner::Reorg(range.clone()));
 				} else {
-					s.block_processor.process_block_data(ChainProgressInner::Progress(*range.end()));
+					s.block_processor
+						.process_block_data(ChainProgressInner::Progress(*range.end()));
 				}
 				s.elections.schedule_range(range);
 			},

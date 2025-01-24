@@ -9,7 +9,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
-use super::{super::state_machine::core::Validate, BlockHeightTrait, ChainProgress};
+use super::{super::state_machine::core::Validate, ChainProgress};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
