@@ -161,12 +161,13 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 		match i {
 			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
 				s.elections.highest_election = range.start().saturating_backward(1);
-				s.elections.schedule_range(range);
-				s.block_processor.process_block_data(ChainProgressInner::Progress(*range.start()));
+				s.elections.schedule_range(range.clone());
+				s.block_processor
+					.process_block_data(ChainProgressInner::Progress(*range.start()));
 			},
 
 			SMInput::Context(ChainProgress::Range(range)) => {
-				if *range.start() <= s.elections.highest_scheduled {
+				if *range.start() <= s.elections.highest_witnessed {
 					//Reorg
 					s.block_processor.process_block_data(ChainProgressInner::Reorg(range.clone()));
 				} else {
@@ -176,19 +177,14 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 				s.elections.schedule_range(range);
 			},
 
-			SMInput::Context(ChainProgress::None) => {
-				// This doesn't need to be run in case there is no update
-				// s.block_processor.process_block_data(ChainProgressInner::Progress(
-				// 	s.elections.highest_scheduled,
-				// ));
-			},
+			SMInput::Context(ChainProgress::None) => {},
 
 			SMInput::Vote(blockdata) => {
 				s.elections.mark_election_done(blockdata.0 .0);
 				log::info!("got block data: {:?}", blockdata.1);
 				s.block_processor.insert(blockdata.0 .0, blockdata.1.data);
 				s.block_processor.process_block_data(ChainProgressInner::Progress(
-					s.elections.highest_scheduled,
+					s.elections.highest_witnessed,
 				));
 			},
 		};

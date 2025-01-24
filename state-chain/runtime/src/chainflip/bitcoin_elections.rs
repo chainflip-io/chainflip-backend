@@ -22,8 +22,8 @@ use pallet_cf_elections::{
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
-            primitives::SafeModeStatus,
-            state_machine::{
+			primitives::SafeModeStatus,
+			state_machine::{
 				BWSettings, BWState, BWStateMachine, BWTypes, BlockWitnesserProcessor,
 			},
 		},
