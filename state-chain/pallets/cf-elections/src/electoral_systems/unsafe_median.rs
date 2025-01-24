@@ -1,7 +1,7 @@
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
+		ElectoralSystemTypes, ElectoralWriteAccess, PartialVoteOf, VoteOf, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
@@ -31,7 +31,7 @@ impl<
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId>
+	> ElectoralSystemTypes for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId>
 {
 	type ValidatorId = ValidatorId;
 
@@ -44,16 +44,24 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = ();
 	type ElectionState = ();
-	type Vote =
+	type VoteStorage =
 		vote_storage::individual::Individual<(), vote_storage::individual::shared::Shared<Value>>;
 	type Consensus = Value;
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
+}
 
+impl<
+		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
+		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
+		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId>
+{
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+		_vote: &PartialVoteOf<Self>,
 	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(())
 	}

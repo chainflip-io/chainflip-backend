@@ -12,8 +12,8 @@ pub fn generate_votes<ES>(
 ) -> ConsensusVotes<ES>
 where
 	ES: ElectoralSystem<ValidatorId = ()>,
-	ES::Vote: VoteStorage<Properties = ()>,
-	ES::Vote: VoteStorage<Vote = u64>,
+	ES::VoteStorage: VoteStorage<Properties = ()>,
+	ES::VoteStorage: VoteStorage<Vote = u64>,
 {
 	ConsensusVotes {
 		votes: (0..success_votes)

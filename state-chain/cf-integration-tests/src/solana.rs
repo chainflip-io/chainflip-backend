@@ -28,7 +28,7 @@ use frame_support::{
 };
 use pallet_cf_elections::{
 	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
-	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
+	AuthorityVoteOf, ElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{
 	DepositFailedReason, DepositWitness, FetchOrTransfer, VaultDepositWitness,
@@ -65,10 +65,10 @@ const REFUND_PARAMS: ChannelRefundParametersDecoded = ChannelRefundParametersDec
 };
 
 type SolanaElectionVote = BoundedBTreeMap<
-	CompositeElectionIdentifierOf<
+	ElectionIdentifierOf<
 		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
 	>,
-	CompositeAuthorityVoteOf<
+	AuthorityVoteOf<
 		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
 	>,
 	ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,

@@ -5,50 +5,54 @@ use frame_support::{
 use sp_std::vec::Vec;
 
 use crate::{
+	electoral_system::{
+		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectoralSystemTypes, PartialVoteOf,
+		VoteOf, VotePropertiesOf,
+	},
 	vote_storage::{AuthorityVote, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
 
 use crate::electoral_system::ConsensusStatus;
 
-#[allow(type_alias_bounds)]
-pub type CompositeElectionIdentifierOf<E: ElectoralSystemRunner> =
-	ElectionIdentifier<<E as ElectoralSystemRunner>::ElectionIdentifierExtra>;
+// #[allow(type_alias_bounds)]
+// pub type ElectionIdentifierOf<E: ElectoralSystemRunner> =
+// 	ElectionIdentifier<<E as ElectoralSystemRunner>::ElectionIdentifierExtra>;
 
-#[allow(type_alias_bounds)]
-pub type CompositeAuthorityVoteOf<E: ElectoralSystemRunner> = AuthorityVote<
-	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::PartialVote,
-	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
->;
-#[allow(type_alias_bounds)]
-pub type CompositeIndividualComponentOf<E: ElectoralSystemRunner> =
-	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::IndividualComponent;
-#[allow(type_alias_bounds)]
-pub type BitmapComponentOf<E: ElectoralSystemRunner> =
-	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::BitmapComponent;
-#[allow(type_alias_bounds)]
-pub type CompositeVotePropertiesOf<E: ElectoralSystemRunner> =
-	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::Properties;
+// #[allow(type_alias_bounds)]
+// pub type AuthorityVoteOf<E: ElectoralSystemRunner> = AuthorityVote<
+// 	PartialVoteOf<<E as ElectoralSystemRunner>>,
+// 	VoteOf<<E as ElectoralSystemRunner>>,
+// >;
+// #[allow(type_alias_bounds)]
+// pub type IndividualComponentOf<E: ElectoralSystemRunner> =
+// 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::IndividualComponent;
+// #[allow(type_alias_bounds)]
+// pub type BitmapComponentOf<E: ElectoralSystemRunner> =
+// 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::BitmapComponent;
+// #[allow(type_alias_bounds)]
+// pub type VotePropertiesOf<E: ElectoralSystemRunner> =
+// 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::Properties;
 
-pub struct CompositeConsensusVote<ES: ElectoralSystemRunner> {
-	// If the validator hasn't voted, they will get a None.
-	pub vote: Option<(CompositeVotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote)>,
-	pub validator_id: ES::ValidatorId,
-}
+// pub struct ConsensusVote<ES: ElectoralSystemRunner> {
+// 	// If the validator hasn't voted, they will get a None.
+// 	pub vote: Option<(VotePropertiesOf<ES>, VoteOf<ES>)>,
+// 	pub validator_id: ES::ValidatorId,
+// }
 
-pub struct CompositeConsensusVotes<ES: ElectoralSystemRunner> {
-	pub votes: Vec<CompositeConsensusVote<ES>>,
-}
+// pub struct ConsensusVotes<ES: ElectoralSystemRunner> {
+// 	pub votes: Vec<ConsensusVote<ES>>,
+// }
 
-#[cfg(test)]
-impl<ES: ElectoralSystemRunner> CompositeConsensusVotes<ES> {
-	pub fn active_votes(self) -> Vec<<ES::Vote as VoteStorage>::Vote> {
-		self.votes
-			.into_iter()
-			.filter_map(|CompositeConsensusVote { vote, .. }| vote.map(|v| v.1))
-			.collect()
-	}
-}
+// #[cfg(test)]
+// impl<ES: ElectoralSystemRunner> ConsensusVotes<ES> {
+// 	pub fn active_votes(self) -> Vec<VoteOf<ES>> {
+// 		self.votes
+// 			.into_iter()
+// 			.filter_map(|ConsensusVote { vote, .. }| vote.map(|v| v.1))
+// 			.collect()
+// 	}
+// }
 
 /// A trait used to define a runner of electoral systems. An object implementing this trait is
 /// injected into an elections pallet, which then executes the necessary logic to run each electoral
@@ -57,74 +61,15 @@ impl<ES: ElectoralSystemRunner> CompositeConsensusVotes<ES> {
 /// implementation of this trait. This ensures that the storage and access is consistent across all
 /// electoral systems. i.e. we always wrap the storage types. Which leads to consistent and
 /// therefore simpler migration logic.
-pub trait ElectoralSystemRunner: 'static + Sized {
-	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
-
-	/// This is intended for storing any internal state of the ElectoralSystem. It is not
-	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
-	/// by the engine.
-	///
-	/// Also note that if this state is changed that will not cause election's consensus to be
-	/// retested.
-	type ElectoralUnsynchronisedState: Parameter + Member + MaybeSerializeDeserialize;
-	/// This is intended for storing any internal state of the ElectoralSystem. It is not
-	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
-	/// by the engine.
-	///
-	/// Also note that if this state is changed that will not cause election's consensus to be
-	/// retested.
-	type ElectoralUnsynchronisedStateMapKey: Parameter + Member;
-	/// This is intended for storing any internal state of the ElectoralSystem. It is not
-	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
-	/// by the engine.
-	///
-	/// Also note that if this state is changed that will not cause election's consensus to be
-	/// retested.
-	type ElectoralUnsynchronisedStateMapValue: Parameter + Member;
-
-	/// Settings of the electoral system. These can be changed at any time by governance, and
-	/// are not synchronised with elections, and therefore there is not a universal mapping from
-	/// elections to these settings values. Therefore it should only be used for internal
-	/// state, i.e. the engines should not consume this data.
-	///
-	/// Also note that if these settings are changed that will not cause election's consensus to be
-	/// retested.
-	type ElectoralUnsynchronisedSettings: Parameter + Member + MaybeSerializeDeserialize;
-
-	/// Settings of the electoral system. These settings are synchronised with
-	/// elections, so all engines will have a consistent view of the electoral settings to use for a
-	/// given election.
-	type ElectoralSettings: Parameter + Member + MaybeSerializeDeserialize + Eq;
-
-	/// Extra data stored along with the UniqueMonotonicIdentifier as part of the
-	/// ElectionIdentifier. This is used by composite electoral systems to identify which variant of
-	/// election it is working with, without needing to reading in further election
-	/// state/properties/etc.
-	type ElectionIdentifierExtra: Parameter + Member + Copy + Eq + Ord;
-
-	/// The properties of a single election, for example this could describe which block of the
-	/// external chain the election is associated with and what needs to be witnessed.
-	type ElectionProperties: Parameter + Member;
-
-	/// Per-election state needed by the ElectoralSystem. This state is not synchronised across
-	/// engines, and may change during the lifetime of a election.
-	type ElectionState: Parameter + Member;
-
-	/// A description of the validator's view of the election's topic. For example a list of all
-	/// ingresses the validator has observed in the block the election is about.
-	type Vote: VoteStorage;
-
-	/// This is the information that results from consensus. Typically this will be the same as the
-	/// `Vote` type, but with more complex consensus models the result of an election may not be
-	/// sensibly represented in the same form as a single vote.
-	type Consensus: Parameter + Member + Eq;
-
+pub trait ElectoralSystemRunner:
+	ElectoralSystemTypes<OnFinalizeContext = (), OnFinalizeReturn = ()>
+{
 	/// This is not used by the pallet, but is used to tell a validator that it should attempt
 	/// to vote in a given Election. Validators are expected to call this indirectly via RPC once
 	/// per state-chain block, for each active election.
 	fn is_vote_desired(
-		_election_identifier_with_extra: CompositeElectionIdentifierOf<Self>,
-		current_vote: Option<(CompositeVotePropertiesOf<Self>, CompositeAuthorityVoteOf<Self>)>,
+		_election_identifier_with_extra: ElectionIdentifierOf<Self>,
+		current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(current_vote.is_none())
 	}
@@ -132,15 +77,8 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	/// This is not used by the pallet, but is used to tell a validator if they should submit vote.
 	/// This is a way to decrease the amount of extrinsics a validator needs to send.
 	fn is_vote_needed(
-		_current_vote: (
-			CompositeVotePropertiesOf<Self>,
-			<Self::Vote as VoteStorage>::PartialVote,
-			CompositeAuthorityVoteOf<Self>,
-		),
-		_proposed_vote: (
-			<Self::Vote as VoteStorage>::PartialVote,
-			<Self::Vote as VoteStorage>::Vote,
-		),
+		_current_vote: (VotePropertiesOf<Self>, PartialVoteOf<Self>, AuthorityVoteOf<Self>),
+		_proposed_vote: (PartialVoteOf<Self>, VoteOf<Self>),
 	) -> bool {
 		true
 	}
@@ -159,8 +97,8 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
 	/// function.
 	fn is_vote_valid(
-		_election_identifier: CompositeElectionIdentifierOf<Self>,
-		_partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
+		_election_identifier: ElectionIdentifierOf<Self>,
+		_partial_vote: &PartialVoteOf<Self>,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(true)
 	}
@@ -172,10 +110,10 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
 	/// function.
 	fn generate_vote_properties(
-		election_identifier: CompositeElectionIdentifierOf<Self>,
-		previous_vote: Option<(CompositeVotePropertiesOf<Self>, CompositeAuthorityVoteOf<Self>)>,
-		vote: &<Self::Vote as VoteStorage>::PartialVote,
-	) -> Result<CompositeVotePropertiesOf<Self>, CorruptStorageError>;
+		election_identifier: ElectionIdentifierOf<Self>,
+		previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		vote: &PartialVoteOf<Self>,
+	) -> Result<VotePropertiesOf<Self>, CorruptStorageError>;
 
 	/// This is called during the pallet's `on_finalize` callback, if elections aren't paused and
 	/// the CorruptStorage error hasn't occurred.
@@ -192,12 +130,12 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	/// function.
 	#[allow(clippy::type_complexity)]
 	fn check_consensus(
-		election_identifier: CompositeElectionIdentifierOf<Self>,
+		election_identifier: ElectionIdentifierOf<Self>,
 		// This is the consensus as of the last time the consensus was checked. Note this is *NOT*
 		// the "last" consensus, i.e. this can be `None` even if on some previous check we had
 		// consensus, but it was subsequently lost.
 		previous_consensus: Option<&Self::Consensus>,
-		votes: CompositeConsensusVotes<Self>,
+		votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError>;
 }
 
@@ -211,19 +149,19 @@ pub trait RunnerStorageAccessTrait {
 	fn electoral_settings_for_election(
 		unique_monotonic_identifier: UniqueMonotonicIdentifier,
 	) -> Result<
-		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
+		<Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralSettings,
 		CorruptStorageError,
 	>;
 	fn election_properties(
-		election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
+		election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
 	) -> Result<
-		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
+		<Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionProperties,
 		CorruptStorageError,
 	>;
 	fn election_state(
 		unique_monotonic_identifier: UniqueMonotonicIdentifier,
 	) -> Result<
-		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
+		<Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionState,
 		CorruptStorageError,
 	>;
 
@@ -233,14 +171,14 @@ pub trait RunnerStorageAccessTrait {
 	/// correctly recalculate the consensus if needed.
 	fn set_election_state(
 		unique_monotonic_identifier: UniqueMonotonicIdentifier,
-		state: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
+		state: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionState,
 	) -> Result<(), CorruptStorageError>;
 
 	// Clear the votes of a particular election
 	fn clear_election_votes(unique_monotonic_identifier: UniqueMonotonicIdentifier);
 
 	fn delete_election(
-		composite_election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
+		composite_election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
 	);
 	/// This will change the `ElectionIdentifierExtra` value of the election, and allows you to
 	/// optionally change the properties. Note the `extra` must be strictly greater than the
@@ -254,50 +192,50 @@ pub trait RunnerStorageAccessTrait {
 	/// stored until any elections referencing them are deleted. Any in-flight authority votes
 	/// will be invalidated by this.
 	fn refresh_election(
-		election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
-		new_extra: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
-		properties: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
+		election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
+		new_extra: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionIdentifierExtra,
+		properties: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<(), CorruptStorageError>;
 
 	/// This returns the current consensus which will always be up to date with the latest
 	/// votes/state. This also returns information about the difference in the consensus between
 	/// the last call to `check_consensus`.
 	fn check_election_consensus(
-		election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
+		election_identifier: ElectionIdentifierOf<Self::ElectoralSystemRunner>,
 	) -> Result<
-		ConsensusStatus<<Self::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus>,
+		ConsensusStatus<<Self::ElectoralSystemRunner as ElectoralSystemTypes>::Consensus>,
 		CorruptStorageError,
 	>;
 
 	fn unsynchronised_settings() -> Result<
-		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedSettings,
+		<Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
 		CorruptStorageError,
 	>;
 	fn unsynchronised_state() -> Result<
-		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
+		<Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 		CorruptStorageError,
 	>;
 	fn unsynchronised_state_map(
-			key: &<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
-		) -> Option<
-				<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
-			>;
+		key: &<Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,
+	) -> Option<
+		<Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue,
+	>;
 
 	fn new_election(
-		extra: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
-		properties: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
-		state: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
-	) -> Result<CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>, CorruptStorageError>;
+		extra: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionIdentifierExtra,
+		properties: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionProperties,
+		state: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionState,
+	) -> Result<ElectionIdentifierOf<Self::ElectoralSystemRunner>, CorruptStorageError>;
 
 	fn set_unsynchronised_state(
-		unsynchronised_state: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
+		unsynchronised_state: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 	);
 
 	/// Inserts or removes a value from the unsynchronised state map of the electoral system.
 	fn set_unsynchronised_state_map(
-		key: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
+		key: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,
 		value: Option<
-				<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
+				<Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue,
 			>,
 	);
 
@@ -309,7 +247,7 @@ pub trait RunnerStorageAccessTrait {
 		T,
 		F: for<'a> FnOnce(
 			&Self,
-			&'a <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
+			&'a <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 		) -> Result<T, CorruptStorageError>,
 	>(
 		&self,

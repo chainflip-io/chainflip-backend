@@ -3,7 +3,8 @@ use sp_std::collections::btree_set::BTreeSet;
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVote, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
-		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
+		ElectionWriteAccess, ElectoralSystem, ElectoralSystemTypes, ElectoralWriteAccess,
+		PartialVoteOf, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError,
@@ -44,7 +45,8 @@ impl<
 			+ Copy,
 		Hook: OnCheckComplete<ValidatorId> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, ValidatorId>
+	> ElectoralSystemTypes
+	for Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, ValidatorId>
 {
 	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = ();
@@ -61,16 +63,31 @@ impl<
 
 	// The SC block number that we started the election at.
 	type ElectionState = BlockNumber;
-	type Vote = vote_storage::bitmap::Bitmap<ChainBlockHash>;
+	type VoteStorage = vote_storage::bitmap::Bitmap<ChainBlockHash>;
 	type Consensus = BTreeSet<Self::ValidatorId>;
 	// The current SC block number, and the current chain tracking height.
 	type OnFinalizeContext = (BlockNumber, ChainBlockNumber);
 	type OnFinalizeReturn = ();
+}
 
+impl<
+		ChainBlockNumber: Member + Parameter + Eq + From<u64> + Into<u64> + Copy,
+		ChainBlockHash: Member + Parameter + Eq + Ord,
+		BlockNumber: Member
+			+ Parameter
+			+ Eq
+			+ MaybeSerializeDeserialize
+			+ frame_support::sp_runtime::Saturating
+			+ Ord
+			+ Copy,
+		Hook: OnCheckComplete<ValidatorId> + 'static,
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, ValidatorId>
+{
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+		_vote: &PartialVoteOf<Self>,
 	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(())
 	}
