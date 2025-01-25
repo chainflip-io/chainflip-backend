@@ -279,20 +279,24 @@ where
 			if channels.is_empty() {
 				election_access.delete();
 			} else {
-				election_access.set_state(pending_ingress_totals.clone())?;
+				if pending_ingress_totals.is_empty() {
+					// recreate this election if the properties changed and there is no pending
+					// state
+					if new_properties != old_properties {
+						log::debug!("recreate election: recreate since properties changed from: {old_properties:?}, to: {new_properties:?}");
 
-				// recreate this election if the properties changed
-				if new_properties != old_properties {
-					log::debug!("recreate election: recreate since properties changed from: {old_properties:?}, to: {new_properties:?}");
-
-					election_access.delete();
-					electoral_access.new_election(
-						Default::default(),
-						new_properties,
-						pending_ingress_totals,
-					)?;
+						election_access.delete();
+						electoral_access.new_election(
+							Default::default(),
+							new_properties,
+							pending_ingress_totals,
+						)?;
+					} else {
+						log::debug!("recreate election: keeping old because properties didn't change: {old_properties:?}");
+					}
 				} else {
-					log::debug!("recreate election: keeping old because properties didn't change: {old_properties:?}");
+					election_access.set_state(pending_ingress_totals.clone())?;
+					log::debug!("recreate election: keeping old because of pending totals: {pending_ingress_totals:?}");
 				}
 			}
 		}
