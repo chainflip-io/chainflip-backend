@@ -27,7 +27,7 @@ use frame_support::{
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
 use pallet_cf_elections::{
-	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
+	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote},
 	AuthorityVoteOf, ElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{
@@ -740,7 +740,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 
 			// Submit vote to witness: transaction success, but execution failure
 			let vote: SolanaElectionVote = BTreeMap::from_iter([(election_id,
-				AuthorityVote::Vote(CompositeVote::EE(TransactionSuccessDetails {
+				AuthorityVote::Vote(CompositeVote::D(TransactionSuccessDetails {
 					tx_fee: 1_000,
 					transaction_successful: false,
 				}))
