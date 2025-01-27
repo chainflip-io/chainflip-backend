@@ -1,10 +1,9 @@
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
+		ElectoralSystemTypes, ElectoralWriteAccess, PartialVoteOf, VotePropertiesOf,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
+	vote_storage, CorruptStorageError, ElectionIdentifier,
 };
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
@@ -37,7 +36,7 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: MedianChangeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for MonotonicMedian<Value, Settings, Hook, ValidatorId>
+	> ElectoralSystemTypes for MonotonicMedian<Value, Settings, Hook, ValidatorId>
 {
 	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = Value;
@@ -49,16 +48,23 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = ();
 	type ElectionState = ();
-	type Vote =
+	type VoteStorage =
 		vote_storage::individual::Individual<(), vote_storage::individual::shared::Shared<Value>>;
 	type Consensus = Value;
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = Value;
-
+}
+impl<
+		Value: MaybeSerializeDeserialize + Member + Parameter + Ord,
+		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
+		Hook: MedianChangeHook<Value> + 'static,
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for MonotonicMedian<Value, Settings, Hook, ValidatorId>
+{
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+		_vote: &PartialVoteOf<Self>,
 	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(())
 	}

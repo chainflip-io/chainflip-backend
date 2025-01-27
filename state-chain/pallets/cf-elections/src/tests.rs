@@ -126,7 +126,7 @@ pub trait ElectoralSystemRunnerTestExt: Sized {
 	fn submit_votes<I: 'static>(
 		self,
 		validator_ids: &[u64],
-		vote: CompositeAuthorityVoteOf<MockElectoralSystemRunner>,
+		vote: AuthorityVoteOf<MockElectoralSystemRunner>,
 		expected_outcome: Result<(), Error<Test, I>>,
 	) -> Self
 	where
@@ -173,7 +173,7 @@ impl ElectoralSystemRunnerTestExt for TestRunner<TestContext> {
 	fn submit_votes<I: 'static>(
 		self,
 		validator_ids: &[u64],
-		vote: CompositeAuthorityVoteOf<MockElectoralSystemRunner>,
+		vote: AuthorityVoteOf<MockElectoralSystemRunner>,
 		expected_outcome: Result<(), Error<Test, I>>,
 	) -> Self
 	where
@@ -192,9 +192,10 @@ impl ElectoralSystemRunnerTestExt for TestRunner<TestContext> {
 								Call::<Test, I>::vote {
 									authority_votes: BoundedBTreeMap::try_from(
 										sp_std::iter::once((
-											CompositeElectionIdentifierOf::<
-												MockElectoralSystemRunner,
-											>::new(*umi, ()),
+											ElectionIdentifierOf::<MockElectoralSystemRunner>::new(
+												*umi,
+												(),
+											),
 											vote.clone(),
 										))
 										.collect::<BTreeMap<_, _>>(),
@@ -239,7 +240,7 @@ impl ElectoralSystemRunnerTestExt for TestRunner<TestContext> {
 
 #[test]
 fn consensus_state_transitions() {
-	const VOTE: CompositeAuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
+	const VOTE: AuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
 
 	election_test_ext(TestSetup { num_non_contributing_authorities: 2, ..Default::default() })
 		.new_election()
@@ -291,7 +292,7 @@ fn consensus_state_transitions() {
 
 #[test]
 fn authority_removes_and_re_adds_itself_from_contributing_set() {
-	const VOTE: CompositeAuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
+	const VOTE: AuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
 
 	election_test_ext(Default::default())
 		.new_election()

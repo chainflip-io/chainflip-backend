@@ -4,19 +4,19 @@ use frame_support::{
 };
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
-	electoral_system_runner::RunnerStorageAccessTrait,
+	electoral_system_runner::{ElectoralSystemRunner, RunnerStorageAccessTrait},
 	electoral_systems::composite::{self, CompositeRunner},
 	vote_storage::{self, VoteStorage},
-	ElectoralSystemRunner,
+	ElectoralSystemTypes, VoteOf,
 };
 
 #[async_trait::async_trait]
 pub trait VoterApi<E: ElectoralSystem> {
 	async fn vote(
 		&self,
-		settings: <E as ElectoralSystem>::ElectoralSettings,
-		properties: <E as ElectoralSystem>::ElectionProperties,
-	) -> Result<<<E as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>;
+		settings: <E as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <E as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<VoteOf<E>, anyhow::Error>;
 }
 
 pub struct CompositeVoter<ElectoralSystemRunner, Voters> {
@@ -39,9 +39,9 @@ impl<ElectoralSystemRunner, Voters> CompositeVoter<ElectoralSystemRunner, Voters
 pub trait CompositeVoterApi<E: ElectoralSystemRunner> {
 	async fn vote(
 		&self,
-		settings: <E as ElectoralSystemRunner>::ElectoralSettings,
-		properties: <E as ElectoralSystemRunner>::ElectionProperties,
-	) -> Result<<<E as ElectoralSystemRunner>::Vote as VoteStorage>::Vote, anyhow::Error>;
+		settings: <E as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <E as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<VoteOf<E>, anyhow::Error>;
 }
 
 // TODO Combine this into the composite macro PRO-1736
@@ -52,10 +52,10 @@ macro_rules! generate_voter_api_tuple_impls {
         impl<$($voter: VoterApi<$electoral_system> + Send + Sync),*, $($electoral_system : ElectoralSystem<ValidatorId = ValidatorId> + Send + Sync + 'static),*, ValidatorId: MaybeSerializeDeserialize + Member + Parameter, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks>> + Send + Sync + 'static, Hooks: Send + Sync + 'static + composite::$module::Hooks<$($electoral_system,)*>> CompositeVoterApi<CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks>> for CompositeVoter<CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks>, ($($voter,)*)> {
             async fn vote(
                 &self,
-                settings: <CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemRunner>::ElectoralSettings,
-                properties: <CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemRunner>::ElectionProperties,
+                settings: <CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::ElectoralSettings,
+                properties: <CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::ElectionProperties,
             ) -> Result<
-                <<CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
+                <<CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::VoteStorage as VoteStorage>::Vote,
                 anyhow::Error,
             > {
                 use vote_storage::composite::$module::CompositeVote;

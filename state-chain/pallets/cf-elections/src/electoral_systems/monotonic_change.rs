@@ -1,10 +1,10 @@
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
-		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
+		ElectionWriteAccess, ElectoralSystem, ElectoralSystemTypes, ElectoralWriteAccess,
+		PartialVoteOf, VoteOf, VotePropertiesOf,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError,
+	vote_storage, CorruptStorageError,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::{success_threshold_from_share_count, threshold_from_share_count};
@@ -59,7 +59,7 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem
+	> ElectoralSystemTypes
 	for MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
 {
 	type ValidatorId = ValidatorId;
@@ -71,11 +71,22 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = (Identifier, Value, BlockHeight);
 	type ElectionState = ();
-	type Vote = vote_storage::change::MonotonicChange<Value, BlockHeight>;
+	type VoteStorage = vote_storage::change::MonotonicChange<Value, BlockHeight>;
 	type Consensus = (Value, BlockHeight);
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
+}
 
+impl<
+		Identifier: Member + Parameter + Ord,
+		Value: Member + Parameter + Eq + Ord,
+		BlockHeight: Member + Parameter + Eq + Ord + Copy + Default,
+		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
+		Hook: OnChangeHook<Identifier, Value> + 'static,
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem
+	for MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
+{
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
@@ -84,15 +95,8 @@ impl<
 	}
 
 	fn is_vote_needed(
-		(_, _, current_vote): (
-			VotePropertiesOf<Self>,
-			<Self::Vote as VoteStorage>::PartialVote,
-			AuthorityVoteOf<Self>,
-		),
-		(_, proposed_vote): (
-			<Self::Vote as VoteStorage>::PartialVote,
-			<Self::Vote as VoteStorage>::Vote,
-		),
+		(_, _, current_vote): (VotePropertiesOf<Self>, PartialVoteOf<Self>, AuthorityVoteOf<Self>),
+		(_, proposed_vote): (PartialVoteOf<Self>, VoteOf<Self>),
 	) -> bool {
 		match current_vote {
 			AuthorityVoteOf::<Self>::Vote(current_vote) =>
@@ -107,7 +111,7 @@ impl<
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+		_vote: &PartialVoteOf<Self>,
 	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(())
 	}

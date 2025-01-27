@@ -3,7 +3,7 @@ use chainflip::solana_elections::SolanaVaultSwapsSettings;
 use frame_support::{pallet_prelude::Weight, storage::unhashed, traits::UncheckedOnRuntimeUpgrade};
 
 use pallet_cf_elections::{
-	Config, ElectoralSettings, ElectoralSystemRunner, ElectoralUnsynchronisedState,
+	electoral_system::ElectoralSystemTypes, Config, ElectoralSettings, ElectoralUnsynchronisedState,
 };
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
@@ -21,7 +21,7 @@ impl UncheckedOnRuntimeUpgrade for SolanaVaultSwapsMigration {
 		>::hashed_key())
 		.unwrap();
 		raw_unsynchronised_state.extend(0u32.encode());
-		ElectoralUnsynchronisedState::<Runtime, SolanaInstance>::put(<<Runtime as Config<SolanaInstance>>::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState::decode(&mut &raw_unsynchronised_state[..]).unwrap());
+		ElectoralUnsynchronisedState::<Runtime, SolanaInstance>::put(<<Runtime as Config<SolanaInstance>>::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedState::decode(&mut &raw_unsynchronised_state[..]).unwrap());
 
 		let (usdc_token_mint_pubkey, swap_endpoint_data_account_address) =
 			match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
@@ -56,7 +56,7 @@ impl UncheckedOnRuntimeUpgrade for SolanaVaultSwapsMigration {
 				}
 				.encode(),
 			);
-			ElectoralSettings::<Runtime, SolanaInstance>::insert(key, <<Runtime as Config<SolanaInstance>>::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings::decode(&mut &raw_storage_at_key[..]).unwrap());
+			ElectoralSettings::<Runtime, SolanaInstance>::insert(key, <<Runtime as Config<SolanaInstance>>::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralSettings::decode(&mut &raw_storage_at_key[..]).unwrap());
 		}
 
 		Weight::zero()

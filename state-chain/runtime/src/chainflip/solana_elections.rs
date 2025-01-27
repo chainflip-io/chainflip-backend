@@ -26,7 +26,7 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
-	electoral_system::{ElectoralReadAccess, ElectoralSystem},
+	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		self,
 		composite::{tuple_7_impls::Hooks, CompositeRunner},
@@ -267,31 +267,37 @@ impl
 		): (
 			Vec<
 				ElectionIdentifier<
-					<SolanaBlockHeightTracking as ElectoralSystem>::ElectionIdentifierExtra,
-				>,
-			>,
-			Vec<
-				ElectionIdentifier<<SolanaFeeTracking as ElectoralSystem>::ElectionIdentifierExtra>,
-			>,
-			Vec<
-				ElectionIdentifier<
-					<SolanaIngressTracking as ElectoralSystem>::ElectionIdentifierExtra,
+					<SolanaBlockHeightTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
 				ElectionIdentifier<
-					<SolanaNonceTracking as ElectoralSystem>::ElectionIdentifierExtra,
+					<SolanaFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
 				ElectionIdentifier<
-					<SolanaEgressWitnessing as ElectoralSystem>::ElectionIdentifierExtra,
+					<SolanaIngressTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
-			Vec<ElectionIdentifier<<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra>>,
 			Vec<
 				ElectionIdentifier<
-					<SolanaVaultSwapTracking as ElectoralSystem>::ElectionIdentifierExtra,
+					<SolanaNonceTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
+				>,
+			>,
+			Vec<
+				ElectionIdentifier<
+					<SolanaEgressWitnessing as ElectoralSystemTypes>::ElectionIdentifierExtra,
+				>,
+			>,
+			Vec<
+				ElectionIdentifier<
+					<SolanaLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
+				>,
+			>,
+			Vec<
+				ElectionIdentifier<
+					<SolanaVaultSwapTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 		),

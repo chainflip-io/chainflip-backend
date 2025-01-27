@@ -1,10 +1,10 @@
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
-		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
+		ElectionWriteAccess, ElectoralSystem, ElectoralSystemTypes, ElectoralWriteAccess,
+		PartialVoteOf, VotePropertiesOf,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError,
+	vote_storage, CorruptStorageError,
 };
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
@@ -47,7 +47,7 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
+	> ElectoralSystemTypes for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
 {
 	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = ();
@@ -59,15 +59,24 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = Identifier;
 	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<Value>;
+	type VoteStorage = vote_storage::bitmap::Bitmap<Value>;
 	type Consensus = Value;
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
+}
 
+impl<
+		Identifier: Member + Parameter + Ord,
+		Value: Member + Parameter + Eq + Ord,
+		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
+		Hook: OnEgressSuccess<Identifier, Value> + 'static,
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
+{
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+		_vote: &PartialVoteOf<Self>,
 	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(())
 	}

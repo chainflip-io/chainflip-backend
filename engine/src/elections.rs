@@ -14,8 +14,8 @@ use cf_utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
 use futures::{stream, StreamExt, TryStreamExt};
 use pallet_cf_elections::{
 	vote_storage::{AuthorityVote, VoteStorage},
-	CompositeElectionIdentifierOf, ElectoralSystemRunner, SharedDataHash,
-	MAXIMUM_VOTES_PER_EXTRINSIC,
+	ElectionIdentifierOf, ElectoralSystemTypes, PartialVoteOf, SharedDataHash, VoteOf,
+	VoteStorageOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use rand::Rng;
 use std::{
@@ -111,17 +111,17 @@ where
 			std::time::Duration::from_millis(MILLISECONDS_PER_BLOCK);
 		let mut submit_interval = tokio::time::interval(BLOCK_TIME);
 		let mut pending_submissions = BTreeMap::<
-			CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
+			ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
 			(
-				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::PartialVote,
-				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
+				PartialVoteOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
+				VoteOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
 			)
 		>::default();
 		let mut vote_tasks = FutureMap::default();
 		let mut shared_data_cache = HashMap::<
 			SharedDataHash,
 			(
-				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::SharedData,
+				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::SharedData,
 				std::time::Instant,
 			)
 		>::default();
@@ -163,7 +163,7 @@ where
 					Ok(vote) => {
 						info!("Voting task for election: '{:?}' succeeded.", election_identifier);
 						// Create the partial_vote early so that SharedData can be provided as soon as the vote has been generated, rather than only after it is submitted.
-						let partial_vote = <<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::vote_into_partial_vote(&vote, |shared_data| {
+						let partial_vote = VoteStorageOf::<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>::vote_into_partial_vote(&vote, |shared_data| {
 							let shared_data_hash = SharedDataHash::of(&shared_data);
 							if shared_data_cache.len() > MAXIMUM_SHARED_DATA_CACHE_ITEMS {
 								for shared_data_hash in shared_data_cache.keys().cloned().take(shared_data_cache.len() - MAXIMUM_SHARED_DATA_CACHE_ITEMS).collect::<Vec<_>>() {

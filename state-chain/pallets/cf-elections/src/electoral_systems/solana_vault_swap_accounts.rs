@@ -13,10 +13,9 @@ use cf_chains::sol::api::VaultSwapAccountAndSender;
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
+		ElectoralSystemTypes, ElectoralWriteAccess, PartialVoteOf, VoteOf, VotePropertiesOf,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
+	vote_storage, CorruptStorageError, ElectionIdentifier,
 };
 use cf_chains::sol::{
 	MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
@@ -113,7 +112,7 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: SolanaVaultSwapAccountsHook<Account, SwapDetails, E> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem
+	> ElectoralSystemTypes
 	for SolanaVaultSwapAccounts<Account, SwapDetails, BlockNumber, Settings, Hook, ValidatorId, E>
 {
 	type ValidatorId = ValidatorId;
@@ -126,15 +125,27 @@ impl<
 	type ElectionIdentifierExtra = u64;
 	type ElectionProperties = SolanaVaultSwapsKnownAccounts<Account>;
 	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<SolanaVaultSwapsVote<Account, SwapDetails>>;
+	type VoteStorage = vote_storage::bitmap::Bitmap<SolanaVaultSwapsVote<Account, SwapDetails>>;
 	type Consensus = SolanaVaultSwapsVote<Account, SwapDetails>;
 	type OnFinalizeContext = BlockNumber;
 	type OnFinalizeReturn = ();
+}
 
+impl<
+		E: sp_std::fmt::Debug + 'static,
+		Account: MaybeSerializeDeserialize + Member + Parameter + Ord,
+		SwapDetails: MaybeSerializeDeserialize + Member + Parameter + Ord + FromSolOrNot,
+		BlockNumber: MaybeSerializeDeserialize + Member + Parameter + Ord + Saturating + Into<u32> + Copy,
+		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
+		Hook: SolanaVaultSwapAccountsHook<Account, SwapDetails, E> + 'static,
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem
+	for SolanaVaultSwapAccounts<Account, SwapDetails, BlockNumber, Settings, Hook, ValidatorId, E>
+{
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+		_vote: &PartialVoteOf<Self>,
 	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(())
 	}
@@ -149,13 +160,10 @@ impl<
 	fn is_vote_needed(
 		(_, current_partial_vote, _): (
 			VotePropertiesOf<Self>,
-			<Self::Vote as VoteStorage>::PartialVote,
+			PartialVoteOf<Self>,
 			AuthorityVoteOf<Self>,
 		),
-		(proposed_partial_vote, _): (
-			<Self::Vote as VoteStorage>::PartialVote,
-			<Self::Vote as VoteStorage>::Vote,
-		),
+		(proposed_partial_vote, _): (PartialVoteOf<Self>, VoteOf<Self>),
 	) -> bool {
 		current_partial_vote != proposed_partial_vote
 	}
