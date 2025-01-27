@@ -10,45 +10,6 @@ use crate::{
 
 use crate::electoral_system::ConsensusStatus;
 
-// #[allow(type_alias_bounds)]
-// pub type ElectionIdentifierOf<E: ElectoralSystemRunner> =
-// 	ElectionIdentifier<<E as ElectoralSystemRunner>::ElectionIdentifierExtra>;
-
-// #[allow(type_alias_bounds)]
-// pub type AuthorityVoteOf<E: ElectoralSystemRunner> = AuthorityVote<
-// 	PartialVoteOf<<E as ElectoralSystemRunner>>,
-// 	VoteOf<<E as ElectoralSystemRunner>>,
-// >;
-// #[allow(type_alias_bounds)]
-// pub type IndividualComponentOf<E: ElectoralSystemRunner> =
-// 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::IndividualComponent;
-// #[allow(type_alias_bounds)]
-// pub type BitmapComponentOf<E: ElectoralSystemRunner> =
-// 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::BitmapComponent;
-// #[allow(type_alias_bounds)]
-// pub type VotePropertiesOf<E: ElectoralSystemRunner> =
-// 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::Properties;
-
-// pub struct ConsensusVote<ES: ElectoralSystemRunner> {
-// 	// If the validator hasn't voted, they will get a None.
-// 	pub vote: Option<(VotePropertiesOf<ES>, VoteOf<ES>)>,
-// 	pub validator_id: ES::ValidatorId,
-// }
-
-// pub struct ConsensusVotes<ES: ElectoralSystemRunner> {
-// 	pub votes: Vec<ConsensusVote<ES>>,
-// }
-
-// #[cfg(test)]
-// impl<ES: ElectoralSystemRunner> ConsensusVotes<ES> {
-// 	pub fn active_votes(self) -> Vec<VoteOf<ES>> {
-// 		self.votes
-// 			.into_iter()
-// 			.filter_map(|ConsensusVote { vote, .. }| vote.map(|v| v.1))
-// 			.collect()
-// 	}
-// }
-
 /// A trait used to define a runner of electoral systems. An object implementing this trait is
 /// injected into an elections pallet, which then executes the necessary logic to run each electoral
 /// system's logic.
