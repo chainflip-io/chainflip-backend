@@ -76,7 +76,6 @@ pub trait SolRetryRpcApi: Clone {
 	async fn get_signature_statuses(
 		&self,
 		signatures: &[SolSignature],
-		search_transaction_history: bool,
 	) -> Response<Vec<Option<TransactionStatus>>>;
 
 	async fn get_transaction(
@@ -154,21 +153,18 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 	async fn get_signature_statuses(
 		&self,
 		signatures: &[SolSignature],
-		search_transaction_history: bool,
 	) -> Response<Vec<Option<TransactionStatus>>> {
 		let signatures = signatures.to_owned();
 		self.rpc_retry_client
 			.request(
 				RequestLog::new(
 					"getSignatureStatuses".to_string(),
-					Some(format!("{:?}, {:?}", signatures, search_transaction_history)),
+					Some(format!("{:?}", signatures)),
 				),
 				Box::pin(move |client| {
 					let signatures = signatures.clone();
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move {
-						client.get_signature_statuses(&signatures, search_transaction_history).await
-					})
+					Box::pin(async move { client.get_signature_statuses(&signatures).await })
 				}),
 			)
 			.await
@@ -237,7 +233,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 							poll_interval.tick().await;
 
 							let signature_statuses =
-								client.get_signature_statuses(&[tx_signature], true).await?;
+								client.get_signature_statuses(&[tx_signature]).await?;
 
 							if let Some(Some(_)) = signature_statuses.value.first() {
 								return Ok(tx_signature);
@@ -311,7 +307,6 @@ pub mod mocks {
 			async fn get_signature_statuses(
 				&self,
 				signatures: &[SolSignature],
-				search_transaction_history: bool,
 			) -> Response<Vec<Option<TransactionStatus>>>;
 
 			async fn get_transaction(
@@ -418,7 +413,6 @@ mod tests {
 				let signature_status = retry_client
 				.get_signature_statuses(
 					&[signature],
-					false
 				).await;
 
 				let confirmation_status = signature_status.value.first().and_then(Option::as_ref).and_then(|ts| ts.confirmation_status.as_ref()).expect("Expected confirmation_status to be Some");
