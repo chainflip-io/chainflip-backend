@@ -1870,4 +1870,35 @@ mod affiliates {
 			);
 		});
 	}
+
+	#[test]
+	fn can_not_deregister_broker_if_affiliates_still_have_balance() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			const BALANCE: AssetAmount = 200;
+			let withdrawal_address: EthereumAddress = Default::default();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
+
+			assert_noop!(
+				Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),
+				Error::<Test>::AffiliateEarnedFeesNotWithdrawn
+			);
+
+			MockBalance::try_debit_account(&affiliate_account_id, Asset::Usdc, BALANCE).unwrap();
+
+			assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)));
+
+			assert!(AffiliateAccountDetails::<Test>::get(BROKER, affiliate_account_id).is_none());
+			assert!(AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID).is_none());
+		});
+	}
 }
