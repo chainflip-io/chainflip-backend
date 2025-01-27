@@ -37,8 +37,8 @@ pub use sol_prim::{
 pub use sol_tx_core::{
 	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
 	CcmAddress as SolCcmAddress, Hash as RawSolHash, Instruction as SolInstruction,
-	InstructionRpc as SolInstructionRpc, Message as SolMessage, Pubkey as SolPubkey,
-	Transaction as SolTransaction,
+	InstructionRpc as SolInstructionRpc, LegacyMessage as SolMessage,
+	LegacyTransaction as SolTransaction, Pubkey as SolPubkey,
 };
 
 // Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch
