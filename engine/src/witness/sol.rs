@@ -53,10 +53,10 @@ impl VoterApi<SolanaBlockHeightTracking> for SolanaBlockHeightTrackingVoter {
 		&self,
 		_settings: <SolanaBlockHeightTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <SolanaBlockHeightTracking as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<SolanaBlockHeightTracking>, anyhow::Error> {
+	) -> Result<Option<VoteOf<SolanaBlockHeightTracking>>, anyhow::Error> {
 		let slot = self.client.get_slot(CommitmentConfig::finalized()).await;
 		CHAIN_TRACKING.set(&[cf_chains::Solana::NAME], Into::<u64>::into(slot));
-		Ok(slot)
+		Ok(Some(slot))
 	}
 }
 
@@ -71,11 +71,11 @@ impl VoterApi<SolanaFeeTracking> for SolanaFeeTrackingVoter {
 		&self,
 		_settings: <SolanaFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <SolanaFeeTracking as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<SolanaFeeTracking>, anyhow::Error> {
+	) -> Result<Option<VoteOf<SolanaFeeTracking>>, anyhow::Error> {
 		// Note, this won't actually be submitted, because no elections will be created (they have
 		// been disabled inside the UnsafeMedian electoral system) this is just to provide
 		// something so we compile.
-		Ok(SolanaChainTrackingProvider::priority_fee())
+		Ok(Some(SolanaChainTrackingProvider::priority_fee()))
 	}
 }
 
@@ -90,7 +90,7 @@ impl VoterApi<SolanaIngressTracking> for SolanaIngressTrackingVoter {
 		&self,
 		settings: <SolanaIngressTracking as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <SolanaIngressTracking as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<SolanaIngressTracking>, anyhow::Error> {
+	) -> Result<Option<VoteOf<SolanaIngressTracking>>, anyhow::Error> {
 		sol_deposits::get_channel_ingress_amounts(
 			&self.client,
 			settings.vault_program,
@@ -101,6 +101,7 @@ impl VoterApi<SolanaIngressTracking> for SolanaIngressTrackingVoter {
 		.and_then(|vote| {
 			vote.try_into().map_err(|_| anyhow::anyhow!("Too many channels in election"))
 		})
+		.map(Option::Some)
 	}
 }
 
@@ -115,7 +116,7 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 		&self,
 		_settings: <SolanaNonceTracking as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <SolanaNonceTracking as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<SolanaNonceTracking>, anyhow::Error> {
+	) -> Result<Option<VoteOf<SolanaNonceTracking>>, anyhow::Error> {
 		let (nonce_account, previous_nonce, previous_slot) = properties;
 
 		let nonce_and_slot =
@@ -124,8 +125,10 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 				.map(|(nonce, slot)| MonotonicChangeVote { value: nonce, block: slot });
 		// If the nonce is not found, we default to the previous nonce and slot.
 		// The `MonotonicChange` electoral system ensure this vote is filtered.
-		Ok(nonce_and_slot
-			.unwrap_or(MonotonicChangeVote { value: previous_nonce, block: previous_slot }))
+		Ok(Some(
+			nonce_and_slot
+				.unwrap_or(MonotonicChangeVote { value: previous_nonce, block: previous_slot }),
+		))
 	}
 }
 
@@ -140,13 +143,14 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 		&self,
 		_settings: <SolanaEgressWitnessing as ElectoralSystemTypes>::ElectoralSettings,
 		signature: <SolanaEgressWitnessing as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<SolanaEgressWitnessing>, anyhow::Error> {
+	) -> Result<Option<VoteOf<SolanaEgressWitnessing>>, anyhow::Error> {
 		egress_witnessing::get_finalized_fee_and_success_status(&self.client, signature)
 			.await
 			.map(|(tx_fee, transaction_successful)| TransactionSuccessDetails {
 				tx_fee,
 				transaction_successful,
 			})
+			.map(Option::Some)
 	}
 }
 
@@ -161,23 +165,25 @@ impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
 		&self,
 		_settings: <SolanaLiveness as ElectoralSystemTypes>::ElectoralSettings,
 		slot: <SolanaLiveness as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<SolanaLiveness>, anyhow::Error> {
-		Ok(SolHash::from_str(
-			&self
-				.client
-				.get_block(
-					slot,
-					RpcBlockConfig {
-						transaction_details: Some(TransactionDetails::None),
-						rewards: Some(false),
-						max_supported_transaction_version: Some(0),
-						..Default::default()
-					},
-				)
-				.await
-				.blockhash,
-		)
-		.map_err(|e| anyhow::anyhow!("Failed to convert blockhash String to SolHash: {e}"))?)
+	) -> Result<Option<VoteOf<SolanaLiveness>>, anyhow::Error> {
+		Ok(Some(
+			SolHash::from_str(
+				&self
+					.client
+					.get_block(
+						slot,
+						RpcBlockConfig {
+							transaction_details: Some(TransactionDetails::None),
+							rewards: Some(false),
+							max_supported_transaction_version: Some(0),
+							..Default::default()
+						},
+					)
+					.await
+					.blockhash,
+			)
+			.map_err(|e| anyhow::anyhow!("Failed to convert blockhash String to SolHash: {e}"))?,
+		))
 	}
 }
 
@@ -192,7 +198,7 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 		&self,
 		settings: <SolanaVaultSwapTracking as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <SolanaVaultSwapTracking as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<SolanaVaultSwapTracking>, anyhow::Error> {
+	) -> Result<Option<VoteOf<SolanaVaultSwapTracking>>, anyhow::Error> {
 		program_swaps_witnessing::get_program_swaps(
 			&self.client,
 			settings.swap_endpoint_data_account_address,
@@ -209,6 +215,7 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 			new_accounts: new_accounts.into_iter().collect::<BTreeSet<_>>(),
 			confirm_closed_accounts: confirm_closed_accounts.into_iter().collect::<BTreeSet<_>>(),
 		})
+		.map(Option::Some)
 	}
 }
 

@@ -16,7 +16,7 @@ pub trait VoterApi<E: ElectoralSystem> {
 		&self,
 		settings: <E as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <E as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<E>, anyhow::Error>;
+	) -> Result<Option<VoteOf<E>>, anyhow::Error>;
 }
 
 pub struct CompositeVoter<ElectoralSystemRunner, Voters> {
@@ -41,7 +41,7 @@ pub trait CompositeVoterApi<E: ElectoralSystemRunner> {
 		&self,
 		settings: <E as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <E as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<E>, anyhow::Error>;
+	) -> Result<Option<VoteOf<E>>, anyhow::Error>;
 }
 
 // TODO Combine this into the composite macro PRO-1736
@@ -55,7 +55,9 @@ macro_rules! generate_voter_api_tuple_impls {
                 settings: <CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::ElectoralSettings,
                 properties: <CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::ElectionProperties,
             ) -> Result<
-                <<CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::VoteStorage as VoteStorage>::Vote,
+            Option<
+                <<CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::VoteStorage as VoteStorage>::Vote
+                >,
                 anyhow::Error,
             > {
                 use vote_storage::composite::$module::CompositeVote;
@@ -69,7 +71,7 @@ macro_rules! generate_voter_api_tuple_impls {
                             $voter.vote(
                                 $electoral_system,
                                 properties,
-                            ).await.map(CompositeVote::$electoral_system)
+                            ).await.map(|x| x.map(CompositeVote::$electoral_system))
                         },
                     )*
                 }
