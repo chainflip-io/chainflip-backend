@@ -91,14 +91,30 @@ async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string,
 async function startDepositMonitor(localnetInitPath: string) {
   console.log('Starting up deposit-monitor.');
 
-  execWithLog(`${localnetInitPath}/scripts/start-deposit-monitor.sh`, 'start-deposit-monitor', {
-    LOCALNET_INIT_DIR: `${localnetInitPath}`,
-    DEPOSIT_MONITOR_CONTAINER: 'deposit-monitor',
-    DOCKER_COMPOSE_CMD: 'docker compose',
-    additional_docker_compose_up_args: '--quiet-pull',
-  });
+  let done = false;
+  execWithLog(
+    `${localnetInitPath}/scripts/start-deposit-monitor.sh`,
+    'start-deposit-monitor',
+    {
+      LOCALNET_INIT_DIR: `${localnetInitPath}`,
+      DEPOSIT_MONITOR_CONTAINER: 'deposit-monitor',
+      DOCKER_COMPOSE_CMD: 'docker compose',
+      additional_docker_compose_up_args: '--quiet-pull',
+    },
+    // callback on success or failure
+    (_) => {
+      done = true;
+    },
+  );
 
-  await sleep(10000);
+  // `execWithLog` is not blocking, so we have to wait until the deposit monitor has started,
+  // waiting at most 10 seconds
+  for (let i = 0; i < 10; i++) {
+    await sleep(1000);
+    if (done) {
+      break;
+    }
+  }
 }
 
 async function compatibleUpgrade(
