@@ -9,7 +9,7 @@ use sp_std::{fmt::Debug, vec::Vec};
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
 	vote_storage::VoteStorage,
-	CorruptStorageError,
+	CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VoteOf,
 };
 
 use super::{
@@ -66,88 +66,10 @@ impl<V: Validate, C: Validate> Validate for SMInput<V, C> {
 	}
 }
 
-pub trait ESInterface {
-	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
-
-	/// This is intended for storing any internal state of the ElectoralSystem. It is not
-	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
-	/// by the engine.
-	///
-	/// Also note that if this state is changed that will not cause election's consensus to be
-	/// retested.
-	type ElectoralUnsynchronisedState: Parameter + Member + MaybeSerializeDeserialize;
-	/// This is intended for storing any internal state of the ElectoralSystem. It is not
-	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
-	/// by the engine.
-	///
-	/// Also note that if this state is changed that will not cause election's consensus to be
-	/// retested.
-	type ElectoralUnsynchronisedStateMapKey: Parameter + Member;
-	/// This is intended for storing any internal state of the ElectoralSystem. It is not
-	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
-	/// by the engine.
-	///
-	/// Also note that if this state is changed that will not cause election's consensus to be
-	/// retested.
-	type ElectoralUnsynchronisedStateMapValue: Parameter + Member;
-
-	/// Settings of the electoral system. These can be changed at any time by governance, and
-	/// are not synchronised with elections, and therefore there is not a universal mapping from
-	/// elections to these settings values. Therefore it should only be used for internal
-	/// state, i.e. the engines should not consume this data.
-	///
-	/// Also note that if these settings are changed that will not cause election's consensus to be
-	/// retested.
-	type ElectoralUnsynchronisedSettings: Parameter + Member + MaybeSerializeDeserialize;
-
-	/// Settings of the electoral system. These settings are synchronised with
-	/// elections, so all engines will have a consistent view of the electoral settings to use for a
-	/// given election.
-	type ElectoralSettings: Parameter + Member + MaybeSerializeDeserialize + Eq;
-
-	/// Extra data stored along with the UniqueMonotonicIdentifier as part of the
-	/// ElectionIdentifier. This is used by composite electoral systems to identify which variant of
-	/// election it is working with, without needing to reading in further election
-	/// state/properties/etc.
-	type ElectionIdentifierExtra: Parameter + Member + Copy + Eq + Ord;
-
-	/// The properties of a single election, for example this could describe which block of the
-	/// external chain the election is associated with and what needs to be witnessed.
-	type ElectionProperties: Parameter + Member;
-
-	/// Per-election state needed by the ElectoralSystem. This state is not synchronised across
-	/// engines, and may change during the lifetime of a election.
-	type ElectionState: Parameter + Member;
-
-	/// A description of the validator's view of the election's topic. For example a list of all
-	/// ingresses the validator has observed in the block the election is about.
-	type Vote: VoteStorage;
-
-	/// This is the information that results from consensus. Typically this will be the same as the
-	/// `Vote` type, but with more complex consensus models the result of an election may not be
-	/// sensibly represented in the same form as a single vote.
-	type Consensus: Parameter + Member + Eq;
-
-	/// Custom parameters for `on_finalize`. Used to communicate information like the latest chain
-	/// tracking block to the electoral system. While it gives more flexibility to use a generic
-	/// type here, instead of an associated type, particularly as it would allow `on_finalize` to
-	/// take trait instead of a specific type, I want to avoid spreading additional generics
-	/// throughout the rest of the code. As an alternative, you can use dynamic dispatch (i.e.
-	/// Box<dyn ...>) to achieve much the same affect.
-	type OnFinalizeContext;
-
-	/// Custom return of the `on_finalize` callback. This can be used to communicate any information
-	/// you want to the caller.
-	type OnFinalizeReturn;
-}
-
-#[allow(type_alias_bounds)]
-type VoteOfVoteStorage<VS: VoteStorage> = VS::Vote;
-
 pub trait StateMachineES:
 	'static
 	+ Sized
-	+ ESInterface<
+	+ ElectoralSystemTypes<
 		ElectoralUnsynchronisedStateMapKey = (),
 		ElectoralUnsynchronisedStateMapValue = (),
 		ElectoralSettings = (),
@@ -156,7 +78,7 @@ pub trait StateMachineES:
 		OnFinalizeContext = Vec<Self::OnFinalizeContextItem>,
 		OnFinalizeReturn = Vec<Self::OnFinalizeReturnItem>,
 		Consensus = Self::Consensus2,
-		Vote = Self::VoteStorage2,
+		VoteStorage = Self::VoteStorage2,
 	>
 {
 	type OnFinalizeContextItem: Clone + Debug;
@@ -181,7 +103,7 @@ pub trait StateMachineForES<ES: StateMachineES> = StateMachine<
 >;
 
 pub trait ConsensusMechanismForES<ES: StateMachineES> = ConsensusMechanism<
-	Vote = VoteOfVoteStorage<ES::Vote>,
+	Vote = VoteOf<ES>,
 	Result = ES::Consensus,
 	Settings = (Threshold, ES::ElectionProperties),
 >;
@@ -190,11 +112,7 @@ pub struct StateMachineESInstance<Bounds: StateMachineES> {
 	_phantom: core::marker::PhantomData<Bounds>,
 }
 
-impl<Bounds: StateMachineES> ElectoralSystem for StateMachineESInstance<Bounds>
-where
-	<Bounds::Vote as VoteStorage>::Properties: Default,
-	Bounds::Consensus: Indexed,
-{
+impl<Bounds: StateMachineES> ElectoralSystemTypes for StateMachineESInstance<Bounds> {
 	type ValidatorId = Bounds::ValidatorId;
 	type ElectoralUnsynchronisedState = Bounds::ElectoralUnsynchronisedState;
 	type ElectoralUnsynchronisedStateMapKey = Bounds::ElectoralUnsynchronisedStateMapKey;
@@ -204,18 +122,24 @@ where
 	type ElectionIdentifierExtra = Bounds::ElectionIdentifierExtra;
 	type ElectionProperties = Bounds::ElectionProperties;
 	type ElectionState = Bounds::ElectionState;
-	type Vote = Bounds::Vote;
+	type VoteStorage = Bounds::VoteStorage;
 	type Consensus = Bounds::Consensus;
 	type OnFinalizeContext = Bounds::OnFinalizeContext;
 	type OnFinalizeReturn = Bounds::OnFinalizeReturn;
+}
 
+impl<Bounds: StateMachineES> ElectoralSystem for StateMachineESInstance<Bounds>
+where
+	<Bounds::VoteStorage as VoteStorage>::Properties: Default,
+	Bounds::Consensus: Indexed,
+{
 	fn generate_vote_properties(
 		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
 		_previous_vote: Option<(
 			crate::electoral_system::VotePropertiesOf<Self>,
 			crate::electoral_system::AuthorityVoteOf<Self>,
 		)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+		_vote: &PartialVoteOf<Self>,
 	) -> Result<crate::electoral_system::VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(Default::default())
 	}

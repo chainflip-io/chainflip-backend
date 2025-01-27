@@ -43,8 +43,8 @@ where
 	StateChainClient: StorageApi
 		+ ChainApi
 		+ SignedExtrinsicApi
-		+ ElectoralApi<cf_chains::Solana, SolanaInstance>
-		+ ElectoralApi<cf_chains::Bitcoin, BitcoinInstance>
+		+ ElectoralApi<SolanaInstance>
+		+ ElectoralApi<BitcoinInstance>
 		+ 'static
 		+ Send
 		+ Sync,
@@ -136,7 +136,7 @@ where
 
 	let start_btc_e = super::btc_e::start(scope, btc_client, state_chain_client);
 
-	futures_util::try_join!(start_eth, start_dot, start_arb, start_sol, start_btc_e)?;
+	futures::future::try_join5(start_eth, start_dot, start_arb, start_sol, start_btc_e).await?;
 
 	Ok(())
 }

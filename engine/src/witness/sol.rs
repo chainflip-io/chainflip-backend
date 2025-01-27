@@ -228,7 +228,7 @@ where
 	StateChainClient: StorageApi
 		+ ChainApi
 		+ SignedExtrinsicApi
-		+ ElectoralApi<cf_chains::Solana, SolanaInstance>
+		+ ElectoralApi<SolanaInstance>
 		+ 'static
 		+ Send
 		+ Sync,

@@ -21,13 +21,13 @@ use super::{
 	register_checks,
 };
 use crate::{
-	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystem},
+	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::ChainProgress,
 		block_witnesser::*,
 		state_machine::{
 			core::{ConstantIndex, Hook, MultiIndexAndValue},
-			state_machine_es::{ESInterface, StateMachineES, StateMachineESInstance},
+			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
 	vote_storage,
@@ -118,6 +118,8 @@ impl MockBlockProcessor<ChainBlockNumber, BlockData> {
 	}
 }
 
+// TODO: recreate this behavior with new `Hook<>` based testing method
+/*
 impl ProcessBlockData<ChainBlockNumber, BlockData>
 	for MockBlockProcessor<ChainBlockNumber, BlockData>
 {
@@ -158,6 +160,7 @@ impl ProcessBlockData<ChainBlockNumber, BlockData>
 		// 	});
 	}
 }
+ */
 
 #[derive(
 	Clone,
@@ -211,7 +214,7 @@ impl BWTypes for MockDepositChannelWitnessingDefinition {
 }
 
 /// Associating the ES related types to the struct
-impl ESInterface for MockDepositChannelWitnessingDefinition {
+impl ElectoralSystemTypes for MockDepositChannelWitnessingDefinition {
 	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = BWState<MockDepositChannelWitnessingDefinition>;
 	type ElectoralUnsynchronisedStateMapKey = ();
@@ -221,7 +224,7 @@ impl ESInterface for MockDepositChannelWitnessingDefinition {
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = (u64, ElectionProperties, u8);
 	type ElectionState = ();
-	type Vote =
+	type VoteStorage =
 		vote_storage::bitmap::Bitmap<ConstantIndex<(u64, ElectionProperties, u8), BlockData>>;
 	type Consensus = ConstantIndex<(u64, ElectionProperties, u8), BlockData>;
 	type OnFinalizeContext = Vec<ChainProgress<u64>>;

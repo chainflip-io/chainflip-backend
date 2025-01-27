@@ -9,14 +9,13 @@ use crate::{
 	},
 };
 use anyhow::anyhow;
-use cf_chains::instances::ChainInstanceAlias;
 use cf_primitives::MILLISECONDS_PER_BLOCK;
 use cf_utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
 use futures::{stream, StreamExt, TryStreamExt};
 use pallet_cf_elections::{
 	vote_storage::{AuthorityVote, VoteStorage},
-	CompositeElectionIdentifierOf, ElectoralSystemRunner, SharedDataHash,
-	MAXIMUM_VOTES_PER_EXTRINSIC,
+	ElectionIdentifierOf, ElectoralSystemTypes, PartialVoteOf, SharedDataHash, VoteOf,
+	VoteStorageOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use rand::Rng;
 use std::{
@@ -32,30 +31,28 @@ const MAXIMUM_SHARED_DATA_CACHE_ITEMS: usize = 1024;
 const MAXIMUM_CONCURRENT_VOTER_REQUESTS: u32 = 32;
 const INITIAL_VOTER_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-pub type ChainInstance<Chain> = <Chain as ChainInstanceAlias>::Instance;
-
 pub struct Voter<
-	Chain: cf_chains::Chain + 'static,
-	StateChainClient: ElectoralApi<Chain, ChainInstance<Chain>> + SignedExtrinsicApi + ChainApi,
-	VoterClient: CompositeVoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<ChainInstance<Chain>>>::ElectoralSystemRunner> + Send + Sync + 'static,
+	Instance: 'static,
+	StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi,
+	VoterClient: CompositeVoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner> + Send + Sync + 'static,
 > where
 	state_chain_runtime::Runtime:
-		pallet_cf_elections::Config<ChainInstance<Chain>>,
+		pallet_cf_elections::Config<Instance>,
 {
 	state_chain_client: Arc<StateChainClient>,
 	voter: RetrierClient<VoterClient>,
-	_phantom: core::marker::PhantomData<Chain>,
+	_phantom: core::marker::PhantomData<Instance>,
 }
 
 impl<
-		Chain: cf_chains::Chain + 'static,
-		StateChainClient: ElectoralApi<Chain, ChainInstance<Chain>> + SignedExtrinsicApi + ChainApi,
-		VoterClient: CompositeVoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<ChainInstance<Chain>>>::ElectoralSystemRunner> + Clone + Send + Sync + 'static,
-	> Voter<Chain, StateChainClient, VoterClient>
+		Instance: Send + Sync + 'static,
+		StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi,
+		VoterClient: CompositeVoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner> + Clone + Send + Sync + 'static,
+	> Voter<Instance, StateChainClient, VoterClient>
 where
 	state_chain_runtime::Runtime:
-		pallet_cf_elections::Config<ChainInstance<Chain>>,
-	pallet_cf_elections::Call<state_chain_runtime::Runtime, ChainInstance<Chain>>:
+		pallet_cf_elections::Config<Instance>,
+	pallet_cf_elections::Call<state_chain_runtime::Runtime, Instance>:
 		std::convert::Into<state_chain_runtime::RuntimeCall>,
 {
 	pub fn new(
@@ -79,9 +76,9 @@ where
 
 	pub async fn continuously_vote(self) {
 		loop {
-			info!("{}: Beginning voting", Chain::NAME);
+			info!("Beginning voting");
 			if let Err(error) = self.reset_and_continuously_vote().await {
-				error!("{}: Voting reset due to error: '{error}'", Chain::NAME);
+				error!("Voting reset due to error: '{}'", error);
 			}
 		}
 	}
@@ -90,16 +87,14 @@ where
 		let mut rng = rand::rngs::OsRng;
 		let latest_unfinalized_block = self.state_chain_client.latest_unfinalized_block();
 		if let Some(_electoral_data) = self.state_chain_client.electoral_data(latest_unfinalized_block).await {
-			tracing::info!("{}: Got some electoral data", Chain::NAME);
-			let (_, _, block_header, _) = self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, ChainInstance<Chain>>::ignore_my_votes {}).await.until_in_block().await?;
+			let (_, _, block_header, _) = self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::ignore_my_votes {}).await.until_in_block().await?;
 
 			if let Some(electoral_data) = self.state_chain_client.electoral_data(block_header.into()).await {
-				tracing::info!("{}: Got some electoral data 2", Chain::NAME);
 				stream::iter(electoral_data.current_elections).map(|(election_identifier, election_data)| {
 					let state_chain_client = &self.state_chain_client;
 					async move {
 						if election_data.option_existing_vote.is_some() {
-							state_chain_client.finalize_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, ChainInstance<Chain>>::delete_vote {
+							state_chain_client.finalize_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::delete_vote {
 								election_identifier,
 							}).await.until_in_block().await?;
 						}
@@ -107,9 +102,7 @@ where
 					}
 				}).buffer_unordered(32).try_collect::<Vec<_>>().await?;
 
-				tracing::info!("{}: Submitting signed extrinsic", Chain::NAME);
-				self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, ChainInstance<Chain>>::stop_ignoring_my_votes {}).await.until_in_block().await?;
-				tracing::info!("{}: Submitted signed extrinsic", Chain::NAME);
+				self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::stop_ignoring_my_votes {}).await.until_in_block().await?;
 			}
 		}
 
@@ -119,17 +112,17 @@ where
 			std::time::Duration::from_millis(MILLISECONDS_PER_BLOCK / 2);
 		let mut submit_interval = tokio::time::interval(BLOCK_TIME);
 		let mut pending_submissions = BTreeMap::<
-			CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<ChainInstance<Chain>>>::ElectoralSystemRunner>,
+			ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
 			(
-				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<ChainInstance<Chain>>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::PartialVote,
-				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<ChainInstance<Chain>>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
+				PartialVoteOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
+				VoteOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
 			)
 		>::default();
 		let mut vote_tasks = FutureMap::default();
 		let mut shared_data_cache = HashMap::<
 			SharedDataHash,
 			(
-				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<ChainInstance<Chain>>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::SharedData,
+				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::SharedData,
 				std::time::Instant,
 			)
 		>::default();
@@ -157,10 +150,10 @@ where
 					let state_chain_client = &self.state_chain_client;
 					async move {
 						for (election_identifier, _) in votes.iter() {
-							info!("{}: Submitting vote for election: '{election_identifier:?}'", Chain::NAME);
+							info!("Submitting vote for election: '{:?}'", election_identifier);
 						}
 						// TODO: Use block hash you got this vote tasks details from as the based of the mortal of the extrinsic
-						state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, ChainInstance<Chain>>::vote {
+						state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::vote {
 							authority_votes: BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/),
 						}).await;
 					}
@@ -168,10 +161,10 @@ where
 			},
 			let (election_identifier, result_vote) = vote_tasks.next_or_pending() => {
 				match result_vote {
-					Ok(vote) => {
-						info!("{}: Voting task for election: '{election_identifier:?}' succeeded.", Chain::NAME);
+					Ok(Some(vote)) => {
+						info!("Voting task for election: '{:?}' succeeded.", election_identifier);
 						// Create the partial_vote early so that SharedData can be provided as soon as the vote has been generated, rather than only after it is submitted.
-						let partial_vote = <<<state_chain_runtime::Runtime as pallet_cf_elections::Config<ChainInstance<Chain>>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::vote_into_partial_vote(&vote, |shared_data| {
+						let partial_vote = VoteStorageOf::<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>::vote_into_partial_vote(&vote, |shared_data| {
 							let shared_data_hash = SharedDataHash::of(&shared_data);
 							if shared_data_cache.len() > MAXIMUM_SHARED_DATA_CACHE_ITEMS {
 								for shared_data_hash in shared_data_cache.keys().cloned().take(shared_data_cache.len() - MAXIMUM_SHARED_DATA_CACHE_ITEMS).collect::<Vec<_>>() {
@@ -184,8 +177,11 @@ where
 
 						pending_submissions.insert(election_identifier,	(partial_vote, vote));
 					},
+					Ok(None) => {
+						info!("Voting task for election '{:?}' returned 'None' (nothing to submit).", election_identifier);
+					},
 					Err(error) => {
-						warn!("{}: Voting task for election '{election_identifier:?}' failed with error: '{error:?}'.", Chain::NAME);
+						warn!("Voting task for election '{:?}' failed with error: '{:?}'.", election_identifier, error);
 					}
 				}
 			},
@@ -198,18 +194,16 @@ where
 					added_to_cache.elapsed() < LIFETIME_OF_SHARED_DATA_IN_CACHE
 				});
 
-				tracing::info!("{}: Unfinalised next, getting electoral_data", Chain::NAME);
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
-					tracing::info!("{}: Unfinalised next, got some electoral_data: {:?}", Chain::NAME, electoral_data);
 					if electoral_data.contributing {
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
 								if !vote_tasks.contains_key(&election_identifier) {
-									info!("{}: Voting task for election: '{election_identifier:?}' initiate.", Chain::NAME);
+									info!("Voting task for election: '{:?}' initiate.", election_identifier);
 									vote_tasks.insert(
 										election_identifier,
 										Box::pin(self.voter.request_with_limit(
-											RequestLog::new("vote".to_string(), Some(format!("{}: {election_identifier:?}", Chain::NAME))),
+											RequestLog::new("vote".to_string(), Some(format!("{election_identifier:?}"))), // Add some identifier for `Instance`.
 											Box::pin(move |client| {
 												let election_data = election_data.clone();
 												#[allow(clippy::redundant_async_block)]
@@ -224,7 +218,7 @@ where
 										))
 									);
 								} else {
-									info!("{}: Voting task for election: '{election_identifier:?}' not initiated as a task is already running for that election.", Chain::NAME);
+									info!("Voting task for election: '{:?}' not initiated as a task is already running for that election.", election_identifier);
 								}
 							}
 						}
@@ -242,7 +236,7 @@ where
 									let final_probability = 1.0 / (core::cmp::max(1, core::cmp::min(reference_details.count, electoral_data.authority_count)) as f64);
 
 									if rng.gen_bool((1.0 - lerp_factor) * initial_probability + lerp_factor * final_probability) {
-										self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, ChainInstance<Chain>>::provide_shared_data {
+										self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::provide_shared_data {
 											shared_data: shared_data.clone(),
 										}).await;
 									}
@@ -252,10 +246,10 @@ where
 					} else {
 						// We expect this to happen when a validator joins the set, since they won't be contributing, but will be a validator.
 						// Therefore they get Some() from `electoral_data` but `contributing` is false, until we reset the voting by throwing an error here.
-						return Err(anyhow!("{}: Validator has just joined the authority set, or has been unexpectedly set as not contributing.", Chain::NAME));
+						return Err(anyhow!("Validator has just joined the authority set, or has been unexpectedly set as not contributing."));
 					}
 				} else {
-					info!("{}: Not voting as not an authority.", Chain::NAME);
+					info!("Not voting as not an authority.");
 				}
 			} else break Ok(()),
 		}

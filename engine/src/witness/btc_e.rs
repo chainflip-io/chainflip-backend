@@ -8,7 +8,7 @@ use cf_chains::{
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
-	electoral_system::ElectoralSystem,
+	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::{
 			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties,
@@ -17,6 +17,7 @@ use pallet_cf_elections::{
 		state_machine::core::ConstantIndex,
 	},
 	vote_storage::VoteStorage,
+	VoteOf,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
@@ -51,12 +52,9 @@ pub struct BitcoinDepositChannelWitnessingVoter {
 impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessingVoter {
 	async fn vote(
 		&self,
-		_settings: <BitcoinDepositChannelWitnessing as ElectoralSystem>::ElectoralSettings,
-		deposit_addresses: <BitcoinDepositChannelWitnessing as ElectoralSystem>::ElectionProperties,
-	) -> Result<
-		<<BitcoinDepositChannelWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
-		anyhow::Error,
-	> {
+		_settings: <BitcoinDepositChannelWitnessing as ElectoralSystemTypes>::ElectoralSettings,
+		deposit_addresses: <BitcoinDepositChannelWitnessing as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessing>>, anyhow::Error> {
 		let (witness_range, deposit_addresses, _extra) = deposit_addresses;
 		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
 		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
@@ -85,7 +83,7 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
 		}
 
-		Ok(ConstantIndex { data: witnesses, _phantom: Default::default() })
+		Ok(Some(ConstantIndex { data: witnesses, _phantom: Default::default() }))
 	}
 }
 
@@ -98,13 +96,10 @@ pub struct BitcoinBlockHeightTrackingVoter {
 impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 	async fn vote(
 		&self,
-		_settings: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectoralSettings,
+		_settings: <BitcoinBlockHeightTracking as ElectoralSystemTypes>::ElectoralSettings,
 		// We could use 0 as a special case (to avoid requiring an Option)
-		properties: <BitcoinBlockHeightTracking as ElectoralSystem>::ElectionProperties,
-	) -> std::result::Result<
-		<<BitcoinBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
-		anyhow::Error,
-	> {
+		properties: <BitcoinBlockHeightTracking as ElectoralSystemTypes>::ElectionProperties,
+	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightTracking>>, anyhow::Error> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
 		let BlockHeightTrackingProperties { witness_from_index: election_property } = properties;
 
@@ -135,7 +130,8 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
 
 		if best_block_header.block_height <= election_property {
-			Err(anyhow::anyhow!("btc: no new blocks found since best block height is {} for witness_from={election_property}", best_block_header.block_height))
+			tracing::info!("btc: no new blocks found since best block height is {} for witness_from={election_property}", best_block_header.block_height);
+			return Ok(None)
 		} else {
 			let witness_from_index = if election_property == 0 {
 				tracing::info!(
@@ -169,7 +165,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 					"bht: Submitting vote for (witness_from={election_property})with {} headers",
 					headers.len()
 				);
-				Ok(InputHeaders(headers))
+				Ok(Some(InputHeaders(headers)))
 			} else {
 				Err(anyhow::anyhow!("bht: Headers do not form a chain"))
 			}
@@ -186,7 +182,7 @@ where
 	StateChainClient: StorageApi
 		+ ChainApi
 		+ SignedExtrinsicApi
-		+ ElectoralApi<cf_chains::Bitcoin, BitcoinInstance>
+		+ ElectoralApi<BitcoinInstance>
 		+ 'static
 		+ Send
 		+ Sync,
