@@ -252,7 +252,7 @@ pub mod sol_test_values {
 
 	#[track_caller]
 	pub fn test_constructed_transaction_with_signer<S: Signer>(
-		mut transaction: crate::sol::SolTransaction,
+		mut transaction: crate::sol::SolLegacyTransaction,
 		expected_serialized_tx: Vec<u8>,
 		signers: TestSigners<S>,
 		blockhash: super::Hash,
@@ -278,7 +278,7 @@ pub mod sol_test_values {
 
 	#[track_caller]
 	pub fn test_constructed_transaction(
-		transaction: crate::sol::SolTransaction,
+		transaction: crate::sol::SolLegacyTransaction,
 		expected_serialized_tx: Vec<u8>,
 	) {
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();

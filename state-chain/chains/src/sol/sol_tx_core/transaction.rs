@@ -491,7 +491,7 @@ pub enum TransactionError {
 	)]
 	InvalidLoadedAccountsDataSizeLimit,
 
-	/// Sanitized transaction differed before/after feature activiation. Needs to be resanitized.
+	/// Sanitized transaction differed before/after feature activation. Needs to be resanitized.
 	#[cfg_attr(feature = "std", error("ResanitizationNeeded"))]
 	ResanitizationNeeded,
 
