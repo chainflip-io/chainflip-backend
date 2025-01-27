@@ -14,6 +14,7 @@ use cf_primitives::{
 	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
 	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
+use serde::{Deserialize, Serialize};
 
 use cf_chains::eth::Address as EthereumAddress;
 use sp_io::hashing::blake2_256;
@@ -75,7 +76,7 @@ struct FeeTaken {
 	pub fee: AssetAmount,
 }
 
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Copy, Clone)]
 pub struct AffiliateDetails {
 	short_id: AffiliateShortId,
 	withdrawal_address: EthereumAddress,

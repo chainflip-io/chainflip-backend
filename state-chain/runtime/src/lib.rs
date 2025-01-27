@@ -79,7 +79,9 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::{BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap};
+use pallet_cf_swapping::{
+	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
+};
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
@@ -2424,6 +2426,13 @@ impl_runtime_apis! {
 			broker: AccountId,
 		) -> Vec<(AffiliateShortId, AccountId)>{
 			pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&broker).collect()
+		}
+
+		fn cf_get_affiliate_account_details(
+			broker: AccountId,
+			affiliate_account_id: AccountId,
+		) -> Option<AffiliateDetails> {
+			pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::get(broker, affiliate_account_id)
 		}
 	}
 
