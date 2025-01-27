@@ -14,8 +14,8 @@ use cf_utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
 use futures::{stream, StreamExt, TryStreamExt};
 use pallet_cf_elections::{
 	vote_storage::{AuthorityVote, VoteStorage},
-	ElectionIdentifierOf, ElectoralSystemRunner, ElectoralSystemTypes, PartialVoteOf,
-	SharedDataHash, VoteOf, VoteStorageOf, MAXIMUM_VOTES_PER_EXTRINSIC,
+	ElectionIdentifierOf, ElectoralSystemTypes, PartialVoteOf, SharedDataHash, VoteOf,
+	VoteStorageOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use rand::Rng;
 use std::{

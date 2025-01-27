@@ -3,8 +3,7 @@ use chainflip::solana_elections::SolanaVaultSwapsSettings;
 use frame_support::{pallet_prelude::Weight, storage::unhashed, traits::UncheckedOnRuntimeUpgrade};
 
 use pallet_cf_elections::{
-	electoral_system::ElectoralSystemTypes, electoral_system_runner::ElectoralSystemRunner, Config,
-	ElectoralSettings, ElectoralUnsynchronisedState,
+	electoral_system::ElectoralSystemTypes, Config, ElectoralSettings, ElectoralUnsynchronisedState,
 };
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;

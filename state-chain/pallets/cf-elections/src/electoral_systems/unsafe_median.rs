@@ -1,10 +1,9 @@
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralSystemTypes, ElectoralWriteAccess, PartialVoteOf, VoteOf, VotePropertiesOf,
+		ElectoralSystemTypes, ElectoralWriteAccess, PartialVoteOf, VotePropertiesOf,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
+	vote_storage, CorruptStorageError, ElectionIdentifier,
 };
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_utilities::success_threshold_from_share_count;

@@ -1,7 +1,3 @@
-use frame_support::{
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	Parameter,
-};
 use sp_std::vec::Vec;
 
 use crate::{
@@ -9,7 +5,6 @@ use crate::{
 		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectoralSystemTypes, PartialVoteOf,
 		VoteOf, VotePropertiesOf,
 	},
-	vote_storage::{AuthorityVote, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
 

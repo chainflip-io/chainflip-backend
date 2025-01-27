@@ -49,10 +49,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 },
                 electoral_system_runner::{ElectoralSystemRunner, RunnerStorageAccessTrait},
                 electoral_system::{AuthorityVoteOf, VotePropertiesOf},
-                vote_storage::{
-                    AuthorityVote,
-                    VoteStorage
-                },
+                vote_storage::AuthorityVote,
                 ElectionIdentifier,
             };
             use crate::vote_storage::composite::$module::{CompositeVoteProperties, CompositeVote, CompositePartialVote};

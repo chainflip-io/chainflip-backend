@@ -913,7 +913,6 @@ pub mod pallet {
 		};
 		use crate::{
 			electoral_system::{BitmapComponentOf, ElectoralSystemTypes},
-			electoral_system_runner::ElectoralSystemRunner,
 			vote_storage::VoteStorage,
 		};
 		use bitvec::prelude::*;

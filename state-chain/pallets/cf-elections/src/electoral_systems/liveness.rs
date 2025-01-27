@@ -6,8 +6,7 @@ use crate::{
 		ElectionWriteAccess, ElectoralSystem, ElectoralSystemTypes, ElectoralWriteAccess,
 		PartialVoteOf, VotePropertiesOf,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError,
+	vote_storage, CorruptStorageError,
 };
 use cf_primitives::AuthorityCount;
 use cf_utilities::success_threshold_from_share_count;

@@ -1,7 +1,6 @@
 use crate::{
 	bitmap_components::ElectionBitmapComponents,
 	electoral_system::{AuthorityVoteOf, IndividualComponentOf, VotePropertiesOf},
-	electoral_system_runner::ElectoralSystemRunner,
 	vote_storage::VoteStorage,
 	*,
 };

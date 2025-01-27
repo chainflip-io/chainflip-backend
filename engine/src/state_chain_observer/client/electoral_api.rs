@@ -3,10 +3,7 @@ use crate::state_chain_observer::client::{
 	StateChainClient,
 };
 use codec::{Decode, Encode};
-use pallet_cf_elections::{
-	vote_storage::VoteStorage, ElectionIdentifierOf, ElectoralDataFor, ElectoralSystemRunner,
-	VoteOf,
-};
+use pallet_cf_elections::{ElectionIdentifierOf, ElectoralDataFor, VoteOf};
 use state_chain_runtime::SolanaInstance;
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::error;

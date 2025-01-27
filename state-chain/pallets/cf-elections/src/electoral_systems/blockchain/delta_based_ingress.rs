@@ -3,8 +3,7 @@ use crate::{
 		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
 		ElectoralSystemTypes, ElectoralWriteAccess, PartialVoteOf, VoteOf, VotePropertiesOf,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
+	vote_storage, CorruptStorageError, ElectionIdentifier,
 };
 use cf_traits::IngressSink;
 use cf_utilities::success_threshold_from_share_count;

@@ -4,8 +4,7 @@ use crate::{
 		ElectionWriteAccess, ElectoralSystem, ElectoralSystemTypes, ElectoralWriteAccess,
 		PartialVoteOf, VoteOf, VotePropertiesOf,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError,
+	vote_storage, CorruptStorageError,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::{success_threshold_from_share_count, threshold_from_share_count};

@@ -5,8 +5,7 @@ use crate::{
 	},
 	electoral_system_runner::{ElectoralSystemRunner, RunnerStorageAccessTrait},
 	mock::Test,
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, RunnerStorageAccess, UniqueMonotonicIdentifier,
+	vote_storage, CorruptStorageError, RunnerStorageAccess, UniqueMonotonicIdentifier,
 };
 use cf_primitives::AuthorityCount;
 use cf_traits::Chainflip;

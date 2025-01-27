@@ -15,8 +15,7 @@ use crate::{
 		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
 		ElectoralSystemTypes, ElectoralWriteAccess, PartialVoteOf, VoteOf, VotePropertiesOf,
 	},
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
+	vote_storage, CorruptStorageError, ElectionIdentifier,
 };
 use cf_chains::sol::{
 	MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
