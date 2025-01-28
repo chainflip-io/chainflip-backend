@@ -1,7 +1,14 @@
 import assert from 'assert';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { KeyringPair } from '@polkadot/keyring/types';
 import { ExecutableTest } from '../shared/executable_test';
-import { createStateChainKeypair, defaultAssetAmounts, handleSubstrateError, newAddress, sleep } from '../shared/utils';
+import {
+  createStateChainKeypair,
+  defaultAssetAmounts,
+  handleSubstrateError,
+  newAddress,
+  sleep,
+} from '../shared/utils';
 import { getEarnedBrokerFees } from './broker_fee_collection';
 import { openPrivateBtcChannel, registerAffiliate } from '../shared/btc_vault_swap';
 import { setupBrokerAccount } from '../shared/setup_account';
@@ -9,7 +16,6 @@ import { performVaultSwap } from '../shared/perform_swap';
 import { prepareSwap } from '../shared/swapping';
 import { getChainflipApi } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
-import { KeyringPair } from '@polkadot/keyring/types';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testVaultSwapFeeCollection = new ExecutableTest(
@@ -21,7 +27,11 @@ export const testVaultSwapFeeCollection = new ExecutableTest(
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
 
-async function testWithdrawCollectedAffiliateFees(broker: KeyringPair, affiliateAccountId: string, withdrawAddress: string) {
+async function testWithdrawCollectedAffiliateFees(
+  broker: KeyringPair,
+  affiliateAccountId: string,
+  withdrawAddress: string,
+) {
   const chainflip = await getChainflipApi();
 
   const balanceObserveTimeout = 60;
@@ -31,24 +41,26 @@ async function testWithdrawCollectedAffiliateFees(broker: KeyringPair, affiliate
   testVaultSwapFeeCollection.log('Affiliate account ID:', affiliateAccountId);
   testVaultSwapFeeCollection.log('Withdraw address:', withdrawAddress);
 
-  await chainflip.tx.swapping.affiliateWithdrawalRequest(affiliateAccountId).signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+  await chainflip.tx.swapping
+    .affiliateWithdrawalRequest(affiliateAccountId)
+    .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
 
   testVaultSwapFeeCollection.log('Withdrawal request sent!');
-  testVaultSwapFeeCollection.log('Waiting for balance change... Observing address:', withdrawAddress);
+  testVaultSwapFeeCollection.log(
+    'Waiting for balance change... Observing address:',
+    withdrawAddress,
+  );
 
   // Wait for balance change
   for (let i = 0; i < balanceObserveTimeout; i++) {
-    if (await getBalance(Assets.Usdc, withdrawAddress) !== '0') {
+    if ((await getBalance(Assets.Usdc, withdrawAddress)) !== '0') {
       success = true;
       break;
     }
     await sleep(1000);
   }
 
-  assert(
-    success,
-    `Withdrawal failed - No balance change detected within the timeout period 🙅‍♂️.`,
-  );
+  assert(success, `Withdrawal failed - No balance change detected within the timeout period 🙅‍♂️.`);
 }
 
 async function testFeeCollection(inputAsset: Asset): Promise<[KeyringPair, string, string]> {
@@ -68,10 +80,7 @@ async function testFeeCollection(inputAsset: Asset): Promise<[KeyringPair, strin
   }
 
   testVaultSwapFeeCollection.debugLog('Registering affiliate');
-  const event = await registerAffiliate(
-    brokerUri,
-    refundAddress,
-  );
+  const event = await registerAffiliate(brokerUri, refundAddress);
 
   const affiliateShotId = event.data.shortId as number;
   const affiliateId = event.data.affiliateId as string;
@@ -138,6 +147,6 @@ async function main() {
   ]);
 
   // Test the affiliate withdrawal functionality
-  let [broker, affiliateId, refundAddress] = await testFeeCollection(Assets.Btc);
+  const [broker, affiliateId, refundAddress] = await testFeeCollection(Assets.Btc);
   await testWithdrawCollectedAffiliateFees(broker, affiliateId, refundAddress);
 }
