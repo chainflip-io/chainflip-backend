@@ -59,8 +59,19 @@ struct DepositChannel {
 	pub close_block: BlockNumber,
 }
 
+impl DepositChannel {
+	pub fn open(&self) {
+		assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
+			TestContext::<SimpleDeltaBasedIngress>::identifiers(),
+			self.account,
+			self.asset,
+			self.close_block
+		));
+	}
+}
+
 fn to_state(
-	channels: Vec<DepositChannel>,
+	channels: impl IntoIterator<Item = DepositChannel>,
 ) -> BTreeMap<AccountId, ChannelTotalIngressedFor<MockIngressSink>> {
 	channels
 		.into_iter()
@@ -77,7 +88,7 @@ fn to_state(
 }
 
 fn to_state_map(
-	channels: Vec<DepositChannel>,
+	channels: impl IntoIterator<Item = DepositChannel>,
 ) -> BTreeMap<(AccountId, Asset), ChannelTotalIngressedFor<MockIngressSink>> {
 	channels
 		.into_iter()
@@ -94,7 +105,7 @@ fn to_state_map(
 }
 
 fn to_properties(
-	channels: Vec<DepositChannel>,
+	channels: impl IntoIterator<Item = DepositChannel>,
 ) -> BTreeMap<
 	AccountId,
 	(OpenChannelDetailsFor<MockIngressSink>, ChannelTotalIngressedFor<MockIngressSink>),
@@ -204,14 +215,14 @@ fn with_default_setup() -> TestSetup<SimpleDeltaBasedIngress> {
 
 register_checks! {
 	SimpleDeltaBasedIngress {
-		started_at_state_map_state(pre_finalize, _post, state: Vec<DepositChannel>) {
+		started_at_state_map_state(pre_finalize, _post, state: impl Clone + IntoIterator<Item = DepositChannel> + 'static) {
 			assert_eq!(
 				pre_finalize.unsynchronised_state_map,
 				to_state_map(state),
 				"Expected state map incorrect before finalization."
 			);
 		},
-		ended_at_state_map_state(_pre, post_finalize, state: Vec<DepositChannel>) {
+		ended_at_state_map_state(_pre, post_finalize, state: impl Clone + IntoIterator<Item = DepositChannel> + 'static) {
 			assert_eq!(
 				post_finalize.unsynchronised_state_map,
 				to_state_map(state),
@@ -219,17 +230,20 @@ register_checks! {
 			);
 		},
 		ended_at_state(_pre, post, election_state: BTreeMap<AccountId, ChannelTotalIngressedFor<MockIngressSink>>) {
-			assert_eq!(*post.election_state.get(post.election_identifiers[0].unique_monotonic()).unwrap(), election_state, "Expected election state incorrect.");
-		},
-		ended_at_empty_state(_pre, post) {
-			assert_eq!(post.election_state.len(), 0, "Expected State to be empty, but it's not.");
+			assert_eq!(
+				*post.election_state.get(post.election_identifiers[0].unique_monotonic()).unwrap(),
+				election_state,
+				"Expected election state incorrect. Expected {:?}, got: {:?}",
+				election_state,
+				*post.election_state.get(post.election_identifiers[0].unique_monotonic()).unwrap()
+			);
 		},
 		ingressed(_pre, _post, expected_ingressed: Vec<(AccountId, Asset, Amount)>) {
 			AMOUNT_INGRESSED.with(|ingresses| {
 				assert_eq!(
 					ingresses.clone().into_inner(),
 					expected_ingressed,
-					"Amount ingressed incorrect."
+					"Unexpected ingresses. Expected {:?}, got {:?}", expected_ingressed, ingresses.clone().into_inner()
 				);
 			});
 		},
@@ -238,7 +252,7 @@ register_checks! {
 				assert_eq!(
 					channels.clone().into_inner(),
 					expected_closed_channels,
-					"Channels closed incorrect."
+					"Channels closed incorrect: expected {:?}, got {:?}", expected_closed_channels, channels.clone().into_inner()
 				);
 			});
 		},
@@ -802,4 +816,107 @@ fn pending_ingresses_update_with_consensus() {
 				Check::ended_at_empty_state(),
 			],
 		);
+}
+
+mod multiple_deposits {
+	use super::*;
+
+	const DEPOSIT_ADDRESS: u32 = 1;
+	const TOTAL_1: ChannelTotalIngressed<u64, u64> =
+		ChannelTotalIngressed { amount: 1000, block_number: 10 };
+	const TOTAL_2: ChannelTotalIngressed<u64, u64> =
+		ChannelTotalIngressed { amount: 1500, block_number: 20 };
+
+	#[test]
+	fn multiple_deposits_result_in_multiple_ingresses() {
+		// Case 1: Two deposits, and three finality checks:
+		// - Check 1: Chain tracking has not reached the block of the first deposit.
+		// - Check 2: Chain tracking has not reached the block of the second deposit, but has passed
+		//   the first.
+		// - Check 3: Chain tracking has reached the block of the second deposit.
+		with_default_setup()
+			.build()
+			.then(|| {
+				DepositChannel {
+					account: DEPOSIT_ADDRESS,
+					asset: Asset::Sol,
+					close_block: 100,
+					total_ingressed: 0,
+					block_number: 0,
+				}
+				.open();
+			})
+			.force_consensus_update(ConsensusStatus::Gained {
+				most_recent: None,
+				new: BTreeMap::from_iter([(DEPOSIT_ADDRESS, TOTAL_1)]),
+			})
+			// Before chain tracking reaches the ingress block, nothing should be ingressed.
+			.test_on_finalize(&{ TOTAL_1.block_number - 1 }, |_| {}, [Check::ingressed(vec![])])
+			// Simulate a second deposit at a later block.
+			.force_consensus_update(ConsensusStatus::Gained {
+				most_recent: Some(BTreeMap::from_iter([(DEPOSIT_ADDRESS, TOTAL_1)])),
+				new: BTreeMap::from_iter([(DEPOSIT_ADDRESS, TOTAL_2)]),
+			})
+			// Finalize with chain tracking at a block between the two deposits. Only the first
+			// should be ingressed.
+			.test_on_finalize(
+				&{ TOTAL_2.block_number - 1 },
+				|_| {},
+				[Check::ingressed(vec![(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_1.amount)])],
+			)
+			// Finalize with chain tracking at the block of the second deposit. Both should be
+			// ingressed.
+			.test_on_finalize(
+				&TOTAL_2.block_number,
+				|_| {},
+				[
+					Check::ingressed(vec![
+						(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_1.amount),
+						(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_2.amount - TOTAL_1.amount),
+					]),
+					Check::election_id_incremented(),
+				],
+			);
+	}
+
+	#[test]
+	fn multiple_deposits_result_in_single_deposit() {
+		// Case 2: Two deposits and three finality checks:
+		// - Check 1: Chain tracking has not reached the block of the first deposit.
+		// - Check 2: Chain tracking has still not reached the block of the first deposit.
+		// - Check 3: Chain tracking has reached the block of the second deposit.
+		with_default_setup()
+			.build()
+			.then(|| {
+				DepositChannel {
+					account: DEPOSIT_ADDRESS,
+					asset: Asset::Sol,
+					close_block: 100,
+					total_ingressed: 0,
+					block_number: 0,
+				}
+				.open();
+			})
+			.force_consensus_update(ConsensusStatus::Gained {
+				most_recent: None,
+				new: BTreeMap::from_iter([(DEPOSIT_ADDRESS, TOTAL_1)]),
+			})
+			// Before chain tracking reaches the ingress block, nothing should be ingressed.
+			.test_on_finalize(&{ TOTAL_1.block_number - 1 }, |_| {}, [Check::ingressed(vec![])])
+			// Simulate a second deposit at a later block.
+			.force_consensus_update(ConsensusStatus::Gained {
+				most_recent: Some(BTreeMap::from_iter([(DEPOSIT_ADDRESS, TOTAL_1)])),
+				new: BTreeMap::from_iter([(DEPOSIT_ADDRESS, TOTAL_2)]),
+			})
+			// Finalize with chain tracking at a block before the first deposit. Nothing should be
+			// ingressed.
+			.test_on_finalize(&{ TOTAL_1.block_number - 1 }, |_| {}, [Check::ingressed(vec![])])
+			// Finalize with chain tracking at the block of the second deposit. Both should be
+			// ingressed as a single deposit.
+			.test_on_finalize(
+				&TOTAL_2.block_number,
+				|_| {},
+				[Check::ingressed(vec![(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_2.amount)])],
+			);
+	}
 }
