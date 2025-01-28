@@ -109,8 +109,8 @@ async function startDepositMonitor(localnetInitPath: string) {
 
   // `execWithLog` is not blocking, so we have to wait until the deposit monitor has started,
   // waiting at most 10 seconds
-  for (let i = 0; i < 10; i++) {
-    await sleep(1000);
+  for (let i = 0; i < 20; i++) {
+    await sleep(500);
     if (done) {
       break;
     }
