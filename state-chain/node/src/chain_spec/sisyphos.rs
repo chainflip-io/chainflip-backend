@@ -108,10 +108,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		),
 	],
 	sol_swap_endpoint_program: SolAddress(bs58_array(
-		"7G6TxoGDsgaZX3HaKkrKyy28tsdr7ZGmeeMbXpm8R5HZ",
+		"FtK6TR2ZqhChxXeDFoVzM9gYDPA18tGrKoBb3hX7nPwt",
 	)),
 	sol_swap_endpoint_program_data_account: SolAddress(bs58_array(
-		"mYabVW1uMXpGqwgHUBQu4Fg6GT9EMYUzYaGYbi3zgT7",
+		"EXeku7Q9AiAXBdH7cUHw2ue3okhrofvDZR7EBE1BVQZu",
 	)),
 };
 

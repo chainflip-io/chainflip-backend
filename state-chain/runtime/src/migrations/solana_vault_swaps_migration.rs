@@ -27,15 +27,15 @@ impl UncheckedOnRuntimeUpgrade for SolanaVaultSwapsMigration {
 			match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 					SolAddress(bs58_array("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")),
-					SolAddress(bs58_array("GfGZCo8KmAQvhZofu3Emt66ZfgjKds6ULhps1DAvN8cm")),
+					SolAddress(bs58_array("FmAcjWaRFUxGWBfGT7G3CzcFeJFsewQ4KPJVG4f6fcob")),
 				),
 				cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 					SolAddress(bs58_array("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")),
-					SolAddress(bs58_array("4hD7UM6rQtcqQWtzELvrafpmBYReVXvCpssB6qjY1Sg5")),
+					SolAddress(bs58_array("12MYcNumSQCn81yKRfrk5P5ThM5ivkLiZda979hhKJDR")),
 				),
 				cf_runtime_utilities::genesis_hashes::SISYPHOS => (
 					SolAddress(bs58_array("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")),
-					SolAddress(bs58_array("mYabVW1uMXpGqwgHUBQu4Fg6GT9EMYUzYaGYbi3zgT7")),
+					SolAddress(bs58_array("EXeku7Q9AiAXBdH7cUHw2ue3okhrofvDZR7EBE1BVQZu")),
 				),
 				_ => (
 					SolAddress(bs58_array("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")),
@@ -84,15 +84,15 @@ impl UncheckedOnRuntimeUpgrade for SolanaVaultSwapsMigration {
 				match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 					cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 						SolAddress(bs58_array("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")),
-						SolAddress(bs58_array("GfGZCo8KmAQvhZofu3Emt66ZfgjKds6ULhps1DAvN8cm")),
+						SolAddress(bs58_array("FmAcjWaRFUxGWBfGT7G3CzcFeJFsewQ4KPJVG4f6fcob")),
 					),
 					cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 						SolAddress(bs58_array("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")),
-						SolAddress(bs58_array("4hD7UM6rQtcqQWtzELvrafpmBYReVXvCpssB6qjY1Sg5")),
+						SolAddress(bs58_array("12MYcNumSQCn81yKRfrk5P5ThM5ivkLiZda979hhKJDR")),
 					),
 					cf_runtime_utilities::genesis_hashes::SISYPHOS => (
 						SolAddress(bs58_array("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")),
-						SolAddress(bs58_array("mYabVW1uMXpGqwgHUBQu4Fg6GT9EMYUzYaGYbi3zgT7")),
+						SolAddress(bs58_array("EXeku7Q9AiAXBdH7cUHw2ue3okhrofvDZR7EBE1BVQZu")),
 					),
 					_ => (
 						SolAddress(bs58_array("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")),
