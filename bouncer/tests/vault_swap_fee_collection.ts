@@ -1,6 +1,7 @@
 import assert from 'assert';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { KeyringPair } from '@polkadot/keyring/types';
+// eslint-disable-next-line no-restricted-imports
+import type { KeyringPair } from '@polkadot/keyring/types';
 import { ExecutableTest } from '../shared/executable_test';
 import {
   createStateChainKeypair,
