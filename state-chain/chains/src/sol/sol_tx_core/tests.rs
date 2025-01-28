@@ -1,7 +1,6 @@
 #![cfg(test)]
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use thiserror::Error;
 
 use crate::{
 	sol::{
@@ -17,13 +16,15 @@ use crate::{
 			sol_test_values::*,
 			token_instructions::AssociatedTokenAccountInstruction,
 			AccountMeta, CompiledInstruction, Hash, Instruction, LegacyMessage, LegacyTransaction,
-			MessageHeader, Pubkey, MAX_BASE58_LEN,
+			MessageHeader, Pubkey,
 		},
 		SolAddress, SolHash, SolSignature,
 	},
 	ForeignChainAddress,
 };
+
 use core::str::FromStr;
+
 use sol_prim::{
 	consts::{
 		MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
@@ -31,32 +32,6 @@ use sol_prim::{
 	},
 	PdaAndBump,
 };
-
-#[cfg(test)]
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum ParseHashError {
-	#[error("string decoded to wrong size for hash")]
-	WrongSize,
-	#[error("failed to decoded string to hash")]
-	Invalid,
-}
-
-#[cfg(test)]
-impl FromStr for Hash {
-	type Err = ParseHashError;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		if s.len() > MAX_BASE58_LEN {
-			return Err(ParseHashError::WrongSize)
-		}
-		let bytes = bs58::decode(s).into_vec().map_err(|_| ParseHashError::Invalid)?;
-		if bytes.len() != std::mem::size_of::<Hash>() {
-			Err(ParseHashError::WrongSize)
-		} else {
-			Ok(Hash::new(&bytes))
-		}
-	}
-}
 
 #[derive(BorshSerialize, BorshDeserialize)]
 enum BankInstruction {

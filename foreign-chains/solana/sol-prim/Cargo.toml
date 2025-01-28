@@ -6,11 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# Required for Solana. May differ from the workspace"s version.
+# Required for Solana. May differ from the workspace's version.
 curve25519-dalek = { version = "^2.1", optional = true, default-features = false, features = [
 	"u64_backend",
 ] }
-
+borsh = { workspace = true, features = [
+  "derive",
+  "unstable__schema",
+  "hashbrown",
+] }
+# Special case for Solana: We use bincode 2 for its no-std support.
+bincode = { version = "2.0.0-rc.3", default-features = false, features = [
+  "alloc",
+  "serde",
+] }
+generic-array = { workspace = true, features = ["serde"] }
 cf-utilities = { package = "utilities", path = "../../../utilities", default-features = false }
 bs58 = { workspace = true, optional = true }
 digest = { workspace = true, optional = true }
@@ -20,8 +30,12 @@ thiserror = { workspace = true, optional = true }
 codec = { workspace = true, optional = true, features = ["derive"] }
 scale-info = { workspace = true, optional = true, features = ["derive"] }
 
+sp-std = { workspace = true }
+sp-core = { workspace = true }
+
 [dev-dependencies]
 serde_json = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
 
 [features]
 default = ["str", "serde", "pda", "scale", "std"]
@@ -42,4 +56,7 @@ std = [
 	"sha2?/std",
 	"cf-utilities/std",
 	"dep:thiserror",
+	"bincode/std",
+	"sp-std/std",
+	"sp-core/std",
 ]

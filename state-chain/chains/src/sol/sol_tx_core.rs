@@ -9,17 +9,12 @@ use crate::sol::SolAddress;
 pub mod address_derivation;
 pub mod bpf_loader_instructions;
 pub mod compute_budget;
-pub mod primitives;
-pub mod program;
 pub mod program_instructions;
-pub mod short_vec;
-#[cfg(feature = "std")]
-pub mod signer;
 pub mod token_instructions;
 pub mod transaction;
 
-pub use primitives::*;
-pub use transaction::legacy::{Message as LegacyMessage, Transaction as LegacyTransaction};
+pub use sol_prim::*;
+pub use transaction::legacy::{LegacyMessage, LegacyTransaction};
 
 pub mod tests;
 
@@ -71,6 +66,63 @@ pub mod rpc_types {
 			}
 		}
 	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+pub struct CcmAddress {
+	pub pubkey: Pubkey,
+	pub is_writable: bool,
+}
+
+impl From<CcmAddress> for AccountMeta {
+	fn from(from: CcmAddress) -> Self {
+		match from.is_writable {
+			true => AccountMeta::new(from.pubkey, false),
+			false => AccountMeta::new_readonly(from.pubkey, false),
+		}
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct CcmAccounts {
+	pub cf_receiver: CcmAddress,
+	pub additional_accounts: Vec<CcmAddress>,
+	pub fallback_address: Pubkey,
+}
+
+impl CcmAccounts {
+	pub fn additional_account_metas(self) -> Vec<AccountMeta> {
+		self.additional_accounts.into_iter().map(|acc| acc.into()).collect::<Vec<_>>()
+	}
+}
+
+#[test]
+fn ccm_extra_accounts_encoding() {
+	let extra_accounts = CcmAccounts {
+		cf_receiver: CcmAddress { pubkey: Pubkey([0x11; 32]), is_writable: false },
+		additional_accounts: vec![
+			CcmAddress { pubkey: Pubkey([0x22; 32]), is_writable: true },
+			CcmAddress { pubkey: Pubkey([0x33; 32]), is_writable: true },
+		],
+		fallback_address: Pubkey([0xf0; 32]),
+	};
+
+	let encoded = Encode::encode(&extra_accounts);
+
+	// Scale encoding format:
+	// cf_receiver(32 bytes, bool),
+	// size_of_vec(compact encoding), additional_accounts_0(32 bytes, bool), additional_accounts_1,
+	// etc..
+	assert_eq!(
+		encoded,
+		hex_literal::hex!(
+			"1111111111111111111111111111111111111111111111111111111111111111 00
+			08 
+			2222222222222222222222222222222222222222222222222222222222222222 01
+			3333333333333333333333333333333333333333333333333333333333333333 01
+			F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0"
+		)
+	);
 }
 
 /// Values used for testing purposes
