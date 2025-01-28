@@ -37,8 +37,8 @@ pub use sol_prim::{
 pub use sol_tx_core::{
 	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
 	CcmAddress as SolCcmAddress, Hash as RawSolHash, Instruction as SolInstruction,
-	InstructionRpc as SolInstructionRpc, Message as SolMessage, Pubkey as SolPubkey,
-	Transaction as SolTransaction,
+	InstructionRpc as SolInstructionRpc, LegacyMessage as SolLegacyMessage,
+	LegacyTransaction as SolLegacyTransaction, Pubkey as SolPubkey,
 };
 
 // Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch
@@ -46,7 +46,7 @@ pub use sol_tx_core::{
 pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
 // Bytes left that are available for the user when building the native and token ccm transfers.
-// All function parameters are already accounted for excepte additional_accounts and message.
+// All function parameters are already accounted for except additional_accounts and message.
 pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize; // 694 bytes left
 pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize; // 481 bytes left
 
@@ -104,7 +104,7 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
-	type Payload = SolMessage;
+	type Payload = SolLegacyMessage;
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolanaTransactionInId;
 	type TransactionOutId = Self::ThresholdSignature;
@@ -127,7 +127,7 @@ impl ChainCrypto for SolanaCrypto {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
-		SolMessage::new(&[], Some(&SolPubkey::from(agg_key)))
+		SolLegacyMessage::new(&[], Some(&SolPubkey::from(agg_key)))
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(

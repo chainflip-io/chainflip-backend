@@ -4,7 +4,7 @@ use cf_chains::{
 	dot::{EncodedPolkadotPayload, PolkadotPair, PolkadotPublicKey, PolkadotSignature},
 	evm::{to_evm_address, AggKey, SchnorrVerificationComponents},
 	sol::{
-		signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolMessage,
+		signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolLegacyMessage,
 		SolSignature,
 	},
 };
@@ -258,7 +258,7 @@ impl Default for SolThresholdSigner {
 impl KeyUtils for SolKeyComponents {
 	type SigVerification = SolSignature;
 	type AggKey = SolAddress;
-	type Message = SolMessage;
+	type Message = SolLegacyMessage;
 
 	fn sign(&self, message: &Self::Message) -> Self::SigVerification {
 		self.secret.sign_message(message.serialize().as_slice())

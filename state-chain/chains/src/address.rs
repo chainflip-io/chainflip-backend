@@ -4,7 +4,7 @@ use crate::{
 	btc::ScriptPubkey,
 	dot::PolkadotAccountId,
 	eth::Address as EvmAddress,
-	sol::{self, SolAddress},
+	sol::{self, SolAddress, SolPubkey},
 	Chain,
 };
 use cf_primitives::{
@@ -132,6 +132,17 @@ impl core::fmt::Display for EncodedAddress {
 					.unwrap_or("The address cant be decoded from the utf8 encoded bytes")
 			),
 			EncodedAddress::Sol(addr) => core::fmt::Display::fmt(&SolAddress(*addr), f),
+		}
+	}
+}
+
+impl TryFrom<EncodedAddress> for SolPubkey {
+	type Error = ();
+	fn try_from(value: EncodedAddress) -> Result<Self, Self::Error> {
+		if let EncodedAddress::Sol(bytes) = value {
+			Ok(SolPubkey(bytes))
+		} else {
+			Err(())
 		}
 	}
 }

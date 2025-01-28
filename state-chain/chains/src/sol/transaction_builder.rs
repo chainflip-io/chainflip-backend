@@ -35,7 +35,7 @@ use crate::{
 			AccountMeta,
 		},
 		AccountBump, SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts,
-		SolComputeLimit, SolInstruction, SolMessage, SolPubkey, SolTransaction, Solana,
+		SolComputeLimit, SolInstruction, SolLegacyMessage, SolLegacyTransaction, SolPubkey, Solana,
 	},
 	FetchAssetParams, ForeignChainAddress,
 };
@@ -66,14 +66,14 @@ impl SolanaTransactionBuilder {
 	/// complete. This will add some extra instruction required for the integrity of the Solana
 	/// Transaction.
 	///
-	/// Returns the finished Instruction Set to construct the SolTransaction.
+	/// Returns the finished Instruction Set to construct the SolLegacyTransaction.
 	fn build(
 		mut instructions: Vec<SolInstruction>,
 		durable_nonce: DurableNonceAndAccount,
 		agg_key: SolPubkey,
 		compute_price: SolAmount,
 		compute_limit: SolComputeLimit,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let mut final_instructions = vec![SystemProgramInstruction::advance_nonce_account(
 			&durable_nonce.0.into(),
 			&agg_key,
@@ -89,7 +89,7 @@ impl SolanaTransactionBuilder {
 		final_instructions.append(&mut instructions);
 
 		// Test serialize the final transaction to obtain its length.
-		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
+		let transaction = SolLegacyTransaction::new_unsigned(SolLegacyMessage::new_with_blockhash(
 			&final_instructions,
 			Some(&agg_key),
 			&durable_nonce.1.into(),
@@ -117,7 +117,7 @@ impl SolanaTransactionBuilder {
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let mut compute_limit: SolComputeLimit = BASE_COMPUTE_UNITS_PER_TX;
 		let instructions = fetch_params
 			.into_iter()
@@ -198,7 +198,7 @@ impl SolanaTransactionBuilder {
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let instructions =
 			vec![SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount)];
 
@@ -227,7 +227,7 @@ impl SolanaTransactionBuilder {
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
 		token_decimals: u8,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![
 			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
 				&agg_key.into(),
@@ -266,7 +266,7 @@ impl SolanaTransactionBuilder {
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let mut instructions = vec![VaultProgram::with_id(vault_program).rotate_agg_key(
 			false,
 			vault_program_data_account,
@@ -305,7 +305,7 @@ impl SolanaTransactionBuilder {
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
 		compute_limit: SolComputeLimit,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![
 			SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount),
 			VaultProgram::with_id(vault_program)
@@ -345,7 +345,7 @@ impl SolanaTransactionBuilder {
 		compute_price: SolAmount,
 		token_decimals: u8,
 		compute_limit: SolComputeLimit,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![
 		AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
 			&agg_key.into(),
@@ -389,7 +389,7 @@ impl SolanaTransactionBuilder {
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![VaultProgram::with_id(vault_program).set_gov_key_with_agg_key(
 			new_gov_key.into(),
 			vault_program_data_account,
@@ -415,7 +415,7 @@ impl SolanaTransactionBuilder {
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let number_of_accounts = vault_swap_accounts.len();
 		let swap_and_sender_vec: Vec<AccountMeta> = vault_swap_accounts
 			.into_iter()
@@ -473,7 +473,7 @@ impl SolanaTransactionBuilder {
 		gov_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![VaultProgram::with_id(vault_program).set_program_swaps_parameters(
 			min_native_swap_amount,
 			max_dst_address_len,
@@ -502,7 +502,7 @@ impl SolanaTransactionBuilder {
 		gov_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+	) -> Result<SolLegacyTransaction, SolanaTransactionBuildingError> {
 		let token_supported_account =
 			derive_token_supported_account(vault_program, token_mint_pubkey)
 				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
