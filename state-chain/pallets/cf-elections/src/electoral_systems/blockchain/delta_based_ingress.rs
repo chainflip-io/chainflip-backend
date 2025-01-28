@@ -5,6 +5,7 @@ use crate::{
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifier,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::IngressSink;
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -175,7 +176,7 @@ where
 		chain_tracking: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
-			let (mut channels, mut pending_ingress_totals, option_consensus) = {
+			let (properties, mut pending_ingress_totals, option_consensus) = {
 				let election_access = ElectoralAccess::election_mut(election_identifier);
 				(
 					election_access.properties()?,
@@ -184,10 +185,8 @@ where
 				)
 			};
 
-			let mut closed_channels = Vec::new();
-			let mut new_properties: Self::ElectionProperties = BTreeMap::new();
-			let old_properties = channels.clone();
-			for (account, (details, old_consensus_ingress_total)) in &channels {
+			let mut new_properties = properties.clone();
+			for (account, (details, _)) in &properties {
 				// We currently split the ingressed amount into two parts:
 				// 1. The consensus amount that is *before* chain tracking. i.e. Chain tracking is
 				//    *ahead*.
@@ -205,47 +204,70 @@ where
 				// can send the smallest unit of Solana in a stream to the victim's deposit channel,
 				// delaying the victim's deposit until the attacker stops their stream.
 
-				let (
-					option_ingress_total_before_chain_tracking,
-					option_ingress_total_after_chain_tracking,
-				) = match option_consensus.as_ref().and_then(|consensus| consensus.get(account)) {
-					None => {
-						new_properties
-							.insert(account.clone(), (*details, *old_consensus_ingress_total));
-						(None, None)
-					},
-					Some(consensus_ingress_total) => {
-						new_properties
-							.insert(account.clone(), (*details, *consensus_ingress_total));
-						if consensus_ingress_total.block_number <= *chain_tracking {
-							(Some(*consensus_ingress_total), None)
+				let (ready_total, future_total) = match (
+					option_consensus.as_ref().and_then(|consensus| consensus.get(account)),
+					pending_ingress_totals.remove(account),
+				) {
+					(None, None) => (None, None),
+					(Some(&total), None) | (None, Some(total)) => {
+						if total.block_number <= *chain_tracking {
+							(Some(total), None)
 						} else {
-							match pending_ingress_totals.remove(account) {
-								None => (None, Some(*consensus_ingress_total)),
-								Some(pending_ingress_total) => {
-									if pending_ingress_total.block_number <
-										consensus_ingress_total.block_number &&
-										pending_ingress_total.amount <
-											consensus_ingress_total.amount
-									{
-										if pending_ingress_total.block_number <= *chain_tracking {
-											(
-												Some(pending_ingress_total),
-												Some(*consensus_ingress_total),
-											)
-										} else {
-											(None, Some(pending_ingress_total))
-										}
-									} else {
-										(None, Some(*consensus_ingress_total))
-									}
-								},
+							(None, Some(total))
+						}
+					},
+					(Some(&new_consensus), Some(old_consensus)) => {
+						if new_consensus.block_number <= old_consensus.block_number {
+							// Not sure if this is possible, but can't exclude it either. Can
+							// indicate a re-org or misbehaving rpcs. Ignore the previous
+							// amount.
+							if *chain_tracking >= new_consensus.block_number {
+								(Some(new_consensus), None)
+							} else {
+								(None, Some(new_consensus))
+							}
+						} else {
+							// In this branch we handle the 'happy' case where block numbers are
+							// monotonically increasing.
+							if *chain_tracking >= new_consensus.block_number {
+								// Chain tracking has progressed beyond the latest ingress block so
+								// we take the latest consensus and ignore any previous
+								// amounts.
+								(Some(new_consensus), None)
+							} else if *chain_tracking >= old_consensus.block_number {
+								// Chain tracking has progressed beyond the previous deposit block
+								// but not the latest. We can confirm the previous amount, the
+								// latest will become pending, as long as the amounts are different.
+								debug_assert!(new_consensus.amount >= old_consensus.amount);
+								// NOTE: We can be sure of this because the block numbers cannot
+								// decrease and, if they were equal, we would have entered the
+								// initial condition.
+								debug_assert!(
+									new_consensus.block_number > old_consensus.block_number
+								);
+
+								if new_consensus.amount > old_consensus.amount {
+									(Some(old_consensus), Some(new_consensus))
+								} else {
+									log_or_panic!(
+										"Consensus {:?} balance for Solana deposit channel `{:?}` decreased from {:?} to {:?}",
+										details.asset,
+										account,
+										old_consensus.amount,
+										new_consensus.amount
+									);
+									(Some(old_consensus), None)
+								}
+							} else {
+								// Chain tracking has not progressed beyond the previous deposit
+								// block. We can confirm neither the previous nor the latest amount.
+								(None, Some(new_consensus))
 							}
 						}
 					},
 				};
 
-				if let Some(ingress_total) = option_ingress_total_before_chain_tracking {
+				if let Some(ready_total) = ready_total {
 					let previous_amount = ElectoralAccess::unsynchronised_state_map(&(
 						account.clone(),
 						details.asset,
@@ -253,55 +275,59 @@ where
 					.map_or(Zero::zero(), |previous_total_ingressed| {
 						previous_total_ingressed.amount
 					});
-					match previous_amount.cmp(&ingress_total.amount) {
+					match previous_amount.cmp(&ready_total.amount) {
 						Ordering::Less => {
 							Sink::on_ingress(
 								account.clone(),
 								details.asset,
-								ingress_total.amount - previous_amount,
-								ingress_total.block_number,
+								ready_total.amount - previous_amount,
+								ready_total.block_number,
 								(),
 							);
 							ElectoralAccess::set_unsynchronised_state_map(
 								(account.clone(), details.asset),
-								Some(ingress_total),
+								Some(ready_total),
 							);
+							if future_total.is_none() {
+								new_properties.entry(account.clone()).and_modify(
+									|(_details, total)| {
+										*total = ready_total;
+									},
+								);
+							}
 						},
 						Ordering::Greater => {
-							log::warn!("Deposit channels on Solana chain has reverted! Account: {:?}, Asset: {:?}, Previous ingressed total: {:?}, new ingressed total: {:?}", account, details.asset, previous_amount, ingress_total.amount);
+							log::error!(
+								"Finalized {:?} balance for Solana deposit channel `{:?}` decreased from {:?} to {:?}",
+								details.asset,
+								account,
+								previous_amount,
+								ready_total.amount
+							);
 						},
 						Ordering::Equal => (),
 					}
-					if ingress_total.block_number >= details.close_block {
+					if ready_total.block_number >= details.close_block && future_total.is_none() {
 						Sink::on_channel_closed(account.clone());
-						closed_channels.push(account.clone());
+						new_properties.remove(account);
 					}
 				}
-				if let Some(ingress_total_after_chain_tracking) =
-					option_ingress_total_after_chain_tracking
-				{
-					pending_ingress_totals
-						.insert(account.clone(), ingress_total_after_chain_tracking);
+				if let Some(future_total) = future_total {
+					pending_ingress_totals.insert(account.clone(), future_total);
 				}
 			}
 
-			for closed_channel in closed_channels {
-				pending_ingress_totals.remove(&closed_channel);
-				channels.remove(&closed_channel);
-				new_properties.remove(&closed_channel);
-			}
+			let election_access = ElectoralAccess::election_mut(election_identifier);
 
-			let mut election_access = ElectoralAccess::election_mut(election_identifier);
-
-			if channels.is_empty() {
+			if new_properties.is_empty() {
+				// This should be ensured because we only remove channels if there are no future
+				// totals.
+				debug_assert!(pending_ingress_totals.is_empty());
+				log::debug!("recreate election: deleting since no channels are left");
 				election_access.delete();
 			} else {
-				election_access.set_state(pending_ingress_totals.clone())?;
-
-				// recreate this election if the properties changed
-				if new_properties != old_properties {
-					log::debug!("recreate election: recreate since properties changed from: {old_properties:?}, to: {new_properties:?}");
-
+				if new_properties != properties {
+					log::debug!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
 					election_access.delete();
 					ElectoralAccess::new_election(
 						Default::default(),
@@ -309,7 +335,8 @@ where
 						pending_ingress_totals,
 					)?;
 				} else {
-					log::debug!("recreate election: keeping old because properties didn't change: {old_properties:?}");
+					log::debug!("recreate election: keeping old because properties didn't change: {properties:?}");
+					election_access.set_state(pending_ingress_totals)?;
 				}
 			}
 		}
