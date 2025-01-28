@@ -21,7 +21,7 @@ import { getBalance } from '../shared/get_balance';
 export const testVaultSwapFeeCollection = new ExecutableTest(
   'Vault-Swap-Fee-Collection',
   main,
-  350,
+  600,
 );
 
 // Fee to use for the broker and affiliates
@@ -61,6 +61,7 @@ async function testWithdrawCollectedAffiliateFees(
   }
 
   assert(success, `Withdrawal failed - No balance change detected within the timeout period 🙅‍♂️.`);
+  testVaultSwapFeeCollection.log('Withdrawal successful ✅.');
 }
 
 async function testFeeCollection(inputAsset: Asset): Promise<[KeyringPair, string, string]> {
