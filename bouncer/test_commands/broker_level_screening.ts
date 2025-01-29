@@ -15,12 +15,11 @@
 //  - reject a boosted deposit
 //  - don't reject a boosted deposit which was reported too late
 
-
 import { testBrokerLevelScreening } from '../tests/broker_level_screening';
 
 let testBoostedDeposits = false;
 if (process.argv.length > 1) {
-    testBoostedDeposits = process.argv[2] == 'testBoostedDeposits';
+  testBoostedDeposits = process.argv[2] === 'testBoostedDeposits';
 }
 
 await testBrokerLevelScreening.run(testBoostedDeposits);
