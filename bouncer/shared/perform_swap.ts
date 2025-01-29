@@ -29,7 +29,7 @@ import {
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 import { getChainflipApi, observeEvent } from './utils/substrate';
-import { executeEvmVaultSwap } from './evm_vault_swap';
+import { executeEvmVaultSwap, executeEvmVaultSwap } from './evm_vault_swap';
 import { executeSolVaultSwap } from './sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from './btc_vault_swap';
 
@@ -265,7 +265,6 @@ export async function executeVaultSwap(
   },
   affiliateFees: {
     accountAddress: string;
-    accountShortId: number;
     commissionBps: number;
   }[] = [],
 ) {
@@ -292,14 +291,14 @@ export async function executeVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
-      brokerFeesValue,
+      brokerFeesValue.commissionBps,
       messageMetadata,
       amount,
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
       wallet,
-      affiliateFees.map((f) => ({ account: f.accountShortId, commissionBps: f.commissionBps })),
+      affiliateFees,
     );
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
@@ -358,7 +357,6 @@ export async function performVaultSwap(
   },
   affiliateFees: {
     accountAddress: string;
-    accountShortId: number;
     commissionBps: number;
   }[] = [],
 ): Promise<VaultSwapParams> {

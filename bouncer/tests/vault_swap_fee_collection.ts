@@ -84,7 +84,6 @@ async function testFeeCollection(inputAsset: Asset): Promise<[KeyringPair, strin
   testVaultSwapFeeCollection.debugLog('Registering affiliate');
   const event = await registerAffiliate(brokerUri, refundAddress);
 
-  const affiliateShotId = event.data.shortId as number;
   const affiliateId = event.data.affiliateId as string;
 
   // Setup
@@ -121,7 +120,7 @@ async function testFeeCollection(inputAsset: Asset): Promise<[KeyringPair, strin
     undefined, // fillOrKillParams
     undefined, // dcaParams
     { account: broker.address, commissionBps },
-    [{ accountAddress: affiliateId, accountShortId: affiliateShotId, commissionBps }],
+    [{ accountAddress: affiliateId, commissionBps }],
   );
 
   // Check that both the broker and affiliate earned fees
