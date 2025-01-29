@@ -185,7 +185,7 @@ async function brokerLevelScreeningTestScenario(
 // 1. No boost and early tx report -> tx is reported early and the swap is refunded.
 // 2. Boost and early tx report -> tx is reported early and the swap is refunded.
 // 3. Boost and late tx report -> tx is reported late and the swap is not refunded.
-async function main() {
+async function main(testBoostedDeposits: boolean = false) {
   const MILLI_SECS_PER_BLOCK = 6000;
 
   // 0. -- Ensure that deposit monitor is running with manual mocking mode --
@@ -207,45 +207,47 @@ async function main() {
 
   testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
 
-  // 2. -- Test boost and early tx report --
-  testBrokerLevelScreening.log(
-    'Testing broker level screening with boost and a early tx report...',
-  );
-  btcRefundAddress = await newAssetAddress('Btc');
+  if (testBoostedDeposits) {
+    // 2. -- Test boost and early tx report --
+    testBrokerLevelScreening.log(
+      'Testing broker level screening with boost and a early tx report...',
+    );
+    btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, async (txId) =>
-    setTxRiskScore(txId, 9.0),
-  );
-  await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
+    await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, async (txId) =>
+      setTxRiskScore(txId, 9.0),
+    );
+    await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
-  if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
-    throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
+    if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
+      throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
+    }
+    testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
+
+    // 3. -- Test boost and late tx report --
+    // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
+    testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
+    btcRefundAddress = await newAssetAddress('Btc');
+
+    const channelId = await brokerLevelScreeningTestScenario(
+      '0.2',
+      true,
+      btcRefundAddress,
+      // We wait 12 seconds (2 localnet btc blocks) before we submit the tx.
+      // We submit the extrinsic manually in order to ensure that even though it definitely arrives,
+      // the transaction is refunded because the extrinsic is submitted too late.
+      async (txId) => {
+        await sleep(MILLI_SECS_PER_BLOCK * 2);
+        await markTxForRejection(txId);
+      },
+    );
+
+    await observeEvent('bitcoinIngressEgress:DepositFinalised', {
+      test: (event) => event.data.channelId === channelId,
+    }).event;
+
+    testBrokerLevelScreening.log(`Swap was executed and transaction was not refunded 👍.`);
   }
-  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
-
-  // 3. -- Test boost and late tx report --
-  // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
-  testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
-  btcRefundAddress = await newAssetAddress('Btc');
-
-  const channelId = await brokerLevelScreeningTestScenario(
-    '0.2',
-    true,
-    btcRefundAddress,
-    // We wait 12 seconds (2 localnet btc blocks) before we submit the tx.
-    // We submit the extrinsic manually in order to ensure that even though it definitely arrives,
-    // the transaction is refunded because the extrinsic is submitted too late.
-    async (txId) => {
-      await sleep(MILLI_SECS_PER_BLOCK * 2);
-      await markTxForRejection(txId);
-    },
-  );
-
-  await observeEvent('bitcoinIngressEgress:DepositFinalised', {
-    test: (event) => event.data.channelId === channelId,
-  }).event;
-
-  testBrokerLevelScreening.log(`Swap was executed and transaction was not refunded 👍.`);
 
   // 4. -- Restore mockmode --
   await setMockmode(previousMockmode);
