@@ -6,7 +6,6 @@ use crate::{
 use cf_primitives::Asset;
 use cf_traits::IngressSink;
 use codec::{Decode, Encode};
-use core::u64;
 use frame_support::assert_ok;
 use sp_std::collections::btree_map::BTreeMap;
 use std::cell::RefCell;
@@ -199,8 +198,8 @@ fn with_default_setup() -> TestSetup<SimpleDeltaBasedIngress> {
 	TestSetup::<_>::default()
 		.with_initial_election_state(
 			1u32,
-			to_properties(INITIAL_CHANNEL_STATE.clone()),
-			to_state(INITIAL_CHANNEL_STATE.clone()),
+			to_properties(INITIAL_CHANNEL_STATE),
+			to_state(INITIAL_CHANNEL_STATE),
 		)
 		.with_initial_state_map(to_state_map(INITIAL_CHANNEL_STATE).into_iter().collect::<Vec<_>>())
 }

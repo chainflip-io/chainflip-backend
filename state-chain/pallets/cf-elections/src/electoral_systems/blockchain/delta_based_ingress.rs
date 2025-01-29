@@ -325,19 +325,17 @@ where
 				debug_assert!(pending_ingress_totals.is_empty());
 				log::debug!("recreate election: deleting since no channels are left");
 				election_access.delete();
+			} else if new_properties != properties {
+				log::debug!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
+				election_access.delete();
+				ElectoralAccess::new_election(
+					Default::default(),
+					new_properties,
+					pending_ingress_totals,
+				)?;
 			} else {
-				if new_properties != properties {
-					log::debug!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
-					election_access.delete();
-					ElectoralAccess::new_election(
-						Default::default(),
-						new_properties,
-						pending_ingress_totals,
-					)?;
-				} else {
-					log::debug!("recreate election: keeping old because properties didn't change: {properties:?}");
-					election_access.set_state(pending_ingress_totals)?;
-				}
+				log::debug!("recreate election: keeping old because properties didn't change: {properties:?}");
+				election_access.set_state(pending_ingress_totals)?;
 			}
 		}
 
