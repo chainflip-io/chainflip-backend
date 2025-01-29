@@ -1164,7 +1164,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Opens up a private broker channel.
+		/// Opens a private broker channel for Bitcoin vault swaps.
+		///
+		/// This requires the broker to have sufficient funds to cover the bond.
 		///
 		/// ## Events
 		///
@@ -1197,6 +1199,8 @@ pub mod pallet {
 
 		/// Closes the currently open private broker channel.
 		///
+		/// Closing the channel will unlock the bonded funds.
+		///
 		/// ## Events
 		///
 		/// - [PrivateBrokerChannelClosed](Event::PrivateBrokerChannelClosed)
@@ -1216,11 +1220,15 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Registers an affiliate for a broker. Sets the withdrawal address for the affiliate which
-		/// will be used to withdraw the affiliate's fees. The withdrawal address can not be changed
-		/// once set. The broker will be able to trigger a withdrawal
-		/// request to the affiliate's withdrawal address. A short id is taken and can only be used
-		/// once. The affiliate account is derived from the broker account id.
+		/// Registers an affiliate for a broker.
+		///
+		/// The broker must provide an Ethereum address to which any earned affiliate fees
+		/// can be withdrawn. The broker can trigger a withdrawal request to the affiliate's
+		/// withdrawal address.
+		///
+		/// Affiliates have a unique account id that can only be accessed through the affiliate's
+		/// broker. The affiliate account id is derived from the broker account id using a short id
+		/// that is unique to that combination of broker and affiliate.
 		///
 		/// ## Events
 		///
@@ -1267,7 +1275,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Triggers a withdrawal request to the registered withdrawal address of the affiliate.
+		/// Triggers a withdrawal to the registered withdrawal address of the affiliate.
+		///
 		/// Note: This extrinsic is secured by the broker that has registered the affiliate account.
 		///
 		/// ## Events
