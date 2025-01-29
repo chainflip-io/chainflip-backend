@@ -76,8 +76,8 @@ struct FeeTaken {
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Copy, Clone)]
 pub struct AffiliateDetails {
-	short_id: AffiliateShortId,
-	withdrawal_address: EthereumAddress,
+	pub short_id: AffiliateShortId,
+	pub withdrawal_address: EthereumAddress,
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
@@ -2316,9 +2316,7 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 		broker_id: &Self::AccountId,
 		affiliate_id: &Self::AccountId,
 	) -> Option<AffiliateShortId> {
-		AffiliateIdMapping::<T>::iter_prefix(broker_id)
-			.find(|(_, id)| id == affiliate_id)
-			.map(|(short_id, _)| short_id)
+		AffiliateAccountDetails::<T>::get(broker_id, affiliate_id).map(|details| details.short_id)
 	}
 
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId> {

@@ -9,12 +9,13 @@ use chainflip_api::{
 		state_chain_runtime::runtime_apis::{
 			ChainAccounts, TransactionScreeningEvents, VaultSwapDetails,
 		},
-		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
+		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
 		DcaParameters,
 	},
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, BrokerApi, ChannelId, DepositMonitorApi, OperatorApi,
-	SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
+	AccountId32, AddressString, BlockUpdate, BrokerApi, ChannelId, DepositMonitorApi,
+	EthereumAddress, OperatorApi, SignedExtrinsicApi, StateChainApi, SwapDepositAddress,
+	TransactionInId, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -140,7 +141,10 @@ pub trait Rpc {
 	) -> RpcResult<AccountId32>;
 
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
-	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
+	async fn get_affiliates(
+		&self,
+		affilate: Option<AccountId32>,
+	) -> RpcResult<Vec<(AccountId32, AffiliateDetails)>>;
 
 	#[method(name = "affiliate_withdrawal_request", aliases = ["broker_affiliateWithdrawalRequest"])]
 	async fn affiliate_withdrawal_request(
@@ -306,11 +310,14 @@ impl RpcServer for RpcServerImpl {
 		Ok(self.api.broker_api().register_affiliate(withdrawal_address).await?)
 	}
 
-	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
+	async fn get_affiliates(
+		&self,
+		affiliate: Option<AccountId32>,
+	) -> RpcResult<Vec<(AccountId32, AffiliateDetails)>> {
 		Ok(self
 			.api
 			.raw_client()
-			.cf_get_affiliates(self.api.state_chain_client.account_id(), None)
+			.cf_affiliate_details(self.api.state_chain_client.account_id(), affiliate, None)
 			.await?)
 	}
 

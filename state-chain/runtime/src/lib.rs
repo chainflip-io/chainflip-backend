@@ -2422,17 +2422,18 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_get_affiliates(
+		fn cf_affiliate_details(
 			broker: AccountId,
-		) -> Vec<(AffiliateShortId, AccountId)>{
-			pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&broker).collect()
-		}
-
-		fn cf_get_affiliate_account_details(
-			broker: AccountId,
-			affiliate_account_id: AccountId,
-		) -> Option<AffiliateDetails> {
-			pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::get(broker, affiliate_account_id)
+			affiliate: Option<AccountId>,
+		) -> Vec<(AccountId, AffiliateDetails)>{
+			if let Some(affiliate) = affiliate {
+				pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::get(&broker, &affiliate)
+					.map(|details| (affiliate, details))
+					.into_iter()
+					.collect()
+			} else {
+				pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&broker).collect()
+			}
 		}
 	}
 
