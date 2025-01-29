@@ -43,6 +43,7 @@ interface EvmVaultSwapExtraParameters {
 }
 
 export async function executeEvmVaultSwap(
+  brokerAddress: string,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -81,8 +82,6 @@ export async function executeEvmVaultSwap(
   }
 
   await using chainflip = await getChainflipApi();
-  const brokerUri = '//BROKER_1';
-  const broker = createStateChainKeypair(brokerUri);
 
   const refundParams: ChannelRefundParameters = {
     retry_duration: fokParams.retryDurationBlocks,
@@ -98,7 +97,7 @@ export async function executeEvmVaultSwap(
 
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_get_vault_swap_details`,
-    broker.address,
+    brokerAddress,
     { chain: srcChain, asset: stateChainAssetFromAsset(sourceAsset) },
     { chain: destChain, asset: stateChainAssetFromAsset(destAsset) },
     destChain === Chains.Polkadot ? decodeDotAddressForContract(destAddress) : destAddress,
@@ -110,7 +109,10 @@ export async function executeEvmVaultSwap(
       ccm_additional_data: messageMetadata.ccmAdditionalData,
     },
     boostFeeBps ?? 0,
-    affiliateFees,
+    affiliateFees.map((fee) => ({
+      account: fee.accountAddress,
+      bps: fee.commissionBps,
+    })),
     dcaParams && {
       number_of_chunks: dcaParams.numberOfChunks,
       chunk_interval: dcaParams.chunkIntervalBlocks,

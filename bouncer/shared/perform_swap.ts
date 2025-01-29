@@ -288,6 +288,7 @@ export async function executeVaultSwap(
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
     const txHash = await executeEvmVaultSwap(
+      brokerFeesValue.account,
       sourceAsset,
       destAsset,
       destAddress,
