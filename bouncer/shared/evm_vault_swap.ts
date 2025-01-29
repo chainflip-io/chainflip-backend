@@ -1,11 +1,4 @@
-import {
-  InternalAsset as Asset,
-  executeSwap,
-  ExecuteSwapParams,
-  approveVault,
-  Asset as SCAsset,
-  Chains,
-} from '@chainflip/cli';
+import { InternalAsset as Asset, approveVault, Asset as SCAsset, Chains } from '@chainflip/cli';
 import { HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import BigNumber from 'bignumber.js';
@@ -19,7 +12,6 @@ import {
   stateChainAssetFromAsset,
   createEvmWalletAndFund,
   newAddress,
-  createStateChainKeypair,
   decodeDotAddressForContract,
   getEvmEndpoint,
 } from './utils';
