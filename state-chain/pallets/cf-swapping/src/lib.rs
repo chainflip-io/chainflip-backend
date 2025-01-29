@@ -5,6 +5,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
+	eth::Address as EthereumAddress,
 	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersDecoded,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
@@ -14,11 +15,6 @@ use cf_primitives::{
 	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
 	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
-use serde::{Deserialize, Serialize};
-
-use cf_chains::eth::Address as EthereumAddress;
-use sp_io::hashing::blake2_256;
-
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
@@ -33,10 +29,11 @@ use frame_support::{
 	},
 	storage::with_transaction_unchecked,
 	traits::Defensive,
-	transactional, CloneNoBound,
+	transactional, CloneNoBound, Hashable,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use serde::{Deserialize, Serialize};
 use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational_with_rounding,
 	traits::{UniqueSaturatedInto, Zero},
@@ -44,6 +41,7 @@ use sp_arithmetic::{
 };
 use sp_runtime::traits::TrailingZeroInput;
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+
 #[cfg(test)]
 mod mock;
 
@@ -1248,9 +1246,7 @@ pub mod pallet {
 			);
 
 			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
-				(b"chainflip/affiliate", &broker_id, short_id)
-					.using_encoded(blake2_256)
-					.as_ref(),
+				(*b"chainflip/affiliate", broker_id.clone(), short_id).blake2_256().as_ref(),
 			))
 			.map_err(|_| Error::<T>::AffiliateAccountIdDerivationFailed)?;
 
