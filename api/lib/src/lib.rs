@@ -513,18 +513,10 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		)
 	}
 
-	async fn register_affiliate(&self, withdrawal_address: AddressString) -> Result<AccountId32> {
+	async fn register_affiliate(&self, withdrawal_address: EthereumAddress) -> Result<AccountId32> {
 		let (_, events, ..) = self
 			.submit_signed_extrinsic_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
-				withdrawal_address: EthereumAddress::try_from(
-					withdrawal_address.try_parse_to_foreign_chain_address(
-						ForeignChain::Ethereum,
-						NetworkEnvironment::Mainnet,
-					)?,
-				)
-				.map_err(|_| {
-					anyhow!("Invalid withdrawal address. Address must be a valid Ethereum address.")
-				})?,
+				withdrawal_address,
 			})
 			.await?
 			.until_in_block()

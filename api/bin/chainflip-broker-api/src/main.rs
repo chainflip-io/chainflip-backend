@@ -134,8 +134,10 @@ pub trait Rpc {
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId>;
 
 	#[method(name = "register_affiliate", aliases = ["broker_registerAffiliate"])]
-	async fn register_affiliate(&self, withdrawal_address: AddressString)
-		-> RpcResult<AccountId32>;
+	async fn register_affiliate(
+		&self,
+		withdrawal_address: EthereumAddress,
+	) -> RpcResult<AccountId32>;
 
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
@@ -299,7 +301,7 @@ impl RpcServer for RpcServerImpl {
 
 	async fn register_affiliate(
 		&self,
-		withdrawal_address: AddressString,
+		withdrawal_address: EthereumAddress,
 	) -> RpcResult<AccountId32> {
 		Ok(self.api.broker_api().register_affiliate(withdrawal_address).await?)
 	}
