@@ -49,10 +49,10 @@ use cf_traits::{
 	SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
+	__private::sp_tracing::warn,
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Permill, Saturating},
-	transactional, OrdNoBound, PartialOrdNoBound,
-	__private::sp_tracing::warn,
+	transactional,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;

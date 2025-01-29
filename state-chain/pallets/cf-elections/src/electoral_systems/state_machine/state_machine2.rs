@@ -17,8 +17,7 @@ use sp_std::fmt::Debug;
 /// Thus the basic structure is that we have three associated types:
 ///  - `State`
 ///  - `Input`
-///  - `Output`
-/// and a function `step(&mut State, Input) -> Output`.
+///  - `Output` and a function `step(&mut State, Input) -> Output`.
 ///
 /// ## Mapping to elections
 /// The `Input` type is the type of votes. Election properties are given by the associated type

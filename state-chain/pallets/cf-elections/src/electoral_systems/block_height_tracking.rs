@@ -1,21 +1,12 @@
-use core::{
-	iter::Step,
-	ops::{RangeInclusive, Rem, Sub},
-};
+use core::{iter::Step, ops::RangeInclusive};
 
-use super::state_machine::{
-	core::{Hook, Indexed, Validate},
-	state_machine::StateMachine,
-	state_machine_es::SMInput,
-};
-use crate::CorruptStorageError;
-use cf_chains::witness_period::{BlockWitnessRange, BlockZero, SaturatingStep};
+use super::state_machine::core::{Hook, Validate};
+use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
-use frame_support::{ensure, pallet_prelude::MaxEncodedLen, sp_runtime::traits::One};
-use primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError};
+use frame_support::ensure;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
+use sp_std::fmt::Debug;
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;

@@ -13406,6 +13406,8 @@ dependencies = [
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
+ "proptest",
+ "proptest-derive",
  "scale-info",
  "serde",
  "sol-prim",

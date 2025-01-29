@@ -59,7 +59,7 @@ impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensu
 			}
 		}
 
-		return None;
+		None
 	}
 }
 

@@ -20,16 +20,14 @@ use pallet_cf_elections::{
 		block_witnesser::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
-			state_machine::{
-				BWSettings, BWState, BWStateMachine, BWTypes, BlockWitnesserProcessor,
-			},
+			state_machine::{BWSettings, BWState, BWStateMachine, BWTypes},
 		},
 		composite::{
 			tuple_3_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
 		state_machine::{
-			core::{ConstantIndex, Hook, MultiIndexAndValue},
+			core::{ConstantIndex, Hook},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
@@ -43,11 +41,8 @@ use sp_std::{
 	marker::PhantomData,
 };
 
-use pallet_cf_ingress_egress::{
-	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo, WitnessSafetyMargin,
-};
+use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness, PalletSafeMode};
 use scale_info::TypeInfo;
-use sp_runtime::BoundedVec;
 
 use crate::{
 	chainflip::{
@@ -71,6 +66,9 @@ use pallet_cf_elections::electoral_systems::{
 };
 use sp_std::{vec, vec::Vec};
 
+use sp_std::vec::Vec;
+
+//TODO! decide an appropriate buffer (in btc blocks) for the reorged events
 pub(crate) const BUFFER_EVENTS: BlockNumber = 10;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<

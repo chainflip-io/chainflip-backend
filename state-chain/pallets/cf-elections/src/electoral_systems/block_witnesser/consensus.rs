@@ -1,7 +1,7 @@
 use crate::{
 	electoral_systems::state_machine::{
 		consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold},
-		core::{ConstantIndex, MultiIndexAndValue},
+		core::ConstantIndex,
 	},
 	SharedDataHash,
 };

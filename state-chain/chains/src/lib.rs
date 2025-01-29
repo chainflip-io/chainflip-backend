@@ -73,7 +73,6 @@ pub mod instances;
 pub mod mocks;
 
 pub mod witness_period {
-	use super::Chain;
 	use crate::ChainWitnessConfig;
 	use codec::{Decode, Encode};
 	use core::{
@@ -109,6 +108,7 @@ pub mod witness_period {
 		_phantom: sp_std::marker::PhantomData<C>,
 	}
 
+	#[allow(clippy::result_unit_err)]
 	impl<C: ChainWitnessConfig> BlockWitnessRange<C> {
 		pub fn try_new(root: C::ChainBlockNumber) -> Result<Self, ()> {
 			ensure!(C::WITNESS_PERIOD >= C::ChainBlockNumber::one(), ());
@@ -185,14 +185,12 @@ pub mod witness_period {
 		}
 
 		fn forward_checked(mut start: Self, count: usize) -> Option<Self> {
-			start.root =
-				start.root.clone().saturating_add(C::WITNESS_PERIOD * (count as u32).into());
+			start.root = start.root.saturating_add(C::WITNESS_PERIOD * (count as u32).into());
 			Some(start)
 		}
 
 		fn backward_checked(mut start: Self, count: usize) -> Option<Self> {
-			start.root =
-				start.root.clone().saturating_sub(C::WITNESS_PERIOD * (count as u32).into());
+			start.root = start.root.saturating_sub(C::WITNESS_PERIOD * (count as u32).into());
 			Some(start)
 		}
 	}
@@ -207,15 +205,13 @@ pub mod witness_period {
 		/// QUESTION: maybe don't loop `count` times?
 		fn saturating_forward(self, count: usize) -> Self {
 			let mut start = self;
-			start.root =
-				start.root.clone().saturating_add(C::WITNESS_PERIOD * (count as u32).into());
+			start.root = start.root.saturating_add(C::WITNESS_PERIOD * (count as u32).into());
 			start
 		}
 
 		fn saturating_backward(self, count: usize) -> Self {
 			let mut start = self;
-			start.root =
-				start.root.clone().saturating_sub(C::WITNESS_PERIOD * (count as u32).into());
+			start.root = start.root.saturating_sub(C::WITNESS_PERIOD * (count as u32).into());
 			start
 		}
 	}

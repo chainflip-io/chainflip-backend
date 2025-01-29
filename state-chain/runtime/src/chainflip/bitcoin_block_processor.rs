@@ -1,13 +1,11 @@
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
-use crate::{
-	chainflip::bitcoin_elections::BlockData, BitcoinChainTracking, BitcoinIngressEgress, Block,
-	ConstU32, Runtime,
-};
-use cf_chains::{btc, btc::BlockNumber, instances::BitcoinInstance};
+use crate::{chainflip::bitcoin_elections::BlockData, BitcoinIngressEgress, Runtime};
+use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
 use cf_primitives::chains::Bitcoin;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{pallet_prelude::TypeInfo, BoundedVec, Deserialize, Serialize};
+use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
+
 use log::warn;
 use pallet_cf_elections::electoral_systems::{
 	block_witnesser::{
@@ -16,7 +14,7 @@ use pallet_cf_elections::electoral_systems::{
 	},
 	state_machine::{
 		core::{Hook, IndexOf, Indexed, Validate},
-		state_machine::StateMachine,
+		state_machine2::StateMachine,
 	},
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
@@ -121,10 +119,9 @@ impl BlockWitnesserProcessor<BlockWitnessingProcessorDefinition>
 				last_block = *range.end();
 				for n in range.clone() {
 					let block_data = self.blocks_data.remove(&n);
-					if let Some((data, last_age)) = block_data {
-						// We need to get only events already processed (last_age not included since
-						// that value has still to be processed)
-						for age in 0..last_age {
+					if let Some((data, next_age)) = block_data {
+						// We need to get only events already processed (next_age not included)
+						for age in 0..next_age {
 							self.reorg_events
 								.insert(n, self.process_rules_for_age_and_block(n, age, &data));
 						}
@@ -145,11 +142,11 @@ impl BlockWitnesserProcessor<BlockWitnessingProcessorDefinition>
 	}
 
 	fn clean_old(&mut self, n: BlockNumber) {
-		self.blocks_data.retain(|key, (data, age)| {
+		self.blocks_data.retain(|_key, (_, age)| {
 			*age <= BitcoinIngressEgress::witness_safety_margin().unwrap()
 		});
 		self.reorg_events
-			.retain(|key, data| *key > n - crate::chainflip::bitcoin_elections::BUFFER_EVENTS);
+			.retain(|key, _| *key > n - crate::chainflip::bitcoin_elections::BUFFER_EVENTS);
 	}
 
 	fn process_rules(&mut self, last_height: BlockNumber) -> Vec<BtcEvent> {
@@ -212,7 +209,7 @@ impl BlockWitnesserProcessor<BlockWitnessingProcessorDefinition>
 )]
 pub struct ExecuteEventHook {}
 impl Hook<BtcEvent, ()> for ExecuteEventHook {
-	fn run(&self, input: BtcEvent) -> () {
+	fn run(&self, input: BtcEvent) {
 		match input {
 			BtcEvent::PreWitness(block, deposit) => {
 				let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(deposit, block);
@@ -266,8 +263,9 @@ impl Hook<(BlockNumber, BlockNumber, BlockData), Vec<BtcEvent>> for ApplyRulesHo
 
 /// State-Machine Block Witness Processor
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum SMBlockProcessorInput {
-	NewBlockData(BlockNumber, BlockNumber, crate::chainflip::bitcoin_elections::BlockData),
+	NewBlockData(BlockNumber, BlockNumber, BlockData),
 	ChainProgress(ChainProgressInner<BlockNumber>),
 }
 
@@ -308,9 +306,7 @@ impl StateMachine for SMBlockProcessor {
 	type Output = SMBlockProcessorOutput;
 	type State = SMBlockProcessorState;
 
-	fn input_index(s: &Self::State) -> IndexOf<Self::Input> {
-		()
-	}
+	fn input_index(_s: &Self::State) -> IndexOf<Self::Input> {}
 
 	fn step(s: &mut Self::State, i: Self::Input, _set: &Self::Settings) -> Self::Output {
 		match i {
@@ -323,5 +319,142 @@ impl StateMachine for SMBlockProcessor {
 			SMBlockProcessorInput::ChainProgress(inner) =>
 				SMBlockProcessorOutput(s.process_block_data(inner)),
 		}
+	}
+
+	#[cfg(test)]
+	fn step_specification(
+		before: &Self::State,
+		input: &Self::Input,
+		_settings: &Self::Settings,
+		after: &Self::State,
+	) {
+		assert!(
+			after.blocks_data.len() <=
+				BitcoinIngressEgress::witness_safety_margin().unwrap() as usize,
+			"Too many blocks data, we should never have more than safety margin blocks"
+		);
+
+		match input {
+			SMBlockProcessorInput::ChainProgress(chain_progress) => match chain_progress {
+				ChainProgressInner::Progress(_last_height) => {
+					assert!(after.reorg_events.len() <= before.reorg_events.len(), "If no reorg happened, number of reorg events should stay the same or decrease");
+				},
+				ChainProgressInner::Reorg(range) =>
+					for n in range.clone().into_iter() {
+						assert!(after.reorg_events.contains_key(&n), "Should always contains key for blocks being reorged, even if no events were produced! (Empty vec)");
+						assert!(
+							!after.blocks_data.contains_key(&n),
+							"Should never contain blocks data for blocks being reorged"
+						);
+					},
+			},
+			SMBlockProcessorInput::NewBlockData(last_height, n, _deposits) => {
+				if last_height - BitcoinIngressEgress::witness_safety_margin().unwrap() > *n {
+					assert!(!after.blocks_data.contains_key(n));
+				}
+			},
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use cf_chains::{
+		btc::{BlockNumber, Utxo, UtxoId},
+		Bitcoin, Chain,
+	};
+	use std::collections::BTreeMap;
+
+	use crate::chainflip::{
+		bitcoin_block_processor::{
+			ApplyRulesHook, ExecuteEventHook, SMBlockProcessor, SMBlockProcessorInput,
+			SMBlockProcessorState,
+		},
+		bitcoin_elections::BlockData,
+	};
+	use core::ops::RangeInclusive;
+	use pallet_cf_elections::electoral_systems::{
+		block_witnesser::primitives::ChainProgressInner,
+		state_machine::state_machine2::StateMachine,
+	};
+	use pallet_cf_ingress_egress::DepositWitness;
+	use proptest::{
+		prelude::{any, prop, BoxedStrategy, Strategy},
+		prop_oneof,
+	};
+
+	fn block_data() -> BoxedStrategy<DepositWitness<Bitcoin>> {
+		(any::<u64>(), any::<u32>())
+			.prop_map(|(amount, numb)| DepositWitness {
+				deposit_address: <Bitcoin as Chain>::ChainAccount::Taproot([0; 32]),
+				asset: <Bitcoin as Chain>::ChainAsset::Btc,
+				amount: amount.clone(),
+				deposit_details: Utxo {
+					id: UtxoId { tx_id: Default::default(), vout: numb },
+					amount,
+					deposit_address: cf_chains::btc::deposit_address::DepositAddress {
+						pubkey_x: [0; 32],
+						script_path: None,
+					},
+				},
+			})
+			.boxed()
+	}
+
+	fn blocks_data(
+		number_of_blocks: u64,
+	) -> BoxedStrategy<BTreeMap<BlockNumber, (BlockData, BlockNumber)>> {
+		prop::collection::btree_map(
+			0..number_of_blocks,
+			(vec![block_data()], (0..=0u64)),
+			RangeInclusive::new(0, number_of_blocks as usize),
+		)
+		.boxed()
+	}
+
+	fn generate_state() -> BoxedStrategy<SMBlockProcessorState> {
+		blocks_data(10)
+			.prop_map(|data| SMBlockProcessorState {
+				blocks_data: data,
+				reorg_events: Default::default(),
+				rules: ApplyRulesHook {},
+				execute: ExecuteEventHook {},
+			})
+			.boxed()
+	}
+
+	fn generate_input() -> BoxedStrategy<SMBlockProcessorInput> {
+		// pub enum SMBlockProcessorInput {
+		// 	NewBlockData(BlockNumber, BlockNumber, BlockData),
+		// 	ChainProgress(ChainProgressInner<BlockNumber>),
+		// }
+		prop_oneof![
+			(any::<u64>(), block_data()).prop_map(|(n, data)| SMBlockProcessorInput::NewBlockData(
+				n,
+				n,
+				vec![data]
+			)),
+			// prop_oneof![
+			// 	(0..=5).prop_map(|n|
+			// 		ChainProgressInner::Progress(n)
+			// 	),
+			// 	(0..=5).prop_map(|n|
+			// 		ChainProgressInner::Reorg(RangeInclusive::<BlockNumber>::new(n, n+2))
+			// 	),
+			// ]
+			prop_oneof![
+				(0..=5u64).prop_map(|n| ChainProgressInner::Progress(n)),
+				(0..=5u64).prop_map(|n| ChainProgressInner::Reorg(
+					RangeInclusive::<BlockNumber>::new(n, n + 2)
+				)),
+			]
+			.prop_map(|inner| SMBlockProcessorInput::ChainProgress(inner)),
+		]
+		.boxed()
+	}
+
+	#[test]
+	fn main_test() {
+		<SMBlockProcessor as StateMachine>::test(file!(), generate_state(), (), generate_input());
 	}
 }

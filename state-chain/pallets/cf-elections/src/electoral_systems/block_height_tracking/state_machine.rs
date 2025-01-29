@@ -1,28 +1,16 @@
-use core::{
-	iter::Step,
-	ops::{RangeInclusive, Rem, Sub},
-};
-
 use super::{
 	super::state_machine::{
 		core::{Indexed, Validate},
-		state_machine::StateMachine,
+		state_machine2::StateMachine,
 		state_machine_es::SMInput,
 	},
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
 	BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
 };
-use crate::{
-	electoral_systems::state_machine::core::{Hook, MultiIndexAndValue},
-	CorruptStorageError,
-};
-use cf_chains::witness_period::{BlockWitnessRange, BlockZero, SaturatingStep};
+use crate::electoral_systems::state_machine::core::{Hook, MultiIndexAndValue};
+use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
-use frame_support::{
-	ensure,
-	pallet_prelude::MaxEncodedLen,
-	sp_runtime::traits::{Block, One, Saturating},
-};
+use frame_support::pallet_prelude::MaxEncodedLen;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
@@ -87,7 +75,7 @@ impl<T: BlockHeightTrackingTypes> Validate for BHWState<T> {
 			BHWState::Starting => Ok(()),
 
 			BHWState::Running { headers, witness_from: _ } =>
-				if headers.len() > 0 {
+				if !headers.is_empty() {
 					InputHeaders::<T>(headers.clone())
 						.is_valid()
 						.map_err(|_| "blocks should be continuous")
@@ -143,7 +131,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 	fn input_index(s: &Self::State) -> <Self::Input as Indexed>::Index {
 		let witness_from_index = match s.state {
 			BHWState::Starting => T::ChainBlockNumber::zero(),
-			BHWState::Running { headers: _, witness_from } => witness_from.clone(),
+			BHWState::Running { headers: _, witness_from } => witness_from,
 		};
 		Vec::from([BlockHeightTrackingProperties { witness_from_index }])
 	}
@@ -281,7 +269,7 @@ mod tests {
 
 	use super::{
 		super::{
-			super::state_machine::{state_machine::StateMachine, state_machine_es::SMInput},
+			super::state_machine::{state_machine2::StateMachine, state_machine_es::SMInput},
 			primitives::Header,
 			BlockHeightTrackingProperties, BlockHeightTrackingTypes,
 		},
@@ -302,7 +290,7 @@ mod tests {
 			return {
 				let headers =
 					header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
-						block_height: first_height.clone().saturating_forward(ix),
+						block_height: first_height.saturating_forward(ix),
 						hash: h1.clone(),
 						parent_hash: h0.clone(),
 					});
@@ -325,9 +313,9 @@ mod tests {
 				let headers in generate_input::<T>(n);
 				return {
 					let witness_from = if is_reorg_without_known_root {
-						headers.0.front().unwrap().block_height.clone()
+						headers.0.front().unwrap().block_height
 					} else {
-						headers.0.back().unwrap().block_height.clone().saturating_forward(1)
+						headers.0.back().unwrap().block_height.saturating_forward(1)
 					};
 					BHWState::Running { headers: headers.0, witness_from }
 				}
@@ -356,7 +344,7 @@ mod tests {
 					Just(SMInput::Context(())),
 					prop_do! {
 						let index in select(indices);
-						let input in generate_input(index.clone());
+						let input in generate_input(index);
 						return SMInput::Vote(MultiIndexAndValue(index, input))
 					}
 				]
@@ -389,7 +377,7 @@ mod tests {
 			|indices| {
 				prop_do! {
 					let index in select(indices);
-					let input in generate_input(index.clone());
+					let input in generate_input(index);
 					return SMInput::Vote(MultiIndexAndValue(index, input))
 				}
 				.boxed()

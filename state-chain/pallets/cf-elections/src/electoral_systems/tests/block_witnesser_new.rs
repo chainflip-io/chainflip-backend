@@ -21,12 +21,16 @@ use super::{
 	register_checks,
 };
 use crate::{
-	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystem, ElectoralSystemTypes},
+	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::ChainProgress,
-		block_witnesser::*,
+		block_witnesser::{
+			primitives::ChainProgressInner,
+			state_machine::{BWProcessorTypes, BlockWitnesserProcessor},
+			*,
+		},
 		state_machine::{
-			core::{ConstantIndex, Hook, MultiIndexAndValue},
+			core::{ConstantIndex, Hook},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
@@ -38,7 +42,6 @@ use consensus::BWConsensus;
 use primitives::SafeModeStatus;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::Get;
 use sp_std::collections::btree_set::BTreeSet;
 use state_machine::{BWSettings, BWState, BWStateMachine, BWTypes};
 
@@ -106,17 +109,17 @@ impl Hook<ChainBlockNumber, Properties> for MockGenerateElectionHook<ChainBlockN
 	}
 }
 
-struct MockBlockProcessor<ChainBlockNumber, BlockData> {
-	_phantom: core::marker::PhantomData<(ChainBlockNumber, BlockData)>,
-}
-
-impl MockBlockProcessor<ChainBlockNumber, BlockData> {
-	pub fn set_block_data_to_return(block_data: Vec<(ChainBlockNumber, BlockData)>) {
-		PASS_THROUGH_BLOCK_DATA.with(|pass_through| pass_through.set(false));
-		PROCESS_BLOCK_DATA_TO_RETURN
-			.with(|block_data_to_return| *block_data_to_return.borrow_mut() = block_data);
-	}
-}
+// struct MockBlockProcessor<ChainBlockNumber, BlockData> {
+// 	_phantom: core::marker::PhantomData<(ChainBlockNumber, BlockData)>,
+// }
+//
+// impl MockBlockProcessor<ChainBlockNumber, BlockData> {
+// 	pub fn set_block_data_to_return(block_data: Vec<(ChainBlockNumber, BlockData)>) {
+// 		PASS_THROUGH_BLOCK_DATA.with(|pass_through| pass_through.set(false));
+// 		PROCESS_BLOCK_DATA_TO_RETURN
+// 			.with(|block_data_to_return| *block_data_to_return.borrow_mut() = block_data);
+// 	}
+// }
 
 // TODO: recreate this behavior with new `Hook<>` based testing method
 /*
@@ -211,6 +214,62 @@ impl BWTypes for MockDepositChannelWitnessingDefinition {
 	type ElectionProperties = ElectionProperties;
 	type ElectionPropertiesHook = MockGenerateElectionHook<u64, Properties>;
 	type SafeModeEnabledHook = MockSafemodeEnabledHook;
+	type BlockProcessor = ();
+	type BWProcessorTypes = ();
+}
+#[derive(Default)]
+pub struct MockRulesHook {}
+impl Hook<(u64, u64, Vec<u8>), std::vec::Vec<()>> for MockRulesHook {
+	fn run(&self, _input: (u64, u64, Vec<u8>)) -> Vec<()> {
+		todo!()
+	}
+}
+
+#[derive(Default)]
+pub struct MockExecuteHook {}
+impl Hook<(), ()> for MockExecuteHook {
+	fn run(&self, _input: ()) {
+		todo!()
+	}
+}
+impl BWProcessorTypes for () {
+	type ChainBlockNumber = u64;
+	type BlockData = Vec<u8>;
+	type Event = ();
+	type Rules = MockRulesHook;
+	type Execute = MockExecuteHook;
+}
+impl BlockWitnesserProcessor<()> for () {
+	fn process_block_data(
+		&mut self,
+		_chain_progress: ChainProgressInner<<() as BWProcessorTypes>::ChainBlockNumber>,
+	) -> Vec<<() as BWProcessorTypes>::Event> {
+		todo!()
+	}
+	fn insert(
+		&mut self,
+		_n: <() as BWProcessorTypes>::ChainBlockNumber,
+		_block_data: <() as BWProcessorTypes>::BlockData,
+	) {
+		todo!()
+	}
+	fn clean_old(&mut self, _n: <() as BWProcessorTypes>::ChainBlockNumber) {
+		todo!()
+	}
+	fn process_rules(
+		&mut self,
+		_last_height: <() as BWProcessorTypes>::ChainBlockNumber,
+	) -> Vec<<() as BWProcessorTypes>::Event> {
+		todo!()
+	}
+	fn process_rules_for_age_and_block(
+		&self,
+		_block: <() as BWProcessorTypes>::ChainBlockNumber,
+		_age: <() as BWProcessorTypes>::ChainBlockNumber,
+		_data: &<() as BWProcessorTypes>::BlockData,
+	) -> Vec<<() as BWProcessorTypes>::Event> {
+		todo!()
+	}
 }
 
 /// Associating the ES related types to the struct
@@ -323,22 +382,22 @@ fn generate_votes(
 }
 
 // Util to create a successful set of votes, along with the consensus expectation.
-fn create_votes_expectation(
-	consensus: BlockData,
-) -> (
-	ConsensusVotes<SimpleBlockWitnesser>,
-	Option<<SimpleBlockWitnesser as ElectoralSystem>::Consensus>,
-) {
-	(
-		generate_votes(
-			(0..20).collect(),
-			Default::default(),
-			Default::default(),
-			consensus.clone(),
-		),
-		Some(ConstantIndex::new(consensus)),
-	)
-}
+// fn create_votes_expectation(
+// 	consensus: BlockData,
+// ) -> (
+// 	ConsensusVotes<SimpleBlockWitnesser>,
+// 	Option<<SimpleBlockWitnesser as ElectoralSystemTypes>::Consensus>,
+// ) {
+// 	(
+// 		generate_votes(
+// 			(0..20).collect(),
+// 			Default::default(),
+// 			Default::default(),
+// 			consensus.clone(),
+// 		),
+// 		Some(ConstantIndex::new(consensus)),
+// 	)
+// }
 
 const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 

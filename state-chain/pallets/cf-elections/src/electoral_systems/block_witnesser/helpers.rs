@@ -59,7 +59,7 @@ pub trait IntoSet<X> {
 
 impl<N: Step + Ord> IntoSet<N> for RangeInclusive<N> {
 	fn into_set(self) -> BTreeSet<N> {
-		BTreeSet::from_iter(self.into_iter())
+		BTreeSet::from_iter(self)
 	}
 }
 

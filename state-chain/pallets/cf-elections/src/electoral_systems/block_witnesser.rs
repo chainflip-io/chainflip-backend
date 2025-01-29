@@ -1,26 +1,8 @@
-use core::cmp::min;
-
-use crate::{
-	electoral_system::{
-		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
-		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
-	},
-	electoral_systems::block_height_tracking::ChainProgress,
-	vote_storage::{self, VoteStorage},
-	CorruptStorageError, SharedDataHash,
-};
-use cf_chains::witness_period::BlockWitnessRange;
-use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode};
-use frame_support::{
-	ensure,
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	Parameter,
-};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::bounded::alloc::collections::BTreeSet;
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::vec::Vec;
 // use crate::mock::pallet_cf_elections;
 
 pub mod consensus;

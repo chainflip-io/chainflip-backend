@@ -1,7 +1,6 @@
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::{iter::Step, ops::RangeInclusive};
-use frame_support::ensure;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_map::BTreeMap;
