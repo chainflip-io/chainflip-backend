@@ -7,8 +7,8 @@ use cf_chains::{
 	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParameters,
 	ChannelRefundParametersEncoded, ForeignChain,
 };
+use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{DcaParameters, NetworkEnvironment};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};

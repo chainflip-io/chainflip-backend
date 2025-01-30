@@ -59,7 +59,7 @@ use cf_chains::{
 	TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
+	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
 	NetworkEnvironment, STABLE_ASSET,
 };
 use cf_traits::{
