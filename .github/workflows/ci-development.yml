@@ -74,7 +74,8 @@ jobs:
     uses: ./.github/workflows/upgrade-test.yml
     secrets: inherit
     with:
-      run-job: false
+      # TODO: Temp, remove this once ready.
+      run-job: true
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml

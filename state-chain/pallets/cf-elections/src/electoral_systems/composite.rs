@@ -13,6 +13,7 @@ pub mod tags {
 	pub struct D;
 	pub struct EE;
 	pub struct FF;
+	pub struct GG;
 }
 
 macro_rules! generate_electoral_system_tuple_impls {
