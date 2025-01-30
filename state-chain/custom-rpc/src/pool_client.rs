@@ -1,18 +1,19 @@
 use crate::{internal_error, CfApiError, RpcResult, StorageQueryApi};
 use anyhow::anyhow;
 use cf_node_clients::{
-	error_decoder::ErrorDecoder, signer::PairSigner, ExtrinsicDetails, WaitFor, WaitForResult,
+	build_runtime_version, error_decoder::ErrorDecoder, signer::PairSigner, ExtrinsicDetails,
+	WaitFor, WaitForResult,
 };
 use codec::{Decode, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::StreamExt;
-use jsonrpsee::tokio::sync::RwLock;
+use jsonrpsee::tokio::sync::{RwLock, RwLockReadGuard};
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
 };
 use sc_transaction_pool::FullPool;
 use sc_transaction_pool_api::{TransactionPool, TransactionStatus};
-use sp_api::{CallApiAt, Core};
+use sp_api::{CallApiAt, Core, Metadata};
 use sp_block_builder::BlockBuilder;
 use sp_core::crypto::AccountId32;
 use sp_runtime::{
@@ -23,7 +24,7 @@ use state_chain_runtime::{
 	constants::common::SIGNED_EXTRINSIC_LIFETIME, runtime_apis::CustomRuntimeApi, AccountId, Hash,
 	Nonce, RuntimeCall,
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, ops::Deref, sync::Arc};
 
 pub struct SignedPoolClient<C, B, BE>
 where
@@ -40,7 +41,8 @@ where
 		+ sp_api::ProvideRuntimeApi<B>
 		+ sp_runtime::traits::BlockIdTo<B>,
 	C::Api: CustomRuntimeApi<B>
-		+ Core<B>
+		+ sp_api::Core<B>
+		+ sp_api::Metadata<B>
 		+ sp_block_builder::BlockBuilder<B>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
@@ -51,7 +53,7 @@ where
 	pub _phantom: PhantomData<B>,
 	pub _phantom_b: PhantomData<BE>,
 	pub pair_signer: PairSigner<sp_core::sr25519::Pair>,
-	pub error_decoder: ErrorDecoder,
+	pub error_decoders: Arc<RwLock<HashMap<u32, ErrorDecoder>>>,
 	pub nonce: Arc<RwLock<Option<Nonce>>>,
 }
 
@@ -70,7 +72,8 @@ where
 		+ sp_api::ProvideRuntimeApi<B>
 		+ sp_runtime::traits::BlockIdTo<B>,
 	C::Api: CustomRuntimeApi<B>
-		+ Core<B>
+		+ sp_api::Core<B>
+		+ sp_api::Metadata<B>
 		+ sp_block_builder::BlockBuilder<B>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
@@ -88,7 +91,7 @@ where
 			_phantom: Default::default(),
 			_phantom_b: Default::default(),
 			pair_signer: PairSigner::new(pair),
-			error_decoder: ErrorDecoder::default(),
+			error_decoders: Arc::new(RwLock::new(HashMap::new())),
 			nonce: Arc::new(RwLock::new(None)),
 		}
 	}
@@ -123,6 +126,60 @@ where
 		*current_nonce = None;
 	}
 
+	/// Returns the error_decoder at the given block. first it acquires the runtime version at the
+	/// given block then it returns a reference to an error_decoder from error_decoders hash map.
+	/// If not found it creates a new one and inserts inside the map for future quick access
+	async fn error_decoder(
+		&self,
+		block_hash: Hash,
+	) -> RpcResult<impl Deref<Target = ErrorDecoder> + '_> {
+		let block_spec_version = self.client.runtime_version_at(block_hash)?.spec_version;
+
+		// Acquire a read guard for the error_decoders map
+		let decoders_read_guard = self.error_decoders.read().await;
+
+		// Check if we have an error decoder corresponding to the runtime of the given block
+		if decoders_read_guard.contains_key(&block_spec_version) {
+			Ok(RwLockReadGuard::map(decoders_read_guard, |decoders_map| {
+				decoders_map.get(&block_spec_version).unwrap()
+			}))
+		} else {
+			// Here we need to create a new error decoder for the runtime at the given block_hash
+			let maybe_new_decoder = self
+				.client
+				.runtime_api()
+				.metadata_at_version(block_hash, 15)
+				.expect("Version 15 should be supported by the runtime.")
+				.map(ErrorDecoder::new);
+
+			// Upgrade the read guard to a write guard
+			drop(decoders_read_guard);
+			let mut decoders_write_guard = self.error_decoders.write().await;
+
+			// Insert the new ErrorDecoder. if anything goes wrong while creating it, return or
+			// insert a default build time ErrorDecoder with the build runtime_version as key
+			let new_decoder_key = match maybe_new_decoder {
+				Some(new_error_decoder) => {
+					decoders_write_guard.entry(block_spec_version).or_insert(new_error_decoder);
+					block_spec_version
+				},
+				None => {
+					let default_spec_version = build_runtime_version().spec_version;
+					decoders_write_guard
+						.entry(default_spec_version)
+						.or_insert(ErrorDecoder::default());
+					default_spec_version
+				},
+			};
+
+			// Downgrade the write guard to a read guard and return the reference
+			drop(decoders_write_guard);
+			Ok(RwLockReadGuard::map(self.error_decoders.read().await, |decoders_map| {
+				decoders_map.get(&new_decoder_key).unwrap()
+			}))
+		}
+	}
+
 	fn create_signed_extrinsic(&self, call: RuntimeCall, nonce: Nonce) -> RpcResult<B::Extrinsic> {
 		let finalized_block_hash = self.client.info().finalized_hash;
 		let finalized_block_number = self.client.info().finalized_number;
@@ -146,7 +203,7 @@ where
 		Ok(Decode::decode(&mut &call_data[..]).map_err(internal_error)?)
 	}
 
-	fn get_extrinsic_details(
+	async fn get_extrinsic_details(
 		&self,
 		block_hash: Hash,
 		extrinsic_index: usize,
@@ -166,13 +223,6 @@ where
 				block_hash,
 			)?;
 
-		//let block_runtime_version = self.client.runtime_version_at(block_hash)?;
-
-		// let runtime_version = StorageQueryApi::new(&self.client)
-		// 	.get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>, _>(
-		// 		block_hash,
-		// 	)?;
-
 		let extrinsic_events = block_events
 			.iter()
 			.filter_map(|event_record| match event_record.as_ref() {
@@ -190,7 +240,7 @@ where
 
 		// We expect to find a Success or Failed event, grab the dispatch info and send
 		// it with the events
-		extrinsic_events
+		let result = extrinsic_events
 			.iter()
 			.find_map(|event| match event {
 				state_chain_runtime::RuntimeEvent::System(
@@ -198,15 +248,20 @@ where
 				) => Some(Ok(*dispatch_info)),
 				state_chain_runtime::RuntimeEvent::System(
 					frame_system::Event::ExtrinsicFailed { dispatch_error, dispatch_info: _ },
-				) => Some(Err(CfApiError::ExtrinsicDispatchError(
-					self.error_decoder.decode_dispatch_error(*dispatch_error),
-				))),
+				) => Some(Err(*dispatch_error)),
 				_ => None,
 			})
 			.expect("Unexpected state chain node behaviour")
 			.map(|dispatch_info| {
 				(tx_hash, extrinsic_events, signed_block.block.header().clone(), dispatch_info)
-			})
+			});
+
+		match result {
+			Ok(details) => Ok(details),
+			Err(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
+				self.error_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
+			)),
+		}
 	}
 
 	async fn handle_transaction_pool_error(
@@ -261,7 +316,7 @@ where
 	/// This is the same function used by Polkadot System api rpc call `system_dryRun`.
 	/// Meant to be used to quickly test if an extrinsic would result in a failure. Note that this
 	/// always uses the current account nonce at the best block.
-	fn dry_run_extrinsic(&self, call: RuntimeCall) -> RpcResult<()> {
+	async fn dry_run_extrinsic(&self, call: RuntimeCall) -> RpcResult<()> {
 		let best_block = self.client.info().best_hash;
 
 		// For apply_extrinsic call, always uses the current stored account nonce.
@@ -278,7 +333,7 @@ where
 			Ok(dispatch_result) => match dispatch_result {
 				Ok(_) => Ok(()),
 				Err(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
-					self.error_decoder.decode_dispatch_error(dispatch_error),
+					self.error_decoder(best_block).await?.decode_dispatch_error(dispatch_error),
 				)),
 			},
 			Err(e) => Err(e.into()),
@@ -312,7 +367,7 @@ where
 	/// if successful, it returns the transaction hash otherwise returns a CallError
 	pub async fn submit_one(&self, call: RuntimeCall, dry_run: bool) -> RpcResult<Hash> {
 		if dry_run {
-			self.dry_run_extrinsic(call.clone())?;
+			self.dry_run_extrinsic(call.clone()).await?;
 		}
 		loop {
 			let at_block = self.client.info().best_hash;
@@ -341,7 +396,7 @@ where
 		dry_run: bool,
 	) -> RpcResult<ExtrinsicDetails> {
 		if dry_run {
-			self.dry_run_extrinsic(call.clone())?;
+			self.dry_run_extrinsic(call.clone()).await?;
 		}
 
 		loop {
@@ -360,11 +415,11 @@ where
 						match status {
 							TransactionStatus::InBlock((block_hash, tx_index)) =>
 								if !until_finalized {
-									return self.get_extrinsic_details(block_hash, tx_index);
+									return self.get_extrinsic_details(block_hash, tx_index).await;
 								},
 							TransactionStatus::Finalized((block_hash, tx_index)) =>
 								if until_finalized {
-									return self.get_extrinsic_details(block_hash, tx_index);
+									return self.get_extrinsic_details(block_hash, tx_index).await;
 								},
 							TransactionStatus::Future |
 							TransactionStatus::Ready |

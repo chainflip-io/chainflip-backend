@@ -30,7 +30,7 @@ use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
 };
-use sp_api::{CallApiAt, Core};
+use sp_api::CallApiAt;
 use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
 use state_chain_runtime::{
@@ -172,7 +172,8 @@ where
 		+ sp_api::ProvideRuntimeApi<B>
 		+ sp_runtime::traits::BlockIdTo<B>,
 	C::Api: CustomRuntimeApi<B>
-		+ Core<B>
+		+ sp_api::Core<B>
+		+ sp_api::Metadata<B>
 		+ sp_block_builder::BlockBuilder<B>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
@@ -197,7 +198,8 @@ where
 		+ sp_api::ProvideRuntimeApi<B>
 		+ sp_runtime::traits::BlockIdTo<B>,
 	C::Api: CustomRuntimeApi<B>
-		+ Core<B>
+		+ sp_api::Core<B>
+		+ sp_api::Metadata<B>
 		+ sp_block_builder::BlockBuilder<B>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
@@ -596,7 +598,8 @@ where
 		+ sp_api::ProvideRuntimeApi<B>
 		+ sp_runtime::traits::BlockIdTo<B>,
 	C::Api: CustomRuntimeApi<B>
-		+ Core<B>
+		+ sp_api::Core<B>
+		+ sp_api::Metadata<B>
 		+ sp_block_builder::BlockBuilder<B>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,

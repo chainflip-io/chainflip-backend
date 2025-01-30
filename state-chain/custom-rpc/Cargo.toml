@@ -57,6 +57,7 @@ sc-transaction-pool-api = { workspace = true, default-features = true }
 sp-transaction-pool = { workspace = true }
 frame-system-rpc-runtime-api = { workspace = true }
 sp-block-builder = { workspace = true }
+sp-version = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }

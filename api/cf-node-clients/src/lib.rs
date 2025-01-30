@@ -1,11 +1,18 @@
 use frame_support::dispatch::DispatchInfo;
+use sp_api::runtime_decl_for_core::CoreV5;
 use sp_core::{
 	serde::{Deserialize, Serialize},
 	H256,
 };
+use std::sync::OnceLock;
 
 pub mod error_decoder;
 pub mod signer;
+
+pub fn build_runtime_version() -> &'static sp_version::RuntimeVersion {
+	static BUILD_RUNTIME_VERSION: OnceLock<sp_version::RuntimeVersion> = OnceLock::new();
+	BUILD_RUNTIME_VERSION.get_or_init(state_chain_runtime::Runtime::version)
+}
 
 pub type ExtrinsicDetails =
 	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
