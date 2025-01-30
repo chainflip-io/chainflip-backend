@@ -6,10 +6,11 @@ use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sol_prim::consts::{
-	ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
+	ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION, SYSTEM_PROGRAM_ID,
+	SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 };
 use sp_runtime::DispatchError;
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
@@ -80,23 +81,39 @@ impl CcmValidityCheck for CcmValidityChecker {
 					// bytes_per_reference);
 					//
 					// Accounts could be duplicated and then they would only take one reference byte
-					// but:
-					// - It doesn't make sense for additional_accounts to have duplicated accounts
-					//   since it'll all be in the same instruction anyway.
-					// - Accounts used by Chainflip (e.g. SYSTEM_PROGRAM or TOKEN_PROGRAM) are
-					//   already being passed to the receiver in the CPI so there's need to add them
-					//   to the list.
-					// - Chainflip specific accounts (agg_key, data_account) and nonce accounts are
-					//   the only accounts that are part of the transaction that the user won't have
-					//   access to. Those accounts are either blacklisted or should be irrelevant
-					//   for the user.
-					// Therefore we can assume that accounts are not duplicated when calculating the
-					// transaction length. If any account is in fact duplicated it will effectively
-					// reduce the allowed maximum length for the user's metadata.
-					let ccm_length = ccm.message.len() +
-						ccm_accounts.additional_accounts.len() *
-							(ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION +
-								ACCOUNT_KEY_LENGTH_IN_TRANSACTION);
+					// instead of 32 per account.
+					// Technically it shouldn't be necessary to pass duplicated accounts as
+					// it will all be executed in the same instruction. However when integrating
+					// with other protocols, many of the account's values are part of a returned
+					// payload from an API and it makes it cumbersome to then dedpulicate on the fly
+					// and then make it match with the receiver contract. It can definitely
+					// be done but it will also add configuration bytes to the payload, which
+					// is not ideal.
+					// Therefore we want to allow for duplicated accounts and we should account the
+					// length accordingly.
+
+					let mut seen_addresses = BTreeSet::new();
+					seen_addresses.insert(SYSTEM_PROGRAM_ID);
+					seen_addresses.insert(SYS_VAR_INSTRUCTIONS);
+
+					if asset == SolAsset::SolUsdc {
+						seen_addresses.insert(TOKEN_PROGRAM_ID);
+					}
+					let mut accounts_length = 0;
+
+					for &ccm_address in &ccm_accounts.additional_accounts {
+						accounts_length += ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
+
+						if !seen_addresses.contains(&ccm_address.pubkey.into()) {
+							accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
+							seen_addresses.insert(ccm_address.pubkey.into());
+						}
+					}
+
+					let ccm_length = ccm.message.len() + accounts_length;
+
+					// Potentially add foom for 1 acount for native (receiverNative) and
+					// two for token (mint & receiverToken)
 					if ccm_length >
 						match asset {
 							SolAsset::Sol => MAX_CCM_BYTES_SOL,
@@ -399,6 +416,99 @@ mod test {
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
 			CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
+		);
+	}
+	#[test]
+	fn can_check_length_native_duplicated() {
+		let ccm = || CcmChannelMetadata {
+			message: vec![0x01; MAX_CCM_BYTES_SOL - 36].try_into().unwrap(),
+			gas_budget: 0,
+			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
+				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				fallback_address: SolPubkey([0xf0; 32]),
+				additional_accounts: vec![
+					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				],
+			})
+			.encode()
+			.try_into()
+			.unwrap(),
+		};
+		assert_ok!(CcmValidityChecker::check_and_decode(&ccm(), Asset::Sol));
+	}
+	#[test]
+	fn can_check_length_native_duplicated_fail() {
+		let invalid_ccm = || CcmChannelMetadata {
+			message: vec![0x01; MAX_CCM_BYTES_SOL - 68].try_into().unwrap(),
+			gas_budget: 0,
+			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
+				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				fallback_address: SolPubkey([0xf0; 32]),
+				additional_accounts: vec![
+					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
+					SolCcmAddress { pubkey: TOKEN_PROGRAM_ID.into(), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				],
+			})
+			.encode()
+			.try_into()
+			.unwrap(),
+		};
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&invalid_ccm(), Asset::Sol),
+			CcmValidityError::CcmIsTooLong
+		);
+	}
+	#[test]
+	fn can_check_length_usdc_duplicated() {
+		let ccm = || CcmChannelMetadata {
+			message: vec![0x01; MAX_CCM_BYTES_USDC - 37].try_into().unwrap(),
+			gas_budget: 0,
+			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
+				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				fallback_address: SolPubkey([0xf0; 32]),
+				additional_accounts: vec![
+					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
+					SolCcmAddress { pubkey: TOKEN_PROGRAM_ID.into(), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				],
+			})
+			.encode()
+			.try_into()
+			.unwrap(),
+		};
+		assert_ok!(CcmValidityChecker::check_and_decode(&ccm(), Asset::SolUsdc));
+	}
+	#[test]
+	fn can_check_length_usdc_duplicated_fail() {
+		let invalid_ccm = || CcmChannelMetadata {
+			message: vec![0x01; MAX_CCM_BYTES_USDC - 36].try_into().unwrap(),
+			gas_budget: 0,
+			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
+				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				fallback_address: SolPubkey([0xf0; 32]),
+				additional_accounts: vec![
+					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
+					SolCcmAddress { pubkey: TOKEN_PROGRAM_ID.into(), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				],
+			})
+			.encode()
+			.try_into()
+			.unwrap(),
+		};
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&invalid_ccm(), Asset::SolUsdc),
+			CcmValidityError::CcmIsTooLong
 		);
 	}
 }
