@@ -176,7 +176,7 @@ where
 		chain_tracking: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
-			let (properties, mut pending_ingress_totals, option_consensus) = {
+			let (properties, pending_ingress_totals, option_consensus) = {
 				let election_access = ElectoralAccess::election_mut(election_identifier);
 				(
 					election_access.properties()?,
@@ -186,6 +186,8 @@ where
 			};
 
 			let mut new_properties = properties.clone();
+			let mut new_pending_ingress_totals =
+				<Self as ElectoralSystemTypes>::ElectionState::default();
 			for (account, (details, _)) in &properties {
 				// We currently split the ingressed amount into two parts:
 				// 1. The consensus amount that is *before* chain tracking. i.e. Chain tracking is
@@ -206,17 +208,17 @@ where
 
 				let (ready_total, future_total) = match (
 					option_consensus.as_ref().and_then(|consensus| consensus.get(account)),
-					pending_ingress_totals.remove(account),
+					pending_ingress_totals.get(account),
 				) {
 					(None, None) => (None, None),
-					(Some(&total), None) | (None, Some(total)) => {
+					(Some(total), None) | (None, Some(total)) => {
 						if total.block_number <= *chain_tracking {
 							(Some(total), None)
 						} else {
 							(None, Some(total))
 						}
 					},
-					(Some(&new_consensus), Some(old_consensus)) => {
+					(Some(new_consensus), Some(old_consensus)) => {
 						if new_consensus.block_number <= old_consensus.block_number {
 							// Not sure if this is possible, but can't exclude it either. Can
 							// indicate a re-org or misbehaving rpcs. Ignore the previous
@@ -286,7 +288,7 @@ where
 							);
 							ElectoralAccess::set_unsynchronised_state_map(
 								(account.clone(), details.asset),
-								Some(ready_total),
+								Some(*ready_total),
 							);
 							if future_total.is_none() {
 								new_properties.entry(account.clone()).and_modify(
@@ -313,7 +315,7 @@ where
 					}
 				}
 				if let Some(future_total) = future_total {
-					pending_ingress_totals.insert(account.clone(), future_total);
+					new_pending_ingress_totals.insert(account.clone(), *future_total);
 				}
 			}
 
@@ -322,7 +324,7 @@ where
 			if new_properties.is_empty() {
 				// This should be ensured because we only remove channels if there are no future
 				// totals.
-				debug_assert!(pending_ingress_totals.is_empty());
+				debug_assert!(new_pending_ingress_totals.is_empty());
 				log::debug!("recreate election: deleting since no channels are left");
 				election_access.delete();
 			} else if new_properties != properties {
@@ -331,11 +333,11 @@ where
 				ElectoralAccess::new_election(
 					Default::default(),
 					new_properties,
-					pending_ingress_totals,
+					new_pending_ingress_totals,
 				)?;
 			} else {
 				log::debug!("recreate election: keeping old because properties didn't change: {properties:?}");
-				election_access.set_state(pending_ingress_totals)?;
+				election_access.set_state(new_pending_ingress_totals)?;
 			}
 		}
 
