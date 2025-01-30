@@ -59,6 +59,23 @@ struct DepositChannel {
 	pub close_block: BlockNumber,
 }
 
+const DEFAULT_CHANNEL_ACCOUNT: u32 = 1234;
+const DEFAULT_CHANNEL_OPEN_BLOCK: BlockNumber = 100;
+const DEFAULT_CHANNEL_CLOSE_BLOCK: BlockNumber = 200;
+const DEFAULT_CHANNEL: DepositChannel = DepositChannel {
+	account: DEFAULT_CHANNEL_ACCOUNT,
+	asset: Asset::Sol,
+	total_ingressed: 0,
+	block_number: DEFAULT_CHANNEL_OPEN_BLOCK,
+	close_block: DEFAULT_CHANNEL_CLOSE_BLOCK,
+};
+
+impl Default for DepositChannel {
+	fn default() -> Self {
+		DEFAULT_CHANNEL
+	}
+}
+
 impl DepositChannel {
 	pub fn open(&self) {
 		assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
@@ -256,15 +273,32 @@ register_checks! {
 				);
 			});
 		},
-		channel_closed(_pre, _post, expected_closed_channels: Vec<AccountId>) {
+		channels_closed_matches(_pre, _post, expected_closed_channels: Vec<AccountId>) {
 			CHANNELS_CLOSED.with(|channels| {
-				assert_eq!(
-					channels.clone().into_inner(),
-					expected_closed_channels,
+				assert!(
+					*channels.borrow() == expected_closed_channels,
 					"Channels closed incorrect: expected {:?}, got {:?}", expected_closed_channels, channels.clone().into_inner()
 				);
 			});
 		},
+		channel_closed_once(_pre, _post, expected_closed: AccountId) {
+			CHANNELS_CLOSED.with(|channels| {
+				assert!(
+					channels.borrow().iter().filter(|c| **c == expected_closed).count() == 1,
+					"Channels closed incorrect: expected {:?}, got {:?}", expected_closed, channels.clone().into_inner()
+				);
+			});
+		},
+		channel_not_closed(_pre, _post, expected_closed: AccountId) {
+			CHANNELS_CLOSED.with(|channels| {
+				assert!(
+					!channels.borrow().contains(&expected_closed),
+					"Expected {:?} to be open, but is contained in closed channels: {:?}",
+					expected_closed,
+					channels.clone().into_inner()
+				);
+			});
+		}
 	}
 }
 
@@ -347,30 +381,186 @@ fn only_trigger_ingress_on_witnessed_blocks() {
 		);
 }
 
-#[test]
-fn can_close_channels() {
-	let channel_close_blocks =
-		[CHANNEL_STATE_CLOSED[0].close_block, CHANNEL_STATE_CLOSED[1].close_block];
-	with_default_setup()
-		.build_with_initial_election()
+mod channel_closure {
+	use super::*;
+	const DEPOSIT_BLOCK: BlockNumber = DEFAULT_CHANNEL_OPEN_BLOCK + 10;
+	const DEPOSIT_AMOUNT: u64 = 500;
+
+	#[test]
+	fn can_close_channels() {
+		fn check_closure(
+			ctx: TestContext<SimpleDeltaBasedIngress>,
+			channel: DepositChannel,
+		) -> TestContext<SimpleDeltaBasedIngress> {
+			ctx.force_consensus_update(ConsensusStatus::Gained {
+				most_recent: None,
+				new: [(
+					channel.account,
+					ChannelTotalIngressed {
+						amount: channel.total_ingressed,
+						block_number: channel.close_block,
+					},
+				)]
+				.into_iter()
+				.collect(),
+			})
+			.test_on_finalize(
+				&channel.close_block,
+				|_| (),
+				vec![Check::channel_closed_once(channel.account), Check::ingressed(vec![])],
+			)
+		}
+
+		let channels = [
+			DepositChannel { account: 1u32, ..Default::default() },
+			DepositChannel {
+				account: 2u32,
+				close_block: DEFAULT_CHANNEL_CLOSE_BLOCK + 100,
+				..Default::default()
+			},
+		];
+		let test_ctx = with_default_setup()
+			.build()
+			.then(|| channels.iter().for_each(|channel| channel.open()));
+		let test_ctx = check_closure(test_ctx, channels[0]);
+		let _test_ctx = check_closure(test_ctx, channels[1]);
+	}
+
+	fn setup_close_after_deposits(lagging: bool) -> TestContext<SimpleDeltaBasedIngress> {
+		let setup = with_default_setup()
+			.build()
+			.then(|| DEFAULT_CHANNEL.open())
+			.force_consensus_update(ConsensusStatus::Gained {
+				most_recent: None,
+				new: [(
+					DEFAULT_CHANNEL_ACCOUNT,
+					ChannelTotalIngressed { amount: DEPOSIT_AMOUNT, block_number: DEPOSIT_BLOCK },
+				)]
+				.into_iter()
+				.collect(),
+			});
+
+		if lagging {
+			setup
+				// Chain tracking is lagging, nothing should be ingressed.
+				.test_on_finalize(
+					&{ DEPOSIT_BLOCK - 1 },
+					|_| (),
+					vec![
+						Check::ingressed(vec![]),
+						Check::ended_at_state(
+							[(
+								DEFAULT_CHANNEL_ACCOUNT,
+								ChannelTotalIngressed {
+									amount: DEPOSIT_AMOUNT,
+									block_number: DEPOSIT_BLOCK,
+								},
+							)]
+							.into_iter()
+							.collect(),
+						),
+					],
+				)
+		} else {
+			setup
+				// Chain tracking is caught up, deposit is ingressed.
+				.test_on_finalize(
+					&DEPOSIT_BLOCK,
+					|_| (),
+					vec![
+						Check::ingressed(vec![(
+							DEFAULT_CHANNEL_ACCOUNT,
+							Asset::Sol,
+							DEPOSIT_AMOUNT,
+						)]),
+						Check::ended_at_state([].into_iter().collect()),
+					],
+				)
+		}
+		// Engines reach consensus on account closure: total balance is unchanged, block number is
+		// the close block.
 		.force_consensus_update(ConsensusStatus::Gained {
 			most_recent: None,
-			new: to_state(CHANNEL_STATE_CLOSED),
+			new: [(
+				DEFAULT_CHANNEL_ACCOUNT,
+				ChannelTotalIngressed {
+					amount: DEPOSIT_AMOUNT,
+					block_number: DEFAULT_CHANNEL_CLOSE_BLOCK,
+				},
+			)]
+			.into_iter()
+			.collect(),
 		})
-		.test_on_finalize(
-			&channel_close_blocks[0],
-			|_| (),
-			vec![Check::channel_closed(vec![1u32]), Check::election_id_incremented()],
-		)
-		.force_consensus_update(ConsensusStatus::Gained {
-			most_recent: None,
-			new: to_state(CHANNEL_STATE_CLOSED),
-		})
-		.test_on_finalize(
-			&channel_close_blocks[1],
-			|_| (),
-			vec![Check::channel_closed(vec![1u32, 2u32])],
-		);
+	}
+
+	#[test]
+	fn close_after_deposit() {
+		setup_close_after_deposits(false)
+			// Chain tracking reaches close block, channel is closed.
+			.test_on_finalize(
+				&DEFAULT_CHANNEL_CLOSE_BLOCK,
+				|_| (),
+				vec![
+					Check::channel_closed_once(DEFAULT_CHANNEL_ACCOUNT),
+					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
+					Check::all_elections_deleted(),
+				],
+			);
+	}
+
+	#[test]
+	fn close_after_deposit_lagging() {
+		setup_close_after_deposits(true)
+			// Chain tracking reaches close block, channel is closed.
+			.test_on_finalize(
+				&DEFAULT_CHANNEL_CLOSE_BLOCK,
+				|_| (),
+				vec![
+					Check::channel_closed_once(DEFAULT_CHANNEL_ACCOUNT),
+					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
+					Check::all_elections_deleted(),
+				],
+			);
+	}
+
+	// Same as above, except tracking catches up to a block between the deposit and close block.
+	#[test]
+	fn close_after_deposit_lagging_recovered() {
+		setup_close_after_deposits(true)
+			// Chain tracking catches up, deposit is ingressed, channel not yet closed.
+			.test_on_finalize(
+				&{ DEFAULT_CHANNEL_CLOSE_BLOCK - 1 },
+				|_| (),
+				vec![
+					Check::channel_not_closed(DEFAULT_CHANNEL_ACCOUNT),
+					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
+					Check::election_id_incremented(),
+				],
+			)
+			// A new election requires new votes, meaning we need to force consensus again.
+			.force_consensus_update(ConsensusStatus::Gained {
+				most_recent: None,
+				new: [(
+					DEFAULT_CHANNEL_ACCOUNT,
+					ChannelTotalIngressed {
+						amount: DEPOSIT_AMOUNT,
+						block_number: DEFAULT_CHANNEL_CLOSE_BLOCK,
+					},
+				)]
+				.into_iter()
+				.collect(),
+			})
+			// Chain tracking reaches close block, channel is closed.
+			.test_on_finalize(
+				&DEFAULT_CHANNEL_CLOSE_BLOCK,
+				|_| (),
+				vec![
+					Check::channel_closed_once(DEFAULT_CHANNEL_ACCOUNT),
+					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
+					Check::all_elections_deleted(),
+				],
+			);
+	}
 }
 
 #[test]
@@ -438,7 +628,7 @@ fn test_deposit_channel_recycling() {
 					(1u32, Asset::Sol, 4_000u64),
 					(2u32, Asset::SolUsdc, 6_000u64),
 				]),
-				Check::channel_closed(vec![1u32, 2u32]),
+				Check::channels_closed_matches(vec![1u32, 2u32]),
 			],
 		)
 		.then(|| {
@@ -469,7 +659,7 @@ fn test_deposit_channel_recycling() {
 					(1u32, Asset::Sol, 16_000u64),
 					(2u32, Asset::SolUsdc, 24_000u64),
 				]),
-				Check::channel_closed(vec![1u32, 2u32, 1u32, 2u32]),
+				Check::channels_closed_matches(vec![1u32, 2u32, 1u32, 2u32]),
 			],
 		)
 		.then(|| {
@@ -506,7 +696,7 @@ fn test_deposit_channel_recycling() {
 					(1u32, Asset::SolUsdc, 100_000u64),
 					(2u32, Asset::Sol, 200_000u64),
 				]),
-				Check::channel_closed(vec![1u32, 2u32, 1u32, 2u32, 1u32, 2u32]),
+				Check::channels_closed_matches(vec![1u32, 2u32, 1u32, 2u32, 1u32, 2u32]),
 			],
 		);
 }
@@ -573,7 +763,7 @@ fn do_nothing_on_revert() {
 			&close_block,
 			|_| (),
 			vec![
-				Check::channel_closed(vec![1u32, 2u32]),
+				Check::channels_closed_matches(vec![1u32, 2u32]),
 				Check::ingressed(vec![
 					(1u32, Asset::Sol, 1_000u64),
 					(2u32, Asset::SolUsdc, 2_000u64),
@@ -664,7 +854,7 @@ fn test_open_channel_with_existing_election() {
 					(3u32, Asset::Sol, 5_000u64),
 					(4u32, Asset::SolUsdc, 6_000u64),
 				]),
-				Check::channel_closed(vec![1u32, 2u32, 3u32, 4u32]),
+				Check::channels_closed_matches(vec![1u32, 2u32, 3u32, 4u32]),
 			],
 		);
 }
