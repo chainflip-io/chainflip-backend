@@ -5,8 +5,8 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
-	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersDecoded,
-	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersEncoded, RefundDestination,
+	RefundParametersExtended, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
@@ -17,8 +17,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
-	FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
-	SwapRequestTypeEncoded, SwapType, SwappingApi,
+	FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -50,7 +50,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
@@ -322,8 +322,8 @@ impl DcaState {
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
 	UserSwap {
-		ccm_deposit_metadata: Option<CcmDepositMetadata>,
-		output_address: ForeignChainAddress,
+		refund_params: Option<RefundParametersExtended<T::AccountId>>,
+		output_action: SwapOutputAction<T::AccountId>,
 		dca_state: DcaState,
 		broker_fees: Beneficiaries<T::AccountId>,
 	},
@@ -337,7 +337,6 @@ struct SwapRequest<T: Config> {
 	id: SwapRequestId,
 	input_asset: Asset,
 	output_asset: Asset,
-	refund_params: Option<ChannelRefundParametersDecoded>,
 	state: SwapRequestState<T>,
 }
 
@@ -383,8 +382,11 @@ where
 pub mod pallet {
 	use core::cmp::max;
 
-	use cf_amm::math::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
-	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
+	use cf_amm::math::{output_amount_ceil, sqrt_price_to_price, Price, SqrtPriceQ64F96};
+	use cf_chains::{
+		address::EncodedAddress, AnyChain, Chain, RefundParametersExtended,
+		RefundParametersExtendedEncoded,
+	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
 		SwapId, SwapOutput, SwapRequestId,
@@ -557,9 +559,9 @@ pub mod pallet {
 			input_amount: AssetAmount, // includes broker fee
 			output_asset: Asset,
 			origin: SwapOrigin<T::AccountId>,
-			request_type: SwapRequestTypeEncoded,
+			request_type: SwapRequestTypeEncoded<T::AccountId>,
 			broker_fees: Beneficiaries<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParametersEncoded>,
+			refund_parameters: Option<RefundParametersExtendedEncoded<T::AccountId>>,
 			dca_parameters: Option<DcaParameters>,
 		},
 		SwapRequestCompleted {
@@ -1206,6 +1208,45 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(15)]
+		#[pallet::weight(T::WeightInfo::internal_swap())]
+		pub fn internal_swap(
+			origin: OriginFor<T>,
+			amount: AssetAmount,
+			input_asset: Asset,
+			output_asset: Asset,
+			retry_duration: BlockNumber,
+			min_price: Price,
+			dca_params: Option<DcaParameters>,
+		) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+
+			// Do we need to sweep?
+
+			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)?;
+
+			Self::init_swap_request(
+				input_asset,
+				amount,
+				output_asset,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::CreditOnChain {
+						account_id: account_id.clone(),
+					},
+				},
+				Default::default(), /* no broker fees */
+				Some(RefundParametersExtended {
+					retry_duration,
+					refund_destination: RefundDestination::OnChainAccount(account_id),
+					min_price,
+				}),
+				dca_params,
+				SwapOrigin::Internal,
+			);
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -1465,38 +1506,63 @@ pub mod pallet {
 				return;
 			};
 
-			let Some(refund_params) = &request.refund_params else {
-				log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
-				return;
-			};
-
 			match &mut request.state {
 				SwapRequestState::UserSwap {
-					ccm_deposit_metadata,
-					output_address,
+					output_action,
+					refund_params,
 					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
-					broker_fees: _,
+					..
 				} => {
-					Self::egress_for_swap(
-						request.id,
-						swap.input_amount + *remaining_input_amount,
-						request.input_asset,
-						refund_params.refund_address.clone(),
-						None, /* refunds don't use ccm parameters */
-						true, /* refund */
-					);
+					let Some(refund_params) = &refund_params else {
+						log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
+						return;
+					};
+
+					let amount_to_refund = swap.input_amount + *remaining_input_amount;
+
+					match &refund_params.refund_destination {
+						RefundDestination::ExternalAddress(address) => {
+							Self::egress_for_swap(
+								request.id,
+								amount_to_refund,
+								request.input_asset,
+								address.clone(),
+								None, /* refunds don't use ccm parameters */
+								true, /* refund */
+							);
+						},
+						RefundDestination::OnChainAccount(account_id) => {
+							T::BalanceApi::credit_account(
+								account_id,
+								request.input_asset,
+								amount_to_refund,
+							);
+						},
+					}
 
 					// In case of DCA we may have partially swapped and now have some output
 					// asset to egress to the output address:
 					if *accumulated_output_amount > 0 {
-						Self::egress_for_swap(
-							swap.swap_request_id,
-							*accumulated_output_amount,
-							request.output_asset,
-							output_address.clone(),
-							ccm_deposit_metadata.clone(),
-							false, /* refund */
-						);
+						match output_action {
+							SwapOutputAction::Egress { ccm_deposit_metadata, output_address } => {
+								Self::egress_for_swap(
+									swap.swap_request_id,
+									*accumulated_output_amount,
+									request.output_asset,
+									output_address.clone(),
+									ccm_deposit_metadata.clone(),
+									false, /* refund */
+								);
+							},
+							SwapOutputAction::CreditOnChain { account_id } => {
+								// TODO: a new event for when LP is credited after a swap?
+								T::BalanceApi::credit_account(
+									account_id,
+									request.output_asset,
+									*accumulated_output_amount,
+								);
+							},
+						}
 					}
 				},
 				non_refundable_request => {
@@ -1546,10 +1612,10 @@ pub mod pallet {
 
 			let request_completed = match &mut request.state {
 				SwapRequestState::UserSwap {
-					ccm_deposit_metadata,
-					output_address,
+					output_action,
 					dca_state,
 					broker_fees,
+					refund_params,
 				} =>
 					if let Some(chunk_input_amount) =
 						dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
@@ -1558,7 +1624,7 @@ pub mod pallet {
 							request.input_asset,
 							request.output_asset,
 							chunk_input_amount,
-							request.refund_params.as_ref(),
+							refund_params.as_ref(),
 							SwapType::Swap,
 							broker_fees.clone(),
 							request.id,
@@ -1571,14 +1637,25 @@ pub mod pallet {
 					} else {
 						debug_assert!(dca_state.remaining_input_amount == 0);
 
-						Self::egress_for_swap(
-							swap_request_id,
-							dca_state.accumulated_output_amount,
-							swap.output_asset(),
-							output_address.clone(),
-							ccm_deposit_metadata.clone(), /* ccm */
-							false,                        /* refund */
-						);
+						match output_action {
+							SwapOutputAction::Egress { ccm_deposit_metadata, output_address } => {
+								Self::egress_for_swap(
+									swap_request_id,
+									dca_state.accumulated_output_amount,
+									swap.output_asset(),
+									output_address.clone(),
+									ccm_deposit_metadata.clone(),
+									false, /* refund */
+								);
+							},
+							SwapOutputAction::CreditOnChain { account_id } => {
+								T::BalanceApi::credit_account(
+									account_id,
+									swap.output_asset(),
+									dca_state.accumulated_output_amount,
+								);
+							},
+						}
 
 						true
 					},
@@ -1714,7 +1791,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<&ChannelRefundParametersDecoded>,
+			refund_params: Option<&RefundParametersExtended<T::AccountId>>,
 			swap_type: SwapType,
 			broker_fees: Beneficiaries<T::AccountId>,
 			swap_request_id: SwapRequestId,
@@ -1904,9 +1981,9 @@ pub mod pallet {
 			input_asset: Asset,
 			input_amount: AssetAmount,
 			output_asset: Asset,
-			request_type: SwapRequestType,
+			request_type: SwapRequestType<Self::AccountId>,
 			broker_fees: Beneficiaries<Self::AccountId>,
-			refund_params: Option<ChannelRefundParametersDecoded>,
+			refund_params: Option<RefundParametersExtended<Self::AccountId>>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin<Self::AccountId>,
 		) -> SwapRequestId {
@@ -1959,24 +2036,12 @@ pub mod pallet {
 				input_asset,
 				input_amount,
 				output_asset,
-				request_type: match &request_type {
-					SwapRequestType::NetworkFee => SwapRequestTypeEncoded::NetworkFee,
-					SwapRequestType::IngressEgressFee => SwapRequestTypeEncoded::IngressEgressFee,
-					SwapRequestType::Regular { output_address, ccm_deposit_metadata } =>
-						SwapRequestTypeEncoded::Regular {
-							output_address: T::AddressConverter::to_encoded_address(
-								output_address.clone(),
-							),
-							ccm_deposit_metadata: ccm_deposit_metadata
-								.clone()
-								.map(|metadata| metadata.to_encoded::<T::AddressConverter>()),
-						},
-				},
+				request_type: request_type.clone().into_encoded::<T::AddressConverter>(),
 				origin: origin.clone(),
 				broker_fees: broker_fees.clone(),
 				refund_parameters: refund_params
 					.clone()
-					.map(|params| params.map_address(T::AddressConverter::to_encoded_address)),
+					.map(|params| params.to_encoded::<T::AddressConverter>()),
 				dca_parameters: dca_params.clone(),
 			});
 
@@ -1999,7 +2064,6 @@ pub mod pallet {
 							id: request_id,
 							input_asset,
 							output_asset,
-							refund_params: None,
 							state: SwapRequestState::NetworkFee,
 						},
 					);
@@ -2022,12 +2086,11 @@ pub mod pallet {
 							id: request_id,
 							input_asset,
 							output_asset,
-							refund_params: None,
 							state: SwapRequestState::IngressEgressFee,
 						},
 					);
 				},
-				SwapRequestType::Regular { output_address, ccm_deposit_metadata } => {
+				SwapRequestType::Regular { output_action } => {
 					let (mut dca_state, chunk_input_amount) =
 						DcaState::create_with_first_chunk(net_amount, dca_params);
 
@@ -2050,10 +2113,9 @@ pub mod pallet {
 							id: request_id,
 							input_asset,
 							output_asset,
-							refund_params,
 							state: SwapRequestState::UserSwap {
-								ccm_deposit_metadata,
-								output_address: output_address.clone(),
+								output_action,
+								refund_params,
 								broker_fees,
 								dca_state,
 							},
@@ -2242,8 +2304,8 @@ pub(crate) mod utilities {
 		}
 	}
 
-	pub(super) fn calculate_swap_refund_parameters(
-		params: &ChannelRefundParametersDecoded,
+	pub(super) fn calculate_swap_refund_parameters<AccountId>(
+		params: &RefundParametersExtended<AccountId>,
 		execute_at_block: u32,
 		input_amount: AssetAmount,
 	) -> SwapRefundParameters {

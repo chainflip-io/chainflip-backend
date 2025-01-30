@@ -1150,6 +1150,8 @@ fn taking_network_fee_from_boost_fee() {
 
 mod vault_swaps {
 
+	use cf_traits::SwapOutputAction;
+
 	use crate::BoostedVaultTransactions;
 
 	use super::*;
@@ -1229,8 +1231,10 @@ mod vault_swaps {
 						output_asset: OUTPUT_ASSET,
 						input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 						swap_type: SwapRequestType::Regular {
-							output_address,
-							ccm_deposit_metadata: None
+							output_action: SwapOutputAction::Egress {
+								output_address,
+								ccm_deposit_metadata: None
+							}
 						},
 						broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 5 }],
 						origin: SwapOrigin::Vault {

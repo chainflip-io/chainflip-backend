@@ -41,7 +41,7 @@ use cf_traits::{
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
 	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
-	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapRequestType,
+	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapOutputAction, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -1865,7 +1865,12 @@ fn can_request_swap_via_extrinsic() {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular { output_address, ccm_deposit_metadata: None },
+				swap_type: SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address,
+						ccm_deposit_metadata: None
+					}
+				},
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
@@ -1925,7 +1930,12 @@ fn vault_swaps_support_affiliate_fees() {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular { output_address, ccm_deposit_metadata: None },
+				swap_type: SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address,
+						ccm_deposit_metadata: None
+					}
+				},
 				broker_fees: bounded_vec![
 					Beneficiary { account: BROKER, bps: BROKER_FEE },
 					// Only one affiliate is used (short id for affiliate 2 has not been
@@ -1982,7 +1992,12 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular { output_address, ccm_deposit_metadata: None },
+				swap_type: SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address,
+						ccm_deposit_metadata: None
+					}
+				},
 				broker_fees: Default::default(),
 				origin: SwapOrigin::Vault {
 					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
@@ -2040,8 +2055,10 @@ fn can_request_ccm_swap_via_extrinsic() {
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular {
-					output_address,
-					ccm_deposit_metadata: Some(ccm_deposit_metadata)
+					output_action: SwapOutputAction::Egress {
+						output_address,
+						ccm_deposit_metadata: Some(ccm_deposit_metadata)
+					}
 				},
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
