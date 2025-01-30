@@ -686,6 +686,11 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
 		},
+		PrivateBrokerChannelCreatedAt {
+			broker_id: T::AccountId,
+			channel_id: ChannelId,
+			created_at: u32,
+		},
 		PrivateBrokerChannelClosed {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
@@ -1157,6 +1162,14 @@ pub mod pallet {
 			BrokerPrivateBtcChannels::<T>::insert(broker_id.clone(), channel_id);
 
 			T::Bonder::update_bond(&broker_id, BrokerBond::<T>::get());
+
+			// TEST EVENT for runtime upgrade testing
+			let created_at = frame_system::Pallet::<T>::block_number();
+			Self::deposit_event(Event::<T>::PrivateBrokerChannelCreatedAt {
+				broker_id: broker_id.clone(),
+				channel_id,
+				created_at: created_at.unique_saturated_into(),
+			});
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened { broker_id, channel_id });
 
