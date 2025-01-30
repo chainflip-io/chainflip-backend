@@ -190,10 +190,10 @@ where
 				<Self as ElectoralSystemTypes>::ElectionState::default();
 			for (account, (details, _)) in &properties {
 				// We currently split the ingressed amount into two parts:
-				// 1. The consensus amount that is *before* chain tracking. i.e. Chain tracking is
-				//    *ahead*.
-				// 2. The pending amount that is *after* chain tracking. i.e. Chain tracking is
-				//    *behind*.
+				// 1. The consensus amount with a block number *earlier* than chain tracking. i.e.
+				//    Chain tracking is *ahead*, deposit witnessing is lagging.
+				// 2. The pending amount that with a block number *later* than chain tracking. i.e.
+				//    Chain tracking is *lagging*, deposit witnessing is ahead.
 				// The engines currently do not necessarily agree on a particular value at the point
 				// of an election because of the inability to query for data at
 				// a particular block height on Solana. Thus, there are two approaches:
@@ -233,8 +233,7 @@ where
 							// monotonically increasing.
 							if *chain_tracking >= new_consensus.block_number {
 								// Chain tracking has progressed beyond the latest ingress block so
-								// we take the latest consensus and ignore any previous
-								// amounts.
+								// we can ignore any previously pending amounts.
 								(Some(new_consensus), None)
 							} else if *chain_tracking >= old_consensus.block_number {
 								// Chain tracking has progressed beyond the previous deposit block
@@ -248,7 +247,8 @@ where
 									new_consensus.block_number > old_consensus.block_number
 								);
 
-								if new_consensus.amount > old_consensus.amount {
+								if new_consensus.amount >= old_consensus.amount {
+									// Note: balance can be equal on channel closure.
 									(Some(old_consensus), Some(new_consensus))
 								} else {
 									log_or_panic!(
@@ -263,7 +263,15 @@ where
 							} else {
 								// Chain tracking has not progressed beyond the previous deposit
 								// block. We can confirm neither the previous nor the latest amount.
-								(None, Some(new_consensus))
+								// We don't update the pending consensus amount: this is to defend
+								// against a malicious actor streaming small amounts, which
+								// would otherwise delay the deposit.
+								if new_consensus.amount == old_consensus.amount {
+									// If amounts are the same it could be account closure.
+									(None, Some(new_consensus))
+								} else {
+									(None, Some(old_consensus))
+								}
 							}
 						}
 					},
@@ -290,13 +298,11 @@ where
 								(account.clone(), details.asset),
 								Some(*ready_total),
 							);
-							if future_total.is_none() {
-								new_properties.entry(account.clone()).and_modify(
-									|(_details, total)| {
-										*total = ready_total;
-									},
-								);
-							}
+							new_properties.entry(account.clone()).and_modify(
+								|(_details, total)| {
+									*total = *ready_total;
+								},
+							);
 						},
 						Ordering::Greater => {
 							log::error!(
@@ -309,7 +315,7 @@ where
 						},
 						Ordering::Equal => (),
 					}
-					if ready_total.block_number >= details.close_block && future_total.is_none() {
+					if ready_total.block_number >= details.close_block {
 						Sink::on_channel_closed(account.clone());
 						new_properties.remove(account);
 					}

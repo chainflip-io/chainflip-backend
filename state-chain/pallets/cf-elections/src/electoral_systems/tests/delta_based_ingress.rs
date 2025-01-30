@@ -225,16 +225,17 @@ impl TestContext<SimpleDeltaBasedIngress> {
 	fn assert_state_update(
 		self,
 		chain_tracking: &BlockNumber,
-		channels: impl Clone + IntoIterator<Item = DepositChannel>,
+		channels: impl IntoIterator<Item = DepositChannel>,
+		expected_state: impl IntoIterator<Item = DepositChannel>,
 	) -> Self {
 		self.force_consensus_update(ConsensusStatus::Gained {
 			most_recent: None,
-			new: to_state(channels.clone()),
+			new: to_state(channels),
 		})
 		.test_on_finalize(
 			chain_tracking,
 			|_| (),
-			[Check::ingressed(vec![]), Check::ended_at_state(to_state(channels))],
+			[Check::ingressed(vec![]), Check::ended_at_state(to_state(expected_state))],
 		)
 	}
 }
@@ -351,7 +352,11 @@ fn only_trigger_ingress_on_witnessed_blocks() {
 		.collect::<Vec<_>>();
 	with_default_setup()
 		.build_with_initial_election()
-		.assert_state_update(&(ingress_block[0] - 1), CHANNEL_STATE_INGRESSED)
+		.assert_state_update(
+			&(ingress_block[0] - 1),
+			CHANNEL_STATE_INGRESSED,
+			CHANNEL_STATE_INGRESSED,
+		)
 		.test_on_finalize(
 			&(ingress_block[1] - 1),
 			|_| (),
@@ -703,56 +708,46 @@ fn test_deposit_channel_recycling() {
 
 #[test]
 fn do_nothing_on_revert() {
-	let channel_state_reverted = vec![
+	const CHANNEL_STATE_REVERTED: [DepositChannel; 2] = [
 		DepositChannel {
-			account: 1u32,
-			asset: Asset::Sol,
-			total_ingressed: 500u64,
-			block_number: 950u64,
-			close_block: 1_000u64,
+			total_ingressed: CHANNEL_STATE_INGRESSED[0].total_ingressed - 500u64,
+			..CHANNEL_STATE_INGRESSED[0]
 		},
 		DepositChannel {
-			account: 2u32,
-			asset: Asset::SolUsdc,
-			total_ingressed: 500u64,
-			block_number: 950u64,
-			close_block: 2_000u64,
+			total_ingressed: CHANNEL_STATE_INGRESSED[1].total_ingressed - 1_500u64,
+			..CHANNEL_STATE_INGRESSED[1]
 		},
 	];
-	let ingress_block = CHANNEL_STATE_INGRESSED[1].block_number;
-	let revert_block = channel_state_reverted[0].block_number;
-	let close_block = channel_state_reverted[1].close_block;
+	let total_ingress = CHANNEL_STATE_INGRESSED
+		.iter()
+		.map(|channel| (channel.account, channel.asset, channel.total_ingressed))
+		.collect::<Vec<_>>();
 
 	with_default_setup()
-		.build_with_initial_election()
+		.build()
+		.then(|| CHANNEL_STATE_INGRESSED.iter().for_each(|channel| channel.open()))
 		.force_consensus_update(ConsensusStatus::Gained {
 			most_recent: None,
 			new: to_state(CHANNEL_STATE_INGRESSED),
 		})
 		.test_on_finalize(
-			&ingress_block,
+			&CHANNEL_STATE_INGRESSED[1].block_number,
 			|_| (),
 			vec![
+				Check::ingressed(total_ingress.clone()),
 				Check::ended_at_state_map_state(CHANNEL_STATE_INGRESSED),
-				Check::ingressed(vec![
-					(1u32, Asset::Sol, 1_000u64),
-					(2u32, Asset::SolUsdc, 2_000u64),
-				]),
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
 			most_recent: None,
-			new: to_state(channel_state_reverted),
+			new: to_state(CHANNEL_STATE_REVERTED),
 		})
 		.test_on_finalize(
-			&revert_block,
+			&CHANNEL_STATE_REVERTED[0].block_number,
 			|_| (),
 			vec![
 				// No new ingress is expected.
-				Check::ingressed(vec![
-					(1u32, Asset::Sol, 1_000u64),
-					(2u32, Asset::SolUsdc, 2_000u64),
-				]),
+				Check::ingressed(total_ingress.clone()),
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
@@ -760,7 +755,7 @@ fn do_nothing_on_revert() {
 			new: to_state(CHANNEL_STATE_CLOSED),
 		})
 		.test_on_finalize(
-			&close_block,
+			&CHANNEL_STATE_CLOSED[1].close_block,
 			|_| (),
 			vec![
 				Check::channels_closed_matches(vec![1u32, 2u32]),
@@ -908,48 +903,107 @@ fn pending_ingresses_update_with_consensus() {
 		block_number: CHAIN_TRACKING + 10,
 		close_block: BlockNumber::MAX, // we're not testing closing here
 	};
-	let deposit_channel_pending_updated_amount = DepositChannel {
+	let deposit_channel_pending_lower_amount = DepositChannel {
 		total_ingressed: deposit_channel_pending.total_ingressed - 1,
 		..deposit_channel_pending
 	};
-	let deposit_channel_pending_updated_block = DepositChannel {
+	let deposit_channel_pending_higher_amount = DepositChannel {
+		total_ingressed: deposit_channel_pending.total_ingressed + 1,
+		..deposit_channel_pending
+	};
+	let deposit_channel_pending_lower_block = DepositChannel {
 		block_number: deposit_channel_pending.block_number - 1,
 		..deposit_channel_pending
 	};
-	let deposit_channel_pending_consensus = DepositChannel {
-		total_ingressed: 2_500u64,
+	let deposit_channel_pending_higher_block = DepositChannel {
 		block_number: deposit_channel_pending.block_number + 1,
+		..deposit_channel_pending
+	};
+	let deposit_channel_with_next_deposit = DepositChannel {
+		total_ingressed: 2_500u64,
+		block_number: deposit_channel_pending.block_number + 10,
 		..deposit_channel_pending
 	};
 
 	let test = with_default_setup()
 		.build()
 		.then(|| deposit_channel_pending.open())
-		.assert_state_update(&CHAIN_TRACKING, [deposit_channel_pending])
-		.assert_state_update(&CHAIN_TRACKING, [deposit_channel_pending_updated_amount])
-		.assert_state_update(&CHAIN_TRACKING, [deposit_channel_pending_updated_block])
-		.assert_state_update(&CHAIN_TRACKING, [deposit_channel_pending_consensus]);
+		.assert_state_update(&CHAIN_TRACKING, [deposit_channel_pending], [deposit_channel_pending])
+		.assert_state_update(
+			&{ CHAIN_TRACKING + 1 },
+			[deposit_channel_pending_lower_amount],
+			[deposit_channel_pending_lower_amount],
+		)
+		.assert_state_update(
+			&{ CHAIN_TRACKING + 2 },
+			[deposit_channel_pending_higher_amount],
+			[deposit_channel_pending_higher_amount],
+		)
+		.assert_state_update(
+			&{ CHAIN_TRACKING + 3 },
+			[deposit_channel_pending_lower_block],
+			[deposit_channel_pending_lower_block],
+		)
+		.assert_state_update(
+			&{ CHAIN_TRACKING + 4 },
+			[deposit_channel_pending_higher_block],
+			[deposit_channel_pending_higher_block],
+		)
+		// Trying to push the state to a different amount at a higher block will have no effect.
+		.assert_state_update(
+			&{ CHAIN_TRACKING + 5 },
+			[deposit_channel_with_next_deposit],
+			[deposit_channel_pending_higher_block],
+		);
 
 	test
-		// The previous pending deposit has been overridden by latest consensus.
+		// Once chain tracking advances past the latest consensus value, we process the first
+		// deposit.
 		.test_on_finalize(
-			&(deposit_channel_pending.block_number),
-			|_| (),
-			vec![
-				Check::ingressed(vec![]),
-				Check::ended_at_state(to_state(vec![deposit_channel_pending_consensus])),
-			],
-		)
-		// Once chain tracking advances past the latest consensus value, we process the ingress.
-		.test_on_finalize(
-			&(deposit_channel_pending_consensus.block_number),
+			&(deposit_channel_pending_higher_block.block_number),
 			|_| (),
 			vec![
 				Check::ingressed(vec![(
-					1u32,
-					Asset::Sol,
-					deposit_channel_pending_consensus.total_ingressed,
+					deposit_channel_pending.account,
+					deposit_channel_pending.asset,
+					deposit_channel_pending.total_ingressed,
 				)]),
+				Check::election_id_incremented(),
+				Check::ended_at_state(to_state(vec![deposit_channel_with_next_deposit])),
+			],
+		)
+		// After the deposit, the latest consensus value will have been promoted to the pending
+		// state.
+		.test_on_finalize(
+			&{ deposit_channel_pending_higher_block.block_number + 1 },
+			|_| (),
+			vec![
+				Check::ingressed(vec![(
+					deposit_channel_pending.account,
+					deposit_channel_pending.asset,
+					deposit_channel_pending.total_ingressed,
+				)]),
+				Check::ended_at_state(to_state(vec![deposit_channel_with_next_deposit])),
+			],
+		)
+		// Once chain tracking advances past the block of the next deposit, we process it too.
+		.test_on_finalize(
+			&(deposit_channel_with_next_deposit.block_number),
+			|_| (),
+			vec![
+				Check::ingressed(vec![
+					(
+						deposit_channel_pending.account,
+						deposit_channel_pending.asset,
+						deposit_channel_pending.total_ingressed,
+					),
+					(
+						deposit_channel_pending.account,
+						deposit_channel_pending.asset,
+						deposit_channel_with_next_deposit.total_ingressed -
+							deposit_channel_pending.total_ingressed,
+					),
+				]),
 				Check::election_id_incremented(),
 				Check::ended_at_state(Default::default()),
 			],
