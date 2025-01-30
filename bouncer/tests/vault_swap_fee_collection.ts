@@ -70,13 +70,9 @@ async function testFeeCollection(inputAsset: Asset): Promise<[KeyringPair, strin
 
   // Setup broker accounts. Different for each asset and specific to this test.
   const brokerUri = `//BROKER_VAULT_FEE_COLLECTION_${inputAsset}`;
-  const affiliateUri = `//BROKER_VAULT_FEE_COLLECTION_AFFILIATE_${inputAsset}`;
   const broker = createStateChainKeypair(brokerUri);
-  const affiliate = createStateChainKeypair(affiliateUri);
   const refundAddress = await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
-  testVaultSwapFeeCollection.debugLog('Broker:', broker.address);
-  testVaultSwapFeeCollection.debugLog('Affiliate:', affiliate.address);
-  await Promise.all([setupBrokerAccount(brokerUri), setupBrokerAccount(affiliateUri)]);
+  await Promise.all([setupBrokerAccount(brokerUri)]);
   if (inputAsset === Assets.Btc) {
     await openPrivateBtcChannel(brokerUri);
   }
@@ -85,6 +81,9 @@ async function testFeeCollection(inputAsset: Asset): Promise<[KeyringPair, strin
   const event = await registerAffiliate(brokerUri, refundAddress);
 
   const affiliateId = event.data.affiliateId as string;
+
+  testVaultSwapFeeCollection.debugLog('Broker:', broker.address);
+  testVaultSwapFeeCollection.debugLog('Affiliate:', affiliateId);
 
   // Setup
   const feeAsset = Assets.Usdc;
