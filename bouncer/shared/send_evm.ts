@@ -10,6 +10,7 @@ import {
   sleep,
   assetDecimals,
   getContractAddress,
+  WhaleKeyManager,
 } from './utils';
 
 const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
@@ -20,6 +21,9 @@ const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
 export async function getNextEvmNonce(
   chain: Chain,
   callback?: (nextNonce: number) => ReturnType<typeof approveVault>,
+  // THIS IS BROKEN BECAUSE I NEED TO SUPPLY A NOTHING CALLBACK, NOT PRIVATE KEY AS SECOND ARGUMENT
+  // Otherwise use the root whale key
+  privateKey?: string,
 ): Promise<number> {
   let mutex;
   switch (chain) {
@@ -36,7 +40,7 @@ export async function getNextEvmNonce(
   return mutex.runExclusive(async () => {
     if (nextEvmNonce[chain] === undefined) {
       const web3 = new Web3(getEvmEndpoint(chain));
-      const whaleKey = getWhaleKey(chain);
+      const whaleKey = privateKey ?? getWhaleKey(chain);
       const address = web3.eth.accounts.privateKeyToAccount(whaleKey).address;
       const txCount = await web3.eth.getTransactionCount(address);
       nextEvmNonce[chain] = txCount;
@@ -56,11 +60,13 @@ export async function signAndSendTxEvm(
   data?: string,
   gas = chain === 'Arbitrum' ? 5000000 : 200000,
   log = true,
+  evmRootWhale = false,
 ) {
   const web3 = new Web3(getEvmEndpoint(chain));
-  const whaleKey = getWhaleKey(chain);
+  const whaleKey = evmRootWhale ? getWhaleKey(chain) : await WhaleKeyManager.getNextKey();
 
-  const nonce = await getNextEvmNonce(chain);
+  // FIX: This is not the correct nonce - we need to get the nonce from the whale key manager
+  const nonce = await getNextEvmNonce(chain, whaleKey);
   const tx = { to, data, gas, nonce, value };
 
   const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
@@ -88,11 +94,11 @@ export async function signAndSendTxEvm(
   if (log) {
     console.log(
       'Transaction complete, tx_hash: ' +
-        receipt.transactionHash +
-        ' blockNumber: ' +
-        receipt.blockNumber +
-        ' blockHash: ' +
-        receipt.blockHash,
+      receipt.transactionHash +
+      ' blockNumber: ' +
+      receipt.blockNumber +
+      ' blockHash: ' +
+      receipt.blockHash,
     );
   }
   return receipt;
@@ -103,9 +109,10 @@ export async function sendEvmNative(
   evmAddress: string,
   ethAmount: string,
   log = true,
+  evmRootWhale = false,
 ) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals('Eth'));
-  await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, undefined, log);
+  await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, undefined, log, evmRootWhale);
 }
 
 export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => boolean) {

@@ -16,7 +16,7 @@ async function main(): Promise<void> {
   const flipAmount = process.argv[3].trim();
 
   const contractAddress = getContractAddress('Ethereum', 'Flip');
-  await sendErc20('Ethereum', ethereumAddress, contractAddress, flipAmount);
+  await sendErc20('Ethereum', ethereumAddress, contractAddress, flipAmount, false, false);
 }
 
 await runWithTimeoutAndExit(main(), 50);

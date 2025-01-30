@@ -19,16 +19,16 @@ import { sendSolUsdc } from './send_solusdc';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-export async function send(asset: Asset, address: string, amount?: string, log = true) {
+export async function send(asset: Asset, address: string, amount?: string, log = true, evmRootWhale = false) {
   switch (asset) {
     case 'Btc':
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'Eth':
-      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log);
+      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log, evmRootWhale);
       break;
     case 'ArbEth':
-      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log);
+      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log, evmRootWhale);
       break;
     case 'Dot':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
@@ -46,6 +46,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
         log,
+        evmRootWhale,
       );
       break;
     }
@@ -57,6 +58,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
         log,
+        evmRootWhale,
       );
       break;
     }
