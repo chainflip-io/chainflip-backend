@@ -61,15 +61,23 @@ export async function signAndSendTxEvm(
   const whaleKey = getWhaleKey(chain);
 
   const nonce = await getNextEvmNonce(chain);
-  const tx = { to, data, gas, nonce, value };
+  const tx = {
+    to,
+    data,
+    gas,
+    nonce,
+    value,
+    maxPriorityFeePerGas: chain === 'Ethereum' ? '20000000' : undefined,
+    maxFeePerGas: chain === 'Ethereum' ? '2000000000' : undefined,
+  };
 
   let receipt;
   const numberRetries = 10;
+  const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
 
   // Retry mechanism as we expect all transactions to succeed.
   for (let i = 0; i < numberRetries; i++) {
     try {
-      const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
       receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
       break;
     } catch (error) {
