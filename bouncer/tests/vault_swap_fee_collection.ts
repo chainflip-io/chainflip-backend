@@ -1,7 +1,7 @@
 import assert from 'assert';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
-import { createStateChainKeypair, defaultAssetAmounts } from '../shared/utils';
+import { createStateChainKeypair, defaultAssetAmounts, WhaleKeyManager } from '../shared/utils';
 import { getEarnedBrokerFees } from './broker_fee_collection';
 import { openPrivateBtcChannel, registerAffiliate } from '../shared/btc_vault_swap';
 import { setupBrokerAccount } from '../shared/setup_account';
@@ -56,11 +56,14 @@ async function testFeeCollection(inputAsset: Asset) {
   testVaultSwapFeeCollection.debugLog('Earned broker fees before:', earnedBrokerFeesBefore);
   testVaultSwapFeeCollection.debugLog('Earned affiliate fees before:', earnedAffiliateFeesBefore);
 
+  const privateKey = await WhaleKeyManager.getNextKey();
+
   // Do the vault swap
   await performVaultSwap(
     inputAsset,
     destAsset,
     destAddress,
+    privateKey,
     tag,
     undefined, // messageMetadata
     testVaultSwapFeeCollection.swapContext,

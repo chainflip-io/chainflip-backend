@@ -47,6 +47,8 @@ export async function executeEvmVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  // for evm chains
+  privateKey?: string,
   brokerFees: {
     account: string;
     commissionBps: number;
@@ -73,7 +75,7 @@ export async function executeEvmVaultSwap(
     minPriceX128: '0',
   };
 
-  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset, privateKey));
 
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.

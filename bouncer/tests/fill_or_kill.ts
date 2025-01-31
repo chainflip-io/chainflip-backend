@@ -44,6 +44,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
 
   let swapRequestedHandle;
 
+  const privateKey = await WhaleKeyManager.getNextKey();
   if (!swapViaVault) {
     testFillOrKill.log(
       `Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`,
@@ -68,7 +69,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
     );
 
     // Deposit the asset
-    const privateKey = await WhaleKeyManager.getNextKey();
+
     await send(inputAsset, depositAddress, amount.toString(), undefined, privateKey);
     testFillOrKill.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
   } else {
@@ -80,6 +81,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
       inputAsset,
       destAsset,
       destAddress,
+      privateKey,
       undefined,
       amount.toString(),
       undefined,

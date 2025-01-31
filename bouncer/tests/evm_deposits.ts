@@ -31,10 +31,11 @@ export const testEvmDeposits = new ExecutableTest('Evm-Deposits', main, 250);
 
 const cfTesterAbi = await getCFTesterAbi();
 
-async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset) {
+async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset, privateKey: string) {
   const swapParams = await testSwap(
     sourceAsset,
     destAsset,
+    privateKey,
     undefined,
     undefined,
     testEvmDeposits.swapContext,
@@ -44,13 +45,14 @@ async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset) {
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`);
+  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`, privateKey);
 }
 
-async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
+async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset, privateKey: string) {
   const swapParams = await testSwap(
     sourceAsset,
     destAsset,
+    privateKey,
     undefined,
     undefined,
     testEvmDeposits.swapContext,
@@ -80,7 +82,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
 }
 
 // Not supporting Btc to avoid adding more unnecessary complexity with address encoding.
-async function testTxMultipleVaultSwaps(sourceAsset: Asset, destAsset: Asset) {
+async function testTxMultipleVaultSwaps(sourceAsset: Asset, destAsset: Asset, privateKey: string) {
   const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
 
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
@@ -109,6 +111,7 @@ async function testTxMultipleVaultSwaps(sourceAsset: Asset, destAsset: Asset) {
     cfTesterAddress,
     (amount * BigInt(numSwaps)).toString(),
     txData,
+    privateKey,
   );
 
   let eventCounter = 0;
@@ -140,7 +143,7 @@ async function testTxMultipleVaultSwaps(sourceAsset: Asset, destAsset: Asset) {
   await observingEvent.event;
 }
 
-async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
+async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset, privateKey: string) {
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
@@ -158,7 +161,6 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
       SwapRequestType.Regular,
     );
 
-    const privateKey = await WhaleKeyManager.getNextKey();
     await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset), undefined, privateKey);
     await swapRequestedHandle;
   }
@@ -180,36 +182,40 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
 }
 
 async function main() {
+  const successiveDepositPrivateKey = await WhaleKeyManager.getNextKey();
   const depositTests = Promise.all([
-    testSuccessiveDepositEvm('Eth', 'Dot'),
-    testSuccessiveDepositEvm('Flip', 'Btc'),
-    testSuccessiveDepositEvm('ArbEth', 'Dot'),
-    testSuccessiveDepositEvm('ArbUsdc', 'Btc'),
+    testSuccessiveDepositEvm('Eth', 'Dot', successiveDepositPrivateKey),
+    testSuccessiveDepositEvm('Flip', 'Btc', successiveDepositPrivateKey),
+    testSuccessiveDepositEvm('ArbEth', 'Dot', successiveDepositPrivateKey),
+    testSuccessiveDepositEvm('ArbUsdc', 'Btc', successiveDepositPrivateKey),
   ]);
 
+  const noDupePrivateKey = await WhaleKeyManager.getNextKey();
   const noDuplicatedWitnessingTest = Promise.all([
-    testNoDuplicateWitnessing('Eth', 'Dot'),
-    testNoDuplicateWitnessing('Eth', 'Btc'),
-    testNoDuplicateWitnessing('Eth', 'Flip'),
-    testNoDuplicateWitnessing('Eth', 'Usdc'),
-    testNoDuplicateWitnessing('ArbEth', 'Dot'),
-    testNoDuplicateWitnessing('ArbEth', 'Btc'),
-    testNoDuplicateWitnessing('ArbEth', 'Flip'),
-    testNoDuplicateWitnessing('ArbEth', 'Usdc'),
+    testNoDuplicateWitnessing('Eth', 'Dot', noDupePrivateKey),
+    testNoDuplicateWitnessing('Eth', 'Btc', noDupePrivateKey),
+    testNoDuplicateWitnessing('Eth', 'Flip', noDupePrivateKey),
+    testNoDuplicateWitnessing('Eth', 'Usdc', noDupePrivateKey),
+    testNoDuplicateWitnessing('ArbEth', 'Dot', noDupePrivateKey),
+    testNoDuplicateWitnessing('ArbEth', 'Btc', noDupePrivateKey),
+    testNoDuplicateWitnessing('ArbEth', 'Flip', noDupePrivateKey),
+    testNoDuplicateWitnessing('ArbEth', 'Usdc', noDupePrivateKey),
   ]);
 
+  const multipleTxSwapsPrivateKey = await WhaleKeyManager.getNextKey();
   const multipleTxSwapsTest = Promise.all([
-    testTxMultipleVaultSwaps('Eth', 'Dot'),
-    testTxMultipleVaultSwaps('Eth', 'Flip'),
-    testTxMultipleVaultSwaps('ArbEth', 'Dot'),
-    testTxMultipleVaultSwaps('ArbEth', 'Flip'),
+    testTxMultipleVaultSwaps('Eth', 'Dot', multipleTxSwapsPrivateKey),
+    testTxMultipleVaultSwaps('Eth', 'Flip', multipleTxSwapsPrivateKey),
+    testTxMultipleVaultSwaps('ArbEth', 'Dot', multipleTxSwapsPrivateKey),
+    testTxMultipleVaultSwaps('ArbEth', 'Flip', multipleTxSwapsPrivateKey),
   ]);
 
+  const doubleDepositPrivateKey = await WhaleKeyManager.getNextKey();
   const doubleDepositTests = Promise.all([
-    testDoubleDeposit('Eth', 'Dot'),
-    testDoubleDeposit('Usdc', 'Flip'),
-    testDoubleDeposit('ArbEth', 'Dot'),
-    testDoubleDeposit('ArbUsdc', 'Btc'),
+    testDoubleDeposit('Eth', 'Dot', doubleDepositPrivateKey),
+    testDoubleDeposit('Usdc', 'Flip', doubleDepositPrivateKey),
+    testDoubleDeposit('ArbEth', 'Dot', doubleDepositPrivateKey),
+    testDoubleDeposit('ArbUsdc', 'Btc', doubleDepositPrivateKey),
   ]);
 
   await Promise.all([

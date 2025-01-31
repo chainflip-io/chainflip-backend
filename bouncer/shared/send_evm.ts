@@ -12,9 +12,14 @@ import {
   WhaleKeyManager,
 } from './utils';
 
-const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
-  Ethereum: undefined,
-  Arbitrum: undefined,
+
+const nextEvmNonce: {
+  [chain in 'Ethereum' | 'Arbitrum']: {
+    [privateKey: string]: number;
+  };
+} = {
+  Ethereum: {},
+  Arbitrum: {},
 };
 
 export async function getNextEvmNonce(
@@ -35,17 +40,17 @@ export async function getNextEvmNonce(
   }
 
   return mutex.runExclusive(async () => {
-    if (nextEvmNonce[chain] === undefined) {
+    if (nextEvmNonce[chain][privateKey] === undefined) {
       const web3 = new Web3(getEvmEndpoint(chain));
       const address = web3.eth.accounts.privateKeyToAccount(privateKey).address;
       const txCount = await web3.eth.getTransactionCount(address);
-      nextEvmNonce[chain] = txCount;
+      nextEvmNonce[chain][privateKey] = txCount;
     }
     // The SDK returns null if no transaction is sent
-    if (callback && (await callback(nextEvmNonce[chain]!)) === null) {
-      return nextEvmNonce[chain]!;
+    if (callback && (await callback(nextEvmNonce[chain][privateKey]!)) === null) {
+      return nextEvmNonce[chain][privateKey]!;
     }
-    return nextEvmNonce[chain]!++;
+    return nextEvmNonce[chain][privateKey]!++;
   });
 }
 
@@ -58,14 +63,18 @@ export async function signAndSendTxEvm(
   gas = chain === 'Arbitrum' ? 5000000 : 200000,
   log = true,
 ) {
-  const web3 = new Web3(getEvmEndpoint(chain));
-  const sendingKey = privateKey ?? await WhaleKeyManager.getNextKey();
 
-  // FIX: This is not the correct nonce - we need to get the nonce from the whale key manager
+  if (!privateKey) {
+    console.log("No private key provided, using next key");
+  } else {
+    console.log("Using private key provided: ", privateKey);
+  }
+  const sendingKey = privateKey ?? await WhaleKeyManager.getNextKey();
   const nonce = await getNextEvmNonce(chain, sendingKey);
-  console.log("Nonce: ", nonce);
+  console.log(`Nonce for key: ${sendingKey} is ${nonce}`);
   const tx = { to, data, gas, nonce, value };
 
+  const web3 = new Web3(getEvmEndpoint(chain));
   const signedTx = await web3.eth.accounts.signTransaction(tx, sendingKey);
 
   let receipt;
@@ -80,7 +89,7 @@ export async function signAndSendTxEvm(
       if (i === numberRetries - 1) {
         throw new Error(`${chain} transaction failure: ${error}`);
       }
-      console.log(`${chain} Retrying transaction`);
+      console.log(`${chain} Retrying transaction from key ${sendingKey}. Error: ${error}`);
       await sleep(2000);
     }
   }

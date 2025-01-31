@@ -23,6 +23,7 @@ export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1200);
 export async function initiateSwap(
   sourceAsset: Asset,
   destAsset: Asset,
+  privateKey?: string,
   functionCall: typeof testSwap | typeof testVaultSwap,
   ccmSwap: boolean = false,
 ): Promise<SwapParams | VaultSwapParams> {
@@ -39,6 +40,7 @@ export async function initiateSwap(
     return functionCall(
       sourceAsset,
       destAsset,
+      privateKey,
       btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
       ccmSwapMetadata,
       testAllSwaps.swapContext,

@@ -50,6 +50,12 @@ async function testDCASwap(
 
   let swapRequestedHandle;
 
+  let privateKey = undefined;
+  const chain = chainFromAsset(inputAsset);
+  if (chain === 'Ethereum' || chain === 'Arbitrum') {
+    privateKey = await WhaleKeyManager.getNextKey();
+  }
+
   if (!swapViaVault) {
     const swapRequest = await requestNewSwap(
       inputAsset,
@@ -73,11 +79,7 @@ async function testDCASwap(
     );
 
     // Deposit the asset
-    let privateKey = undefined;
-    const chain = chainFromAsset(inputAsset);
-    if (chain === 'Ethereum' || chain === 'Arbitrum') {
-      privateKey = await WhaleKeyManager.getNextKey();
-    }
+
     await send(inputAsset, swapRequest.depositAddress, amount.toString(), undefined, privateKey);
     testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
@@ -85,6 +87,7 @@ async function testDCASwap(
       inputAsset,
       destAsset,
       destAddress,
+      privateKey,
       undefined,
       amount.toString(),
       undefined,

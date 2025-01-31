@@ -19,6 +19,7 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
+  WhaleKeyManager,
 } from '../shared/utils';
 import { observeEvent } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
@@ -49,7 +50,8 @@ async function legacyEvmVaultSwap(sourceAsset: Asset, destAsset: Asset, ccmSwap:
     (await getEvmVaultAbi()) as any,
     vaultAddress,
   );
-  const evmWallet = await createEvmWalletAndFund(sourceAsset);
+  const privateKey = await WhaleKeyManager.getNextKey();
+  const evmWallet = await createEvmWalletAndFund(sourceAsset, privateKey);
 
   const cfParametersList = ['', '0x', 'deadbeef', '0xdeadbeef', 'deadc0de', '0xdeadc0de'];
   const cfParameters = Math.floor(Math.random() * cfParametersList.length);

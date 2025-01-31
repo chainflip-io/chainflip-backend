@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import { connectContainerToNetwork, disconnectContainerFromNetwork } from '../shared/docker_utils';
-import { sleep } from '../shared/utils';
+import { sleep, getEvmRootWhaleKey } from '../shared/utils';
 import { testSwap } from '../shared/swapping';
 import { ExecutableTest } from '../shared/executable_test';
 
@@ -26,9 +26,11 @@ async function main() {
     allExternalNodes.map((container) => connectContainerToNetwork(container, networkName)),
   );
 
+  const privateKey = getEvmRootWhaleKey();
+
   await Promise.all([
-    testSwap('Dot', 'Btc', undefined, undefined, testSwapAfterDisconnection.swapContext),
-    testSwap('Btc', 'Flip', undefined, undefined, testSwapAfterDisconnection.swapContext),
-    testSwap('Eth', 'Usdc', undefined, undefined, testSwapAfterDisconnection.swapContext),
+    testSwap('Dot', 'Btc', privateKey, undefined, undefined, testSwapAfterDisconnection.swapContext),
+    testSwap('Btc', 'Flip', privateKey, undefined, undefined, testSwapAfterDisconnection.swapContext),
+    testSwap('Eth', 'Usdc', privateKey, undefined, undefined, testSwapAfterDisconnection.swapContext),
   ]);
 }

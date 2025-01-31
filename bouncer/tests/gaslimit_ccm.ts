@@ -12,7 +12,7 @@ import {
   sleep,
   SwapRequestType,
   TransactionOrigin,
-  WhaleKeyManager,
+  getEvmRootWhaleKey,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
@@ -367,7 +367,10 @@ async function spamChain(chain: Chain) {
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum':
-      const privateKey = await WhaleKeyManager.getNextKey();
+      // We currently run this in a separate script within bouncer
+      // so using the WhaleKeyManager singleton will not work as intended
+      // since it'll be reinitialized when tests run.
+      const privateKey = getEvmRootWhaleKey();
       spamEvm('Ethereum', privateKey, 500, () => spam);
       break;
     case 'Solana':

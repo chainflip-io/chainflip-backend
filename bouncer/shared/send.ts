@@ -25,7 +25,6 @@ export async function send(asset: Asset, address: string, amount?: string, log =
     throw new Error('No private key provided for EVM asset');
   }
 
-
   switch (asset) {
     case 'Btc':
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));

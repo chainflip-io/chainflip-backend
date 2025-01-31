@@ -45,15 +45,8 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders = 30, lp
   await Promise.all([
     // provide liquidity to LP_3
     depositLiquidity('Usdc', 10000, false, lpUri, privateKey),
-    depositLiquidity('Eth', deposits.get('Eth')!, false, lpUri, privateKey),
-    depositLiquidity('Dot', deposits.get('Dot')!, false, lpUri, privateKey),
-    depositLiquidity('Btc', deposits.get('Btc')!, false, lpUri, privateKey),
-    depositLiquidity('Flip', deposits.get('Flip')!, false, lpUri, privateKey),
-    depositLiquidity('Usdt', deposits.get('Usdt')!, false, lpUri),
-    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, lpUri, privateKey),
-    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, lpUri, privateKey),
-    depositLiquidity('Sol', deposits.get('Sol')!, false, lpUri),
-    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
+    depositLiquidity('Eth', 2, false, lpUri, privateKey),
+    depositLiquidity('Btc', 2, false, lpUri, privateKey),
   ]);
 
   // create a series of limit_order and save their info to delete them later on

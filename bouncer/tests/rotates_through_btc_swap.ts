@@ -49,6 +49,7 @@ async function main() {
     'Btc',
     undefined,
     undefined,
+    undefined,
     testRotatesThroughBtcSwap.swapContext,
     'after rotation',
   );

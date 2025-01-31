@@ -268,6 +268,8 @@ export async function executeVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  // for evm chains
+  privateKey?: string,
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
   boostFeeBps?: number,
@@ -294,9 +296,12 @@ export async function executeVaultSwap(
   };
 
   if (evmChains.includes(srcChain)) {
+    if (!privateKey) {
+      throw new Error('No private key provided for EVM vault swap');
+    }
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
-    const wallet = await createEvmWalletAndFund(sourceAsset);
+    const wallet = await createEvmWalletAndFund(sourceAsset, privateKey);
     sourceAddress = wallet.address.toLowerCase();
 
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
@@ -306,6 +311,7 @@ export async function executeVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
+      privateKey,
       brokerFeesValue,
       messageMetadata,
       amount,
@@ -358,6 +364,8 @@ export async function performVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  // for evm chains
+  privateKey?: string,
   swapTag = '',
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
@@ -391,6 +399,7 @@ export async function performVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
+      privateKey,
       messageMetadata,
       amount,
       boostFeeBps,

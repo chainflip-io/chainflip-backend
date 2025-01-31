@@ -31,7 +31,6 @@ import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
-import { WhaleKeyManager } from './utils';
 import { execWithLog } from './utils/exec_with_log';
 import { send } from './send';
 
@@ -737,7 +736,9 @@ export class WhaleKeyManager {
           // divide the balance by the number of wallets
           const balance = new BigNumber(Math.floor(Number(balances.get(asset))));
           console.log(`Balance of whale key: ${balance}`);
-          const toSend = (balance.div(this.NUMBER_OF_WALLETS)).toString();
+          // subtract 1 so the root wallet still has some funds - this is a workaround because
+          // we run some bouncer tests in different scripts.
+          const toSend = (balance.div(this.NUMBER_OF_WALLETS - 1)).toString();
           console.log(`Whale key manager: Sending from root whale ${toSend} ${asset} to ${wallet.address}`);
           await send(asset, wallet.address, toSend, true, rootWallet.privateKey);
           console.log(`Sent ${toSend} ${asset} to ${wallet.address}`);
@@ -1309,7 +1310,7 @@ export function getTimeStamp(): string {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-export async function createEvmWalletAndFund(asset: Asset): Promise<HDNodeWallet> {
+export async function createEvmWalletAndFund(asset: Asset, fundFromKey: string): Promise<HDNodeWallet> {
   console.log('Creating EVM wallet and funding');
   const chain = chainFromAsset(asset);
 
@@ -1317,9 +1318,8 @@ export async function createEvmWalletAndFund(asset: Asset): Promise<HDNodeWallet
   if (mnemonic === '') {
     throw new Error('Failed to create random mnemonic');
   }
-  const privateKey = await WhaleKeyManager.getNextKey();
   const wallet = Wallet.fromPhrase(mnemonic).connect(getDefaultProvider(getEvmEndpoint(chain)));
-  await send(chainGasAsset(chain) as SDKAsset, wallet.address, undefined, false, privateKey);
-  await send(asset, wallet.address, undefined, false, privateKey);
+  await send(chainGasAsset(chain) as SDKAsset, wallet.address, undefined, false, fundFromKey);
+  await send(asset, wallet.address, undefined, false, fundFromKey);
   return wallet;
 }

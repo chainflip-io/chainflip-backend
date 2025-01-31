@@ -244,6 +244,8 @@ export async function prepareSwap(
 export async function testSwap(
   sourceAsset: Asset,
   destAsset: Asset,
+  // For evm chains
+  privateKey?: string,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
@@ -260,8 +262,6 @@ export async function testSwap(
     log,
     swapContext,
   );
-
-  const privateKey = await WhaleKeyManager.getNextKey();
 
   return performSwap(
     sourceAsset,
@@ -280,6 +280,8 @@ export async function testSwap(
 export async function testVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
+  // for evm chains
+  privateKey?: string,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
@@ -300,6 +302,7 @@ export async function testVaultSwap(
     sourceAsset,
     destAsset,
     destAddress,
+    privateKey,
     tag,
     messageMetadata,
     swapContext,
