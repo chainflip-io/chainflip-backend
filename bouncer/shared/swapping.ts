@@ -9,7 +9,6 @@ import {
   getContractAddress,
   ccmSupportedChains,
   solVersionedCcmAdditionalDataCodec,
-  WhaleKeyManager,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';

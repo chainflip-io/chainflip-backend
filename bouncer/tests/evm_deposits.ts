@@ -175,7 +175,6 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset, privateKe
       SwapRequestType.Regular,
     );
 
-    const privateKey = await WhaleKeyManager.getNextKey();
     await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset), undefined, privateKey);
     await swapRequestedHandle;
   }

@@ -4,7 +4,6 @@ import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { limitOrder } from '../shared/limit_order';
 import { rangeOrder } from '../shared/range_order';
 import { depositLiquidity } from '../shared/deposit_liquidity';
-import { deposits } from '../shared/setup_swaps';
 import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */

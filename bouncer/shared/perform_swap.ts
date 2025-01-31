@@ -249,7 +249,7 @@ export async function performAndTrackSwap(
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 
   const chain = chainFromAsset(sourceAsset);
-  let privateKey = undefined;
+  let privateKey;
   if (chain === 'Ethereum' || chain === 'Arbitrum') {
     privateKey = await WhaleKeyManager.getNextKey();
   }

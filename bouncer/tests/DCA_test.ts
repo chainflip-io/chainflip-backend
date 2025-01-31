@@ -50,7 +50,7 @@ async function testDCASwap(
 
   let swapRequestedHandle;
 
-  let privateKey = undefined;
+  let privateKey;
   const chain = chainFromAsset(inputAsset);
   if (chain === 'Ethereum' || chain === 'Arbitrum') {
     privateKey = await WhaleKeyManager.getNextKey();

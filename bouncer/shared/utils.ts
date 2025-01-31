@@ -678,15 +678,13 @@ export function getEvmRootWhaleKey(): string {
   );
 }
 
-type WalletConnections = {
-  ethereum: HDNodeWallet;
-  arbitrum: HDNodeWallet;
-}
-
 export class WhaleKeyManager {
   private static keys: HDNodeWallet[] = [];
+
   private static currentIndex: number = 0;
+
   private static initialized: boolean = false;
+
   private static initializationPromise: Promise<void> | null = null;
 
   private static NUMBER_OF_WALLETS: number = 10;
@@ -694,13 +692,13 @@ export class WhaleKeyManager {
   // Initialize for Ethereum and Arbitrum
   public static async initialize(): Promise<void> {
     // If already fully initialized, return immediately
-    if (this.initialized) return;
+    if (this.initialized) return Promise.resolve();
     // If initialization is in progress, wait for it
     if (this.initializationPromise) {
       return this.initializationPromise;
     }
 
-    this.initializationPromise = (async () => {
+    this.initializationPromise = (async (): Promise<void> => {
       const rootWallet = Wallet.fromPhrase(getWhaleMnemonic('Ethereum'));
       // Get all the balance of each asset from the root wallet
 
@@ -755,7 +753,6 @@ export class WhaleKeyManager {
     })()
 
     return this.initializationPromise;
-
   }
 
   public static async getNextKey(): Promise<string> {
@@ -764,11 +761,6 @@ export class WhaleKeyManager {
     const key = this.keys[this.currentIndex].privateKey;
     this.currentIndex = (this.currentIndex + 1) % this.keys.length;
     return key;
-  }
-
-  public static getRootKey(): string {
-    // Don't inline to not break things for now
-    return getEvmRootWhaleKey();
   }
 }
 

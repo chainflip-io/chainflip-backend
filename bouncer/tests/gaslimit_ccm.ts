@@ -370,8 +370,7 @@ async function spamChain(chain: Chain) {
       // We currently run this in a separate script within bouncer
       // so using the WhaleKeyManager singleton will not work as intended
       // since it'll be reinitialized when tests run.
-      const privateKey = getEvmRootWhaleKey();
-      spamEvm('Ethereum', privateKey, 500, () => spam);
+      spamEvm('Ethereum', getEvmRootWhaleKey(), 500, () => spam);
       break;
     case 'Solana':
       spamSolana(getChainMinFee('Solana'), 100, () => spam);
