@@ -5,12 +5,9 @@ use crate::{
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sol_prim::consts::{
-	ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION, SYSTEM_PROGRAM_ID,
-	SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
-};
+use sol_prim::consts::ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 use sp_runtime::DispatchError;
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::vec::Vec;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
@@ -75,45 +72,14 @@ impl CcmValidityCheck for CcmValidityChecker {
 			.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?
 			{
 				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => {
-					// Calculate the length of the user's data to ensure the built CCM transaction
-					// will not exceed the maximum allowed length in Solana.
-					// data length = message length + #accounts * (bytes_per_account +
-					// bytes_per_reference);
-					//
-					// Accounts could be duplicated and then they would only take one reference byte
-					// instead of 32 per account.
-					// Technically it shouldn't be necessary to pass duplicated accounts as
-					// it will all be executed in the same instruction. However when integrating
-					// with other protocols, many of the account's values are part of a returned
-					// payload from an API and it makes it cumbersome to then dedpulicate on the fly
-					// and then make it match with the receiver contract. It can definitely
-					// be done but it will also add configuration bytes to the payload, which
-					// is not ideal.
-					// Therefore we want to allow for duplicated accounts and we should account the
-					// length accordingly.
+					// It's hard at this stage to compute exactly the length of the finally build
+					// transaction and it will be even harder once we use Versioned
+					// Transactions. Therefore we just check for the worse case scenario where
+					// we know it's impossible to fit the CCM in the transaction. Then the
+					// transaction builder will ensure that a built transaction is never beyond
+					// the Solana Transaction limit.
+					let ccm_length = ccm.message.len() + ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
-					let mut seen_addresses = BTreeSet::new();
-					seen_addresses.insert(SYSTEM_PROGRAM_ID);
-					seen_addresses.insert(SYS_VAR_INSTRUCTIONS);
-
-					if asset == SolAsset::SolUsdc {
-						seen_addresses.insert(TOKEN_PROGRAM_ID);
-					}
-					let mut accounts_length = 0;
-
-					for &ccm_address in &ccm_accounts.additional_accounts {
-						accounts_length += ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
-
-						if !seen_addresses.contains(&ccm_address.pubkey.into()) {
-							accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
-							seen_addresses.insert(ccm_address.pubkey.into());
-						}
-					}
-
-					let ccm_length = ccm.message.len() + accounts_length;
-
-					// Potentially add foom for 1 acount for native (receiverNative) and
-					// two for token (mint & receiverToken)
 					if ccm_length >
 						match asset {
 							SolAsset::Sol => MAX_CCM_BYTES_SOL,
