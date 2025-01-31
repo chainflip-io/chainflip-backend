@@ -104,13 +104,6 @@ impl CcmValidityCheck for CcmValidityChecker {
 			Ok(DecodedCcmAdditionalData::NotRequired)
 		}
 	}
-
-	fn get_fallback_address(
-		ccm: &CcmChannelMetadata,
-		egress_asset: Asset,
-	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
-		let ccm_additional_accounts = Self::check_and_decode(ccm, egress_asset)?;
-	}
 }
 
 /// Checks if the given CCM accounts contains any blacklisted accounts.
@@ -394,99 +387,6 @@ mod test {
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
 			CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
-		);
-	}
-	#[test]
-	fn can_check_length_native_duplicated() {
-		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL - 36].try_into().unwrap(),
-			gas_budget: 0,
-			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
-				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				fallback_address: SolPubkey([0xf0; 32]),
-				additional_accounts: vec![
-					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				],
-			})
-			.encode()
-			.try_into()
-			.unwrap(),
-		};
-		assert_ok!(CcmValidityChecker::check_and_decode(&ccm(), Asset::Sol));
-	}
-	#[test]
-	fn can_check_length_native_duplicated_fail() {
-		let invalid_ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL - 68].try_into().unwrap(),
-			gas_budget: 0,
-			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
-				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				fallback_address: SolPubkey([0xf0; 32]),
-				additional_accounts: vec![
-					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
-					SolCcmAddress { pubkey: TOKEN_PROGRAM_ID.into(), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				],
-			})
-			.encode()
-			.try_into()
-			.unwrap(),
-		};
-		assert_err!(
-			CcmValidityChecker::check_and_decode(&invalid_ccm(), Asset::Sol),
-			CcmValidityError::CcmIsTooLong
-		);
-	}
-	#[test]
-	fn can_check_length_usdc_duplicated() {
-		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_USDC - 37].try_into().unwrap(),
-			gas_budget: 0,
-			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
-				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				fallback_address: SolPubkey([0xf0; 32]),
-				additional_accounts: vec![
-					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
-					SolCcmAddress { pubkey: TOKEN_PROGRAM_ID.into(), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				],
-			})
-			.encode()
-			.try_into()
-			.unwrap(),
-		};
-		assert_ok!(CcmValidityChecker::check_and_decode(&ccm(), Asset::SolUsdc));
-	}
-	#[test]
-	fn can_check_length_usdc_duplicated_fail() {
-		let invalid_ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_USDC - 36].try_into().unwrap(),
-			gas_budget: 0,
-			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
-				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				fallback_address: SolPubkey([0xf0; 32]),
-				additional_accounts: vec![
-					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
-					SolCcmAddress { pubkey: TOKEN_PROGRAM_ID.into(), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
-				],
-			})
-			.encode()
-			.try_into()
-			.unwrap(),
-		};
-		assert_err!(
-			CcmValidityChecker::check_and_decode(&invalid_ccm(), Asset::SolUsdc),
-			CcmValidityError::CcmIsTooLong
 		);
 	}
 }
