@@ -2198,6 +2198,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		}: VaultDepositWitness<T, I>,
 	) {
+		if let Some(Beneficiary { account, .. }) = broker_fee.clone() {
+			if !T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker) {
+				AbortedVaultTransaction::<T, I>::insert(&tx_id, ());
+				return;
+			}
+		}
+
 		let destination_address_internal =
 			match T::AddressConverter::decode_and_validate_address_for_asset(
 				destination_address.clone(),
