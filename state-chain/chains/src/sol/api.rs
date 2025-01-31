@@ -632,7 +632,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 	fn new_unsigned(
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
-		source_address: Option<ForeignChainAddress>,
+		_source_address: Option<ForeignChainAddress>,
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
@@ -640,7 +640,9 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		Self::ccm_transfer(
 			transfer_param,
 			source_chain,
-			source_address,
+			// Hardcoding this to None to gain extra bytes in Solana.
+			// Revert this when we implement versioned Transactions.
+			None,
 			gas_budget,
 			message,
 			ccm_additional_data,
