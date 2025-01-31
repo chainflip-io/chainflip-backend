@@ -15,6 +15,7 @@
 // is processed.
 
 use core::ops::RangeInclusive;
+use std::collections::BTreeMap;
 
 use super::{
 	mocks::{Check, TestSetup},
@@ -24,11 +25,7 @@ use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::ChainProgress,
-		block_witnesser::{
-			primitives::ChainProgressInner,
-			state_machine::{BWProcessorTypes, BlockWitnesserProcessor},
-			*,
-		},
+		block_witnesser::{state_machine::BWProcessorTypes, *},
 		state_machine::{
 			core::{ConstantIndex, Hook},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
@@ -36,7 +33,7 @@ use crate::{
 	},
 	vote_storage,
 };
-use cf_chains::{mocks::MockEthereum, Chain};
+use cf_chains::{btc::BlockNumber, mocks::MockEthereum, Chain};
 use codec::{Decode, Encode, MaxEncodedLen};
 use consensus::BWConsensus;
 use primitives::SafeModeStatus;
@@ -214,10 +211,23 @@ impl BWTypes for MockDepositChannelWitnessingDefinition {
 	type ElectionProperties = ElectionProperties;
 	type ElectionPropertiesHook = MockGenerateElectionHook<u64, Properties>;
 	type SafeModeEnabledHook = MockSafemodeEnabledHook;
-	type BlockProcessor = ();
 	type BWProcessorTypes = ();
 }
-#[derive(Default)]
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
 pub struct MockRulesHook {}
 impl Hook<(u64, u64, Vec<u8>), std::vec::Vec<()>> for MockRulesHook {
 	fn run(&self, _input: (u64, u64, Vec<u8>)) -> Vec<()> {
@@ -225,10 +235,82 @@ impl Hook<(u64, u64, Vec<u8>), std::vec::Vec<()>> for MockRulesHook {
 	}
 }
 
-#[derive(Default)]
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
 pub struct MockExecuteHook {}
 impl Hook<(), ()> for MockExecuteHook {
 	fn run(&self, _input: ()) {
+		todo!()
+	}
+}
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
+pub struct MockCleanOldHook {}
+impl
+	Hook<
+		(
+			&mut BTreeMap<BlockNumber, (Vec<u8>, BlockNumber)>,
+			&mut BTreeMap<BlockNumber, Vec<()>>,
+			BlockNumber,
+		),
+		(),
+	> for MockCleanOldHook
+{
+	fn run(
+		&self,
+		(_blocks_data, _reorg_events, _last_height): (
+			&mut BTreeMap<BlockNumber, (BlockData, BlockNumber)>,
+			&mut BTreeMap<BlockNumber, Vec<()>>,
+			BlockNumber,
+		),
+	) {
+		todo!()
+	}
+}
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
+pub struct MockDedupEventsHook {}
+impl Hook<Vec<()>, Vec<()>> for MockDedupEventsHook {
+	fn run(&self, _events: Vec<()>) -> Vec<()> {
 		todo!()
 	}
 }
@@ -238,38 +320,8 @@ impl BWProcessorTypes for () {
 	type Event = ();
 	type Rules = MockRulesHook;
 	type Execute = MockExecuteHook;
-}
-impl BlockWitnesserProcessor<()> for () {
-	fn process_block_data(
-		&mut self,
-		_chain_progress: ChainProgressInner<<() as BWProcessorTypes>::ChainBlockNumber>,
-	) -> Vec<<() as BWProcessorTypes>::Event> {
-		todo!()
-	}
-	fn insert(
-		&mut self,
-		_n: <() as BWProcessorTypes>::ChainBlockNumber,
-		_block_data: <() as BWProcessorTypes>::BlockData,
-	) {
-		todo!()
-	}
-	fn clean_old(&mut self, _n: <() as BWProcessorTypes>::ChainBlockNumber) {
-		todo!()
-	}
-	fn process_rules(
-		&mut self,
-		_last_height: <() as BWProcessorTypes>::ChainBlockNumber,
-	) -> Vec<<() as BWProcessorTypes>::Event> {
-		todo!()
-	}
-	fn process_rules_for_age_and_block(
-		&self,
-		_block: <() as BWProcessorTypes>::ChainBlockNumber,
-		_age: <() as BWProcessorTypes>::ChainBlockNumber,
-		_data: &<() as BWProcessorTypes>::BlockData,
-	) -> Vec<<() as BWProcessorTypes>::Event> {
-		todo!()
-	}
+	type CleanOld = MockCleanOldHook;
+	type DedupEvents = MockDedupEventsHook;
 }
 
 /// Associating the ES related types to the struct

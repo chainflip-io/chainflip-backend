@@ -5,6 +5,7 @@ use sp_core::bounded::alloc::collections::BTreeSet;
 use sp_std::vec::Vec;
 // use crate::mock::pallet_cf_elections;
 
+pub mod block_processor;
 pub mod consensus;
 pub mod helpers;
 pub mod primitives;

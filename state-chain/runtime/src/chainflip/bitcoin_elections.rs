@@ -65,6 +65,8 @@ use pallet_cf_elections::electoral_systems::{
 	},
 };
 use sp_std::{vec, vec::Vec};
+use crate::chainflip::bitcoin_block_processor::BlockWitnessingProcessorDefinition;
+use cf_chains::btc::BlockNumber;
 
 use sp_std::vec::Vec;
 
@@ -238,7 +240,6 @@ impl BWTypes for BitcoinDepositChannelWitnessingDefinition {
 	type ElectionPropertiesHook = BitcoinDepositChannelWitnessingGenerator;
 	type SafeModeEnabledHook = BitcoinSafemodeEnabledHook;
 	type BWProcessorTypes = BlockWitnessingProcessorDefinition;
-	type BlockProcessor = DepositChannelWitnessingProcessor<Self::BWProcessorTypes>;
 }
 
 /// Associating the ES related types to the struct

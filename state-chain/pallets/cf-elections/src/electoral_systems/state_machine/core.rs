@@ -38,6 +38,33 @@ pub mod hook_test_utils {
 			self.state.clone()
 		}
 	}
+
+	#[derive(
+		Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen,
+	)]
+	pub struct IncreasingHook<A, B> {
+		pub counter: u32,
+		pub state: B,
+		pub _phantom: sp_std::marker::PhantomData<A>,
+	}
+
+	impl<A, B> IncreasingHook<A, B> {
+		pub fn new(counter_value: u32, state: B) -> Self {
+			Self { counter: counter_value, state, _phantom: Default::default() }
+		}
+	}
+
+	impl<A, B: Default> Default for IncreasingHook<A, B> {
+		fn default() -> Self {
+			Self::new(Default::default(), Default::default())
+		}
+	}
+
+	impl<A, B: Clone> Hook<A, B> for IncreasingHook<A, B> {
+		fn run(&self, _input: A) -> B {
+			self.state.clone()
+		}
+	}
 }
 
 /// A type which has an associated index type.
