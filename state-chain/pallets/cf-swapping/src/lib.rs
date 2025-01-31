@@ -686,11 +686,6 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
 		},
-		PrivateBrokerChannelCreatedAt {
-			broker_id: T::AccountId,
-			channel_id: ChannelId,
-			created_at: u32,
-		},
 		PrivateBrokerChannelClosed {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
@@ -703,6 +698,11 @@ pub mod pallet {
 		},
 		BrokerBondSet {
 			bond: T::Amount,
+		},
+		PrivateBrokerChannelCreatedAt {
+			broker_id: T::AccountId,
+			channel_id: ChannelId,
+			created_at: u32,
 		},
 	}
 	#[pallet::error]
