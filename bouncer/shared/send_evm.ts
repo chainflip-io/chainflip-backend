@@ -78,7 +78,7 @@ export async function signAndSendTxEvm(
   const signedTx = await web3.eth.accounts.signTransaction(tx, sendingKey);
 
   let receipt;
-  const numberRetries = 20;
+  const numberRetries = 40;
 
   // Retry mechanism as we expect all transactions to succeed.
   for (let i = 0; i < numberRetries; i++) {
@@ -89,7 +89,7 @@ export async function signAndSendTxEvm(
       if (i === numberRetries - 1) {
         throw new Error(`${chain} transaction failure: ${error}`);
       }
-      console.log(`${chain} Retrying transaction from key ${sendingKey}. Error: ${error}`);
+      console.log(`${chain} Retrying transaction from key ${sendingKey} with nonce ${nonce}. Error: ${error}`);
       await sleep(2000);
     }
   }

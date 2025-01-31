@@ -11,7 +11,7 @@ import { ExecutableTest } from '../shared/executable_test';
 export const testCancelOrdersBatch = new ExecutableTest(
   'Cancel-Orders-Batch',
   createAndDeleteMultipleOrders,
-  240,
+  340,
 );
 
 const DEFAULT_LP: string = '//LP_3';

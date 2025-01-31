@@ -47,12 +47,12 @@ export async function executeEvmVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  // for evm chains
-  privateKey?: string,
   brokerFees: {
     account: string;
     commissionBps: number;
   },
+  // for evm chains
+  privateKey: string,
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
   boostFeeBps?: number,
@@ -133,6 +133,8 @@ export async function executeEvmVaultSwapViaBrokerApi(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  // for evm chains
+  privateKey: string,
   brokerCommissionBps: number = 0,
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
@@ -155,7 +157,7 @@ export async function executeEvmVaultSwapViaBrokerApi(
     minPriceX128: '0',
   };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
-  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset, privateKey));
 
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.

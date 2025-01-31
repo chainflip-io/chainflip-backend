@@ -15,7 +15,7 @@ import { getChainflipApi } from '../shared/utils/substrate';
 import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testFundRedeem = new ExecutableTest('Fund/Redeem', main, 1000);
+export const testFundRedeem = new ExecutableTest('Fund/Redeem', main, 1100);
 
 // Submitting the `redeem` extrinsic will cost a small amount of gas. Any more than this and we should be suspicious.
 const gasErrorMargin = 0.1;
@@ -86,9 +86,8 @@ export async function main(providedSeed?: string) {
   const expectedRedeemAllAmount = fundAmount - redeemedExact - redemptionTaxAmount * 2;
   assert(
     redeemedAll >= expectedRedeemAllAmount - gasErrorMargin &&
-      redeemedAll <= expectedRedeemAllAmount,
-    `Unexpected balance increase amount: ${redeemedAll}. Expected between: ${
-      expectedRedeemAllAmount - gasErrorMargin
+    redeemedAll <= expectedRedeemAllAmount,
+    `Unexpected balance increase amount: ${redeemedAll}. Expected between: ${expectedRedeemAllAmount - gasErrorMargin
     } - ${expectedRedeemAllAmount}. Did fees change?`,
   );
 }

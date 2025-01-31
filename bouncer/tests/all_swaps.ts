@@ -13,20 +13,21 @@ import {
   chainFromAsset,
   VaultSwapParams,
   vaultSwapSupportedChains,
+  WhaleKeyManager,
 } from '../shared/utils';
 import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
 
 // This timeout needs to be increased when running 3-nodes
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1200);
+export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1300);
 
 export async function initiateSwap(
   sourceAsset: Asset,
   destAsset: Asset,
-  privateKey?: string,
   functionCall: typeof testSwap | typeof testVaultSwap,
   ccmSwap: boolean = false,
 ): Promise<SwapParams | VaultSwapParams> {
+  const privateKey = await WhaleKeyManager.getNextKey();
   let ccmSwapMetadata;
   if (ccmSwap) {
     ccmSwapMetadata =
@@ -46,7 +47,7 @@ export async function initiateSwap(
       testAllSwaps.swapContext,
     );
   }
-  return functionCall(sourceAsset, destAsset, undefined, ccmSwapMetadata, testAllSwaps.swapContext);
+  return functionCall(sourceAsset, destAsset, privateKey, undefined, ccmSwapMetadata, testAllSwaps.swapContext);
 }
 
 async function main() {

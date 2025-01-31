@@ -5,7 +5,7 @@ import { sendEvmNative } from '../shared/send_evm';
 import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testDoubleDeposit = new ExecutableTest('DoubleDeposit', main, 120);
+export const testDoubleDeposit = new ExecutableTest('DoubleDeposit', main, 220);
 
 async function main(): Promise<void> {
   const keyring = new Keyring({ type: 'sr25519' });

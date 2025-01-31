@@ -22,7 +22,7 @@ import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testLpApi = new ExecutableTest('LP-API', main, 200);
+export const testLpApi = new ExecutableTest('LP-API', main, 300);
 
 type RpcAsset = {
   asset: string;

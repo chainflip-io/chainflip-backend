@@ -736,11 +736,12 @@ export class WhaleKeyManager {
           // divide the balance by the number of wallets
           const balance = new BigNumber(Math.floor(Number(balances.get(asset))));
           console.log(`Balance of whale key: ${balance}`);
-          // subtract 1 so the root wallet still has some funds - this is a workaround because
-          // we run some bouncer tests in different scripts.
-          const toSend = (balance.div(this.NUMBER_OF_WALLETS - 1)).toString();
-          console.log(`Whale key manager: Sending from root whale ${toSend} ${asset} to ${wallet.address}`);
-          await send(asset, wallet.address, toSend, true, rootWallet.privateKey);
+          // divide by an extra one so the root wallet still has some funds - this is a workaround because
+          // we run some bouncer tests in different scripts, otherwise we could always use this WhaleKeyManager
+          const toSend = (balance.div(this.NUMBER_OF_WALLETS + 1)).toString();
+          const toSendFloored = toSend.split('.')[0];
+          console.log(`Whale key manager: Sending from root whale ${toSendFloored} ${asset} to ${wallet.address}`);
+          await send(asset, wallet.address, toSendFloored, true, rootWallet.privateKey);
           console.log(`Sent ${toSend} ${asset} to ${wallet.address}`);
         }
 

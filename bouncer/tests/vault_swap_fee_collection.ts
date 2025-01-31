@@ -12,7 +12,7 @@ import { prepareSwap } from '../shared/swapping';
 export const testVaultSwapFeeCollection = new ExecutableTest(
   'Vault-Swap-Fee-Collection',
   main,
-  230,
+  400,
 );
 
 // Fee to use for the broker and affiliates

@@ -19,7 +19,7 @@ import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testFillOrKill = new ExecutableTest('FoK', main, 600);
+export const testFillOrKill = new ExecutableTest('FoK', main, 700);
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVault = false) {

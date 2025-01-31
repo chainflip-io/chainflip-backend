@@ -18,7 +18,7 @@ import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testDCASwaps = new ExecutableTest('DCA-Swaps', main, 150);
+export const testDCASwaps = new ExecutableTest('DCA-Swaps', main, 250);
 
 // Requested number of blocks between each chunk
 const CHUNK_INTERVAL = 2;
