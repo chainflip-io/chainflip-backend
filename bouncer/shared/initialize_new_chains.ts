@@ -36,6 +36,7 @@ export async function initializeSolanaChain() {
 export async function initializeArbitrumContracts(
   arbClient: Web3,
   arbKey: { pubKeyX: string; pubKeyYParity: string },
+  privateKey: string,
 ) {
   const keyManagerAddress = getContractAddress('Arbitrum', 'KEY_MANAGER');
 
@@ -50,7 +51,7 @@ export async function initializeArbitrumContracts(
       pubKeyYParity: arbKey.pubKeyYParity === 'Odd' ? 1 : 0,
     })
     .encodeABI();
-  await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData);
+  await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData, privateKey);
 }
 
 function numberToBuffer(bytes: number, number: number): Buffer {

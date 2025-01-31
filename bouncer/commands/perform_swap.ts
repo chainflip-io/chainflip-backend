@@ -7,7 +7,7 @@ async function main() {
   const srcCcy = parseAssetString(process.argv[2]);
   const dstCcy = parseAssetString(process.argv[3]);
   const address = process.argv[4];
-  await performSwap(srcCcy as InternalAsset, dstCcy as InternalAsset, address);
+  await performSwap(srcCcy as InternalAsset, dstCcy as InternalAsset, address, undefined);
   process.exit(0);
 }
 

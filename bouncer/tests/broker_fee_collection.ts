@@ -17,6 +17,7 @@ import {
   observeSwapRequested,
   TransactionOrigin,
   defaultAssetAmounts,
+  WhaleKeyManager,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
@@ -114,7 +115,8 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
     SwapRequestType.Regular,
   );
 
-  await send(inputAsset, depositAddress, rawDepositForSwapAmount, true /* log */);
+  const privateKey = await WhaleKeyManager.getNextKey();
+  await send(inputAsset, depositAddress, rawDepositForSwapAmount, true, privateKey);
 
   const swapRequestedEvent = (await swapRequestedHandle).data;
 
@@ -137,7 +139,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   testBrokerFeeCollection.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
     depositAmountAfterIngressFee >= 0 &&
-      depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+    depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
     `Unexpected ${inputAsset} deposit amount ${depositAmountAfterIngressFee},
     }`,
   );

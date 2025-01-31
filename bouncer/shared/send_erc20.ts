@@ -12,7 +12,7 @@ export async function sendErc20(
   contractAddress: string,
   amount: string,
   log = true,
-  evmRootWhale = false,
+  privateKey?: string,
 ) {
   const web3 = new Web3(getEvmEndpoint(chain));
 
@@ -27,5 +27,5 @@ export async function sendErc20(
 
   if (log) console.log('Transferring ' + amount + ' ' + symbol + ' to ' + destinationAddress);
 
-  await signAndSendTxEvm(chain, contractAddress, '0', txData, undefined, log, evmRootWhale);
+  await signAndSendTxEvm(chain, contractAddress, '0', txData, privateKey, undefined, log);
 }

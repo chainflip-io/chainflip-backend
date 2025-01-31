@@ -19,16 +19,22 @@ import { sendSolUsdc } from './send_solusdc';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-export async function send(asset: Asset, address: string, amount?: string, log = true, evmRootWhale = false) {
+export async function send(asset: Asset, address: string, amount?: string, log = true, privateKey?: string) {
+  const chain = chainFromAsset(asset);
+  if ((chain === 'Ethereum' || chain === 'Arbitrum') && !privateKey) {
+    throw new Error('No private key provided for EVM asset');
+  }
+
+
   switch (asset) {
     case 'Btc':
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'Eth':
-      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log, evmRootWhale);
+      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log, privateKey);
       break;
     case 'ArbEth':
-      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log, evmRootWhale);
+      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log, privateKey);
       break;
     case 'Dot':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
@@ -46,7 +52,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
         log,
-        evmRootWhale,
+        privateKey,
       );
       break;
     }
@@ -58,7 +64,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
         log,
-        evmRootWhale,
+        privateKey,
       );
       break;
     }
@@ -70,7 +76,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
   }
 }
 
-export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: string) {
+export async function sendViaCfTester(asset: Asset, toAddress: string, privateKey: string, amount?: string) {
   const chain = chainFromAsset(asset);
 
   const web3 = new Web3(getEvmEndpoint(chain));
@@ -88,7 +94,7 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
       break;
     case 'Usdc':
     case 'Flip': {
-      await approveErc20(asset, cfTesterAddress, amount ?? defaultAssetAmounts(asset));
+      await approveErc20(asset, cfTesterAddress, amount ?? defaultAssetAmounts(asset), privateKey);
       txData = cfTesterContract.methods
         .transferToken(
           toAddress,
@@ -102,5 +108,5 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
       throw new Error(`Unsupported asset type: ${asset}`);
   }
 
-  await signAndSendTxEvm(chain, cfTesterAddress, value, txData);
+  await signAndSendTxEvm(chain, cfTesterAddress, value, txData, privateKey);
 }

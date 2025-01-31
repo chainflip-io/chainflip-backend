@@ -9,6 +9,7 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
+  WhaleKeyManager,
 } from '../shared/utils';
 import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
@@ -67,7 +68,8 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
     );
 
     // Deposit the asset
-    await send(inputAsset, depositAddress, amount.toString());
+    const privateKey = await WhaleKeyManager.getNextKey();
+    await send(inputAsset, depositAddress, amount.toString(), undefined, privateKey);
     testFillOrKill.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
   } else {
     testFillOrKill.log(

@@ -7,8 +7,8 @@ import {
   hexPubkeyToFlipAddress,
   decodeFlipAddressForContract,
   getEvmEndpoint,
-  getWhaleKey,
   assetDecimals,
+  WhaleKeyManager,
 } from './utils';
 import { amountToFineAmount } from '../shared/utils';
 import { approveErc20 } from './approve_erc20';
@@ -16,10 +16,13 @@ import { observeEvent } from './utils/substrate';
 
 export async function fundFlip(scAddress: string, flipAmount: string) {
   // Doing effectively infinite approvals to prevent race conditions between tests
+  const whaleKey = await WhaleKeyManager.getNextKey();
+
   await approveErc20(
     'Flip',
     getContractAddress('Ethereum', 'GATEWAY'),
     '100000000000000000000000000',
+    whaleKey,
   );
 
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals('Flip'));
@@ -28,7 +31,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
 
   const gatewayContractAddress = getContractAddress('Ethereum', 'GATEWAY');
 
-  const whaleKey = getWhaleKey('Ethereum');
+
   console.log('Approving ' + flipAmount + ' Flip to State Chain Gateway');
 
   const wallet = new Wallet(whaleKey, ethers.getDefaultProvider(getEvmEndpoint('Ethereum')));
@@ -40,7 +43,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
     flipContractAddress,
   } as const;
   const txOptions = {
-    nonce: await getNextEvmNonce('Ethereum'),
+    nonce: await getNextEvmNonce('Ethereum', whaleKey),
   } as const;
 
   console.log('Funding ' + flipAmount + ' Flip to ' + scAddress);
@@ -58,11 +61,11 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
 
   console.log(
     'Transaction complete, tx_hash: ' +
-      receipt2.hash +
-      ' blockNumber: ' +
-      receipt2.blockNumber +
-      ' blockHash: ' +
-      receipt2.blockHash,
+    receipt2.hash +
+    ' blockNumber: ' +
+    receipt2.blockNumber +
+    ' blockHash: ' +
+    receipt2.blockHash,
   );
   await observeEvent('funding:Funded', {
     test: (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,

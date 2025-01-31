@@ -17,6 +17,7 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
+  WhaleKeyManager,
 } from '../shared/utils';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { getCFTesterAbi } from '../shared/contract_interfaces';
@@ -157,7 +158,8 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
       SwapRequestType.Regular,
     );
 
-    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+    const privateKey = await WhaleKeyManager.getNextKey();
+    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset), undefined, privateKey);
     await swapRequestedHandle;
   }
 
@@ -171,7 +173,8 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
       SwapRequestType.Regular,
     );
 
-    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+    const privateKey = await WhaleKeyManager.getNextKey();
+    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset), undefined, privateKey);
     await swapRequestedHandle;
   }
 }

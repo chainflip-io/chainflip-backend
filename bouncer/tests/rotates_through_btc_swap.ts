@@ -36,6 +36,7 @@ async function rotatesThroughBtcSwap() {
     undefined,
     undefined,
     undefined,
+    undefined,
     true,
     testRotatesThroughBtcSwap.swapContext,
   );

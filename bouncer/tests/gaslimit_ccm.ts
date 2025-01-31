@@ -12,6 +12,7 @@ import {
   sleep,
   SwapRequestType,
   TransactionOrigin,
+  WhaleKeyManager,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
@@ -366,7 +367,8 @@ async function spamChain(chain: Chain) {
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum':
-      spamEvm('Ethereum', 500, () => spam);
+      const privateKey = await WhaleKeyManager.getNextKey();
+      spamEvm('Ethereum', privateKey, 500, () => spam);
       break;
     case 'Solana':
       spamSolana(getChainMinFee('Solana'), 100, () => spam);

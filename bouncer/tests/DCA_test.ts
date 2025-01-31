@@ -7,6 +7,8 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
+  chainFromAsset,
+  WhaleKeyManager,
 } from '../shared/utils';
 import { send } from '../shared/send';
 import { observeEvent, observeEvents } from '../shared/utils/substrate';
@@ -71,7 +73,12 @@ async function testDCASwap(
     );
 
     // Deposit the asset
-    await send(inputAsset, swapRequest.depositAddress, amount.toString());
+    let privateKey = undefined;
+    const chain = chainFromAsset(inputAsset);
+    if (chain === 'Ethereum' || chain === 'Arbitrum') {
+      privateKey = await WhaleKeyManager.getNextKey();
+    }
+    await send(inputAsset, swapRequest.depositAddress, amount.toString(), undefined, privateKey);
     testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
     const { transactionId } = await executeVaultSwap(

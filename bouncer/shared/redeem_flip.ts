@@ -12,8 +12,8 @@ import {
   observeEVMEvent,
   chainFromAsset,
   getEvmEndpoint,
-  getWhaleKey,
   assetDecimals,
+  WhaleKeyManager,
   createStateChainKeypair,
 } from './utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
@@ -38,7 +38,8 @@ export async function redeemFlip(
   await using chainflip = await getChainflipApi();
   const flipWallet = createStateChainKeypair('//' + flipSeed);
   const accountIdHex: HexString = `0x${Buffer.from(flipWallet.publicKey).toString('hex')}`;
-  const ethWallet = new Wallet(getWhaleKey('Ethereum')).connect(
+  const whaleKey = await WhaleKeyManager.getNextKey();;
+  const ethWallet = new Wallet(whaleKey).connect(
     ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
   );
   const networkOptions = {
@@ -85,7 +86,7 @@ export async function redeemFlip(
 
   console.log(`Executing redemption`);
 
-  const nonce = await getNextEvmNonce('Ethereum');
+  const nonce = await getNextEvmNonce('Ethereum', whaleKey);
 
   const redemptionExecutedHandle = observeEvent('funding:RedemptionSettled', {
     test: (event) => event.data[0] === flipWallet.address,

@@ -6,7 +6,6 @@ import {
   ethNonceMutex,
   arbNonceMutex,
   getEvmEndpoint,
-  getWhaleKey,
   sleep,
   assetDecimals,
   getContractAddress,
@@ -20,10 +19,8 @@ const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
 
 export async function getNextEvmNonce(
   chain: Chain,
+  privateKey: string,
   callback?: (nextNonce: number) => ReturnType<typeof approveVault>,
-  // THIS IS BROKEN BECAUSE I NEED TO SUPPLY A NOTHING CALLBACK, NOT PRIVATE KEY AS SECOND ARGUMENT
-  // Otherwise use the root whale key
-  privateKey?: string,
 ): Promise<number> {
   let mutex;
   switch (chain) {
@@ -40,8 +37,7 @@ export async function getNextEvmNonce(
   return mutex.runExclusive(async () => {
     if (nextEvmNonce[chain] === undefined) {
       const web3 = new Web3(getEvmEndpoint(chain));
-      const whaleKey = privateKey ?? getWhaleKey(chain);
-      const address = web3.eth.accounts.privateKeyToAccount(whaleKey).address;
+      const address = web3.eth.accounts.privateKeyToAccount(privateKey).address;
       const txCount = await web3.eth.getTransactionCount(address);
       nextEvmNonce[chain] = txCount;
     }
@@ -58,18 +54,19 @@ export async function signAndSendTxEvm(
   to: string,
   value?: string,
   data?: string,
+  privateKey?: string,
   gas = chain === 'Arbitrum' ? 5000000 : 200000,
   log = true,
-  evmRootWhale = false,
 ) {
   const web3 = new Web3(getEvmEndpoint(chain));
-  const whaleKey = evmRootWhale ? getWhaleKey(chain) : await WhaleKeyManager.getNextKey();
+  const sendingKey = privateKey ?? await WhaleKeyManager.getNextKey();
 
   // FIX: This is not the correct nonce - we need to get the nonce from the whale key manager
-  const nonce = await getNextEvmNonce(chain, whaleKey);
+  const nonce = await getNextEvmNonce(chain, sendingKey);
+  console.log("Nonce: ", nonce);
   const tx = { to, data, gas, nonce, value };
 
-  const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
+  const signedTx = await web3.eth.accounts.signTransaction(tx, sendingKey);
 
   let receipt;
   const numberRetries = 20;
@@ -109,13 +106,13 @@ export async function sendEvmNative(
   evmAddress: string,
   ethAmount: string,
   log = true,
-  evmRootWhale = false,
+  privateKey?: string,
 ) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals('Eth'));
-  await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, undefined, log, evmRootWhale);
+  await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, privateKey, undefined, log);
 }
 
-export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => boolean) {
+export async function spamEvm(chain: Chain, privateKey: string, periodMilisec: number, spam?: () => boolean) {
   const continueSpam = spam ?? (() => true);
 
   while (continueSpam()) {
@@ -125,8 +122,7 @@ export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => 
       '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
       '1',
       undefined,
-      undefined,
-      false,
+      privateKey,
     );
     await sleep(periodMilisec);
   }

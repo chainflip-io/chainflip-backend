@@ -31,6 +31,7 @@ import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
+import { WhaleKeyManager } from './utils';
 import { execWithLog } from './utils/exec_with_log';
 import { send } from './send';
 
@@ -669,18 +670,13 @@ export function getSolWhaleKeyPair(): Keypair {
   return Keypair.fromSecretKey(new Uint8Array(secretKey));
 }
 
-// Root whale key.
-export function getWhaleKey(chain: Chain): string {
-  switch (chain) {
-    case 'Ethereum':
-    case 'Arbitrum':
-      return (
-        process.env.ETH_USDC_WHALE ??
-        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
-      );
-    default:
-      throw new Error(`${chain} does not have a whale key`);
-  }
+// Root whale key - private. This should never be used directly,
+// since all it's funds are used in the WhaleKeyManager
+export function getEvmRootWhaleKey(): string {
+  return (
+    process.env.ETH_USDC_WHALE ??
+    '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+  );
 }
 
 type WalletConnections = {
@@ -743,7 +739,7 @@ export class WhaleKeyManager {
           console.log(`Balance of whale key: ${balance}`);
           const toSend = (balance.div(this.NUMBER_OF_WALLETS)).toString();
           console.log(`Whale key manager: Sending from root whale ${toSend} ${asset} to ${wallet.address}`);
-          await send(asset, wallet.address, toSend, true, true);
+          await send(asset, wallet.address, toSend, true, rootWallet.privateKey);
           console.log(`Sent ${toSend} ${asset} to ${wallet.address}`);
         }
 
@@ -768,9 +764,9 @@ export class WhaleKeyManager {
     return key;
   }
 
-  getRootKey(chain: Chain): string {
+  public static getRootKey(): string {
     // Don't inline to not break things for now
-    return getWhaleKey(chain);
+    return getEvmRootWhaleKey();
   }
 }
 
@@ -1321,8 +1317,9 @@ export async function createEvmWalletAndFund(asset: Asset): Promise<HDNodeWallet
   if (mnemonic === '') {
     throw new Error('Failed to create random mnemonic');
   }
+  const privateKey = await WhaleKeyManager.getNextKey();
   const wallet = Wallet.fromPhrase(mnemonic).connect(getDefaultProvider(getEvmEndpoint(chain)));
-  await send(chainGasAsset(chain) as SDKAsset, wallet.address, undefined, false);
-  await send(asset, wallet.address, undefined, false);
+  await send(chainGasAsset(chain) as SDKAsset, wallet.address, undefined, false, privateKey);
+  await send(asset, wallet.address, undefined, false, privateKey);
   return wallet;
 }

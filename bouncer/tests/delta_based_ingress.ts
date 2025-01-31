@@ -107,6 +107,7 @@ async function deltaBasedIngressTest(
     `[${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit]`,
     undefined,
     undefined,
+    undefined,
     amountSecondDeposit,
   );
 

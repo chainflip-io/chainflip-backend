@@ -7,7 +7,7 @@ import { getErc20abi } from './contract_interfaces';
 
 const erc20abi = await getErc20abi();
 
-export async function approveErc20(asset: Asset, toAddress: string, amount: string) {
+export async function approveErc20(asset: Asset, toAddress: string, amount: string, privateKey: string) {
   const chain = chainFromAsset(asset);
 
   const web3 = new Web3(getEvmEndpoint(chain));
@@ -23,5 +23,5 @@ export async function approveErc20(asset: Asset, toAddress: string, amount: stri
 
   console.log('Approving ' + amount + ' ' + asset + ' to ' + toAddress);
 
-  await signAndSendTxEvm(chain, tokenContractAddress, '0', txData);
+  await signAndSendTxEvm(chain, tokenContractAddress, '0', txData, privateKey);
 }

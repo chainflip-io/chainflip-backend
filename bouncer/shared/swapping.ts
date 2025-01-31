@@ -9,6 +9,7 @@ import {
   getContractAddress,
   ccmSupportedChains,
   solVersionedCcmAdditionalDataCodec,
+  WhaleKeyManager,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -260,10 +261,13 @@ export async function testSwap(
     swapContext,
   );
 
+  const privateKey = await WhaleKeyManager.getNextKey();
+
   return performSwap(
     sourceAsset,
     destAsset,
     destAddress,
+    privateKey,
     tag,
     messageMetadata,
     undefined,

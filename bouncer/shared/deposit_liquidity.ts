@@ -21,6 +21,8 @@ export async function depositLiquidity(
   amount: number,
   waitForFinalization = false,
   lpKey?: string,
+  // where the funds are coming from, only used for EVM assets
+  sendFromKey?: string,
 ) {
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
@@ -74,7 +76,7 @@ export async function depositLiquidity(
     finalized: waitForFinalization,
   }).event;
 
-  await send(ccy, ingressAddress, String(amount));
+  await send(ccy, ingressAddress, String(amount), false, sendFromKey);
 
   return eventHandle;
 }

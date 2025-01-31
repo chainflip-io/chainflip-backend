@@ -1,7 +1,8 @@
 import { createLpPool } from '../shared/create_lp_pool';
 import { depositLiquidity } from './deposit_liquidity';
 import { rangeOrder } from '../shared/range_order';
-import { Asset } from './utils';
+import { Asset, getEvmRootWhaleKey } from './utils';
+
 
 export const deposits = new Map<Asset, number>([
   ['Dot', 200000],
@@ -32,6 +33,8 @@ const price = new Map<Asset, number>([
 export async function setupSwaps(): Promise<void> {
   console.log('=== Setting up for swaps ===');
 
+  const evmRootWhaleKey = getEvmRootWhaleKey();
+
   await Promise.all([
     createLpPool('Eth', price.get('Eth')!),
     createLpPool('Dot', price.get('Dot')!),
@@ -45,27 +48,27 @@ export async function setupSwaps(): Promise<void> {
   ]);
 
   const lp1Deposits = Promise.all([
-    depositLiquidity('Usdc', deposits.get('Usdc')!, false, '//LP_1'),
-    depositLiquidity('Eth', deposits.get('Eth')!, false, '//LP_1'),
+    depositLiquidity('Usdc', deposits.get('Usdc')!, false, '//LP_1', evmRootWhaleKey),
+    depositLiquidity('Eth', deposits.get('Eth')!, false, '//LP_1', evmRootWhaleKey),
     depositLiquidity('Dot', deposits.get('Dot')!, false, '//LP_1'),
     depositLiquidity('Btc', deposits.get('Btc')!, false, '//LP_1'),
-    depositLiquidity('Flip', deposits.get('Flip')!, false, '//LP_1'),
-    depositLiquidity('Usdt', deposits.get('Usdt')!, false, '//LP_1'),
-    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, '//LP_1'),
-    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_1'),
+    depositLiquidity('Flip', deposits.get('Flip')!, false, '//LP_1', evmRootWhaleKey),
+    depositLiquidity('Usdt', deposits.get('Usdt')!, false, '//LP_1', evmRootWhaleKey),
+    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, '//LP_1', evmRootWhaleKey),
+    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_1', evmRootWhaleKey),
     depositLiquidity('Sol', deposits.get('Sol')!, false, '//LP_1'),
     depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, '//LP_1'),
   ]);
 
   const lpApiDeposits = Promise.all([
-    depositLiquidity('Usdc', 1000, false, '//LP_API'),
-    depositLiquidity('Eth', 100, false, '//LP_API'),
+    depositLiquidity('Usdc', 1000, false, '//LP_API', evmRootWhaleKey),
+    depositLiquidity('Eth', 100, false, '//LP_API', evmRootWhaleKey),
     depositLiquidity('Dot', 2000, false, '//LP_API'),
     depositLiquidity('Btc', 10, false, '//LP_API'),
-    depositLiquidity('Flip', 10000, false, '//LP_API'),
-    depositLiquidity('Usdt', 1000, false, '//LP_API'),
-    depositLiquidity('ArbEth', 10, false, '//LP_API'),
-    depositLiquidity('ArbUsdc', 1000, false, '//LP_API'),
+    depositLiquidity('Flip', 10000, false, '//LP_API', evmRootWhaleKey),
+    depositLiquidity('Usdt', 1000, false, '//LP_API', evmRootWhaleKey),
+    depositLiquidity('ArbEth', 10, false, '//LP_API', evmRootWhaleKey),
+    depositLiquidity('ArbUsdc', 1000, false, '//LP_API', evmRootWhaleKey),
     depositLiquidity('Sol', 500, false, '//LP_API'),
     depositLiquidity('SolUsdc', 1000, false, '//LP_API'),
   ]);

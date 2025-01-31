@@ -25,6 +25,7 @@ import {
   defaultAssetAmounts,
   newAddress,
   getContractAddress,
+  WhaleKeyManager,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
@@ -82,11 +83,11 @@ export async function requestNewSwap(
 
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
-          event.data.channelMetadata.message ===
-            (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
-          event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
-          event.data.channelMetadata.ccmAdditionalData ===
-            (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
+        event.data.channelMetadata.message ===
+        (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
+        event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
+        event.data.channelMetadata.ccmAdditionalData ===
+        (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
@@ -132,6 +133,8 @@ export enum SenderType {
 export async function doPerformSwap(
   { sourceAsset, destAsset, destAddress, depositAddress, channelId }: SwapParams,
   tag = '',
+  // only used for EVM chains at the moment
+  privateKey?: string,
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
   amount?: string,
@@ -153,9 +156,14 @@ export async function doPerformSwap(
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
     : Promise.resolve();
 
-  await (senderType === SenderType.Address
-    ? send(sourceAsset, depositAddress, amount, log)
-    : sendViaCfTester(sourceAsset, depositAddress));
+  if (senderType === SenderType.Address) {
+    await send(sourceAsset, depositAddress, amount, log, privateKey);
+  } else {
+    if (!privateKey) {
+      throw new Error('No private key provided');
+    }
+    await sendViaCfTester(sourceAsset, depositAddress, privateKey, amount);
+  }
 
   if (log) console.log(`${tag} Funded the address`);
 
@@ -191,6 +199,8 @@ export async function performSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  // Only EVM uses this private key at the moment
+  privateKey?: string,
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
@@ -203,12 +213,11 @@ export async function performSwap(
 
   if (log)
     console.log(
-      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
-        messageMetadata
-          ? messageMetadata.message.substring(0, 6) +
-            '...' +
-            messageMetadata.message.substring(messageMetadata.message.length - 4)
-          : ''
+      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${messageMetadata
+        ? messageMetadata.message.substring(0, 6) +
+        '...' +
+        messageMetadata.message.substring(messageMetadata.message.length - 4)
+        : ''
       }`,
     );
 
@@ -222,7 +231,7 @@ export async function performSwap(
     log,
   );
 
-  await doPerformSwap(swapParams, tag, messageMetadata, senderType, amount, log, swapContext);
+  await doPerformSwap(swapParams, tag, privateKey, messageMetadata, senderType, amount, log, swapContext);
 
   return swapParams;
 }
@@ -239,7 +248,12 @@ export async function performAndTrackSwap(
 
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 
-  await send(sourceAsset, swapParams.depositAddress, amount);
+  const chain = chainFromAsset(sourceAsset);
+  let privateKey = undefined;
+  if (chain === 'Ethereum' || chain === 'Arbitrum') {
+    privateKey = await WhaleKeyManager.getNextKey();
+  }
+  await send(sourceAsset, swapParams.depositAddress, amount, undefined, privateKey);
   console.log(`${tag} fund sent, waiting for the deposit to be witnessed..`);
 
   // SwapScheduled, SwapExecuted, SwapEgressScheduled, BatchBroadcastRequested
