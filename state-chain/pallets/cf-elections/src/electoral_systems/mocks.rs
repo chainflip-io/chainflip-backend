@@ -420,7 +420,8 @@ register_checks! {
 		);
 		assert!(
 			post_finalize.election_identifiers.is_empty(),
-			"Expected no elections after finalization.",
+			"Expected no elections after finalization, got: {:?}.",
+			post_finalize.election_identifiers,
 		);
 	},
 }

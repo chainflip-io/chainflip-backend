@@ -542,19 +542,6 @@ mod channel_closure {
 					Check::election_id_incremented(),
 				],
 			)
-			// A new election requires new votes, meaning we need to force consensus again.
-			.force_consensus_update(ConsensusStatus::Gained {
-				most_recent: None,
-				new: [(
-					DEFAULT_CHANNEL_ACCOUNT,
-					ChannelTotalIngressed {
-						amount: DEPOSIT_AMOUNT,
-						block_number: DEFAULT_CHANNEL_CLOSE_BLOCK,
-					},
-				)]
-				.into_iter()
-				.collect(),
-			})
 			// Chain tracking reaches close block, channel is closed.
 			.test_on_finalize(
 				&DEFAULT_CHANNEL_CLOSE_BLOCK,
@@ -1004,7 +991,6 @@ fn pending_ingresses_update_with_consensus() {
 							deposit_channel_pending.total_ingressed,
 					),
 				]),
-				Check::election_id_incremented(),
 				Check::ended_at_state(Default::default()),
 			],
 		);
@@ -1043,7 +1029,11 @@ mod multiple_deposits {
 				new: BTreeMap::from_iter([(DEPOSIT_ADDRESS, TOTAL_1)]),
 			})
 			// Before chain tracking reaches the ingress block, nothing should be ingressed.
-			.test_on_finalize(&{ TOTAL_1.block_number - 1 }, |_| {}, [Check::ingressed(vec![])])
+			.test_on_finalize(
+				&{ TOTAL_1.block_number - 1 },
+				|_| {},
+				[Check::ingressed(vec![]), Check::election_id_incremented()],
+			)
 			// Simulate a second deposit at a later block.
 			.force_consensus_update(ConsensusStatus::Gained {
 				most_recent: Some(BTreeMap::from_iter([(DEPOSIT_ADDRESS, TOTAL_1)])),
@@ -1054,20 +1044,20 @@ mod multiple_deposits {
 			.test_on_finalize(
 				&{ TOTAL_2.block_number - 1 },
 				|_| {},
-				[Check::ingressed(vec![(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_1.amount)])],
+				[
+					Check::ingressed(vec![(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_1.amount)]),
+					Check::election_id_incremented(),
+				],
 			)
 			// Finalize with chain tracking at the block of the second deposit. Both should be
 			// ingressed.
 			.test_on_finalize(
 				&TOTAL_2.block_number,
 				|_| {},
-				[
-					Check::ingressed(vec![
-						(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_1.amount),
-						(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_2.amount - TOTAL_1.amount),
-					]),
-					Check::election_id_incremented(),
-				],
+				[Check::ingressed(vec![
+					(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_1.amount),
+					(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_2.amount - TOTAL_1.amount),
+				])],
 			);
 	}
 

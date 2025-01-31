@@ -321,6 +321,9 @@ where
 					}
 				}
 				if let Some(future_total) = future_total {
+					new_properties.entry(account.clone()).and_modify(|(_details, total)| {
+						*total = *future_total;
+					});
 					new_pending_ingress_totals.insert(account.clone(), *future_total);
 				}
 			}
@@ -328,10 +331,9 @@ where
 			let election_access = ElectoralAccess::election_mut(election_identifier);
 
 			if new_properties.is_empty() {
-				// This should be ensured because we only remove channels if there are no future
-				// totals.
-				debug_assert!(new_pending_ingress_totals.is_empty());
-				log::debug!("recreate election: deleting since no channels are left");
+				// Note: it's possible that there are still some remaining pending totals, but if
+				// the channel is expired, we need to close it, otherwise an attacker could keep it
+				// open indeifitely by streaming small deposits.
 				election_access.delete();
 			} else if new_properties != properties {
 				log::debug!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
