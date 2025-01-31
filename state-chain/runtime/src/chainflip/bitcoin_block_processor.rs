@@ -46,7 +46,7 @@ impl BtcEvent {
 )]
 pub struct ExecuteEventHook {}
 impl Hook<BtcEvent, ()> for ExecuteEventHook {
-	fn run(&self, input: BtcEvent) {
+	fn run(&mut self, input: BtcEvent) {
 		match input {
 			BtcEvent::PreWitness(block, deposit) => {
 				let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(deposit, block);
@@ -77,7 +77,7 @@ impl Hook<BtcEvent, ()> for ExecuteEventHook {
 pub struct ApplyRulesHook {}
 impl Hook<(BlockNumber, BlockNumber, BlockData), Vec<BtcEvent>> for ApplyRulesHook {
 	fn run(
-		&self,
+		&mut self,
 		(block, age, block_data): (BlockNumber, BlockNumber, BlockData),
 	) -> Vec<BtcEvent> {
 		// Prewitness rule
@@ -117,7 +117,7 @@ pub struct DedupEventsHook {}
 /// Returns one event per deposit witness. If multiple events share the same deposit witness:
 /// - keep only the `Witness` variant,
 impl Hook<Vec<BtcEvent>, Vec<BtcEvent>> for DedupEventsHook {
-	fn run(&self, events: Vec<BtcEvent>) -> Vec<BtcEvent> {
+	fn run(&mut self, events: Vec<BtcEvent>) -> Vec<BtcEvent> {
 		// Map: deposit_witness -> chosen BtcEvent
 		// todo! this is annoying, it require us to implement Ord down to the Chain type
 		let mut chosen: BTreeMap<DepositWitness<Bitcoin>, BtcEvent> = BTreeMap::new();
@@ -177,7 +177,7 @@ impl
 	> for CleanOldBlockDataHook
 {
 	fn run(
-		&self,
+		&mut self,
 		(blocks_data, reorg_events, last_height): (
 			&mut BTreeMap<BlockNumber, (BlockData, BlockNumber)>,
 			&mut BTreeMap<BlockNumber, Vec<BtcEvent>>,

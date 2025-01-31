@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sp_std::vec::Vec;
 
 pub trait Hook<A, B> {
-	fn run(&self, input: A) -> B;
+	fn run(&mut self, input: A) -> B;
 }
 
 #[cfg(test)]
@@ -34,7 +34,7 @@ pub mod hook_test_utils {
 	}
 
 	impl<A, B: Clone> Hook<A, B> for ConstantHook<A, B> {
-		fn run(&self, _input: A) -> B {
+		fn run(&mut self, _input: A) -> B {
 			self.state.clone()
 		}
 	}
@@ -61,7 +61,8 @@ pub mod hook_test_utils {
 	}
 
 	impl<A, B: Clone> Hook<A, B> for IncreasingHook<A, B> {
-		fn run(&self, _input: A) -> B {
+		fn run(&mut self, _input: A) -> B {
+			self.counter += 1;
 			self.state.clone()
 		}
 	}

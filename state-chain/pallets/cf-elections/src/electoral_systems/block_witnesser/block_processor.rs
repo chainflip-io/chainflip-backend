@@ -49,10 +49,8 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 					if let Some((data, next_age)) = block_data {
 						// We need to get only events already processed (next_age not included)
 						for age in 0..next_age.into() {
-							self.reorg_events.insert(
-								n,
-								self.process_rules_for_age_and_block(n, age.into(), &data),
-							);
+							let events = self.process_rules_for_age_and_block(n, age.into(), &data);
+							self.reorg_events.insert(n, events);
 						}
 					}
 				}
@@ -87,7 +85,7 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 	}
 
 	fn process_rules_for_age_and_block(
-		&self,
+		&mut self,
 		block: T::ChainBlockNumber,
 		age: T::ChainBlockNumber,
 		data: &T::BlockData,

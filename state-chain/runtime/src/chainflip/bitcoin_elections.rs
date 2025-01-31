@@ -165,7 +165,7 @@ impl StateMachineES for BitcoinBlockHeightTrackingTypes {
 pub struct BitcoinBlockHeightChangeHook {}
 
 impl Hook<btc::BlockNumber, ()> for BitcoinBlockHeightChangeHook {
-	fn run(&self, block_height: btc::BlockNumber) {
+	fn run(&mut self, block_height: btc::BlockNumber) {
 		if let Err(err) = BitcoinChainTracking::inner_update_chain_state(cf_chains::ChainState {
 			block_height,
 			tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(0) },
@@ -219,7 +219,7 @@ pub(crate) type BlockData = Vec<DepositWitness<Bitcoin>>;
 pub struct BitcoinSafemodeEnabledHook {}
 
 impl Hook<(), SafeModeStatus> for BitcoinSafemodeEnabledHook {
-	fn run(&self, _input: ()) -> SafeModeStatus {
+	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
 			PalletSafeMode<BitcoinInstance>,
 		>>::get()
@@ -304,7 +304,7 @@ impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>
 	for BitcoinDepositChannelWitnessingGenerator
 {
 	fn run(
-		&self,
+		&mut self,
 		block_witness_root: btc::BlockNumber,
 	) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
 		// TODO: Channel expiry

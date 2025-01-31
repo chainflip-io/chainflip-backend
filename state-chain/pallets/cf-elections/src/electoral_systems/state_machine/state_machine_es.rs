@@ -187,7 +187,8 @@ where
 		}
 
 		// gather the input indices after all state transitions
-		let input_indices: Vec<_> = Bounds::StateMachine::input_index(&state).into_iter().collect();
+		let input_indices: Vec<_> =
+			Bounds::StateMachine::input_index(&mut state).into_iter().collect();
 		let mut open_elections = Vec::new();
 
 		// delete elections which are no longer in the input indices

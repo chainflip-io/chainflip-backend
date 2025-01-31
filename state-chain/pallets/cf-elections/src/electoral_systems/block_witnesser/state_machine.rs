@@ -152,7 +152,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 	type Output = Result<(), &'static str>;
 	type State = BWState<T>;
 
-	fn input_index(s: &Self::State) -> IndexOf<Self::Input> {
+	fn input_index(s: &mut Self::State) -> IndexOf<Self::Input> {
 		s.elections
 			.ongoing
 			.clone()

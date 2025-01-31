@@ -58,7 +58,7 @@ pub trait StateMachine: 'static {
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
-	fn input_index(s: &Self::State) -> IndexOf<Self::Input>;
+	fn input_index(s: &mut Self::State) -> IndexOf<Self::Input>;
 
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore

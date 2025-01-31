@@ -128,7 +128,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 	type Settings = ();
 	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
 
-	fn input_index(s: &Self::State) -> <Self::Input as Indexed>::Index {
+	fn input_index(s: &mut Self::State) -> <Self::Input as Indexed>::Index {
 		let witness_from_index = match s.state {
 			BHWState::Starting => T::ChainBlockNumber::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from,
