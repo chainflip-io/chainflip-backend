@@ -73,12 +73,17 @@ impl CcmValidityCheck for CcmValidityChecker {
 			{
 				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => {
 					// It's hard at this stage to compute exactly the length of the finally build
-					// transaction and it will be even harder once we use Versioned
-					// Transactions. Therefore we just check for the worse case scenario where
-					// we know it's impossible to fit the CCM in the transaction. Then the
-					// transaction builder will ensure that a built transaction is never beyond
-					// the Solana Transaction limit.
-					let ccm_length = ccm.message.len() + ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
+					// transaction. That is because accounts can be repeated within the user's
+					// additional accounts but also with Chainflip accounts. It can be hard for
+					// integrators to not repeate them when crafting payloads with aggregators
+					// and then have the receiver contract handle it appropriately.
+					// Therefore we just check for the worse case scenario where we know it's
+					// impossible to fit the CCM in the transaction. Then the transaction
+					// builder will ensure that a built transaction is never beyond the
+					// Solana Transaction limit.
+					let ccm_length = ccm.message.len() +
+						ccm_accounts.additional_accounts.len() *
+							ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
 					if ccm_length >
 						match asset {
@@ -98,6 +103,13 @@ impl CcmValidityCheck for CcmValidityChecker {
 		} else {
 			Ok(DecodedCcmAdditionalData::NotRequired)
 		}
+	}
+
+	fn get_fallback_address(
+		ccm: &CcmChannelMetadata,
+		egress_asset: Asset,
+	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
+		let ccm_additional_accounts = Self::check_and_decode(ccm, egress_asset)?;
 	}
 }
 
