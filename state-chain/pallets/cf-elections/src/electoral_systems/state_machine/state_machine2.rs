@@ -70,7 +70,7 @@ pub trait StateMachine: 'static {
 	/// that the resulting state after the step function always fulfills this specification.
 	#[cfg(test)]
 	fn step_specification(
-		_before: &Self::State,
+		_before: &mut Self::State,
 		_input: &Self::Input,
 		_settings: &Self::Settings,
 		_after: &Self::State,
@@ -105,8 +105,8 @@ pub trait StateMachine: 'static {
 
 		runner
 			.run(
-				&((states, settings).prop_flat_map(|(state, settings)| {
-					(Just(state.clone()), inputs(Self::input_index(&state)), Just(settings))
+				&((states, settings).prop_flat_map(|(mut state, settings)| {
+					(Just(state.clone()), inputs(Self::input_index(&mut state)), Just(settings))
 				})),
 				run_with_timeout(
 					10,
@@ -120,12 +120,12 @@ pub trait StateMachine: 'static {
 						);
 						assert!(input.is_valid().is_ok(), "input not valid {:?}", input.is_valid());
 						assert!(
-							input.has_index(&Self::input_index(&state)),
+							input.has_index(&Self::input_index(&mut state)),
 							"input has wrong index"
 						);
 
 						// backup state
-						let prev_state = state.clone();
+						let mut prev_state = state.clone();
 
 						// run step function and ensure that output is valid
 						assert!(
@@ -141,7 +141,7 @@ pub trait StateMachine: 'static {
 						);
 
 						// ensure that step function computed valid state
-						Self::step_specification(&prev_state, &input, &settings, &state);
+						Self::step_specification(&mut prev_state, &input, &settings, &state);
 
 						println!("done test");
 						Ok(())

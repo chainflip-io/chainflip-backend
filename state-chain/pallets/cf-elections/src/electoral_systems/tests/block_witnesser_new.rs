@@ -15,7 +15,6 @@
 // is processed.
 
 use core::ops::RangeInclusive;
-use std::collections::BTreeMap;
 
 use super::{
 	mocks::{Check, TestSetup},
@@ -25,7 +24,7 @@ use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::ChainProgress,
-		block_witnesser::{state_machine::BWProcessorTypes, *},
+		block_witnesser::{block_processor::test::MockBlockProcessorDefinition, *},
 		state_machine::{
 			core::{ConstantIndex, Hook},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
@@ -33,7 +32,7 @@ use crate::{
 	},
 	vote_storage,
 };
-use cf_chains::{btc::BlockNumber, mocks::MockEthereum, Chain};
+use cf_chains::{mocks::MockEthereum, Chain};
 use codec::{Decode, Encode, MaxEncodedLen};
 use consensus::BWConsensus;
 use primitives::SafeModeStatus;
@@ -97,7 +96,7 @@ impl BlockElectionPropertiesGenerator<ChainBlockNumber, Properties>
 }
 
 impl Hook<ChainBlockNumber, Properties> for MockGenerateElectionHook<ChainBlockNumber, Properties> {
-	fn run(&self, input: ChainBlockNumber) -> Properties {
+	fn run(&mut self, input: ChainBlockNumber) -> Properties {
 		println!("generate_election_hook called for {input}");
 		GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
 		// The properties are not important to the logic of the electoral system itself, so we can
@@ -199,7 +198,7 @@ type ElectionProperties = Properties;
 pub struct MockSafemodeEnabledHook {}
 
 impl Hook<(), SafeModeStatus> for MockSafemodeEnabledHook {
-	fn run(&self, _input: ()) -> SafeModeStatus {
+	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		SafeModeStatus::Disabled
 	}
 }
@@ -211,117 +210,7 @@ impl BWTypes for MockDepositChannelWitnessingDefinition {
 	type ElectionProperties = ElectionProperties;
 	type ElectionPropertiesHook = MockGenerateElectionHook<u64, Properties>;
 	type SafeModeEnabledHook = MockSafemodeEnabledHook;
-	type BWProcessorTypes = ();
-}
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-)]
-pub struct MockRulesHook {}
-impl Hook<(u64, u64, Vec<u8>), std::vec::Vec<()>> for MockRulesHook {
-	fn run(&self, _input: (u64, u64, Vec<u8>)) -> Vec<()> {
-		todo!()
-	}
-}
-
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-)]
-pub struct MockExecuteHook {}
-impl Hook<(), ()> for MockExecuteHook {
-	fn run(&self, _input: ()) {
-		todo!()
-	}
-}
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-)]
-pub struct MockCleanOldHook {}
-impl
-	Hook<
-		(
-			&mut BTreeMap<BlockNumber, (Vec<u8>, BlockNumber)>,
-			&mut BTreeMap<BlockNumber, Vec<()>>,
-			BlockNumber,
-		),
-		(),
-	> for MockCleanOldHook
-{
-	fn run(
-		&self,
-		(_blocks_data, _reorg_events, _last_height): (
-			&mut BTreeMap<BlockNumber, (BlockData, BlockNumber)>,
-			&mut BTreeMap<BlockNumber, Vec<()>>,
-			BlockNumber,
-		),
-	) {
-		todo!()
-	}
-}
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-)]
-pub struct MockDedupEventsHook {}
-impl Hook<Vec<()>, Vec<()>> for MockDedupEventsHook {
-	fn run(&self, _events: Vec<()>) -> Vec<()> {
-		todo!()
-	}
-}
-impl BWProcessorTypes for () {
-	type ChainBlockNumber = u64;
-	type BlockData = Vec<u8>;
-	type Event = ();
-	type Rules = MockRulesHook;
-	type Execute = MockExecuteHook;
-	type CleanOld = MockCleanOldHook;
-	type DedupEvents = MockDedupEventsHook;
+	type BWProcessorTypes = MockBlockProcessorDefinition;
 }
 
 /// Associating the ES related types to the struct

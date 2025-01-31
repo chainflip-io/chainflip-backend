@@ -106,91 +106,174 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 	}
 }
 
-//
-// #[cfg(test)]
-// mod test {
-//     use codec::{Decode, Encode};
-//     use frame_support::{Deserialize, Serialize};
-//     use frame_support::pallet_prelude::TypeInfo;
-//     use cf_chains::btc::BlockNumber;
-//     use crate::electoral_systems::block_witnesser::state_machine::BWProcessorTypes;
-//     use crate::electoral_systems::state_machine::core::Hook;
-//     use crate::electoral_systems::state_machine::core::hook_test_utils::IncreasingHook;
-//
-//     struct MockBlockProcessorDefinition {}
-//     #[derive(
-//         Clone,
-//         PartialEq,
-//         Eq,
-//         Serialize,
-//         Deserialize,
-//         Encode,
-//         TypeInfo,
-//         Decode,
-//         Debug,
-//         Ord,
-//         PartialOrd,
-//         Default
-//     )]
-//     struct MockDeposit {
-//         pub amount: u64,
-//         pub deposit_address: String,
-//     }
-//     type  MockBlockData = Vec<MockDeposit>;
-//
-//     #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-//     enum MockBtcEvent {
-//         PreWitness(BlockNumber, MockDeposit),
-//         Witness(BlockNumber, MockDeposit),
-//     }
-//     impl MockBtcEvent {
-//         pub fn deposit_witness(&self) -> &MockDeposit {
-//             match self {
-//                 MockBtcEvent::PreWitness(_, dw) | MockBtcEvent::Witness(_, dw) => dw,
-//             }
-//         }
-//         pub fn equal_inner(&self, other: MockBtcEvent) -> bool {
-//             self.deposit_witness() == other.deposit_witness()
-//         }
-//     }
-//
-//     struct ApplyRulesHook{}
-//     impl Hook<(BlockNumber, BlockNumber, MockBlockData), Vec<MockBtcEvent>> for ApplyRulesHook {
-//         fn run(
-//             &self,
-//             (block, age, block_data): (BlockNumber, BlockNumber, MockBlockData),
-//         ) -> Vec<MockBtcEvent> {
-//             // Prewitness rule
-//             if age == 0 {
-//                 return block_data
-//                     .iter()
-//                     .map(|deposit_witness| MockBtcEvent::PreWitness(block,
-// deposit_witness.clone()))                     .collect::<Vec<MockBtcEvent>>();
-//             }
-//             //Full witness rule
-//             if age == 10 {
-//                 return block_data
-//                     .iter()
-//                     .map(|deposit_witness| MockBtcEvent::Witness(block, deposit_witness.clone()))
-//                     .collect::<Vec<MockBtcEvent>>();
-//             }
-//             vec![]
-//         }
-//     }
-//     impl BWProcessorTypes for MockBlockProcessorDefinition {
-//         type ChainBlockNumber = BlockNumber;
-//         type BlockData = MockBlockData;
-//         type Event = MockBtcEvent;
-//         type Rules = ApplyRulesHook;
-//         type Execute = IncreasingHook<MockBtcEvent, ()>;
-//         type CleanOld = ();
-//         type DedupEvents = ();
-//     }
-//
-//     #[test]
-//     fn test() {
-//         let mut processor =
-// DepositChannelWitnessingProcessor::<MockBlockProcessorDefinition>::default();
-//
-//     }
-// }
+#[cfg(test)]
+pub(crate) mod test {
+	use crate::{
+		electoral_systems::{
+			block_witnesser::{
+				block_processor::DepositChannelWitnessingProcessor, state_machine::BWProcessorTypes,
+			},
+			state_machine::core::{hook_test_utils::IncreasingHook, Hook},
+		},
+		*,
+	};
+	use cf_chains::btc::BlockNumber;
+	use codec::{Decode, Encode};
+	use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
+	use std::collections::BTreeMap;
+
+	#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	pub struct MockBlockProcessorDefinition {}
+
+	type MockBlockData = Vec<u8>;
+
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+	pub enum MockBtcEvent {
+		PreWitness(BlockNumber, u8),
+		Witness(BlockNumber, u8),
+	}
+	impl MockBtcEvent {
+		pub fn deposit_witness(&self) -> &u8 {
+			match self {
+				MockBtcEvent::PreWitness(_, dw) | MockBtcEvent::Witness(_, dw) => dw,
+			}
+		}
+		#[allow(dead_code)]
+		pub fn equal_inner(&self, other: MockBtcEvent) -> bool {
+			self.deposit_witness() == other.deposit_witness()
+		}
+	}
+
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+		Default,
+	)]
+	pub struct ApplyRulesHook {}
+	impl Hook<(BlockNumber, BlockNumber, MockBlockData), Vec<MockBtcEvent>> for ApplyRulesHook {
+		fn run(
+			&mut self,
+			(block, age, block_data): (BlockNumber, BlockNumber, MockBlockData),
+		) -> Vec<MockBtcEvent> {
+			// Prewitness rule
+			if age == 0 {
+				return block_data
+					.iter()
+					.map(|deposit_witness| MockBtcEvent::PreWitness(block, *deposit_witness))
+					.collect::<Vec<MockBtcEvent>>();
+			}
+			//Full witness rule
+			if age == 10 {
+				return block_data
+					.iter()
+					.map(|deposit_witness| MockBtcEvent::Witness(block, *deposit_witness))
+					.collect::<Vec<MockBtcEvent>>();
+			}
+			vec![]
+		}
+	}
+
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+		Default,
+	)]
+	pub struct CleanOldBlockDataHook {}
+	impl
+		Hook<
+			(
+				&mut BTreeMap<BlockNumber, (MockBlockData, BlockNumber)>,
+				&mut BTreeMap<BlockNumber, Vec<MockBtcEvent>>,
+				BlockNumber,
+			),
+			(),
+		> for CleanOldBlockDataHook
+	{
+		fn run(
+			&mut self,
+			(blocks_data, reorg_events, last_height): (
+				&mut BTreeMap<BlockNumber, (MockBlockData, BlockNumber)>,
+				&mut BTreeMap<BlockNumber, Vec<MockBtcEvent>>,
+				BlockNumber,
+			),
+		) {
+			blocks_data.retain(|_key, (_, age)| *age <= 5);
+			reorg_events.retain(|key, _| *key > last_height - 10);
+		}
+	}
+
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+		Default,
+	)]
+	pub struct DedupEventsHook {}
+	impl Hook<Vec<MockBtcEvent>, Vec<MockBtcEvent>> for DedupEventsHook {
+		fn run(&mut self, events: Vec<MockBtcEvent>) -> Vec<MockBtcEvent> {
+			let mut chosen: BTreeMap<u8, MockBtcEvent> = BTreeMap::new();
+
+			for event in events {
+				let deposit: u8 = *event.deposit_witness();
+
+				match chosen.get(&deposit) {
+					None => {
+						chosen.insert(deposit, event);
+					},
+					Some(existing) => match (existing, &event) {
+						(MockBtcEvent::Witness(_, _), MockBtcEvent::PreWitness(_, _)) => (),
+						(MockBtcEvent::PreWitness(_, _), MockBtcEvent::Witness(_, _)) => {
+							chosen.insert(deposit, event);
+						},
+						(_, _) => (),
+					},
+				}
+			}
+			chosen.into_values().collect()
+		}
+	}
+	impl BWProcessorTypes for MockBlockProcessorDefinition {
+		type ChainBlockNumber = BlockNumber;
+		type BlockData = MockBlockData;
+		type Event = MockBtcEvent;
+		type Rules = ApplyRulesHook;
+		type Execute = IncreasingHook<MockBtcEvent, ()>;
+		type CleanOld = CleanOldBlockDataHook;
+		type DedupEvents = DedupEventsHook;
+	}
+
+	#[test]
+	fn test() {
+		let mut _processor =
+			DepositChannelWitnessingProcessor::<MockBlockProcessorDefinition>::default();
+	}
+}

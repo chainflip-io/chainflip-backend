@@ -139,7 +139,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 	// specification for step function
 	#[cfg(test)]
 	fn step_specification(
-		before: &Self::State,
+		before: &mut Self::State,
 		input: &Self::Input,
 		_settings: &Self::Settings,
 		after: &Self::State,

@@ -40,7 +40,18 @@ pub mod hook_test_utils {
 	}
 
 	#[derive(
-		Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen,
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
 	)]
 	pub struct IncreasingHook<A, B> {
 		pub counter: u32,

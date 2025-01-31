@@ -207,7 +207,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 	/// Specifiation for step function
 	#[cfg(test)]
 	fn step_specification(
-		before: &Self::State,
+		before: &mut Self::State,
 		input: &Self::Input,
 		settings: &Self::Settings,
 		after: &Self::State,
