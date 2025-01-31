@@ -8,7 +8,8 @@
 // For example: ./commands/send_flip.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6 5.5
 // will send 5.5 Flip to the account with address 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
-import { runWithTimeoutAndExit, getContractAddress, getEvmRootWhaleKey } from '../shared/utils';
+import { runWithTimeoutAndExit, getContractAddress } from '../shared/utils';
+import { getEvmRootWhaleKey } from '../shared/utils/whale_key_manager';
 import { sendErc20 } from '../shared/send_erc20';
 
 async function main(): Promise<void> {

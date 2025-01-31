@@ -19,8 +19,8 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
-  WhaleKeyManager,
 } from '../shared/utils';
+import { WhaleKeyManager } from '../shared/utils/whale_key_manager';
 import { observeEvent } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
 import { ExecutableTest } from '../shared/executable_test';

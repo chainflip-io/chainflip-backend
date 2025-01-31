@@ -1,10 +1,11 @@
 import assert from 'assert';
-import { createStateChainKeypair, handleSubstrateError, lpMutex, WhaleKeyManager } from '../shared/utils';
+import { createStateChainKeypair, handleSubstrateError, lpMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { limitOrder } from '../shared/limit_order';
 import { rangeOrder } from '../shared/range_order';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { ExecutableTest } from '../shared/executable_test';
+import { WhaleKeyManager } from '../shared/utils/whale_key_manager';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testCancelOrdersBatch = new ExecutableTest(

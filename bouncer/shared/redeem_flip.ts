@@ -13,10 +13,10 @@ import {
   chainFromAsset,
   getEvmEndpoint,
   assetDecimals,
-  WhaleKeyManager,
   createStateChainKeypair,
 } from './utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { WhaleKeyManager } from './utils/whale_key_manager';
 
 export type RedeemAmount = 'Max' | { Exact: string };
 
@@ -38,7 +38,7 @@ export async function redeemFlip(
   await using chainflip = await getChainflipApi();
   const flipWallet = createStateChainKeypair('//' + flipSeed);
   const accountIdHex: HexString = `0x${Buffer.from(flipWallet.publicKey).toString('hex')}`;
-  const whaleKey = await WhaleKeyManager.getNextKey();;
+  const whaleKey = await WhaleKeyManager.getNextKey();
   const ethWallet = new Wallet(whaleKey).connect(
     ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
   );

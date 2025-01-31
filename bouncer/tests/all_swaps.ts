@@ -13,9 +13,9 @@ import {
   chainFromAsset,
   VaultSwapParams,
   vaultSwapSupportedChains,
-  WhaleKeyManager,
 } from '../shared/utils';
 import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
+import { WhaleKeyManager } from '../shared/utils/whale_key_manager';
 
 // This timeout needs to be increased when running 3-nodes
 /* eslint-disable @typescript-eslint/no-use-before-define */
@@ -47,7 +47,14 @@ export async function initiateSwap(
       testAllSwaps.swapContext,
     );
   }
-  return functionCall(sourceAsset, destAsset, privateKey, undefined, ccmSwapMetadata, testAllSwaps.swapContext);
+  return functionCall(
+    sourceAsset,
+    destAsset,
+    privateKey,
+    undefined,
+    ccmSwapMetadata,
+    testAllSwaps.swapContext,
+  );
 }
 
 async function main() {

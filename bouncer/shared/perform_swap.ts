@@ -25,8 +25,8 @@ import {
   defaultAssetAmounts,
   newAddress,
   getContractAddress,
-  WhaleKeyManager,
 } from '../shared/utils';
+import { WhaleKeyManager } from './utils/whale_key_manager';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 import { getChainflipApi, observeEvent } from './utils/substrate';
@@ -83,11 +83,11 @@ export async function requestNewSwap(
 
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
-        event.data.channelMetadata.message ===
-        (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
-        event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
-        event.data.channelMetadata.ccmAdditionalData ===
-        (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
+          event.data.channelMetadata.message ===
+            (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
+          event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
+          event.data.channelMetadata.ccmAdditionalData ===
+            (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
@@ -213,11 +213,12 @@ export async function performSwap(
 
   if (log)
     console.log(
-      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${messageMetadata
-        ? messageMetadata.message.substring(0, 6) +
-        '...' +
-        messageMetadata.message.substring(messageMetadata.message.length - 4)
-        : ''
+      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
+        messageMetadata
+          ? messageMetadata.message.substring(0, 6) +
+            '...' +
+            messageMetadata.message.substring(messageMetadata.message.length - 4)
+          : ''
       }`,
     );
 
@@ -231,7 +232,16 @@ export async function performSwap(
     log,
   );
 
-  await doPerformSwap(swapParams, tag, privateKey, messageMetadata, senderType, amount, log, swapContext);
+  await doPerformSwap(
+    swapParams,
+    tag,
+    privateKey,
+    messageMetadata,
+    senderType,
+    amount,
+    log,
+    swapContext,
+  );
 
   return swapParams;
 }

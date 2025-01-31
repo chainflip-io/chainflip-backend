@@ -17,8 +17,8 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
-  WhaleKeyManager,
 } from '../shared/utils';
+import { WhaleKeyManager } from '../shared/utils/whale_key_manager';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { getCFTesterAbi } from '../shared/contract_interfaces';
 import { send } from '../shared/send';
@@ -45,7 +45,11 @@ async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset, pr
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`, privateKey);
+  await doPerformSwap(
+    swapParams,
+    `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`,
+    privateKey,
+  );
 }
 
 async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset, privateKey: string) {
@@ -161,7 +165,13 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset, privateKe
       SwapRequestType.Regular,
     );
 
-    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset), undefined, privateKey);
+    await send(
+      sourceAsset,
+      swapParams.depositAddress,
+      defaultAssetAmounts(sourceAsset),
+      undefined,
+      privateKey,
+    );
     await swapRequestedHandle;
   }
 
@@ -175,7 +185,13 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset, privateKe
       SwapRequestType.Regular,
     );
 
-    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset), undefined, privateKey);
+    await send(
+      sourceAsset,
+      swapParams.depositAddress,
+      defaultAssetAmounts(sourceAsset),
+      undefined,
+      privateKey,
+    );
     await swapRequestedHandle;
   }
 }

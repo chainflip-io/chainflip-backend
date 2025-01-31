@@ -9,9 +9,9 @@ import {
   sleep,
   assetDecimals,
   getContractAddress,
-  WhaleKeyManager,
 } from './utils';
 
+import { WhaleKeyManager } from './utils/whale_key_manager';
 
 const nextEvmNonce: {
   [chain in 'Ethereum' | 'Arbitrum']: {
@@ -63,13 +63,12 @@ export async function signAndSendTxEvm(
   gas = chain === 'Arbitrum' ? 5000000 : 200000,
   log = true,
 ) {
-
   if (!privateKey) {
-    console.log("No private key provided, using next key");
+    console.log('No private key provided, using next key');
   } else {
-    console.log("Using private key provided: ", privateKey);
+    console.log('Using private key provided: ', privateKey);
   }
-  const sendingKey = privateKey ?? await WhaleKeyManager.getNextKey();
+  const sendingKey = privateKey ?? (await WhaleKeyManager.getNextKey());
   const nonce = await getNextEvmNonce(chain, sendingKey);
   console.log(`Nonce for key: ${sendingKey} is ${nonce}`);
   const tx = { to, data, gas, nonce, value };
@@ -89,7 +88,9 @@ export async function signAndSendTxEvm(
       if (i === numberRetries - 1) {
         throw new Error(`${chain} transaction failure: ${error}`);
       }
-      console.log(`${chain} Retrying transaction from key ${sendingKey} with nonce ${nonce}. Error: ${error}`);
+      console.log(
+        `${chain} Retrying transaction from key ${sendingKey} with nonce ${nonce}. Error: ${error}`,
+      );
       await sleep(2000);
     }
   }
@@ -100,11 +101,11 @@ export async function signAndSendTxEvm(
   if (log) {
     console.log(
       'Transaction complete, tx_hash: ' +
-      receipt.transactionHash +
-      ' blockNumber: ' +
-      receipt.blockNumber +
-      ' blockHash: ' +
-      receipt.blockHash,
+        receipt.transactionHash +
+        ' blockNumber: ' +
+        receipt.blockNumber +
+        ' blockHash: ' +
+        receipt.blockHash,
     );
   }
   return receipt;
@@ -121,7 +122,12 @@ export async function sendEvmNative(
   await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, privateKey, undefined, log);
 }
 
-export async function spamEvm(chain: Chain, privateKey: string, periodMilisec: number, spam?: () => boolean) {
+export async function spamEvm(
+  chain: Chain,
+  privateKey: string,
+  periodMilisec: number,
+  spam?: () => boolean,
+) {
   const continueSpam = spam ?? (() => true);
 
   while (continueSpam()) {

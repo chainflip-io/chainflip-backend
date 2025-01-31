@@ -12,8 +12,8 @@ import {
   sleep,
   SwapRequestType,
   TransactionOrigin,
-  getEvmRootWhaleKey,
 } from '../shared/utils';
+import { getEvmRootWhaleKey } from '../shared/utils/whale_key_manager';
 import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
 import { estimateCcmCfTesterGas, spamEvm } from '../shared/send_evm';

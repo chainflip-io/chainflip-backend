@@ -1,8 +1,8 @@
 import { createLpPool } from '../shared/create_lp_pool';
 import { depositLiquidity } from './deposit_liquidity';
 import { rangeOrder } from '../shared/range_order';
-import { Asset, getEvmRootWhaleKey } from './utils';
-
+import { Asset } from './utils';
+import { getEvmRootWhaleKey } from './utils/whale_key_manager';
 
 export const deposits = new Map<Asset, number>([
   ['Dot', 200000],

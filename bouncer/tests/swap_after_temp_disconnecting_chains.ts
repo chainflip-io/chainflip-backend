@@ -1,8 +1,9 @@
 #!/usr/bin/env -S pnpm tsx
 import { connectContainerToNetwork, disconnectContainerFromNetwork } from '../shared/docker_utils';
-import { sleep, getEvmRootWhaleKey } from '../shared/utils';
+import { sleep } from '../shared/utils';
 import { testSwap } from '../shared/swapping';
 import { ExecutableTest } from '../shared/executable_test';
+import { getEvmRootWhaleKey } from '../shared/utils/whale_key_manager';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testSwapAfterDisconnection = new ExecutableTest(
@@ -29,8 +30,29 @@ async function main() {
   const privateKey = getEvmRootWhaleKey();
 
   await Promise.all([
-    testSwap('Dot', 'Btc', privateKey, undefined, undefined, testSwapAfterDisconnection.swapContext),
-    testSwap('Btc', 'Flip', privateKey, undefined, undefined, testSwapAfterDisconnection.swapContext),
-    testSwap('Eth', 'Usdc', privateKey, undefined, undefined, testSwapAfterDisconnection.swapContext),
+    testSwap(
+      'Dot',
+      'Btc',
+      privateKey,
+      undefined,
+      undefined,
+      testSwapAfterDisconnection.swapContext,
+    ),
+    testSwap(
+      'Btc',
+      'Flip',
+      privateKey,
+      undefined,
+      undefined,
+      testSwapAfterDisconnection.swapContext,
+    ),
+    testSwap(
+      'Eth',
+      'Usdc',
+      privateKey,
+      undefined,
+      undefined,
+      testSwapAfterDisconnection.swapContext,
+    ),
   ]);
 }

@@ -12,8 +12,8 @@ import {
   assetDecimals,
   stateChainAssetFromAsset,
   Chain,
-  WhaleKeyManager,
 } from '../shared/utils';
+import { WhaleKeyManager } from '../shared/utils/whale_key_manager';
 import { lpApiRpc } from '../shared/json_rpc';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { sendEvmNative } from '../shared/send_evm';

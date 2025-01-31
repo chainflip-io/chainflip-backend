@@ -15,8 +15,8 @@ import {
   getEvmEndpoint,
   getSolConnection,
   deferredPromise,
-  getEvmRootWhaleKey,
 } from '../shared/utils';
+import { getEvmRootWhaleKey } from '../shared/utils/whale_key_manager';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import {
   initializeArbitrumChain,

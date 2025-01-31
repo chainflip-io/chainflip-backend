@@ -19,7 +19,13 @@ import { sendSolUsdc } from './send_solusdc';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-export async function send(asset: Asset, address: string, amount?: string, log = true, privateKey?: string) {
+export async function send(
+  asset: Asset,
+  address: string,
+  amount?: string,
+  log = true,
+  privateKey?: string,
+) {
   const chain = chainFromAsset(asset);
   if ((chain === 'Ethereum' || chain === 'Arbitrum') && !privateKey) {
     throw new Error('No private key provided for EVM asset');
@@ -30,10 +36,22 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'Eth':
-      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log, privateKey);
+      await sendEvmNative(
+        'Ethereum',
+        address,
+        amount ?? defaultAssetAmounts(asset),
+        log,
+        privateKey,
+      );
       break;
     case 'ArbEth':
-      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log, privateKey);
+      await sendEvmNative(
+        'Arbitrum',
+        address,
+        amount ?? defaultAssetAmounts(asset),
+        log,
+        privateKey,
+      );
       break;
     case 'Dot':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
@@ -75,7 +93,12 @@ export async function send(asset: Asset, address: string, amount?: string, log =
   }
 }
 
-export async function sendViaCfTester(asset: Asset, toAddress: string, privateKey: string, amount?: string) {
+export async function sendViaCfTester(
+  asset: Asset,
+  toAddress: string,
+  privateKey: string,
+  amount?: string,
+) {
   const chain = chainFromAsset(asset);
 
   const web3 = new Web3(getEvmEndpoint(chain));

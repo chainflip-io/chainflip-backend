@@ -9,8 +9,8 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
-  WhaleKeyManager,
 } from '../shared/utils';
+import { WhaleKeyManager } from '../shared/utils/whale_key_manager';
 import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
 import { getBalance } from '../shared/get_balance';

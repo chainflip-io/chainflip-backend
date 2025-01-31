@@ -8,8 +8,8 @@ import {
   SwapRequestType,
   TransactionOrigin,
   chainFromAsset,
-  WhaleKeyManager,
 } from '../shared/utils';
+import { WhaleKeyManager } from '../shared/utils/whale_key_manager';
 import { send } from '../shared/send';
 import { observeEvent, observeEvents } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';

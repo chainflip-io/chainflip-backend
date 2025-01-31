@@ -86,8 +86,9 @@ export async function main(providedSeed?: string) {
   const expectedRedeemAllAmount = fundAmount - redeemedExact - redemptionTaxAmount * 2;
   assert(
     redeemedAll >= expectedRedeemAllAmount - gasErrorMargin &&
-    redeemedAll <= expectedRedeemAllAmount,
-    `Unexpected balance increase amount: ${redeemedAll}. Expected between: ${expectedRedeemAllAmount - gasErrorMargin
+      redeemedAll <= expectedRedeemAllAmount,
+    `Unexpected balance increase amount: ${redeemedAll}. Expected between: ${
+      expectedRedeemAllAmount - gasErrorMargin
     } - ${expectedRedeemAllAmount}. Did fees change?`,
   );
 }

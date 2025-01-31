@@ -1,12 +1,13 @@
 import assert from 'assert';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
-import { createStateChainKeypair, defaultAssetAmounts, WhaleKeyManager } from '../shared/utils';
+import { createStateChainKeypair, defaultAssetAmounts } from '../shared/utils';
 import { getEarnedBrokerFees } from './broker_fee_collection';
 import { openPrivateBtcChannel, registerAffiliate } from '../shared/btc_vault_swap';
 import { setupBrokerAccount } from '../shared/setup_account';
 import { performVaultSwap } from '../shared/perform_swap';
 import { prepareSwap } from '../shared/swapping';
+import { WhaleKeyManager } from '../shared/utils/whale_key_manager';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testVaultSwapFeeCollection = new ExecutableTest(

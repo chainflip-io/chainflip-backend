@@ -17,12 +17,12 @@ import {
   observeSwapRequested,
   TransactionOrigin,
   defaultAssetAmounts,
-  WhaleKeyManager,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { send } from '../shared/send';
 import { ExecutableTest } from '../shared/executable_test';
+import { WhaleKeyManager } from '../shared/utils/whale_key_manager';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBrokerFeeCollection = new ExecutableTest('Broker-Fee-Collection', main, 200);
@@ -139,7 +139,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   testBrokerFeeCollection.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
     depositAmountAfterIngressFee >= 0 &&
-    depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+      depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
     `Unexpected ${inputAsset} deposit amount ${depositAmountAfterIngressFee},
     }`,
   );
