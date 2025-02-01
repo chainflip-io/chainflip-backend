@@ -10,7 +10,7 @@ use cf_chains::sol::SolanaTransactionData;
 use codec::{Decode, Encode};
 
 pub mod old {
-	use cf_chains::sol::{SolMessage, SolSignature};
+	use cf_chains::sol::{SolLegacyMessage, SolSignature};
 	use cf_primitives::BroadcastId;
 	use frame_support::{pallet_prelude::OptionQuery, Twox64Concat};
 
@@ -25,7 +25,7 @@ pub mod old {
 	pub struct SolanaBroadcastData {
 		pub broadcast_id: BroadcastId,
 		pub transaction_payload: SolanaTransactionData,
-		pub threshold_signature_payload: SolMessage,
+		pub threshold_signature_payload: SolLegacyMessage,
 		pub transaction_out_id: SolSignature,
 		pub nominee: Option<<Runtime as frame_system::Config>::AccountId>,
 	}

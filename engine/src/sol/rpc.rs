@@ -145,7 +145,6 @@ pub trait SolRpcApi {
 	async fn get_signature_statuses(
 		&self,
 		signatures: &[SolSignature],
-		search_transaction_history: bool,
 	) -> Result<Response<Vec<Option<TransactionStatus>>>>;
 	async fn get_transaction(
 		&self,
@@ -205,7 +204,6 @@ impl SolRpcApi for SolRpcClient {
 	async fn get_signature_statuses(
 		&self,
 		signatures: &[SolSignature],
-		search_transaction_history: bool,
 	) -> Result<Response<Vec<Option<TransactionStatus>>>> {
 		let response = self
 			.call_rpc(
@@ -213,7 +211,7 @@ impl SolRpcApi for SolRpcClient {
 				Some(json!([
 					signatures,
 					json!({
-						"searchTransactionHistory": search_transaction_history
+						"searchTransactionHistory": true
 					})
 				])),
 			)
@@ -366,8 +364,7 @@ mod tests {
 			.unwrap();
 		println!("transaction: {:?}", transaction);
 
-		let signature_status =
-			sol_rpc_client.get_signature_statuses(&[signature], true).await.unwrap();
+		let signature_status = sol_rpc_client.get_signature_statuses(&[signature]).await.unwrap();
 
 		let confirmation_status = signature_status
 			.value

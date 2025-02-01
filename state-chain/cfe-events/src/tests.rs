@@ -8,7 +8,7 @@ use cf_chains::{
 	evm::{self, Address, ParityBit, H256},
 	sol::{
 		sol_tx_core::{CompiledInstruction, MessageHeader},
-		RawSolHash, SolMessage, SolPubkey, SolTransaction, SolanaTransactionData,
+		RawSolHash, SolLegacyMessage, SolLegacyTransaction, SolPubkey, SolanaTransactionData,
 	},
 };
 use cf_primitives::AccountId;
@@ -85,7 +85,7 @@ fn event_decoding() {
 				epoch_index: 2,
 				key: [7u8;32].into(),
 				signatories: participants.clone(),
-				payload: SolMessage {
+				payload: SolLegacyMessage {
 					header: MessageHeader {
 						num_readonly_signed_accounts: 1,
 						num_readonly_unsigned_accounts: 1,
@@ -179,9 +179,9 @@ fn event_decoding() {
 		check_encoding(CfeEvent::SolTxBroadcastRequest(TxBroadcastRequest {
 				broadcast_id: 1,
 				nominee: AccountId::from([1; 32]),
-				payload: SolanaTransactionData{ serialized_transaction: (SolTransaction {
+				payload: SolanaTransactionData{ serialized_transaction: (SolLegacyTransaction {
 					signatures: vec![[9u8; 64].into()],
-					message: SolMessage {
+					message: SolLegacyMessage {
 						header: MessageHeader {
 							num_readonly_signed_accounts: 2,
 							num_readonly_unsigned_accounts: 2,

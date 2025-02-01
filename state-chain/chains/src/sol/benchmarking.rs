@@ -2,7 +2,7 @@
 
 use super::{
 	api::{SolanaApi, VaultSwapAccountAndSender},
-	SolAddress, SolHash, SolMessage, SolSignature, SolTrackedData, SolTransaction,
+	SolAddress, SolHash, SolLegacyMessage, SolLegacyTransaction, SolSignature, SolTrackedData,
 	SolanaTransactionData,
 };
 
@@ -26,22 +26,22 @@ impl BenchmarkValue for SolTrackedData {
 	}
 }
 
-impl BenchmarkValue for SolMessage {
+impl BenchmarkValue for SolLegacyMessage {
 	fn benchmark_value() -> Self {
 		Self::new_with_blockhash(&[], None, &SolHash::default().into())
 	}
 }
 
-impl BenchmarkValue for SolTransaction {
+impl BenchmarkValue for SolLegacyTransaction {
 	fn benchmark_value() -> Self {
-		SolTransaction::new_unsigned(SolMessage::benchmark_value())
+		SolLegacyTransaction::new_unsigned(SolLegacyMessage::benchmark_value())
 	}
 }
 
 impl BenchmarkValue for SolanaTransactionData {
 	fn benchmark_value() -> Self {
 		SolanaTransactionData {
-			serialized_transaction: SolTransaction::benchmark_value()
+			serialized_transaction: SolLegacyTransaction::benchmark_value()
 				.finalize_and_serialize()
 				.expect("Failed to serialize payload"),
 			skip_preflight: false,

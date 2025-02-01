@@ -103,7 +103,7 @@ mod test {
 		cf_parameters::build_cf_parameters,
 		sol::{
 			signing_key::SolSigningKey, sol_tx_core::sol_test_values::*, SolAddress, SolHash,
-			SolMessage, SolTransaction,
+			SolLegacyMessage, SolLegacyTransaction,
 		},
 		ChannelRefundParametersDecoded, ForeignChainAddress,
 	};
@@ -195,10 +195,12 @@ mod test {
 		)
 	}
 
-	fn into_transaction(instructions: SolInstruction, payer: SolPubkey) -> SolTransaction {
+	fn into_transaction(instructions: SolInstruction, payer: SolPubkey) -> SolLegacyTransaction {
 		// Build mock Transaction for testing.
-		let transaction =
-			SolTransaction::new_unsigned(SolMessage::new(&[instructions], Some(&payer)));
+		let transaction = SolLegacyTransaction::new_unsigned(SolLegacyMessage::new(
+			&[instructions],
+			Some(&payer),
+		));
 
 		let mock_serialized_tx = transaction
 			.clone()

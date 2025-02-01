@@ -16,7 +16,7 @@ use crate::{
 	},
 	sol::{
 		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolHash, SolTrackedData, SolTransaction, SolanaCrypto,
+		SolAsset, SolHash, SolLegacyTransaction, SolTrackedData, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
@@ -159,7 +159,7 @@ pub enum SolanaTransactionType {
 #[scale_info(skip_type_params(Environment))]
 pub struct SolanaApi<Environment: 'static> {
 	pub call_type: SolanaTransactionType,
-	pub transaction: SolTransaction,
+	pub transaction: SolLegacyTransaction,
 	pub signer: Option<SolAddress>,
 	#[doc(hidden)]
 	#[codec(skip)]
