@@ -83,7 +83,8 @@ impl CcmValidityCheck for CcmValidityChecker {
 					// with other protocols, many of the account's values are part of a returned
 					// payload from an API and it makes it cumbersome to then dedpulicate on the
 					// fly and then make it match with the receiver contract. It can be done
-					// but it then rrequires extra configuratio payload data.
+					// but it then requires extra configuration bytes in the payload, which
+					// then defeats the purpose.
 					// Therefore we want to allow for duplicated accounts, both duplicated
 					// within the additional accounts and with our accounts. Then we can
 					// calculate the length accordingly.
