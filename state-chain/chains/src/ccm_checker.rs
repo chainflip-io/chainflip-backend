@@ -76,16 +76,25 @@ impl CcmValidityCheck for CcmValidityChecker {
 			{
 				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => {
 					// It's hard at this stage to compute exactly the length of the finally build
-					// transaction. That is because accounts can be repeated within the user's
-					// additional accounts but also with Chainflip accounts. It can be hard for
-					// integrators to not repeate them when crafting payloads with aggregators
-					// and then have the receiver contract handle it appropriately.
-					// Therefore we just check for the worse case scenario where we know it's
-					// impossible to fit the CCM in the transaction. Then the transaction
-					// builder will ensure that a built transaction is never beyond the
-					// Solana Transaction limit.
+					// transaction from the message and the additional accounts. Duplicated
+					// accounts only take one reference byte while new accounts take 32 bytes.
+					// Technically it shouldn't be necessary to pass duplicated accounts as
+					// it will all be executed in the same instruction. However when integrating
+					// with other protocols, many of the account's values are part of a returned
+					// payload from an API and it makes it cumbersome to then dedpulicate on the
+					// fly and then make it match with the receiver contract. It can be done
+					// but it then rrequires extra configuratio payload data.
+					// Therefore we want to allow for duplicated accounts, both duplicated
+					// within the additional accounts and with our accounts. Then we can
+					// calculate the length accordingly.
 
 					let mut seen_addresses = BTreeSet::new();
+
+					// From the Chainflip accounts included in the transaction, aggKey, DataAccount,
+					// NonceAccount and some others are irrelevant to the user anyway. The only
+					// relevant ones not included here are environment ones (ReceiverNative for
+					// SOL, receiverTokenAccount and USDC MINT for SolUsdc) but that'd just be
+					// a minor improvement.
 					seen_addresses.insert(SYSTEM_PROGRAM_ID);
 					seen_addresses.insert(SYS_VAR_INSTRUCTIONS);
 
