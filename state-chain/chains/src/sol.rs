@@ -47,8 +47,8 @@ pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
 // Bytes left that are available for the user when building the native and token ccm transfers.
 // All function parameters are already accounted for excepte additional_accounts and message.
-pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize; // 694 bytes left
-pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize; // 481 bytes left
+pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize + 32usize; // 694 bytes left + 32 empty source address
+pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize + 32usize; // 481 bytes left + 32 empty source address
 
 // Nonce management values
 pub const NONCE_NUMBER_CRITICAL_NONCES: usize = 1;
