@@ -393,30 +393,6 @@ export async function main() {
     (await getChainFees('Arbitrum')).baseFee < arbMinBaseFee ||
     (await getChainFees('Solana')).priorityFee < solMinPrioFee
   ) {
-    if ((await getChainFees('Ethereum')).priorityFee < ethMinPriorityFee) {
-      console.log(
-        'ethMinPriorityFee',
-        ethMinPriorityFee,
-        'awaiting for',
-        (await getChainFees('Ethereum')).priorityFee,
-      );
-    }
-    if ((await getChainFees('Arbitrum')).baseFee < arbMinBaseFee) {
-      console.log(
-        'arbMinBaseFee',
-        arbMinBaseFee,
-        'awaiting for',
-        (await getChainFees('Arbitrum')).baseFee,
-      );
-    }
-    if ((await getChainFees('Solana')).priorityFee < solMinPrioFee) {
-      console.log(
-        'solMinPrioFee',
-        solMinPrioFee,
-        'awaiting for',
-        (await getChainFees('Solana')).priorityFee,
-      );
-    }
     if (++i > LOOP_TIMEOUT) {
       spam = false;
       await spammingEth;
@@ -424,12 +400,6 @@ export async function main() {
       await spammingSol;
       testGasLimitCcmSwaps.log(
         "Skipping gasLimit CCM test as the priority fee didn't increase enough",
-        "Ethereum's fee",
-        ethMinPriorityFee,
-        "Arbitrum's fee",
-        arbMinBaseFee,
-        "Solana's fee",
-        solMinPrioFee,
       );
       return;
     }
