@@ -16,9 +16,8 @@ import {
 import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
 import { estimateCcmCfTesterGas, spamEvm } from '../shared/send_evm';
-import { observeEvent, observeBadEvent, getChainflipApi } from '../shared/utils/substrate';
+import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { spamSolana } from '../shared/send_sol';
 import { ExecutableTest } from '../shared/executable_test';
 
 // Run this test separately from all the concurrent tests because there will be BroadcastAborted events emitted.
