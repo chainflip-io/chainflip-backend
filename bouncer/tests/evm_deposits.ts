@@ -79,7 +79,6 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
 }
 
 // Not supporting Btc to avoid adding more unnecessary complexity with address encoding.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function testTxMultipleVaultSwaps(sourceAsset: Asset, destAsset: Asset) {
   const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
 
@@ -196,12 +195,12 @@ async function main() {
     testNoDuplicateWitnessing('ArbEth', 'Usdc'),
   ]);
 
-  // const multipleTxSwapsTest = Promise.all([
-  // testTxMultipleVaultSwaps('Eth', 'Dot'),
-  // testTxMultipleVaultSwaps('Eth', 'Flip'),
-  // testTxMultipleVaultSwaps('ArbEth', 'Dot'),
-  // testTxMultipleVaultSwaps('ArbEth', 'Flip'),
-  // ]);
+  const multipleTxSwapsTest = Promise.all([
+    testTxMultipleVaultSwaps('Eth', 'Dot'),
+    testTxMultipleVaultSwaps('Eth', 'Flip'),
+    testTxMultipleVaultSwaps('ArbEth', 'Dot'),
+    testTxMultipleVaultSwaps('ArbEth', 'Flip'),
+  ]);
 
   const doubleDepositTests = Promise.all([
     testDoubleDeposit('Eth', 'Dot'),
@@ -213,7 +212,7 @@ async function main() {
   await Promise.all([
     depositTests,
     noDuplicatedWitnessingTest,
-    // multipleTxSwapsTest,
+    multipleTxSwapsTest,
     doubleDepositTests,
   ]);
 }
