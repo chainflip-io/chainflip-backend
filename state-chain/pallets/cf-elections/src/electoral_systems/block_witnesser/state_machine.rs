@@ -5,7 +5,8 @@ use super::{
 use crate::electoral_systems::{
 	block_height_tracking::ChainProgress,
 	block_witnesser::{
-		block_processor::DepositChannelWitnessingProcessor, primitives::ChainProgressInner,
+		block_processor::{DepositChannelWitnessingProcessor, InnerEquality},
+		primitives::ChainProgressInner,
 	},
 	state_machine::{
 		core::{IndexOf, MultiIndexAndValue, Validate},
@@ -56,7 +57,7 @@ pub trait BWProcessorTypes {
 		+ 'static;
 
 	type BlockData: Serde + Clone;
-	type Event: Serde + Debug + Clone + Eq;
+	type Event: Serde + Debug + Clone + Eq + InnerEquality;
 	type Rules: Hook<(Self::ChainBlockNumber, Self::ChainBlockNumber, Self::BlockData), Vec<Self::Event>>
 		+ Default
 		+ Serde
@@ -168,16 +169,17 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 				s.elections.highest_election = range.start().saturating_backward(1);
 				s.elections.schedule_range(range.clone());
 				s.block_processor
-					.process_block_data(ChainProgressInner::Progress(*range.start()));
+					.process_block_data(ChainProgressInner::Progress(*range.start()), None);
 			},
 
 			SMInput::Context(ChainProgress::Range(range)) => {
 				if *range.start() <= s.elections.highest_witnessed {
 					//Reorg
-					s.block_processor.process_block_data(ChainProgressInner::Reorg(range.clone()));
+					s.block_processor
+						.process_block_data(ChainProgressInner::Reorg(range.clone()), None);
 				} else {
 					s.block_processor
-						.process_block_data(ChainProgressInner::Progress(*range.end()));
+						.process_block_data(ChainProgressInner::Progress(*range.end()), None);
 				}
 				s.elections.schedule_range(range);
 			},
@@ -187,10 +189,10 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 			SMInput::Vote(blockdata) => {
 				s.elections.mark_election_done(blockdata.0 .0);
 				log::info!("got block data: {:?}", blockdata.1);
-				s.block_processor.insert(blockdata.0 .0, blockdata.1.data);
-				s.block_processor.process_block_data(ChainProgressInner::Progress(
-					s.elections.highest_witnessed,
-				));
+				s.block_processor.process_block_data(
+					ChainProgressInner::Progress(s.elections.highest_witnessed),
+					Some((blockdata.0 .0, blockdata.1.data)),
+				);
 			},
 		};
 

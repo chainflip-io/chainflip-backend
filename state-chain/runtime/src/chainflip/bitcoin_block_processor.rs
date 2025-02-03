@@ -8,7 +8,8 @@ use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 
 use log::warn;
 use pallet_cf_elections::electoral_systems::{
-	block_witnesser::state_machine::BWProcessorTypes, state_machine::core::Hook,
+	block_witnesser::{block_processor::InnerEquality, state_machine::BWProcessorTypes},
+	state_machine::core::Hook,
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 
@@ -19,13 +20,19 @@ pub enum BtcEvent {
 }
 
 impl BtcEvent {
-	pub fn deposit_witness(&self) -> &DepositWitness<Bitcoin> {
+	fn deposit_witness(&self) -> &DepositWitness<Bitcoin> {
 		match self {
 			BtcEvent::PreWitness(_, dw) | BtcEvent::Witness(_, dw) => dw,
 		}
 	}
-	pub fn equal_inner(&self, other: &BtcEvent) -> bool {
+	fn equal_inner(&self, other: &BtcEvent) -> bool {
 		self.deposit_witness() == other.deposit_witness()
+	}
+}
+
+impl InnerEquality for BtcEvent {
+	fn inner_eq(&self, other: &Self) -> bool {
+		self.equal_inner(other)
 	}
 }
 
