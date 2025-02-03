@@ -1508,6 +1508,8 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 	}
 }
 
+use cf_chains::TransferFallback;
+
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn mark_transaction_for_rejection_inner(
 		account_id: T::AccountId,
@@ -2485,8 +2487,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			dca_params,
 			boost_fee,
 		} = vault_deposit_witness.clone();
-
-		use cf_chains::TransferFallback;
 
 		if AbortedVaultTransaction::<T, I>::take(&tx_id).is_some() {
 			log::info!("Ignoring deposit since transcation was aborted.");
