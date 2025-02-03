@@ -68,12 +68,13 @@ async function getChainFees(chain: Chain) {
   let baseFee = 0;
   let priorityFee = 0;
 
+  const trackedData = (
+    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
+  ).data.newChainState.trackedData;
+
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum': {
-      const trackedData = (
-        await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
-      ).data.newChainState.trackedData;
       baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
 
       if (chain === 'Ethereum') {
@@ -82,10 +83,7 @@ async function getChainFees(chain: Chain) {
       break;
     }
     case 'Solana': {
-      await using chainflip = await getChainflipApi();
-      const trackedData = await chainflip.query.solanaElections.electoralUnsynchronisedState();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      priorityFee = Number((trackedData.toJSON() as any[])[1].toString().replace(/,/g, ''));
+      priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
       break;
     }
     default:
@@ -369,7 +367,8 @@ async function spamChain(chain: Chain) {
       spamEvm('Ethereum', 500, () => spam);
       break;
     case 'Solana':
-      spamSolana(getChainMinFee('Solana'), 100, () => spam);
+      // No need to spam solana since we are anyway hardcoding the priority fees.
+      // spamSolana(getChainMinFee('Solana'), 100, () => spam);
       break;
     default:
       throw new Error(`Chain ${chain} is not supported for CCM`);
