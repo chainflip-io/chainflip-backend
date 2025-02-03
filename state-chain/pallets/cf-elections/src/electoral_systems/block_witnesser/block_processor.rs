@@ -6,23 +6,55 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec, vec::Vec};
 
-
-/// Block Processor
-/// responsible for processing blocks while handling reorgs based on our safety margin
-/// Blocks data are inserted in the processor along with the current height of the chain (which is used to determine which rules to process)
-///
-/// Each chain will implement its own rules (I.E. Pre-witness and Witness for BTC)
-///	When to delete block data
-/// How to dedup events (I.E. in case of both Pre-witness and Witness events in the same iteration)
-///
+/// A helper trait for determining whether two objects are “inner‐equal.”
+/// This trait is intended for use with event types to provide a custom notion
+/// of equality. In our context, events may be produced via different Rules (such as pre‐witness
+/// and full witness), and we want to ensure that the “deposit witness” aspect of an event is
+/// compared when deduplicating events.
 pub trait InnerEquality {
 	fn inner_eq(&self, other: &Self) -> bool;
 }
 
+///
+/// DepositChannelWitnessingProcessor
+/// ===================================
+///
+/// This processor is responsible for handling block data from a blockchain deposit channel while
+/// managing reorganization events (reorgs) within a safety margin. It maintains an internal state
+/// of block data and reorg events, applies chain-specific processing rules (such as pre-witness and
+/// witness event generation), deduplicates events to avoid processing the same deposit twice, and
+/// finally executes those events.
+///
+/// Each blockchain can provide its own definitions for:
+/// - The block number type.
+/// - The block data type.
+/// - The event type produced during block processing.
+/// - The rules to generate events (for example, pre-witness and full witness rules).
+/// - The logic for executing events.
+/// - The mechanism for cleaning up old block data and reorg events.
+/// - The logic for deduplicating events.
+///
+/// These are defined via the [`BWProcessorTypes`] trait, which is a generic parameter for this
+/// processor.
+///
+/// # Type Parameters
+///
+/// * `T`: A type that implements [`BWProcessorTypes`]. This defines:
+///     - `ChainBlockNumber`: The type representing block numbers.
+///     - `BlockData`: The type of data associated with a block.
+///     - `Event`: The type of event generated from processing blocks.
+///     - `Rules`: A hook to process block data and generate events.
+///     - `Execute`: A hook to execute generated events.
+///     - `CleanOld`: A hook to clean up old block data and reorg events.
+///     - `DedupEvents`: A hook to deduplicate events.
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
 pub struct DepositChannelWitnessingProcessor<T: BWProcessorTypes> {
+	/// A mapping from block numbers to their corresponding block data and the next age to be
+	/// processed. The "age" represents the block height difference between head of the chain and
+	/// block that we are processing, and it's used to know what rules have already been processed
+	/// for such block
 	pub blocks_data: BTreeMap<T::ChainBlockNumber, (T::BlockData, T::ChainBlockNumber)>,
 	pub reorg_events: BTreeMap<T::ChainBlockNumber, Vec<T::Event>>,
 	pub rules: T::Rules,
@@ -46,6 +78,43 @@ impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 }
 
 impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
+	/// Processes incoming block data and chain progress updates.
+	///
+	/// This method performs several key tasks:
+	///
+	/// 1. **Inserting Block Data:** If new block data is provided, it is inserted into the
+	///    processor's state (`blocks_data`).
+	///
+	/// 2. **Handling Chain Progress:** Based on the provided `chain_progress`, the processor
+	///    determines whether the chain has simply progressed (i.e., a new highest block) or
+	///    undergone a reorganization (reorg).
+	///    - For a normal progress update, it uses the latest block height to process pending block
+	///      data.
+	///    - For a reorg, it removes the block data for the affected blocks and collects any events
+	///      generated during that process into `reorg_events`.
+	///
+	/// 3. **Processing Rules:** The processor applies the chain-specific rules (via the `rules`
+	///    hook) to the stored block data, generating a set of events.
+	///
+	/// 4. **Deduplication and Execution:** Generated events are deduplicated using the
+	///    `dedup_events` hook. The remaining events are then executed via the `execute` hook.
+	///
+	/// 5. **Cleanup:** Finally, the `clean_old` hook is invoked to remove outdated block data and
+	///    reorg events, ensuring that only data within the defined safety margin is kept.
+	///
+	/// # Parameters
+	///
+	/// - `chain_progress`: Indicates the current state of the blockchain. It can either be:
+	///   - `ChainProgressInner::Progress(last_height)` for a simple progress update.
+	///   - `ChainProgressInner::Reorg(range)` for a reorganization event, where `range` defines the
+	///     blocks affected.
+	/// - `block_data`: An optional tuple `(block_number, block_data)`. If provided, this new block
+	///   data is stored.
+	///
+	/// # Returns
+	///
+	/// A vector of events (`T::Event`) generated during the processing. These events have been
+	/// deduplicated and executed.
 	pub fn process_block_data(
 		&mut self,
 		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
@@ -89,6 +158,20 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 		last_events
 	}
 
+	/// Processes the stored block data to generate events by applying the provided rules.
+	///
+	/// This method iterates over all the blocks in `blocks_data` and, for each block,
+	/// applies the rules for every applicable “age” (i.e., the difference between the current block
+	/// height and the block’s number). It then updates the stored "next age" for each block to
+	/// ensure that future processing resumes from the correct point.
+	///
+	/// # Parameters
+	///
+	/// - `last_height`: The current highest block number in the chain.
+	///
+	/// # Returns
+	///
+	/// A vector of events (`T::Event`) generated by applying the processing rules.
 	fn process_rules(&mut self, last_height: T::ChainBlockNumber) -> Vec<T::Event> {
 		let mut last_events: Vec<T::Event> = vec![];
 		for (block, (data, next_age)) in self.blocks_data.clone() {
@@ -106,6 +189,24 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 		last_events
 	}
 
+	/// Applies the processing rules for a given block at a specific age to generate events.
+	///
+	/// This function performs two primary steps:
+	///
+	/// 1. **Event Generation:** It calls the `rules` hook with a tuple `(block, age, data.clone())`
+	///    to generate events.
+	/// 2. **Deduplication Filtering:** It then filters out events that are already present in
+	///    `reorg_events` (using the [`InnerEquality`] trait to determine duplicate events).
+	///
+	/// # Parameters
+	///
+	/// - `block`: The block number for which to process rules.
+	/// - `age`: The age of the block (i.e., how many blocks have passed since this block).
+	/// - `data`: A reference to the block data.
+	///
+	/// # Returns
+	///
+	/// A vector of events (`T::Event`) generated by applying the rules, excluding any duplicates.
 	fn process_rules_for_age_and_block(
 		&mut self,
 		block: T::ChainBlockNumber,
