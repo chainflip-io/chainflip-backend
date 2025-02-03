@@ -2482,10 +2482,39 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		} = vault_deposit_witness.clone();
 
-		if let Some(_) = AbortedVaultTransaction::<T, I>::take(&tx_id) {
+		use cf_chains::TransferFallback;
+
+		if AbortedVaultTransaction::<T, I>::take(&tx_id).is_some() {
 			log::info!("Ignoring deposit since transcation was aborted.");
+			match (
+				refund_params
+					.expect("vault swap should have refund params")
+					.refund_address
+					.try_into(),
+				source_asset.try_into(),
+			) {
+				(Ok(refund_address), Ok(asset)) => {
+					let api_call =
+						<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
+							TransferAssetParams {
+								asset,
+								amount: deposit_amount,
+								to: refund_address,
+							},
+						)
+						.expect("Failed to create api call");
+					T::Broadcaster::threshold_sign_and_broadcast(api_call);
+				},
+				_ => {
+					// TODO: Maybe add the tx_id here bag or save swap details here for later
+					// investigation?
+					// TODO: Maybe emit an event here?
+					log::warn!("Failed to refund vault swap");
+				},
+			};
 			return;
 		}
+
 		let boost_status =
 			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
 
