@@ -204,6 +204,12 @@ mod benchmarks {
 		let lp_id =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::LiquidityProvider)
 				.unwrap();
+
+		T::LpRegistrationApi::register_liquidity_refund_address(
+			&lp_id,
+			ForeignChainAddress::Eth(Default::default()),
+		);
+
 		let caller = OriginFor::<T>::signed(lp_id.clone());
 
 		T::BalanceApi::credit_account(&lp_id, Asset::Eth, 1000);
