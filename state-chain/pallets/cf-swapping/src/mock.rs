@@ -202,7 +202,7 @@ cf_test_utilities::impl_test_helpers! {
 	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&BROKER).unwrap();
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
-			&LP_ACCOUNT.into(),
+			&LP_ACCOUNT,
 		).unwrap();
 	},
 }

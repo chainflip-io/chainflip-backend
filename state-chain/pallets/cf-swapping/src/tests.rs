@@ -1689,7 +1689,7 @@ mod on_chain_swapping {
 						input_asset: INPUT_ASSET,
 						input_amount: INPUT_AMOUNT,
 						output_asset: OUTPUT_ASSET,
-						origin: SwapOrigin::Internal,
+						origin: SwapOrigin::OnChainAccount(LP_ACCOUNT),
 						request_type: SwapRequestTypeEncoded::Regular {
 							output_action: SwapOutputActionEncoded::CreditOnChain {
 								account_id: LP_ACCOUNT
@@ -1704,9 +1704,21 @@ mod on_chain_swapping {
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
 			.then_execute_with(|_| {
-				assert_has_matching_event!(
+				assert_event_sequence!(
 					Test,
-					RuntimeEvent::Swapping(Event::SwapExecuted { .. }),
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						swap_request_id: SWAP_REQUEST_ID,
+						..
+					}),
+					RuntimeEvent::Swapping(Event::CreditedOnChain {
+						swap_request_id: SWAP_REQUEST_ID,
+						account_id: LP_ACCOUNT,
+						asset: OUTPUT_ASSET,
+						amount: EXPECTED_OUTPUT_AMOUNT,
+					}),
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID
+					}),
 				);
 
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
@@ -1746,7 +1758,7 @@ mod on_chain_swapping {
 						input_asset: INPUT_ASSET,
 						input_amount: INPUT_AMOUNT,
 						output_asset: OUTPUT_ASSET,
-						origin: SwapOrigin::Internal,
+						origin: SwapOrigin::OnChainAccount(LP_ACCOUNT),
 						request_type: SwapRequestTypeEncoded::Regular {
 							output_action: SwapOutputActionEncoded::CreditOnChain {
 								account_id: LP_ACCOUNT
@@ -1771,11 +1783,28 @@ mod on_chain_swapping {
 			})
 			.then_process_blocks_until_block(CHUNK_2_BLOCK)
 			.then_execute_with(|_| {
-				// There is no "SwapRefunded" event...
-
 				// Only one chunk is expected to be swapped:
 				const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
 					CHUNK_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::Swapping(Event::RefundedOnChain {
+						swap_request_id: SWAP_REQUEST_ID,
+						account_id: LP_ACCOUNT,
+						asset: INPUT_ASSET,
+						amount: CHUNK_AMOUNT,
+					}),
+					RuntimeEvent::Swapping(Event::CreditedOnChain {
+						swap_request_id: SWAP_REQUEST_ID,
+						account_id: LP_ACCOUNT,
+						asset: OUTPUT_ASSET,
+						amount: EXPECTED_OUTPUT_AMOUNT
+					}),
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID
+					}),
+				);
 
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), CHUNK_AMOUNT);
 				assert_eq!(

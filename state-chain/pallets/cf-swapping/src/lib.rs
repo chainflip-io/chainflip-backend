@@ -703,6 +703,20 @@ pub mod pallet {
 		MinimumNetworkFeeSet {
 			min_fee: AssetAmount,
 		},
+		// Account credited as a result of an on-chain swap
+		CreditedOnChain {
+			swap_request_id: SwapRequestId,
+			account_id: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+		},
+		// Account received a refund as a result of an on-chain swap
+		RefundedOnChain {
+			swap_request_id: SwapRequestId,
+			account_id: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -1538,6 +1552,13 @@ pub mod pallet {
 							);
 						},
 						RefundDestination::OnChainAccount(account_id) => {
+							Self::deposit_event(Event::<T>::RefundedOnChain {
+								swap_request_id,
+								account_id: account_id.clone(),
+								asset: request.input_asset,
+								amount: amount_to_refund,
+							});
+
 							T::BalanceApi::credit_account(
 								account_id,
 								request.input_asset,
@@ -1552,7 +1573,7 @@ pub mod pallet {
 						match output_action {
 							SwapOutputAction::Egress { ccm_deposit_metadata, output_address } => {
 								Self::egress_for_swap(
-									swap.swap_request_id,
+									swap_request_id,
 									*accumulated_output_amount,
 									request.output_asset,
 									output_address.clone(),
@@ -1561,7 +1582,13 @@ pub mod pallet {
 								);
 							},
 							SwapOutputAction::CreditOnChain { account_id } => {
-								// TODO: a new event for when LP is credited after a swap?
+								Self::deposit_event(Event::<T>::CreditedOnChain {
+									swap_request_id,
+									account_id: account_id.clone(),
+									asset: request.output_asset,
+									amount: *accumulated_output_amount,
+								});
+
 								T::BalanceApi::credit_account(
 									account_id,
 									request.output_asset,
@@ -1655,9 +1682,16 @@ pub mod pallet {
 								);
 							},
 							SwapOutputAction::CreditOnChain { account_id } => {
+								Self::deposit_event(Event::<T>::CreditedOnChain {
+									swap_request_id,
+									account_id: account_id.clone(),
+									asset: request.output_asset,
+									amount: dca_state.accumulated_output_amount,
+								});
+
 								T::BalanceApi::credit_account(
 									account_id,
-									swap.output_asset(),
+									request.output_asset,
 									dca_state.accumulated_output_amount,
 								);
 							},
