@@ -8,8 +8,11 @@ use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
-		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
+		address_converter::MockAddressConverter,
+		balance_api::{MockBalance, MockLpRegistration},
+		bonding::MockBonderFor,
+		deposit_handler::MockDepositHandler,
+		egress_handler::MockEgressHandler,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
 	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
@@ -180,6 +183,8 @@ impl pallet_cf_swapping::Config for Test {
 	type FeePayment = MockFeePayment<Self>;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
 	type BalanceApi = MockBalance;
+	type PoolApi = Self;
+	type LpRegistrationApi = MockLpRegistration;
 	type CcmValidityChecker = AlwaysValid;
 	type NetworkFee = NetworkFee;
 	type ChannelIdAllocator = MockChannelIdAllocator;
@@ -189,11 +194,15 @@ impl pallet_cf_swapping::Config for Test {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 789u64;
 pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
+pub const LP_ACCOUNT: u64 = 119;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&BROKER).unwrap();
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&LP_ACCOUNT.into(),
+		).unwrap();
 	},
 }

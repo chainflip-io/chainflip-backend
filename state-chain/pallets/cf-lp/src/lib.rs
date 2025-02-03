@@ -424,17 +424,12 @@ impl<T: Config> LpRegistration for Pallet<T> {
 		LiquidityRefundAddress::<T>::insert(account_id, address.chain(), address);
 	}
 
-	fn ensure_has_refund_address_for_pair(
+	fn ensure_has_refund_address_for_asset(
 		account_id: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset: Asset,
 	) -> DispatchResult {
 		ensure!(
-			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
-				LiquidityRefundAddress::<T>::contains_key(
-					account_id,
-					ForeignChain::from(quote_asset)
-				),
+			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(asset)),
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);
 		Ok(())

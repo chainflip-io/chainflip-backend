@@ -24,11 +24,7 @@ pub trait LpRegistration {
 	);
 
 	/// Ensure that the given account has a refund address set for the given asset.
-	fn ensure_has_refund_address_for_pair(
-		who: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
-	) -> DispatchResult;
+	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult;
 }
 
 pub trait HistoricalFeeMigration {

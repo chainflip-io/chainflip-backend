@@ -310,6 +310,8 @@ impl pallet_cf_swapping::Config for Runtime {
 	type CcmValidityChecker = CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
+	type PoolApi = LiquidityPools;
+	type LpRegistrationApi = LiquidityProvider;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
 }

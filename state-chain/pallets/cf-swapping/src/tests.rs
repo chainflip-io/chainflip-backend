@@ -1649,6 +1649,7 @@ mod swap_batching {
 	}
 }
 
+#[cfg(test)]
 mod on_chain_swapping {
 
 	use cf_traits::{mocks::balance_api::MockBalance, SwapOutputActionEncoded};
@@ -1657,8 +1658,6 @@ mod on_chain_swapping {
 
 	const INPUT_ASSET: Asset = Asset::Eth;
 	const OUTPUT_ASSET: Asset = Asset::Flip;
-
-	const ACCOUNT_ID: u64 = 3;
 
 	const INPUT_AMOUNT: AssetAmount = 1000;
 
@@ -1672,10 +1671,10 @@ mod on_chain_swapping {
 
 		new_test_ext()
 			.execute_with(|| {
-				MockBalance::credit_account(&ACCOUNT_ID, INPUT_ASSET, INPUT_AMOUNT);
+				MockBalance::credit_account(&LP_ACCOUNT, INPUT_ASSET, INPUT_AMOUNT);
 
 				assert_ok!(Swapping::internal_swap(
-					RuntimeOrigin::signed(ACCOUNT_ID),
+					RuntimeOrigin::signed(LP_ACCOUNT),
 					INPUT_AMOUNT,
 					INPUT_ASSET,
 					OUTPUT_ASSET,
@@ -1693,15 +1692,15 @@ mod on_chain_swapping {
 						origin: SwapOrigin::Internal,
 						request_type: SwapRequestTypeEncoded::Regular {
 							output_action: SwapOutputActionEncoded::CreditOnChain {
-								account_id: ACCOUNT_ID
+								account_id: LP_ACCOUNT
 							}
 						},
 						..
 					})
 				);
 
-				assert_eq!(MockBalance::get_balance(&ACCOUNT_ID, INPUT_ASSET), 0);
-				assert_eq!(MockBalance::get_balance(&ACCOUNT_ID, OUTPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
 			.then_execute_with(|_| {
@@ -1710,9 +1709,9 @@ mod on_chain_swapping {
 					RuntimeEvent::Swapping(Event::SwapExecuted { .. }),
 				);
 
-				assert_eq!(MockBalance::get_balance(&ACCOUNT_ID, INPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
 				assert_eq!(
-					MockBalance::get_balance(&ACCOUNT_ID, OUTPUT_ASSET),
+					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
 					EXPECTED_OUTPUT_AMOUNT
 				);
 			});
@@ -1729,10 +1728,10 @@ mod on_chain_swapping {
 
 		new_test_ext()
 			.execute_with(|| {
-				MockBalance::credit_account(&ACCOUNT_ID, INPUT_ASSET, INPUT_AMOUNT);
+				MockBalance::credit_account(&LP_ACCOUNT, INPUT_ASSET, INPUT_AMOUNT);
 
 				assert_ok!(Swapping::internal_swap(
-					RuntimeOrigin::signed(ACCOUNT_ID),
+					RuntimeOrigin::signed(LP_ACCOUNT),
 					INPUT_AMOUNT,
 					INPUT_ASSET,
 					OUTPUT_ASSET,
@@ -1750,15 +1749,15 @@ mod on_chain_swapping {
 						origin: SwapOrigin::Internal,
 						request_type: SwapRequestTypeEncoded::Regular {
 							output_action: SwapOutputActionEncoded::CreditOnChain {
-								account_id: ACCOUNT_ID
+								account_id: LP_ACCOUNT
 							}
 						},
 						..
 					})
 				);
 
-				assert_eq!(MockBalance::get_balance(&ACCOUNT_ID, INPUT_ASSET), 0);
-				assert_eq!(MockBalance::get_balance(&ACCOUNT_ID, OUTPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
 			})
 			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
@@ -1778,9 +1777,9 @@ mod on_chain_swapping {
 				const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
 					CHUNK_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
 
-				assert_eq!(MockBalance::get_balance(&ACCOUNT_ID, INPUT_ASSET), CHUNK_AMOUNT);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), CHUNK_AMOUNT);
 				assert_eq!(
-					MockBalance::get_balance(&ACCOUNT_ID, OUTPUT_ASSET),
+					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
 					EXPECTED_OUTPUT_AMOUNT
 				);
 			});

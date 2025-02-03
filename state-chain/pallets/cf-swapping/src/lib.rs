@@ -17,8 +17,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
-	FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	FundingInfo, IngressEgressFeeApi, LpRegistration, SwapLimitsProvider, SwapOutputAction,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -391,7 +391,7 @@ pub mod pallet {
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
 		SwapId, SwapOutput, SwapRequestId,
 	};
-	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, ScheduledEgressDetails};
+	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, PoolApi, ScheduledEgressDetails};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
 
@@ -441,6 +441,10 @@ pub mod pallet {
 
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
+
+		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type ChannelIdAllocator: ChannelIdAllocator;
 
@@ -1220,9 +1224,11 @@ pub mod pallet {
 			min_price: Price,
 			dca_params: Option<DcaParameters>,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			// Do we need to sweep?
+			T::LpRegistrationApi::ensure_has_refund_address_for_asset(&account_id, output_asset)?;
+
+			T::PoolApi::sweep(&account_id)?;
 
 			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)?;
 
@@ -1238,11 +1244,11 @@ pub mod pallet {
 				Default::default(), /* no broker fees */
 				Some(RefundParametersExtended {
 					retry_duration,
-					refund_destination: RefundDestination::OnChainAccount(account_id),
+					refund_destination: RefundDestination::OnChainAccount(account_id.clone()),
 					min_price,
 				}),
 				dca_params,
-				SwapOrigin::Internal,
+				SwapOrigin::OnChainAccount(account_id),
 			);
 
 			Ok(())

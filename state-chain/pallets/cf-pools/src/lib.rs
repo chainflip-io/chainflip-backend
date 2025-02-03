@@ -1698,7 +1698,8 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		f: F,
 	) -> Result<R, DispatchError> {
-		T::LpRegistrationApi::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
+		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, base_asset)?;
+		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, quote_asset)?;
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)

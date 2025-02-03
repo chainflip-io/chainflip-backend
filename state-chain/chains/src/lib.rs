@@ -682,6 +682,7 @@ pub enum SwapOrigin<AccountId> {
 		broker_id: Option<AccountId>,
 	},
 	Internal,
+	OnChainAccount(AccountId),
 }
 
 impl<AccountId> SwapOrigin<AccountId> {
@@ -690,6 +691,7 @@ impl<AccountId> SwapOrigin<AccountId> {
 			Self::DepositChannel { ref broker_id, .. } => Some(broker_id),
 			Self::Vault { ref broker_id, .. } => broker_id.as_ref(),
 			Self::Internal => None,
+			Self::OnChainAccount(_) => None,
 		}
 	}
 }
