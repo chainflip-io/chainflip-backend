@@ -102,14 +102,12 @@ impl CcmValidityCheck for CcmValidityChecker {
 					if asset == SolAsset::SolUsdc {
 						seen_addresses.insert(TOKEN_PROGRAM_ID);
 					}
-					let mut accounts_length = 0;
+					let mut accounts_length = ccm_accounts.additional_accounts.len() *
+						ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
-					for &ccm_address in &ccm_accounts.additional_accounts {
-						accounts_length += ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
-
-						if !seen_addresses.contains(&ccm_address.pubkey.into()) {
+					for ccm_address in &ccm_accounts.additional_accounts {
+						if seen_addresses.insert(ccm_address.pubkey.into()) {
 							accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
-							seen_addresses.insert(ccm_address.pubkey.into());
 						}
 					}
 
