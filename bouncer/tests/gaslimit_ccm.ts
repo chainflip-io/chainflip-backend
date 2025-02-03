@@ -402,6 +402,7 @@ export async function main() {
       testGasLimitCcmSwaps.log(
         "Skipping gasLimit CCM test as the priority fee didn't increase enough",
       );
+      await sleep(10000);
       return;
     }
     await sleep(500);
