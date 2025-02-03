@@ -2,8 +2,8 @@ mod boost;
 mod screening;
 
 use crate::{
-	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
-	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
+	mock_eth::*, AbortedVaultTransaction, BoostStatus, Call as PalletCall, ChannelAction,
+	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
 	DepositOrigin, DepositWitness, DisabledEgressAssets, EgressDustLimit, Event as PalletEvent,
 	Event, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit,
@@ -36,6 +36,7 @@ use cf_traits::{
 		balance_api::MockBalance,
 		block_height_provider::BlockHeightProvider,
 		chain_tracking::ChainTracker,
+		egress_handler::MockEgressHandler,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
@@ -52,7 +53,7 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::{bounded_vec, H160};
+use sp_core::{bounded_vec, H160, U256};
 use sp_runtime::{DispatchError, DispatchResult, Percent};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -2360,5 +2361,47 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 			DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
 		)
 		.is_ok());
+	});
+}
+
+#[test]
+fn vault_swaps_gets_refunded_if_vault_transaction_aborts() {
+	new_test_ext().execute_with(|| {
+		let tx_id = H256::default();
+		AbortedVaultTransaction::<Test, ()>::insert(tx_id, ());
+
+		IngressEgress::process_vault_swap_request_full_witness(
+			0,
+			VaultDepositWitness {
+				input_asset: Asset::Eth.try_into().unwrap(),
+				deposit_address: Default::default(),
+				channel_id: Some(0),
+				deposit_amount: 100,
+				deposit_details: Default::default(),
+				output_asset: Asset::Eth.try_into().unwrap(),
+				destination_address: EncodedAddress::Eth(Default::default()),
+				deposit_metadata: Default::default(),
+				tx_id,
+				broker_fee: None,
+				affiliate_fees: Default::default(),
+				refund_params: Some(ChannelRefundParametersDecoded {
+					retry_duration: 0,
+					min_price: U256::from(0),
+					refund_address: ForeignChainAddress::Eth(Default::default()),
+				}),
+				dca_params: None,
+				boost_fee: 0,
+			},
+		);
+
+		assert!(
+			AbortedVaultTransaction::<Test, ()>::get(tx_id).is_none(),
+			"vault swap should have been refunded"
+		);
+
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+		let egresses = MockEgressHandler::<Ethereum>::get_scheduled_egresses();
+		assert_eq!(egresses.len(), 0);
 	});
 }
