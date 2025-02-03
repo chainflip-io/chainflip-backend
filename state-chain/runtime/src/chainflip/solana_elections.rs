@@ -29,7 +29,7 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		self,
-		composite::{tuple_7_impls::Hooks, CompositeRunner},
+		composite::{tuple_6_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
@@ -41,7 +41,7 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
+use sp_runtime::DispatchResult;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -55,7 +55,6 @@ type Instance = <Solana as ChainInstanceAlias>::Instance;
 pub type SolanaElectoralSystemRunner = CompositeRunner<
 	(
 		SolanaBlockHeightTracking,
-		SolanaFeeTracking,
 		SolanaIngressTracking,
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
@@ -71,7 +70,6 @@ const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
 
 /// Creates an initial state to initialize the pallet with.
 pub fn initial_state(
-	priority_fee: SolAmount,
 	vault_program: SolAddress,
 	usdc_token_mint_pubkey: SolAddress,
 	swap_endpoint_data_account_address: SolAddress,
@@ -81,24 +79,14 @@ pub fn initial_state(
 			// The initial chaintracking value does not matter, as we don't care about the vault
 			// start blocks.
 			Default::default(),
-			priority_fee,
 			(),
 			(),
 			(),
 			(),
 			0u32,
 		),
-		unsynchronised_settings: (
-			(),
-			SolanaFeeUnsynchronisedSettings { fee_multiplier: FixedU128::from_u32(1u32) },
-			(),
-			(),
-			(),
-			(),
-			(),
-		),
+		unsynchronised_settings: ((), (), (), (), (), ()),
 		settings: (
-			(),
 			(),
 			SolanaIngressSettings { vault_program, usdc_token_mint_pubkey },
 			(),
@@ -115,12 +103,7 @@ pub type SolanaBlockHeightTracking = electoral_systems::monotonic_median::Monoto
 	SolanaBlockHeightTrackingHook,
 	<Runtime as Chainflip>::ValidatorId,
 >;
-pub type SolanaFeeTracking = electoral_systems::unsafe_median::UnsafeMedian<
-	<Solana as Chain>::ChainAmount,
-	SolanaFeeUnsynchronisedSettings,
-	(),
-	<Runtime as Chainflip>::ValidatorId,
->;
+
 pub type SolanaIngressTracking =
 	electoral_systems::blockchain::delta_based_ingress::DeltaBasedIngress<
 		pallet_cf_ingress_egress::Pallet<Runtime, Instance>,
@@ -247,7 +230,6 @@ pub struct SolanaElectionHooks;
 impl
 	Hooks<
 		SolanaBlockHeightTracking,
-		SolanaFeeTracking,
 		SolanaIngressTracking,
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
@@ -258,7 +240,6 @@ impl
 	fn on_finalize(
 		(
 			block_height_identifiers,
-			fee_identifiers,
 			ingress_identifiers,
 			nonce_tracking_identifiers,
 			egress_witnessing_identifiers,
@@ -268,11 +249,6 @@ impl
 			Vec<
 				ElectionIdentifier<
 					<SolanaBlockHeightTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
-				>,
-			>,
-			Vec<
-				ElectionIdentifier<
-					<SolanaFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
@@ -313,13 +289,6 @@ impl
 		SolanaLiveness::on_finalize::<
 			DerivedElectoralAccess<_, SolanaLiveness, RunnerStorageAccess<Runtime, SolanaInstance>>,
 		>(liveness_identifiers, &(current_sc_block_number, block_height))?;
-		SolanaFeeTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				SolanaFeeTracking,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
-		>(fee_identifiers, &())?;
 		SolanaNonceTracking::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -353,18 +322,6 @@ impl
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub struct SolanaFeeUnsynchronisedSettings {
-	pub fee_multiplier: FixedU128,
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for SolanaFeeUnsynchronisedSettings {
-	fn benchmark_value() -> Self {
-		Self { fee_multiplier: 1u128.into() }
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct SolanaIngressSettings {
 	pub vault_program: SolAddress,
 	pub usdc_token_mint_pubkey: SolAddress,
@@ -380,7 +337,7 @@ impl BenchmarkValue for SolanaIngressSettings {
 	}
 }
 
-use pallet_cf_elections::electoral_systems::composite::tuple_7_impls::DerivedElectoralAccess;
+use pallet_cf_elections::electoral_systems::composite::tuple_6_impls::DerivedElectoralAccess;
 
 pub struct SolanaChainTrackingProvider;
 impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
@@ -400,36 +357,19 @@ impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
 	}
 }
 
+// TODO: Look at removing this
 impl SolanaChainTrackingProvider {
 	pub fn priority_fee() -> <Solana as Chain>::ChainAmount {
 		MIN_COMPUTE_PRICE
 	}
 
+	// TODO: Delete this.
 	fn with_tracked_data_then_apply_fee_multiplier<
 		F: FnOnce(SolTrackedData) -> <Solana as Chain>::ChainAmount,
 	>(
 		f: F,
 	) -> <Solana as Chain>::ChainAmount {
-		DerivedElectoralAccess::<
-			_,
-			SolanaFeeTracking,
-			RunnerStorageAccess<Runtime, SolanaInstance>,
-		>::unsynchronised_state()
-			.and_then(|priority_fee| {
-				DerivedElectoralAccess::<
-			_,
-			SolanaFeeTracking,
-			RunnerStorageAccess<Runtime, SolanaInstance>,
-		>::unsynchronised_settings().map(|fees| {
-					{
-						fees.fee_multiplier.saturating_mul_int(f(SolTrackedData { priority_fee }))
-					}
-				})
-			})
-			.unwrap_or_else(|err| {
-				log_or_panic!("Failed to obtain Solana fee: '{err:?}'.");
-				Default::default()
-			})
+		f(SolTrackedData { priority_fee: SolanaChainTrackingProvider::priority_fee() })
 	}
 }
 impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
@@ -443,6 +383,7 @@ impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
 
 	fn estimate_ingress_fee_vault_swap() -> Option<<Solana as Chain>::ChainAmount> {
 		Some(Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
+			// TODO: These should be untangled?
 			tracked_data.estimate_ingress_fee_vault_swap().unwrap_or_else(|| {
 				log_or_panic!(
 					"Obtained None when estimating Solana Ingress Vault Swap fee. This should not happen"
@@ -490,7 +431,7 @@ impl IngressSource for SolanaIngress {
 				SolanaElectoralSystemRunner::with_identifiers(
 					composite_election_identifiers,
 					|grouped_election_identifiers| {
-						let (_, _, election_identifiers, ..) = grouped_election_identifiers;
+						let (_, election_identifiers, ..) = grouped_election_identifiers;
 						SolanaIngressTracking::open_channel::<
 							DerivedElectoralAccess<
 								_,

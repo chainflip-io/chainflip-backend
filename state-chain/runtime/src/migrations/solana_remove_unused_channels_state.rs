@@ -2,7 +2,7 @@ use crate::*;
 use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
 
 use pallet_cf_elections::{
-	electoral_systems::composite::tuple_7_impls::CompositeElectoralUnsynchronisedStateMapKey,
+	electoral_systems::composite::tuple_6_impls::CompositeElectoralUnsynchronisedStateMapKey,
 	ElectoralUnsynchronisedStateMap,
 };
 use sp_core::bounded::alloc::collections::BTreeSet;
@@ -42,7 +42,7 @@ impl OnRuntimeUpgrade for SolanaRemoveUnusedChannelsState {
 		log::info!("🧮 Number of Solana Addresses stored before migration: {:?}", keys.len());
 		let mut removed = 0;
 		for key in keys.into_iter() {
-			if let CompositeElectoralUnsynchronisedStateMapKey::C((address, _asset)) = key {
+			if let CompositeElectoralUnsynchronisedStateMapKey::B((address, _asset)) = key {
 				if !addresses_in_use.contains(&address) {
 					ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::remove(key);
 					removed += 1;

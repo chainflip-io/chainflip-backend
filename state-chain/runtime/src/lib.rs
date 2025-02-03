@@ -1303,7 +1303,7 @@ macro_rules! instanced_migrations {
 		from: $from:literal,
 		to: $to:literal,
 		include_instances: [$( $include:ident ),+ $(,)?],
-		exclude_instances: [$( $exclude:ident ),+ $(,)?] $(,)?
+		exclude_instances: [$( $exclude:ident ),* $(,)?] $(,)?
 	) => {
 		(
 			$(
@@ -1323,7 +1323,7 @@ macro_rules! instanced_migrations {
 					$module::Pallet<Runtime, $exclude>,
 					DbWeight,
 				>,
-			)+
+			)*
 		)
 	}
 }
@@ -1381,6 +1381,16 @@ type MigrationsForV1_8 = (
 			BitcoinInstance,
 			SolanaInstance,
 		],
+	},
+	instanced_migrations! {
+		module: pallet_cf_elections,
+		migration: migrations::remove_fee_tracking_migration::RemoveFeeTrackingMigration,
+		from: 3,
+		to: 4,
+		include_instances: [
+			SolanaInstance
+		],
+		exclude_instances: [],
 	},
 );
 

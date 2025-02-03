@@ -14,12 +14,10 @@ use pallet_cf_elections::InitialState;
 use pallet_cf_validator::SetSizeParameters;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::{FixedU128, Percent, Permill};
+use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::{
-		solana_elections::{
-			SolanaFeeUnsynchronisedSettings, SolanaIngressSettings, SolanaVaultSwapsSettings,
-		},
+		solana_elections::{SolanaIngressSettings, SolanaVaultSwapsSettings},
 		Offence,
 	},
 	constants::common::*,
@@ -304,26 +302,14 @@ impl ExtBuilder {
 				option_initial_state: Some(InitialState {
 					unsynchronised_state: (
 						/* chain tracking */ Default::default(),
-						/* priority_fee */ COMPUTE_PRICE,
 						(),
 						(),
 						(),
 						(),
 						Default::default(),
 					),
-					unsynchronised_settings: (
-						(),
-						SolanaFeeUnsynchronisedSettings {
-							fee_multiplier: FixedU128::from_u32(1u32),
-						},
-						(),
-						(),
-						(),
-						(),
-						(),
-					),
+					unsynchronised_settings: ((), (), (), (), (), ()),
 					settings: (
-						(),
 						(),
 						SolanaIngressSettings {
 							vault_program: sol_test_values::VAULT_PROGRAM,

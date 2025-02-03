@@ -124,7 +124,7 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 pub use pallet::UniqueMonotonicIdentifier;
 
@@ -413,7 +413,7 @@ pub mod pallet {
 	/// added the reference will be removed which will invalidate any votes that reference it,
 	/// forcing validators who referenced it to revote.
 	#[pallet::storage]
-	pub(crate) type SharedDataReferenceCount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type SharedDataReferenceCount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Identity,
 		SharedDataHash,
@@ -439,7 +439,7 @@ pub mod pallet {
 	/// data instead of the full data, any validator who has the associated data will randomly
 	/// choose to submit it, where the probability increases over time.
 	#[pallet::storage]
-	pub(crate) type SharedData<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type SharedData<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Identity,
 		SharedDataHash,
@@ -450,7 +450,7 @@ pub mod pallet {
 	/// A mapping from election id and validator id to shared vote hash that uses bitmaps to
 	/// decrease space requirements assuming most validators submit the same hashes.
 	#[pallet::storage]
-	pub(crate) type BitmapComponents<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type BitmapComponents<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -460,7 +460,7 @@ pub mod pallet {
 
 	/// A mapping from election id and validator id to individual vote components.
 	#[pallet::storage]
-	pub(crate) type IndividualComponents<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type IndividualComponents<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -483,7 +483,7 @@ pub mod pallet {
 	/// Stores governance-controlled settings regarding the electoral system. These settings can be
 	/// changed by governance at anytime.
 	#[pallet::storage]
-	pub(crate) type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static = ()> = StorageValue<
+	pub type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
 		<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
 		OptionQuery,
@@ -521,7 +521,7 @@ pub mod pallet {
 	/// Stores the properties of each election. These settings are fixed and are set on creation of
 	/// the election by the electoral system.
 	#[pallet::storage]
-	type ElectionProperties<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ElectionProperties<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		ElectionIdentifierOf<T::ElectoralSystemRunner>,
@@ -531,7 +531,7 @@ pub mod pallet {
 
 	/// Stores mutable per-election state that the electoral system needs.
 	#[pallet::storage]
-	type ElectionState<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ElectionState<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -543,7 +543,7 @@ pub mod pallet {
 	/// `ElectoralSystemRunner::check_consensus` that returned `Some(...)`, and whether it is
 	/// `current` / has not been `lost` since.
 	#[pallet::storage]
-	type ElectionConsensusHistory<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ElectionConsensusHistory<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -554,20 +554,20 @@ pub mod pallet {
 	#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo, Default)]
 	pub struct ConsensusHistory<T> {
 		/// The most recent consensus the election had.
-		most_recent: T,
+		pub most_recent: T,
 		/// Indicates if consensus was lost after the `most_recent` consensus was gained. I.e. that
 		/// we currently do not have consensus.
 		///
 		/// Note that `lost_since` is only based on when `check_consensus` is called, and so it is
 		/// possible consensus was "lost" and regained, but as `check_consensus` was not called
 		/// while the consensus was "lost", this member could still be `false`.
-		lost_since: bool,
+		pub lost_since: bool,
 	}
 
 	/// Stores the elections whose consensus doesn't need to be rechecked, and the epoch when they
 	/// were last checked.
 	#[pallet::storage]
-	pub(crate) type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
+	pub type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, UniqueMonotonicIdentifier, EpochIndex, OptionQuery>;
 
 	/// Stores the set of authorities whose votes can contribute to consensus. Whether an authority
@@ -907,7 +907,7 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	pub(crate) mod bitmap_components {
+	pub mod bitmap_components {
 		use super::{
 			BitmapComponents, Config, CorruptStorageError, Pallet, UniqueMonotonicIdentifier,
 		};
@@ -925,7 +925,7 @@ pub mod pallet {
 
 		#[derive(Encode, Decode, TypeInfo)]
 		#[scale_info(skip_type_params(T, I))]
-		pub(crate) struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
+		pub struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
 			epoch: EpochIndex,
 			#[allow(clippy::type_complexity)]
 			bitmaps:
