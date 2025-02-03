@@ -71,8 +71,8 @@ const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 300;
 const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 150;
 
 // Solana CCM-related parameters. These are limits in the protocol.
-const MAX_CCM_BYTES_SOL = 694;
-const MAX_CCM_BYTES_USDC = 481;
+const MAX_CCM_BYTES_SOL = 694 + 32; // Adding 32 for now to account for the empty source_address
+const MAX_CCM_BYTES_USDC = 481 + 32; // Adding 32 for now to account for the empty source_address
 const SOLANA_BYTES_PER_ACCOUNT = 33;
 
 function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: number): string {
