@@ -1,5 +1,7 @@
 use frame_support::traits::UncheckedOnRuntimeUpgrade;
 
+use cf_chains::{CcmAdditionalData, CcmMessage};
+
 use crate::Config;
 
 use crate::*;
@@ -11,9 +13,31 @@ use codec::{Decode, Encode};
 
 pub mod old {
 	use super::*;
-	use cf_chains::{CcmDepositMetadata, ChannelRefundParametersDecoded, ForeignChainAddress};
+	use cf_chains::{ChannelRefundParametersDecoded, ForeignChainAddress};
 	use cf_primitives::{Asset, AssetAmount, Beneficiaries, SwapId};
 	use frame_support::Twox64Concat;
+
+	const MAX_CCM_MSG_LENGTH: u32 = 10_000;
+	const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
+
+	type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
+	type CcmCfParameters = BoundedVec<u8, ConstU32<MAX_CCM_CF_PARAM_LENGTH>>;
+
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+	pub struct CcmChannelMetadata {
+		pub message: CcmMessage,
+		pub gas_budget: AssetAmount,
+		pub cf_parameters: CcmCfParameters,
+	}
+
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub struct CcmDepositMetadataGeneric<Address> {
+		pub channel_metadata: CcmChannelMetadata,
+		pub source_chain: ForeignChain,
+		pub source_address: Option<Address>,
+	}
+
+	pub type CcmDepositMetadata = CcmDepositMetadataGeneric<ForeignChainAddress>;
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub enum GasSwapState {
@@ -102,8 +126,32 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 						dca_state,
 						broker_fees,
 					} => SwapRequestState::UserSwap {
-						ccm_deposit_metadata: ccm
-							.map(|old_ccm_state| old_ccm_state.ccm_deposit_metadata),
+						ccm_deposit_metadata: ccm.map(|old_ccm_state| CcmDepositMetadata {
+							channel_metadata: CcmChannelMetadata {
+								message: CcmMessage::try_from(
+									old_ccm_state
+										.ccm_deposit_metadata
+										.channel_metadata
+										.message
+										.into_inner(),
+								)
+								.unwrap_or_default(),
+								gas_budget: old_ccm_state
+									.ccm_deposit_metadata
+									.channel_metadata
+									.gas_budget,
+								ccm_additional_data: CcmAdditionalData::try_from(
+									old_ccm_state
+										.ccm_deposit_metadata
+										.channel_metadata
+										.cf_parameters
+										.into_inner(),
+								)
+								.unwrap_or_default(),
+							},
+							source_chain: old_ccm_state.ccm_deposit_metadata.source_chain,
+							source_address: old_ccm_state.ccm_deposit_metadata.source_address,
+						}),
 						output_address,
 						dca_state,
 						broker_fees,
