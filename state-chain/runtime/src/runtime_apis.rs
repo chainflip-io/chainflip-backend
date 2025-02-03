@@ -265,11 +265,9 @@ pub struct FailingWitnessValidators {
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
-type ChainAccountFor<C> = <C as Chain>::ChainAccount;
-
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct ChainAccounts {
-	pub btc_chain_accounts: Vec<ChainAccountFor<cf_chains::Bitcoin>>,
+	pub chain_accounts: Vec<EncodedAddress>,
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]

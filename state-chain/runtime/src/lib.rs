@@ -43,7 +43,7 @@ pub use cf_chains::instances::{
 	SolanaInstance,
 };
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress},
+	address::{AddressConverter, EncodedAddress, IntoForeignChainAddress},
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
@@ -2392,11 +2392,15 @@ impl_runtime_apis! {
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId>) -> ChainAccounts {
 			let btc_chain_accounts = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter_values()
 				.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id.as_ref())
-				.map(|channel_details| channel_details.deposit_channel.address)
+				.map(|channel_details|
+					channel_details.deposit_channel.address
+					.into_foreign_chain_address()
+					.to_encoded_address(Environment::network_environment())
+				)
 				.collect::<Vec<_>>();
 
 			ChainAccounts {
-				btc_chain_accounts
+				chain_accounts: btc_chain_accounts
 			}
 		}
 
