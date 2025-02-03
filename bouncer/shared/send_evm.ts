@@ -77,7 +77,7 @@ export async function signAndSendTxEvm(
       if (i === numberRetries - 1) {
         throw new Error(`${chain} transaction failure: ${error}`);
       }
-      console.log(`${chain} Retrying transaction`);
+      console.log(`${chain} Retrying transaction. Found error: ${error}`);
     }
   }
   if (!receipt) {

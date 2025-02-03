@@ -265,7 +265,6 @@ export async function executeVaultSwap(
   },
   affiliateFees: {
     accountAddress: string;
-    accountShortId: number;
     commissionBps: number;
   }[] = [],
 ) {
@@ -289,17 +288,18 @@ export async function executeVaultSwap(
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
     const txHash = await executeEvmVaultSwap(
+      brokerFeesValue.account,
       sourceAsset,
       destAsset,
       destAddress,
-      brokerFeesValue,
+      brokerFeesValue.commissionBps,
       messageMetadata,
       amount,
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
       wallet,
-      affiliateFees.map((f) => ({ account: f.accountShortId, commissionBps: f.commissionBps })),
+      affiliateFees,
     );
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
@@ -358,7 +358,6 @@ export async function performVaultSwap(
   },
   affiliateFees: {
     accountAddress: string;
-    accountShortId: number;
     commissionBps: number;
   }[] = [],
 ): Promise<VaultSwapParams> {

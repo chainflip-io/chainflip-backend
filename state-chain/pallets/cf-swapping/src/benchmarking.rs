@@ -2,7 +2,9 @@
 
 use super::*;
 
-use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
+use cf_chains::{
+	address::EncodedAddress, benchmarking_value::BenchmarkValue, eth::Address as EthereumAddress,
+};
 use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
@@ -181,21 +183,49 @@ mod benchmarks {
 
 		const IDX: u8 = 0;
 		let caller = OriginFor::<T>::signed(broker_id.clone());
-		let affiliate_id = frame_benchmarking::account::<T::AccountId>("affiliate", 0, 0);
+
+		let withdrawal_address: EthereumAddress = Default::default();
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T>::register_affiliate(
+			assert_ok!(Pallet::<T>::register_affiliate(caller.clone(), withdrawal_address,));
+		}
+
+		assert!(
+			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX)).is_some(),
+			"Affiliate must have been registered"
+		);
+	}
+
+	#[benchmark]
+	fn affiliate_withdrawal_request() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		const IDX: u8 = 0;
+		let caller = OriginFor::<T>::signed(broker_id.clone());
+		let withdrawal_address: EthereumAddress = Default::default();
+
+		assert_ok!(Pallet::<T>::register_affiliate(caller.clone(), withdrawal_address,));
+
+		let affiliate_account_id =
+			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX))
+				.expect("Affiliate must be registered!");
+
+		T::BalanceApi::credit_account(&affiliate_account_id, Asset::Usdc, 200);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::affiliate_withdrawal_request(
 				caller.clone(),
-				affiliate_id.clone(),
-				IDX.into(),
+				affiliate_account_id.clone()
 			));
 		}
 
 		assert_eq!(
-			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX)),
-			Some(affiliate_id),
-			"Affiliate must have been registered"
+			T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc),
+			0,
+			"Expect account balance to be 0 after distribution."
 		);
 	}
 

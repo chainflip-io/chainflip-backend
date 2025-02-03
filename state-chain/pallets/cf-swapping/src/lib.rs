@@ -5,6 +5,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
+	eth::Address as EthereumAddress,
 	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersDecoded,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
@@ -28,16 +29,19 @@ use frame_support::{
 	},
 	storage::with_transaction_unchecked,
 	traits::Defensive,
-	transactional, CloneNoBound,
+	transactional, CloneNoBound, Hashable,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use serde::{Deserialize, Serialize};
 use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational_with_rounding,
 	traits::{UniqueSaturatedInto, Zero},
 	Rounding,
 };
+use sp_runtime::traits::TrailingZeroInput;
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+
 #[cfg(test)]
 mod mock;
 
@@ -68,6 +72,12 @@ impl<T: Config> Get<BlockNumberFor<T>> for DefaultSwapRetryDelay<T> {
 struct FeeTaken {
 	pub remaining_amount: AssetAmount,
 	pub fee: AssetAmount,
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Copy, Clone)]
+pub struct AffiliateDetails {
+	pub short_id: AffiliateShortId,
+	pub withdrawal_address: EthereumAddress,
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
@@ -537,6 +547,19 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Stores the details of an affiliate account against the account id of a broker and the
+	/// derived affiliate id.
+	#[pallet::storage]
+	pub type AffiliateAccountDetails<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		T::AccountId,
+		Identity,
+		T::AccountId,
+		AffiliateDetails,
+		OptionQuery,
+	>;
+
 	/// The bond for a broker to open a private channel.
 	#[pallet::storage]
 	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
@@ -685,11 +708,10 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
 		},
-		AffiliateRegistrationUpdated {
+		AffiliateRegistration {
 			broker_id: T::AccountId,
-			affiliate_short_id: AffiliateShortId,
+			short_id: AffiliateShortId,
 			affiliate_id: T::AccountId,
-			previous_affiliate_id: Option<T::AccountId>,
 		},
 		BrokerBondSet {
 			bond: T::Amount,
@@ -752,12 +774,22 @@ pub mod pallet {
 		NoPrivateChannelExistsForBroker,
 		/// The affiliate fee is too large to fit in a u8.
 		AffiliateFeeTooHigh,
-		/// The affiliate id is not registered with the broker.
-		AffiliateNotRegistered,
+		/// The affiliate id is not registered for the broker.
+		AffiliateNotRegisteredForBroker,
 		/// Bitcoin vault swaps only support up to 2 affiliates.
 		TooManyAffiliates,
 		/// The Bonder does not have enough Funds to cover the bond.
 		InsufficientFunds,
+		/// The affiliate is already registered.
+		AffiliateAlreadyRegistered,
+		/// The affiliate account id could not be derived.
+		AffiliateAccountIdDerivationFailed,
+		/// The affiliate short id is out of bounds. That means the broker has registered more than
+		/// 255 affiliates.
+		AffiliateShortIdOutOfBounds,
+		/// The affiliate has not withdrawn their earned fees. This is a pre-requisite for
+		/// deregistration of a broker.
+		AffiliateEarnedFeesNotWithdrawn,
 	}
 
 	#[pallet::genesis_config]
@@ -906,26 +938,7 @@ pub mod pallet {
 				)
 				.map_err(address_error_to_pallet_error::<T>)?;
 
-			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
-			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
-			T::BalanceApi::try_debit_account(&account_id, asset, earned_fees)?;
-
-			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
-				T::EgressHandler::schedule_egress(
-					asset,
-					earned_fees,
-					destination_address_internal,
-					None,
-				)
-				.map_err(Into::into)?;
-
-			Self::deposit_event(Event::<T>::WithdrawalRequested {
-				egress_amount,
-				egress_asset: asset,
-				egress_fee: fee_withheld,
-				destination_address,
-				egress_id,
-			});
+			Self::trigger_withdrawal(&account_id, asset, destination_address_internal)?;
 
 			Ok(())
 		}
@@ -1031,6 +1044,17 @@ pub mod pallet {
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
 
+			// Check the affiliate's balance before we allow deregistration
+			for affiliate_account_id in AffiliateAccountDetails::<T>::iter_key_prefix(&account_id) {
+				ensure!(
+					T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc).is_zero(),
+					Error::<T>::AffiliateEarnedFeesNotWithdrawn
+				);
+			}
+
+			// Clear the affiliate account details and affiliate id mapping.
+			// With this the broker has no longer access to the affiliate's account.
+			let _ = AffiliateAccountDetails::<T>::clear_prefix(&account_id, u32::MAX, None);
 			let _ = AffiliateIdMapping::<T>::clear_prefix(&account_id, u32::MAX, None);
 
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
@@ -1066,7 +1090,7 @@ pub mod pallet {
 			{
 				if beneficiary.bps > 0 {
 					beneficiaries.try_push(beneficiary).expect(
-						"We are pushing affiiliates + 1 which is exactly the maximum Beneficiaries size",
+						"We are pushing affiliates + 1 which is exactly the maximum Beneficiaries size",
 					);
 				}
 			}
@@ -1140,6 +1164,13 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Opens a private broker channel for Bitcoin vault swaps.
+		///
+		/// This requires the broker to have sufficient funds to cover the bond.
+		///
+		/// ## Events
+		///
+		/// - [PrivateBrokerChannelOpened](Event::PrivateBrokerChannelOpened)
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::open_private_btc_channel())]
 		pub fn open_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
@@ -1166,6 +1197,13 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Closes the currently open private broker channel.
+		///
+		/// Closing the channel will unlock the bonded funds.
+		///
+		/// ## Events
+		///
+		/// - [PrivateBrokerChannelClosed](Event::PrivateBrokerChannelClosed)
 		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::close_private_btc_channel())]
 		pub fn close_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
@@ -1182,28 +1220,84 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Associates `short_id` with `affiliate_id` for a given broker. Overwrites the record
-		/// under `short_id` if already taken by another affiliate.
+		/// Registers an affiliate for a broker.
+		///
+		/// The broker must provide an Ethereum address to which any earned affiliate fees
+		/// can be withdrawn. The broker can trigger a withdrawal request to the affiliate's
+		/// withdrawal address.
+		///
+		/// Affiliates have a unique account id that can only be accessed through the affiliate's
+		/// broker. The affiliate account id is derived from the broker account id using a short id
+		/// that is unique to that combination of broker and affiliate.
+		///
+		/// ## Events
+		///
+		/// - [AffiliateRegistration](Event::AffiliateRegistration)
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
 			origin: OriginFor<T>,
-			affiliate_id: T::AccountId,
-			short_id: AffiliateShortId,
+			withdrawal_address: EthereumAddress,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let previous_affiliate_id = AffiliateIdMapping::<T>::take(&broker_id, short_id);
+			let next_id: u8 = AffiliateIdMapping::<T>::iter_prefix_values(&broker_id)
+				.count()
+				.try_into()
+				.map_err(|_| Error::<T>::AffiliateShortIdOutOfBounds)?;
+
+			let short_id = AffiliateShortId::from(next_id);
+
+			ensure!(
+				!AffiliateIdMapping::<T>::contains_key(&broker_id, short_id),
+				Error::<T>::AffiliateAlreadyRegistered
+			);
+
+			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
+				(*b"chainflip/affiliate", broker_id.clone(), short_id).blake2_256().as_ref(),
+			))
+			.map_err(|_| Error::<T>::AffiliateAccountIdDerivationFailed)?;
 
 			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
 
-			Self::deposit_event(Event::<T>::AffiliateRegistrationUpdated {
+			AffiliateAccountDetails::<T>::insert(
+				&broker_id,
+				&affiliate_id,
+				AffiliateDetails { short_id, withdrawal_address },
+			);
+
+			Self::deposit_event(Event::<T>::AffiliateRegistration {
 				broker_id,
-				affiliate_short_id: short_id,
+				short_id,
 				affiliate_id,
-				previous_affiliate_id,
 			});
 
+			Ok(())
+		}
+
+		/// Triggers a withdrawal to the registered withdrawal address of the affiliate.
+		///
+		/// Note: This extrinsic is secured by the broker that has registered the affiliate account.
+		///
+		/// ## Events
+		///
+		/// - [WithdrawalRequested](Event::WithdrawalRequested)
+		#[pallet::call_index(16)]
+		#[pallet::weight(T::WeightInfo::affiliate_withdrawal_request())]
+		pub fn affiliate_withdrawal_request(
+			origin: OriginFor<T>,
+			affiliate_account_id: T::AccountId,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let details = AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_account_id)
+				.ok_or(Error::<T>::AffiliateNotRegisteredForBroker)?;
+
+			Self::trigger_withdrawal(
+				&affiliate_account_id,
+				Asset::Usdc,
+				ForeignChainAddress::Eth(details.withdrawal_address),
+			)?;
 			Ok(())
 		}
 	}
@@ -1287,6 +1381,35 @@ pub mod pallet {
 					}
 				})
 				.collect()
+		}
+
+		fn trigger_withdrawal(
+			account_id: &T::AccountId,
+			asset: Asset,
+			destination_address: ForeignChainAddress,
+		) -> DispatchResult {
+			let earned_fees = T::BalanceApi::get_balance(account_id, asset);
+			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
+			T::BalanceApi::try_debit_account(account_id, asset, earned_fees)?;
+
+			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+				T::EgressHandler::schedule_egress(
+					asset,
+					earned_fees,
+					destination_address.clone(),
+					None,
+				)
+				.map_err(Into::into)?;
+
+			Self::deposit_event(Event::<T>::WithdrawalRequested {
+				egress_amount,
+				egress_asset: asset,
+				egress_fee: fee_withheld,
+				destination_address: T::AddressConverter::to_encoded_address(destination_address),
+				egress_id,
+			});
+
+			Ok(())
 		}
 
 		fn take_broker_fees(
@@ -2193,9 +2316,7 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 		broker_id: &Self::AccountId,
 		affiliate_id: &Self::AccountId,
 	) -> Option<AffiliateShortId> {
-		AffiliateIdMapping::<T>::iter_prefix(broker_id)
-			.find(|(_, id)| id == affiliate_id)
-			.map(|(short_id, _)| short_id)
+		AffiliateAccountDetails::<T>::get(broker_id, affiliate_id).map(|details| details.short_id)
 	}
 
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId> {

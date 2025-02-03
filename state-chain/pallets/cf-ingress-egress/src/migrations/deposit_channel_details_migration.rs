@@ -1,6 +1,7 @@
 use frame_support::traits::UncheckedOnRuntimeUpgrade;
 
 use crate::{Config, DepositChannelDetails};
+use cf_chains::CcmMessage;
 
 use crate::*;
 use frame_support::pallet_prelude::Weight;
@@ -10,12 +11,17 @@ use sp_runtime::DispatchError;
 use codec::{Decode, Encode};
 
 pub mod old {
+	use super::*;
 	use crate::BoostStatus;
 	use cf_chains::{ChannelRefundParametersDecoded, DepositChannel, ForeignChainAddress};
 	use cf_primitives::Beneficiaries;
 	use frame_support::{pallet_prelude::OptionQuery, Twox64Concat};
 
-	use super::*;
+	const MAX_CCM_MSG_LENGTH: u32 = 10_000;
+	const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
+
+	type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
+	type CcmCfParameters = BoundedVec<u8, ConstU32<MAX_CCM_CF_PARAM_LENGTH>>;
 
 	#[derive(PartialEq, Eq, Encode, Decode)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
@@ -32,7 +38,7 @@ pub mod old {
 	pub struct CcmChannelMetadata {
 		pub message: CcmMessage,
 		pub gas_budget: AssetAmount,
-		pub ccm_additional_data: CcmAdditionalData,
+		pub cf_parameters: CcmCfParameters,
 	}
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
@@ -108,9 +114,13 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for DepositChannelDetai
 						destination_address,
 						broker_fees,
 						channel_metadata: Some(crate::CcmChannelMetadata {
-							message: channel_metadata.message,
+							message: CcmMessage::try_from(channel_metadata.message.into_inner())
+								.unwrap_or_default(),
 							gas_budget: channel_metadata.gas_budget,
-							ccm_additional_data: channel_metadata.ccm_additional_data,
+							ccm_additional_data: crate::CcmAdditionalData::try_from(
+								channel_metadata.cf_parameters.into_inner(),
+							)
+							.unwrap_or_default(),
 						}),
 						refund_params,
 						dca_params,

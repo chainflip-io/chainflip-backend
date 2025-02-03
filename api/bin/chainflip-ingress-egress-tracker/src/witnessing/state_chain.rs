@@ -12,8 +12,8 @@ use cf_chains::{
 };
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
 use chainflip_api::primitives::{
-	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters,
-	ForeignChain, NetworkEnvironment,
+	AffiliateDetails, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
+	DcaParameters, ForeignChain, NetworkEnvironment,
 };
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi, StateChainClient,
@@ -364,23 +364,25 @@ async fn save_deposit_witnesses<S, C>(
 
 #[cfg_attr(test, mockall::automock)]
 pub trait CfGetAffiliates {
-	async fn cf_get_affiliates(
+	async fn cf_affiliate_details(
 		&self,
 		broker_fee_account: &AccountId32,
-	) -> anyhow::Result<BTreeMap<AffiliateShortId, state_chain_runtime::AccountId>>;
+		affiliate: Option<AccountId32>,
+	) -> anyhow::Result<BTreeMap<state_chain_runtime::AccountId, AffiliateDetails>>;
 }
 
 impl<S> CfGetAffiliates for StateChainClient<S> {
-	async fn cf_get_affiliates(
+	async fn cf_affiliate_details(
 		&self,
 		broker_fee_account: &AccountId32,
-	) -> anyhow::Result<BTreeMap<AffiliateShortId, state_chain_runtime::AccountId>> {
+		affiliate: Option<AccountId32>,
+	) -> anyhow::Result<BTreeMap<state_chain_runtime::AccountId, AffiliateDetails>> {
 		use custom_rpc::CustomApiClient;
 
 		Ok(self
 			.base_rpc_client
 			.raw_rpc_client
-			.cf_get_affiliates(broker_fee_account.clone(), None)
+			.cf_affiliate_details(broker_fee_account.clone(), affiliate, None)
 			.await?
 			.into_iter()
 			.collect::<BTreeMap<_, _>>())
@@ -405,7 +407,12 @@ where
 		.as_ref()
 		.map(|Beneficiary { account, .. }| account.clone())
 	{
-		state_chain_client.cf_get_affiliates(&broker_id).await?
+		state_chain_client
+			.cf_affiliate_details(&broker_id, None)
+			.await?
+			.into_iter()
+			.map(|(id, details)| (details.short_id, id))
+			.collect()
 	} else {
 		Default::default()
 	};
@@ -683,10 +690,11 @@ mod tests {
 
 	// This implementation is necessary to keep the compiler happy.
 	impl CfGetAffiliates for MockStateChainClient {
-		async fn cf_get_affiliates(
+		async fn cf_affiliate_details(
 			&self,
 			_broker_fee_account: &AccountId32,
-		) -> anyhow::Result<BTreeMap<AffiliateShortId, state_chain_runtime::AccountId>> {
+			_affiliate: Option<AccountId32>,
+		) -> anyhow::Result<BTreeMap<state_chain_runtime::AccountId, AffiliateDetails>> {
 			unimplemented!(
 				"This is not tested via the MockStateChainClient, use MockCfGetAffiliates instead."
 			)
@@ -892,8 +900,11 @@ mod tests {
 		let mut client = MockCfGetAffiliates::new();
 
 		// We expect the affiliates to be mapped from short id's to account id's
-		client.expect_cf_get_affiliates().returning(move |_| {
-			Ok(BTreeMap::from_iter([(affiliate_short_id, AccountId32::new([1; 32]))]))
+		client.expect_cf_affiliate_details().returning(move |_, _| {
+			Ok(BTreeMap::from_iter([(
+				AccountId32::new([1; 32]),
+				AffiliateDetails { short_id: affiliate_short_id, withdrawal_address: eth_address },
+			)]))
 		});
 
 		let client = Arc::new(client);

@@ -24,7 +24,7 @@ use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::SwapLegInfo;
+use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
 use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
@@ -465,7 +465,10 @@ decl_runtime_apis!(
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
-		fn cf_get_affiliates(broker: AccountId32) -> Vec<(AffiliateShortId, AccountId32)>;
+		fn cf_affiliate_details(
+			broker: AccountId32,
+			affiliate: Option<AccountId32>,
+		) -> Vec<(AccountId32, AffiliateDetails)>;
 	}
 );
 

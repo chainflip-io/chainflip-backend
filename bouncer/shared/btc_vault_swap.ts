@@ -110,25 +110,17 @@ export async function openPrivateBtcChannel(brokerUri: string): Promise<number> 
   return Number((await openedChannelEvent).data.channelId);
 }
 
-export async function registerAffiliate(
-  brokerUri: string,
-  affiliateUri: string,
-  affiliateShortId: number,
-) {
+export async function registerAffiliate(brokerUri: string, withdrawalAddress: string) {
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
-  const affiliate = createStateChainKeypair(affiliateUri);
 
-  const registeredEvent = observeEvent('swapping:AffiliateRegistrationUpdated', {
-    test: (event) =>
-      event.data.brokerId === broker.address &&
-      event.data.affiliateId === affiliate.address &&
-      Number(event.data.affiliateShortId) === affiliateShortId,
+  const registeredEvent = observeEvent('swapping:AffiliateRegistration', {
+    test: (event) => event.data.brokerId === broker.address,
   }).event;
 
   await brokerMutex.runExclusive(async () => {
     await chainflip.tx.swapping
-      .registerAffiliate(affiliate.address, affiliateShortId)
+      .registerAffiliate(withdrawalAddress)
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 

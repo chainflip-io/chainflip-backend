@@ -8,6 +8,7 @@ use crate::sol::{
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+#[cfg(any(test, feature = "runtime-integration-tests"))]
 use sol_prim::errors::TransactionError;
 use sp_std::{vec, vec::Vec};
 

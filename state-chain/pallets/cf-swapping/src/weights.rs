@@ -40,6 +40,7 @@ pub trait WeightInfo {
 	fn open_private_btc_channel() -> Weight;
 	fn close_private_btc_channel() -> Weight;
 	fn register_affiliate() -> Weight;
+	fn affiliate_withdrawal_request() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -209,6 +210,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+
+	fn affiliate_withdrawal_request() -> Weight {
+		Weight::from_parts(100, 0)
+	}
 }
 
 // For backwards compatibility and tests
@@ -376,5 +381,9 @@ impl WeightInfo for () {
 		Weight::from_parts(14_000_000, 4072)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+	
+	fn affiliate_withdrawal_request() -> Weight {
+		Weight::from_parts(100, 0)
 	}
 }
