@@ -1,8 +1,7 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-// eslint-disable-next-line no-restricted-imports
-import { KeyringPair } from '@polkadot/keyring/types';
+
 import Keyring from '../polkadot/keyring';
 import {
   brokerMutex,
@@ -46,11 +45,11 @@ export async function submitBrokerWithdrawal(
 
 const feeAsset = Assets.Usdc;
 
-export async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> {
+export async function getEarnedBrokerFees(address: string): Promise<bigint> {
   await using chainflip = await getChainflipApi();
   // NOTE: All broker fees are collected in USDC now:
   const feeStr = (
-    await chainflip.query.assetBalances.freeBalances(brokerKeypair.address, Assets.Usdc)
+    await chainflip.query.assetBalances.freeBalances(address, Assets.Usdc)
   ).toString();
   return BigInt(feeStr);
 }
@@ -60,7 +59,7 @@ export async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<b
 async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   await using chainflip = await getChainflipApi();
   // Check the broker fees before the swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker);
+  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker.address);
   testBrokerFeeCollection.log(`${inputAsset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
   // Run a swap
@@ -143,7 +142,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   );
 
   // Check that the detected increase in earned broker fees matches the swap event values and it is equal to the expected amount (after the deposit fee is accounted for)
-  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker);
+  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker.address);
   testBrokerFeeCollection.log(`${inputAsset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
 
   assert(earnedBrokerFeesAfter > earnedBrokerFeesBefore, 'No increase in earned broker fees');
