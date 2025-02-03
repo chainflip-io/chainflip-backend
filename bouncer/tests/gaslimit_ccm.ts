@@ -398,7 +398,6 @@ export async function main() {
       await spammingEth;
       await spammingArb;
       await spammingSol;
-      testGasLimitCcmSwaps.log("Chain fees didn't increase enough");
       throw new Error(`Chain fees did not increase enough for the CCM gas limit test to run`);
     }
     await sleep(500);
