@@ -58,7 +58,7 @@ function getChainMinFee(chain: Chain): number {
     case 'Arbitrum':
       return 100000000;
     case 'Solana':
-      return 100000000;
+      return 10000000;
     default:
       throw new Error(`Chain ${chain} is not supported for CCM`);
   }
