@@ -1,10 +1,13 @@
 use crate::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	state_machine::core::Hook,
+	state_machine::{
+		core::{Hook, IndexOf, Indexed, Validate},
+		state_machine2::StateMachine,
+	},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
 /// A helper trait for determining whether two objects are “inner‐equal.”
 /// This trait is intended for use with event types to provide a custom notion
@@ -76,7 +79,6 @@ impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 		}
 	}
 }
-
 impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 	/// Processes incoming block data and chain progress updates.
 	///
@@ -525,3 +527,99 @@ pub(crate) mod test {
 		)
 	}
 }
+
+// State-Machine Block Witness Processor
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+pub enum SMBlockProcessorInput<T: BWProcessorTypes> {
+	NewBlockData(T::ChainBlockNumber, T::ChainBlockNumber, T::BlockData),
+	ChainProgress(ChainProgressInner<T::ChainBlockNumber>),
+}
+
+impl<T: BWProcessorTypes> Indexed for SMBlockProcessorInput<T> {
+	type Index = ();
+	fn has_index(&self, _idx: &Self::Index) -> bool {
+		true
+	}
+}
+impl<T: BWProcessorTypes> Validate for SMBlockProcessorInput<T> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl<T: BWProcessorTypes> Validate for DepositChannelWitnessingProcessor<T> {
+	type Error = ();
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+#[allow(dead_code)]
+pub struct SMBlockProcessorOutput<T: BWProcessorTypes>(Vec<T::Event>);
+impl<T: BWProcessorTypes> Validate for SMBlockProcessorOutput<T> {
+	type Error = ();
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+pub struct SMBlockProcessor<T: BWProcessorTypes> {
+	_phantom: PhantomData<T>,
+}
+
+impl<T: BWProcessorTypes + 'static> StateMachine for SMBlockProcessor<T> {
+	type Input = SMBlockProcessorInput<T>;
+	type Settings = ();
+	type Output = SMBlockProcessorOutput<T>;
+	type State = DepositChannelWitnessingProcessor<T>;
+
+	fn input_index(_s: &mut Self::State) -> IndexOf<Self::Input> {}
+
+	fn step(s: &mut Self::State, i: Self::Input, _set: &Self::Settings) -> Self::Output {
+		match i {
+			SMBlockProcessorInput::NewBlockData(last_height, n, deposits) =>
+				SMBlockProcessorOutput(s.process_block_data(
+					ChainProgressInner::Progress(last_height),
+					Some((n, deposits)),
+				)),
+			SMBlockProcessorInput::ChainProgress(inner) =>
+				SMBlockProcessorOutput(s.process_block_data(inner, None)),
+		}
+	}
+}
+
+// #[cfg(test)]
+// fn step_specification(
+// 	before: &Self::State,
+// 	input: &Self::Input,
+// 	_settings: &Self::Settings,
+// 	after: &Self::State,
+// ) {
+// 	assert!(
+// 		after.blocks_data.len() <=
+// 			BitcoinIngressEgress::witness_safety_margin().unwrap() as usize,
+// 		"Too many blocks data, we should never have more than safety margin blocks"
+// 	);
+//
+// 	match input {
+// 		SMBlockProcessorInput::ChainProgress(chain_progress) => match chain_progress {
+// 			ChainProgressInner::Progress(_last_height) => {
+// 				assert!(after.reorg_events.len() <= before.reorg_events.len(), "If no reorg happened,
+// number of reorg events should stay the same or decrease"); 	// 			},
+// 	// 			ChainProgressInner::Reorg(range) =>
+// 	// 				for n in range.clone().into_iter() {
+// 	// 					assert!(after.reorg_events.contains_key(&n), "Should always contains key for blocks
+// being reorged, even if no events were produced! (Empty vec)"); 	// 					assert!(
+// 	// 						!after.blocks_data.contains_key(&n),
+// 	// 						"Should never contain blocks data for blocks being reorged"
+// 	// 					);
+// 	// 				},
+// 	// 		},
+// 	// 		SMBlockProcessorInput::NewBlockData(last_height, n, _deposits) => {
+// 	// 			if last_height - BitcoinIngressEgress::witness_safety_margin().unwrap() > *n {
+// 	// 				assert!(!after.blocks_data.contains_key(n));
+// 	// 			}
+// 	// 		},
+// 	// 	}
+// 	// }
