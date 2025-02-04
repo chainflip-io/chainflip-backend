@@ -17,8 +17,7 @@ pub mod weights;
 
 mod boost_pool;
 
-use boost_pool::BoostPool;
-pub use boost_pool::OwedAmount;
+pub use boost_pool::{BoostPool, OwedAmount, OwedAmountScaled, ScaledAmount};
 
 use cf_chains::{
 	address::{
@@ -2161,6 +2160,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		Ok(())
+	}
+
+	pub fn recover_boost_deposit(
+		asset: TargetChainAsset<T, I>,
+		pool_tier: BoostPoolTier,
+		prewitnessed_deposit_id: PrewitnessedDepositId,
+		booster_contributions: BTreeMap<T::AccountId, OwedAmountScaled<T::TargetChain>>,
+		pending_withdrawals: BTreeSet<T::AccountId>,
+	) {
+		BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
+			if let Some(pool) = pool {
+				for (booster_id, finalised_withdrawn_amount) in pool.process_deposit_as_recovered(
+					prewitnessed_deposit_id,
+					booster_contributions,
+					pending_withdrawals,
+				) {
+					if let Err(err) = T::Balance::try_credit_account(
+						&booster_id,
+						asset.into(),
+						finalised_withdrawn_amount.into(),
+					) {
+						log_or_panic!(
+									"Failed to credit booster account {:?} after unlock of {finalised_withdrawn_amount:?} {asset:?}: {:?}",
+									booster_id, err
+								);
+					}
+				}
+			}
+		});
 	}
 
 	fn expiry_and_recycle_block_height(

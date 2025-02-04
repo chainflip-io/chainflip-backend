@@ -43,7 +43,10 @@ pub use cf_chains::instances::{
 use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
+	btc::{
+		api::BitcoinApi, deposit_address::DepositAddress, BitcoinCrypto, BitcoinRetryPolicy,
+		ScriptPubkey, Utxo, UtxoId,
+	},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
@@ -59,7 +62,6 @@ use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
 };
-use cf_utilities::bs58_array;
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
 use frame_support::{derive_impl, instances::*};
@@ -111,7 +113,7 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H256};
 use sp_runtime::{
 	traits::{
 		BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One, OpaqueKeys,
@@ -207,7 +209,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 178,
+	spec_version: 179,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -1285,116 +1287,80 @@ type PalletMigrations = (
 );
 
 // v-- START: DO NOT MERGE TO MAIN --v //
-use cf_primitives::chains::assets::sol::Asset as SolAsset;
-use cf_traits::DepositApi;
-use sp_runtime::AccountId32;
-#[cfg(feature = "try-runtime")]
-use sp_std::collections::btree_set::BTreeSet;
+use cf_primitives::chains::assets::btc::Asset as BtcAsset;
 
-pub struct IngressMigration;
+pub struct BoostRecovery;
 
-const CHANNEL_ADDRESS: SolAddress =
-	SolAddress(bs58_array("9rwJYe6GpwpRDjNKCoxxwRwXhtTJa7Pecqo375CmeHqZ"));
-const CHANNEL_ACCOUNT: [u8; 32] =
-	hex_literal::hex!("a846a1d39894d3fdb63ec07ef9aed03e2632f508480fbeb047e902371250f46c");
-const CHANNEL_ID: u64 = 14716;
+const RECOVERY_TX_ID: H256 =
+	H256(hex_literal::hex!("a250b52718e91a1d7184690d0985f068db21d4a949254a8a994e6c412bc66612"));
+const SALT: u32 = 29875;
+const PUBKEY: [u8; 32] =
+	hex_literal::hex!("af7ee887264c85f3eb84468c7cae0bc6b40d23732f94d5db591226654dcc7803");
+const POOL_TIER: u16 = 5;
 
-pub fn should_run() -> bool {
-	cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() ==
-		cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN &&
-		!pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::contains_key(
-			CHANNEL_ADDRESS,
-		)
-}
-
-pub fn reopen<T: pallet_cf_ingress_egress::Config<I, AccountId = AccountId32>, I: 'static>(
-	channel_id: u64,
-	asset: <T::TargetChain as cf_chains::Chain>::ChainAsset,
-) -> Result<(), DispatchError> {
-	let channel =
-		cf_chains::DepositChannel::<T::TargetChain>::generate_new::<T::AddressDerivation>(
-			channel_id, asset,
-		)
-		.map_err(|_| DispatchError::Other("Failed to generate new deposit channel"))?;
-	pallet_cf_ingress_egress::DepositChannelPool::<T, I>::insert(
-		channel.channel_id,
-		channel.clone(),
-	);
-
-	let (channel_id, address, ..) =
-		pallet_cf_ingress_egress::Pallet::<T, I>::request_liquidity_deposit_address(
-			AccountId32::new(CHANNEL_ACCOUNT),
-			asset,
-			Default::default(),
-			cf_chains::ForeignChainAddress::Sol(SolAddress(bs58_array(
-				"Hqn5iCLXYm2pP2iqzVAsvsNAFw1kuvEGXxG3JAqwfsEq",
-			))),
-		)?;
-
-	frame_support::ensure!(channel_id == channel.channel_id, "Channel IDs don't match");
-	frame_support::ensure!(
-		<<T::TargetChain as cf_chains::Chain>::ChainAccount>::try_from(address)
-			.map_err(|_| "Failed to convert address")? ==
-			channel.address,
-		"Addresses don't match"
-	);
-
-	Ok(())
-}
-
-impl frame_support::traits::OnRuntimeUpgrade for IngressMigration {
+impl frame_support::traits::OnRuntimeUpgrade for BoostRecovery {
 	fn on_runtime_upgrade() -> Weight {
-		if should_run() {
-			let previous_safe_mode =
-				pallet_cf_environment::RuntimeSafeMode::<Runtime>::mutate(|safe_mode| {
-					core::mem::replace(&mut safe_mode.ingress_egress_solana.deposits_enabled, true)
-				});
-			let _ = reopen::<Runtime, SolanaInstance>(CHANNEL_ID, SolAsset::Sol).map_err(|e| {
-				log::warn!("⛔️ Failed to reopen channel: {:?}", e);
-			});
-			let _ = pallet_cf_environment::RuntimeSafeMode::<Runtime>::mutate(|safe_mode| {
-				core::mem::replace(
-					&mut safe_mode.ingress_egress_solana.deposits_enabled,
-					previous_safe_mode,
-				)
-			});
+		// Only run this once: use the spec_version and utxo id as a markers.
+		if VERSION.spec_version != 179 ||
+			pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get()
+				.iter()
+				.any(|utxo| utxo.id.tx_id == RECOVERY_TX_ID)
+		{
+			return Weight::zero();
 		}
+
+		pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::recover_boost_deposit(
+			BtcAsset::Btc,
+			POOL_TIER,
+			migrations::boost_recovery::PREWITNESSED_DEPOSIT_ID,
+			migrations::boost_recovery::scaled_boost_contributions_from_raw(),
+			Default::default(),
+		);
+
+		pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::mutate(|utxos| {
+			utxos.push(Utxo {
+				id: UtxoId { tx_id: RECOVERY_TX_ID, vout: 0 },
+				amount: 100_000_000,
+				deposit_address: DepositAddress::new(PUBKEY, SALT),
+			});
+		});
+		log::info!("✅ Boost contributions recovered");
+
 		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let open_channels_pre_upgrade =
-			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
-				.map(|(addr, details)| (addr.0, details.deposit_channel.channel_id))
-				.collect::<BTreeSet<_>>();
-		Ok((
-			should_run(),
-			open_channels_pre_upgrade,
-			pallet_cf_environment::RuntimeSafeMode::<Runtime>::get(),
-		)
-			.encode())
+		let pre_upgrade_pools_state = pallet_cf_ingress_egress::BoostPools::<
+			Runtime,
+			BitcoinInstance,
+		>::get(BtcAsset::Btc, POOL_TIER)
+		.expect("There should be some boost liquidity");
+		assert!(!pre_upgrade_pools_state
+			.pending_boosts
+			.contains_key(&migrations::boost_recovery::PREWITNESSED_DEPOSIT_ID));
+		Ok(pre_upgrade_pools_state.get_available_amount().encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let (should_have_run, open_channels_pre_upgrade, safe_mode) =
-			<(bool, BTreeSet<([u8; 32], u64)>, RuntimeSafeMode)>::decode(&mut &state[..])
-				.map_err(|_| "Failed to decode pre-upgrade state")?;
-		assert_eq!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::get(), safe_mode);
-		let open_channels_post_upgrade =
-			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
-				.map(|(addr, details)| (addr.0, details.deposit_channel.channel_id))
-				.collect::<BTreeSet<_>>();
-		let diff = open_channels_post_upgrade
-			.difference(&open_channels_pre_upgrade)
-			.collect::<Vec<_>>();
-		if should_have_run {
-			assert!(diff.len() == 1);
-			assert_eq!(diff[0].clone(), (CHANNEL_ADDRESS.0, CHANNEL_ID));
-		} else {
-			assert!(diff.is_empty());
-		}
+		let post_upgrade_pools_state = pallet_cf_ingress_egress::BoostPools::<
+			Runtime,
+			BitcoinInstance,
+		>::get(BtcAsset::Btc, POOL_TIER)
+		.expect("There should be some boost liquidity");
+		// The boost should have been recovered and removed again.
+		assert!(!post_upgrade_pools_state
+			.pending_boosts
+			.contains_key(&migrations::boost_recovery::PREWITNESSED_DEPOSIT_ID));
+		// Available liquidity should have increased by ~1 BTC.
+		let pre_upgrade_available_amount =
+			Decode::decode(&mut &state[..]).map_err(|_| "Failed to decode pre-upgrade state")?;
+		assert!(post_upgrade_pools_state.get_available_amount() > pre_upgrade_available_amount);
+		log::info!(
+			"Recovered boost liquidity: {}",
+			post_upgrade_pools_state.get_available_amount() - pre_upgrade_available_amount
+		);
 		Ok(())
 	}
 }
@@ -1428,7 +1394,7 @@ type MigrationsForV1_7 = (
 	>,
 	VersionedMigration<SolanaElections, chainflip::solana_elections::old::Migration, 1, 2>,
 	// DO NOT MERGE TO MAIN:
-	IngressMigration,
+	BoostRecovery,
 );
 
 #[cfg(feature = "runtime-benchmarks")]

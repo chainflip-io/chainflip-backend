@@ -12,7 +12,7 @@ use super::*;
 const SCALE_FACTOR: u128 = 1000;
 /// Represents 1/SCALE_FACTOR of Asset amount as a way to gain extra precision.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, DefaultNoBound)]
-struct ScaledAmount<C: Chain> {
+pub struct ScaledAmount<C: Chain> {
 	val: u128,
 	_phantom: PhantomData<C>,
 }
@@ -45,7 +45,7 @@ impl<C: Chain> ScaledAmount<C> {
 
 	// Convenience method to create ScaledAmount from u128
 	// without scaling
-	fn from_raw(val: u128) -> Self {
+	pub fn from_raw(val: u128) -> Self {
 		ScaledAmount { val, _phantom: PhantomData }
 	}
 
@@ -82,7 +82,7 @@ impl<C: Chain> ScaledAmount<C> {
 	}
 }
 
-type OwedAmountScaled<C> = OwedAmount<ScaledAmount<C>>;
+pub type OwedAmountScaled<C> = OwedAmount<ScaledAmount<C>>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct OwedAmount<AmountT> {
@@ -140,7 +140,7 @@ pub struct BoostPool<AccountId, C: Chain> {
 	// Mapping from booster to the available amount they own in `available_amount`
 	amounts: BTreeMap<AccountId, ScaledAmount<C>>,
 	// Boosted deposits awaiting finalisation and how much of them is owed to which booster
-	pending_boosts: BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, OwedAmountScaled<C>>>,
+	pub pending_boosts: BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, OwedAmountScaled<C>>>,
 	// Stores boosters who have indicated that they want to stop boosting along with
 	// the pending deposits that they have to wait to be finalised
 	pending_withdrawals: BTreeMap<AccountId, BTreeSet<PrewitnessedDepositId>>,
@@ -402,6 +402,34 @@ where
 		}
 
 		booster_contributions.len()
+	}
+
+	// If some funds were mistakenly marked as lost, this function can be used to recover them.
+	// It reverses the effects of `process_deposit_as_lost` and then applies
+	// `process_deposit_as_finalised`.
+	pub fn process_deposit_as_recovered(
+		&mut self,
+		prewitnessed_deposit_id: PrewitnessedDepositId,
+		booster_contributions: BTreeMap<AccountId, OwedAmountScaled<C>>,
+		pending_withdrawals: BTreeSet<AccountId>,
+	) -> Vec<(AccountId, C::ChainAmount)> {
+		if self
+			.pending_boosts
+			.insert(prewitnessed_deposit_id, booster_contributions)
+			.is_some()
+		{
+			log::warn!("Can't recover a deposit if it already exists. Aborting.");
+			return Default::default();
+		}
+
+		for booster_id in pending_withdrawals {
+			self.pending_withdrawals
+				.entry(booster_id)
+				.or_default()
+				.insert(prewitnessed_deposit_id);
+		}
+
+		self.process_deposit_as_finalised(prewitnessed_deposit_id)
 	}
 
 	// Return the amount immediately unlocked for the booster and a list of all pending boosts that
