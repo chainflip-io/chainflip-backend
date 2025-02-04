@@ -177,7 +177,7 @@ where
 						pending_submissions.insert(election_identifier,	(partial_vote, vote));
 					},
 					Ok(None) => {
-						info!("Voting task for election '{:?}' returned 'None' (nothing to submit).", election_identifier);
+						debug!("Voting task for election '{:?}' returned 'None' (nothing to submit).", election_identifier);
 					},
 					Err(error) => {
 						warn!("Voting task for election '{:?}' failed with error: '{:?}'.", election_identifier, error);
