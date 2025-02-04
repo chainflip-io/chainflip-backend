@@ -2187,6 +2187,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								);
 					}
 				}
+			} else {
+				log::error!("Pool must exist: ({pool_tier:?}, {:?})", asset);
 			}
 		});
 	}
