@@ -22,7 +22,7 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	sync::Arc,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use voter_api::CompositeVoterApi;
 
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
@@ -160,7 +160,7 @@ where
 			},
 			let (election_identifier, result_vote) = vote_tasks.next_or_pending() => {
 				match result_vote {
-					Ok(vote) => {
+					Ok(Some(vote)) => {
 						info!("Voting task for election: '{:?}' succeeded.", election_identifier);
 						// Create the partial_vote early so that SharedData can be provided as soon as the vote has been generated, rather than only after it is submitted.
 						let partial_vote = VoteStorageOf::<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>::vote_into_partial_vote(&vote, |shared_data| {
@@ -175,6 +175,9 @@ where
 						});
 
 						pending_submissions.insert(election_identifier,	(partial_vote, vote));
+					},
+					Ok(None) => {
+						debug!("Voting task for election '{:?}' returned 'None' (nothing to submit).", election_identifier);
 					},
 					Err(error) => {
 						warn!("Voting task for election '{:?}' failed with error: '{:?}'.", election_identifier, error);
