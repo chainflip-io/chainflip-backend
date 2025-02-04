@@ -9,7 +9,6 @@ import {
   Transaction,
   AccountMeta,
 } from '@solana/web3.js';
-import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import BigNumber from 'bignumber.js';
 import {
   getContractAddress,
