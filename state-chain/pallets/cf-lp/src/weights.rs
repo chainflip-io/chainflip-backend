@@ -37,6 +37,7 @@ pub trait WeightInfo {
 	fn register_lp_account() -> Weight;
 	fn deregister_lp_account() -> Weight;
 	fn register_liquidity_refund_address() -> Weight;
+	fn internal_swap() -> Weight;
 }
 
 /// Weights for pallet_cf_lp using the Substrate node and recommended hardware.
@@ -153,6 +154,33 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:1 w:0)
+	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:1 w:0)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
+	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
+	/// Proof: `Swapping::MaximumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
+	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapQueue` (r:1 w:1)
+	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
+	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn internal_swap() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1051`
+		//  Estimated: `4516`
+		// Minimum execution time: 34_000_000 picoseconds.
+		Weight::from_parts(35_000_000, 4516)
+			.saturating_add(T::DbWeight::get().reads(8_u64))
+			.saturating_add(T::DbWeight::get().writes(5_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -267,5 +295,32 @@ impl WeightInfo for () {
 		Weight::from_parts(16_393_000, 3969)
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:1 w:0)
+	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:1 w:0)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
+	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
+	/// Proof: `Swapping::MaximumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
+	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapQueue` (r:1 w:1)
+	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
+	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn internal_swap() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1051`
+		//  Estimated: `4516`
+		// Minimum execution time: 34_000_000 picoseconds.
+		Weight::from_parts(35_000_000, 4516)
+			.saturating_add(ParityDbWeight::get().reads(8_u64))
+			.saturating_add(ParityDbWeight::get().writes(5_u64))
 	}
 }

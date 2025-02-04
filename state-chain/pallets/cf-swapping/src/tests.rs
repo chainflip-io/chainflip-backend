@@ -1673,17 +1673,22 @@ mod on_chain_swapping {
 
 		new_test_ext()
 			.execute_with(|| {
-				MockBalance::credit_account(&LP_ACCOUNT, INPUT_ASSET, INPUT_AMOUNT);
-
-				assert_ok!(Swapping::internal_swap(
-					RuntimeOrigin::signed(LP_ACCOUNT),
-					INPUT_AMOUNT,
+				Swapping::init_swap_request(
 					INPUT_ASSET,
+					INPUT_AMOUNT,
 					OUTPUT_ASSET,
-					0,
-					min_price,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
+					},
+					Default::default(),
+					Some(RefundParametersExtended {
+						retry_duration: 0,
+						refund_destination: RefundDestination::OnChainAccount(LP_ACCOUNT),
+						min_price,
+					}),
 					None,
-				));
+					SwapOrigin::OnChainAccount(LP_ACCOUNT),
+				);
 
 				assert_has_matching_event!(
 					Test,
@@ -1742,17 +1747,22 @@ mod on_chain_swapping {
 
 		new_test_ext()
 			.execute_with(|| {
-				MockBalance::credit_account(&LP_ACCOUNT, INPUT_ASSET, INPUT_AMOUNT);
-
-				assert_ok!(Swapping::internal_swap(
-					RuntimeOrigin::signed(LP_ACCOUNT),
-					INPUT_AMOUNT,
+				Swapping::init_swap_request(
 					INPUT_ASSET,
+					INPUT_AMOUNT,
 					OUTPUT_ASSET,
-					0,
-					min_price,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
+					},
+					Default::default(),
+					Some(RefundParametersExtended {
+						retry_duration: 0,
+						refund_destination: RefundDestination::OnChainAccount(LP_ACCOUNT),
+						min_price,
+					}),
 					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
-				));
+					SwapOrigin::OnChainAccount(LP_ACCOUNT),
+				);
 
 				assert_has_matching_event!(
 					Test,

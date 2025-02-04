@@ -82,7 +82,7 @@ where
 					);
 				},
 				SwapOutputAction::CreditOnChain { .. } => {
-					panic!("Not yet supported in tests");
+					// do nothing: this behaviour is tested by the swapping pallet's tests
 				},
 			},
 			_ => { /* do nothing */ },

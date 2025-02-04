@@ -40,7 +40,6 @@ pub trait WeightInfo {
 	fn open_private_btc_channel() -> Weight;
 	fn close_private_btc_channel() -> Weight;
 	fn register_affiliate() -> Weight;
-	fn internal_swap() -> Weight;
 	fn affiliate_withdrawal_request() -> Weight;
 }
 
@@ -210,27 +209,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(14_000_000, 4072)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
-	/// Proof: `Swapping::MaximumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapQueue` (r:1 w:1)
-	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
-	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn internal_swap() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `311`
-		//  Estimated: `3776`
-		// Minimum execution time: 20_000_000 picoseconds.
-		Weight::from_parts(20_000_000, 3776)
-			.saturating_add(T::DbWeight::get().reads(5_u64))
-			.saturating_add(T::DbWeight::get().writes(5_u64))
 	}
 
 	fn affiliate_withdrawal_request() -> Weight {
@@ -404,28 +382,7 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
-	/// Proof: `Swapping::MaximumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapQueue` (r:1 w:1)
-	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
-	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn internal_swap() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `311`
-		//  Estimated: `3776`
-		// Minimum execution time: 20_000_000 picoseconds.
-		Weight::from_parts(20_000_000, 3776)
-			.saturating_add(ParityDbWeight::get().reads(5_u64))
-			.saturating_add(ParityDbWeight::get().writes(5_u64))
-	}
-	
+
 	fn affiliate_withdrawal_request() -> Weight {
 		Weight::from_parts(100, 0)
 	}

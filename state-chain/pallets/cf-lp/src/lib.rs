@@ -1,11 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
+use cf_chains::{
+	address::AddressConverter, AnyChain, ForeignChainAddress, RefundParametersExtended,
+};
+use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostApi, Chainflip, DepositApi,
-	EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails,
+	EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapOutputAction,
+	SwapRequestHandler, SwapRequestType,
 };
 
 use sp_std::vec;
@@ -33,8 +36,8 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::Chain;
-	use cf_primitives::{ChannelId, EgressId};
+	use cf_chains::{Chain, RefundDestination, SwapOrigin};
+	use cf_primitives::{BlockNumber, ChannelId, EgressId, Price};
 	use cf_traits::HistoricalFeeMigration;
 
 	use super::*;
@@ -83,6 +86,8 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>,
 		>;
+
+		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -328,6 +333,48 @@ pub mod pallet {
 				asset,
 				AccountOrAddress::Internal(destination),
 			)
+		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::internal_swap())]
+		pub fn internal_swap(
+			origin: OriginFor<T>,
+			amount: AssetAmount,
+			input_asset: Asset,
+			output_asset: Asset,
+			retry_duration: BlockNumber,
+			min_price: Price,
+			dca_params: Option<DcaParameters>,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			Self::ensure_has_refund_address_for_asset(&account_id, output_asset)?;
+
+			T::PoolApi::sweep(&account_id)?;
+
+			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)
+				.map_err(|_| Error::<T>::InsufficientBalance)?;
+
+			T::SwapRequestHandler::init_swap_request(
+				input_asset,
+				amount,
+				output_asset,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::CreditOnChain {
+						account_id: account_id.clone(),
+					},
+				},
+				Default::default(), /* no broker fees */
+				Some(RefundParametersExtended {
+					retry_duration,
+					refund_destination: RefundDestination::OnChainAccount(account_id.clone()),
+					min_price,
+				}),
+				dca_params,
+				SwapOrigin::OnChainAccount(account_id),
+			);
+
+			Ok(())
 		}
 	}
 }

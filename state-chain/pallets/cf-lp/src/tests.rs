@@ -1,10 +1,13 @@
 use crate::{mock::*, Error, Event, LiquidityRefundAddress};
 
 use cf_chains::{address::EncodedAddress, ForeignChainAddress};
-use cf_primitives::{AccountId, Asset, AssetAmount, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, ForeignChain};
 
 use cf_test_utilities::assert_events_match;
-use cf_traits::{AccountRoleRegistry, BalanceApi, Chainflip, SetSafeMode};
+use cf_traits::{
+	mocks::swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
+	AccountRoleRegistry, BalanceApi, Chainflip, SetSafeMode, SwapOutputAction, SwapRequestType,
+};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
 use sp_runtime::AccountId32;
 
@@ -72,7 +75,7 @@ fn liquidity_providers_can_move_assets_internally() {
 				RuntimeOrigin::signed((LP_ACCOUNT).into()),
 				TRANSFER_AMOUNT,
 				Asset::Eth,
-				AccountId::from(NON_LP_ACCOUNT),
+				NON_LP_ACCOUNT,
 			),
 			Error::<Test>::DestinationAccountNotLiquidityProvider
 		);
@@ -83,7 +86,7 @@ fn liquidity_providers_can_move_assets_internally() {
 				RuntimeOrigin::signed((LP_ACCOUNT).into()),
 				TRANSFER_AMOUNT,
 				Asset::Eth,
-				AccountId::from(LP_ACCOUNT),
+				LP_ACCOUNT,
 			),
 			Error::<Test>::CannotTransferToOriginAccount
 		);
@@ -92,12 +95,12 @@ fn liquidity_providers_can_move_assets_internally() {
 			RuntimeOrigin::signed((LP_ACCOUNT).into()),
 			TRANSFER_AMOUNT,
 			Asset::Eth,
-			AccountId::from(LP_ACCOUNT_2),
+			LP_ACCOUNT_2,
 		));
 
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(Event::AssetTransferred {
-			from: AccountId::from(LP_ACCOUNT),
-			to: AccountId::from(LP_ACCOUNT_2),
+			from: LP_ACCOUNT,
+			to: LP_ACCOUNT_2,
 			asset: Asset::Eth,
 			amount: TRANSFER_AMOUNT,
 		}));
@@ -159,47 +162,46 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 #[test]
 fn can_register_and_deregister_liquidity_refund_address() {
 	new_test_ext().execute_with(|| {
-		let account_id = AccountId::from(LP_ACCOUNT);
 		let encoded_address = EncodedAddress::Eth([0x01; 20]);
 		let decoded_address = ForeignChainAddress::Eth([0x01; 20].into());
-		assert!(LiquidityRefundAddress::<Test>::get(&account_id, ForeignChain::Ethereum).is_none());
+		assert!(LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Ethereum).is_none());
 
 		// Can register EWA
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
-			RuntimeOrigin::signed(account_id.clone()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			encoded_address
 		));
 		assert_eq!(
-			LiquidityRefundAddress::<Test>::get(&account_id, ForeignChain::Ethereum),
+			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Ethereum),
 			Some(decoded_address.clone())
 		);
 		// Other chain should be unaffected.
-		assert!(LiquidityRefundAddress::<Test>::get(&account_id, ForeignChain::Polkadot).is_none());
-		assert!(LiquidityRefundAddress::<Test>::get(&account_id, ForeignChain::Bitcoin).is_none());
+		assert!(LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Polkadot).is_none());
+		assert!(LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Bitcoin).is_none());
 
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
 			Event::<Test>::LiquidityRefundAddressRegistered {
-				account_id: account_id.clone(),
+				account_id: LP_ACCOUNT,
 				chain: ForeignChain::Ethereum,
 				address: decoded_address,
 			},
 		));
 
-		// Can reaplce the registered EWA with a new one.
+		// Can replace the registered EWA with a new one.
 		let encoded_address = EncodedAddress::Eth([0x05; 20]);
 		let decoded_address = ForeignChainAddress::Eth([0x05; 20].into());
 
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
-			RuntimeOrigin::signed(account_id.clone()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			encoded_address,
 		));
 		assert_eq!(
-			LiquidityRefundAddress::<Test>::get(&account_id, ForeignChain::Ethereum),
+			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Ethereum),
 			Some(decoded_address.clone()),
 		);
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
 			Event::<Test>::LiquidityRefundAddressRegistered {
-				account_id,
+				account_id: LP_ACCOUNT,
 				chain: ForeignChain::Ethereum,
 				address: decoded_address,
 			},
@@ -316,26 +318,23 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 fn account_registration_and_deregistration() {
 	new_test_ext().execute_with(|| {
 		const DEPOSIT_AMOUNT: AssetAmount = 1_000;
-		const LP_ACCOUNT_ID: AccountId = AccountId32::new(LP_ACCOUNT);
 
-		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_liquidity_provider(OriginTrait::signed(
-			LP_ACCOUNT_ID,
-		))
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_liquidity_provider(OriginTrait::signed(LP_ACCOUNT))
 		.expect("LP_ACCOUNT registered at genesis.");
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
-			OriginTrait::signed(LP_ACCOUNT_ID),
+			OriginTrait::signed(LP_ACCOUNT),
 			EncodedAddress::Eth([0x01; 20])
 		));
 
-		MockBalanceApi::credit_account(&LP_ACCOUNT_ID, Asset::Eth, DEPOSIT_AMOUNT);
+		MockBalanceApi::credit_account(&LP_ACCOUNT, Asset::Eth, DEPOSIT_AMOUNT);
 
 		assert_noop!(
-			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
+			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT)),
 			Error::<Test>::FundsRemaining,
 		);
 
 		assert_ok!(LiquidityProvider::withdraw_asset(
-			OriginTrait::signed(LP_ACCOUNT_ID),
+			OriginTrait::signed(LP_ACCOUNT),
 			DEPOSIT_AMOUNT,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
@@ -344,22 +343,101 @@ fn account_registration_and_deregistration() {
 		assert_ok!(MockIngressEgressBoostApi::set_boost_funds(100));
 
 		assert_noop!(
-			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
+			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT)),
 			Error::<Test>::BoostedFundsRemaining,
 		);
 
 		assert_ok!(MockIngressEgressBoostApi::remove_boost_funds(100));
 
 		assert_ok!(
-			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
+			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT)),
 		);
 
 		assert!(
-			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT_ID, ForeignChain::Ethereum).is_none()
+			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Ethereum).is_none()
 		);
 
-		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT_ID)
+		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT)
 			.iter()
 			.all(|(_, amount)| *amount == 0));
+	});
+}
+
+#[test]
+fn internal_swap_checks() {
+	new_test_ext().execute_with(|| {
+
+		const NOT_LP_ACCOUNT: u64 = 11;
+		const INPUT_AMOUNT: AssetAmount = 1_000;
+
+		// Must be an LP:
+		LiquidityProvider::internal_swap(
+			RuntimeOrigin::signed(NOT_LP_ACCOUNT),
+			INPUT_AMOUNT,
+			Asset::Eth,
+			Asset::Flip,
+			0,
+			Default::default(),
+			None,
+		).unwrap_err();
+
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_liquidity_provider(OriginTrait::signed(
+			LP_ACCOUNT,
+		))
+		.expect("LP_ACCOUNT registered at genesis.");
+
+		// Must register a refund address
+		assert_noop!(LiquidityProvider::internal_swap(
+			RuntimeOrigin::signed(LP_ACCOUNT),
+			INPUT_AMOUNT,
+			Asset::Eth,
+			Asset::Flip,
+			0,
+			Default::default(),
+			None,
+		), Error::<Test>::NoLiquidityRefundAddressRegistered);
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			OriginTrait::signed(LP_ACCOUNT),
+			EncodedAddress::Eth([0x01; 20])
+		));
+
+		// Must have sufficient balance:
+		assert_noop!(LiquidityProvider::internal_swap(
+			RuntimeOrigin::signed(LP_ACCOUNT),
+			INPUT_AMOUNT,
+			Asset::Eth,
+			Asset::Flip,
+			0,
+			Default::default(),
+			None,
+		), Error::<Test>::InsufficientBalance);
+
+		MockBalanceApi::credit_account(&LP_ACCOUNT, Asset::Eth, INPUT_AMOUNT);
+
+		// Now the extrinsic should succeed resulting in a swap request getting recorded:
+		assert_ok!(LiquidityProvider::internal_swap(
+			RuntimeOrigin::signed(LP_ACCOUNT),
+			INPUT_AMOUNT,
+			Asset::Eth,
+			Asset::Flip,
+			0,
+			Default::default(),
+			None,
+		));
+
+		assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests(),
+			vec![MockSwapRequest {
+				input_asset: Asset::Eth,
+				output_asset: Asset::Flip,
+				input_amount: INPUT_AMOUNT,
+				swap_type: SwapRequestType::Regular {
+					output_action: SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT }
+				},
+				broker_fees: Default::default(),
+				origin: cf_chains::SwapOrigin::OnChainAccount(LP_ACCOUNT)
+			}]
+		);
+
 	});
 }

@@ -453,10 +453,6 @@ pub mod pallet {
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
-		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
-
-		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
-
 		type ChannelIdAllocator: ChannelIdAllocator;
 
 		type Bonder: Bonding<
@@ -1294,45 +1290,6 @@ pub mod pallet {
 			});
 
 			Ok(())
-		}
-
-		#[pallet::call_index(15)]
-		#[pallet::weight(T::WeightInfo::internal_swap())]
-		pub fn internal_swap(
-			origin: OriginFor<T>,
-			amount: AssetAmount,
-			input_asset: Asset,
-			output_asset: Asset,
-			retry_duration: BlockNumber,
-			min_price: Price,
-			dca_params: Option<DcaParameters>,
-		) -> DispatchResult {
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			T::LpRegistrationApi::ensure_has_refund_address_for_asset(&account_id, output_asset)?;
-
-			T::PoolApi::sweep(&account_id)?;
-
-			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)?;
-
-			Self::init_swap_request(
-				input_asset,
-				amount,
-				output_asset,
-				SwapRequestType::Regular {
-					output_action: SwapOutputAction::CreditOnChain {
-						account_id: account_id.clone(),
-					},
-				},
-				Default::default(), /* no broker fees */
-				Some(RefundParametersExtended {
-					retry_duration,
-					refund_destination: RefundDestination::OnChainAccount(account_id.clone()),
-					min_price,
-				}),
-				dca_params,
-				SwapOrigin::OnChainAccount(account_id),
-			);
 		}
 
 		/// Triggers a withdrawal to the registered withdrawal address of the affiliate.

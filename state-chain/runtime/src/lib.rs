@@ -312,8 +312,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	type CcmValidityChecker = CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
-	type PoolApi = LiquidityPools;
-	type LpRegistrationApi = LiquidityProvider;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
 }
@@ -533,6 +531,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type PoolApi = LiquidityPools;
 	type BalanceApi = AssetBalances;
 	type BoostApi = IngressEgressBoostApi;
+	type SwapRequestHandler = Swapping;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;

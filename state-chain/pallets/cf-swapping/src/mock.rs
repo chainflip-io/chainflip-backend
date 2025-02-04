@@ -187,8 +187,6 @@ impl pallet_cf_swapping::Config for Test {
 	type FeePayment = MockFeePayment<Self>;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
 	type BalanceApi = MockBalance;
-	type PoolApi = Self;
-	type LpRegistrationApi = MockLpRegistration;
 	type CcmValidityChecker = AlwaysValid;
 	type NetworkFee = NetworkFee;
 	type ChannelIdAllocator = MockChannelIdAllocator;
