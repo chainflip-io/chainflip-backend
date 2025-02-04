@@ -24,6 +24,7 @@ frame-metadata = { workspace = true, default-features = true, features = [
     "current",
 ] }
 frame-metadata-hash-extension = { workspace = true }
+subxt = { workspace = true, features = ["substrate-compat"] }
 
 [dev-dependencies]
 pallet-cf-funding = { workspace = true, default-features = true }

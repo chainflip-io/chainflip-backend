@@ -1,3 +1,4 @@
+use crate::events_decoder::DynamicEvents;
 use frame_support::dispatch::DispatchInfo;
 use sp_api::runtime_decl_for_core::CoreV5;
 use sp_core::{
@@ -7,7 +8,12 @@ use sp_core::{
 use std::sync::OnceLock;
 
 pub mod error_decoder;
+pub mod events_decoder;
 pub mod signer;
+pub mod subxt_state_chain_config;
+
+#[subxt::subxt(runtime_metadata_path = "./artifacts/chainflip_metadata.scale")]
+pub mod cf_static_runtime {}
 
 pub fn build_runtime_version() -> &'static sp_version::RuntimeVersion {
 	static BUILD_RUNTIME_VERSION: OnceLock<sp_version::RuntimeVersion> = OnceLock::new();
@@ -16,6 +22,8 @@ pub fn build_runtime_version() -> &'static sp_version::RuntimeVersion {
 
 pub type ExtrinsicDetails =
 	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
+
+pub type ExtrinsicData = (H256, DynamicEvents, state_chain_runtime::Header, DispatchInfo);
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
 pub enum WaitFor {

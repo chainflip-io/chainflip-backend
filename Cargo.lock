@@ -1429,6 +1429,7 @@ dependencies = [
  "sp-runtime 39.0.0",
  "sp-version",
  "state-chain-runtime",
+ "subxt",
  "thiserror",
 ]
 

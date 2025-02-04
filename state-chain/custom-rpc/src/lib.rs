@@ -12,7 +12,7 @@ use cf_chains::{
 	sol::SolAddress,
 	Chain,
 };
-use cf_node_clients::error_decoder;
+use cf_node_clients::{error_decoder, events_decoder};
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountId, AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
@@ -1168,6 +1168,8 @@ pub enum CfApiError {
 	TransactionValidityError(#[from] TransactionValidityError),
 	#[error("{0:?}")]
 	ExtrinsicDispatchError(#[from] error_decoder::DispatchError),
+	#[error("{0:?}")]
+	ExtrinsicDynamicEventsError(#[from] events_decoder::DynamicEventError),
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
 	#[error(transparent)]
@@ -1218,6 +1220,7 @@ impl From<CfApiError> for ErrorObjectOwned {
 			CfApiError::TransactionPoolError(error) => call_error(error),
 			CfApiError::TransactionValidityError(error) => call_error(error),
 			CfApiError::ExtrinsicDispatchError(error) => call_error(error),
+			CfApiError::ExtrinsicDynamicEventsError(error) => call_error(error),
 		}
 	}
 }

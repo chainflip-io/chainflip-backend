@@ -4,6 +4,7 @@ use cf_chains::{
 	address::AddressString, CcmChannelMetadata, ChannelRefundParametersEncoded,
 	ChannelRefundParametersGeneric,
 };
+use cf_node_clients::cf_static_runtime;
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters,
 };
@@ -336,22 +337,39 @@ where
 	}
 
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		let (_, events, _, _) = self
+		let (_, dynamic_events, _, _) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_v2(
 				RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
 				false,
 				true,
 			)
 			.await?;
 
-		Ok(extract_event!(
-			events,
-			state_chain_runtime::RuntimeEvent::Swapping,
-			pallet_cf_swapping::Event::PrivateBrokerChannelOpened,
-			{ channel_id, .. },
-			*channel_id
-		)?)
+		match dynamic_events
+			.find_static_event::<cf_static_runtime::swapping::events::PrivateBrokerChannelOpened>()?
+			.map(|event| event.channel_id)
+		{
+			Some(channel_id) => Ok(channel_id),
+			None => Err(anyhow!("No PrivateBrokerChannelOpened event was found").into()),
+		}
+
+		// let (_, events, _, _) = self
+		// 	.signed_pool_client
+		// 	.submit_watch(
+		// 		RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
+		// 		false,
+		// 		true,
+		// 	)
+		// 	.await?;
+		//
+		// Ok(extract_event!(
+		// 	events,
+		// 	state_chain_runtime::RuntimeEvent::Swapping,
+		// 	pallet_cf_swapping::Event::PrivateBrokerChannelOpened,
+		// 	{ channel_id, .. },
+		// 	*channel_id
+		// )?)
 	}
 
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
