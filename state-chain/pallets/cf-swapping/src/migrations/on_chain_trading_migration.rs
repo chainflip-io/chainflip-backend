@@ -74,7 +74,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 							 }| {
 								RefundParametersExtended {
 									retry_duration,
-									refund_destination: RefundDestination::ExternalAddress(
+									refund_destination: AccountOrAddress::ExternalAddress(
 										refund_address,
 									),
 									min_price,

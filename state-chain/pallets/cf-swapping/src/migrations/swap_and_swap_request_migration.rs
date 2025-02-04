@@ -1,7 +1,5 @@
 use frame_support::traits::UncheckedOnRuntimeUpgrade;
 
-use cf_chains::{CcmAdditionalData, CcmMessage};
-
 use crate::Config;
 
 use crate::*;

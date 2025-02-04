@@ -916,7 +916,7 @@ pub struct ChannelRefundParameters<A> {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
 pub struct RefundParametersExtendedGeneric<Address, AccountId> {
 	pub retry_duration: cf_primitives::BlockNumber,
-	pub refund_destination: RefundDestination<Address, AccountId>,
+	pub refund_destination: AccountOrAddress<Address, AccountId>,
 	pub min_price: Price,
 }
 
@@ -932,10 +932,10 @@ impl<AccountId> RefundParametersExtended<AccountId> {
 		RefundParametersExtendedEncoded {
 			retry_duration: self.retry_duration,
 			refund_destination: match self.refund_destination {
-				RefundDestination::ExternalAddress(address) =>
-					RefundDestination::ExternalAddress(Converter::to_encoded_address(address)),
-				RefundDestination::OnChainAccount(account_id) =>
-					RefundDestination::OnChainAccount(account_id),
+				AccountOrAddress::ExternalAddress(address) =>
+					AccountOrAddress::ExternalAddress(Converter::to_encoded_address(address)),
+				AccountOrAddress::InternalAccount(account_id) =>
+					AccountOrAddress::InternalAccount(account_id),
 			},
 			min_price: self.min_price,
 		}
@@ -947,19 +947,13 @@ impl<AccountId> RefundParametersExtended<AccountId> {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
-pub enum RefundDestination<Address, AccountId> {
+/// AccountOrAddress is a enum that can represent an internal account or an external address.
+/// This is used to represent the destination address for an egress or an internal account
+/// to move funds internally.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+pub enum AccountOrAddress<Address, AccountId> {
+	InternalAccount(AccountId),
 	ExternalAddress(Address),
-	OnChainAccount(AccountId),
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl<Address: BenchmarkValue, AccountId: BenchmarkValue> BenchmarkValue
-	for RefundDestination<Address, AccountId>
-{
-	fn benchmark_value() -> Self {
-		RefundDestination::ExternalAddress(BenchmarkValue::benchmark_value())
-	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]

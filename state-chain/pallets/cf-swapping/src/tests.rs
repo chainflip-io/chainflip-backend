@@ -106,7 +106,7 @@ impl TestRefundParams {
 
 		RefundParametersExtended {
 			retry_duration: self.retry_duration,
-			refund_destination: RefundDestination::ExternalAddress(ForeignChainAddress::Eth(
+			refund_destination: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
 				[10; 20].into(),
 			)),
 			min_price: sqrt_price_to_price(bounded_sqrt_price(
@@ -1683,7 +1683,7 @@ mod on_chain_swapping {
 					Default::default(),
 					Some(RefundParametersExtended {
 						retry_duration: 0,
-						refund_destination: RefundDestination::OnChainAccount(LP_ACCOUNT),
+						refund_destination: AccountOrAddress::InternalAccount(LP_ACCOUNT),
 						min_price,
 					}),
 					None,
@@ -1757,7 +1757,7 @@ mod on_chain_swapping {
 					Default::default(),
 					Some(RefundParametersExtended {
 						retry_duration: 0,
-						refund_destination: RefundDestination::OnChainAccount(LP_ACCOUNT),
+						refund_destination: AccountOrAddress::InternalAccount(LP_ACCOUNT),
 						min_price,
 					}),
 					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),

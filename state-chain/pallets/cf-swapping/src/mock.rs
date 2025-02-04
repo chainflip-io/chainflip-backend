@@ -8,11 +8,8 @@ use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		address_converter::MockAddressConverter,
-		balance_api::{MockBalance, MockLpRegistration},
-		bonding::MockBonderFor,
-		deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler,
+		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
+		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
 	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
@@ -150,10 +147,6 @@ impl WeightInfo for MockWeightInfo {
 	}
 
 	fn register_affiliate() -> Weight {
-		Weight::from_parts(100, 0)
-	}
-
-	fn internal_swap() -> Weight {
 		Weight::from_parts(100, 0)
 	}
 

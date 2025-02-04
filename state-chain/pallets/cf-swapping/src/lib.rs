@@ -6,9 +6,8 @@ use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
 	eth::Address as EthereumAddress,
-	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersDecoded,
-	ChannelRefundParametersEncoded, RefundDestination, RefundParametersExtended, SwapOrigin,
-	SwapRefundParameters,
+	AccountOrAddress, CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersEncoded,
+	RefundParametersExtended, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
@@ -19,8 +18,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
-	FundingInfo, IngressEgressFeeApi, LpRegistration, SwapLimitsProvider, SwapOutputAction,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -393,7 +392,7 @@ where
 pub mod pallet {
 	use core::cmp::max;
 
-	use cf_amm::math::{output_amount_ceil, sqrt_price_to_price, Price, SqrtPriceQ64F96};
+	use cf_amm::math::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{
 		address::EncodedAddress, AnyChain, Chain, RefundParametersExtended,
 		RefundParametersExtendedEncoded,
@@ -402,7 +401,7 @@ pub mod pallet {
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
 		SwapId, SwapOutput, SwapRequestId,
 	};
-	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, PoolApi, ScheduledEgressDetails};
+	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, ScheduledEgressDetails};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
 
@@ -1620,7 +1619,7 @@ pub mod pallet {
 					let amount_to_refund = swap.input_amount + *remaining_input_amount;
 
 					match &refund_params.refund_destination {
-						RefundDestination::ExternalAddress(address) => {
+						AccountOrAddress::ExternalAddress(address) => {
 							Self::egress_for_swap(
 								request.id,
 								amount_to_refund,
@@ -1630,7 +1629,7 @@ pub mod pallet {
 								true, /* refund */
 							);
 						},
-						RefundDestination::OnChainAccount(account_id) => {
+						AccountOrAddress::InternalAccount(account_id) => {
 							Self::deposit_event(Event::<T>::RefundedOnChain {
 								swap_request_id,
 								account_id: account_id.clone(),

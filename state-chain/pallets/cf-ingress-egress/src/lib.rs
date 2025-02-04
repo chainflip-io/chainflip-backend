@@ -1919,7 +1919,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broker_fees,
 					refund_params.map(|params| RefundParametersExtended {
 						retry_duration: params.retry_duration,
-						refund_destination: cf_chains::RefundDestination::ExternalAddress(
+						refund_destination: cf_chains::AccountOrAddress::ExternalAddress(
 							params.refund_address,
 						),
 						min_price: params.min_price,

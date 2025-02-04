@@ -9,14 +9,13 @@ use cf_traits::{
 	AccountRoleRegistry, BalanceApi, Chainflip, SetSafeMode, SwapOutputAction, SwapRequestType,
 };
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
-use sp_runtime::AccountId32;
 
 #[test]
 fn egress_chain_and_asset_must_match() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
-				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				1,
 				Asset::Eth,
 				EncodedAddress::Dot(Default::default()),
@@ -29,12 +28,12 @@ fn egress_chain_and_asset_must_match() {
 #[test]
 fn liquidity_providers_can_withdraw_asset() {
 	new_test_ext().execute_with(|| {
-		MockBalanceApi::insert_balance(LP_ACCOUNT.into(), 1_000);
-		MockBalanceApi::insert_balance(NON_LP_ACCOUNT.into(), 1_000);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, 1_000);
+		MockBalanceApi::insert_balance(NON_LP_ACCOUNT, 1_000);
 
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
-				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				100,
 				Asset::Dot,
 				EncodedAddress::Eth(Default::default()),
@@ -44,7 +43,7 @@ fn liquidity_providers_can_withdraw_asset() {
 
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
-				RuntimeOrigin::signed(NON_LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(NON_LP_ACCOUNT),
 				100,
 				Asset::Eth,
 				EncodedAddress::Eth(Default::default()),
@@ -53,7 +52,7 @@ fn liquidity_providers_can_withdraw_asset() {
 		);
 
 		assert_ok!(LiquidityProvider::withdraw_asset(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			100,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
@@ -67,12 +66,12 @@ fn liquidity_providers_can_move_assets_internally() {
 		const BALANCE_LP_1: AssetAmount = 1_000;
 		const TRANSFER_AMOUNT: AssetAmount = 100;
 
-		MockBalanceApi::insert_balance(LP_ACCOUNT.into(), BALANCE_LP_1);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, BALANCE_LP_1);
 
 		// Cannot move assets to a non-LP account.
 		assert_noop!(
 			LiquidityProvider::transfer_asset(
-				RuntimeOrigin::signed((LP_ACCOUNT).into()),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				TRANSFER_AMOUNT,
 				Asset::Eth,
 				NON_LP_ACCOUNT,
@@ -83,7 +82,7 @@ fn liquidity_providers_can_move_assets_internally() {
 		// Cannot transfer assets to the same account.
 		assert_noop!(
 			LiquidityProvider::transfer_asset(
-				RuntimeOrigin::signed((LP_ACCOUNT).into()),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				TRANSFER_AMOUNT,
 				Asset::Eth,
 				LP_ACCOUNT,
@@ -92,7 +91,7 @@ fn liquidity_providers_can_move_assets_internally() {
 		);
 
 		assert_ok!(LiquidityProvider::transfer_asset(
-			RuntimeOrigin::signed((LP_ACCOUNT).into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			TRANSFER_AMOUNT,
 			Asset::Eth,
 			LP_ACCOUNT_2,
@@ -110,9 +109,9 @@ fn liquidity_providers_can_move_assets_internally() {
 #[test]
 fn cannot_deposit_and_withdrawal_during_safe_mode() {
 	new_test_ext().execute_with(|| {
-		MockBalanceApi::insert_balance(LP_ACCOUNT.into(), 1_000);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, 1_000);
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			EncodedAddress::Eth(Default::default()),
 		));
 
@@ -122,7 +121,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 		// Cannot request deposit address during Code red.
 		assert_noop!(
 			LiquidityProvider::request_liquidity_deposit_address(
-				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				Asset::Eth,
 				0
 			),
@@ -132,7 +131,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 		// Cannot withdraw liquidity during Code red.
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
-				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				100,
 				Asset::Eth,
 				EncodedAddress::Eth(Default::default()),
@@ -145,13 +144,13 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 
 		// Deposit and withdrawal can now work as per normal.
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			Asset::Eth,
 			0
 		));
 
 		assert_ok!(LiquidityProvider::withdraw_asset(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			100,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
@@ -164,7 +163,7 @@ fn can_register_and_deregister_liquidity_refund_address() {
 	new_test_ext().execute_with(|| {
 		let encoded_address = EncodedAddress::Eth([0x01; 20]);
 		let decoded_address = ForeignChainAddress::Eth([0x01; 20].into());
-		assert!(LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Ethereum).is_none());
+		assert!(LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Ethereum).is_none());
 
 		// Can register EWA
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
@@ -172,12 +171,12 @@ fn can_register_and_deregister_liquidity_refund_address() {
 			encoded_address
 		));
 		assert_eq!(
-			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Ethereum),
+			LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Ethereum),
 			Some(decoded_address.clone())
 		);
 		// Other chain should be unaffected.
-		assert!(LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Polkadot).is_none());
-		assert!(LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Bitcoin).is_none());
+		assert!(LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Polkadot).is_none());
+		assert!(LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Bitcoin).is_none());
 
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
 			Event::<Test>::LiquidityRefundAddressRegistered {
@@ -196,7 +195,7 @@ fn can_register_and_deregister_liquidity_refund_address() {
 			encoded_address,
 		));
 		assert_eq!(
-			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Ethereum),
+			LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Ethereum),
 			Some(decoded_address.clone()),
 		);
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
@@ -214,7 +213,7 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			LiquidityProvider::request_liquidity_deposit_address(
-				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				Asset::Eth,
 				0,
 			),
@@ -223,23 +222,23 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 
 		// Register EWA
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			EncodedAddress::Eth([0x01; 20])
 		));
 
 		// Now the LPer should be able to request deposit channel for assets of the Ethereum chain.
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			Asset::Eth,
 			0,
 		));
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			Asset::Flip,
 			0,
 		));
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			Asset::Usdc,
 			0,
 		));
@@ -255,7 +254,7 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		// Requesting deposit address for other chains will fail.
 		assert_noop!(
 			LiquidityProvider::request_liquidity_deposit_address(
-				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				Asset::Btc,
 				0,
 			),
@@ -263,7 +262,7 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		);
 		assert_noop!(
 			LiquidityProvider::request_liquidity_deposit_address(
-				RuntimeOrigin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				Asset::Dot,
 				0,
 			),
@@ -280,22 +279,22 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 		const BOOST_FEE3: u16 = 100;
 
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			EncodedAddress::Eth([0x01; 20])
 		));
 
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			Asset::Eth,
 			BOOST_FEE1,
 		));
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			Asset::Flip,
 			BOOST_FEE2,
 		));
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			Asset::Usdc,
 			BOOST_FEE3,
 		));
@@ -354,7 +353,7 @@ fn account_registration_and_deregistration() {
 		);
 
 		assert!(
-			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT, ForeignChain::Ethereum).is_none()
+			LiquidityRefundAddress::<Test>::get(LP_ACCOUNT, ForeignChain::Ethereum).is_none()
 		);
 
 		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT)
