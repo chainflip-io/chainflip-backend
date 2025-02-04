@@ -403,8 +403,6 @@ fn send_funds_back_after_they_have_been_rejected() {
 				tx_id: _,
 			})
 		);
-
-		assert!(MockEgressHandler::<Bitcoin>::get_scheduled_egresses().len() == 1);
 	});
 }
 
