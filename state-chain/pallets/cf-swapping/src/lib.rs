@@ -556,6 +556,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		PrivateBrokerChannelCreatedAt {
+			broker_id: T::AccountId,
+			channel_id: ChannelId,
+			created_at: u32,
+		},
 		/// New swap has been requested
 		SwapRequested {
 			swap_request_id: SwapRequestId,
@@ -698,11 +703,6 @@ pub mod pallet {
 		},
 		BrokerBondSet {
 			bond: T::Amount,
-		},
-		PrivateBrokerChannelCreatedAt {
-			broker_id: T::AccountId,
-			channel_id: ChannelId,
-			created_at: u32,
 		},
 	}
 	#[pallet::error]
