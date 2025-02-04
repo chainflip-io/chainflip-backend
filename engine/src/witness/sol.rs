@@ -27,9 +27,9 @@ use pallet_cf_elections::{
 };
 use state_chain_runtime::{
 	chainflip::solana_elections::{
-		SolanaBlockHeightTracking, SolanaChainTrackingProvider, SolanaEgressWitnessing,
-		SolanaElectoralSystemRunner, SolanaFeeTracking, SolanaIngressTracking, SolanaLiveness,
-		SolanaNonceTracking, SolanaVaultSwapTracking, TransactionSuccessDetails,
+		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystemRunner,
+		SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking, SolanaVaultSwapTracking,
+		TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
@@ -57,25 +57,6 @@ impl VoterApi<SolanaBlockHeightTracking> for SolanaBlockHeightTrackingVoter {
 		let slot = self.client.get_slot(CommitmentConfig::finalized()).await;
 		CHAIN_TRACKING.set(&[cf_chains::Solana::NAME], Into::<u64>::into(slot));
 		Ok(slot)
-	}
-}
-
-// This will be removed soon, but we have to delete the electoral system, which requires a
-// migration. So we're leaving a dummy implementation here for now. PRO-1960
-#[derive(Clone)]
-struct SolanaFeeTrackingVoter;
-
-#[async_trait::async_trait]
-impl VoterApi<SolanaFeeTracking> for SolanaFeeTrackingVoter {
-	async fn vote(
-		&self,
-		_settings: <SolanaFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
-		_properties: <SolanaFeeTracking as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<VoteOf<SolanaFeeTracking>, anyhow::Error> {
-		// Note, this won't actually be submitted, because no elections will be created (they have
-		// been disabled inside the UnsafeMedian electoral system) this is just to provide
-		// something so we compile.
-		Ok(SolanaChainTrackingProvider::priority_fee())
 	}
 }
 
@@ -234,7 +215,6 @@ where
 					state_chain_client,
 					CompositeVoter::<SolanaElectoralSystemRunner, _>::new((
 						SolanaBlockHeightTrackingVoter { client: client.clone() },
-						SolanaFeeTrackingVoter,
 						SolanaIngressTrackingVoter { client: client.clone() },
 						SolanaNonceTrackingVoter { client: client.clone() },
 						SolanaEgressWitnessingVoter { client: client.clone() },

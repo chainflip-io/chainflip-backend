@@ -36,7 +36,7 @@ use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
 	UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::SwapLegInfo;
+use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
@@ -1023,11 +1023,12 @@ pub trait CustomApi {
 	) -> RpcResult<TransactionScreeningEvents>;
 
 	#[method(name = "get_affiliates")]
-	fn cf_get_affiliates(
+	fn cf_affiliate_details(
 		&self,
 		broker: state_chain_runtime::AccountId,
+		affiliate: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(AffiliateShortId, state_chain_runtime::AccountId)>>;
+	) -> RpcResult<Vec<(state_chain_runtime::AccountId, AffiliateDetails)>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1292,7 +1293,7 @@ where
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
-		cf_get_affiliates(broker: state_chain_runtime::AccountId) -> Vec<(AffiliateShortId, state_chain_runtime::AccountId)>,
+		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 	}
 
 	pass_through_and_flatten! {

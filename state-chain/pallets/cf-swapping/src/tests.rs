@@ -27,6 +27,7 @@ use cf_test_utilities::{assert_event_sequence, assert_events_eq, assert_has_matc
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
+		balance_api::MockBalance,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
@@ -38,6 +39,7 @@ use frame_support::{
 	testing_prelude::bounded_vec,
 	traits::{Hooks, OriginTrait},
 };
+
 use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
 use sp_std::iter;
@@ -1910,13 +1912,31 @@ mod private_channels {
 	}
 
 	#[test]
+	fn default_broker_bond() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(BrokerBond::<Test>::get(), FLIPPERINOS_PER_FLIP * 100);
+		});
+	}
+}
+
+#[cfg(test)]
+mod affiliates {
+
+	use super::*;
+
+	use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
+	use sp_runtime::DispatchError::BadOrigin;
+
+	#[test]
 	fn register_affiliate() {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 
+			let withdrawal_address: EthereumAddress = Default::default();
+
 			// Only brokers can register affiliates
 			assert_noop!(
-				Swapping::register_affiliate(OriginTrait::signed(ALICE), BOB, SHORT_ID),
+				Swapping::register_affiliate(OriginTrait::signed(ALICE), withdrawal_address,),
 				BadOrigin
 			);
 			assert_eq!(Swapping::get_short_id(&BROKER, &BOB), None);
@@ -1925,47 +1945,142 @@ mod private_channels {
 			{
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
-					ALICE,
-					SHORT_ID,
+					withdrawal_address,
 				));
+
+				let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+					.expect("Affiliate must be registered!");
 
 				System::assert_has_event(RuntimeEvent::Swapping(
-					Event::<Test>::AffiliateRegistrationUpdated {
+					Event::<Test>::AffiliateRegistration {
 						broker_id: BROKER,
-						affiliate_short_id: SHORT_ID,
-						affiliate_id: ALICE,
-						previous_affiliate_id: None,
+						short_id: SHORT_ID,
+						affiliate_id: affiliate_account_id,
 					},
 				));
-				assert_eq!(Swapping::get_short_id(&BROKER, &ALICE), Some(SHORT_ID));
-			}
-
-			// Overwriting an existing affiliate registration entry.
-			{
-				assert_ok!(Swapping::register_affiliate(
-					OriginTrait::signed(BROKER),
-					BOB,
-					SHORT_ID,
-				));
-
-				System::assert_has_event(RuntimeEvent::Swapping(
-					Event::<Test>::AffiliateRegistrationUpdated {
-						broker_id: BROKER,
-						affiliate_short_id: SHORT_ID,
-						affiliate_id: BOB,
-						previous_affiliate_id: Some(ALICE),
-					},
-				));
-				assert_eq!(Swapping::get_short_id(&BROKER, &BOB), Some(SHORT_ID));
-				assert_eq!(Swapping::get_short_id(&BROKER, &ALICE), None);
+				assert_eq!(Swapping::get_short_id(&BROKER, &affiliate_account_id), Some(SHORT_ID));
 			}
 		});
 	}
 
 	#[test]
-	fn default_broker_bond() {
+	fn register_address_and_request_withdrawal_success() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(BrokerBond::<Test>::get(), FLIPPERINOS_PER_FLIP * 100);
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			const BALANCE: AssetAmount = 200;
+			let withdrawal_address: EthereumAddress = Default::default();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address,
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
+
+			assert_ok!(Swapping::affiliate_withdrawal_request(
+				OriginTrait::signed(BROKER),
+				affiliate_account_id,
+			));
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::AffiliateRegistration { .. }),
+				RuntimeEvent::Swapping(Event::WithdrawalRequested { .. }),
+			);
+
+			assert_eq!(MockBalance::get_balance(&affiliate_account_id, Asset::Usdc), 0);
+
+			let egresses = MockEgressHandler::<Ethereum>::get_scheduled_egresses();
+			assert_eq!(egresses.len(), 1);
+			assert_eq!(egresses.first().unwrap().amount(), BALANCE);
+		});
+	}
+
+	#[test]
+	fn fail_due_to_insufficient_funds() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			let withdrawal_address: EthereumAddress = Default::default();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			assert_noop!(
+				Swapping::affiliate_withdrawal_request(
+					OriginTrait::signed(BROKER),
+					affiliate_account_id
+				),
+				Error::<Test>::NoFundsAvailable
+			);
+		});
+	}
+
+	#[test]
+	fn withdrawal_can_only_get_triggered_by_associated_broker() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			const BALANCE: AssetAmount = 200;
+			let withdrawal_address: EthereumAddress = Default::default();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
+
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE)
+				.unwrap();
+
+			assert_noop!(
+				Swapping::affiliate_withdrawal_request(
+					OriginTrait::signed(ALICE),
+					affiliate_account_id
+				),
+				Error::<Test>::AffiliateNotRegisteredForBroker
+			);
+		});
+	}
+
+	#[test]
+	fn can_not_deregister_broker_if_affiliates_still_have_balance() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			const BALANCE: AssetAmount = 200;
+			let withdrawal_address: EthereumAddress = Default::default();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
+
+			assert_noop!(
+				Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),
+				Error::<Test>::AffiliateEarnedFeesNotWithdrawn
+			);
+
+			MockBalance::try_debit_account(&affiliate_account_id, Asset::Usdc, BALANCE).unwrap();
+
+			assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)));
+
+			assert!(AffiliateAccountDetails::<Test>::get(BROKER, affiliate_account_id).is_none());
+			assert!(AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID).is_none());
 		});
 	}
 }

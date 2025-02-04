@@ -59,8 +59,7 @@ fn if_consensus_update_unsynchronised_state() {
 				Check::started_at_initial_state(),
 				Check::ended_at_new_state(),
 				Check::last_election_deleted(),
-				// TODO: Re-add PRO-1960
-				// Check::election_id_incremented(),
+				Check::election_id_incremented(),
 			],
 		);
 }

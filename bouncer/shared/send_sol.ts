@@ -11,7 +11,6 @@ import {
   getEncodedSolAddress,
   getSolConnection,
   getSolWhaleKeyPair,
-  sleep,
 } from './utils';
 
 export async function signAndSendTxSol(transaction: Transaction, log = true) {
@@ -75,21 +74,4 @@ export async function sendSol(solAddress: string, solAmount: string, log = true)
     }),
   );
   return signAndSendTxSol(transaction, log);
-}
-
-export async function spamSolana(prioFee: number, periodMilisec: number, spam: () => boolean) {
-  const continueSpam = spam ?? (() => true);
-
-  const solWhaleKey = getSolWhaleKeyPair().publicKey;
-  const ixs = [
-    SystemProgram.transfer({
-      fromPubkey: solWhaleKey,
-      toPubkey: solWhaleKey,
-      lamports: BigInt(1),
-    }),
-  ];
-  while (continueSpam()) {
-    await signAndSendIxsSol(ixs, prioFee, 0, false);
-    await sleep(periodMilisec);
-  }
 }

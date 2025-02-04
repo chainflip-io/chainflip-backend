@@ -703,7 +703,7 @@ pub enum DepositOriginType {
 }
 
 pub const MAX_CCM_MSG_LENGTH: u32 = 15_000;
-pub const MAX_CCM_ADDITIONAL_DATA_LENGTH: u32 = 1_000;
+pub const MAX_CCM_ADDITIONAL_DATA_LENGTH: u32 = 3_000;
 
 pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
 pub type CcmAdditionalData = BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>;

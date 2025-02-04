@@ -39,26 +39,26 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for SolApiEnvironmentMigr
 						match cf_runtime_utilities::genesis_hashes::genesis_hash::<T>() {
 							cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 								SolAddress(bs58_array(
-									"4FVuGMuzuFAo5KWLnVNknDkNZ84er2wcrtJ79pfyoZqH",
+									"J88B7gmadHzTNGiy54c9Ms8BsEXNdB2fntFyhKpk3qoT",
 								)),
 								SolAddress(bs58_array(
-									"GfGZCo8KmAQvhZofu3Emt66ZfgjKds6ULhps1DAvN8cm",
+									"FmAcjWaRFUxGWBfGT7G3CzcFeJFsewQ4KPJVG4f6fcob",
 								)),
 							),
 							cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 								SolAddress(bs58_array(
-									"FXN1iLmQ47c962nackmzBWZxXE8BR9AXy8mu34oFdKiy",
+									"DeL6iGV5RWrWh7cPoEa7tRHM8XURAaB4vPjfX5qVyuWE",
 								)),
 								SolAddress(bs58_array(
-									"4hD7UM6rQtcqQWtzELvrafpmBYReVXvCpssB6qjY1Sg5",
+									"12MYcNumSQCn81yKRfrk5P5ThM5ivkLiZda979hhKJDR",
 								)),
 							),
 							cf_runtime_utilities::genesis_hashes::SISYPHOS => (
 								SolAddress(bs58_array(
-									"7G6TxoGDsgaZX3HaKkrKyy28tsdr7ZGmeeMbXpm8R5HZ",
+									"FtK6TR2ZqhChxXeDFoVzM9gYDPA18tGrKoBb3hX7nPwt",
 								)),
 								SolAddress(bs58_array(
-									"mYabVW1uMXpGqwgHUBQu4Fg6GT9EMYUzYaGYbi3zgT7",
+									"EXeku7Q9AiAXBdH7cUHw2ue3okhrofvDZR7EBE1BVQZu",
 								)),
 							),
 							_ => (
