@@ -18,8 +18,10 @@ use cf_chains::{
 };
 
 use cf_traits::{
-	mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, BalanceApi,
-	DepositApi,
+	mocks::{
+		account_role_registry::MockAccountRoleRegistry, swap_request_api::MockSwapRequestHandler,
+	},
+	AccountRoleRegistry, BalanceApi, DepositApi,
 };
 
 use cf_primitives::{chains::assets::btc, Beneficiaries, ChannelId};
@@ -150,6 +152,7 @@ fn process_marked_transaction_and_expect_refund() {
 		);
 
 		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::decode_len(), Some(1));
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
 }
 
@@ -200,6 +203,8 @@ fn finalize_boosted_tx_if_marked_after_prewitness() {
 				..
 			})
 		);
+
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().len() == 1);
 	});
 }
 
@@ -256,6 +261,8 @@ fn reject_tx_if_marked_before_prewitness() {
 				block_height: _,
 			})
 		);
+
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
 }
 
@@ -396,6 +403,8 @@ fn send_funds_back_after_they_have_been_rejected() {
 				tx_id: _,
 			})
 		);
+
+		assert!(MockEgressHandler::<Bitcoin>::get_scheduled_egresses().len() == 1);
 	});
 }
 
@@ -451,5 +460,7 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 				block_height: _,
 			})
 		);
+
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
 }
