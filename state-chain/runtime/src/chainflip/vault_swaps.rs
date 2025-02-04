@@ -284,12 +284,16 @@ pub fn solana_vault_swap<A>(
 						.map_err(|_| "Failed to derive supported token account")?;
 
 				let from_token_account = match from_token_account {
-					Some(token_account) => SolPubkey::try_from(token_account)?,
+					Some(token_account) => SolPubkey::try_from(token_account)
+						.map_err(|_| "Failed to decode the source token account")?,
 					// Defaulting to the user's associated token account
 					None => derive_associated_token_account(
-						from,
+						from.into(),
 						api_environment.usdc_token_mint_pubkey,
-					),
+					)
+					.map_err(|_| "Failed to derive the associated token account")?
+					.address
+					.into(),
 				};
 
 				SolanaInstructionBuilder::x_swap_usdc(
