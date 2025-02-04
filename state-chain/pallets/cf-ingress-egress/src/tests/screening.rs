@@ -392,6 +392,8 @@ fn send_funds_back_after_they_have_been_rejected() {
 			deposit_details,
 		});
 
+		assert_eq!(MockEgressBroadcaster::get_pending_api_calls().len(), 0);
+
 		IngressEgress::on_finalize(1);
 
 		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::decode_len(), None);
@@ -403,6 +405,8 @@ fn send_funds_back_after_they_have_been_rejected() {
 				tx_id: _,
 			})
 		);
+
+		assert_eq!(MockEgressBroadcaster::get_pending_api_calls().len(), 1);
 	});
 }
 
