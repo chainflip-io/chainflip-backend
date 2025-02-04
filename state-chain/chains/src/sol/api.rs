@@ -364,6 +364,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					.expect("This is parsed from bounded vec, therefore the size must fit"),
 			},
 			transfer_param.asset.into(),
+			transfer_param.to.into(),
 		)
 		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
 
