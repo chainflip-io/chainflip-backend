@@ -40,6 +40,60 @@ enum BankInstruction {
 	Withdraw { lamports: u64 },
 }
 
+#[cfg(test)]
+mod versioned_transaction {
+	use crate::sol::sol_tx_core::transaction::{
+		v0::VersionedMessageV0, VersionedMessage, VersionedTransaction,
+	};
+
+	use super::*;
+
+	#[test]
+	fn create_simple_tx() {
+		let program_id = Pubkey([0u8; 32]);
+		let payer = SolSigningKey::new();
+		let bank_instruction = BankInstruction::Initialize;
+
+		let instruction = Instruction::new_with_borsh(program_id, &bank_instruction, vec![]);
+
+		let mut tx =
+			VersionedTransaction::new_with_payer(&[instruction], Some(payer.pubkey()), &[]);
+		tx.sign(vec![payer].into(), Default::default());
+	}
+
+	#[test]
+	fn create_transfer_native_no_lookup_table() {
+		let durable_nonce = TEST_DURABLE_NONCE.into();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_pubkey = agg_key_keypair.pubkey();
+
+		let to_pubkey = TRANSFER_TO_ACCOUNT.into();
+		let instructions = [
+			SystemProgramInstruction::advance_nonce_account(
+				&NONCE_ACCOUNTS[0].into(),
+				&agg_key_pubkey,
+			),
+			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
+			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
+			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, TRANSFER_AMOUNT),
+		];
+		let message = VersionedMessage::V0(VersionedMessageV0::new_with_blockhash(
+			&instructions,
+			Some(agg_key_pubkey),
+			durable_nonce,
+			&[],
+		));
+		let mut tx = VersionedTransaction::new_unsigned(message);
+		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+
+		let serialized_tx = tx.finalize_and_serialize().unwrap();
+		let expected_serialized_tx = "012e1beb02a24f6e59148fc4eb64aeaeaad291e5f241b8b2d01775a6d3956392ac7186fbee0963d6ca0720bddb5d8b555ada6beb2cd3e9bd0415c343a5ca0cde0b8001000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400030200020c0200000000ca9a3b0000000000";
+
+		assert_eq!(hex::encode(serialized_tx.clone()), expected_serialized_tx);
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
+	}
+}
+
 #[test]
 fn create_simple_tx() {
 	let program_id = Pubkey([0u8; 32]);
