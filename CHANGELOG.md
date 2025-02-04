@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.9] - 2025-02-04
+
+### Fixes
+
+- Recover boosted utxo.
+
 ## [1.7.8] - 2025-01-23
 
 ### Fixes
