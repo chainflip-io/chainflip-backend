@@ -108,14 +108,7 @@ export async function executeSolVaultSwap(
     event_data_account: decodeSolAddress(newEventAccountKeypair.publicKey.toBase58()),
     input_amount: '0x' + new BigNumber(amountToSwap).toString(16),
     refund_parameters: refundParams,
-    from_token_account:
-      srcAsset === 'Sol'
-        ? undefined
-        : getAssociatedTokenAddressSync(
-            new PublicKey(getContractAddress('Solana', 'SolUsdc')),
-            whaleKeypair.publicKey,
-            false,
-          ).toString(),
+    from_token_account: undefined,
   };
 
   const vaultSwapDetails = (await chainflip.rpc(

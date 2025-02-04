@@ -15,7 +15,8 @@ use cf_chains::{
 	cf_parameters::build_cf_parameters,
 	evm::api::{EvmCall, EvmEnvironmentProvider},
 	sol::{
-		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder, SolAmount, SolPubkey,
+		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder,
+		sol_tx_core::address_derivation::derive_associated_token_account, SolAmount, SolPubkey,
 	},
 	Arbitrum, CcmChannelMetadata, ChannelRefundParametersEncoded, Ethereum, ForeignChain,
 };
@@ -282,10 +283,14 @@ pub fn solana_vault_swap<A>(
 						)
 						.map_err(|_| "Failed to derive supported token account")?;
 
-				let from_token_account = SolPubkey::try_from(
-					from_token_account.ok_or("From token account is required for SolUsdc swaps")?,
-				)
-				.map_err(|_| "Invalid Solana Address: from_token_account")?;
+				let from_token_account = match from_token_account {
+					Some(token_account) => SolPubkey::try_from(token_account)?,
+					// Defaulting to the user's associated token account
+					None => derive_associated_token_account(
+						from,
+						api_environment.usdc_token_mint_pubkey,
+					),
+				};
 
 				SolanaInstructionBuilder::x_swap_usdc(
 					api_environment,
