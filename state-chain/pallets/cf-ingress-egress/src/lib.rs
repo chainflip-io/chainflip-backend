@@ -775,6 +775,10 @@ pub mod pallet {
 	pub(crate) type AbortedVaultTransaction<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, TransactionInIdFor<T, I>, ()>;
 
+	#[pallet::storage]
+	pub(crate) type AbortedVaultTransactionDetails<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, TransactionInIdFor<T, I>, VaultDepositWitness<T, I>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -928,6 +932,12 @@ pub mod pallet {
 		},
 		NetworkFeeDeductionFromBoostSet {
 			deduction_percent: Percent,
+		},
+		VaultSwapRefunded {
+			tx_id: TransactionInIdFor<T, I>,
+		},
+		VaultSwapRefundFailed {
+			tx_id: TransactionInIdFor<T, I>,
 		},
 	}
 
@@ -2486,32 +2496,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if AbortedVaultTransaction::<T, I>::take(&tx_id).is_some() {
 			log::info!("Ignoring deposit since transcation was aborted.");
-			match (
-				refund_params
-					.expect("vault swap should have refund params")
-					.refund_address
-					.try_into(),
-				source_asset.try_into(),
-			) {
-				(Ok(refund_address), Ok(asset)) => {
-					let api_call =
-						<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
-							TransferAssetParams {
-								asset,
-								amount: deposit_amount,
-								to: refund_address,
-							},
-						)
-						.expect("Failed to create api call");
-					T::Broadcaster::threshold_sign_and_broadcast(api_call);
-				},
-				_ => {
-					// TODO: Maybe add the tx_id here bag or save swap details here for later
-					// investigation?
-					// TODO: Maybe emit an event here?
-					log::warn!("Failed to refund vault swap");
-				},
-			};
+
+			let refunded = refund_params.map_or(false, |refund_params| {
+				match (refund_params.refund_address.try_into(), source_asset.try_into()) {
+					(Ok(refund_address), Ok(asset)) => <T::ChainApiCall as TransferFallback<
+						T::TargetChain,
+					>>::new_unsigned(TransferAssetParams {
+						asset,
+						amount: deposit_amount,
+						to: refund_address,
+					})
+					.map_or(false, |api_call| {
+						T::Broadcaster::threshold_sign_and_broadcast(api_call);
+						Self::deposit_event(Event::VaultSwapRefunded { tx_id: tx_id.clone() });
+						true
+					}),
+					_ => {
+						log::error!("Failed to refund vault swap for tx id: {tx_id:?} due to failed conversation!");
+						false
+					},
+				}
+			});
+
+			if !refunded {
+				AbortedVaultTransactionDetails::<T, I>::insert(
+					tx_id.clone(),
+					vault_deposit_witness,
+				);
+				Self::deposit_event(Event::VaultSwapRefundFailed { tx_id });
+			}
+
 			return;
 		}
 

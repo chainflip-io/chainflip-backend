@@ -36,7 +36,6 @@ use cf_traits::{
 		balance_api::MockBalance,
 		block_height_provider::BlockHeightProvider,
 		chain_tracking::ChainTracker,
-		egress_handler::MockEgressHandler,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
@@ -2365,7 +2364,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 }
 
 #[test]
-fn vault_swaps_gets_refunded_if_vault_transaction_aborts() {
+fn vault_swaps_gets_refunded_if_vault_transaction_was_aborted() {
 	new_test_ext().execute_with(|| {
 		let tx_id = H256::default();
 		AbortedVaultTransaction::<Test, ()>::insert(tx_id, ());
@@ -2396,12 +2395,17 @@ fn vault_swaps_gets_refunded_if_vault_transaction_aborts() {
 
 		assert!(
 			AbortedVaultTransaction::<Test, ()>::get(tx_id).is_none(),
-			"vault swap should have been refunded"
+			"Vault swap should have been taken from aborted vault transaction!"
 		);
 
-		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+		assert!(
+			MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
+			"No swaps should have been triggered!"
+		);
 
-		let egresses = MockEgressHandler::<Ethereum>::get_scheduled_egresses();
-		assert_eq!(egresses.len(), 0);
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(Event::VaultSwapRefunded { tx_id: _ })
+		);
 	});
 }
