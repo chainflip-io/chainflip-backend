@@ -1298,14 +1298,21 @@ const PUBKEY: [u8; 32] =
 	hex_literal::hex!("af7ee887264c85f3eb84468c7cae0bc6b40d23732f94d5db591226654dcc7803");
 const POOL_TIER: u16 = 5;
 
-impl frame_support::traits::OnRuntimeUpgrade for BoostRecovery {
-	fn on_runtime_upgrade() -> Weight {
-		// Only run this once: use the spec_version and utxo id as a markers.
-		if VERSION.spec_version != 179 ||
+impl BoostRecovery {
+	/// Only run this once, and only on mainnet. Use the spec_version and utxo id as a markers.
+	fn should_run() -> bool {
+		use cf_runtime_upgrade_utilities::genesis_hashes::{genesis_hash, BERGHAIN};
+		genesis_hash::<Runtime>() == BERGHAIN &&
+			VERSION.spec_version == 179 &&
 			pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get()
 				.iter()
-				.any(|utxo| utxo.id.tx_id == RECOVERY_TX_ID)
-		{
+				.all(|utxo| utxo.id.tx_id != RECOVERY_TX_ID)
+	}
+}
+
+impl frame_support::traits::OnRuntimeUpgrade for BoostRecovery {
+	fn on_runtime_upgrade() -> Weight {
+		if !Self::should_run() {
 			return Weight::zero();
 		}
 
@@ -1331,6 +1338,12 @@ impl frame_support::traits::OnRuntimeUpgrade for BoostRecovery {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		let should_run = Self::should_run();
+		if !should_run {
+			log::info!("Boost recovery not needed");
+			return Ok((should_run, 0u64).encode());
+		}
+
 		let pre_upgrade_pools_state = pallet_cf_ingress_egress::BoostPools::<
 			Runtime,
 			BitcoinInstance,
@@ -1339,11 +1352,17 @@ impl frame_support::traits::OnRuntimeUpgrade for BoostRecovery {
 		assert!(!pre_upgrade_pools_state
 			.pending_boosts
 			.contains_key(&migrations::boost_recovery::PREWITNESSED_DEPOSIT_ID));
-		Ok(pre_upgrade_pools_state.get_available_amount().encode())
+		Ok((should_run, pre_upgrade_pools_state.get_available_amount()).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let (should_run, pre_upgrade_available_amount) = <(bool, u64)>::decode(&mut &state[..])
+			.map_err(|_| "Failed to decode pre-upgrade state")?;
+		if !should_run {
+			log::info!("Boost recovery not needed, ignoring post checks.");
+			return Ok(());
+		}
 		let post_upgrade_pools_state = pallet_cf_ingress_egress::BoostPools::<
 			Runtime,
 			BitcoinInstance,
@@ -1354,12 +1373,22 @@ impl frame_support::traits::OnRuntimeUpgrade for BoostRecovery {
 			.pending_boosts
 			.contains_key(&migrations::boost_recovery::PREWITNESSED_DEPOSIT_ID));
 		// Available liquidity should have increased by ~1 BTC.
-		let pre_upgrade_available_amount =
-			Decode::decode(&mut &state[..]).map_err(|_| "Failed to decode pre-upgrade state")?;
-		assert!(post_upgrade_pools_state.get_available_amount() > pre_upgrade_available_amount);
+		let post_upgrade_available_amount = post_upgrade_pools_state.get_available_amount();
+		assert!(
+			post_upgrade_available_amount > pre_upgrade_available_amount,
+			"Expected more than {} available, got {}",
+			pre_upgrade_available_amount,
+			post_upgrade_available_amount
+		);
 		log::info!(
 			"Recovered boost liquidity: {}",
-			post_upgrade_pools_state.get_available_amount() - pre_upgrade_available_amount
+			post_upgrade_available_amount - pre_upgrade_available_amount
+		);
+		assert!(
+			pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get()
+				.iter()
+				.any(|utxo| utxo.id.tx_id == RECOVERY_TX_ID),
+			"Expected recovered UTXO to be present"
 		);
 		Ok(())
 	}
