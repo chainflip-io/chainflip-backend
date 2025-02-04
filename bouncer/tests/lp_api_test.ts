@@ -12,6 +12,9 @@ import {
   assetDecimals,
   stateChainAssetFromAsset,
   Chain,
+  handleSubstrateError,
+  shortChainFromAsset,
+  newAddress,
 } from '../shared/utils';
 import { lpApiRpc } from '../shared/json_rpc';
 import { depositLiquidity } from '../shared/deposit_liquidity';
@@ -150,6 +153,13 @@ async function testTransferAsset() {
 
   const sourceLpAccount = keyring.createFromUri('//LP_API');
   const destinationLpAccount = keyring.createFromUri('//LP_2');
+
+  // Destination account needs a refund address too.
+  const chain = shortChainFromAsset(testAsset);
+  let refundAddress = await newAddress(testAsset, '//LP_2');
+  await chainflip.tx.liquidityProvider
+    .registerLiquidityRefundAddress({ [chain]: refundAddress })
+    .signAndSend(destinationLpAccount, { nonce: -1 }, handleSubstrateError(chainflip));
 
   const oldBalanceSource = await getLpBalance(sourceLpAccount.address);
   const oldBalanceDestination = await getLpBalance(destinationLpAccount.address);
