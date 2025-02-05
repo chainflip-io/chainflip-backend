@@ -29,7 +29,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(5);
 pub struct BtcSourceState {
 	last_block_yielded_hash: BlockHash,
 	last_block_yielded_index: btc::BlockNumber,
-	best_known_block_height: btc::BlockNumber,
+	best_known_block_index: btc::BlockNumber,
 }
 
 #[async_trait::async_trait]
@@ -57,11 +57,11 @@ where
 						// We don't want to wait for the tick if we have backfilling to do, so we do
 						// it here before awaiting the tick.
 						if let Some(state) = &stream_state {
-							if state.best_known_block_height > state.last_block_yielded_index {
+							if state.best_known_block_index > state.last_block_yielded_index {
 								tracing::debug!(
 									"Backfilling BTC source from index {} to {}",
 									state.last_block_yielded_index,
-									state.best_known_block_height,
+									state.best_known_block_index,
 								);
 								let header = client
 									.header_at_index(
@@ -75,7 +75,7 @@ where
 										Some(BtcSourceState {
 											last_block_yielded_hash: header.hash,
 											last_block_yielded_index: header.index,
-											best_known_block_height: state.best_known_block_height,
+											best_known_block_index: state.best_known_block_index,
 										}),
 										tick,
 									),
@@ -102,7 +102,7 @@ where
 							{
 								// Update the state for the next iteration to backfill
 								if let Some(state) = stream_state.as_mut() {
-									state.best_known_block_height = best_block_header.height;
+									state.best_known_block_index = best_block_header.height;
 								}
 								false
 							},
@@ -124,7 +124,7 @@ where
 									Some(BtcSourceState {
 										last_block_yielded_hash: best_block_header.hash,
 										last_block_yielded_index: best_block_header.height,
-										best_known_block_height: best_block_header.height,
+										best_known_block_index: best_block_header.height,
 									}),
 									tick,
 								),
