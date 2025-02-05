@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use bitcoin::BlockHash;
+use cf_chains::btc;
 use cf_utilities::make_periodic_tick;
 use futures_util::stream;
 
@@ -25,6 +26,12 @@ impl<C> BtcSource<C> {
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5);
 
+pub struct BtcSourceState {
+	last_block_yielded_hash: BlockHash,
+	last_block_yielded_index: btc::BlockNumber,
+	best_known_block_height: btc::BlockNumber,
+}
+
 #[async_trait::async_trait]
 impl<C> ChainSource for BtcSource<C>
 where
@@ -40,13 +47,71 @@ where
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		(
 			Box::pin(stream::unfold(
-				(self.client.clone(), None, make_periodic_tick(POLL_INTERVAL, true)),
-				|(client, last_block_hash_yielded, mut tick)| async move {
+				(
+					self.client.clone(),
+					Option::<BtcSourceState>::None,
+					make_periodic_tick(POLL_INTERVAL, true),
+				),
+				|(client, mut stream_state, mut tick)| async move {
 					loop {
+						// We don't want to wait for the tick if we have backfilling to do, so we do
+						// it here before awaiting the tick.
+						if let Some(state) = &stream_state {
+							if state.best_known_block_height > state.last_block_yielded_index {
+								tracing::debug!(
+									"Backfilling BTC source from index {} to {}",
+									state.last_block_yielded_index,
+									state.best_known_block_height,
+								);
+								let header = client
+									.header_at_index(
+										state.last_block_yielded_index.saturating_add(1),
+									)
+									.await;
+								return Some((
+									header,
+									(
+										client,
+										Some(BtcSourceState {
+											last_block_yielded_hash: header.hash,
+											last_block_yielded_index: header.index,
+											best_known_block_height: state.best_known_block_height,
+										}),
+										tick,
+									),
+								));
+							}
+						}
+
 						tick.tick().await;
 
 						let best_block_header = client.best_block_header().await;
-						if last_block_hash_yielded != Some(best_block_header.hash) {
+
+						let yield_new_best_header: bool = match &mut stream_state {
+							Some(state)
+								if state.last_block_yielded_index.saturating_add(1) ==
+									best_block_header.height || state.last_block_yielded_hash !=
+									best_block_header.hash =>
+								true,
+							// If we don't yet have state (we're initialising), then we want to
+							// yield the new best header immediately
+							None => true,
+							// If we've progressed by more than one block, then we need to backfill
+							Some(state)
+								if state.last_block_yielded_index < best_block_header.height =>
+							{
+								// Update the state for the next iteration to backfill
+								stream_state.as_mut().map(|state| {
+									state.best_known_block_height = best_block_header.height;
+								});
+								false
+							},
+							// do nothing, just loop again.
+							_ => false,
+						};
+
+						if yield_new_best_header {
+							// Yield the new best header immediately
 							return Some((
 								Header {
 									index: best_block_header.height,
@@ -54,8 +119,16 @@ where
 									parent_hash: best_block_header.previous_block_hash,
 									data: (),
 								},
-								(client, Some(best_block_header.hash), tick),
-							))
+								(
+									client,
+									Some(BtcSourceState {
+										last_block_yielded_hash: best_block_header.hash,
+										last_block_yielded_index: best_block_header.height,
+										best_known_block_height: best_block_header.height,
+									}),
+									tick,
+								),
+							));
 						}
 					}
 				},
