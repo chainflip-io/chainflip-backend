@@ -2377,7 +2377,7 @@ fn vault_swaps_gets_refunded_if_vault_transaction_was_aborted() {
 				channel_id: Some(0),
 				deposit_amount: 100,
 				deposit_details: Default::default(),
-				output_asset: Asset::Eth.try_into().unwrap(),
+				output_asset: Asset::Eth,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				deposit_metadata: Default::default(),
 				tx_id,
