@@ -156,7 +156,7 @@ async function testTransferAsset() {
 
   // Destination account needs a refund address too.
   const chain = shortChainFromAsset(testAsset);
-  let refundAddress = await newAddress(testAsset, '//LP_2');
+  const refundAddress = await newAddress(testAsset, '//LP_2');
   await chainflip.tx.liquidityProvider
     .registerLiquidityRefundAddress({ [chain]: refundAddress })
     .signAndSend(destinationLpAccount, { nonce: -1 }, handleSubstrateError(chainflip));
