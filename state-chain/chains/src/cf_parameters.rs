@@ -1,4 +1,4 @@
-use crate::{CcmAdditionalData, CcmChannelMetadata, ChannelRefundParametersDecoded};
+use crate::{CcmAdditionalData, CcmChannelMetadata, Chain, ChannelRefundParameters};
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
 };
@@ -8,21 +8,25 @@ use sp_core::ConstU32;
 use sp_runtime::{BoundedVec, Vec};
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub enum VersionedCfParameters<CcmData = ()> {
-	V0(CfParameters<CcmData>),
+pub enum VersionedCfParameters<RefundAddress, CcmData = ()> {
+	V0(CfParameters<RefundAddress, CcmData>),
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct CfParameters<CcmData = ()> {
+pub struct CfParameters<RefundAddress, CcmData = ()> {
 	/// CCMs may require additional data (e.g. CCMs to Solana requires a list of addresses).
 	pub ccm_additional_data: CcmData,
-	pub vault_swap_parameters: VaultSwapParameters,
+	pub vault_swap_parameters: VaultSwapParameters<RefundAddress>,
 }
 
-pub type VersionedCcmCfParameters = VersionedCfParameters<CcmAdditionalData>;
+pub type VersionedCcmCfParameters<RefundAddress> =
+	VersionedCfParameters<RefundAddress, CcmAdditionalData>;
 
-impl CfParameters<CcmAdditionalData> {
-	pub fn with_ccm_data(cf_parameter: CfParameters<()>, data: CcmAdditionalData) -> Self {
+impl<RefundAddress> CfParameters<RefundAddress, CcmAdditionalData> {
+	pub fn with_ccm_data(
+		cf_parameter: CfParameters<RefundAddress, ()>,
+		data: CcmAdditionalData,
+	) -> Self {
 		CfParameters {
 			ccm_additional_data: data,
 			vault_swap_parameters: cf_parameter.vault_swap_parameters,
@@ -31,8 +35,8 @@ impl CfParameters<CcmAdditionalData> {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct VaultSwapParameters {
-	pub refund_params: ChannelRefundParametersDecoded,
+pub struct VaultSwapParameters<RefundAddress> {
+	pub refund_params: ChannelRefundParameters<RefundAddress>,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: u8,
 	pub broker_fee: Beneficiary<AccountId>,
@@ -42,8 +46,8 @@ pub struct VaultSwapParameters {
 /// Provide a function that builds and encodes `cf_parameters`.
 /// The return type is encoded Vec<u8>, which circumvents the difference in return types depending
 /// on if CCM data is available.
-pub fn build_cf_parameters(
-	refund_parameters: ChannelRefundParametersDecoded,
+pub fn build_cf_parameters<C: Chain>(
+	refund_parameters: ChannelRefundParameters<C::ChainAccount>,
 	dca_parameters: Option<DcaParameters>,
 	boost_fee: u8,
 	broker_id: AccountId,
@@ -88,12 +92,19 @@ mod tests {
 
 	#[test]
 	fn test_cf_parameters_max_length() {
+		// Pessimistic assumption of some chain with 64 bytes of account data.
+		#[derive(Encode, Decode, MaxEncodedLen)]
+		struct MaxAccountLength([u8; 64]);
 		assert!(
-			MAX_VAULT_SWAP_PARAMETERS_LENGTH as usize >= VaultSwapParameters::max_encoded_len()
+			MAX_VAULT_SWAP_PARAMETERS_LENGTH as usize >=
+				VaultSwapParameters::<MaxAccountLength>::max_encoded_len()
 		);
-		assert!(MAX_CF_PARAM_LENGTH as usize >= CfParameters::<()>::max_encoded_len());
 		assert!(
-			MAX_VAULT_SWAP_PARAMETERS_LENGTH as usize >= VaultSwapParameters::max_encoded_len()
+			MAX_CF_PARAM_LENGTH as usize >= CfParameters::<MaxAccountLength>::max_encoded_len()
+		);
+		assert!(
+			MAX_VAULT_SWAP_PARAMETERS_LENGTH as usize >=
+				VaultSwapParameters::<MaxAccountLength>::max_encoded_len()
 		);
 	}
 
@@ -111,7 +122,7 @@ mod tests {
 			affiliate_fees: sp_core::bounded_vec![],
 		};
 
-		let cf_parameters = CfParameters::<()> {
+		let cf_parameters = CfParameters {
 			ccm_additional_data: (),
 			vault_swap_parameters: vault_swap_parameters.clone(),
 		};

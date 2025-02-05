@@ -2335,21 +2335,7 @@ impl_runtime_apis! {
 				(
 					ForeignChain::Ethereum,
 					VaultSwapExtraParametersEncoded::Ethereum(extra_params)
-				) => {
-					crate::chainflip::vault_swaps::evm_vault_swap(
-						broker_id,
-						source_asset,
-						extra_params.input_amount,
-						destination_asset,
-						destination_address,
-						broker_commission,
-						extra_params.refund_parameters,
-						boost_fee,
-						affiliate_fees,
-						dca_parameters,
-						channel_metadata,
-					)
-				},
+				)|
 				(
 					ForeignChain::Arbitrum,
 					VaultSwapExtraParametersEncoded::Arbitrum(extra_params)

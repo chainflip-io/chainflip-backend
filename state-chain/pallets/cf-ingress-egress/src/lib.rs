@@ -28,9 +28,10 @@ use cf_chains::{
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
 	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParametersDecoded, ConsolidateCall,
-	DepositChannel, DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
+	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
+	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
+	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
 	TransferAssetParams,
 };
 use cf_primitives::{
@@ -406,12 +407,15 @@ pub mod pallet {
 		pub deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 		pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		pub output_asset: Asset,
+		// Note we use EncodedAddress here rather than eg. ForeignChainAddress because this
+		// value can be populated by the submitter of the vault deposit and is not verified
+		// in the engine, so we need to verify on-chain.
 		pub destination_address: EncodedAddress,
 		pub deposit_metadata: Option<CcmDepositMetadata>,
 		pub tx_id: TransactionInIdFor<T, I>,
 		pub broker_fee: Option<Beneficiary<T::AccountId>>,
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
-		pub refund_params: Option<ChannelRefundParametersDecoded>,
+		pub refund_params: Option<ChannelRefundParameters<TargetChainAccount<T, I>>>,
 		pub dca_params: Option<DcaParameters>,
 		pub boost_fee: BasisPoints,
 	}
@@ -465,7 +469,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadata>,
-			refund_params: Option<ChannelRefundParametersDecoded>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -2237,7 +2241,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_asset: output_asset,
 			destination_address: destination_address_internal,
 			broker_fees,
-			refund_params,
+			refund_params: refund_params
+				.map(|params| params.map_address(|address| address.into_foreign_chain_address())),
 			dca_params,
 			channel_metadata,
 		};
@@ -2547,7 +2552,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_address: destination_address_internal,
 			broker_fees,
 			channel_metadata: channel_metadata.clone(),
-			refund_params: refund_params.clone(),
+			refund_params: refund_params
+				.map(|params| params.map_address(|address| address.into_foreign_chain_address())),
 			dca_params: dca_params.clone(),
 		};
 

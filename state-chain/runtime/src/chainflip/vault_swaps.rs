@@ -18,7 +18,7 @@ use cf_chains::{
 		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder,
 		sol_tx_core::address_derivation::derive_associated_token_account, SolAmount, SolPubkey,
 	},
-	Arbitrum, CcmChannelMetadata, ChannelRefundParametersEncoded, Ethereum, ForeignChain,
+	Arbitrum, CcmChannelMetadata, ChannelRefundParametersEncoded, Ethereum, ForeignChain, Solana,
 };
 use cf_primitives::{
 	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, DcaParameters, SWAP_DELAY_BLOCKS,
@@ -114,13 +114,18 @@ pub fn evm_vault_swap<A>(
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	let refund_params = refund_params.try_map_address(|addr| {
 		ChainAddressConverter::try_from_encoded_address(addr)
+			.and_then(|addr| addr.try_into().map_err(|_| ()))
 			.map_err(|_| "Invalid refund address".into())
 	})?;
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
 		.try_into()
 		.map_err(|_| "Too many affiliates.")?;
 
-	let cf_parameters = build_cf_parameters(
+	let cf_parameters = match ForeignChain::from(source_asset) {
+		ForeignChain::Ethereum => build_cf_parameters::<Ethereum>,
+		ForeignChain::Arbitrum => build_cf_parameters::<Arbitrum>,
+		_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for EVM vault swap"))?,
+	}(
 		refund_params,
 		dca_parameters,
 		boost_fee,
@@ -246,13 +251,14 @@ pub fn solana_vault_swap<A>(
 	let from = SolPubkey::try_from(from).map_err(|_| "Invalid Solana Address: from")?;
 	let refund_parameters = refund_parameters.try_map_address(|addr| {
 		ChainAddressConverter::try_from_encoded_address(addr)
+			.and_then(|addr| addr.try_into().map_err(|_| ()))
 			.map_err(|_| "Invalid refund address".into())
 	})?;
 	let event_data_account = SolPubkey::try_from(event_data_account)
 		.map_err(|_| "Invalid Solana Address: event_data_account")?;
 	let input_amount =
 		SolAmount::try_from(input_amount).map_err(|_| "Input amount exceeded MAX")?;
-	let cf_parameters = build_cf_parameters(
+	let cf_parameters = build_cf_parameters::<Solana>(
 		refund_parameters,
 		dca_parameters,
 		boost_fee,
