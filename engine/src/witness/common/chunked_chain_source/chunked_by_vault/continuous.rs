@@ -130,6 +130,7 @@ where
 										if inprogress_indices.len() < MAXIMUM_CONCURRENT_INPROGRESS {
 											inprogress_indices.insert(unprocessed_root, {
 												let chain_client = chain_client.clone();
+												tracing::info!("continuing with unprocessed index {:?}", unprocessed_root);
 												#[allow(clippy::redundant_async_block)]
 												async move {
 													chain_client.header_at_index(unprocessed_root).await
@@ -163,6 +164,7 @@ where
 									let next_unprocessed_indice = unprocessed_indices.iter(true).next();
 									if let Some(unprocessed_index) = next_unprocessed_indice {
 										unprocessed_indices.set_range(<Inner::Chain as Chain>::block_witness_range(unprocessed_index), false);
+										tracing::info!("continuing with unprocessed index {:?}", unprocessed_index);
 										inprogress_indices.insert(unprocessed_index, {
 											let chain_client = chain_client.clone();
 											#[allow(clippy::redundant_async_block)]
