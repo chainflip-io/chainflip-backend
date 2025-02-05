@@ -83,6 +83,7 @@ mod test {
 					Header { index: 4u32, hash: (), parent_hash: Some(()), data: () },
 					Header { index: 3u32, hash: (), parent_hash: Some(()), data: () },
 					Header { index: 2u32, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 10u32, hash: (), parent_hash: Some(()), data: () },
 				]),
 				last_output: None
 			}
@@ -90,7 +91,7 @@ mod test {
 			.await
 			.into_iter()
 			.map(|header| header.index),
-			[4, 5, 6]
+			[4, 5, 6, 10]
 		));
 	}
 }
