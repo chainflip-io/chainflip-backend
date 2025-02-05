@@ -450,8 +450,14 @@ mod test {
 				additional_accounts: vec![
 					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
 					SolCcmAddress { pubkey: MOCK_ADDR, is_writable: true },
-					SolCcmAddress { pubkey:  SolPubkey::try_from(DEST_ADDR).unwrap(), is_writable: true },
-					SolCcmAddress { pubkey: SolPubkey::try_from(DEST_ADDR).unwrap(), is_writable: true },
+					SolCcmAddress {
+						pubkey: SolPubkey::try_from(DEST_ADDR).unwrap(),
+						is_writable: true,
+					},
+					SolCcmAddress {
+						pubkey: SolPubkey::try_from(DEST_ADDR).unwrap(),
+						is_writable: true,
+					},
 				],
 			})
 			.encode()
