@@ -103,9 +103,7 @@ where
 								if state.last_block_yielded_index < best_block_header.height =>
 							{
 								// Update the state for the next iteration to backfill
-								if let Some(state) = stream_state.as_mut() {
-									state.best_known_block_index = best_block_header.height;
-								}
+								state.best_known_block_index = best_block_header.height;
 								false
 							},
 							// do nothing, just loop again.
