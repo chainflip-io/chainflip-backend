@@ -89,9 +89,11 @@ where
 
 						let yield_new_best_header: bool = match &mut stream_state {
 							Some(state)
-								if state.last_block_yielded_index.saturating_add(1) ==
-									best_block_header.height || state.last_block_yielded_hash !=
-									best_block_header.hash =>
+								// We want to immediately yield the new best header if we've reorged on the same block
+								// or it's the next block we expect
+								if (state.last_block_yielded_index == best_block_header.height &&
+									state.last_block_yielded_hash != best_block_header.hash) ||
+									state.last_block_yielded_index.saturating_add(1) == best_block_header.height =>
 								true,
 							// If we don't yet have state (we're initialising), then we want to
 							// yield the new best header immediately
