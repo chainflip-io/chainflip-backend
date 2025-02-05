@@ -5,7 +5,7 @@ use cf_primitives::{AccountId, Asset, AssetAmount, ForeignChain};
 
 use cf_test_utilities::assert_events_match;
 use cf_traits::{AccountRoleRegistry, BalanceApi, Chainflip, SetSafeMode};
-use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
+use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
 use sp_runtime::AccountId32;
 
 #[test]
@@ -87,6 +87,21 @@ fn liquidity_providers_can_move_assets_internally() {
 			),
 			Error::<Test>::CannotTransferToOriginAccount
 		);
+
+		assert_err!(
+			LiquidityProvider::transfer_asset(
+				RuntimeOrigin::signed((LP_ACCOUNT).into()),
+				TRANSFER_AMOUNT,
+				Asset::Eth,
+				AccountId::from(LP_ACCOUNT_2),
+			),
+			Error::<Test>::NoLiquidityRefundAddressRegistered
+		);
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			RuntimeOrigin::signed(LP_ACCOUNT_2.into()),
+			EncodedAddress::Eth(Default::default())
+		));
 
 		assert_ok!(LiquidityProvider::transfer_asset(
 			RuntimeOrigin::signed((LP_ACCOUNT).into()),
