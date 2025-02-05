@@ -2282,7 +2282,7 @@ impl_runtime_apis! {
 				}
 
 				// Ensure CCM message is valid
-				match CcmValidityChecker::check_and_decode(ccm, destination_asset)
+				match CcmValidityChecker::check_and_decode(ccm, destination_asset, destination_address.clone())
 				{
 					Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(ccm_accounts))) => {
 						// Ensure the CCM parameters do not contain blacklisted accounts.

@@ -2202,8 +2202,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			};
 
 		if let Some(metadata) = deposit_metadata.clone() {
-			if T::CcmValidityChecker::check_and_decode(&metadata.channel_metadata, output_asset)
-				.is_err()
+			if T::CcmValidityChecker::check_and_decode(
+				&metadata.channel_metadata,
+				output_asset,
+				destination_address,
+			)
+			.is_err()
 			{
 				log::warn!("Failed to process vault swap due to invalid CCM metadata");
 				return;
@@ -2501,6 +2505,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if T::CcmValidityChecker::check_and_decode(
 				&metadata.channel_metadata,
 				destination_asset,
+				destination_address,
 			)
 			.is_err()
 			{
