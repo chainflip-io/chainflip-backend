@@ -1,7 +1,8 @@
 use crate::sol::{
 	sol_tx_core::{
 		compile_instructions, short_vec, AddressLookupTableAccount, CompiledInstruction,
-		CompiledKeys, Hash, Instruction, MessageHeader, Pubkey, RawSignature,
+		CompiledKeys, Hash, Instruction, MessageAddressTableLookup, MessageHeader, Pubkey,
+		RawSignature,
 	},
 	SolSignature,
 };
@@ -12,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use sol_prim::errors::TransactionError;
 use sp_std::{vec, vec::Vec};
 
-use crate::sol::sol_tx_core::MessageAddressTableLookup;
 use sol_prim::consts::MESSAGE_VERSION_PREFIX;
 
 use serde::{
