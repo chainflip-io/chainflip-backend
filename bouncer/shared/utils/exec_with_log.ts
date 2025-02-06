@@ -37,10 +37,11 @@ export function execWithLog(
   command: string,
   commandAlias: string,
   additionalEnv: Record<string, string> = {},
-  callback?: (success: boolean) => void,
+  callback?: (success: boolean, logFile: string) => void,
 ) {
   let success: boolean | undefined;
-  withFileStreamTo(initLogFile(`${commandAlias}.log`), (file) => {
+  const logFile = initLogFile(`${commandAlias}.log`);
+  withFileStreamTo(logFile, (file) => {
     try {
       execSync(`${command}`, {
         env: { ...process.env, ...additionalEnv },
@@ -51,10 +52,10 @@ export function execWithLog(
     } catch (e) {
       console.error(`${commandAlias} failed: ${e}`);
       success = false;
-      callback?.(false);
+      callback?.(false, logFile);
     }
   }).on('close', () => {
-    callback?.(success!);
+    callback?.(success!, logFile);
   });
 }
 
@@ -62,7 +63,7 @@ export function execWithRustLog(
   command: string,
   logFileName: string,
   logLevel: string | undefined = 'info',
-  callback?: (success: boolean) => void,
+  callback?: (success: boolean, logFile: string) => void,
 ) {
   execWithLog(command, logFileName, { RUST_LOG: logLevel }, callback);
 }

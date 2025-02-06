@@ -2,6 +2,7 @@
 // https://github.com/paritytech/try-runtime-cli
 
 import path from 'path';
+import fs from 'fs';
 import { compileBinaries } from './utils/compile_binaries';
 import { createTmpDirIfNotExists, execWithRustLog } from './utils/exec_with_log';
 import { getChainflipApi } from './utils/substrate';
@@ -29,22 +30,21 @@ function createSnapshotFile(networkUrl: string, blockHash: string) {
 function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
 
-  if (process.exitCode === 1) {
-    console.error('TryRuntime error detected. Exiting... CHECK THE NODE LOGS FOR MORE INFO');
-    throw new Error('TryRuntime error detected.');
-  }
-
   execWithRustLog(
     `try-runtime \
         --runtime ${runtimePath} on-runtime-upgrade \
+        --blocktime 6000 \
         --disable-spec-version-check \
         --checks all ${blockParam} \
         --uri ${networkUrl}`,
     `try-runtime-${blockHash}`,
     'runtime::executive=debug',
-    (success) => {
+    (success, logFile) => {
       if (!success) {
         createSnapshotFile(networkUrl, blockHash);
+        const logContents = fs.readFileSync(logFile, 'utf8');
+        console.error(logContents);
+        throw new Error('TryRuntime error detected.');
       }
     },
   );
