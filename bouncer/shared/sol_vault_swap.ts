@@ -111,7 +111,7 @@ export async function executeSolVaultSwap(
   };
 
   const vaultSwapDetails = (await chainflip.rpc(
-    `cf_get_vault_swap_details`,
+    `cf_request_swap_parameter_encoding`,
     brokerFees.account,
     { chain: chainFromAsset(srcAsset), asset: stateChainAssetFromAsset(srcAsset) },
     { chain: chainFromAsset(destAsset), asset: stateChainAssetFromAsset(destAsset) },

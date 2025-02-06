@@ -993,8 +993,8 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
 
-	#[method(name = "get_vault_swap_details")]
-	fn cf_get_vault_swap_details(
+	#[method(name = "request_swap_parameter_encoding")]
+	fn cf_request_swap_parameter_encoding(
 		&self,
 		broker: state_chain_runtime::AccountId,
 		source_asset: Asset,
@@ -1870,7 +1870,7 @@ where
 		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
 	}
 
-	fn cf_get_vault_swap_details(
+	fn cf_request_swap_parameter_encoding(
 		&self,
 		broker: state_chain_runtime::AccountId,
 		source_asset: Asset,
@@ -1886,7 +1886,7 @@ where
 	) -> RpcResult<VaultSwapDetails<AddressString>> {
 		self.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(
-				api.cf_get_vault_swap_details(
+				api.cf_request_swap_parameter_encoding(
 					hash,
 					broker,
 					source_asset,
