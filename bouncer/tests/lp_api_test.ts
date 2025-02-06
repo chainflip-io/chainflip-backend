@@ -21,10 +21,7 @@ import { depositLiquidity } from '../shared/deposit_liquidity';
 import { sendEvmNative } from '../shared/send_evm';
 import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { ExecutableTest } from '../shared/executable_test';
-
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testLpApi = new ExecutableTest('LP-API', main, 200);
+import { TestContext } from '../shared/swap_context';
 
 type RpcAsset = {
   asset: string;
@@ -402,45 +399,19 @@ async function testLimitOrder() {
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
-async function main() {
-  // Sub tests
-  const registerLiquidityRefundAddress = new ExecutableTest(
-    'LP-API::Register-Liquidity-Refund-Address',
-    testRegisterLiquidityRefundAddress,
-    30,
-  );
-  const LiquidityDeposit = new ExecutableTest(
-    'LP-API::Liquidity-Deposit',
-    testLiquidityDeposit,
-    60,
-  );
-  const WithdrawAsset = new ExecutableTest('LP-API::Withdraw-Asset', testWithdrawAsset, 60);
-  const RegisterWithExistingLpAccount = new ExecutableTest(
-    'LP-API::testRegisterWithExistingLpAccount',
-    testRegisterWithExistingLpAccount,
-    15,
-  );
-  const RangeOrder = new ExecutableTest('LP-API::Range-Order', testRangeOrder, 60);
-  const LimitOrder = new ExecutableTest('LP-API::Limit-Order', testLimitOrder, 120);
-  const GetOpenSwapChannels = new ExecutableTest(
-    'LP-API::Get-Open-Swap-Channels',
-    testGetOpenSwapChannels,
-    15,
-  );
-  const TransferAsset = new ExecutableTest('LP-API::TransferAsset', testTransferAsset, 30);
-
+export async function testLpApi(_testContext: TestContext) {
   // Provide the amount of liquidity needed for the tests
   await provideLiquidityAndTestAssetBalances();
 
   await Promise.all([
-    registerLiquidityRefundAddress.run(),
-    LiquidityDeposit.run(),
-    WithdrawAsset.run(),
-    RegisterWithExistingLpAccount.run(),
-    RangeOrder.run(),
-    LimitOrder.run(),
-    GetOpenSwapChannels.run(),
+    testRegisterLiquidityRefundAddress,
+    testLiquidityDeposit,
+    testWithdrawAsset,
+    testRegisterWithExistingLpAccount,
+    testRangeOrder,
+    testLimitOrder,
+    testGetOpenSwapChannels,
   ]);
 
-  await TransferAsset.run();
+  await testTransferAsset;
 }

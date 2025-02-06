@@ -11,13 +11,14 @@ import {
 } from '../tests/polkadot_runtime_update';
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { getNetworkRuntimeVersion } from '../shared/utils/spec_version';
+import { logger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
   // Bump the spec version
-  const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime();
+  const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime(logger);
 
   // Submit the runtime update
-  await pushPolkadotRuntimeUpdate(wasmPath);
+  await pushPolkadotRuntimeUpdate(wasmPath, logger);
 
   // Check the polkadot spec version has changed
   const postUpgradeSpecVersion = await getNetworkRuntimeVersion('http://127.0.0.1:9947');

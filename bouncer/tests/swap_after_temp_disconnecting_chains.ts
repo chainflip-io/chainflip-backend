@@ -1,18 +1,10 @@
-#!/usr/bin/env -S pnpm tsx
 import { connectContainerToNetwork, disconnectContainerFromNetwork } from '../shared/docker_utils';
 import { sleep } from '../shared/utils';
 import { testSwap } from '../shared/swapping';
-import { ExecutableTest } from '../shared/executable_test';
-
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testSwapAfterDisconnection = new ExecutableTest(
-  'Swap-After-Disconnection',
-  main,
-  1300,
-);
+import { TestContext } from '../shared/swap_context';
 
 // Testing a swap after temporarily disconnecting external nodes
-async function main() {
+export async function testSwapAfterDisconnection(testContext: TestContext) {
   const networkName = 'chainflip-localnet_default';
   const allExternalNodes = ['bitcoin', 'geth'];
 
@@ -27,7 +19,7 @@ async function main() {
   );
 
   await Promise.all([
-    testSwap('Btc', 'Flip', undefined, undefined, testSwapAfterDisconnection.swapContext),
-    testSwap('Eth', 'Usdc', undefined, undefined, testSwapAfterDisconnection.swapContext),
+    testSwap('Btc', 'Flip', undefined, undefined, testContext.swapContext),
+    testSwap('Eth', 'Usdc', undefined, undefined, testContext.swapContext),
   ]);
 }

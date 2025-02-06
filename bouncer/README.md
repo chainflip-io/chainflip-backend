@@ -48,5 +48,54 @@ The following commands should be executed from the bouncer directory.
   `pnpm prettier:write`
 - Check linting:<br>
   `pnpm eslint:check`
+  `pnpm tsc --noEmit`
 - Fix linting:<br>
   `pnpm eslint:fix`
+
+## How to create bouncer test
+
+### Writing the test
+
+Create a file for your test in the `/tests/` folder. This file will contain all code related to the test. The main function to run the test.
+must take the `TestContext` and the first argument. The `TestContext` contains swap context and a logger that already has the test name attached to it (given in `Running the test` below).
+
+```ts
+export async function myNewTestFunction(testContext: TestContext, seed?: string) {
+  /* Test code */
+  testContext.logger.debug('example message');
+}
+```
+
+In summary, your test should:
+
+- Have a function that takes the `TestContext` and the first argument.
+- Have all other arguments be optional. (If required, wrap in a function that uses defaults).
+- **Not** be a `.test.ts` file.
+- **Not** exit the process. ie, not include `process.exit(0)`.
+- only use the given logger. ie do not use any `console.log()`.
+
+### Running the test
+
+To run the test you must add it to one of the `.test.ts` files. We have 3 options. Depending on where you add the test, depends on how it will be ran by the ci.
+
+- Run on the ci = add to the `full_bouncer.test.ts` file.
+  - Run concurrently with the other tests = add to `ConcurrentTests` section.
+  - Run by its self = add to `SerialTests` section.
+- Not ran by the ci, just ran manually = add to the `other.tests.ts` file.
+
+Using either the `concurrentTest` or `serialTest` function, add the test with with its name, main function (the one that takes `TestContext`) and the timeout in seconds.
+
+```ts
+describe('ConcurrentTests', () => {
+  /* .. Other tests .. */
+  concurrentTest('myNewTest', myNewTestFunction, 300);
+});
+```
+
+Now that the test is added, we can run it using the `vitest` command.
+
+```sh copy
+pnpm vitest run -t "myNewTest"
+```
+
+If you would like to run your test with custom arguments, then you will have to create a test command file. See the `test_commands` folder for examples.

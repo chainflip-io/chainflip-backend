@@ -18,11 +18,8 @@ import { send } from '../shared/send';
 import { estimateCcmCfTesterGas, spamEvm } from '../shared/send_evm';
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { ExecutableTest } from '../shared/executable_test';
-
-// Run this test separately from all the concurrent tests because there will be BroadcastAborted events emitted.
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testGasLimitCcmSwaps = new ExecutableTest('Gas-Limit-Ccm-Swaps', main, 1800);
+import { TestContext } from '../shared/swap_context';
+import { Logger } from '../shared/utils/logger';
 
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
@@ -90,6 +87,7 @@ async function getChainFees(chain: Chain) {
 }
 
 async function executeAndTrackCcmSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   messageMetadata: CcmDepositMetadata,
@@ -131,7 +129,7 @@ async function executeAndTrackCcmSwap(
       historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.egressId as EgressId;
-  testGasLimitCcmSwaps.debugLog(`${tag} Found egressId: ${egressId}`);
+  logger.debug(`${tag} Found egressId: ${egressId}`);
 
   const broadcastId = (
     await observeEvent(`${destChain.toLowerCase()}IngressEgress:CcmBroadcastRequested`, {
@@ -140,7 +138,7 @@ async function executeAndTrackCcmSwap(
       historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.broadcastId;
-  testGasLimitCcmSwaps.debugLog(`${tag} Found broadcastId: ${broadcastId}`);
+  logger.debug(`${tag} Found broadcastId: ${broadcastId}`);
 
   const txPayload = (
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:TransactionBroadcastRequest`, {
@@ -148,12 +146,12 @@ async function executeAndTrackCcmSwap(
       historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.transactionPayload;
-  testGasLimitCcmSwaps.debugLog(`${tag} Found txPayload: ${txPayload}`);
+  logger.debug(`${tag} Found txPayload: ${txPayload}`);
 
   return { tag, destAddress, broadcastId, txPayload };
 }
 
-async function testGasLimitSwapToSolana(sourceAsset: Asset, destAsset: Asset) {
+async function testGasLimitSwapToSolana(logger: Logger, sourceAsset: Asset, destAsset: Asset) {
   const connection = getSolConnection();
   const destChain = chainFromAsset(destAsset);
 
@@ -163,9 +161,14 @@ async function testGasLimitSwapToSolana(sourceAsset: Asset, destAsset: Asset) {
 
   const ccmMetadata = await newCcmMetadata(destAsset);
 
-  const { tag, destAddress } = await executeAndTrackCcmSwap(sourceAsset, destAsset, ccmMetadata);
+  const { tag, destAddress } = await executeAndTrackCcmSwap(
+    logger,
+    sourceAsset,
+    destAsset,
+    ccmMetadata,
+  );
 
-  testGasLimitCcmSwaps.log(`${tag} Finished tracking events`);
+  logger.debug(`${tag} Finished tracking events`);
 
   const { priorityFee: computePrice } = await getChainFees('Solana');
 
@@ -173,11 +176,11 @@ async function testGasLimitSwapToSolana(sourceAsset: Asset, destAsset: Asset) {
     throw new Error('Compute price should not be 0');
   }
 
-  testGasLimitCcmSwaps.log(`${tag} Expecting successful CCM broadcast.`);
+  logger.debug(`${tag} Expecting successful CCM broadcast.`);
 
   const ccmEvent = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
   const txSignature = ccmEvent?.txHash as string;
-  testGasLimitCcmSwaps.log(`${tag} CCM event emitted!`);
+  logger.debug(`${tag} CCM event emitted!`);
 
   const transaction = await connection.getTransaction(txSignature, {
     commitment: 'confirmed',
@@ -195,10 +198,10 @@ async function testGasLimitSwapToSolana(sourceAsset: Asset, destAsset: Asset) {
     `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
     { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
   );
-  testGasLimitCcmSwaps.log(`${tag} CCM Swap success! TxHash: ${txSignature}!`);
-  testGasLimitCcmSwaps.log(`${tag} Waiting for a fee deficit to be recorded...`);
+  logger.debug(`${tag} CCM Swap success! TxHash: ${txSignature}!`);
+  logger.debug(`${tag} Waiting for a fee deficit to be recorded...`);
   await feeDeficitHandle.event;
-  testGasLimitCcmSwaps.log(`${tag} Fee deficit recorded!`);
+  logger.debug(`${tag} Fee deficit recorded!`);
 }
 
 // Using unique gas consumption amount since the CCM message is used as unique identifier
@@ -206,6 +209,7 @@ async function testGasLimitSwapToSolana(sourceAsset: Asset, destAsset: Asset) {
 const usedGasConsumptionAmount = new Set<number>();
 
 async function testGasLimitSwapToEvm(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   abortTest: boolean = false,
@@ -253,17 +257,18 @@ async function testGasLimitSwapToEvm(
   const testTag = abortTest ? `InsufficientGas` : '';
 
   const { tag, destAddress, broadcastId, txPayload } = await executeAndTrackCcmSwap(
+    logger,
     sourceAsset,
     destAsset,
     ccmMetadata,
     testTag,
   );
-  testGasLimitCcmSwaps.log(`${tag} Finished tracking events`);
+  logger.debug(`${tag} Finished tracking events`);
 
   const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
   const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
 
-  testGasLimitCcmSwaps.log(
+  logger.debug(
     `${tag} Expecting broadcast ${abortTest ? 'abort' : 'success'}. Broadcast gas budget: ${gasLimitBudget}, user gasBudget ${ccmMetadata.gasBudget} cfTester gasConsumption ${gasConsumption}`,
   );
 
@@ -290,7 +295,7 @@ async function testGasLimitSwapToEvm(
       test: (event) => event.data.broadcastId === broadcastId,
     }).event;
     stopObservingCcmReceived = true;
-    testGasLimitCcmSwaps.log(`${tag} Broadcast Aborted found! broadcastId: ${broadcastId}`);
+    logger.debug(`${tag} Broadcast Aborted found! broadcastId: ${broadcastId}`);
   } else {
     // Check that broadcast is not aborted
     const observeBroadcastFailure = observeBadEvent(
@@ -309,7 +314,7 @@ async function testGasLimitSwapToEvm(
       },
     );
 
-    testGasLimitCcmSwaps.log(`${tag} Waiting for CCM event...`);
+    logger.debug(`${tag} Waiting for CCM event...`);
 
     // Expecting success
     const ccmReceived = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
@@ -317,7 +322,7 @@ async function testGasLimitSwapToEvm(
       throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
     }
 
-    testGasLimitCcmSwaps.log(`${tag} CCM event emitted!`);
+    logger.debug(`${tag} CCM event emitted!`);
 
     // Stop listening for broadcast failure
     await observeBroadcastFailure.stop();
@@ -342,16 +347,16 @@ async function testGasLimitSwapToEvm(
       throw new Error(`${tag} Tx gas limit ${tx.gas} different than expected ${gasLimitBudget}`);
     }
 
-    testGasLimitCcmSwaps.log(`${tag} Swap success! TxHash: ${ccmReceived?.txHash}!`);
+    logger.debug(`${tag} Swap success! TxHash: ${ccmReceived?.txHash}!`);
 
-    testGasLimitCcmSwaps.log(`${tag} Waiting for a fee deficit to be recorded...`);
+    logger.debug(`${tag} Waiting for a fee deficit to be recorded...`);
     await feeDeficitHandle.event;
-    testGasLimitCcmSwaps.log(`${tag} Fee deficit recorded!`);
+    logger.debug(`${tag} Fee deficit recorded!`);
   }
 }
 
-async function testEvmInsufficientGas(sourceAsset: Asset, destAsset: Asset) {
-  await testGasLimitSwapToEvm(sourceAsset, destAsset, true);
+async function testEvmInsufficientGas(logger: Logger, sourceAsset: Asset, destAsset: Asset) {
+  await testGasLimitSwapToEvm(logger, sourceAsset, destAsset, true);
 }
 
 // Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee (~7 wei)
@@ -368,9 +373,10 @@ async function spamChain(chain: Chain) {
   }
 }
 
-export async function main() {
+export async function testGasLimitCcmSwaps(testContext: TestContext) {
+  const logger = testContext.logger;
   const feeDeficitRefused = observeBadEvent(':TransactionFeeDeficitRefused', {});
-  testGasLimitCcmSwaps.log('Spamming chains to increase fees...');
+  testContext.logger.debug('Spamming chains to increase fees...');
 
   // No need to spam Solana since we are hardcoding the priority fees on the SC
   // and the chain "base fee" don't increase anyway..
@@ -395,38 +401,38 @@ export async function main() {
   }
 
   const insufficientGasTestEvm = [
-    testEvmInsufficientGas('Dot', 'Flip'),
-    testEvmInsufficientGas('Eth', 'Usdc'),
-    testEvmInsufficientGas('Eth', 'Usdt'),
-    testEvmInsufficientGas('Flip', 'Eth'),
-    testEvmInsufficientGas('Btc', 'Eth'),
-    testEvmInsufficientGas('Dot', 'ArbEth'),
-    testEvmInsufficientGas('Eth', 'ArbUsdc'),
-    testEvmInsufficientGas('Flip', 'ArbEth'),
-    testEvmInsufficientGas('ArbEth', 'Eth'),
-    testEvmInsufficientGas('Sol', 'ArbUsdc'),
-    testEvmInsufficientGas('SolUsdc', 'Eth'),
+    testEvmInsufficientGas(logger, 'Dot', 'Flip'),
+    testEvmInsufficientGas(logger, 'Eth', 'Usdc'),
+    testEvmInsufficientGas(logger, 'Eth', 'Usdt'),
+    testEvmInsufficientGas(logger, 'Flip', 'Eth'),
+    testEvmInsufficientGas(logger, 'Btc', 'Eth'),
+    testEvmInsufficientGas(logger, 'Dot', 'ArbEth'),
+    testEvmInsufficientGas(logger, 'Eth', 'ArbUsdc'),
+    testEvmInsufficientGas(logger, 'Flip', 'ArbEth'),
+    testEvmInsufficientGas(logger, 'ArbEth', 'Eth'),
+    testEvmInsufficientGas(logger, 'Sol', 'ArbUsdc'),
+    testEvmInsufficientGas(logger, 'SolUsdc', 'Eth'),
   ];
 
   const gasLimitSwapsSufBudget = [
-    testGasLimitSwapToEvm('Dot', 'Usdc'),
-    testGasLimitSwapToEvm('Usdc', 'Eth'),
-    testGasLimitSwapToEvm('Flip', 'Usdt'),
-    testGasLimitSwapToEvm('Usdt', 'Eth'),
-    testGasLimitSwapToEvm('Btc', 'Flip'),
-    testGasLimitSwapToEvm('Dot', 'ArbEth'),
-    testGasLimitSwapToEvm('Eth', 'ArbUsdc'),
-    testGasLimitSwapToEvm('ArbEth', 'Flip'),
-    testGasLimitSwapToEvm('Btc', 'ArbUsdc'),
-    testGasLimitSwapToEvm('Eth', 'ArbEth'),
-    testGasLimitSwapToEvm('ArbUsdc', 'Flip'),
-    testGasLimitSwapToEvm('Sol', 'Usdc'),
-    testGasLimitSwapToEvm('SolUsdc', 'ArbEth'),
-    testGasLimitSwapToSolana('Usdc', 'Sol'),
-    testGasLimitSwapToSolana('Btc', 'Sol'),
-    testGasLimitSwapToSolana('Dot', 'Sol'),
-    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc'),
-    testGasLimitSwapToSolana('Eth', 'SolUsdc'),
+    testGasLimitSwapToEvm(logger, 'Dot', 'Usdc'),
+    testGasLimitSwapToEvm(logger, 'Usdc', 'Eth'),
+    testGasLimitSwapToEvm(logger, 'Flip', 'Usdt'),
+    testGasLimitSwapToEvm(logger, 'Usdt', 'Eth'),
+    testGasLimitSwapToEvm(logger, 'Btc', 'Flip'),
+    testGasLimitSwapToEvm(logger, 'Dot', 'ArbEth'),
+    testGasLimitSwapToEvm(logger, 'Eth', 'ArbUsdc'),
+    testGasLimitSwapToEvm(logger, 'ArbEth', 'Flip'),
+    testGasLimitSwapToEvm(logger, 'Btc', 'ArbUsdc'),
+    testGasLimitSwapToEvm(logger, 'Eth', 'ArbEth'),
+    testGasLimitSwapToEvm(logger, 'ArbUsdc', 'Flip'),
+    testGasLimitSwapToEvm(logger, 'Sol', 'Usdc'),
+    testGasLimitSwapToEvm(logger, 'SolUsdc', 'ArbEth'),
+    testGasLimitSwapToSolana(logger, 'Usdc', 'Sol'),
+    testGasLimitSwapToSolana(logger, 'Btc', 'Sol'),
+    testGasLimitSwapToSolana(logger, 'Dot', 'Sol'),
+    testGasLimitSwapToSolana(logger, 'ArbUsdc', 'SolUsdc'),
+    testGasLimitSwapToSolana(logger, 'Eth', 'SolUsdc'),
   ];
 
   await Promise.all([...gasLimitSwapsSufBudget, ...insufficientGasTestEvm]);

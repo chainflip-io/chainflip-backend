@@ -2,14 +2,8 @@ import assert from 'assert';
 import { createStateChainKeypair, tryUntilSuccess } from '../shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { ExecutableTest } from '../shared/executable_test';
-
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testMultipleMembersGovernance = new ExecutableTest(
-  'Multiple-Members-Governance',
-  main,
-  120,
-);
+import { TestContext } from '../shared/swap_context';
+import { Logger } from '../shared/utils/logger';
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
@@ -24,10 +18,10 @@ async function setGovernanceMembers(members: string[]) {
 
 const alice = createStateChainKeypair('//Alice');
 
-async function addAliceToGovernance() {
+async function addAliceToGovernance(logger: Logger) {
   const initMembers = await getGovernanceMembers();
   if (initMembers.includes(alice.address)) {
-    testMultipleMembersGovernance.log('Warning: Alice is already in governance!');
+    logger.warn('Alice is already in governance!');
     return;
   }
 
@@ -41,10 +35,10 @@ async function addAliceToGovernance() {
 
   await tryUntilSuccess(async () => (await getGovernanceMembers()).length === 2, 3000, 10);
 
-  testMultipleMembersGovernance.log('Added Alice to governance!');
+  logger.debug('Added Alice to governance!');
 }
 
-async function submitWithMultipleGovernanceMembers() {
+async function submitWithMultipleGovernanceMembers(logger: Logger) {
   // Killing 2 birds with 1 stone: testing governance execution with multiple
   // members *and* restoring governance to its original state
   await submitGovernanceExtrinsic((chainflip) =>
@@ -66,10 +60,10 @@ async function submitWithMultipleGovernanceMembers() {
     'Governance should have been restored to 1 member',
   );
 
-  testMultipleMembersGovernance.log('Removed Alice from governance!');
+  logger.debug('Removed Alice from governance!');
 }
 
-async function main() {
-  await addAliceToGovernance();
-  await submitWithMultipleGovernanceMembers();
+export async function testMultipleMembersGovernance(testContext: TestContext) {
+  await addAliceToGovernance(testContext.logger);
+  await submitWithMultipleGovernanceMembers(testContext.logger);
 }

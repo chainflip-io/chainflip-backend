@@ -13,15 +13,20 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
+import { SwapContext } from '../shared/swap_context';
+import { logger } from '../shared/utils/logger';
+import { runWithTimeoutAndExit } from '../shared/utils';
 
 // Test Solana's delta based ingress
 async function main(): Promise<void> {
+  const testContext = { swapContext: new SwapContext(), logger };
+
   await yargs(hideBin(process.argv))
     .command(
       'prebuilt',
       'specify paths to the prebuilt binaries and runtime you wish to upgrade to',
       (args) => {
-        testDeltaBasedIngress.log('prebuilt selected');
+        logger.info('prebuilt selected');
         return args
           .option('bins', {
             describe: 'paths to the binaries and runtime you wish to upgrade to',
@@ -43,7 +48,10 @@ async function main(): Promise<void> {
           });
       },
       async (args) => {
-        await testDeltaBasedIngress.runAndExit(args.bins, args.localnet_init, args.nodes as 1 | 3);
+        await runWithTimeoutAndExit(
+          testDeltaBasedIngress(testContext, args.bins, args.localnet_init, args.nodes as 1 | 3),
+          800,
+        );
       },
     )
     .demandCommand(1)

@@ -10,11 +10,10 @@ import { specVersion, getNetworkRuntimeVersion } from '../shared/utils/spec_vers
 import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
 import { testSwap } from '../shared/swapping';
 import { observeEvent, observeBadEvent, getPolkadotApi } from '../shared/utils/substrate';
-import { ExecutableTest } from '../shared/executable_test';
+import { Logger } from '../shared/utils/logger';
+import { TestContext } from '../shared/swap_context';
 
 // Note: This test only passes if there is more than one node in the network due to the polkadot runtime upgrade causing broadcast failures due to bad signatures.
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testPolkadotRuntimeUpdate = new ExecutableTest('Polkadot-Runtime-Update', main, 1300);
 
 const POLKADOT_REPO_URL = `https://github.com/chainflip-io/polkadot.git`;
 const PROPOSAL_AMOUNT = '100';
@@ -32,9 +31,9 @@ let swapsStarted = 0;
 
 /// Pushes a polkadot runtime update using the democracy pallet.
 /// preimage -> proposal -> vote -> democracy pass -> scheduler dispatch runtime update.
-export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void> {
+export async function pushPolkadotRuntimeUpdate(wasmPath: string, logger: Logger): Promise<void> {
   await using polkadot = await getPolkadotApi();
-  testPolkadotRuntimeUpdate.log('-- Pushing polkadot runtime update --');
+  logger.info('-- Pushing polkadot runtime update --');
 
   // Read the runtime wasm from file
   const runtimeWasm = fs.readFileSync(wasmPath);
@@ -46,7 +45,7 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
   const setCodeCall = polkadot.tx.system.setCode(Array.from(runtimeWasm));
   const preimage = setCodeCall.method.toHex();
   const preimageHash = '0x' + Buffer.from(blake2AsU8a(preimage)).toString('hex');
-  testPolkadotRuntimeUpdate.log(`Preimage hash: ${preimageHash}`);
+  logger.debug(`Preimage hash: ${preimageHash}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let preimageStatus = (await polkadot.query.preimage.statusFor(preimageHash)) as any;
   if (JSON.stringify(preimageStatus) !== 'null') {
@@ -56,7 +55,7 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
     }
   }
   if (preimageStatus?.unrequested?.len > 0 || preimageStatus?.requested?.len > 0) {
-    testPolkadotRuntimeUpdate.log('Preimage already exists, skipping submission');
+    logger.debug('Preimage already exists, skipping submission');
   } else {
     const notePreimageEvent = await submitAndGetEvent(
       polkadot.tx.preimage.notePreimage(preimage),
@@ -67,7 +66,7 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
       notePreimageEvent.data[0].toString(),
       'Preimage hash mismatch',
     );
-    testPolkadotRuntimeUpdate.log(`Preimage submitted: ${preimageHash}`);
+    logger.debug(`Preimage submitted: ${preimageHash}`);
   }
 
   // Submit the proposal
@@ -75,16 +74,16 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
     chain: 'polkadot',
   }).event;
   const amount = amountToFineAmount(PROPOSAL_AMOUNT, assetDecimals('Dot'));
-  testPolkadotRuntimeUpdate.log(`Submitting proposal with amount: ${PROPOSAL_AMOUNT}`);
+  logger.debug(`Submitting proposal with amount: ${PROPOSAL_AMOUNT}`);
   const democracyStartedEvent = await submitAndGetEvent(
     polkadot.tx.democracy.propose({ Legacy: preimageHash }, amount),
     polkadot.events.democracy.Proposed,
   );
   const proposalIndex = democracyStartedEvent.data[0];
-  testPolkadotRuntimeUpdate.log(`proposal submitted: index ${proposalIndex}`);
+  logger.debug(`proposal submitted: index ${proposalIndex}`);
 
   // Wait for the democracy started event
-  testPolkadotRuntimeUpdate.log('Waiting for voting to start...');
+  logger.debug('Waiting for voting to start...');
   await observeDemocracyStarted;
 
   // Vote for the proposal
@@ -105,7 +104,7 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
     polkadot.tx.democracy.vote(proposalIndex, vote),
     polkadot.events.democracy.Voted,
   );
-  testPolkadotRuntimeUpdate.log(`voted for proposal ${proposalIndex}`);
+  logger.debug(`voted for proposal ${proposalIndex}`);
 
   // Stopping swaps now because the api sometimes gets error 1010 (bad signature) when depositing dot after the runtime update but before the api is updated.
   runtimeUpdatePushed = true;
@@ -116,56 +115,52 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
       throw new Error(`Democracy failed for runtime update. ${proposalIndex}`);
     }
   });
-  testPolkadotRuntimeUpdate.log(
-    'Democracy manifest! waiting for a succulent scheduled runtime update...',
-  );
+  logger.debug('Democracy manifest! waiting for a succulent scheduled runtime update...');
 
   // Wait for the runtime update to complete
   const schedulerDispatchedEvent = await observeSchedulerDispatched;
   if (schedulerDispatchedEvent.data.result.Err) {
-    testPolkadotRuntimeUpdate.log('Runtime update failed');
+    logger.debug('Runtime update failed');
     await handleDispatchError({
       dispatchError: JSON.stringify({ module: schedulerDispatchedEvent.data.result.Err.Module }),
     });
     process.exit(-1);
   }
-  testPolkadotRuntimeUpdate.log(
-    `Scheduler dispatched Runtime update at block ${schedulerDispatchedEvent.block}`,
-  );
+  logger.debug(`Scheduler dispatched Runtime update at block ${schedulerDispatchedEvent.block}`);
 
   const CodeUpdated = await observeCodeUpdated;
-  testPolkadotRuntimeUpdate.log(`Code updated at block ${CodeUpdated.block}`);
+  logger.debug(`Code updated at block ${CodeUpdated.block}`);
 
-  testPolkadotRuntimeUpdate.log('-- Polkadot runtime update complete --');
+  logger.info('-- Polkadot runtime update complete --');
 }
 
 /// Pulls the polkadot source code and bumps the spec version, then compiles it if necessary.
 /// If the bumped spec version matches the pre-compiled one stored in the repo, then it will use that instead.
-export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
+export async function bumpAndBuildPolkadotRuntime(logger: Logger): Promise<[string, number]> {
   const projectPath = process.cwd();
   // tmp/ is ignored in the bouncer .gitignore file.
   const workspacePath = path.join(projectPath, 'tmp/polkadot');
   const nextSpecVersion = (await getNetworkRuntimeVersion(polkadotEndpoint)).specVersion + 1;
-  testPolkadotRuntimeUpdate.log('Current polkadot spec_version: ' + nextSpecVersion);
+  logger.debug('Current polkadot spec_version: ' + nextSpecVersion);
 
   // No need to compile if the version we need is the pre-compiled version.
   const preCompiledWasmPath = `${projectPath}/tests/test_data/polkadot_runtime_${PRE_COMPILED_WASM_VERSION}.wasm`;
   let copyToPreCompileLocation = false;
   if (nextSpecVersion === PRE_COMPILED_WASM_VERSION) {
     if (!fs.existsSync(preCompiledWasmPath)) {
-      testPolkadotRuntimeUpdate.log(
+      logger.debug(
         `Warning: Precompiled Wasm file not found at "${preCompiledWasmPath}". It will be compiled and copied there. You will need to commit the file to the repo to speed up future runs.`,
       );
       copyToPreCompileLocation = true;
     } else {
-      testPolkadotRuntimeUpdate.log(`Using pre-compiled wasm file: ${preCompiledWasmPath}`);
+      logger.debug(`Using pre-compiled wasm file: ${preCompiledWasmPath}`);
       return [preCompiledWasmPath, nextSpecVersion];
     }
   }
 
   // Get polkadot source using git
   if (!fs.existsSync(workspacePath)) {
-    testPolkadotRuntimeUpdate.log('Cloning polkadot repo to: ' + workspacePath);
+    logger.debug('Cloning polkadot repo to: ' + workspacePath);
     execSync(`git clone https://github.com/chainflip-io/polkadot.git ${workspacePath}`);
   }
   const remoteUrl = execSync('git config --get remote.origin.url', { cwd: workspacePath })
@@ -176,15 +171,15 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
       `Polkadot folder exists at ${workspacePath} but is not the correct git repo: ${remoteUrl}. Please remove the folder and try again.`,
     );
   }
-  testPolkadotRuntimeUpdate.log('Updating polkadot source');
+  logger.debug('Updating polkadot source');
   execSync(`git pull`, { cwd: workspacePath });
 
   specVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, 'write', nextSpecVersion);
 
   // Compile polkadot runtime
-  testPolkadotRuntimeUpdate.log('Compiling polkadot...');
+  logger.debug('Compiling polkadot...');
   execSync(`cargo build --locked --release --features fast-runtime`, { cwd: workspacePath });
-  testPolkadotRuntimeUpdate.log('Finished compiling polkadot');
+  logger.info('Finished compiling polkadot');
   const wasmPath = `${workspacePath}/target/release/wbuild/polkadot-runtime/polkadot_runtime.compact.compressed.wasm`;
   if (!fs.existsSync(wasmPath)) {
     throw new Error(`Wasm file not found: ${wasmPath}`);
@@ -193,13 +188,13 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
   // Backup the pre-compiled wasm file so we do not have to build it again on future fresh runs.
   if (copyToPreCompileLocation) {
     fs.copyFileSync(wasmPath, preCompiledWasmPath);
-    testPolkadotRuntimeUpdate.log(`Copied ${wasmPath} to ${preCompiledWasmPath}`);
+    logger.debug(`Copied ${wasmPath} to ${preCompiledWasmPath}`);
   }
 
   return [wasmPath, nextSpecVersion];
 }
 
-async function randomPolkadotSwap(): Promise<void> {
+async function randomPolkadotSwap(testContext: TestContext): Promise<void> {
   const assets: Asset[] = [Assets.Btc, Assets.Eth, Assets.Usdc, Assets.Flip];
   const randomAsset = assets[Math.floor(Math.random() * assets.length)];
 
@@ -219,40 +214,38 @@ async function randomPolkadotSwap(): Promise<void> {
     destAsset,
     undefined,
     undefined,
-    testPolkadotRuntimeUpdate.swapContext,
+    testContext.swapContext,
     undefined,
     undefined,
     false,
   );
   swapsComplete++;
-  testPolkadotRuntimeUpdate.log(`Swap complete: (${swapsComplete}/${swapsStarted})`);
+  testContext.logger.debug(`Swap complete: (${swapsComplete}/${swapsStarted})`);
 }
 
-async function doPolkadotSwaps(): Promise<void> {
+async function doPolkadotSwaps(testContext: TestContext): Promise<void> {
+  const logger = testContext.logger.child({ module: 'doPolkadotSwaps' });
   const startSwapInterval = 2000;
-  testPolkadotRuntimeUpdate.log(
-    `Running polkadot swaps, new random swap every ${startSwapInterval}ms`,
-  );
+  logger.debug(`Running polkadot swaps, new random swap every ${startSwapInterval}ms`);
   while (!runtimeUpdatePushed) {
     /* eslint-disable @typescript-eslint/no-floating-promises */
-    randomPolkadotSwap();
+    randomPolkadotSwap(testContext);
     swapsStarted++;
     await sleep(startSwapInterval);
   }
-  testPolkadotRuntimeUpdate.log(
-    `Stopping polkadot swaps, ${swapsComplete}/${swapsStarted} swaps complete.`,
-  );
+  logger.debug(`Stopping polkadot swaps, ${swapsComplete}/${swapsStarted} swaps complete.`);
 
   // Wait for all of the swaps to complete
   while (swapsComplete < swapsStarted) {
     await sleep(1000);
   }
-  testPolkadotRuntimeUpdate.log(`All ${swapsComplete} swaps complete`);
+  logger.info(`All ${swapsComplete} swaps complete`);
 }
 
 // Note: This test only passes if there is more than one node in the network due to the polkadot runtime upgrade causing broadcast failures due to bad signatures.
-export async function main(): Promise<void> {
-  const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime();
+export async function testPolkadotRuntimeUpdate(testContext: TestContext): Promise<void> {
+  const logger = testContext.logger;
+  const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime(logger);
 
   // Monitor for the broadcast aborted event to help catch failed swaps
   const broadcastAborted = observeBadEvent(':BroadcastAborted', {
@@ -260,14 +253,14 @@ export async function main(): Promise<void> {
   });
 
   // Start some swaps
-  const swapping = doPolkadotSwaps();
-  testPolkadotRuntimeUpdate.log('Waiting for swaps to start...');
+  const swapping = doPolkadotSwaps(testContext);
+  logger.debug('Waiting for swaps to start...');
   while (swapsComplete === 0) {
     await sleep(1000);
   }
 
   // Submit the runtime update
-  await pushPolkadotRuntimeUpdate(wasmPath);
+  await pushPolkadotRuntimeUpdate(wasmPath, logger);
 
   // Check the polkadot spec version has changed
   const postUpgradeSpecVersion = await getNetworkRuntimeVersion(polkadotEndpoint);
@@ -278,7 +271,7 @@ export async function main(): Promise<void> {
   }
 
   // Wait for all of the swaps to complete
-  testPolkadotRuntimeUpdate.log('Waiting for swaps to complete...');
+  logger.info('Waiting for swaps to complete...');
   await swapping;
   await broadcastAborted.stop();
 }

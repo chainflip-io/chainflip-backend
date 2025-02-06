@@ -15,6 +15,9 @@
 //  - reject a boosted deposit
 //  - don't reject a boosted deposit which was reported too late
 
+import { SwapContext } from '../shared/swap_context';
+import { runWithTimeoutAndExit } from '../shared/utils';
+import { logger } from '../shared/utils/logger';
 import { testBrokerLevelScreening } from '../tests/broker_level_screening';
 
 let testBoostedDeposits = false;
@@ -22,4 +25,6 @@ if (process.argv.length > 1) {
   testBoostedDeposits = process.argv[2] === 'testBoostedDeposits';
 }
 
-await testBrokerLevelScreening.run(testBoostedDeposits);
+const testContext = { swapContext: new SwapContext(), logger };
+
+await runWithTimeoutAndExit(testBrokerLevelScreening(testContext, testBoostedDeposits), 300);

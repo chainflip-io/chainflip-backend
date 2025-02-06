@@ -1,4 +1,5 @@
 import assert from 'assert';
+import { logger as globalLogger, Logger } from './utils/logger';
 
 export enum SwapStatus {
   Initiated,
@@ -73,7 +74,7 @@ export class SwapContext {
     this.allSwaps.set(tag, status);
   }
 
-  print_report() {
+  print_report(logger: Logger = globalLogger) {
     const unsuccessfulSwapsEntries: string[] = [];
     this.allSwaps.forEach((status, tag) => {
       if (status !== SwapStatus.Success) {
@@ -81,12 +82,19 @@ export class SwapContext {
       }
     });
 
-    if (unsuccessfulSwapsEntries.length === 0) {
-      console.log('All swaps are successful!');
-    } else {
-      let report = `Unsuccessful swaps:\n`;
-      report += unsuccessfulSwapsEntries.join('\n');
-      console.error(report);
+    if (this.allSwaps.size > 0) {
+      if (unsuccessfulSwapsEntries.length === 0) {
+        logger.info(`✅ All ${this.allSwaps.size} swaps were successful`);
+      } else {
+        let report = `❌ Unsuccessful swaps:\n`;
+        report += unsuccessfulSwapsEntries.join('\n');
+        logger.error(report);
+      }
     }
   }
+}
+
+export interface TestContext {
+  swapContext: SwapContext;
+  logger: Logger;
 }
