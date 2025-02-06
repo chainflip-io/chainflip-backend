@@ -1,5 +1,4 @@
 mod egress_witnessing;
-mod fee_tracking;
 mod nonce_witnessing;
 mod program_swaps_witnessing;
 mod sol_deposits;
@@ -23,14 +22,14 @@ use cf_chains::{
 };
 use futures::FutureExt;
 use pallet_cf_elections::{
-	electoral_system::ElectoralSystem,
-	electoral_systems::solana_vault_swap_accounts::SolanaVaultSwapsVote, vote_storage::VoteStorage,
+	electoral_systems::solana_vault_swap_accounts::SolanaVaultSwapsVote, ElectoralSystemTypes,
+	VoteOf,
 };
 use state_chain_runtime::{
 	chainflip::solana_elections::{
 		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystemRunner,
-		SolanaFeeTracking, SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking,
-		SolanaVaultSwapTracking, TransactionSuccessDetails,
+		SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking, SolanaVaultSwapTracking,
+		TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
@@ -52,37 +51,12 @@ struct SolanaBlockHeightTrackingVoter {
 impl VoterApi<SolanaBlockHeightTracking> for SolanaBlockHeightTrackingVoter {
 	async fn vote(
 		&self,
-		_settings: <SolanaBlockHeightTracking as ElectoralSystem>::ElectoralSettings,
-		_properties: <SolanaBlockHeightTracking as ElectoralSystem>::ElectionProperties,
-	) -> Result<
-		<<SolanaBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
-		anyhow::Error,
-	> {
+		_settings: <SolanaBlockHeightTracking as ElectoralSystemTypes>::ElectoralSettings,
+		_properties: <SolanaBlockHeightTracking as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<SolanaBlockHeightTracking>>, anyhow::Error> {
 		let slot = self.client.get_slot(CommitmentConfig::finalized()).await;
 		CHAIN_TRACKING.set(&[cf_chains::Solana::NAME], Into::<u64>::into(slot));
-		Ok(slot)
-	}
-}
-
-#[derive(Clone)]
-struct SolanaFeeTrackingVoter {
-	client: SolRetryRpcClient,
-}
-
-// TODO: decide on a reasonable value for this.
-const MIN_PRIORITIZATION_FEE: u64 = 0;
-
-#[async_trait::async_trait]
-impl VoterApi<SolanaFeeTracking> for SolanaFeeTrackingVoter {
-	async fn vote(
-		&self,
-		_settings: <SolanaFeeTracking as ElectoralSystem>::ElectoralSettings,
-		_properties: <SolanaFeeTracking as ElectoralSystem>::ElectionProperties,
-	) -> Result<<<SolanaFeeTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>
-	{
-		Ok(fee_tracking::get_median_prioritization_fee(&self.client)
-			.await
-			.unwrap_or(MIN_PRIORITIZATION_FEE))
+		Ok(Some(slot))
 	}
 }
 
@@ -95,12 +69,9 @@ struct SolanaIngressTrackingVoter {
 impl VoterApi<SolanaIngressTracking> for SolanaIngressTrackingVoter {
 	async fn vote(
 		&self,
-		settings: <SolanaIngressTracking as ElectoralSystem>::ElectoralSettings,
-		properties: <SolanaIngressTracking as ElectoralSystem>::ElectionProperties,
-	) -> Result<
-		<<SolanaIngressTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
-		anyhow::Error,
-	> {
+		settings: <SolanaIngressTracking as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <SolanaIngressTracking as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<SolanaIngressTracking>>, anyhow::Error> {
 		sol_deposits::get_channel_ingress_amounts(
 			&self.client,
 			settings.vault_program,
@@ -111,6 +82,7 @@ impl VoterApi<SolanaIngressTracking> for SolanaIngressTrackingVoter {
 		.and_then(|vote| {
 			vote.try_into().map_err(|_| anyhow::anyhow!("Too many channels in election"))
 		})
+		.map(Option::Some)
 	}
 }
 
@@ -123,10 +95,9 @@ struct SolanaNonceTrackingVoter {
 impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 	async fn vote(
 		&self,
-		_settings: <SolanaNonceTracking as ElectoralSystem>::ElectoralSettings,
-		properties: <SolanaNonceTracking as ElectoralSystem>::ElectionProperties,
-	) -> Result<<<SolanaNonceTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>
-	{
+		_settings: <SolanaNonceTracking as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <SolanaNonceTracking as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<SolanaNonceTracking>>, anyhow::Error> {
 		let (nonce_account, previous_nonce, previous_slot) = properties;
 
 		let nonce_and_slot =
@@ -135,8 +106,10 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 				.map(|(nonce, slot)| MonotonicChangeVote { value: nonce, block: slot });
 		// If the nonce is not found, we default to the previous nonce and slot.
 		// The `MonotonicChange` electoral system ensure this vote is filtered.
-		Ok(nonce_and_slot
-			.unwrap_or(MonotonicChangeVote { value: previous_nonce, block: previous_slot }))
+		Ok(Some(
+			nonce_and_slot
+				.unwrap_or(MonotonicChangeVote { value: previous_nonce, block: previous_slot }),
+		))
 	}
 }
 
@@ -149,18 +122,16 @@ struct SolanaEgressWitnessingVoter {
 impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 	async fn vote(
 		&self,
-		_settings: <SolanaEgressWitnessing as ElectoralSystem>::ElectoralSettings,
-		signature: <SolanaEgressWitnessing as ElectoralSystem>::ElectionProperties,
-	) -> Result<
-		<<SolanaEgressWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
-		anyhow::Error,
-	> {
+		_settings: <SolanaEgressWitnessing as ElectoralSystemTypes>::ElectoralSettings,
+		signature: <SolanaEgressWitnessing as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<SolanaEgressWitnessing>>, anyhow::Error> {
 		egress_witnessing::get_finalized_fee_and_success_status(&self.client, signature)
 			.await
 			.map(|(tx_fee, transaction_successful)| TransactionSuccessDetails {
 				tx_fee,
 				transaction_successful,
 			})
+			.map(Option::Some)
 	}
 }
 
@@ -173,25 +144,27 @@ struct SolanaLivenessVoter {
 impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
 	async fn vote(
 		&self,
-		_settings: <SolanaLiveness as ElectoralSystem>::ElectoralSettings,
-		slot: <SolanaLiveness as ElectoralSystem>::ElectionProperties,
-	) -> Result<<<SolanaLiveness as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error> {
-		Ok(SolHash::from_str(
-			&self
-				.client
-				.get_block(
-					slot,
-					RpcBlockConfig {
-						transaction_details: Some(TransactionDetails::None),
-						rewards: Some(false),
-						max_supported_transaction_version: Some(0),
-						..Default::default()
-					},
-				)
-				.await
-				.blockhash,
-		)
-		.map_err(|e| anyhow::anyhow!("Failed to convert blockhash String to SolHash: {e}"))?)
+		_settings: <SolanaLiveness as ElectoralSystemTypes>::ElectoralSettings,
+		slot: <SolanaLiveness as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<SolanaLiveness>>, anyhow::Error> {
+		Ok(Some(
+			SolHash::from_str(
+				&self
+					.client
+					.get_block(
+						slot,
+						RpcBlockConfig {
+							transaction_details: Some(TransactionDetails::None),
+							rewards: Some(false),
+							max_supported_transaction_version: Some(0),
+							..Default::default()
+						},
+					)
+					.await
+					.blockhash,
+			)
+			.map_err(|e| anyhow::anyhow!("Failed to convert blockhash String to SolHash: {e}"))?,
+		))
 	}
 }
 
@@ -204,12 +177,9 @@ struct SolanaVaultSwapsVoter {
 impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 	async fn vote(
 		&self,
-		settings: <SolanaVaultSwapTracking as ElectoralSystem>::ElectoralSettings,
-		properties: <SolanaVaultSwapTracking as ElectoralSystem>::ElectionProperties,
-	) -> Result<
-		<<SolanaVaultSwapTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
-		anyhow::Error,
-	> {
+		settings: <SolanaVaultSwapTracking as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <SolanaVaultSwapTracking as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<SolanaVaultSwapTracking>>, anyhow::Error> {
 		program_swaps_witnessing::get_program_swaps(
 			&self.client,
 			settings.swap_endpoint_data_account_address,
@@ -226,6 +196,7 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 			new_accounts: new_accounts.into_iter().collect::<BTreeSet<_>>(),
 			confirm_closed_accounts: confirm_closed_accounts.into_iter().collect::<BTreeSet<_>>(),
 		})
+		.map(Option::Some)
 	}
 }
 
@@ -251,7 +222,6 @@ where
 					state_chain_client,
 					CompositeVoter::<SolanaElectoralSystemRunner, _>::new((
 						SolanaBlockHeightTrackingVoter { client: client.clone() },
-						SolanaFeeTrackingVoter { client: client.clone() },
 						SolanaIngressTrackingVoter { client: client.clone() },
 						SolanaNonceTrackingVoter { client: client.clone() },
 						SolanaEgressWitnessingVoter { client: client.clone() },

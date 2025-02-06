@@ -536,7 +536,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.and_then(|()| SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]))
 			.map(|entry| (*entry.key(), entry))
 			.filter(|(sqrt_price, _)| {
-				sqrt_price_limit.map_or(true, |sqrt_price_limit| {
+				sqrt_price_limit.is_none_or(|sqrt_price_limit| {
 					!SD::sqrt_price_op_more_than(*sqrt_price, sqrt_price_limit)
 				})
 			}) {

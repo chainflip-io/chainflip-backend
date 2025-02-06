@@ -112,7 +112,7 @@ impl TryFrom<Vec<u8>> for PolkadotAccountId {
 		if value.len() != 32 {
 			return Err(())
 		}
-		Ok(Self(value.as_array()))
+		Ok(Self(value.copy_to_array()))
 	}
 }
 
@@ -297,6 +297,10 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 		use fee_constants::fetch::*;
 
 		self.median_tip + fetch::EXTRINSIC_FEE
+	}
+
+	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Polkadot as Chain>::ChainAmount> {
+		None
 	}
 
 	fn estimate_egress_fee(

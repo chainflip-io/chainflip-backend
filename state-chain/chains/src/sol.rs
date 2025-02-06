@@ -37,8 +37,8 @@ pub use sol_prim::{
 pub use sol_tx_core::{
 	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
 	CcmAddress as SolCcmAddress, Hash as RawSolHash, Instruction as SolInstruction,
-	InstructionRpc as SolInstructionRpc, Message as SolMessage, Pubkey as SolPubkey,
-	Transaction as SolTransaction,
+	InstructionRpc as SolInstructionRpc, LegacyMessage as SolLegacyMessage,
+	LegacyTransaction as SolLegacyTransaction, Pubkey as SolPubkey,
 };
 
 // Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch
@@ -46,9 +46,9 @@ pub use sol_tx_core::{
 pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
 // Bytes left that are available for the user when building the native and token ccm transfers.
-// All function parameters are already accounted for excepte additional_accounts and message.
-pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize; // 694 bytes left
-pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize; // 481 bytes left
+// All function parameters are already accounted except additional_accounts and message.
+pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize + 32usize; // 694 bytes left + 32 empty source address
+pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize + 32usize; // 481 bytes left + 32 empty source address
 
 // Nonce management values
 pub const NONCE_NUMBER_CRITICAL_NONCES: usize = 1;
@@ -104,7 +104,7 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
-	type Payload = SolMessage;
+	type Payload = SolLegacyMessage;
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolanaTransactionInId;
 	type TransactionOutId = Self::ThresholdSignature;
@@ -127,7 +127,7 @@ impl ChainCrypto for SolanaCrypto {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
-		SolMessage::new(&[], Some(&SolPubkey::from(agg_key)))
+		SolLegacyMessage::new(&[], Some(&SolPubkey::from(agg_key)))
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(
@@ -165,13 +165,13 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
-	pub const COMPUTE_UNITS_PER_CLOSE_VAULT_SWAP_ACCOUNTS: SolComputeLimit = 10_000u32;
-	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 10_000u32;
+	pub const COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS: SolComputeLimit = 20_000u32;
+	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 6_000u32;
 	pub const COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS: SolComputeLimit = 50_000u32;
 	pub const COMPUTE_UNITS_PER_ENABLE_TOKEN_SUPPORT: SolComputeLimit = 50_000u32;
 
-	/// This is equivalent to a priority fee
-	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
+	/// This is equivalent to a priority fee, in micro-lamports/compute unit.
+	pub const MIN_COMPUTE_PRICE: SolAmount = 10_000_000;
 
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
 	pub const MAX_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 600_000u32;
@@ -275,6 +275,17 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		);
 
 		self.calculate_transaction_fee(compute_units_per_fetch)
+	}
+
+	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Solana as Chain>::ChainAmount> {
+		use compute_units_costs::*;
+
+		// Some of the fetches might be batches but we need to estimate pessimistically.
+		let compute_units_per_fetch_and_close = compute_limit_with_buffer(
+			COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS + COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
+		);
+
+		Some(self.calculate_transaction_fee(compute_units_per_fetch_and_close))
 	}
 
 	fn estimate_ccm_fee(

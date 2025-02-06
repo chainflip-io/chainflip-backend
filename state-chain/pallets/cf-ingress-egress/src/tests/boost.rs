@@ -1,6 +1,6 @@
 use super::*;
 
-use cf_chains::{ChannelRefundParametersDecoded, DepositOriginType, FeeEstimationApi};
+use cf_chains::{DepositOriginType, FeeEstimationApi};
 use cf_primitives::{AssetAmount, BasisPoints, PrewitnessedDepositId, SwapRequestId};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -1150,6 +1150,8 @@ fn taking_network_fee_from_boost_fee() {
 
 mod vault_swaps {
 
+	use cf_chains::ChannelRefundParameters;
+
 	use crate::BoostedVaultTransactions;
 
 	use super::*;
@@ -1168,6 +1170,7 @@ mod vault_swaps {
 			const OUTPUT_ASSET: Asset = Asset::Flip;
 
 			const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * TIER_5_BPS as u128 / 10_000;
+			const INGRESS_FEE: AssetAmount = 1000000;
 			const PREWITNESS_DEPOSIT_ID: PrewitnessedDepositId = 1;
 			const CHANNEL_ID: ChannelId = 1;
 
@@ -1199,9 +1202,9 @@ mod vault_swaps {
 				tx_id,
 				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
 				affiliate_fees: Default::default(),
-				refund_params: Some(ChannelRefundParametersDecoded {
+				refund_params: Some(ChannelRefundParameters {
 					retry_duration: 2,
-					refund_address: ForeignChainAddress::Eth([2; 20].into()),
+					refund_address: [2; 20].into(),
 					min_price: Default::default(),
 				}),
 				dca_params: None,
@@ -1226,8 +1229,7 @@ mod vault_swaps {
 					vec![MockSwapRequest {
 						input_asset: INPUT_ASSET,
 						output_asset: OUTPUT_ASSET,
-						// Note that ingress fee is not charged:
-						input_amount: DEPOSIT_AMOUNT - BOOST_FEE,
+						input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 						swap_type: SwapRequestType::Regular {
 							output_address,
 							ccm_deposit_metadata: None

@@ -75,7 +75,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ScheduledEgressCcmM
 							source_chain: old_cross_chain_message.source_chain,
 							source_address: old_cross_chain_message.source_address,
 							ccm_additional_data: CcmAdditionalData::try_from(
-								old_cross_chain_message.cf_parameters,
+								old_cross_chain_message.cf_parameters.into_inner(),
 							)
 							.unwrap_or_default(),
 							// Using reasonable values for gas budget egress. We can't just

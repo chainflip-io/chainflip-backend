@@ -3,7 +3,7 @@ use crate::{
 	utils::get_broadcast_id,
 };
 use cf_chains::{
-	address::EncodedAddress,
+	address::{EncodedAddress, IntoForeignChainAddress},
 	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
@@ -13,8 +13,8 @@ use cf_chains::{
 };
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
 use chainflip_api::primitives::{
-	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters,
-	ForeignChain, NetworkEnvironment,
+	AffiliateDetails, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
+	DcaParameters, ForeignChain, NetworkEnvironment,
 };
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi, StateChainClient,
@@ -293,7 +293,11 @@ where
 				.collect::<Vec<Beneficiary<AccountId32>>>()
 				.try_into()
 				.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same."),
-			refund_params: self.refund_params.map(|params| params.map_address(|a| TrackerAddress::from(a.to_encoded_address(network)))),
+			refund_params: self.refund_params.map(
+				|params| params.map_address(
+					|a| TrackerAddress::from(a.into_foreign_chain_address().to_encoded_address(network))
+				)
+			),
 			dca_params: self.dca_params,
 			max_boost_fee: self.boost_fee,
 		}
@@ -381,23 +385,25 @@ async fn save_deposit_witnesses<S, C>(
 
 #[cfg_attr(test, mockall::automock)]
 pub trait CfGetAffiliates {
-	async fn cf_get_affiliates(
+	async fn cf_affiliate_details(
 		&self,
 		broker_fee_account: &AccountId32,
-	) -> anyhow::Result<BTreeMap<AffiliateShortId, state_chain_runtime::AccountId>>;
+		affiliate: Option<AccountId32>,
+	) -> anyhow::Result<BTreeMap<state_chain_runtime::AccountId, AffiliateDetails>>;
 }
 
 impl<S> CfGetAffiliates for StateChainClient<S> {
-	async fn cf_get_affiliates(
+	async fn cf_affiliate_details(
 		&self,
 		broker_fee_account: &AccountId32,
-	) -> anyhow::Result<BTreeMap<AffiliateShortId, state_chain_runtime::AccountId>> {
+		affiliate: Option<AccountId32>,
+	) -> anyhow::Result<BTreeMap<state_chain_runtime::AccountId, AffiliateDetails>> {
 		use custom_rpc::CustomApiClient;
 
 		Ok(self
 			.base_rpc_client
 			.raw_rpc_client
-			.cf_get_affiliates(broker_fee_account.clone(), None)
+			.cf_affiliate_details(broker_fee_account.clone(), affiliate, None)
 			.await?
 			.into_iter()
 			.collect::<BTreeMap<_, _>>())
@@ -422,7 +428,12 @@ where
 		.as_ref()
 		.map(|Beneficiary { account, .. }| account.clone())
 	{
-		state_chain_client.cf_get_affiliates(&broker_id).await?
+		state_chain_client
+			.cf_affiliate_details(&broker_id, None)
+			.await?
+			.into_iter()
+			.map(|(id, details)| (details.short_id, id))
+			.collect()
 	} else {
 		Default::default()
 	};
@@ -739,10 +750,11 @@ mod tests {
 
 	// This implementation is necessary to keep the compiler happy.
 	impl CfGetAffiliates for MockStateChainClient {
-		async fn cf_get_affiliates(
+		async fn cf_affiliate_details(
 			&self,
 			_broker_fee_account: &AccountId32,
-		) -> anyhow::Result<BTreeMap<AffiliateShortId, state_chain_runtime::AccountId>> {
+			_affiliate: Option<AccountId32>,
+		) -> anyhow::Result<BTreeMap<state_chain_runtime::AccountId, AffiliateDetails>> {
 			unimplemented!(
 				"This is not tested via the MockStateChainClient, use MockCfGetAffiliates instead."
 			)
@@ -935,7 +947,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_handle_vault_deposit_calls() {
-		use cf_chains::ChannelRefundParametersDecoded;
 		chainflip_api::use_chainflip_account_id_encoding();
 		let (eth_address, _) = parse_eth_address("0x541f563237A309B3A61E33BDf07a8930Bdba8D99");
 		let affiliate_short_id = AffiliateShortId::from(69);
@@ -948,8 +959,11 @@ mod tests {
 		let mut client = MockCfGetAffiliates::new();
 
 		// We expect the affiliates to be mapped from short id's to account id's
-		client.expect_cf_get_affiliates().returning(move |_| {
-			Ok(BTreeMap::from_iter([(affiliate_short_id, AccountId32::new([1; 32]))]))
+		client.expect_cf_affiliate_details().returning(move |_, _| {
+			Ok(BTreeMap::from_iter([(
+				AccountId32::new([1; 32]),
+				AffiliateDetails { short_id: affiliate_short_id, withdrawal_address: eth_address },
+			)]))
 		});
 
 		let client = Arc::new(client);
@@ -987,8 +1001,8 @@ mod tests {
 						bps: 10
 					}])
 					.unwrap(),
-					refund_params: Some(ChannelRefundParametersDecoded {
-						refund_address: ForeignChainAddress::Eth(eth_address),
+					refund_params: Some(ChannelRefundParameters {
+						refund_address: eth_address,
 						retry_duration: Default::default(),
 						min_price: Default::default(),
 					}),

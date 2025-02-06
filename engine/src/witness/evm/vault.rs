@@ -27,14 +27,15 @@ use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
-fn decode_cf_parameters<CcmData>(
+fn decode_cf_parameters<RefundAddress, CcmData>(
 	cf_parameters: &[u8],
 	block_height: u64,
-) -> (Option<VaultSwapParameters>, CcmData)
+) -> (Option<VaultSwapParameters<RefundAddress>>, CcmData)
 where
+	RefundAddress: Decode,
 	CcmData: Default + Decode,
 {
-	if let Ok(decoded) = VersionedCfParameters::<CcmData>::decode(&mut &cf_parameters[..]) {
+	if let Ok(decoded) = VersionedCfParameters::decode(&mut &cf_parameters[..]) {
 		match decoded {
 			VersionedCfParameters::V0(CfParameters {
 				ccm_additional_data,
@@ -86,8 +87,8 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let vault_swap_parameters =
-				decode_cf_parameters::<()>(&cf_parameters[..], block_height).0;
+			let (vault_swap_parameters, ()) =
+				decode_cf_parameters(&cf_parameters[..], block_height);
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
@@ -109,8 +110,8 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let vault_swap_parameters =
-				decode_cf_parameters::<()>(&cf_parameters[..], block_height).0;
+			let (vault_swap_parameters, ()) =
+				decode_cf_parameters(&cf_parameters[..], block_height);
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
@@ -287,7 +288,9 @@ pub trait IngressCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: H256,
-		vault_swap_parameters: Option<VaultSwapParameters>,
+		vault_swap_parameters: Option<
+			VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
+		>,
 	) -> state_chain_runtime::RuntimeCall;
 
 	fn vault_transfer_failed(

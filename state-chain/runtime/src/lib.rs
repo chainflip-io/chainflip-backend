@@ -43,7 +43,7 @@ pub use cf_chains::instances::{
 	PolkadotCryptoInstance, PolkadotInstance, SolanaInstance,
 };
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress},
+	address::{AddressConverter, EncodedAddress, IntoForeignChainAddress},
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
@@ -60,7 +60,7 @@ use cf_chains::{
 	Solana, TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
+	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
 	NetworkEnvironment, STABLE_ASSET,
 };
 use cf_traits::{
@@ -80,7 +80,9 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::{BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap};
+use pallet_cf_swapping::{
+	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
+};
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
@@ -1392,7 +1394,7 @@ macro_rules! instanced_migrations {
 		from: $from:literal,
 		to: $to:literal,
 		include_instances: [$( $include:ident ),+ $(,)?],
-		exclude_instances: [$( $exclude:ident ),+ $(,)?] $(,)?
+		exclude_instances: [$( $exclude:ident ),* $(,)?] $(,)?
 	) => {
 		(
 			$(
@@ -1412,7 +1414,7 @@ macro_rules! instanced_migrations {
 					$module::Pallet<Runtime, $exclude>,
 					DbWeight,
 				>,
-			)+
+			)*
 		)
 	}
 }
@@ -1470,6 +1472,16 @@ type MigrationsForV1_8 = (
 			BitcoinInstance,
 			SolanaInstance,
 		],
+	},
+	instanced_migrations! {
+		module: pallet_cf_elections,
+		migration: migrations::remove_fee_tracking_migration::RemoveFeeTrackingMigration,
+		from: 3,
+		to: 4,
+		include_instances: [
+			SolanaInstance
+		],
+		exclude_instances: [],
 	},
 );
 
@@ -1782,9 +1794,12 @@ impl_runtime_apis! {
 
 			let include_fee = |fee_type: FeeTypes| !exclude_fees.contains(&fee_type);
 
-			let (amount_to_swap, ingress_fee) = if include_fee(FeeTypes::Ingress) {
-				remove_fees(IngressOrEgress::Ingress, input_asset, input_amount)
-			} else {
+			// Default to using the DepositChannel fee unless specified.
+			let (amount_to_swap, ingress_fee) = if include_fee(FeeTypes::IngressDepositChannel) {
+				remove_fees(IngressOrEgress::IngressDepositChannel, input_asset, input_amount)
+			} else if include_fee(FeeTypes::IngressVaultSwap) {
+				remove_fees(IngressOrEgress::IngressVaultSwap, input_asset, input_amount)
+			}else {
 				(input_amount, 0u128)
 			};
 
@@ -2372,7 +2387,7 @@ impl_runtime_apis! {
 				}
 
 				// Ensure CCM message is valid
-				match CcmValidityChecker::check_and_decode(ccm, destination_asset)
+				match CcmValidityChecker::check_and_decode(ccm, destination_asset, destination_address.clone())
 				{
 					Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(ccm_accounts))) => {
 						// Ensure the CCM parameters do not contain blacklisted accounts.
@@ -2425,21 +2440,7 @@ impl_runtime_apis! {
 				(
 					ForeignChain::Ethereum,
 					VaultSwapExtraParametersEncoded::Ethereum(extra_params)
-				) => {
-					crate::chainflip::vault_swaps::evm_vault_swap(
-						broker_id,
-						source_asset,
-						extra_params.input_amount,
-						destination_asset,
-						destination_address,
-						broker_commission,
-						extra_params.refund_parameters,
-						boost_fee,
-						affiliate_fees,
-						dca_parameters,
-						channel_metadata,
-					)
-				},
+				)|
 				(
 					ForeignChain::Arbitrum,
 					VaultSwapExtraParametersEncoded::Arbitrum(extra_params)
@@ -2492,11 +2493,15 @@ impl_runtime_apis! {
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId>) -> ChainAccounts {
 			let btc_chain_accounts = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter_values()
 				.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id.as_ref())
-				.map(|channel_details| channel_details.deposit_channel.address)
+				.map(|channel_details|
+					channel_details.deposit_channel.address
+					.into_foreign_chain_address()
+					.to_encoded_address(Environment::network_environment())
+				)
 				.collect::<Vec<_>>();
 
 			ChainAccounts {
-				btc_chain_accounts
+				chain_accounts: btc_chain_accounts
 			}
 		}
 
@@ -2522,10 +2527,18 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_get_affiliates(
+		fn cf_affiliate_details(
 			broker: AccountId,
-		) -> Vec<(AffiliateShortId, AccountId)>{
-			pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&broker).collect()
+			affiliate: Option<AccountId>,
+		) -> Vec<(AccountId, AffiliateDetails)>{
+			if let Some(affiliate) = affiliate {
+				pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::get(&broker, &affiliate)
+					.map(|details| (affiliate, details))
+					.into_iter()
+					.collect()
+			} else {
+				pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&broker).collect()
+			}
 		}
 	}
 

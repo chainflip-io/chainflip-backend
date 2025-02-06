@@ -234,6 +234,7 @@ pub mod mockall_utilities {
 	}
 }
 
+#[allow(clippy::literal_string_with_formatting_args)]
 pub fn repository_link() -> Option<impl core::fmt::Display> {
 	core::option_env!("COMMIT_HASH").map(|commit_hash| {
 		lazy_format::lazy_format!(

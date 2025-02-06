@@ -545,7 +545,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 
 		let should_process_shares = resharing_context
 			.as_ref()
-			.map_or(true, |context| context.receiving_participants.contains(&common.own_idx));
+			.is_none_or(|context| context.receiving_participants.contains(&common.own_idx));
 
 		let mut bad_parties = BTreeSet::new();
 		let verified_shares = if should_process_shares {

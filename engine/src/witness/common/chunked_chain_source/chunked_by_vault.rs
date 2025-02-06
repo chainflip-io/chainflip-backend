@@ -139,12 +139,9 @@ where
 						.filter(move |header| {
 							futures::future::ready(
 								header.index >= vault.info.1 &&
-									vault
-										.historic_signal
-										.get()
-										.map_or(true, |(_, end_index, _)| {
-											header.index < *end_index
-										}),
+									vault.historic_signal.get().is_none_or(
+										|(_, end_index, _)| header.index < *end_index,
+									),
 							)
 						})
 						.into_box(),

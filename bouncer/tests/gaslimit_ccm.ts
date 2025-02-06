@@ -16,9 +16,8 @@ import {
 import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
 import { estimateCcmCfTesterGas, spamEvm } from '../shared/send_evm';
-import { observeEvent, observeBadEvent, getChainflipApi } from '../shared/utils/substrate';
+import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { spamSolana } from '../shared/send_sol';
 import { ExecutableTest } from '../shared/executable_test';
 
 // Run this test separately from all the concurrent tests because there will be BroadcastAborted events emitted.
@@ -57,10 +56,8 @@ function getChainMinFee(chain: Chain): number {
       return 1000000000;
     case 'Arbitrum':
       return 100000000;
-    case 'Solana':
-      return 100000000;
     default:
-      throw new Error(`Chain ${chain} is not supported for CCM`);
+      throw new Error(`Chain ${chain} is not expected to have a minimum fee`);
   }
 }
 
@@ -68,12 +65,13 @@ async function getChainFees(chain: Chain) {
   let baseFee = 0;
   let priorityFee = 0;
 
+  const trackedData = (
+    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
+  ).data.newChainState.trackedData;
+
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum': {
-      const trackedData = (
-        await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
-      ).data.newChainState.trackedData;
       baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
 
       if (chain === 'Ethereum') {
@@ -82,10 +80,7 @@ async function getChainFees(chain: Chain) {
       break;
     }
     case 'Solana': {
-      await using chainflip = await getChainflipApi();
-      const trackedData = await chainflip.query.solanaElections.electoralUnsynchronisedState();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      priorityFee = Number((trackedData.toJSON() as any[])[1].toString().replace(/,/g, ''));
+      priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
       break;
     }
     default:
@@ -368,9 +363,6 @@ async function spamChain(chain: Chain) {
     case 'Arbitrum':
       spamEvm('Ethereum', 500, () => spam);
       break;
-    case 'Solana':
-      spamSolana(getChainMinFee('Solana'), 100, () => spam);
-      break;
     default:
       throw new Error(`Chain ${chain} is not supported for CCM`);
   }
@@ -380,29 +372,24 @@ export async function main() {
   const feeDeficitRefused = observeBadEvent(':TransactionFeeDeficitRefused', {});
   testGasLimitCcmSwaps.log('Spamming chains to increase fees...');
 
+  // No need to spam Solana since we are hardcoding the priority fees on the SC
+  // and the chain "base fee" don't increase anyway..
   const spammingEth = spamChain('Ethereum');
   const spammingArb = spamChain('Arbitrum');
-  const spammingSol = spamChain('Solana');
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
   const ethMinPriorityFee = getChainMinFee('Ethereum');
   const arbMinBaseFee = getChainMinFee('Arbitrum');
-  const solMinPrioFee = getChainMinFee('Solana');
   while (
     (await getChainFees('Ethereum')).priorityFee < ethMinPriorityFee ||
-    (await getChainFees('Arbitrum')).baseFee < arbMinBaseFee ||
-    (await getChainFees('Solana')).priorityFee < solMinPrioFee
+    (await getChainFees('Arbitrum')).baseFee < arbMinBaseFee
   ) {
     if (++i > LOOP_TIMEOUT) {
       spam = false;
       await spammingEth;
       await spammingArb;
-      await spammingSol;
-      testGasLimitCcmSwaps.log(
-        "Skipping gasLimit CCM test as the priority fee didn't increase enough",
-      );
-      return;
+      throw new Error(`Chain fees did not increase enough for the CCM gas limit test to run`);
     }
     await sleep(500);
   }
@@ -447,7 +434,6 @@ export async function main() {
   spam = false;
   await spammingEth;
   await spammingArb;
-  await spammingSol;
 
   // Make sure all the spamming has stopped to avoid triggering connectivity issues when running the next test.
   await sleep(10000);

@@ -7,16 +7,17 @@ pub mod x_swap_token;
 #[cfg(test)]
 pub mod test_utils {
 	use crate::{
-		cf_parameters::*, CcmChannelMetadata, ChannelRefundParameters, ForeignChainAddress,
+		cf_parameters::*, eth::Address as EthAddress, CcmChannelMetadata, ChannelRefundParameters,
 	};
 	use cf_primitives::{
-		AccountId, AffiliateAndFee, AffiliateShortId, Beneficiary, DcaParameters, MAX_AFFILIATES,
+		chains::Ethereum, AccountId, AffiliateAndFee, AffiliateShortId, Beneficiary, DcaParameters,
+		MAX_AFFILIATES,
 	};
 	use frame_support::pallet_prelude::ConstU32;
 	use sp_runtime::BoundedVec;
 
-	pub fn refund_address() -> ForeignChainAddress {
-		ForeignChainAddress::Eth([0xF0; 20].into())
+	pub fn refund_address() -> EthAddress {
+		[0xF0; 20].into()
 	}
 	pub fn dca_parameter() -> DcaParameters {
 		DcaParameters { number_of_chunks: 10u32, chunk_interval: 5u32 }
@@ -40,7 +41,7 @@ pub mod test_utils {
 	pub const BROKER_FEE: u8 = 150u8;
 
 	pub fn dummy_cf_parameter(with_ccm: bool) -> Vec<u8> {
-		build_cf_parameters(
+		build_cf_parameters::<Ethereum>(
 			ChannelRefundParameters {
 				retry_duration: 1u32,
 				refund_address: refund_address(),

@@ -1,40 +1,89 @@
 import assert from 'assert';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+// eslint-disable-next-line no-restricted-imports
+import type { KeyringPair } from '@polkadot/keyring/types';
 import { ExecutableTest } from '../shared/executable_test';
-import { createStateChainKeypair, defaultAssetAmounts } from '../shared/utils';
+import {
+  createStateChainKeypair,
+  defaultAssetAmounts,
+  handleSubstrateError,
+  newAddress,
+  sleep,
+} from '../shared/utils';
 import { getEarnedBrokerFees } from './broker_fee_collection';
 import { openPrivateBtcChannel, registerAffiliate } from '../shared/btc_vault_swap';
 import { setupBrokerAccount } from '../shared/setup_account';
 import { performVaultSwap } from '../shared/perform_swap';
 import { prepareSwap } from '../shared/swapping';
+import { getChainflipApi } from '../shared/utils/substrate';
+import { getBalance } from '../shared/get_balance';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testVaultSwapFeeCollection = new ExecutableTest(
   'Vault-Swap-Fee-Collection',
   main,
-  230,
+  600,
 );
 
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
 
-async function testFeeCollection(inputAsset: Asset) {
+async function testWithdrawCollectedAffiliateFees(
+  broker: KeyringPair,
+  affiliateAccountId: string,
+  withdrawAddress: string,
+) {
+  const chainflip = await getChainflipApi();
+
+  const balanceObserveTimeout = 60;
+  let success = false;
+
+  testVaultSwapFeeCollection.log('Starting withdraw collected affiliate fees test...');
+  testVaultSwapFeeCollection.log('Affiliate account ID:', affiliateAccountId);
+  testVaultSwapFeeCollection.log('Withdraw address:', withdrawAddress);
+
+  await chainflip.tx.swapping
+    .affiliateWithdrawalRequest(affiliateAccountId)
+    .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+
+  testVaultSwapFeeCollection.log('Withdrawal request sent!');
+  testVaultSwapFeeCollection.log(
+    'Waiting for balance change... Observing address:',
+    withdrawAddress,
+  );
+
+  // Wait for balance change
+  for (let i = 0; i < balanceObserveTimeout; i++) {
+    if ((await getBalance(Assets.Usdc, withdrawAddress)) !== '0') {
+      success = true;
+      break;
+    }
+    await sleep(1000);
+  }
+
+  assert(success, `Withdrawal failed - No balance change detected within the timeout period 🙅‍♂️.`);
+  testVaultSwapFeeCollection.log('Withdrawal successful ✅.');
+}
+
+async function testFeeCollection(inputAsset: Asset): Promise<[KeyringPair, string, string]> {
   testVaultSwapFeeCollection.debugLog('Testing:', inputAsset);
 
   // Setup broker accounts. Different for each asset and specific to this test.
   const brokerUri = `//BROKER_VAULT_FEE_COLLECTION_${inputAsset}`;
-  const affiliateUri = `//BROKER_VAULT_FEE_COLLECTION_AFFILIATE_${inputAsset}`;
   const broker = createStateChainKeypair(brokerUri);
-  const affiliate = createStateChainKeypair(affiliateUri);
-  testVaultSwapFeeCollection.debugLog('Broker:', broker.address);
-  testVaultSwapFeeCollection.debugLog('Affiliate:', affiliate.address);
-  await Promise.all([setupBrokerAccount(brokerUri), setupBrokerAccount(affiliateUri)]);
+  const refundAddress = await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
+  await Promise.all([setupBrokerAccount(brokerUri)]);
   if (inputAsset === Assets.Btc) {
     await openPrivateBtcChannel(brokerUri);
   }
-  const affiliateShotId = 0;
+
   testVaultSwapFeeCollection.debugLog('Registering affiliate');
-  await registerAffiliate(brokerUri, affiliateUri, affiliateShotId);
+  const event = await registerAffiliate(brokerUri, refundAddress);
+
+  const affiliateId = event.data.affiliateId as string;
+
+  testVaultSwapFeeCollection.debugLog('Broker:', broker.address);
+  testVaultSwapFeeCollection.debugLog('Affiliate:', affiliateId);
 
   // Setup
   const feeAsset = Assets.Usdc;
@@ -51,8 +100,8 @@ async function testFeeCollection(inputAsset: Asset) {
   );
 
   // Amounts before swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker);
-  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(affiliate);
+  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker.address);
+  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(affiliateId);
   testVaultSwapFeeCollection.debugLog('Earned broker fees before:', earnedBrokerFeesBefore);
   testVaultSwapFeeCollection.debugLog('Earned affiliate fees before:', earnedAffiliateFeesBefore);
 
@@ -70,29 +119,34 @@ async function testFeeCollection(inputAsset: Asset) {
     undefined, // fillOrKillParams
     undefined, // dcaParams
     { account: broker.address, commissionBps },
-    [{ accountAddress: affiliate.address, accountShortId: affiliateShotId, commissionBps }],
+    [{ accountAddress: affiliateId, commissionBps }],
   );
 
   // Check that both the broker and affiliate earned fees
-  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker);
-  const earnedAffiliateFeesAfter = await getEarnedBrokerFees(affiliate);
+  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker.address);
+  const earnedAffiliateFeesAfter = await getEarnedBrokerFees(affiliateId);
   testVaultSwapFeeCollection.debugLog('Earned broker fees after:', earnedBrokerFeesAfter);
   testVaultSwapFeeCollection.debugLog('Earned affiliate fees after:', earnedAffiliateFeesAfter);
   assert(
     earnedBrokerFeesAfter > earnedBrokerFeesBefore,
-    `No increase in earned broker fees after ${inputAsset} swap`,
+    `No increase in earned broker fees after ${tag}(${inputAsset} -> ${destAsset}) vault swap: ${{ account: broker.address, commissionBps }}, ${earnedBrokerFeesBefore} -> ${earnedBrokerFeesAfter}`,
   );
   assert(
     earnedAffiliateFeesAfter > earnedAffiliateFeesBefore,
     `No increase in earned affiliate fees after ${inputAsset} swap`,
   );
+
+  return Promise.resolve([broker, affiliateId, refundAddress]);
 }
 
 async function main() {
   await Promise.all([
-    testFeeCollection(Assets.Btc),
     testFeeCollection(Assets.Eth),
     testFeeCollection(Assets.ArbEth),
     testFeeCollection(Assets.Sol),
   ]);
+
+  // Test the affiliate withdrawal functionality
+  const [broker, affiliateId, refundAddress] = await testFeeCollection(Assets.Btc);
+  await testWithdrawCollectedAffiliateFees(broker, affiliateId, refundAddress);
 }

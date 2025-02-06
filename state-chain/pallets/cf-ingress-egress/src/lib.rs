@@ -28,9 +28,10 @@ use cf_chains::{
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
 	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParametersDecoded, ConsolidateCall,
-	DepositChannel, DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
+	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
+	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
+	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
 	TransferAssetParams,
 };
 use cf_primitives::{
@@ -407,12 +408,15 @@ pub mod pallet {
 		pub deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 		pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		pub output_asset: Asset,
+		// Note we use EncodedAddress here rather than eg. ForeignChainAddress because this
+		// value can be populated by the submitter of the vault deposit and is not verified
+		// in the engine, so we need to verify on-chain.
 		pub destination_address: EncodedAddress,
 		pub deposit_metadata: Option<CcmDepositMetadata>,
 		pub tx_id: TransactionInIdFor<T, I>,
 		pub broker_fee: Option<Beneficiary<T::AccountId>>,
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
-		pub refund_params: Option<ChannelRefundParametersDecoded>,
+		pub refund_params: Option<ChannelRefundParameters<TargetChainAccount<T, I>>>,
 		pub dca_params: Option<DcaParameters>,
 		pub boost_fee: BasisPoints,
 	}
@@ -447,7 +451,8 @@ pub mod pallet {
 	}
 
 	pub enum IngressOrEgress {
-		Ingress,
+		IngressDepositChannel,
+		IngressVaultSwap,
 		Egress,
 		EgressCcm { gas_budget: GasAmount, message_length: usize },
 	}
@@ -465,7 +470,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadata>,
-			refund_params: Option<ChannelRefundParametersDecoded>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -1625,7 +1630,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					T::FetchesTransfersLimitProvider::maybe_fetches_limit();
 				// Filter out disabled assets and requests that are not ready to be egressed.
 				requests
-					.extract_if(|request| {
+					.extract_if(.., |request| {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
 							match request {
 								FetchOrTransfer::Fetch {
@@ -1737,7 +1742,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
-				ccms.extract_if(|ccm| {
+				ccms.extract_if(.., |ccm| {
 					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) &&
 						Self::should_fetch_or_transfer(&mut maybe_no_of_transfers_remaining)
 				})
@@ -2205,8 +2210,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			};
 
 		if let Some(metadata) = deposit_metadata.clone() {
-			if T::CcmValidityChecker::check_and_decode(&metadata.channel_metadata, output_asset)
-				.is_err()
+			if T::CcmValidityChecker::check_and_decode(
+				&metadata.channel_metadata,
+				output_asset,
+				destination_address,
+			)
+			.is_err()
 			{
 				log::warn!("Failed to process vault swap due to invalid CCM metadata");
 				return;
@@ -2236,7 +2245,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_asset: output_asset,
 			destination_address: destination_address_internal,
 			broker_fees,
-			refund_params,
+			refund_params: refund_params
+				.map(|params| params.map_address(|address| address.into_foreign_chain_address())),
 			dca_params,
 			channel_metadata,
 		};
@@ -2504,6 +2514,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if T::CcmValidityChecker::check_and_decode(
 				&metadata.channel_metadata,
 				destination_asset,
+				destination_address,
 			)
 			.is_err()
 			{
@@ -2545,7 +2556,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_address: destination_address_internal,
 			broker_fees,
 			channel_metadata: channel_metadata.clone(),
-			refund_params: refund_params.clone(),
+			refund_params: refund_params
+				.map(|params| params.map_address(|address| address.into_foreign_chain_address())),
 			dca_params: dca_params.clone(),
 		};
 
@@ -2705,14 +2717,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		available_amount: TargetChainAmount<T, I>,
 		origin: &DepositOrigin<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
-		if matches!(origin, &DepositOrigin::DepositChannel { .. }) {
-			Self::withhold_ingress_or_egress_fee(IngressOrEgress::Ingress, asset, available_amount)
-		} else {
-			// No ingress fee for vault swaps.
-			AmountAndFeesWithheld {
-				amount_after_fees: available_amount,
-				fees_withheld: 0u32.into(),
-			}
+		match origin {
+			DepositOrigin::DepositChannel { .. } => Self::withhold_ingress_or_egress_fee(
+				IngressOrEgress::IngressDepositChannel,
+				asset,
+				available_amount,
+			),
+			DepositOrigin::Vault { .. } => Self::withhold_ingress_or_egress_fee(
+				IngressOrEgress::IngressVaultSwap,
+				asset,
+				available_amount,
+			),
 		}
 	}
 
@@ -2728,14 +2743,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		available_amount: TargetChainAmount<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
 		let fee_estimate = match ingress_or_egress {
-			IngressOrEgress::Ingress => T::ChainTracking::estimate_ingress_fee(asset),
-			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
-			IngressOrEgress::EgressCcm{gas_budget, message_length} =>
-			T::ChainTracking::estimate_ccm_fee(asset, gas_budget, message_length)
+			IngressOrEgress::IngressDepositChannel => T::ChainTracking::estimate_ingress_fee(asset),
+			IngressOrEgress::IngressVaultSwap => T::ChainTracking::estimate_ingress_fee_vault_swap()
 			.unwrap_or_else(|| {
-				log::warn!("Unable to get the ccm fee estimate for ${gas_budget:?} ${asset:?}. Ignoring ccm egress fees.");
+				log::warn!("Unable to get the ingress fee for Vault swaps for ${asset:?}. Ignoring ingres fees.");
 				<T::TargetChain as Chain>::ChainAmount::zero()
-			})
+			}),
+			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
+			IngressOrEgress::EgressCcm { gas_budget, message_length } =>
+				T::ChainTracking::estimate_ccm_fee(asset, gas_budget, message_length)
+				.unwrap_or_else(|| {
+					log::warn!("Unable to get the ccm fee estimate for ${gas_budget:?} ${asset:?}. Ignoring ccm egress fees.");
+					<T::TargetChain as Chain>::ChainAmount::zero()
+				})
 		};
 
 		let fees_withheld = if asset == <T::TargetChain as Chain>::GAS_ASSET {

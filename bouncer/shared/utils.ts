@@ -878,14 +878,8 @@ export async function observeSolanaCcmEvent(
               throw new Error(`Expected all additional accounts to be read-only`);
             }
 
-            if (sourceAddress !== null) {
-              const hexSourceAddress = '0x' + (event.data.source_address as Buffer).toString('hex');
-              if (hexSourceAddress !== sourceAddress) {
-                throw new Error(
-                  `Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`,
-                );
-              }
-            } else if (event.data.source_address.toString() !== Buffer.from([]).toString()) {
+            // Expect always empty bytes as source address. This will change when we have versioned transactions.
+            if (event.data.source_address.toString() !== Buffer.from([]).toString()) {
               throw new Error(
                 `Unexpected source address: ${event.data.source_address}, expecting empty ${Buffer.from([0])}`,
               );

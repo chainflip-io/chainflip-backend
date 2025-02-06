@@ -14,7 +14,7 @@ use cf_chains::{
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
 		SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParametersDecoded,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
 	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
@@ -27,8 +27,8 @@ use frame_support::{
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
 use pallet_cf_elections::{
-	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
-	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
+	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote},
+	AuthorityVoteOf, ElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{
 	DepositFailedReason, DepositWitness, FetchOrTransfer, VaultDepositWitness,
@@ -58,17 +58,17 @@ const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
-const REFUND_PARAMS: ChannelRefundParametersDecoded = ChannelRefundParametersDecoded {
+const REFUND_PARAMS: ChannelRefundParameters<SolAddress> = ChannelRefundParameters {
 	retry_duration: 0,
-	refund_address: ForeignChainAddress::Sol(FALLBACK_ADDRESS),
+	refund_address: FALLBACK_ADDRESS,
 	min_price: sp_core::U256::zero(),
 };
 
 type SolanaElectionVote = BoundedBTreeMap<
-	CompositeElectionIdentifierOf<
+	ElectionIdentifierOf<
 		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
 	>,
-	CompositeAuthorityVoteOf<
+	AuthorityVoteOf<
 		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
 	>,
 	ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
@@ -664,9 +664,10 @@ fn solana_resigning() {
 					.finalize_and_serialize().unwrap();
 
 				// Compare against a manually crafted transaction that works with the current test values and
-				// agg_key. Not comparing the first byte (number of signatures) nor the signature itself
-				let expected_serialized_tx = hex_literal::hex!("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000306f68d61e8d834034cf583f486f2a08ef53ce4134ed41c4d88f4720c39518745b617eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192cf1dd130e0341d60a0771ac40ea7900106a423354d2ecd6e609bd5e2ed833dec00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090364000000000000000400050284030000030200020c020000008096980000000000").to_vec();
+				// agg_key. Not the signature itself
+				let expected_serialized_tx = hex_literal::hex!("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000306f68d61e8d834034cf583f486f2a08ef53ce4134ed41c4d88f4720c39518745b617eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192cf1dd130e0341d60a0771ac40ea7900106a423354d2ecd6e609bd5e2ed833dec00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090380969800000000000400050284030000030200020c020000008096980000000000").to_vec();
 				assert_eq!(&serialized_tx[1+64..], &expected_serialized_tx[1+64..]);
+				assert_eq!(&serialized_tx[0], &expected_serialized_tx[0]);
 			} else {
 				panic!("RequiresSignatureRefresh is False");
 			}
@@ -739,7 +740,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 
 			// Submit vote to witness: transaction success, but execution failure
 			let vote: SolanaElectionVote = BTreeMap::from_iter([(election_id,
-				AuthorityVote::Vote(CompositeVote::EE(TransactionSuccessDetails {
+				AuthorityVote::Vote(CompositeVote::D(TransactionSuccessDetails {
 					tx_fee: 1_000,
 					transaction_successful: false,
 				}))

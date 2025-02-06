@@ -35,6 +35,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 CorruptStorageError,
                 electoral_system::{
                     ElectoralSystem,
+                    ElectoralSystemTypes,
                     ConsensusVote,
                     ElectionReadAccess,
                     ElectionWriteAccess,
@@ -42,14 +43,13 @@ macro_rules! generate_electoral_system_tuple_impls {
                     ElectoralWriteAccess,
                     ConsensusVotes,
                     ElectionIdentifierOf,
+                    PartialVoteOf,
+                    VoteOf,
                     ConsensusStatus,
                 },
-                electoral_system_runner::{ElectoralSystemRunner, CompositeAuthorityVoteOf, RunnerStorageAccessTrait,
-                    CompositeVotePropertiesOf, CompositeConsensusVotes, CompositeElectionIdentifierOf, CompositeConsensusVote},
-                vote_storage::{
-                    AuthorityVote,
-                    VoteStorage
-                },
+                electoral_system_runner::{ElectoralSystemRunner, RunnerStorageAccessTrait},
+                electoral_system::{AuthorityVoteOf, VotePropertiesOf},
+                vote_storage::AuthorityVote,
                 ElectionIdentifier,
             };
             use crate::vote_storage::composite::$module::{CompositeVoteProperties, CompositeVote, CompositePartialVote};
@@ -98,7 +98,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                         Vec<ElectionIdentifierOf<$electoral_system>>,
                     )*)
                 ) -> R>(
-                    election_identifiers: Vec<CompositeElectionIdentifierOf<Self>>,
+                    election_identifiers: Vec<ElectionIdentifierOf<Self>>,
                     f: F,
                 ) -> R {
                     $(let mut $electoral_system_alt_name_0 = Vec::new();)*
@@ -117,25 +117,29 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
             }
 
-            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> ElectoralSystemRunner for CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H> {
+            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> ElectoralSystemTypes for CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H> {
                 type ValidatorId = ValidatorId;
-                type ElectoralUnsynchronisedState = ($(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedState,)*);
-                type ElectoralUnsynchronisedStateMapKey = CompositeElectoralUnsynchronisedStateMapKey<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,)*>;
-                type ElectoralUnsynchronisedStateMapValue = CompositeElectoralUnsynchronisedStateMapValue<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,)*>;
-                type ElectoralUnsynchronisedSettings = ($(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedSettings,)*);
-                type ElectoralSettings = ($(<$electoral_system as ElectoralSystem>::ElectoralSettings,)*);
+                type ElectoralUnsynchronisedState = ($(<$electoral_system as ElectoralSystemTypes>::ElectoralUnsynchronisedState,)*);
+                type ElectoralUnsynchronisedStateMapKey = CompositeElectoralUnsynchronisedStateMapKey<$(<$electoral_system as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,)*>;
+                type ElectoralUnsynchronisedStateMapValue = CompositeElectoralUnsynchronisedStateMapValue<$(<$electoral_system as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue,)*>;
+                type ElectoralUnsynchronisedSettings = ($(<$electoral_system as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,)*);
+                type ElectoralSettings = ($(<$electoral_system as ElectoralSystemTypes>::ElectoralSettings,)*);
 
-                type ElectionIdentifierExtra = CompositeElectionIdentifierExtra<$(<$electoral_system as ElectoralSystem>::ElectionIdentifierExtra,)*>;
-                type ElectionProperties = CompositeElectionProperties<$(<$electoral_system as ElectoralSystem>::ElectionProperties,)*>;
-                type ElectionState = CompositeElectionState<$(<$electoral_system as ElectoralSystem>::ElectionState,)*>;
-                type Vote = ($(<$electoral_system as ElectoralSystem>::Vote,)*);
-                type Consensus = CompositeConsensus<$(<$electoral_system as ElectoralSystem>::Consensus,)*>;
+                type ElectionIdentifierExtra = CompositeElectionIdentifierExtra<$(<$electoral_system as ElectoralSystemTypes>::ElectionIdentifierExtra,)*>;
+                type ElectionProperties = CompositeElectionProperties<$(<$electoral_system as ElectoralSystemTypes>::ElectionProperties,)*>;
+                type ElectionState = CompositeElectionState<$(<$electoral_system as ElectoralSystemTypes>::ElectionState,)*>;
+                type VoteStorage = ($(<$electoral_system as ElectoralSystemTypes>::VoteStorage,)*);
+                type Consensus = CompositeConsensus<$(<$electoral_system as ElectoralSystemTypes>::Consensus,)*>;
+                type OnFinalizeContext = ();
+                type OnFinalizeReturn = ();
+            }
 
+            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> ElectoralSystemRunner for CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H> {
                 fn is_vote_desired(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
                     current_vote: Option<(
-                        CompositeVotePropertiesOf<Self>,
-                        CompositeAuthorityVoteOf<Self>,
+                        VotePropertiesOf<Self>,
+                        AuthorityVoteOf<Self>,
                     )>,
                 ) -> Result<bool, CorruptStorageError> {
                     match *election_identifier.extra() {
@@ -161,8 +165,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
 
                 fn is_vote_needed(
-                    (current_vote_properties, current_partial_vote, current_authority_vote): (CompositeVotePropertiesOf<Self>, <Self::Vote as VoteStorage>::PartialVote, CompositeAuthorityVoteOf<Self>),
-                    (proposed_partial_vote, proposed_vote): (<Self::Vote as VoteStorage>::PartialVote, <Self::Vote as VoteStorage>::Vote),
+                    (current_vote_properties, current_partial_vote, current_authority_vote): (VotePropertiesOf<Self>, PartialVoteOf<Self>, AuthorityVoteOf<Self>),
+                    (proposed_partial_vote, proposed_vote): (PartialVoteOf<Self>, VoteOf<Self>),
                 ) -> bool {
                     match (current_vote_properties, current_partial_vote, current_authority_vote, proposed_partial_vote, proposed_vote) {
                         $(
@@ -198,11 +202,11 @@ macro_rules! generate_electoral_system_tuple_impls {
                 fn generate_vote_properties(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
                     previous_vote: Option<(
-                        CompositeVotePropertiesOf<Self>,
-                        CompositeAuthorityVoteOf<Self>,
+                        VotePropertiesOf<Self>,
+                        AuthorityVoteOf<Self>,
                     )>,
-                    partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
-                ) -> Result<CompositeVotePropertiesOf<Self>, CorruptStorageError> {
+                    partial_vote: &PartialVoteOf<Self>,
+                ) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
                     match (*election_identifier.extra(), partial_vote) {
                         $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(partial_vote)) => {
                             <$electoral_system as ElectoralSystem>::generate_vote_properties(
@@ -240,7 +244,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 fn check_consensus(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
                     previous_consensus: Option<&Self::Consensus>,
-                    consensus_votes: CompositeConsensusVotes<Self>,
+                    consensus_votes: ConsensusVotes<Self>,
                 ) -> Result<Option<Self::Consensus>, CorruptStorageError> {
                     Ok(match *election_identifier.extra() {
                         $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
@@ -253,7 +257,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                                     }
                                 }).transpose()?,
                                 ConsensusVotes {
-                                    votes: consensus_votes.votes.into_iter().map(|CompositeConsensusVote { vote, validator_id }| {
+                                    votes: consensus_votes.votes.into_iter().map(|ConsensusVote { vote, validator_id }| {
                                         if let Some((properties, vote)) = vote {
                                             match (properties, vote) {
                                                 (
@@ -379,7 +383,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             type ElectionReadAccess = DerivedElectionAccess<tags::$current, $current, StorageAccess>;
 
             fn election(
-                id: ElectionIdentifier<<$current as ElectoralSystem>::ElectionIdentifierExtra>,
+                id: ElectionIdentifier<<$current as ElectoralSystemTypes>::ElectionIdentifierExtra>,
             ) -> Self::ElectionReadAccess {
                 DerivedElectionAccess::<tags::$current, _, StorageAccess>::new(id)
             }
@@ -459,4 +463,4 @@ macro_rules! generate_electoral_system_tuple_impls {
     };
 }
 
-generate_electoral_system_tuple_impls!(tuple_7_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0), (FF, F0), (GG, G0)));
+generate_electoral_system_tuple_impls!(tuple_6_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0), (FF, F0)));

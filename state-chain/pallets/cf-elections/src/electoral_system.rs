@@ -11,24 +11,24 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct ConsensusVote<ES: ElectoralSystem> {
+pub struct ConsensusVote<ES: ElectoralSystemTypes> {
 	// If the validator hasn't voted, they will get a None.
-	pub vote: Option<(VotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote)>,
+	pub vote: Option<(VotePropertiesOf<ES>, VoteOf<ES>)>,
 	pub validator_id: ES::ValidatorId,
 }
 
-pub struct ConsensusVotes<ES: ElectoralSystem> {
+pub struct ConsensusVotes<ES: ElectoralSystemTypes> {
 	pub votes: Vec<ConsensusVote<ES>>,
 }
 
-impl<ES: ElectoralSystem> ConsensusVotes<ES> {
+impl<ES: ElectoralSystemTypes> ConsensusVotes<ES> {
 	// We expect that the number of votes is equal to the authority count.
 	pub fn num_authorities(&self) -> AuthorityCount {
 		self.votes.len() as AuthorityCount
 	}
 
 	// Returns all votes of those who actually voted.
-	pub fn active_votes(self) -> Vec<<ES::Vote as VoteStorage>::Vote> {
+	pub fn active_votes(self) -> Vec<VoteOf<ES>> {
 		self.votes
 			.into_iter()
 			.filter_map(|ConsensusVote { vote, .. }| vote.map(|v| v.1))
@@ -36,12 +36,8 @@ impl<ES: ElectoralSystem> ConsensusVotes<ES> {
 	}
 }
 
-/// A trait that describes a method of coming to consensus on some aspect of an external chain, and
-/// how that consensus should be processed.
-///
-/// Implementations of this trait should *NEVER* directly access the storage of the elections
-/// pallet, and only access it through the passed-in accessors.
-pub trait ElectoralSystem: 'static + Sized {
+/// A trait for defining all relevant types of an electoral system.
+pub trait ElectoralSystemTypes: 'static + Sized {
 	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
 
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
@@ -96,7 +92,7 @@ pub trait ElectoralSystem: 'static + Sized {
 
 	/// A description of the validator's view of the election's topic. For example a list of all
 	/// ingresses the validator has observed in the block the election is about.
-	type Vote: VoteStorage;
+	type VoteStorage: VoteStorage;
 
 	/// This is the information that results from consensus. Typically this will be the same as the
 	/// `Vote` type, but with more complex consensus models the result of an election may not be
@@ -114,7 +110,37 @@ pub trait ElectoralSystem: 'static + Sized {
 	/// Custom return of the `on_finalize` callback. This can be used to communicate any information
 	/// you want to the caller.
 	type OnFinalizeReturn;
+}
 
+#[allow(type_alias_bounds)]
+pub type ElectionIdentifierOf<E: ElectoralSystemTypes> =
+	ElectionIdentifier<<E as ElectoralSystemTypes>::ElectionIdentifierExtra>;
+#[allow(type_alias_bounds)]
+pub type AuthorityVoteOf<E: ElectoralSystemTypes> = AuthorityVote<PartialVoteOf<E>, VoteOf<E>>;
+#[allow(type_alias_bounds)]
+pub type VoteOf<E: ElectoralSystemTypes> =
+	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::Vote;
+#[allow(type_alias_bounds)]
+pub type PartialVoteOf<E: ElectoralSystemTypes> =
+	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::PartialVote;
+#[allow(type_alias_bounds)]
+pub type VoteStorageOf<E: ElectoralSystemTypes> = <E as ElectoralSystemTypes>::VoteStorage;
+#[allow(type_alias_bounds)]
+pub type IndividualComponentOf<E: ElectoralSystemTypes> =
+	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::IndividualComponent;
+#[allow(type_alias_bounds)]
+pub type BitmapComponentOf<E: ElectoralSystemTypes> =
+	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::BitmapComponent;
+#[allow(type_alias_bounds)]
+pub type VotePropertiesOf<E: ElectoralSystemTypes> =
+	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::Properties;
+
+/// A trait that describes a method of coming to consensus on some aspect of an external chain, and
+/// how that consensus should be processed.
+///
+/// Implementations of this trait should *NEVER* directly access the storage of the elections
+/// pallet, and only access it through the passed-in accessors.
+pub trait ElectoralSystem: ElectoralSystemTypes {
 	/// This is not used by the pallet, but is used to tell a validator that it should attempt
 	/// to vote in a given Election. Validators are expected to call this indirectly via RPC once
 	/// per state-chain block, for each active election.
@@ -128,15 +154,8 @@ pub trait ElectoralSystem: 'static + Sized {
 	/// This is not used by the pallet, but is used to tell a validator if they should submit vote.
 	/// This is a way to decrease the amount of extrinsics a validator needs to send.
 	fn is_vote_needed(
-		_current_vote: (
-			VotePropertiesOf<Self>,
-			<Self::Vote as VoteStorage>::PartialVote,
-			AuthorityVoteOf<Self>,
-		),
-		_proposed_vote: (
-			<Self::Vote as VoteStorage>::PartialVote,
-			<Self::Vote as VoteStorage>::Vote,
-		),
+		_current_vote: (VotePropertiesOf<Self>, PartialVoteOf<Self>, AuthorityVoteOf<Self>),
+		_proposed_vote: (PartialVoteOf<Self>, VoteOf<Self>),
 	) -> bool {
 		true
 	}
@@ -150,7 +169,7 @@ pub trait ElectoralSystem: 'static + Sized {
 	fn generate_vote_properties(
 		election_identifier: ElectionIdentifierOf<Self>,
 		previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
-		vote: &<Self::Vote as VoteStorage>::PartialVote,
+		vote: &PartialVoteOf<Self>,
 	) -> Result<VotePropertiesOf<Self>, CorruptStorageError>;
 
 	/// This is called during the pallet's `on_finalize` callback, if elections aren't paused and
@@ -177,24 +196,6 @@ pub trait ElectoralSystem: 'static + Sized {
 	) -> Result<Option<Self::Consensus>, CorruptStorageError>;
 }
 
-#[allow(type_alias_bounds)]
-pub type ElectionIdentifierOf<E: ElectoralSystem> =
-	ElectionIdentifier<<E as ElectoralSystem>::ElectionIdentifierExtra>;
-#[allow(type_alias_bounds)]
-pub type AuthorityVoteOf<E: ElectoralSystem> = AuthorityVote<
-	<<E as ElectoralSystem>::Vote as VoteStorage>::PartialVote,
-	<<E as ElectoralSystem>::Vote as VoteStorage>::Vote,
->;
-#[allow(type_alias_bounds)]
-pub type IndividualComponentOf<E: ElectoralSystem> =
-	<<E as ElectoralSystem>::Vote as VoteStorage>::IndividualComponent;
-#[allow(type_alias_bounds)]
-pub type BitmapComponentOf<E: ElectoralSystem> =
-	<<E as ElectoralSystem>::Vote as VoteStorage>::BitmapComponent;
-#[allow(type_alias_bounds)]
-pub type VotePropertiesOf<E: ElectoralSystem> =
-	<<E as ElectoralSystem>::Vote as VoteStorage>::Properties;
-
 mod access {
 	//! This module contains a set of interfaces used to access the details of elections. These
 	//! traits abstract the underlying substrate storage items, thereby allowing ElectoralSystem's
@@ -213,7 +214,7 @@ mod access {
 	//! to allow the pallet to at restrict write access when it should be done, to help ensure
 	//! correct ElectoralSystem implementation.
 
-	use super::{CorruptStorageError, ElectionIdentifierOf, ElectoralSystem};
+	use super::{CorruptStorageError, ElectionIdentifierOf, ElectoralSystem, ElectoralSystemTypes};
 
 	#[cfg(test)]
 	use codec::{Decode, Encode};
@@ -278,18 +279,21 @@ mod access {
 		fn settings(
 			&self,
 		) -> Result<
-			<Self::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+			<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralSettings,
 			CorruptStorageError,
 		>;
 		fn properties(
 			&self,
 		) -> Result<
-			<Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+			<Self::ElectoralSystem as ElectoralSystemTypes>::ElectionProperties,
 			CorruptStorageError,
 		>;
 		fn state(
 			&self,
-		) -> Result<<Self::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>;
+		) -> Result<
+			<Self::ElectoralSystem as ElectoralSystemTypes>::ElectionState,
+			CorruptStorageError,
+		>;
 
 		fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem>;
 	}
@@ -302,7 +306,7 @@ mod access {
 		/// correctly recalculate the consensus if needed.
 		fn set_state(
 			&self,
-			state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
+			state: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionState,
 		) -> Result<(), CorruptStorageError>;
 		fn clear_votes(&self);
 		fn delete(self);
@@ -319,8 +323,8 @@ mod access {
 		/// will be invalidated by this.
 		fn refresh(
 			&mut self,
-			new_extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
-			properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+			new_extra: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionIdentifierExtra,
+			properties: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionProperties,
 		) -> Result<(), CorruptStorageError>;
 
 		/// This returns the current consensus which will always be up to date with the latest
@@ -329,7 +333,7 @@ mod access {
 		fn check_consensus(
 			&self,
 		) -> Result<
-			ConsensusStatus<<Self::ElectoralSystem as ElectoralSystem>::Consensus>,
+			ConsensusStatus<<Self::ElectoralSystem as ElectoralSystemTypes>::Consensus>,
 			CorruptStorageError,
 		>;
 	}
@@ -341,18 +345,18 @@ mod access {
 
 		fn election(id: ElectionIdentifierOf<Self::ElectoralSystem>) -> Self::ElectionReadAccess;
 		fn unsynchronised_settings() -> Result<
-			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
+			<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
 			CorruptStorageError,
 		>;
 		fn unsynchronised_state() -> Result<
-			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+			<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 			CorruptStorageError,
 		>;
 		fn unsynchronised_state_map(
-			key: &<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
+			key: &<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,
 		) -> Result<
 			Option<
-				<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
+				<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue,
 			>,
 			CorruptStorageError,
 		>;
@@ -363,22 +367,22 @@ mod access {
 		type ElectionWriteAccess: ElectionWriteAccess<ElectoralSystem = Self::ElectoralSystem>;
 
 		fn new_election(
-			extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
-			properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
-			state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
+			extra: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionIdentifierExtra,
+			properties: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionProperties,
+			state: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionState,
 		) -> Result<Self::ElectionWriteAccess, CorruptStorageError>;
 		fn election_mut(
 			id: ElectionIdentifierOf<Self::ElectoralSystem>,
 		) -> Self::ElectionWriteAccess;
 		fn set_unsynchronised_state(
-			unsynchronised_state: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+			unsynchronised_state: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 		) -> Result<(), CorruptStorageError>;
 
 		/// Inserts or removes a value from the unsynchronised state map of the electoral system.
 		fn set_unsynchronised_state_map(
-			key: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
+			key: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,
 			value: Option<
-				<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
+				<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue,
 			>,
 		);
 
@@ -389,11 +393,11 @@ mod access {
 		fn mutate_unsynchronised_state<
 			T,
 			F: for<'a> FnOnce(
-				&'a mut <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+				&'a mut <Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 			) -> Result<T, CorruptStorageError>,
 		>(
 			f: F,
-		) -> Result<T, CorruptStorageError> {
+		) -> Result<T, CorruptStorageError>{
 			let mut unsynchronised_state = Self::unsynchronised_state()?;
 			let t = f(&mut unsynchronised_state)?;
 			Self::set_unsynchronised_state(unsynchronised_state)?;

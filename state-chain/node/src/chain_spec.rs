@@ -405,7 +405,6 @@ pub fn inner_cf_development_config(
 			devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
 			SolanaElectionsConfig {
 				option_initial_state: Some(solana_elections::initial_state(
-					100_000,
 					sol_vault_program,
 					sol_usdc_token_mint_pubkey,
 					sol_swap_endpoint_program_data_account,
@@ -574,7 +573,6 @@ macro_rules! network_spec {
 						AUCTION_BID_CUTOFF_PERCENTAGE,
 						SolanaElectionsConfig {
 							option_initial_state: Some(solana_elections::initial_state(
-								100000,
 								sol_vault_program,
 								sol_usdc_token_mint_pubkey,
 								sol_swap_endpoint_program_data_account,

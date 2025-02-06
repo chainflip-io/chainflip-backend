@@ -1,10 +1,11 @@
 use crate::{
-	electoral_system::ConsensusStatus,
-	electoral_system_runner::{CompositeConsensusVotes, RunnerStorageAccessTrait},
+	electoral_system::{
+		AuthorityVoteOf, ConsensusStatus, ConsensusVotes, ElectionIdentifierOf,
+		ElectoralSystemTypes, PartialVoteOf, VoteOf, VotePropertiesOf,
+	},
+	electoral_system_runner::{ElectoralSystemRunner, RunnerStorageAccessTrait},
 	mock::Test,
-	vote_storage::{self, VoteStorage},
-	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, CompositeVotePropertiesOf,
-	CorruptStorageError, ElectoralSystemRunner, RunnerStorageAccess, UniqueMonotonicIdentifier,
+	vote_storage, CorruptStorageError, RunnerStorageAccess, UniqueMonotonicIdentifier,
 };
 use cf_primitives::AuthorityCount;
 use cf_traits::Chainflip;
@@ -115,7 +116,7 @@ impl MockElectoralSystemRunner {
 	}
 }
 
-impl ElectoralSystemRunner for MockElectoralSystemRunner {
+impl ElectoralSystemTypes for MockElectoralSystemRunner {
 	type ValidatorId = <Test as Chainflip>::ValidatorId;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = ();
@@ -127,20 +128,25 @@ impl ElectoralSystemRunner for MockElectoralSystemRunner {
 	type ElectionProperties = ();
 	type ElectionState = ();
 	// TODO: mock the vote storage
-	type Vote =
+	type VoteStorage =
 		vote_storage::individual::Individual<(), vote_storage::individual::shared::Shared<()>>;
 	type Consensus = AuthorityCount;
 
+	type OnFinalizeContext = ();
+	type OnFinalizeReturn = ();
+}
+
+impl ElectoralSystemRunner for MockElectoralSystemRunner {
 	fn generate_vote_properties(
-		_election_identifier: CompositeElectionIdentifierOf<Self>,
-		_previous_vote: Option<(CompositeVotePropertiesOf<Self>, CompositeAuthorityVoteOf<Self>)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+		_election_identifier: ElectionIdentifierOf<Self>,
+		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_vote: &PartialVoteOf<Self>,
 	) -> Result<(), CorruptStorageError> {
 		Ok(())
 	}
 
 	fn on_finalize(
-		election_identifiers: Vec<CompositeElectionIdentifierOf<Self>>,
+		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
 	) -> Result<(), CorruptStorageError> {
 		for id in election_identifiers {
 			let consensus =
@@ -155,9 +161,9 @@ impl ElectoralSystemRunner for MockElectoralSystemRunner {
 	}
 
 	fn check_consensus(
-		_election_identifier: CompositeElectionIdentifierOf<Self>,
+		_election_identifier: ElectionIdentifierOf<Self>,
 		_previous_consensus: Option<&Self::Consensus>,
-		consensus_votes: CompositeConsensusVotes<Self>,
+		consensus_votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		Ok(if Self::should_assume_consensus() {
 			Some(consensus_votes.active_votes().len() as AuthorityCount)
@@ -167,22 +173,15 @@ impl ElectoralSystemRunner for MockElectoralSystemRunner {
 	}
 
 	fn is_vote_desired(
-		_election_identifier: CompositeElectionIdentifierOf<Self>,
-		_current_vote: Option<(CompositeVotePropertiesOf<Self>, CompositeAuthorityVoteOf<Self>)>,
+		_election_identifier: ElectionIdentifierOf<Self>,
+		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(Self::vote_desired())
 	}
 
 	fn is_vote_needed(
-		_current_vote: (
-			CompositeVotePropertiesOf<Self>,
-			<Self::Vote as VoteStorage>::PartialVote,
-			CompositeAuthorityVoteOf<Self>,
-		),
-		_proposed_vote: (
-			<Self::Vote as VoteStorage>::PartialVote,
-			<Self::Vote as VoteStorage>::Vote,
-		),
+		_current_vote: (VotePropertiesOf<Self>, PartialVoteOf<Self>, AuthorityVoteOf<Self>),
+		_proposed_vote: (PartialVoteOf<Self>, VoteOf<Self>),
 	) -> bool {
 		Self::vote_needed()
 	}

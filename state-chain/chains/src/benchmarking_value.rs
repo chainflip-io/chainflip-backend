@@ -325,7 +325,7 @@ macro_rules! impl_bounded_vec_benchmark_value {
 }
 
 impl_bounded_vec_benchmark_value!(u8, 15000);
-impl_bounded_vec_benchmark_value!(u8, 1000);
+impl_bounded_vec_benchmark_value!(u8, 3000);
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for ForeignChain {

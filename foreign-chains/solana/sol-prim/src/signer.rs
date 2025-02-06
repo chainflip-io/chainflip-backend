@@ -1,7 +1,4 @@
-use crate::sol::{
-	sol_tx_core::{signer::presigner::PresignerError, transaction::TransactionError},
-	SolPubkey, SolSignature,
-};
+use crate::{errors::TransactionError, signer::presigner::PresignerError, Pubkey, Signature};
 
 use thiserror::Error;
 
@@ -48,19 +45,19 @@ pub enum SignerError {
 /// `Transaction` signing interfaces
 pub trait Signer {
 	/// Infallibly gets the implementor's public key. Returns the all-zeros
-	/// `SolPubkey` if the implementor has none.
-	fn pubkey(&self) -> SolPubkey {
+	/// `Pubkey` if the implementor has none.
+	fn pubkey(&self) -> Pubkey {
 		self.try_pubkey().unwrap_or_default()
 	}
 	/// Fallibly gets the implementor's public key
-	fn try_pubkey(&self) -> Result<SolPubkey, SignerError>;
+	fn try_pubkey(&self) -> Result<Pubkey, SignerError>;
 	/// Infallibly produces an Ed25519 signature over the provided `message`
 	/// bytes. Returns the all-zeros `Signature` if signing is not possible.
-	fn sign_message(&self, message: &[u8]) -> SolSignature {
+	fn sign_message(&self, message: &[u8]) -> Signature {
 		self.try_sign_message(message).unwrap_or_default()
 	}
 	/// Fallibly produces an Ed25519 signature over the provided `message` bytes.
-	fn try_sign_message(&self, message: &[u8]) -> Result<SolSignature, SignerError>;
+	fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError>;
 	/// Whether the implementation requires user interaction to sign
 	fn is_interactive(&self) -> bool;
 }
@@ -77,11 +74,11 @@ pub mod presigner {
 
 pub struct TestSigners<S>(pub Vec<S>);
 impl<S: Signer> TestSigners<S> {
-	pub fn pubkeys(&self) -> Vec<SolPubkey> {
+	pub fn pubkeys(&self) -> Vec<Pubkey> {
 		self.0.iter().map(|keypair| keypair.pubkey()).collect()
 	}
 
-	pub fn try_pubkeys(&self) -> Result<Vec<SolPubkey>, SignerError> {
+	pub fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError> {
 		let mut pubkeys = Vec::new();
 		for keypair in self.0.iter() {
 			pubkeys.push(keypair.try_pubkey()?);
@@ -89,11 +86,11 @@ impl<S: Signer> TestSigners<S> {
 		Ok(pubkeys)
 	}
 
-	pub fn sign_message(&self, message: &[u8]) -> Vec<SolSignature> {
+	pub fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
 		self.0.iter().map(|keypair| keypair.sign_message(message)).collect()
 	}
 
-	pub fn try_sign_message(&self, message: &[u8]) -> Result<Vec<SolSignature>, SignerError> {
+	pub fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError> {
 		let mut signatures = Vec::new();
 		for keypair in self.0.iter() {
 			signatures.push(keypair.try_sign_message(message)?);

@@ -6,7 +6,7 @@ use cf_chains::{
 		deposit_address::DepositAddress, vault_swap_encoding::UtxoEncodedData, ScriptPubkey, Utxo,
 		UtxoId,
 	},
-	ChannelRefundParametersDecoded, ForeignChainAddress,
+	ChannelRefundParameters,
 };
 use cf_primitives::{AccountId, Beneficiary, ChannelId, DcaParameters};
 use cf_utilities::SliceToArray;
@@ -54,7 +54,7 @@ fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 
 fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 	fn data_from_script<const LEN: usize>(script: &ScriptBuf, bytes_to_skip: usize) -> [u8; LEN] {
-		script.bytes().skip(bytes_to_skip).take(LEN).collect_vec().as_array()
+		script.bytes().skip(bytes_to_skip).take(LEN).collect_vec().copy_to_array()
 	}
 
 	let pubkey = if script.is_p2pkh() {
@@ -159,9 +159,9 @@ pub fn try_extract_vault_swap_witness(
 			.collect_vec()
 			.try_into()
 			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
-		refund_params: Some(ChannelRefundParametersDecoded {
+		refund_params: Some(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration.into(),
-			refund_address: ForeignChainAddress::Btc(refund_address),
+			refund_address,
 			min_price,
 		}),
 		dca_params: Some(DcaParameters {
@@ -326,9 +326,9 @@ mod tests {
 				}),
 				affiliate_fees: bounded_vec![MOCK_SWAP_PARAMS.parameters.affiliates[0].into()],
 				deposit_metadata: None,
-				refund_params: Some(ChannelRefundParametersDecoded {
+				refund_params: Some(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
-					refund_address: ForeignChainAddress::Btc(refund_pubkey),
+					refund_address: refund_pubkey,
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),

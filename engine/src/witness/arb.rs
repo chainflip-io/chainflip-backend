@@ -192,7 +192,9 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_id: H256,
-		vault_swap_parameters: Option<VaultSwapParameters>,
+		vault_swap_parameters: Option<
+			VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
+		>,
 	) -> state_chain_runtime::RuntimeCall {
 		let deposit = vault_deposit_witness!(
 			source_asset,

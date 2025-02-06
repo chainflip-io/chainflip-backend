@@ -1,7 +1,8 @@
 use crate::{
 	electoral_system::{
 		ConsensusStatus, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
-		ElectionWriteAccess, ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess,
+		ElectionWriteAccess, ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes,
+		ElectoralWriteAccess,
 	},
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
@@ -31,7 +32,7 @@ macro_rules! impl_read_access {
 			fn settings(
 				&self,
 			) -> Result<
-				<Self::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+				<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralSettings,
 				CorruptStorageError,
 			> {
 				Ok(MockStorageAccess::electoral_settings_for_election::<ES>(self.identifier()))
@@ -40,7 +41,7 @@ macro_rules! impl_read_access {
 			fn properties(
 				&self,
 			) -> Result<
-				<Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+				<Self::ElectoralSystem as ElectoralSystemTypes>::ElectionProperties,
 				CorruptStorageError,
 			> {
 				Ok(MockStorageAccess::election_properties::<ES>(self.identifier()))
@@ -49,7 +50,7 @@ macro_rules! impl_read_access {
 			fn state(
 				&self,
 			) -> Result<
-				<Self::ElectoralSystem as ElectoralSystem>::ElectionState,
+				<Self::ElectoralSystem as ElectoralSystemTypes>::ElectionState,
 				CorruptStorageError,
 			> {
 				Ok(MockStorageAccess::election_state::<ES>(self.identifier()))
@@ -94,7 +95,7 @@ thread_local! {
 impl<ES: ElectoralSystem> ElectionWriteAccess for MockWriteAccess<ES> {
 	fn set_state(
 		&self,
-		state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
+		state: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionState,
 	) -> Result<(), CorruptStorageError> {
 		MockStorageAccess::set_state::<ES>(self.identifier(), state);
 		Ok(())
@@ -107,8 +108,8 @@ impl<ES: ElectoralSystem> ElectionWriteAccess for MockWriteAccess<ES> {
 	}
 	fn refresh(
 		&mut self,
-		new_extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
-		properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+		new_extra: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionIdentifierExtra,
+		properties: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<(), CorruptStorageError> {
 		// Remove the old properties and replace it with the new one.
 		MockStorageAccess::set_election_properties::<ES>(self.identifier(), None);
@@ -122,7 +123,7 @@ impl<ES: ElectoralSystem> ElectionWriteAccess for MockWriteAccess<ES> {
 	fn check_consensus(
 		&self,
 	) -> Result<
-		ConsensusStatus<<Self::ElectoralSystem as ElectoralSystem>::Consensus>,
+		ConsensusStatus<<Self::ElectoralSystem as ElectoralSystemTypes>::Consensus>,
 		CorruptStorageError,
 	> {
 		Ok(MockStorageAccess::consensus_status::<ES>(self.identifier()))
@@ -137,21 +138,23 @@ impl<ES: ElectoralSystem> ElectoralReadAccess for MockAccess<ES> {
 		MockReadAccess { election_identifier: id }
 	}
 	fn unsynchronised_settings() -> Result<
-		<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
+		<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
 		CorruptStorageError,
 	> {
 		Ok(MockStorageAccess::unsynchronised_settings::<ES>())
 	}
 	fn unsynchronised_state() -> Result<
-		<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+		<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 		CorruptStorageError,
 	> {
 		Ok(MockStorageAccess::unsynchronised_state::<ES>())
 	}
 	fn unsynchronised_state_map(
-		key: &<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
+		key: &<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,
 	) -> Result<
-		Option<<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue>,
+		Option<
+			<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue,
+		>,
 		CorruptStorageError,
 	> {
 		Ok(MockStorageAccess::unsynchronised_state_map::<ES>(key))
@@ -162,9 +165,9 @@ impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 	type ElectionWriteAccess = MockWriteAccess<ES>;
 
 	fn new_election(
-		extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
-		properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
-		state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
+		extra: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionIdentifierExtra,
+		properties: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionProperties,
+		state: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectionState,
 	) -> Result<Self::ElectionWriteAccess, CorruptStorageError> {
 		Ok(Self::election_mut(MockStorageAccess::new_election::<ES>(extra, properties, state)))
 	}
@@ -172,7 +175,7 @@ impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 		MockWriteAccess { election_identifier: id }
 	}
 	fn set_unsynchronised_state(
-		unsynchronised_state: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+		unsynchronised_state: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 	) -> Result<(), CorruptStorageError> {
 		MockStorageAccess::set_unsynchronised_state::<ES>(unsynchronised_state);
 		Ok(())
@@ -180,9 +183,9 @@ impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 
 	/// Inserts or removes a value from the unsynchronised state map of the electoral system.
 	fn set_unsynchronised_state_map(
-		key: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
+		key: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,
 		value: Option<
-			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
+			<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue,
 		>,
 	) {
 		MockStorageAccess::set_unsynchronised_state_map::<ES>(key, value);
@@ -243,7 +246,7 @@ impl MockStorageAccess {
 	}
 
 	pub fn set_electoral_settings<ES: ElectoralSystem>(
-		settings: <ES as ElectoralSystem>::ElectoralSettings,
+		settings: <ES as ElectoralSystemTypes>::ElectoralSettings,
 	) {
 		ELECTORAL_SETTINGS.with(|old_settings| {
 			let mut settings_ref = old_settings.borrow_mut();
@@ -260,7 +263,7 @@ impl MockStorageAccess {
 
 	pub fn set_electoral_settings_for_election<ES: ElectoralSystem>(
 		identifier: ElectionIdentifierOf<ES>,
-		settings: <ES as ElectoralSystem>::ElectoralSettings,
+		settings: <ES as ElectoralSystemTypes>::ElectoralSettings,
 	) {
 		ELECTION_SETTINGS.with(|old_settings| {
 			let mut settings_ref = old_settings.borrow_mut();
@@ -270,7 +273,7 @@ impl MockStorageAccess {
 
 	pub fn electoral_settings_for_election<ES: ElectoralSystem>(
 		identifier: ElectionIdentifierOf<ES>,
-	) -> <ES as ElectoralSystem>::ElectoralSettings {
+	) -> <ES as ElectoralSystemTypes>::ElectoralSettings {
 		ELECTION_SETTINGS.with(|settings| {
 			let settings_ref = settings.borrow();
 			settings_ref
@@ -464,9 +467,9 @@ impl MockStorageAccess {
 	}
 
 	pub fn new_election<ES: ElectoralSystem>(
-		extra: <ES as ElectoralSystem>::ElectionIdentifierExtra,
-		properties: <ES as ElectoralSystem>::ElectionProperties,
-		state: <ES as ElectoralSystem>::ElectionState,
+		extra: <ES as ElectoralSystemTypes>::ElectionIdentifierExtra,
+		properties: <ES as ElectoralSystemTypes>::ElectionProperties,
+		state: <ES as ElectoralSystemTypes>::ElectionState,
 	) -> ElectionIdentifierOf<ES> {
 		let next_umi = Self::next_umi();
 		let election_identifier = ElectionIdentifier::new(next_umi, extra);

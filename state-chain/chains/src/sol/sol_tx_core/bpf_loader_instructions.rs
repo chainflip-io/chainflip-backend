@@ -1,6 +1,8 @@
-use super::{AccountMeta, Instruction, Pubkey, BPF_LOADER_UPGRADEABLE_ID};
+use super::{AccountMeta, Instruction, Pubkey};
 use crate::vec;
+
 use serde::{Deserialize, Serialize};
+use sol_prim::consts::BPF_LOADER_UPGRADEABLE_ID;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum UpgradeableLoaderInstruction {

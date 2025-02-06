@@ -3,10 +3,7 @@ use crate::state_chain_observer::client::{
 	StateChainClient,
 };
 use codec::{Decode, Encode};
-use pallet_cf_elections::{
-	electoral_system_runner::CompositeElectionIdentifierOf, vote_storage::VoteStorage,
-	ElectoralDataFor, ElectoralSystemRunner,
-};
+use pallet_cf_elections::{ElectionIdentifierOf, ElectoralDataFor, VoteOf};
 use state_chain_runtime::SolanaInstance;
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::error;
@@ -28,10 +25,10 @@ where
 	fn filter_votes(
 		&self,
 		proposed_votes: BTreeMap<
-			CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
-			<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
+			ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
+			VoteOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
 		>,
-	) -> impl std::future::Future<Output = BTreeSet<CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>>> + Send + 'static;
+	) -> impl std::future::Future<Output = BTreeSet<ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>>> + Send + 'static;
 }
 
 impl<
@@ -67,10 +64,10 @@ impl<
 	fn filter_votes(
 		&self,
 		proposed_votes: BTreeMap<
-			CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner>,
-			<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
+			ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner>,
+			VoteOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner>,
 		>,
-	) -> impl std::future::Future<Output = BTreeSet<CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner>>> + Send + 'static{
+	) -> impl std::future::Future<Output = BTreeSet<ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner>>> + Send + 'static{
 		let base_rpc_client = self.base_rpc_client.clone();
 		let account_id = self.signed_extrinsic_client.account_id();
 		async move {
@@ -81,7 +78,7 @@ impl<
 				.map_err(anyhow::Error::from)
 				.and_then(|electoral_data| {
 					<BTreeSet<
-						CompositeElectionIdentifierOf<
+						ElectionIdentifierOf<
 							<state_chain_runtime::Runtime as pallet_cf_elections::Config<
 								SolanaInstance,
 							>>::ElectoralSystemRunner,

@@ -357,6 +357,13 @@ impl<T: Config> Pallet<T> {
 						),
 						Error::<T>::DestinationAccountNotLiquidityProvider
 					);
+					ensure!(
+						LiquidityRefundAddress::<T>::contains_key(
+							&destination_account,
+							ForeignChain::from(asset)
+						),
+						Error::<T>::NoLiquidityRefundAddressRegistered
+					);
 					// Sweep earned fees
 					T::PoolApi::sweep(&account_id)?;
 
