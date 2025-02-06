@@ -23,7 +23,7 @@ use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
 	chainflip::bitcoin_elections::{
 		BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingTypes,
-		BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner,
+		BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner, BitcoinLiveness,
 	},
 	BitcoinInstance,
 };
@@ -39,6 +39,9 @@ use crate::{
 };
 use anyhow::Result;
 
+use cf_chains::sol::SolHash;
+use sp_core::H256;
+use state_chain_runtime::chainflip::solana_elections::SolanaLiveness;
 use std::sync::Arc;
 
 use crate::btc::retry_rpc::BtcRetryRpcClient;
@@ -173,6 +176,22 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 	}
 }
 
+#[derive(Clone)]
+pub struct BitcoinLivenessVoter {
+	client: BtcRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinLiveness> for BitcoinLivenessVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinLiveness as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinLiveness as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinLiveness>>, anyhow::Error> {
+		Ok(Some(H256::from_slice(&self.client.block_hash(properties).await.to_byte_array())))
+	}
+}
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: BtcRetryRpcClient,
@@ -196,7 +215,8 @@ where
 					state_chain_client,
 					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
 						BitcoinBlockHeightTrackingVoter { client: client.clone() },
-						BitcoinDepositChannelWitnessingVoter { client },
+						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
+						BitcoinLivenessVoter { client },
 					)),
 				)
 				.continuously_vote()
