@@ -993,7 +993,7 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
 
-	#[method(name = "get_vault_swap_details")]
+	#[method(name = "request_swap_parameter_encoding")]
 	fn cf_request_swap_parameter_encoding(
 		&self,
 		broker: state_chain_runtime::AccountId,
