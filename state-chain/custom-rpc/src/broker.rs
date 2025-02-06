@@ -347,7 +347,9 @@ where
 			.await?;
 
 		match dynamic_events
-			.find_static_event::<cf_static_runtime::swapping::events::PrivateBrokerChannelOpened>()?
+			.find_static_event::<cf_static_runtime::swapping::events::PrivateBrokerChannelOpened>(
+				true,
+			)?
 			.map(|event| event.channel_id)
 		{
 			Some(channel_id) => Ok(channel_id),

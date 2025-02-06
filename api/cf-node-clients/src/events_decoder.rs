@@ -2,9 +2,10 @@ use crate::{cf_static_runtime, subxt_state_chain_config::StateChainConfig};
 use codec::Decode;
 use frame_support::dispatch::DispatchInfo;
 use sp_runtime::{DispatchError, Either};
-use subxt::{events::StaticEvent, ext::subxt_core};
-
-pub type DynamicEvent = subxt::events::EventDetails<StateChainConfig>;
+use subxt::{
+	events::StaticEvent,
+	ext::{scale_decode, subxt_core, subxt_core::events::EventMetadataDetails},
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum DynamicEventError {
@@ -14,6 +15,95 @@ pub enum DynamicEventError {
 	UnexpectedChainBehaviour,
 	#[error("Could not decode event, please consider upgrading your node. {0}")]
 	EventDecodeError(String),
+	#[error("Event unknown to static metadata, it might be because you running an old binary please consider upgrading your node")]
+	EventUnknownToStaticMetadata,
+}
+
+#[derive(Debug, Clone)]
+pub struct DynamicEvent {
+	event: subxt::events::EventDetails<StateChainConfig>,
+	static_metadata: subxt::Metadata,
+}
+
+impl DynamicEvent {
+	pub fn event_static_metadata<E: StaticEvent>(
+		&self,
+	) -> Result<EventMetadataDetails, DynamicEventError> {
+		// Make sure the event is still known to the static metadata. i.e. it was not removed in a
+		// newer runtime version
+		if self.event.variant_name() != E::EVENT {
+			return Err(DynamicEventError::EventUnknownToStaticMetadata);
+		}
+		let pallet_metadata = self
+			.static_metadata
+			.pallet_by_name(E::PALLET)
+			.ok_or_else(|| DynamicEventError::EventUnknownToStaticMetadata)?;
+
+		let variant_metadata = pallet_metadata
+			.event_variant_by_index(self.event.variant_index())
+			.ok_or_else(|| DynamicEventError::EventUnknownToStaticMetadata)?;
+
+		Ok(EventMetadataDetails { pallet: pallet_metadata, variant: variant_metadata })
+	}
+
+	pub fn as_event<E: StaticEvent>(&self) -> Result<Option<E>, DynamicEventError> {
+		self.event.as_event::<E>().map_err(DynamicEventError::from)
+	}
+
+	pub fn as_event_strict<E: StaticEvent>(&self) -> Result<Option<E>, DynamicEventError> {
+		let ev_metadata = self.event.event_metadata();
+		if ev_metadata.pallet.name() == E::PALLET && ev_metadata.variant.name == E::EVENT {
+			let ev_static_metadata = self.event_static_metadata::<E>()?;
+
+			// Decode the fields using the old static metadata
+			let mut bytes = self.event.field_bytes(); // Get the event's field bytes
+			let mut static_fields = ev_static_metadata
+				.variant
+				.fields
+				.iter()
+				.map(|f| scale_decode::Field::new(f.ty.id, f.name.as_deref()));
+
+			let decoded =
+				E::decode_as_fields(&mut bytes, &mut static_fields, self.static_metadata.types())
+					.map_err(subxt_core::Error::from)?;
+
+			// **STRICT NAMES CHECK **: Ensure decoded fields match old static metadata fields
+			let static_field_names: Vec<_> =
+				ev_static_metadata.variant.fields.iter().map(|f| f.name.as_deref()).collect();
+
+			let actual_field_names: Vec<_> =
+				ev_metadata.variant.fields.iter().map(|f| f.name.as_deref()).collect();
+
+			if static_field_names != actual_field_names {
+				return Err(DynamicEventError::EventDecodeError(format!(
+					"{} event strict fields check failed: expected {:?}, got {:?}",
+					E::EVENT,
+					static_field_names,
+					actual_field_names
+				)));
+			}
+
+			// **STRICT BYTE CHECK**: Ensure no extra bytes remain
+			if !bytes.is_empty() {
+				return Err(DynamicEventError::EventDecodeError(format!(
+					"{} event strict byte check failed",
+					E::EVENT
+				)));
+			}
+
+			Ok(Some(decoded))
+		} else {
+			Ok(None)
+		}
+	}
+
+	pub fn pallet_name(&self) -> &str {
+		self.event.pallet_name()
+	}
+
+	pub fn variant_name(&self) -> &str {
+		self.event.variant_name()
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -36,13 +126,13 @@ impl DynamicEvents {
 			.find(|event| event.pallet_name() == pallet_name && event.variant_name() == event_name)
 	}
 
-	pub fn find_static_event<E: StaticEvent>(&self) -> Result<Option<E>, DynamicEventError> {
+	pub fn find_static_event<E: StaticEvent>(
+		&self,
+		is_strict: bool,
+	) -> Result<Option<E>, DynamicEventError> {
 		for event in self.events.iter() {
 			if (event.pallet_name(), event.variant_name()) == (E::PALLET, E::EVENT) {
-				return match event.as_event::<E>() {
-					Ok(maybe_event) => Ok(maybe_event),
-					Err(e) => Err(DynamicEventError::EventDecodeError(e.to_string())),
-				}
+				return if is_strict { event.as_event_strict::<E>() } else { event.as_event::<E>() }
 			}
 		}
 		Ok(None)
@@ -77,7 +167,8 @@ impl DynamicEvents {
 }
 
 pub struct EventsDecoder {
-	subxt_metadata: subxt::Metadata,
+	current_metadata: subxt::Metadata,
+	static_metadata: subxt::Metadata,
 }
 
 impl Default for EventsDecoder {
@@ -91,23 +182,22 @@ impl Default for EventsDecoder {
 
 impl EventsDecoder {
 	pub fn new(opaque_metadata: sp_core::OpaqueMetadata) -> Self {
-		let metadata =
+		let current_metadata = subxt::Metadata::try_from(
 			frame_metadata::RuntimeMetadataPrefixed::decode(&mut opaque_metadata.as_slice())
-				.expect("Runtime metadata should be valid.");
+				.expect("Runtime metadata should be valid."),
+		)
+		.expect("Metadata should be valid.");
 
-		// Ok(OfflineClient::<StateChainConfig>::new(
-		//     genesis_hash,
-		//     subxt::client::RuntimeVersion {
-		//         spec_version: version.spec_version,
-		//         transaction_version: version.transaction_version,
-		//     },
-		//     subxt::Metadata::try_from(metadata).map_err(internal_error)?,
-		// ))
+		// Get the old metadata
+		let static_opaque_metadata = state_chain_runtime::Runtime::metadata_at_version(15)
+			.expect("Version 15 should be supported by the runtime.");
+		let static_metadata = subxt::Metadata::try_from(
+			frame_metadata::RuntimeMetadataPrefixed::decode(&mut static_opaque_metadata.as_slice())
+				.expect("Runtime metadata should be valid."),
+		)
+		.expect("Metadata should be valid.");
 
-		let subxt_metadata =
-			subxt::Metadata::try_from(metadata).expect("Metadata should be valid.");
-
-		Self { subxt_metadata }
+		Self { current_metadata, static_metadata }
 	}
 
 	pub fn decode_extrinsic_events(
@@ -121,7 +211,7 @@ impl EventsDecoder {
 
 		let evs = subxt::events::Events::<StateChainConfig>::decode_from(
 			events_bytes,
-			self.subxt_metadata.clone(),
+			self.current_metadata.clone(),
 		);
 
 		let mut events = vec![];
@@ -131,31 +221,16 @@ impl EventsDecoder {
 
 			if event_details.phase() == subxt::events::Phase::ApplyExtrinsic(extrinsic_index as u32)
 			{
-				events.push(event_details);
+				events.push(DynamicEvent {
+					event: event_details,
+					static_metadata: self.static_metadata.clone(),
+				});
 			}
 		}
 
 		Ok(DynamicEvents { events })
 	}
 }
-//
-// fn convert_dispatch_error(error: DispatchError) -> sp_runtime::DispatchError {
-// 	match error {
-// 		DispatchError::Other => sp_runtime::DispatchError::Other("Other error"),
-// 		DispatchError::CannotLookup => sp_runtime::DispatchError::CannotLookup,
-// 		DispatchError::BadOrigin => sp_runtime::DispatchError::BadOrigin,
-// 		DispatchError::Module(e) => {
-// 			sp_runtime::DispatchError::Module(e.into())
-// 		}
-// 		DispatchError::ConsumerRemaining => sp_runtime::DispatchError::ConsumerRemaining,
-// 		DispatchError::NoProviders => sp_runtime::DispatchError::NoProviders,
-// 		DispatchError::TooManyConsumers => sp_runtime::DispatchError::TooManyConsumers,
-// 		DispatchError::Token(e) => sp_runtime::DispatchError::Token(e.into()), // Convert TokenError if
-// needed 		DispatchError::Arithmetic(e) => sp_runtime::DispatchError::Arithmetic(e.into()), //
-// Convert ArithmeticError if needed 		DispatchError::Transactional(_) =>
-// sp_runtime::DispatchError::Transactional(error.into()), // Convert TransactionalError if needed
-// 	}
-// }
 
 impl From<cf_static_runtime::runtime_types::sp_runtime::DispatchError> for DispatchError {
 	fn from(error: cf_static_runtime::runtime_types::sp_runtime::DispatchError) -> Self {
