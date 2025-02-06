@@ -232,7 +232,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(self
 			.api
 			.raw_client()
-			.cf_get_vault_swap_details(
+			.cf_request_swap_parameter_encoding(
 				self.api.state_chain_client.account_id(),
 				source_asset,
 				destination_asset,

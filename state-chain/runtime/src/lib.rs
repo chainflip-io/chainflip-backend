@@ -2231,7 +2231,7 @@ impl_runtime_apis! {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
 		}
 
-		fn cf_get_vault_swap_details(
+		fn cf_request_swap_parameter_encoding(
 			broker_id: AccountId,
 			source_asset: Asset,
 			destination_asset: Asset,
