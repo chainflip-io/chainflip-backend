@@ -315,6 +315,9 @@ where
 						},
 						Ordering::Equal => (),
 					}
+					// Note: we only check for close in this branch to guarantee that both the
+					// channel state and chain tracking have caught up to the close block, and all
+					// confirmed deposits have been ingressed.
 					if ready_total.block_number >= details.close_block {
 						Sink::on_channel_closed(account.clone());
 						new_properties.remove(account);
@@ -336,7 +339,7 @@ where
 				// open indeifitely by streaming small deposits.
 				election_access.delete();
 			} else if new_properties != properties {
-				log::debug!("recreate election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
+				log::debug!("recreate delta based ingress election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
 				election_access.delete();
 				ElectoralAccess::new_election(
 					Default::default(),
@@ -344,7 +347,7 @@ where
 					new_pending_ingress_totals,
 				)?;
 			} else {
-				log::debug!("recreate election: keeping old because properties didn't change: {properties:?}");
+				log::debug!("recreate delta based ingress election: keeping old because properties didn't change: {properties:?}");
 				election_access.set_state(new_pending_ingress_totals)?;
 			}
 		}

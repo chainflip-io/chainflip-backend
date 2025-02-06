@@ -432,7 +432,9 @@ mod channel_closure {
 		let _test_ctx = check_closure(test_ctx, channels[1]);
 	}
 
-	fn setup_close_after_deposits(lagging: bool) -> TestContext<SimpleDeltaBasedIngress> {
+	fn setup_close_after_deposits(
+		chain_tracking_lagging: bool,
+	) -> TestContext<SimpleDeltaBasedIngress> {
 		let setup = with_default_setup()
 			.build()
 			.then(|| DEFAULT_CHANNEL.open())
@@ -446,7 +448,7 @@ mod channel_closure {
 				.collect(),
 			});
 
-		if lagging {
+		if chain_tracking_lagging {
 			setup
 				// Chain tracking is lagging, nothing should be ingressed.
 				.test_on_finalize(
