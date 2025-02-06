@@ -683,9 +683,9 @@ pub mod pallet {
 			amount: AssetAmount,
 		},
 		PrivateBrokerChannelOpened {
+			created_at: u32,
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
-			created_at: u32,
 		},
 		PrivateBrokerChannelClosed {
 			broker_id: T::AccountId,
@@ -1163,9 +1163,9 @@ pub mod pallet {
 			let created_at: u32 = frame_system::Pallet::<T>::block_number().unique_saturated_into();
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened {
+				created_at,
 				broker_id,
 				channel_id,
-				created_at,
 			});
 
 			Ok(())
