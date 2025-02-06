@@ -83,6 +83,7 @@ where
 		}
 	}
 
+	#[tracing::instrument(name = "voter-task", skip(self))]
 	async fn reset_and_continuously_vote(&self) -> Result<(), anyhow::Error> {
 		let mut rng = rand::rngs::OsRng;
 		let latest_unfinalized_block = self.state_chain_client.latest_unfinalized_block();
@@ -149,7 +150,7 @@ where
 					let state_chain_client = &self.state_chain_client;
 					async move {
 						for (election_identifier, _) in votes.iter() {
-							info!("Submitting vote for election: '{:?}'", election_identifier);
+							debug!("Submitting vote for election: '{:?}'", election_identifier);
 						}
 						// TODO: Use block hash you got this vote tasks details from as the based of the mortal of the extrinsic
 						state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::vote {
@@ -161,7 +162,7 @@ where
 			let (election_identifier, result_vote) = vote_tasks.next_or_pending() => {
 				match result_vote {
 					Ok(Some(vote)) => {
-						info!("Voting task for election: '{:?}' succeeded.", election_identifier);
+						debug!("Voting task for election: '{:?}' succeeded.", election_identifier);
 						// Create the partial_vote early so that SharedData can be provided as soon as the vote has been generated, rather than only after it is submitted.
 						let partial_vote = VoteStorageOf::<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>::vote_into_partial_vote(&vote, |shared_data| {
 							let shared_data_hash = SharedDataHash::of(&shared_data);
@@ -198,7 +199,7 @@ where
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
 								if !vote_tasks.contains_key(&election_identifier) {
-									info!("Voting task for election: '{:?}' initiate.", election_identifier);
+									debug!("Voting task for election: '{:?}' initiated.", election_identifier);
 									vote_tasks.insert(
 										election_identifier,
 										Box::pin(self.voter.request_with_limit(
@@ -217,7 +218,7 @@ where
 										))
 									);
 								} else {
-									info!("Voting task for election: '{:?}' not initiated as a task is already running for that election.", election_identifier);
+									debug!("Voting task for election: '{:?}' not initiated as a task is already running for that election.", election_identifier);
 								}
 							}
 						}
