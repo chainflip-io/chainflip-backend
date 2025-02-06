@@ -10,10 +10,10 @@ As of yet there is no real structure - this isn't intended to be a document to r
 
 ## Runtime upgrades / Try-runtime
 
-First, download and install the [`try-runtime-cli`](https://paritytech.github.io/try-runtime-cli/try_runtime/). This guide was written against try-runtime-cli v0.7.0:
+First, download and install the [`try-runtime-cli`](https://paritytech.github.io/try-runtime-cli/try_runtime/). This guide was written against try-runtime-cli v0.8.0:
 
 ```bash copy
-cargo +stable install --git https://github.com/paritytech/try-runtime-cli --tag v0.7.0
+cargo +stable install --git https://github.com/paritytech/try-runtime-cli --tag v0.8.0
 ```
 
 You need to build the runtime with `try-runtime` enabled.
@@ -28,19 +28,21 @@ To test against Perseverance (Our canary testnet):
 ```bash copy
 try-runtime \
     --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
-    on-runtime-upgrade --checks all live --uri wss://archive.perseverance.chainflip.io:443
+    on-runtime-upgrade --blocktime 6000 --checks all live --uri wss://archive.perseverance.chainflip.io:443
 ```
 
 For fatser executions, you can create a snapshot of a live node state:
+
 ```bash copy
 try-runtime create-snapshot --uri wss://archive.perseverance.chainflip.io:443 /tmp/perseverance_state.snap
 ```
 
 then run try-runtime against the sanpshot:
+
 ```bash copy
 try-runtime \
     --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
-    on-runtime-upgrade --checks all snap --path /tmp/perseverance_state.snap
+    on-runtime-upgrade --blocktime 6000 --checks all snap --path /tmp/perseverance_state.snap
 ```
 
 To test try-runtime against Berghain (Our Mainnet):
@@ -48,7 +50,7 @@ To test try-runtime against Berghain (Our Mainnet):
 ```bash copy
 try-runtime \
     --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
-    on-runtime-upgrade --checks all live --uri wss://mainnet-rpc.chainflip.io:443
+    on-runtime-upgrade --blocktime 6000 --checks all live --uri wss://mainnet-rpc.chainflip.io:443
 ```
 
 If you have trouble connecting to the remote rpc node, you can run a local rpc node and connect to that instead. First connect a local node to the network with some rpc optimisations:
@@ -68,7 +70,7 @@ Once the node has synced, in another terminal window, run the checks as above:
 ```bash copy
 try-runtime \
     --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
-    on-runtime-upgrade --checks all live --uri ws://localhost:9944
+    on-runtime-upgrade --blocktime 6000 --checks all live --uri ws://localhost:9944
 ```
 
 ### General tips and guidelines

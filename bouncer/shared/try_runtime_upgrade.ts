@@ -2,6 +2,7 @@
 // https://github.com/paritytech/try-runtime-cli
 
 import path from 'path';
+import fs from 'fs';
 import { compileBinaries } from './utils/compile_binaries';
 import { mkTmpDir, execWithRustLog } from './utils/exec_with_log';
 import { getChainflipApi } from './utils/substrate';
@@ -30,6 +31,7 @@ async function tryRuntimeCommand(
   const success = await execWithRustLog(
     `try-runtime \
         --runtime ${runtimePath} on-runtime-upgrade \
+        --blocktime 6000 \
         --disable-spec-version-check \
         --checks all ${blockParam} \
         --uri ${networkUrl}`,

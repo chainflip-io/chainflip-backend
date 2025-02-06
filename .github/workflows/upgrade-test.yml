@@ -81,7 +81,7 @@ jobs:
         uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4
         with:
           repo: paritytech/try-runtime-cli
-          tag: v0.7.0
+          tag: v0.8.0
           extension-matching: disable
           rename-to: try-runtime
           chmod: 0755
