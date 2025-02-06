@@ -222,6 +222,7 @@ fn with_default_setup() -> TestSetup<SimpleDeltaBasedIngress> {
 }
 
 impl TestContext<SimpleDeltaBasedIngress> {
+	#[track_caller]
 	fn assert_state_update(
 		self,
 		chain_tracking: &BlockNumber,
