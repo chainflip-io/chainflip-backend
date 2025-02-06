@@ -83,7 +83,7 @@ where
 		}
 	}
 
-	#[tracing::instrument(name = "voter-task")]
+	#[tracing::instrument(name = "voter-task", skip(self))]
 	async fn reset_and_continuously_vote(&self) -> Result<(), anyhow::Error> {
 		let mut rng = rand::rngs::OsRng;
 		let latest_unfinalized_block = self.state_chain_client.latest_unfinalized_block();
