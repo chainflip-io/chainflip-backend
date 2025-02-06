@@ -685,6 +685,7 @@ pub mod pallet {
 		PrivateBrokerChannelOpened {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
+			created_at: u32,
 		},
 		PrivateBrokerChannelClosed {
 			broker_id: T::AccountId,
@@ -1158,7 +1159,14 @@ pub mod pallet {
 
 			T::Bonder::update_bond(&broker_id, BrokerBond::<T>::get());
 
-			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened { broker_id, channel_id });
+			// TEST EVENT for runtime upgrade testing
+			let created_at: u32 = frame_system::Pallet::<T>::block_number().unique_saturated_into();
+
+			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened {
+				broker_id,
+				channel_id,
+				created_at,
+			});
 
 			Ok(())
 		}

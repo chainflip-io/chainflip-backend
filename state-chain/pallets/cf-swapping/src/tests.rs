@@ -1674,6 +1674,7 @@ mod private_channels {
 				Event::<Test>::PrivateBrokerChannelOpened {
 					broker_id: BROKER,
 					channel_id: FIRST_CHANNEL_ID,
+					created_at: 1,
 				},
 			));
 
