@@ -32,6 +32,24 @@ pub trait OnCheckComplete<ValidatorId> {
 	fn on_check_complete(validator_ids: BTreeSet<ValidatorId>);
 }
 
+#[macro_export]
+macro_rules! create_on_check_complete_hook {
+	($name:ident, $chain:expr) => {
+		pub struct $name;
+
+		impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for $name {
+			fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
+				const CHAIN: ForeignChain = $chain; // Enforce ForeignChain at compile time
+
+				<Reputation as OffenceReporter>::report_many(
+					Offence::FailedLivenessCheck(CHAIN),
+					validator_ids,
+				);
+			}
+		}
+	};
+}
+
 impl<
 		ChainBlockNumber: Member + Parameter + Eq + From<u64> + Into<u64> + Copy,
 		ChainBlockHash: Member + Parameter + Eq + Ord,

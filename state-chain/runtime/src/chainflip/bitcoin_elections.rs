@@ -11,6 +11,7 @@ use sp_core::Get;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 use frame_support::__private::sp_tracing::event;
+use frame_system::pallet_prelude::BlockNumberFor;
 use log::warn;
 use pallet_cf_elections::{
 	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
@@ -59,12 +60,15 @@ use crate::{
 use cf_chains::btc::{BlockNumber, Hash};
 use cf_primitives::ForeignChain;
 use cf_traits::offence_reporting::OffenceReporter;
-use pallet_cf_elections::electoral_systems::{
-	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	liveness::{Liveness, OnCheckComplete},
-	state_machine::{
-		core::{IndexOf, Indexed, Validate},
-		state_machine::StateMachine,
+use pallet_cf_elections::{
+	create_on_check_complete_hook,
+	electoral_systems::{
+		block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
+		liveness::{Liveness, OnCheckComplete},
+		state_machine::{
+			core::{IndexOf, Indexed, Validate},
+			state_machine::StateMachine,
+		},
 	},
 };
 use sp_std::{vec, vec::Vec};
@@ -311,24 +315,15 @@ impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>
 	}
 }
 
+create_on_check_complete_hook!(BitcoinOnCheckCompleteHook, ForeignChain::Bitcoin);
+
 pub type BitcoinLiveness = Liveness<
 	BlockNumber,
 	Hash,
 	cf_primitives::BlockNumber,
-	OnCheckCompleteHook,
+	BitcoinOnCheckCompleteHook,
 	<Runtime as Chainflip>::ValidatorId,
 >;
-
-pub struct OnCheckCompleteHook;
-
-impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHook {
-	fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
-		<Reputation as OffenceReporter>::report_many(
-			Offence::FailedLivenessCheck(ForeignChain::Bitcoin),
-			validator_ids,
-		);
-	}
-}
 
 pub struct BitcoinElectionHooks;
 
@@ -374,9 +369,10 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinL
 			>,
 		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress)?;
 
-		// I think we should always use this as our upper limit to avoid not reaching consensus in
+		// We use `ProcessedUpTo` as our upper limit to avoid not reaching consensus in
 		// case there is a reorg, using this block means safety margin will be kept into account for
-		// this election
+		// this election, and thus are much less likely to ask nodes to query for a block they don't
+		// have.
 		let last_processed_block = ProcessedUpTo::<Runtime, BitcoinInstance>::get();
 		BitcoinLiveness::on_finalize::<
 			DerivedElectoralAccess<
@@ -390,12 +386,13 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinL
 	}
 }
 
+const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
+
 // Channel expiry:
 // We need to process elections in order, even after a safe mode pause. This is to ensure channel
 // expiry is done correctly. During safe mode pause, we could get into a situation where the current
 // state suggests that a channel is expired, but at the time of a previous block which we have not
 // yet processed, the channel was not expired.
-
 pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 	InitialState {
 		unsynchronised_state: (Default::default(), Default::default(), Default::default()),
@@ -403,8 +400,8 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 			Default::default(),
 			// TODO: Write a migration to set this too.
 			BWSettings { max_concurrent_elections: 15 },
-			Default::default(),
+			(),
 		),
-		settings: (Default::default(), Default::default(), Default::default()),
+		settings: (Default::default(), Default::default(), LIVENESS_CHECK_DURATION),
 	}
 }

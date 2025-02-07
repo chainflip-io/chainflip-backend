@@ -26,6 +26,7 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
+	create_on_check_complete_hook,
 	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		self,
@@ -145,21 +146,16 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	<Runtime as Chainflip>::ValidatorId,
 >;
 
+create_on_check_complete_hook!(SolanaOnCheckCompleteHook, ForeignChain::Solana);
+
 pub type SolanaLiveness = electoral_systems::liveness::Liveness<
 	<Solana as Chain>::ChainBlockNumber,
 	SolHash,
 	cf_primitives::BlockNumber,
-	OnCheckCompleteHook,
+	SolanaOnCheckCompleteHook,
 	<Runtime as Chainflip>::ValidatorId,
 >;
 
-pub struct OnCheckCompleteHook;
-
-impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHook {
-	fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
-		Reputation::report_many(Offence::FailedLivenessCheck(ForeignChain::Solana), validator_ids);
-	}
-}
 pub type SolanaVaultSwapTracking =
 	electoral_systems::solana_vault_swap_accounts::SolanaVaultSwapAccounts<
 		VaultSwapAccountAndSender,
