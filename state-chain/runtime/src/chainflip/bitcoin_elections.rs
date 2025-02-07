@@ -38,7 +38,10 @@ use pallet_cf_elections::{
 };
 use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
-use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	marker::PhantomData,
+};
 
 use pallet_cf_ingress_egress::{
 	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo, WitnessSafetyMargin,
@@ -51,22 +54,19 @@ use crate::{
 		bitcoin_block_processor::{
 			BlockWitnessingProcessorDefinition, BtcEvent, DepositChannelWitnessingProcessor,
 		},
-		Offence,
+		Offence, ReportFailedLivenessCheck,
 	},
 	Reputation,
 };
 use cf_chains::btc::{BlockNumber, Hash};
 use cf_primitives::ForeignChain;
 use cf_traits::offence_reporting::OffenceReporter;
-use pallet_cf_elections::{
-	create_on_check_complete_hook,
-	electoral_systems::{
-		block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-		liveness::{Liveness, OnCheckComplete},
-		state_machine::{
-			core::{IndexOf, Indexed, Validate},
-			state_machine::StateMachine,
-		},
+use pallet_cf_elections::electoral_systems::{
+	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
+	liveness::{Liveness, OnCheckComplete},
+	state_machine::{
+		core::{IndexOf, Indexed, Validate},
+		state_machine::StateMachine,
 	},
 };
 use sp_std::{vec, vec::Vec};
@@ -313,13 +313,11 @@ impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>
 	}
 }
 
-create_on_check_complete_hook!(Bitcoin);
-
 pub type BitcoinLiveness = Liveness<
 	BlockNumber,
 	Hash,
 	cf_primitives::BlockNumber,
-	BitcoinOnCheckCompleteHook,
+	ReportFailedLivenessCheck<Bitcoin>,
 	<Runtime as Chainflip>::ValidatorId,
 >;
 

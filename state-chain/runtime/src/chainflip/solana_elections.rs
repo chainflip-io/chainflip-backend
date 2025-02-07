@@ -1,7 +1,8 @@
 use crate::{
-	AccountId, Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
-	SolanaIngressEgress, SolanaThresholdSigner,
+	chainflip::ReportFailedLivenessCheck, AccountId, Environment, Offence, Reputation, Runtime,
+	SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner,
 };
+
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, sol::Asset as SolAsset},
@@ -26,7 +27,6 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
-	create_on_check_complete_hook,
 	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		self,
@@ -47,6 +47,8 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_primitives::chains::Bitcoin;
+use electoral_systems::liveness::Liveness;
 use sol_prim::SlotNumber;
 
 use super::SolEnvironment;
@@ -146,13 +148,11 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	<Runtime as Chainflip>::ValidatorId,
 >;
 
-create_on_check_complete_hook!(Solana);
-
-pub type SolanaLiveness = electoral_systems::liveness::Liveness<
+pub type SolanaLiveness = Liveness<
 	<Solana as Chain>::ChainBlockNumber,
 	SolHash,
 	cf_primitives::BlockNumber,
-	SolanaOnCheckCompleteHook,
+	ReportFailedLivenessCheck<Solana>,
 	<Runtime as Chainflip>::ValidatorId,
 >;
 

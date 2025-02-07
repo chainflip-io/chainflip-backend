@@ -1,4 +1,4 @@
-use sp_std::collections::btree_set::BTreeSet;
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData};
 
 use crate::{
 	electoral_system::{
@@ -8,13 +8,15 @@ use crate::{
 	},
 	vote_storage, CorruptStorageError,
 };
-use cf_primitives::AuthorityCount;
+use cf_primitives::{AuthorityCount, ForeignChain};
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
 
+use cf_chains::Get;
+use cf_traits::{offence_reporting::OffenceReporter, Chainflip};
 use itertools::Itertools;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
@@ -30,26 +32,6 @@ pub struct Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, Validat
 
 pub trait OnCheckComplete<ValidatorId> {
 	fn on_check_complete(validator_ids: BTreeSet<ValidatorId>);
-}
-
-#[macro_export]
-macro_rules! create_on_check_complete_hook {
-	($chain:ident) => {
-		sp_core::paste::paste! {
-			pub struct [<$chain OnCheckCompleteHook>];
-
-			impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for [<$chain OnCheckCompleteHook>]{
-				fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
-					const CHAIN: ForeignChain = ForeignChain::$chain; // Enforce ForeignChain at compile time
-
-					<Reputation as OffenceReporter>::report_many(
-						Offence::FailedLivenessCheck(CHAIN),
-						validator_ids,
-					);
-				}
-			}
-		}
-	};
 }
 
 impl<

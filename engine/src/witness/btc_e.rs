@@ -8,7 +8,7 @@ use cf_chains::{
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
-	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
+	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
 		block_height_tracking::{
 			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties,
@@ -16,7 +16,6 @@ use pallet_cf_elections::{
 		},
 		state_machine::core::ConstantIndex,
 	},
-	vote_storage::VoteStorage,
 	VoteOf,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
@@ -39,9 +38,7 @@ use crate::{
 };
 use anyhow::Result;
 
-use cf_chains::sol::SolHash;
 use sp_core::H256;
-use state_chain_runtime::chainflip::solana_elections::SolanaLiveness;
 use std::sync::Arc;
 
 use crate::btc::retry_rpc::BtcRetryRpcClient;
