@@ -26,8 +26,8 @@ jobs:
     name: Create Try-Runtime Snapshots
     runs-on: digitalocean
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -50,6 +50,10 @@ jobs:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
+        
+      - name: Install node dependencies 📦
+        working-directory: bouncer
+        run: pnpm install
 
       - name: Install system packages 💿
         run: |
@@ -72,8 +76,6 @@ jobs:
           # ) &
       - name: Create snapshots in parallel
         run: |
-          # First install node dependencies since we're using TypeScript scripts
-          cd bouncer && pnpm install && cd ..
 
           # Add https:// prefix to URIs and ensure they're using wss:// for secure WebSocket
           SISYPHOS_URI="https://${SISYPHOS_URI}"
@@ -81,9 +83,9 @@ jobs:
           MAINNET_URI="https://${MAINNET_URI}"
 
           # Get versions using node to run the TypeScript script
-          SISYPHOS_VERSION=$(node bouncer/commands/network_spec_version.ts $SISYPHOS_URI)
-          PERSEVERANCE_VERSION=$(node bouncer/commands/network_spec_version.ts $PERSEVERANCE_URI)
-          MAINNET_VERSION=$(node bouncer/commands/network_spec_version.ts $MAINNET_URI)
+          SISYPHOS_VERSION=$(./bouncer/commands/network_spec_version.ts $SISYPHOS_URI)
+          PERSEVERANCE_VERSION=$(./bouncer/commands/network_spec_version.ts $PERSEVERANCE_URI)
+          MAINNET_VERSION=$(./bouncer/commands/network_spec_version.ts $MAINNET_URI)
 
           # Log the versions
           echo "Sisyphos Version: $SISYPHOS_VERSION"
