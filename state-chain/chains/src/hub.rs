@@ -83,7 +83,7 @@ pub fn calculate_derived_address(
 	let mut layers = channel_id
 		.to_be_bytes()
 		.chunks(2)
-		.map(|chunk| u16::from_be_bytes(chunk.as_array::<2>()))
+		.map(|chunk| u16::from_be_bytes(chunk.copy_to_array::<2>()))
 		.skip_while(|layer| *layer == 0u16)
 		.collect::<Vec<u16>>();
 
@@ -303,6 +303,10 @@ impl FeeEstimationApi<Assethub> for AssethubTrackedData {
 		use fee_constants::transfer::*;
 
 		self.median_tip + transfer::EXTRINSIC_FEE
+	}
+	
+	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Assethub as Chain>::ChainAmount> {
+		None
 	}
 }
 

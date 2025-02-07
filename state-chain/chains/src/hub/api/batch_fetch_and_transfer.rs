@@ -8,8 +8,8 @@ use crate::{
 	},
 	FetchAssetParams, TransferAssetParams,
 };
-use cf_primitives::{ASSETHUB_USDC_ASSET_ID, ASSETHUB_USDT_ASSET_ID};
 use cf_utilities::SliceToArray;
+use cf_primitives::{ASSETHUB_USDC_ASSET_ID, ASSETHUB_USDT_ASSET_ID};
 use sp_std::{boxed::Box, vec::Vec};
 
 pub fn extrinsic_builder(
@@ -66,7 +66,7 @@ fn utility_fetch(
 		.deposit_fetch_id
 		.to_be_bytes()
 		.chunks(2)
-		.map(|chunk| u16::from_be_bytes(chunk.as_array::<2>()))
+		.map(|chunk| u16::from_be_bytes(chunk.copy_to_array::<2>()))
 		.skip_while(|layer| *layer == 0u16)
 		.collect::<Vec<u16>>();
 
