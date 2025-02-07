@@ -1,7 +1,7 @@
 use super::{
 	super::state_machine::{
 		core::{Indexed, Validate},
-		state_machine2::StateMachine,
+		state_machine::StateMachine,
 		state_machine_es::SMInput,
 	},
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
@@ -269,7 +269,7 @@ mod tests {
 
 	use super::{
 		super::{
-			super::state_machine::{state_machine2::StateMachine, state_machine_es::SMInput},
+			super::state_machine::{state_machine::StateMachine, state_machine_es::SMInput},
 			primitives::Header,
 			BlockHeightTrackingProperties, BlockHeightTrackingTypes,
 		},

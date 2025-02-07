@@ -7,7 +7,7 @@ use crate::electoral_systems::{
 	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{
 		core::{IndexOf, MultiIndexAndValue, Validate},
-		state_machine2::StateMachine,
+		state_machine::StateMachine,
 		state_machine_es::SMInput,
 	},
 };

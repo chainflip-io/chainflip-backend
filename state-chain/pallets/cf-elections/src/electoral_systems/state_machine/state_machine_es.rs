@@ -12,7 +12,7 @@ use crate::{
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
 	core::{Indexed, MultiIndexAndValue, Validate},
-	state_machine2::StateMachine,
+	state_machine::StateMachine,
 };
 
 pub trait IntoResult {

@@ -2,7 +2,7 @@ use crate::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
 	state_machine::{
 		core::{Hook, IndexOf, Indexed, Validate},
-		state_machine2::StateMachine,
+		state_machine::StateMachine,
 	},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
