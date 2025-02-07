@@ -13,7 +13,7 @@ type RuntimeVersion = {
 };
 
 export async function getNetworkRuntimeVersion(endpoint?: string): Promise<RuntimeVersion> {
-  return (await jsonRpc('state_getRuntimeVersion', [], endpoint)) as unknown as RuntimeVersion;
+  return (await jsonRpc('state_getRuntimeVersion', [], endpoint, false)) as unknown as RuntimeVersion;
 }
 
 export function specVersion(

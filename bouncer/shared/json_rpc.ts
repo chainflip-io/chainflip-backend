@@ -4,8 +4,11 @@ export async function jsonRpc(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: any[],
   endpoint?: string,
+  log = true,
 ): Promise<JSON> {
-  console.log('Sending json RPC', method);
+  if (log) {
+    console.log('Sending json RPC', method);
+  }
 
   id++;
   const request = JSON.stringify({

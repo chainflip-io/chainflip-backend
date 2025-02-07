@@ -1,0 +1,87 @@
+name: Create Try-Runtime Snapshots
+
+on:
+  # temp: just for testing
+  pull_request:
+    branches:
+      - feat/live-network-migration-checks
+  # schedule:
+  #   # Run at midnight UTC every day
+  #   - cron: '0 0 * * *'
+  # Optional: Allow manual triggering
+  workflow_dispatch:
+
+env:
+  SISYPHOS_URI: "rpc.sisyphos.liquidity.network"
+  PERSEVERANCE_URI: "rpc.perseverance.liquidity.network"
+  MAINNET_URI: "mainnet-rpc.chainflip.io:443"
+
+jobs:
+  create-snapshots:
+    name: Create Try-Runtime Snapshots
+    runs-on: digitalocean
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Download try-runtime binary 📥
+        uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4
+        with:
+          repo: paritytech/try-runtime-cli
+          extension-matching: disable
+          rename-to: try-runtime
+          chmod: 0755
+      
+      - name: Create directories
+        run: |
+          mkdir -p snapshots
+
+      - name: Create snapshots in parallel
+        run: |
+
+          # Get runtime versions first
+          SISYPHOS_VERSION=$(./bouncer/commands/network_spec_version.ts $SISYPHOS_URI)
+          PERSEVERANCE_VERSION=$(./bouncer/commands/network_spec_version.ts $PERSEVERANCE_URI)
+          MAINNET_VERSION=$(./bouncer/commands/network_spec_version.ts $MAINNET_URI)
+
+          # Create directories with version info
+          mkdir -p "snapshots/sisyphos_${SISYPHOS_VERSION}"
+          mkdir -p "snapshots/perseverance_${PERSEVERANCE_VERSION}"
+          mkdir -p "snapshots/mainnet_${MAINNET_VERSION}"
+
+          # Run all three snapshot creation tasks in parallel
+          (
+            for i in {1..10}; do
+              try-runtime create-snapshot --uri $SISYPHOS_URI "snapshots/sisyphos_${SISYPHOS_VERSION}/snapshot_$i"
+            done
+          ) &
+          
+          # (
+          #   for i in {1..10}; do
+          #     try-runtime create-snapshot --uri $PERSEVERANCE_URI "snapshots/perseverance_${PERSEVERANCE_VERSION}/snapshot_$i"
+          #   done
+          # ) &
+          
+          # (
+          #   for i in {1..10}; do
+          #     try-runtime create-snapshot --uri $MAINNET_URI "snapshots/mainnet_${MAINNET_VERSION}/snapshot_$i"
+          #   done
+          # ) &
+          
+          # Wait for all background processes to complete
+          wait
+
+      - name: Upload snapshots
+        uses: actions/upload-artifact@v3
+        with:
+          name: try-runtime-snapshots
+          path: snapshots/
+          retention-days: 7 # Keep snapshots for 7 days
