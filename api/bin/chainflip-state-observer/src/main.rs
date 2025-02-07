@@ -35,36 +35,24 @@ async fn main() {
 
 		let block_hash = client.latest_finalized_block().hash;
 
-			let bitmaps : BTreeMap<UniqueMonotonicIdentifier,
-				// Vec<(BitmapComponentOf<_>, BitVec<u8, bitvec::order::Lsb0>)>,
-				_
-			 > = client
-				.storage_map::<pallet_cf_elections::BitmapComponents::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
-				.await
-				.expect("could not get storage")
-			//  = pallet_cf_elections::BitmapComponents::<Runtime, SolanaInstance>::iter()
-			;
+		let bitmaps : BTreeMap<UniqueMonotonicIdentifier,
+			_
+			> = client
+			.storage_map::<pallet_cf_elections::BitmapComponents::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
+			.await
+			.expect("could not get storage")
+		;
 
-			let bitmaps = bitmaps.into_iter()
-				.map(|(k,v)| (k, v.bitmaps))
-				.collect();
+		let bitmaps = bitmaps.into_iter()
+			.map(|(k,v)| (k, v.bitmaps))
+			.collect();
 
-			let result : ElectionDataFor<Runtime, SolanaInstance> = ElectionData {
-				bitmaps,
-				_phantom: Default::default()
-			};
-
-
-		// let response : Vec<u8> = client
-		// 		.base_rpc_client
-		// 		.raw_rpc_client
-		// 		.cf_solana_election_data(None).await
-		// 		.expect("Could not get data (wrong format)");
-
-		// let election_data = <ElectionDataFor<Runtime, SolanaInstance> as Decode>::decode(&mut &response[..]).expect("could not decode");
+		let result : ElectionDataFor<Runtime, SolanaInstance> = ElectionData {
+			bitmaps,
+			_phantom: Default::default()
+		};
 
 		let traces = traces(result);
-
 
 		println!("got election data: {traces:?}");
 

@@ -55,7 +55,7 @@ pub fn traces<ES: ElectoralSystemTypes>(data: ElectionData<ES>) -> Trace<Key, ()
                     .map(|(component, bitmap)| 
                         (
                             Category(FullVote("vote".into())),
-                            Trace::Composite((), bitmap.iter().enumerate().map(|(id, bit)| (Validator(id as u64), Trace::Single(()))).collect())
+                            Trace::Composite((), bitmap.iter().enumerate().map(|(id, bit)| (Validator(id as u64), Trace::Composite((), BTreeMap::new()))).collect())
                         )
                     )
                     .collect()
