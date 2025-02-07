@@ -204,6 +204,13 @@ impl UncheckedOnRuntimeUpgrade for RemoveFeeTrackingMigration {
 
 			ElectoralUnsynchronisedState::<Runtime, SolanaInstance>::put((a, (), (), (), (), gg));
 			log::info!("Inserted new electoral unsynchronised state");
+		} else if let Some(raw_state) =
+			unhashed::get_raw(&old::ElectoralUnsynchronisedState::hashed_key())
+		{
+			log::error!(
+				"Unable to decode old electoral unsynchronised state: {}",
+				hex::encode(raw_state)
+			);
 		}
 
 		// ElectoralUnsynchronisedStateMap
@@ -255,12 +262,10 @@ impl UncheckedOnRuntimeUpgrade for RemoveFeeTrackingMigration {
 		let election_properties = old::ElectionProperties::iter().collect::<Vec<_>>();
 		let mut new_election_properties = Vec::new();
 
-		log::info!("Old election properties: {:?}", election_properties);
+		log::info!("Old election properties: {} elections.", election_properties.len());
 
 		for (election_identifier, _props) in election_properties {
 			let key = old::ElectionProperties::hashed_key_for(election_identifier.clone());
-
-			log::info!("Migrating election properties {:?}", key);
 
 			let raw_storage_at_key =
 				unhashed::get_raw(&key).expect("We just got the keys directly from the storage");
@@ -268,16 +273,12 @@ impl UncheckedOnRuntimeUpgrade for RemoveFeeTrackingMigration {
 			let props =
 				old::CompositeElectionProperties::decode(&mut &raw_storage_at_key[..]).unwrap();
 
-			log::info!("Migrating election properties, decoded {:?}", props);
-
 			if let Some(props) = old::translate_composite_enum_CompositeElectionProperties(props) {
 				let old_extra = election_identifier.extra();
-				log::info!("Migrating election properties, old extra {:?}", old_extra);
 				if let Some(new_extra) =
 					old::translate_composite_enum_CompositeElectionIdentifierExtra(
 						old_extra.clone(),
 					) {
-					log::info!("Migrating election properties, new extra {:?}", new_extra);
 					new_election_properties
 						.push((election_identifier.with_extra(new_extra), props));
 				}
@@ -286,7 +287,7 @@ impl UncheckedOnRuntimeUpgrade for RemoveFeeTrackingMigration {
 
 		if !new_election_properties.is_empty() {
 			log::info!(
-				"Adding new election properties with {:?} items",
+				"Adding new election properties with {} items",
 				new_election_properties.len()
 			);
 
@@ -294,14 +295,14 @@ impl UncheckedOnRuntimeUpgrade for RemoveFeeTrackingMigration {
 			log::info!("Cleared old election properties");
 
 			for (election_identifier, props) in new_election_properties {
-				log::info!("Inserting new election properties {:?}", election_identifier);
 				ElectionProperties::<Runtime, SolanaInstance>::insert(election_identifier, props);
 			}
+			log::info!("Inserted new election properties");
 		}
 
 		// Election state
 		let election_state = old::ElectionState::iter().collect::<Vec<_>>();
-		log::info!("Old election state: {:?}", election_state);
+		log::info!("Old election state had {} entries.", election_state.len());
 		let mut new_election_state = Vec::new();
 		for (election_identifier, _state) in election_state {
 			let raw_storage_at_key =
