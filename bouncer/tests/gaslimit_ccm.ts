@@ -18,7 +18,7 @@ import { send } from '../shared/send';
 import { estimateCcmCfTesterGas, spamEvm } from '../shared/send_evm';
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 import { Logger } from '../shared/utils/logger';
 
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
@@ -376,7 +376,7 @@ async function spamChain(chain: Chain) {
 export async function testGasLimitCcmSwaps(testContext: TestContext) {
   const logger = testContext.logger;
   const feeDeficitRefused = observeBadEvent(':TransactionFeeDeficitRefused', {});
-  testContext.logger.debug('Spamming chains to increase fees...');
+  testContext.debug('Spamming chains to increase fees...');
 
   // No need to spam Solana since we are hardcoding the priority fees on the SC
   // and the chain "base fee" don't increase anyway..

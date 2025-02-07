@@ -5,7 +5,7 @@ import { limitOrder } from '../shared/limit_order';
 import { rangeOrder } from '../shared/range_order';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { deposits } from '../shared/setup_swaps';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 import { Logger } from '../shared/utils/logger';
 
 const DEFAULT_LP: string = '//LP_3';

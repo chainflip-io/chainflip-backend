@@ -14,7 +14,8 @@ import {
   vaultSwapSupportedChains,
 } from '../shared/utils';
 import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
-import { SwapContext, TestContext } from '../shared/swap_context';
+import { SwapContext } from '../shared/utils/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 export async function initiateSwap(
   swapContext: SwapContext,

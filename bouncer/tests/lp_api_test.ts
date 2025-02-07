@@ -21,7 +21,7 @@ import { depositLiquidity } from '../shared/deposit_liquidity';
 import { sendEvmNative } from '../shared/send_evm';
 import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 type RpcAsset = {
   asset: string;

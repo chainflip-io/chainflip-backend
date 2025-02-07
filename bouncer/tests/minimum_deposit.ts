@@ -2,7 +2,7 @@ import { requestNewSwap } from '../shared/perform_swap';
 import { setMinimumDeposit } from '../shared/set_minimum_deposit';
 import { observeEvent } from '../shared/utils/substrate';
 import { sendDot } from '../shared/send_dot';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 export async function testMinimumDeposit(testContext: TestContext) {
   const logger = testContext.logger;

@@ -11,7 +11,7 @@ import {
   startEngines,
 } from '../shared/utils';
 import { observeEvent } from '../shared/utils/substrate';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 // Test the delta based ingress feature of Solana works as intended.
 // The test will initiate and witness a swap from Solana. It will then restart the engine and ensure
@@ -141,7 +141,7 @@ export async function testDeltaBasedIngress(
     throw new Error('Directory does not exist: ' + localnetInitPath);
   }
 
-  testContext.logger.debug('testing with args: ' + binariesPath + ' ' + localnetInitPath);
+  testContext.debug('testing with args: ' + binariesPath + ' ' + localnetInitPath);
 
   await deltaBasedIngressTest(
     testContext,

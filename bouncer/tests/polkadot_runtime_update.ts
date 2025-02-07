@@ -11,7 +11,7 @@ import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils
 import { testSwap } from '../shared/swapping';
 import { observeEvent, observeBadEvent, getPolkadotApi } from '../shared/utils/substrate';
 import { Logger } from '../shared/utils/logger';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 // Note: This test only passes if there is more than one node in the network due to the polkadot runtime upgrade causing broadcast failures due to bad signatures.
 
@@ -220,7 +220,7 @@ async function randomPolkadotSwap(testContext: TestContext): Promise<void> {
     false,
   );
   swapsComplete++;
-  testContext.logger.debug(`Swap complete: (${swapsComplete}/${swapsStarted})`);
+  testContext.debug(`Swap complete: (${swapsComplete}/${swapsStarted})`);
 }
 
 async function doPolkadotSwaps(testContext: TestContext): Promise<void> {

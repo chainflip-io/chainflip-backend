@@ -23,7 +23,7 @@ import { getCFTesterAbi } from '../shared/contract_interfaces';
 import { send } from '../shared/send';
 
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -139,7 +139,7 @@ async function testTxMultipleVaultSwaps(
   while (eventCounter === 0) {
     await sleep(2000);
   }
-  testContext.logger.debug(`${tag} Successfully observed event: swapping: SwapScheduled`);
+  testContext.debug(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
   // Wait some more time after the first event to ensure another one is not emited
   await sleep(30000);

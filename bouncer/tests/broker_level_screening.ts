@@ -14,7 +14,7 @@ import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { getBtcBalance } from '../shared/get_btc_balance';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');

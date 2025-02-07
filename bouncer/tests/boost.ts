@@ -19,7 +19,7 @@ import { requestNewSwap } from '../shared/perform_swap';
 import { createBoostPools } from '../shared/setup_boost_pools';
 import { jsonRpc } from '../shared/json_rpc';
 import { observeEvent, Event, getChainflipApi } from '../shared/utils/substrate';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 /* eslint-disable @typescript-eslint/no-explicit-any */

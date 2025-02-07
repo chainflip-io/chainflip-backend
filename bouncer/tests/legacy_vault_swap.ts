@@ -25,7 +25,7 @@ import { getBalance } from '../shared/get_balance';
 import { newVaultSwapCcmMetadata } from '../shared/swapping';
 import { getEvmVaultAbi } from '../shared/contract_interfaces';
 import { approveEvmTokenVault } from '../shared/evm_vault_swap';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 import { Logger } from '../shared/utils/logger';
 
 async function legacyEvmVaultSwap(

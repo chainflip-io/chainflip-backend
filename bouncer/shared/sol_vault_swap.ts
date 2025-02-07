@@ -30,7 +30,7 @@ import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.1-
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
 import { getBalance } from './get_balance';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from './utils/test_context';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
 

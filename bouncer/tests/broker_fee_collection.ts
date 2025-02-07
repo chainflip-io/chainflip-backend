@@ -20,7 +20,7 @@ import {
 import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { send } from '../shared/send';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 import { Logger } from '../shared/utils/logger';
 
 const commissionBps = 1000; // 10%
@@ -187,7 +187,7 @@ export async function testBrokerFeeCollection(testContext: TestContext): Promise
   const role = JSON.stringify(
     await chainflip.query.accountRoles.accountRoles(broker.address),
   ).replace(/"/g, '');
-  testContext.logger.debug('Broker address:', broker.address);
+  testContext.debug('Broker address:', broker.address);
   assert.strictEqual(role, 'Broker', `Broker has unexpected role: ${role}`);
 
   await testBrokerFees(testContext.logger, Assets.Flip, randomBytes(32).toString('hex'));

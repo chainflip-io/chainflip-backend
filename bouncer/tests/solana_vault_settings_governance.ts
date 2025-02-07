@@ -9,7 +9,7 @@ import {
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { getSolanaVaultIdl } from '../shared/contract_interfaces';
 import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.1-swap-endpoint/vault';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 import { Logger } from '../shared/utils/logger';
 
 type VaultSwapSettings = {

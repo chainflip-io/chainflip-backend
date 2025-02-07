@@ -33,7 +33,7 @@ import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 import { execWithLog } from './utils/exec_with_log';
 import { send } from './send';
-import { TestContext } from './swap_context';
+import { TestContext } from './utils/test_context';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -1169,7 +1169,7 @@ export async function startEngines(
 
 // Check that all Solana Nonces are available
 export async function checkAvailabilityAllSolanaNonces(testContext: TestContext) {
-  testContext.logger.info('=== Checking Solana Nonce Availability ===');
+  testContext.info('=== Checking Solana Nonce Availability ===');
 
   // Check that all Solana nonces are available
   await using chainflip = await getChainflipApi();

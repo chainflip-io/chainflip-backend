@@ -13,14 +13,12 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
-import { SwapContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 import { logger } from '../shared/utils/logger';
 import { runWithTimeoutAndExit } from '../shared/utils';
 
 // Test Solana's delta based ingress
 async function main(): Promise<void> {
-  const testContext = { swapContext: new SwapContext(), logger };
-
   await yargs(hideBin(process.argv))
     .command(
       'prebuilt',
@@ -49,7 +47,12 @@ async function main(): Promise<void> {
       },
       async (args) => {
         await runWithTimeoutAndExit(
-          testDeltaBasedIngress(testContext, args.bins, args.localnet_init, args.nodes as 1 | 3),
+          testDeltaBasedIngress(
+            new TestContext(),
+            args.bins,
+            args.localnet_init,
+            args.nodes as 1 | 3,
+          ),
           800,
         );
       },

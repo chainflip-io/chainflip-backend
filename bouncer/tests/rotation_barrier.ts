@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 import { testVaultSwap } from '../shared/swapping';
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 
@@ -9,11 +9,11 @@ export async function testRotateAndSwap(testContext: TestContext) {
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
 
   // Wait for the activation key to be created and the activation key to be sent for signing
-  testContext.logger.info(`Vault rotation initiated`);
+  testContext.info(`Vault rotation initiated`);
   await observeEvent('evmThresholdSigner:KeygenSuccess').event;
-  testContext.logger.info(`Waiting for the bitcoin key handover`);
+  testContext.info(`Waiting for the bitcoin key handover`);
   await observeEvent('bitcoinThresholdSigner:KeyHandoverSuccessReported').event;
-  testContext.logger.info(`Waiting for eth key activation transaction to be sent for signing`);
+  testContext.info(`Waiting for eth key activation transaction to be sent for signing`);
   await observeEvent('evmThresholdSigner:ThresholdSignatureRequest').event;
 
   const broadcastAborted = observeBadEvent(':BroadcastAborted', { label: 'Rotate and swap' });

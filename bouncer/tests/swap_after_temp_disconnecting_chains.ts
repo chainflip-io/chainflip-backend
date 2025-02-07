@@ -1,7 +1,7 @@
 import { connectContainerToNetwork, disconnectContainerFromNetwork } from '../shared/docker_utils';
 import { sleep } from '../shared/utils';
 import { testSwap } from '../shared/swapping';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 // Testing a swap after temporarily disconnecting external nodes
 export async function testSwapAfterDisconnection(testContext: TestContext) {

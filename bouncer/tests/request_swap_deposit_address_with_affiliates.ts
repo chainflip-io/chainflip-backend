@@ -8,7 +8,7 @@ import assert from 'assert';
 import { z } from 'zod';
 import { getChainflipApi } from '../shared/utils/substrate';
 import { deferredPromise, handleSubstrateError, shortChainFromAsset } from '../shared/utils';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 export async function depositChannelCreation(testContext: TestContext) {
   const keyring = new Keyring({ type: 'sr25519' });
@@ -236,7 +236,7 @@ export async function depositChannelCreation(testContext: TestContext) {
 
   results.forEach((result, i) => {
     if (result.status === 'fulfilled') {
-      testContext.logger.debug(`swap channel ${i} opened successfully`);
+      testContext.debug(`swap channel ${i} opened successfully`);
     } else {
       throw new Error(`Swap channel ${i} couldn't be opened: ${(result.reason as Error).message}`);
     }

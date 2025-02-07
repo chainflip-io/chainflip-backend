@@ -3,7 +3,7 @@ import assert from 'assert';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { observeEvent, getChainflipApi } from '../shared/utils/substrate';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 interface Utxo {
   id: string;

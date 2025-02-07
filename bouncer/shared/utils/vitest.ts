@@ -1,17 +1,13 @@
 import { afterEach, beforeEach, it } from 'vitest';
-import { SwapContext, TestContext } from '../swap_context';
-import { logger } from './logger';
+import { TestContext } from './test_context';
 
 // Create a new SwapContext for each test
 beforeEach<{ testContext: TestContext }>((context) => {
-  context.testContext = {
-    swapContext: new SwapContext(),
-    logger,
-  };
+  context.testContext = new TestContext();
 });
-// Print the SwapContext report after the test finishes
+// Print the SwapContext report after each test finishes
 afterEach<{ testContext: TestContext }>((context) => {
-  context.testContext.swapContext.print_report(context.testContext.logger);
+  context.testContext.printReport();
 });
 
 export function concurrentTest(
@@ -22,9 +18,12 @@ export function concurrentTest(
   it.concurrent<{ testContext: TestContext }>(
     name,
     async (context) => {
+      // Attach the test name to the logger
       context.testContext.logger = context.testContext.logger.child({ test: name });
+      // Run the test with the test context
       await testFunction(context.testContext).catch((error) => {
-        context.testContext.logger.error(error);
+        // We must catch the error here to be able to log it
+        context.testContext.error(error);
         throw error;
       });
     },
@@ -40,9 +39,12 @@ export function serialTest(
   it<{ testContext: TestContext }>(
     name,
     async (context) => {
+      // Attach the test name to the logger
       context.testContext.logger = context.testContext.logger.child({ test: name });
+      // Run the test with the test context
       await testFunction(context.testContext).catch((error) => {
-        context.testContext.logger.error(error);
+        // We must catch the error here to be able to log it
+        context.testContext.error(error);
         throw error;
       });
     },

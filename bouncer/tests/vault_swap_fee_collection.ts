@@ -16,7 +16,7 @@ import { performVaultSwap } from '../shared/perform_swap';
 import { prepareSwap } from '../shared/swapping';
 import { getChainflipApi } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 import { Logger } from '../shared/utils/logger';
 
 // Fee to use for the broker and affiliates

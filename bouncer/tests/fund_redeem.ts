@@ -13,7 +13,7 @@ import { redeemFlip, RedeemAmount } from '../shared/redeem_flip';
 import { newStatechainAddress } from '../shared/new_statechain_address';
 import { getChainflipApi } from '../shared/utils/substrate';
 import { Logger } from '../shared/utils/logger';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 // Submitting the `redeem` extrinsic will cost a small amount of gas. Any more than this and we should be suspicious.
 const gasErrorMargin = 0.1;

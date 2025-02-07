@@ -2,7 +2,7 @@ import assert from 'assert';
 import { createStateChainKeypair, tryUntilSuccess } from '../shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { TestContext } from '../shared/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 import { Logger } from '../shared/utils/logger';
 
 async function getGovernanceMembers(): Promise<string[]> {

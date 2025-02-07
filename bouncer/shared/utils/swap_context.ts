@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { logger as globalLogger, Logger } from './utils/logger';
+import { logger as globalLogger, Logger } from './logger';
 
 export enum SwapStatus {
   Initiated,
@@ -74,7 +74,7 @@ export class SwapContext {
     this.allSwaps.set(tag, status);
   }
 
-  print_report(logger: Logger = globalLogger) {
+  printReport(logger: Logger = globalLogger) {
     const unsuccessfulSwapsEntries: string[] = [];
     this.allSwaps.forEach((status, tag) => {
       if (status !== SwapStatus.Success) {
@@ -92,9 +92,4 @@ export class SwapContext {
       }
     }
   }
-}
-
-export interface TestContext {
-  swapContext: SwapContext;
-  logger: Logger;
 }
