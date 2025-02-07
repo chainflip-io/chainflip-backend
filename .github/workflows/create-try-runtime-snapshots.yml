@@ -1,15 +1,20 @@
 name: Create Try-Runtime Snapshots
 
 on:
-  # temp: just for testing
-  pull_request:
+  push:
     branches:
       - feat/live-network-migration-checks
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-try-runtime-snapshots
+  cancel-in-progress: true
+
   # schedule:
   #   # Run at midnight UTC every day
   #   - cron: '0 0 * * *'
   # Optional: Allow manual triggering
-  workflow_dispatch:
+  
 
 env:
   SISYPHOS_URI: "rpc.sisyphos.liquidity.network"
