@@ -38,7 +38,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
 	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
 	EpochIndex, ForeignChain, GasAmount, PrewitnessedDepositId, SwapRequestId,
-	ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -1429,38 +1429,6 @@ pub mod pallet {
 				})
 			})?;
 			Ok(())
-		}
-
-		// TODO: remove these deprecated calls after runtime version 1.8
-		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::vault_swap_request())]
-		pub fn vault_swap_request_deprecated(
-			origin: OriginFor<T>,
-			_from: Asset,
-			_to: Asset,
-			_deposit_amount: AssetAmount,
-			_destination_address: EncodedAddress,
-			_tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Err(DispatchError::Other("deprecated"))
-		}
-
-		#[pallet::call_index(11)]
-		#[pallet::weight(T::WeightInfo::vault_swap_request())]
-		pub fn vault_ccm_swap_request_deprecated(
-			origin: OriginFor<T>,
-			_source_asset: Asset,
-			_deposit_amount: AssetAmount,
-			_destination_asset: Asset,
-			_destination_address: EncodedAddress,
-			_deposit_metadata: CcmDepositMetadata,
-			_tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Err(DispatchError::Other("deprecated"))
 		}
 
 		#[pallet::call_index(12)]

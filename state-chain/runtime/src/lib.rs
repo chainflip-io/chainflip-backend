@@ -19,11 +19,10 @@ use crate::{
 		},
 		Offence,
 	},
-	migrations::solana_transaction_data_migration::NoopUpgrade,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
-		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, OpenDepositChannels,
-		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
+		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, OpenDepositChannels, PendingBroadcasts,
+		PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
@@ -69,8 +68,9 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
+use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
+use monitoring_apis::MonitoringDataV2;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
@@ -212,7 +212,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 180,
+	spec_version: 190,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -1240,6 +1240,8 @@ pub type PalletExecutionOrder = (
 /// - The VersionUpdate migration. Don't remove this.
 /// - Individual pallet migrations. Don't remove these unless there's a good reason. Prefer to
 ///   disable these at the pallet level (ie. set it to () or PhantomData).
+/// - Housekeeping migrations. Don't remove this - check individual housekeeping migrations and
+///   remove them when they are no longer needed.
 /// - Release-specific migrations: remove these if they are no longer needed.
 type AllMigrations = (
 	// This ClearEvents should only be run at the start of all migrations. This is in case another
@@ -1249,11 +1251,8 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_8,
 	migrations::housekeeping::Migration,
-	// Can be removed once Solana address re-use is activated.
-	migrations::solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
-	migrations::reap_old_accounts::Migration,
+	MigrationsForV1_9,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1296,6 +1295,7 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
+#[allow(unused)]
 macro_rules! instanced_migrations {
 	(
 		module: $module:ident,
@@ -1319,7 +1319,7 @@ macro_rules! instanced_migrations {
 				VersionedMigration<
 					$from,
 					$to,
-					NoopUpgrade,
+					(),
 					$module::Pallet<Runtime, $exclude>,
 					DbWeight,
 				>,
@@ -1328,71 +1328,7 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_8 = (
-	VersionedMigration<
-		2,
-		3,
-		migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
-		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-	// Only the Solana Transaction type has changed
-	instanced_migrations! {
-		module: pallet_cf_broadcast,
-		migration: migrations::solana_transaction_data_migration::SolanaTransactionDataMigration,
-		from: 10,
-		to: 11,
-		include_instances: [
-			SolanaInstance
-		],
-		exclude_instances: [
-			EthereumInstance,
-			PolkadotInstance,
-			BitcoinInstance,
-			ArbitrumInstance,
-		],
-	},
-	instanced_migrations! {
-		module: pallet_cf_chain_tracking,
-		migration: migrations::arbitrum_chain_tracking_migration::ArbitrumChainTrackingMigration,
-		from: 3,
-		to: 4,
-		include_instances: [
-			ArbitrumInstance
-		],
-		exclude_instances: [
-			EthereumInstance,
-			PolkadotInstance,
-			BitcoinInstance,
-			SolanaInstance,
-		],
-	},
-	instanced_migrations! {
-		module: pallet_cf_broadcast,
-		migration: migrations::api_calls_gas_migration::EthApiCallsGasMigration,
-		from: 11,
-		to: 12,
-		include_instances: [
-			EthereumInstance,
-			ArbitrumInstance
-		],
-		exclude_instances: [
-			PolkadotInstance,
-			BitcoinInstance,
-			SolanaInstance,
-		],
-	},
-	instanced_migrations! {
-		module: pallet_cf_elections,
-		migration: migrations::remove_fee_tracking_migration::RemoveFeeTrackingMigration,
-		from: 3,
-		to: 4,
-		include_instances: [
-			SolanaInstance
-		],
-		exclude_instances: [],
-	},
-);
+type MigrationsForV1_9 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -2631,7 +2567,7 @@ impl_runtime_apis! {
 			SolanaBroadcaster::current_on_chain_key().unwrap_or_default()
 		}
 		fn cf_monitoring_data() -> MonitoringDataV2 {
-			MonitoringDataV2{
+			MonitoringDataV2 {
 				external_chains_height: Self::cf_external_chains_block_height(),
 				btc_utxos: Self::cf_btc_utxos(),
 				epoch: Self::cf_epoch_state(),
