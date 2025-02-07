@@ -1,0 +1,157 @@
+
+
+#![feature(async_closure)]
+
+use std::collections::BTreeMap;
+use std::time::Duration;
+
+use bitvec::vec::BitVec;
+use chainflip_engine::state_chain_observer::client::chain_api::ChainApi;
+use chainflip_engine::witness::dot::polkadot::storage;
+use codec::{Decode, Encode};
+use chainflip_engine::state_chain_observer::client::{
+	base_rpc_api::RawRpcApi, extrinsic_api::signed::SignedExtrinsicApi, BlockInfo,
+	StateChainClient,
+};
+use chainflip_engine::state_chain_observer::client::base_rpc_api::BaseRpcClient;
+use custom_rpc::CustomApiClient;
+// use elections::traces;
+// use pallet_cf_elections::electoral_system::{BitmapComponentOf, ElectionData};
+use pallet_cf_elections::UniqueMonotonicIdentifier;
+use state_chain_runtime::{Runtime, SolanaInstance};
+use cf_utilities::task_scope;
+use futures_util::FutureExt;
+use futures::{stream, StreamExt, TryStreamExt};
+use chainflip_engine::state_chain_observer::client::storage_api::StorageApi;
+use pallet_cf_elections::electoral_systems::composite::tuple_6_impls::*;
+use tokio::time::sleep;
+use std::env;
+
+#[tokio::main(flavor = "multi_thread", worker_threads = 3)]
+async fn main() {
+	println!("Hello, world!");
+
+	watch_stuck_solana_ingress().await;
+}
+
+async fn watch_stuck_solana_ingress() {
+
+	let health_url = env::var("HEALTH_URL").expect("HEALTH_URL required");
+
+	tokio::spawn(async move {
+            // Process each socket concurrently.
+            loop {
+				let body = reqwest::get(&health_url)
+					.await.unwrap()
+					.text()
+					.await.unwrap();
+
+				sleep(Duration::from_secs(30)).await
+			}
+	});
+
+
+
+	task_scope::task_scope(|scope| async move { 
+
+		let rpc_url = env::var("CF_RPC_NODE").expect("CF_RPC_NODE required");
+		let discord_url = env::var("DISCORD_URL").expect("DISCORD_URL required");
+
+		let (finalized_stream, _, client) = StateChainClient::connect_without_account(scope, &rpc_url).await.unwrap();
+
+		finalized_stream.fold(client, async |client, block| {
+
+			// let block_hash = client.latest_finalized_block().hash;
+			let block_hash = block.hash;
+
+			let all_properties : BTreeMap<_,_> = client
+				.storage_map::<pallet_cf_elections::ElectionProperties::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
+				.await
+				.expect("could not get storage");
+
+			let delta_properties : Vec<_> =
+				all_properties.iter().map(|(_, value)| match value {
+					pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::C(props) => Some(props),
+					_ => None
+				})
+				.collect();
+
+			let all_state_map : BTreeMap<_,_> = client
+				.storage_map::<pallet_cf_elections::ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
+				.await
+				.expect("could not get storage");
+
+			let delta_state : BTreeMap<_,_> =
+				all_state_map.iter().filter_map(|(key, value)| match (key,value) {
+					(CompositeElectoralUnsynchronisedStateMapKey::C(key), CompositeElectoralUnsynchronisedStateMapValue::C(val))
+					=> Some((key,val)),
+					_ => None
+				})
+				.collect();
+
+			let block_height_state = client
+				.storage_value::<pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime, SolanaInstance>>(block_hash)
+				.await
+				.expect("could not get storage")
+				.map(|(value, ..)| value)
+				.expect("could not get block height");
+
+			for delta_prop_one in delta_properties {
+				for delta_prop in delta_prop_one {
+
+					for (account, (channel_details, total_consensus)) in delta_prop {
+						let total_ingressed = delta_state.get(&(account.clone(), channel_details.asset)).map(|i| i.amount).unwrap_or(0);
+
+						if total_consensus.block_number > block_height_state && total_consensus.amount > total_ingressed {
+							println!("not ingressed for account {account:?}");
+							println!("details: {channel_details:?}");
+
+							// let body = reqwest::get(&discord_url)
+							// 	.await?
+							// 	.text()
+							// 	.await?;
+						}
+					}
+				}
+
+				// println!("delta: {delta_prop:?}");
+			}
+
+			println!("processed block!");
+
+			client
+
+		}).await;
+
+		
+
+
+		/*
+		let bitmaps : BTreeMap<UniqueMonotonicIdentifier, _ > = client
+			.storage_map::<pallet_cf_elections::BitmapComponents::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
+			.await
+			.expect("could not get storage")
+		;
+
+		let bitmaps = bitmaps.into_iter()
+			.map(|(k,v)| (k, v.bitmaps))
+			.collect();
+
+		let result : ElectionDataFor<Runtime, SolanaInstance> = ElectionData {
+			bitmaps,
+			_phantom: Default::default()
+		};
+
+		let traces = traces(result);
+
+		println!("got election data: {traces:?}");
+
+		*/
+
+		Ok(())
+
+	 }.boxed()).await.unwrap()
+}
+
+
+

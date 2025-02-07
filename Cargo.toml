@@ -5,7 +5,7 @@ members = [
   "api/bin/chainflip-broker-api",
   "api/bin/chainflip-cli",
   "api/bin/chainflip-ingress-egress-tracker",
-  "api/bin/chainflip-lp-api",
+  "api/bin/chainflip-lp-api", "api/bin/chainflip-state-observer",
   "api/lib",
   "engine",
   "engine-proc-macros",

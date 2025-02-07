@@ -487,7 +487,7 @@ pub mod pallet {
 
 	/// Stores persistent state the electoral system needs.
 	#[pallet::storage]
-	pub(crate) type ElectoralUnsynchronisedState<T: Config<I>, I: 'static = ()> = StorageValue<
+	pub type ElectoralUnsynchronisedState<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
 		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 		OptionQuery,
@@ -495,7 +495,7 @@ pub mod pallet {
 
 	/// Stores persistent state the electoral system needs.
 	#[pallet::storage]
-	type ElectoralUnsynchronisedStateMap<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ElectoralUnsynchronisedStateMap<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
@@ -517,7 +517,7 @@ pub mod pallet {
 	/// Stores the properties of each election. These settings are fixed and are set on creation of
 	/// the election by the electoral system.
 	#[pallet::storage]
-	type ElectionProperties<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ElectionProperties<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		ElectionIdentifierOf<T::ElectoralSystem>,
