@@ -47,28 +47,7 @@ jobs:
       - name: Create directories
         run: |
           mkdir -p snapshots
-
-      - name: Create snapshots in parallel
-        run: |
-
-          # Get runtime versions first
-          SISYPHOS_VERSION=$(./bouncer/commands/network_spec_version.ts $SISYPHOS_URI)
-          PERSEVERANCE_VERSION=$(./bouncer/commands/network_spec_version.ts $PERSEVERANCE_URI)
-          MAINNET_VERSION=$(./bouncer/commands/network_spec_version.ts $MAINNET_URI)
-
-          # Create directories with version info
-          mkdir -p "snapshots/sisyphos_${SISYPHOS_VERSION}"
-          mkdir -p "snapshots/perseverance_${PERSEVERANCE_VERSION}"
-          mkdir -p "snapshots/mainnet_${MAINNET_VERSION}"
-
-          # Run all three snapshot creation tasks in parallel
-          (
-            for i in {1..10}; do
-              try-runtime create-snapshot --uri $SISYPHOS_URI "snapshots/sisyphos_${SISYPHOS_VERSION}/snapshot_$i"
-            done
-          ) &
-          
-          # (
+#           # (
           #   for i in {1..10}; do
           #     try-runtime create-snapshot --uri $PERSEVERANCE_URI "snapshots/perseverance_${PERSEVERANCE_VERSION}/snapshot_$i"
           #   done
@@ -79,8 +58,22 @@ jobs:
           #     try-runtime create-snapshot --uri $MAINNET_URI "snapshots/mainnet_${MAINNET_VERSION}/snapshot_$i"
           #   done
           # ) &
+      - name: Create snapshots in parallel
+        run: |
+          SISYPHOS_VERSION=$(./bouncer/commands/network_spec_version.ts $SISYPHOS_URI)
+          PERSEVERANCE_VERSION=$(./bouncer/commands/network_spec_version.ts $PERSEVERANCE_URI)
+          MAINNET_VERSION=$(./bouncer/commands/network_spec_version.ts $MAINNET_URI)
+
+          mkdir -p "snapshots/sisyphos_${SISYPHOS_VERSION}"
+          mkdir -p "snapshots/perseverance_${PERSEVERANCE_VERSION}"
+          mkdir -p "snapshots/mainnet_${MAINNET_VERSION}"
+
+          (
+            for i in {1..10}; do
+              try-runtime create-snapshot --uri $SISYPHOS_URI "snapshots/sisyphos_${SISYPHOS_VERSION}/snapshot_$i"
+            done
+          ) &
           
-          # Wait for all background processes to complete
           wait
 
       - name: Upload snapshots
