@@ -1392,6 +1392,16 @@ type MigrationsForV1_8 = (
 		],
 		exclude_instances: [],
 	},
+	instanced_migrations! {
+		module: pallet_cf_elections,
+		migration: migrations::refresh_delta_based_ingress::RefreshDeltaBasedIngress,
+		from: 4,
+		to: 5,
+		include_instances: [
+			SolanaInstance
+		],
+		exclude_instances: [],
+	},
 );
 
 #[cfg(feature = "runtime-benchmarks")]

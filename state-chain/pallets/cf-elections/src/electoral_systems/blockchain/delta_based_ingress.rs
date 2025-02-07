@@ -95,7 +95,39 @@ where
 
 		Ok(())
 	}
+
+	// This should not be merged to main.
+	pub fn migrate<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
+		election_identifiers: &[ElectionIdentifier<
+			<Self as ElectoralSystemTypes>::ElectionIdentifierExtra,
+		>],
+	) -> Result<(), CorruptStorageError> {
+		for id in election_identifiers {
+			let election_access = ElectoralAccess::election_mut(*id);
+			let new_properties = election_access
+				.properties()?
+				.into_iter()
+				.map(|(deposit_address, (details, _))| {
+					let confirmed_total = ElectoralAccess::unsynchronised_state_map(&(
+						deposit_address.clone(),
+						details.asset,
+					))?
+					.unwrap_or_else(|| ChannelTotalIngressed {
+						block_number: Zero::zero(),
+						amount: Zero::zero(),
+					});
+					Ok((deposit_address, (details, confirmed_total)))
+				})
+				.collect::<Result<BTreeMap<_, _>, _>>()?;
+
+			election_access.delete();
+			ElectoralAccess::new_election(Default::default(), new_properties, Default::default())?;
+		}
+
+		Ok(())
+	}
 }
+
 impl<Sink, Settings, ValidatorId> ElectoralSystemTypes
 	for DeltaBasedIngress<Sink, Settings, ValidatorId>
 where
