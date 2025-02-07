@@ -20,16 +20,20 @@ codec = { workspace = true, default-features = false }
 futures = { workspace = true }
 futures-core = { workspace = true }
 futures-util = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 # local dependencies
+cf-chains = { workspace = true }
 pallet-cf-elections = { workspace = true, default-features = true }
 chainflip-engine = { workspace = true }
 custom-rpc = { workspace = true }
 state-chain-runtime = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
+serde_json = {workspace = true}
+anyhow = { workspace = true, default-features = true }
 
 # new deps
-reqwest = { workspace = true, default-features = true }
+reqwest = { workspace = true, default-features = true, features = ["json"] }
 
 [lints]
 workspace = true

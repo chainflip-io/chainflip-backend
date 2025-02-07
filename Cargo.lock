@@ -1891,7 +1891,9 @@ dependencies = [
 name = "chainflip-state-observer"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bitvec",
+ "cf-chains",
  "chainflip-engine",
  "custom-rpc",
  "futures",
@@ -1900,6 +1902,8 @@ dependencies = [
  "pallet-cf-elections",
  "parity-scale-codec",
  "reqwest",
+ "serde",
+ "serde_json",
  "state-chain-runtime",
  "tokio",
  "utilities",
