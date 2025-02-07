@@ -49,7 +49,7 @@ struct NotifiedChannel {
 	asset: SolAsset,
 }
 
-const FILENAME: &'static str = "notified_channels.txt";
+const FILENAME: &'static str = "/data/notified_channels.txt";
 
 async fn watch_stuck_solana_ingress() {
 	let health_url = env::var("HEALTH_URL").expect("HEALTH_URL required");
@@ -129,7 +129,12 @@ async fn watch_stuck_solana_ingress() {
 					for (account, (channel_details, total_consensus)) in delta_prop {
 						let total_ingressed = delta_state.get(&(account.clone(), channel_details.asset)).map(|i| i.amount).unwrap_or(0);
 
-						if total_consensus.block_number < block_height_state && total_consensus.amount > total_ingressed {
+						let min_amount = match channel_details.asset {
+								SolAsset::Sol => 0,
+								SolAsset::SolUsdc => 2_000_000,
+							};
+
+						if total_consensus.block_number < block_height_state && total_consensus.amount >= total_ingressed + min_amount {
 
 							println!("account: {account:?}");
 							println!("asset: {:?}", channel_details.asset);
