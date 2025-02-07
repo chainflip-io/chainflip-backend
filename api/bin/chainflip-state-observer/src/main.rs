@@ -130,7 +130,7 @@ async fn watch_stuck_solana_ingress() {
 						let total_ingressed = delta_state.get(&(account.clone(), channel_details.asset)).map(|i| i.amount).unwrap_or(0);
 
 						let min_amount = match channel_details.asset {
-								SolAsset::Sol => 0,
+								SolAsset::Sol => 10_000_000,
 								SolAsset::SolUsdc => 2_000_000,
 							};
 
