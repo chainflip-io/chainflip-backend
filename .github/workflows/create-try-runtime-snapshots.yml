@@ -17,8 +17,8 @@ concurrency:
   
 
 env:
-  SISYPHOS_URI: "rpc.sisyphos.liquidity.network"
-  PERSEVERANCE_URI: "rpc.perseverance.liquidity.network"
+  SISYPHOS_URI: "archive.sisyphos.chainflip.io:443"
+  PERSEVERANCE_URI: "archive.perseverance.chainflip.io:443"
   MAINNET_URI: "mainnet-rpc.chainflip.io:443"
 
 jobs:
@@ -60,21 +60,36 @@ jobs:
           # ) &
       - name: Create snapshots in parallel
         run: |
-          SISYPHOS_VERSION=$(./bouncer/commands/network_spec_version.ts $SISYPHOS_URI)
-          PERSEVERANCE_VERSION=$(./bouncer/commands/network_spec_version.ts $PERSEVERANCE_URI)
-          MAINNET_VERSION=$(./bouncer/commands/network_spec_version.ts $MAINNET_URI)
+          # First install node dependencies since we're using TypeScript scripts
+          cd bouncer && pnpm install && cd ..
 
-          mkdir -p "snapshots/sisyphos_${SISYPHOS_VERSION}"
-          mkdir -p "snapshots/perseverance_${PERSEVERANCE_VERSION}"
-          mkdir -p "snapshots/mainnet_${MAINNET_VERSION}"
+          # Add https:// prefix to URIs and ensure they're using wss:// for secure WebSocket
+          SISYPHOS_URI="https://${SISYPHOS_URI}"
+          PERSEVERANCE_URI="https://${PERSEVERANCE_URI}" 
+          MAINNET_URI="https://${MAINNET_URI}"
 
-          (
+          # Get versions using node to run the TypeScript script
+          SISYPHOS_VERSION=$(node bouncer/commands/network_spec_version.ts $SISYPHOS_URI)
+          PERSEVERANCE_VERSION=$(node bouncer/commands/network_spec_version.ts $PERSEVERANCE_URI)
+          MAINNET_VERSION=$(node bouncer/commands/network_spec_version.ts $MAINNET_URI)
+
+          # Log the versions
+          echo "Sisyphos Version: $SISYPHOS_VERSION"
+          echo "Perseverance Version: $PERSEVERANCE_VERSION"
+          echo "Mainnet Version: $MAINNET_VERSION"
+
+          # Create directories only if versions were retrieved successfully
+          if [ ! -z "$SISYPHOS_VERSION" ]; then
+            mkdir -p "snapshots/sisyphos_${SISYPHOS_VERSION}"
+            
+            # Run snapshots in sequence to avoid connection issues
             for i in {1..10}; do
-              try-runtime create-snapshot --uri $SISYPHOS_URI "snapshots/sisyphos_${SISYPHOS_VERSION}/snapshot_$i"
+              try-runtime create-snapshot --uri $SISYPHOS_URI "snapshots/sisyphos_${SISYPHOS_VERSION}/snapshot_$i" || exit 1
             done
-          ) &
-          
-          wait
+          else
+            echo "Failed to get Sisyphos version"
+            exit 1
+          fi
 
       - name: Upload snapshots
         uses: actions/upload-artifact@v4
