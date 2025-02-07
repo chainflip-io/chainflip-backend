@@ -25,7 +25,6 @@ jobs:
   create-snapshots:
     name: Create Try-Runtime Snapshots
     runs-on: digitalocean
-    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -85,7 +84,7 @@ jobs:
           wait
 
       - name: Upload snapshots
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: try-runtime-snapshots
           path: snapshots/
