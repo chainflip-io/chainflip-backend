@@ -970,6 +970,12 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>>;
 
+	#[method(name = "solana_election_data")]
+	fn cf_solana_election_data(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult< Vec<u8> >;
+
 	#[method(name = "solana_filter_votes")]
 	fn cf_solana_filter_votes(
 		&self,
@@ -1859,6 +1865,13 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.with_runtime_api(at, |api, hash| api.cf_electoral_data(hash, validator))
+	}
+
+	fn cf_solana_election_data(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult< Vec<u8> > {
+		self.with_runtime_api(at, |api, hash| api.cf_election_data(hash))
 	}
 
 	fn cf_solana_filter_votes(

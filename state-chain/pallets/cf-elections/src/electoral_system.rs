@@ -36,6 +36,24 @@ impl<ES: ElectoralSystemTypes> ConsensusVotes<ES> {
 	}
 }
 
+use sp_std::collections::btree_map::BTreeMap;
+use bitvec::prelude::BitVec;
+use sp_core::Encode;
+use sp_core::Decode;
+use crate::UniqueMonotonicIdentifier;
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct ElectionData<ES: ElectoralSystemTypes> {
+    // properties: ES::ElectionProperties,
+    // validators: Vec<ES::ValidatorId>,
+    // shared_votes: BTreeMap<SharedDataHash, <ES::VoteStorage as VoteStorage>::SharedData>,
+    pub bitmaps: BTreeMap<
+		UniqueMonotonicIdentifier,
+		Vec<(BitmapComponentOf<ES>, BitVec<u8, bitvec::order::Lsb0>)>
+		>,
+
+    pub _phantom: sp_std::marker::PhantomData<ES>
+}
+
 /// A trait for defining all relevant types of an electoral system.
 pub trait ElectoralSystemTypes: 'static + Sized {
 	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;

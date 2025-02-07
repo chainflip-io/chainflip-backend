@@ -1429,6 +1429,9 @@ mod benches {
 	);
 }
 
+use pallet_cf_elections::ElectionDataFor;
+use pallet_cf_elections::electoral_system::ElectionData;
+
 impl_runtime_apis! {
 	impl runtime_apis::ElectoralRuntimeApi<Block, SolanaInstance> for Runtime {
 		fn cf_electoral_data(account_id: AccountId) -> Vec<u8> {
@@ -1442,6 +1445,20 @@ impl_runtime_apis! {
 
 	// START custom runtime APIs
 	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
+
+		fn cf_election_data() -> Vec<u8> {
+			let bitmaps = pallet_cf_elections::BitmapComponents::<Runtime, SolanaInstance>::iter()
+				.map(|(k,v)| (k, v.bitmaps))
+				.collect();
+
+			let result : ElectionDataFor<Runtime, SolanaInstance> = ElectionData {
+				bitmaps,
+				_phantom: Default::default()
+			};
+
+			result.encode()
+		}
+
 		fn cf_is_auction_phase() -> bool {
 			Validator::is_auction_phase()
 		}

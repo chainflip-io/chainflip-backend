@@ -467,6 +467,9 @@ decl_runtime_apis!(
 			broker: AccountId32,
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
+
+		fn cf_election_data() -> Vec<u8>;
+		// ElectionDataFor<state_chain_runtime::Runtime, SolanaInstance>;
 	}
 );
 

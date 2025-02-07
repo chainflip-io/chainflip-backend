@@ -195,6 +195,12 @@ pub mod pallet {
 		BlockNumberFor<T>,
 	>;
 
+	use crate::electoral_system::ElectionData;
+
+	/// TEMP.
+	#[allow(type_alias_bounds)]
+	pub type ElectionDataFor<T: Config<I>, I: 'static> = ElectionData<T::ElectoralSystemRunner>;
+
 	/// A unique identifier for an election.
 	#[derive(
 		PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo, Default,
@@ -930,7 +936,7 @@ pub mod pallet {
 		pub struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
 			epoch: EpochIndex,
 			#[allow(clippy::type_complexity)]
-			bitmaps:
+			pub bitmaps:
 				Vec<(BitmapComponentOf<T::ElectoralSystemRunner>, BitVec<u8, bitvec::order::Lsb0>)>,
 			#[codec(skip)]
 			_phantom: core::marker::PhantomData<(T, I)>,

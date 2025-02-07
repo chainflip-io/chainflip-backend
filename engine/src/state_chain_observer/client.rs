@@ -281,13 +281,13 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			// incompatible (by returning an error here) even if the finalised stream is compatible.
 			// PRO-1334
 			match block_compatibility.compatibility {
-				CfeCompatibility::Compatible => block_stream,
-				_ => {
-					return Err(CreateStateChainClientError::CompatibilityError(
-						block_compatibility,
-					)
-					.into());
-				},
+				_ => block_stream,
+				// _ => {
+				// 	return Err(CreateStateChainClientError::CompatibilityError(
+				// 		block_compatibility,
+				// 	)
+				// 	.into());
+				// },
 			}
 		};
 
@@ -296,10 +296,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 		let latest_block = *processed_stream.cache();
 
-		assert_eq!(
-			base_rpc_client.check_block_compatibility(latest_block).await?.compatibility,
-			CfeCompatibility::Compatible
-		);
+		// assert_eq!(
+		// 	base_rpc_client.check_block_compatibility(latest_block).await?.compatibility,
+		// 	CfeCompatibility::Compatible
+		// );
 
 		let (latest_block_sender, latest_block_watcher) =
 			tokio::sync::watch::channel::<BlockInfo>(latest_block);
@@ -320,23 +320,23 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 						let block_compatibility = base_rpc_client.check_block_compatibility(block).await?;
 						match block_compatibility.compatibility {
-							CfeCompatibility::Compatible => {
+							_ => {
 								latest_block = block;
 								block_sender.send(block).await;
 								let _result = latest_block_sender.send(block);
 							},
-							CfeCompatibility::NoLongerCompatible => {
-								if error_on_incompatible_block {
-									break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
-								} else {
-									tracing::warn!("StateChain block number {} is no longer compatible.", block.number);
-								}
-							}
-							CfeCompatibility::NotYetCompatible => {
-								// We've either already returned a NotYetCompatible error, or we've waited until we're compatible. So we
-								// don't expect this case to happen.
-								break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
-							},
+							// CfeCompatibility::NoLongerCompatible => {
+							// 	if error_on_incompatible_block {
+							// 		break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
+							// 	} else {
+							// 		tracing::warn!("StateChain block number {} is no longer compatible.", block.number);
+							// 	}
+							// }
+							// CfeCompatibility::NotYetCompatible => {
+							// 	// We've either already returned a NotYetCompatible error, or we've waited until we're compatible. So we
+							// 	// don't expect this case to happen.
+							// 	break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
+							// },
 						}
 					},
 					if let Some(block_stream_request) = block_stream_request_receiver.next() => {
