@@ -12,7 +12,6 @@ echo "Running full bouncer 🧪"
 if [[ $LOCALNET == false ]]; then
   echo "🤫 Skipping tests that require localnet"
 else
-  echo "🤫 Skipping tests that require localnet until they are fixed."
-  # echo "🚀 Running tests that require localnet"
-  # ./commands/run_test.ts "Swap-After-Disconnection"
+  echo "🚀 Running tests that require localnet"
+  ./commands/run_test.ts "Swap-After-Disconnection"
 fi
