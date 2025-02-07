@@ -1,4 +1,4 @@
-use crate::{boost_pool_rpc::BoostPoolFeesRpc, monitoring::RpcEpochStateV2};
+use crate::{boost_pool_rpc::BoostPoolFeesRpc, monitoring::RpcEpochState};
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
 	common::{PoolPairsMap, Side},
@@ -109,7 +109,7 @@ impl From<FlipSupply> for RpcFlipSupply {
 pub struct RpcMonitoringData {
 	pub external_chains_height: ExternalChainsBlockHeight,
 	pub btc_utxos: BtcUtxos,
-	pub epoch: RpcEpochStateV2,
+	pub epoch: RpcEpochState,
 	pub pending_redemptions: RpcRedemptionsInfo,
 	pub pending_broadcasts: PendingBroadcasts,
 	pub pending_tss: PendingTssCeremonies,

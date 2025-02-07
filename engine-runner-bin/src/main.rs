@@ -3,7 +3,7 @@ use engine_upgrade_utils::{CStrArray, NEW_VERSION, OLD_VERSION};
 
 // Declare the entrypoints into each version of the engine
 mod old {
-	#[engine_proc_macros::link_engine_library_version("1.7.9")]
+	#[engine_proc_macros::link_engine_library_version("1.8.0")]
 	extern "C" {
 		pub fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,
@@ -13,7 +13,7 @@ mod old {
 }
 
 mod new {
-	#[engine_proc_macros::link_engine_library_version("1.8.0")]
+	#[engine_proc_macros::link_engine_library_version("1.9.0")]
 	extern "C" {
 		fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,

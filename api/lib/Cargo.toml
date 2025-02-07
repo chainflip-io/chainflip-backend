@@ -1,6 +1,6 @@
 [package]
 name = "chainflip-api"
-version = "1.8.0"
+version = "1.9.0"
 edition = "2021"
 
 [lints]
@@ -12,7 +12,7 @@ async-trait = { workspace = true }
 bs58 = { workspace = true, default-features = true }
 ed25519-dalek = { workspace = true }
 futures = { workspace = true }
-hex = { workspace = true, default-features = true}
+hex = { workspace = true, default-features = true }
 hmac-sha512 = { workspace = true }
 libsecp256k1 = { workspace = true, default-features = true }
 rand = { workspace = true, default-features = true }
