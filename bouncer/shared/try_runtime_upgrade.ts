@@ -59,7 +59,7 @@ export async function tryRuntimeUpgrade(
   block: number | 'latest' | 'all' | 'last-n',
   networkUrl: string,
   runtimePath: string,
-  lastN = 50,
+  lastN = 40,
 ) {
   await using api = await getChainflipApi();
 
