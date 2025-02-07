@@ -165,7 +165,7 @@ services:
           "curl",
           "-H 'Content-Type: application/json;'",
           "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9947"
+          "http://localhost:9948"
         ]
       interval: 10s
       timeout: 5s
@@ -209,7 +209,7 @@ services:
           "curl",
           "-H 'Content-Type: application/json;'",
           "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9947"
+          "http://localhost:9955"
         ]
       interval: 10s
       timeout: 5s
