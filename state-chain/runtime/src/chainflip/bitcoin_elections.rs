@@ -6,10 +6,6 @@ use cf_chains::{
 };
 use cf_traits::Chainflip;
 use core::ops::RangeInclusive;
-use serde::{Deserialize, Serialize};
-use sp_core::Get;
-use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
-
 use frame_support::__private::sp_tracing::event;
 use frame_system::pallet_prelude::BlockNumberFor;
 use log::warn;
@@ -40,7 +36,9 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-use sp_core::{Decode, Encode, MaxEncodedLen};
+use serde::{Deserialize, Serialize};
+use sp_core::{Decode, Encode, Get, MaxEncodedLen};
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 use pallet_cf_ingress_egress::{
 	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo, WitnessSafetyMargin,
@@ -315,7 +313,7 @@ impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>
 	}
 }
 
-create_on_check_complete_hook!(BitcoinOnCheckCompleteHook, ForeignChain::Bitcoin);
+create_on_check_complete_hook!(Bitcoin);
 
 pub type BitcoinLiveness = Liveness<
 	BlockNumber,

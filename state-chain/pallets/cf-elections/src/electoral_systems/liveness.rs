@@ -34,17 +34,19 @@ pub trait OnCheckComplete<ValidatorId> {
 
 #[macro_export]
 macro_rules! create_on_check_complete_hook {
-	($name:ident, $chain:expr) => {
-		pub struct $name;
+	($chain:ident) => {
+		sp_core::paste::paste! {
+			pub struct [<$chain OnCheckCompleteHook>];
 
-		impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for $name {
-			fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
-				const CHAIN: ForeignChain = $chain; // Enforce ForeignChain at compile time
+			impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for [<$chain OnCheckCompleteHook>]{
+				fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
+					const CHAIN: ForeignChain = ForeignChain::$chain; // Enforce ForeignChain at compile time
 
-				<Reputation as OffenceReporter>::report_many(
-					Offence::FailedLivenessCheck(CHAIN),
-					validator_ids,
-				);
+					<Reputation as OffenceReporter>::report_many(
+						Offence::FailedLivenessCheck(CHAIN),
+						validator_ids,
+					);
+				}
 			}
 		}
 	};

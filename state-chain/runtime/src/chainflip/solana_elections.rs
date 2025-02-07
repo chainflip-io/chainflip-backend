@@ -146,7 +146,7 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	<Runtime as Chainflip>::ValidatorId,
 >;
 
-create_on_check_complete_hook!(SolanaOnCheckCompleteHook, ForeignChain::Solana);
+create_on_check_complete_hook!(Solana);
 
 pub type SolanaLiveness = electoral_systems::liveness::Liveness<
 	<Solana as Chain>::ChainBlockNumber,
