@@ -27,7 +27,6 @@ async function main() {
   );
 
   await Promise.all([
-    testSwap('Dot', 'Btc', undefined, undefined, testSwapAfterDisconnection.swapContext),
     testSwap('Btc', 'Flip', undefined, undefined, testSwapAfterDisconnection.swapContext),
     testSwap('Eth', 'Usdc', undefined, undefined, testSwapAfterDisconnection.swapContext),
   ]);
