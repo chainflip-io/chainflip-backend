@@ -4,10 +4,7 @@ use super::{
 };
 use crate::electoral_systems::{
 	block_height_tracking::ChainProgress,
-	block_witnesser::{
-		block_processor::{DepositChannelWitnessingProcessor, InnerEquality},
-		primitives::ChainProgressInner,
-	},
+	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{
 		core::{IndexOf, MultiIndexAndValue, Validate},
 		state_machine2::StateMachine,
@@ -20,7 +17,7 @@ use core::iter::Step;
 use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
+use sp_std::{fmt::Debug, ops::Sub, vec::Vec};
 
 pub trait BWTypes: 'static {
 	type ChainBlockNumber: Serde
@@ -54,35 +51,33 @@ pub trait BWProcessorTypes {
 		+ Into<u64>
 		+ Default
 		+ From<u64>
+		+ Sub<Output = Self::ChainBlockNumber>
 		+ 'static;
 
 	type BlockData: Serde + Clone;
-	type Event: Serde + Debug + Clone + Eq + InnerEquality;
-	type Rules: Hook<(Self::ChainBlockNumber, Self::ChainBlockNumber, Self::BlockData), Vec<Self::Event>>
-		+ Default
-		+ Serde
-		+ Debug
-		+ Clone
-		+ Eq;
-	type Execute: Hook<Self::Event, ()> + Default + Serde + Debug + Clone + Eq;
-	type CleanOld: for<'a> Hook<
-			(
-				&'a mut BTreeMap<Self::ChainBlockNumber, (Self::BlockData, Self::ChainBlockNumber)>,
-				&'a mut BTreeMap<Self::ChainBlockNumber, Vec<Self::Event>>,
-				Self::ChainBlockNumber,
-			),
-			(),
+	type Event: Serde + Debug + Clone + Eq;
+	type Rules: Hook<
+			(Self::ChainBlockNumber, Self::ChainBlockNumber, Self::BlockData),
+			Vec<(Self::ChainBlockNumber, Self::Event)>,
 		> + Default
 		+ Serde
 		+ Debug
 		+ Clone
 		+ Eq;
-	type DedupEvents: Hook<Vec<Self::Event>, Vec<Self::Event>>
+	type Execute: Hook<(Self::ChainBlockNumber, Self::Event), ()>
 		+ Default
 		+ Serde
 		+ Debug
 		+ Clone
 		+ Eq;
+	type DedupEvents: Hook<Vec<(Self::ChainBlockNumber, Self::Event)>, Vec<(Self::ChainBlockNumber, Self::Event)>>
+		+ Default
+		+ Serde
+		+ Debug
+		+ Clone
+		+ Eq;
+
+	fn get_safety_margin() -> Self::ChainBlockNumber;
 }
 
 #[derive(
@@ -109,7 +104,7 @@ pub struct BWState<T: BWTypes> {
 	pub elections: ElectionTracker<T::ChainBlockNumber>,
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
 	pub safemode_enabled: T::SafeModeEnabledHook,
-	pub block_processor: DepositChannelWitnessingProcessor<T::BWProcessorTypes>,
+	pub block_processor: BlockProcessor<T::BWProcessorTypes>,
 	_phantom: sp_std::marker::PhantomData<T>,
 }
 

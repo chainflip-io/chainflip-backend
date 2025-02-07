@@ -9,15 +9,6 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
-/// A helper trait for determining whether two objects are “inner‐equal.”
-/// This trait is intended for use with event types to provide a custom notion
-/// of equality. In our context, events may be produced via different Rules (such as pre‐witness
-/// and full witness), and we want to ensure that the “deposit witness” aspect of an event is
-/// compared when deduplicating events.
-pub trait InnerEquality {
-	fn inner_eq(&self, other: &Self) -> bool;
-}
-
 ///
 /// DepositChannelWitnessingProcessor
 /// ===================================
@@ -34,7 +25,6 @@ pub trait InnerEquality {
 /// - The event type produced during block processing.
 /// - The rules to generate events (for example, pre-witness and full witness rules).
 /// - The logic for executing events.
-/// - The mechanism for cleaning up old block data and reorg events.
 /// - The logic for deduplicating events.
 ///
 /// These are defined via the [`BWProcessorTypes`] trait, which is a generic parameter for this
@@ -48,12 +38,11 @@ pub trait InnerEquality {
 ///     - `Event`: The type of event generated from processing blocks.
 ///     - `Rules`: A hook to process block data and generate events.
 ///     - `Execute`: A hook to execute generated events.
-///     - `CleanOld`: A hook to clean up old block data and reorg events.
 ///     - `DedupEvents`: A hook to deduplicate events.
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
-pub struct DepositChannelWitnessingProcessor<T: BWProcessorTypes> {
+pub struct BlockProcessor<T: BWProcessorTypes> {
 	/// A mapping from block numbers to their corresponding block data and the next age to be
 	/// processed. The "age" represents the block height difference between head of the chain and
 	/// block that we are processing, and it's used to know what rules have already been processed
@@ -62,11 +51,10 @@ pub struct DepositChannelWitnessingProcessor<T: BWProcessorTypes> {
 	pub reorg_events: BTreeMap<T::ChainBlockNumber, Vec<T::Event>>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
-	pub clean_old: T::CleanOld,
 	pub dedup_events: T::DedupEvents,
 }
 impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
-	for DepositChannelWitnessingProcessor<BlockWitnessingProcessorDefinition>
+	for BlockProcessor<BlockWitnessingProcessorDefinition>
 {
 	fn default() -> Self {
 		Self {
@@ -74,12 +62,11 @@ impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 			reorg_events: Default::default(),
 			rules: Default::default(),
 			execute: Default::default(),
-			clean_old: Default::default(),
 			dedup_events: Default::default(),
 		}
 	}
 }
-impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
+impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// Processes incoming block data and chain progress updates.
 	///
 	/// This method performs several key tasks:
@@ -101,9 +88,6 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 	/// 4. **Deduplication and Execution:** Generated events are deduplicated using the
 	///    `dedup_events` hook. The remaining events are then executed via the `execute` hook.
 	///
-	/// 5. **Cleanup:** Finally, the `clean_old` hook is invoked to remove outdated block data and
-	///    reorg events, ensuring that only data within the defined safety margin is kept.
-	///
 	/// # Parameters
 	///
 	/// - `chain_progress`: Indicates the current state of the blockchain. It can either be:
@@ -115,13 +99,13 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 	///
 	/// # Returns
 	///
-	/// A vector of events (`T::Event`) generated during the processing. These events have been
-	/// deduplicated and executed.
+	/// A vector of (block height, events (`T::Event`)) generated during the processing. These
+	/// events have been deduplicated and executed.
 	pub fn process_block_data(
 		&mut self,
 		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
 		block_data: Option<(T::ChainBlockNumber, T::BlockData)>,
-	) -> Vec<T::Event> {
+	) -> Vec<(T::ChainBlockNumber, T::Event)> {
 		if let Some((block_number, block_data)) = block_data {
 			self.blocks_data.insert(block_number, (block_data, Default::default()));
 		}
@@ -137,7 +121,11 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 					if let Some((data, next_age)) = block_data {
 						// We need to get only events already processed (next_age not included)
 						for age in 0..next_age.into() {
-							let events = self.process_rules_for_age_and_block(n, age.into(), &data);
+							let events = self
+								.process_rules_for_age_and_block(n, age.into(), &data)
+								.into_iter()
+								.map(|(_, event)| event)
+								.collect::<Vec<_>>();
 							match self.reorg_events.get_mut(&n) {
 								None => {
 									self.reorg_events.insert(n, events);
@@ -156,7 +144,7 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 		for event in &last_events {
 			self.execute.run(event.clone());
 		}
-		self.clean_old.run((&mut self.blocks_data, &mut self.reorg_events, last_block));
+		self.clean_old(last_block);
 		last_events
 	}
 
@@ -173,9 +161,12 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 	///
 	/// # Returns
 	///
-	/// A vector of events (`T::Event`) generated by applying the processing rules.
-	fn process_rules(&mut self, last_height: T::ChainBlockNumber) -> Vec<T::Event> {
-		let mut last_events: Vec<T::Event> = vec![];
+	/// A vector of (block height, events (`T::Event`)) generated during the processing rules.
+	fn process_rules(
+		&mut self,
+		last_height: T::ChainBlockNumber,
+	) -> Vec<(T::ChainBlockNumber, T::Event)> {
+		let mut last_events: Vec<(T::ChainBlockNumber, T::Event)> = vec![];
 		for (block, (data, next_age)) in self.blocks_data.clone() {
 			for age in next_age.into()..=last_height.into().saturating_sub(block.into()) {
 				last_events = last_events
@@ -198,7 +189,7 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 	/// 1. **Event Generation:** It calls the `rules` hook with a tuple `(block, age, data.clone())`
 	///    to generate events.
 	/// 2. **Deduplication Filtering:** It then filters out events that are already present in
-	///    `reorg_events` (using the [`InnerEquality`] trait to determine duplicate events).
+	///    `reorg_events`
 	///
 	/// # Parameters
 	///
@@ -208,25 +199,37 @@ impl<T: BWProcessorTypes> DepositChannelWitnessingProcessor<T> {
 	///
 	/// # Returns
 	///
-	/// A vector of events (`T::Event`) generated by applying the rules, excluding any duplicates.
+	/// A vector of (block height, events (`T::Event`)) generated by applying the rules, excluding
+	/// any duplicates.
 	fn process_rules_for_age_and_block(
 		&mut self,
 		block: T::ChainBlockNumber,
 		age: T::ChainBlockNumber,
 		data: &T::BlockData,
-	) -> Vec<T::Event> {
-		let mut events: Vec<T::Event> = vec![];
-		events = events.into_iter().chain(self.rules.run((block, age, data.clone()))).collect();
+	) -> Vec<(T::ChainBlockNumber, T::Event)> {
+		let events: Vec<(T::ChainBlockNumber, T::Event)> =
+			self.rules.run((block, age, data.clone()));
 		events
 			.into_iter()
-			.filter(|last_event| {
+			.filter(|(_, last_event)| {
 				!self
 					.reorg_events
 					.iter()
 					.flat_map(|(_, events)| events)
-					.any(|event| event.inner_eq(last_event))
+					.any(|event| event == last_event)
 			})
 			.collect::<Vec<_>>()
+	}
+	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
+		self.blocks_data
+			.retain(|_key, (_, next_age)| *next_age <= T::get_safety_margin());
+		// Todo! Do we want to keep these events around for longer? is there any benefit?
+		// If we keep these for let's say 100 blocks we can then prevent double processing things
+		// that are reorged up to 100 blocks later, what are the chanches of smth like this
+		// happening? This still won't protect us from re-processing full Witness events since we
+		// remove the blocks from block_data as soon as safety margin is reached (we would have to
+		// increase the size of blocks_data as well)
+		self.reorg_events.retain(|key, _| *key > last_height - T::get_safety_margin());
 	}
 }
 
@@ -235,22 +238,20 @@ pub(crate) mod test {
 	use crate::{
 		electoral_systems::{
 			block_witnesser::{
-				block_processor::{DepositChannelWitnessingProcessor, InnerEquality},
-				primitives::ChainProgressInner,
+				block_processor::BlockProcessor, primitives::ChainProgressInner,
 				state_machine::BWProcessorTypes,
 			},
 			state_machine::core::{hook_test_utils::IncreasingHook, Hook},
 		},
 		*,
 	};
-	use cf_chains::btc::BlockNumber;
 	use codec::{Decode, Encode};
 	use core::ops::RangeInclusive;
 	use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 	use std::collections::BTreeMap;
 
 	const SAFETY_MARGIN: u64 = 3;
-	const BUFFER_REORG_EVENTS: u64 = 5;
+	type BlockNumber = u64;
 	#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct MockBlockProcessorDefinition {}
 
@@ -258,24 +259,14 @@ pub(crate) mod test {
 
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 	pub enum MockBtcEvent {
-		PreWitness(BlockNumber, u8),
-		Witness(BlockNumber, u8),
+		PreWitness(u8),
+		Witness(u8),
 	}
 	impl MockBtcEvent {
 		pub fn deposit_witness(&self) -> &u8 {
 			match self {
-				MockBtcEvent::PreWitness(_, dw) | MockBtcEvent::Witness(_, dw) => dw,
+				MockBtcEvent::PreWitness(dw) | MockBtcEvent::Witness(dw) => dw,
 			}
-		}
-		#[allow(dead_code)]
-		pub fn equal_inner(&self, other: &MockBtcEvent) -> bool {
-			self.deposit_witness() == other.deposit_witness()
-		}
-	}
-
-	impl InnerEquality for MockBtcEvent {
-		fn inner_eq(&self, other: &Self) -> bool {
-			self.equal_inner(other)
 		}
 	}
 
@@ -294,25 +285,27 @@ pub(crate) mod test {
 		Deserialize,
 		Default,
 	)]
-	pub struct ApplyRulesHook {}
-	impl Hook<(BlockNumber, BlockNumber, MockBlockData), Vec<MockBtcEvent>> for ApplyRulesHook {
+	pub struct MockApplyRulesHook {}
+	impl Hook<(BlockNumber, BlockNumber, MockBlockData), Vec<(BlockNumber, MockBtcEvent)>>
+		for MockApplyRulesHook
+	{
 		fn run(
 			&mut self,
 			(block, age, block_data): (BlockNumber, BlockNumber, MockBlockData),
-		) -> Vec<MockBtcEvent> {
+		) -> Vec<(BlockNumber, MockBtcEvent)> {
 			// Prewitness rule
 			if age == 0 {
 				return block_data
 					.iter()
-					.map(|deposit_witness| MockBtcEvent::PreWitness(block, *deposit_witness))
-					.collect::<Vec<MockBtcEvent>>();
+					.map(|deposit_witness| (block, MockBtcEvent::PreWitness(*deposit_witness)))
+					.collect::<Vec<(BlockNumber, MockBtcEvent)>>();
 			}
 			//Full witness rule
 			if age == SAFETY_MARGIN {
 				return block_data
 					.iter()
-					.map(|deposit_witness| MockBtcEvent::Witness(block, *deposit_witness))
-					.collect::<Vec<MockBtcEvent>>();
+					.map(|deposit_witness| (block, MockBtcEvent::Witness(*deposit_witness)))
+					.collect::<Vec<(BlockNumber, MockBtcEvent)>>();
 			}
 			vec![]
 		}
@@ -333,63 +326,38 @@ pub(crate) mod test {
 		Deserialize,
 		Default,
 	)]
-	pub struct CleanOldBlockDataHook {}
-	impl
-		Hook<
-			(
-				&mut BTreeMap<BlockNumber, (MockBlockData, BlockNumber)>,
-				&mut BTreeMap<BlockNumber, Vec<MockBtcEvent>>,
-				BlockNumber,
-			),
-			(),
-		> for CleanOldBlockDataHook
+	pub struct MockDedupEventsHook {}
+	impl Hook<Vec<(BlockNumber, MockBtcEvent)>, Vec<(BlockNumber, MockBtcEvent)>>
+		for MockDedupEventsHook
 	{
 		fn run(
 			&mut self,
-			(blocks_data, reorg_events, last_height): (
-				&mut BTreeMap<BlockNumber, (MockBlockData, BlockNumber)>,
-				&mut BTreeMap<BlockNumber, Vec<MockBtcEvent>>,
-				BlockNumber,
-			),
-		) {
-			blocks_data.retain(|_key, (_, age)| *age <= SAFETY_MARGIN);
-			reorg_events.retain(|key, _| *key > last_height - BUFFER_REORG_EVENTS);
-		}
-	}
+			events: Vec<(BlockNumber, MockBtcEvent)>,
+		) -> Vec<(BlockNumber, MockBtcEvent)> {
+			// Map: deposit_witness -> chosen BtcEvent
+			// todo! this is annoying, it require us to implement Ord down to the Chain type
+			let mut chosen: BTreeMap<u8, (BlockNumber, MockBtcEvent)> = BTreeMap::new();
 
-	#[derive(
-		Clone,
-		PartialEq,
-		Eq,
-		PartialOrd,
-		Ord,
-		Debug,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Serialize,
-		Deserialize,
-		Default,
-	)]
-	pub struct DedupEventsHook {}
-	impl Hook<Vec<MockBtcEvent>, Vec<MockBtcEvent>> for DedupEventsHook {
-		fn run(&mut self, events: Vec<MockBtcEvent>) -> Vec<MockBtcEvent> {
-			let mut chosen: BTreeMap<u8, MockBtcEvent> = BTreeMap::new();
-
-			for event in events {
-				let deposit: u8 = *event.deposit_witness();
+			for (block, event) in events {
+				let deposit = *event.deposit_witness();
 
 				match chosen.get(&deposit) {
 					None => {
-						chosen.insert(deposit, event);
+						// No event yet for this deposit, store it
+						chosen.insert(deposit, (block, event));
 					},
-					Some(existing) => match (existing, &event) {
-						(MockBtcEvent::Witness(_, _), MockBtcEvent::PreWitness(_, _)) => (),
-						(MockBtcEvent::PreWitness(_, _), MockBtcEvent::Witness(_, _)) => {
-							chosen.insert(deposit, event);
-						},
-						(_, _) => (),
+					Some((_, existing_event)) => {
+						// There's already an event for this deposit
+						match (existing_event, &event) {
+							// If we already have a Witness, do nothing
+							(MockBtcEvent::Witness(_), MockBtcEvent::PreWitness(_)) => (),
+							// If we have a PreWitness and the new event is a Witness, override it
+							(MockBtcEvent::PreWitness(_), MockBtcEvent::Witness(_)) => {
+								chosen.insert(deposit, (block, event));
+							},
+							// This should be impossible to reach!
+							(_, _) => (),
+						}
 					},
 				}
 			}
@@ -400,18 +368,20 @@ pub(crate) mod test {
 		type ChainBlockNumber = BlockNumber;
 		type BlockData = MockBlockData;
 		type Event = MockBtcEvent;
-		type Rules = ApplyRulesHook;
-		type Execute = IncreasingHook<MockBtcEvent, ()>;
-		type CleanOld = CleanOldBlockDataHook;
-		type DedupEvents = DedupEventsHook;
+		type Rules = MockApplyRulesHook;
+		type Execute = IncreasingHook<(BlockNumber, MockBtcEvent), ()>;
+		type DedupEvents = MockDedupEventsHook;
+
+		fn get_safety_margin() -> Self::ChainBlockNumber {
+			3
+		}
 	}
 
 	/// tests that the processor correcly keep up to SAFETY MARGIN blocks (3), and remove them once
 	/// the safety margin elapsed
 	#[test]
 	fn blocks_correctly_inserted_and_removed() {
-		let mut processor =
-			DepositChannelWitnessingProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
 
 		processor.process_block_data(ChainProgressInner::Progress(11), Some((9, vec![1])));
 		assert_eq!(processor.blocks_data.len(), 1, "Only one blockdata added to the processor");
@@ -429,8 +399,7 @@ pub(crate) mod test {
 	/// test that a reorg cause the processor to discard all the reorged blocks
 	#[test]
 	fn reorgs_remove_block_data() {
-		let mut processor =
-			DepositChannelWitnessingProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
 
 		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
 		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4, 5, 6])));
@@ -444,10 +413,9 @@ pub(crate) mod test {
 	/// test that a reorg is properly handled by saving all the events executed so far
 	#[test]
 	fn reorgs_events_saved_and_removed() {
-		let mut processor =
-			DepositChannelWitnessingProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
 
-		let mut events =
+		let mut events: Vec<_> =
 			processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
 		events.extend(
 			processor
@@ -464,19 +432,19 @@ pub(crate) mod test {
 			events,
 			processor
 				.reorg_events
-				.into_iter()
-				.flat_map(|(_, event)| event)
+				.iter()
+				.flat_map(|(block_number, events)| {
+					events.iter().map(|event| (*block_number, event.clone()))
+				})
 				.collect::<Vec<_>>()
 		);
 	}
 
 	/// test that when a reorg happens the reorged events are used to avoid re-executing the same
-	/// action even if the deposit ends up in a different block, we have a BUFFER (5) that dictates
-	/// for how many blocks these events will be kept in the processor
+	/// action even if the deposit ends up in a different block,
 	#[test]
 	fn already_executed_events_are_not_reprocessed_after_reorg() {
-		let mut processor =
-			DepositChannelWitnessingProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
 
 		// We processed pre-witnessing (boost) for the followings deposit
 		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
@@ -495,7 +463,7 @@ pub(crate) mod test {
 		));
 		// After reprocessing the reorged blocks we should have not re-emitted the same prewitness
 		// events for the same deposit, only the new detected deposit (10) is present
-		assert_eq!(events, vec![MockBtcEvent::PreWitness(11, 10)]);
+		assert_eq!(events, vec![(11, MockBtcEvent::PreWitness(10))]);
 	}
 
 	/// test that in case we process multiple action for the same deposit simultaneously
@@ -503,19 +471,17 @@ pub(crate) mod test {
 	/// make the user pay for boost if the block was effectivily not processed in advance
 	#[test]
 	fn no_boost_if_full_witness_in_same_block() {
-		let mut processor =
-			DepositChannelWitnessingProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
 		let events =
 			processor.process_block_data(ChainProgressInner::Progress(15), Some((9, vec![4, 7])));
 
-		assert_eq!(events, vec![MockBtcEvent::Witness(9, 4), MockBtcEvent::Witness(9, 7)])
+		assert_eq!(events, vec![(9, MockBtcEvent::Witness(4)), (9, MockBtcEvent::Witness(7))])
 	}
 
 	/// test that the hook executing the events is called the correct number of times
 	#[test]
 	fn number_of_events_executed_is_correct() {
-		let mut processor =
-			DepositChannelWitnessingProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
 
 		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4])));
 		processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![6])));
@@ -550,14 +516,14 @@ impl<T: BWProcessorTypes> Validate for SMBlockProcessorInput<T> {
 	}
 }
 
-impl<T: BWProcessorTypes> Validate for DepositChannelWitnessingProcessor<T> {
+impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
 	type Error = ();
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		Ok(())
 	}
 }
 #[allow(dead_code)]
-pub struct SMBlockProcessorOutput<T: BWProcessorTypes>(Vec<T::Event>);
+pub struct SMBlockProcessorOutput<T: BWProcessorTypes>(Vec<(T::ChainBlockNumber, T::Event)>);
 impl<T: BWProcessorTypes> Validate for SMBlockProcessorOutput<T> {
 	type Error = ();
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -572,7 +538,7 @@ impl<T: BWProcessorTypes + 'static> StateMachine for SMBlockProcessor<T> {
 	type Input = SMBlockProcessorInput<T>;
 	type Settings = ();
 	type Output = SMBlockProcessorOutput<T>;
-	type State = DepositChannelWitnessingProcessor<T>;
+	type State = BlockProcessor<T>;
 
 	fn input_index(_s: &mut Self::State) -> IndexOf<Self::Input> {}
 

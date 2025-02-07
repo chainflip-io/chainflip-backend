@@ -66,12 +66,8 @@ use pallet_cf_elections::electoral_systems::{
 };
 use sp_std::{vec, vec::Vec};
 use crate::chainflip::bitcoin_block_processor::BlockWitnessingProcessorDefinition;
-use cf_chains::btc::BlockNumber;
 
 use sp_std::vec::Vec;
-
-//TODO! decide an appropriate buffer (in btc blocks) for the reorged events
-pub(crate) const BUFFER_EVENTS: BlockNumber = 10;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinLiveness),
