@@ -12,7 +12,9 @@ pub mod events_decoder;
 pub mod signer;
 pub mod subxt_state_chain_config;
 
-#[subxt::subxt(runtime_metadata_path = "./artifacts/chainflip_metadata.scale")]
+#[subxt::subxt(
+	runtime_path = "../../target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm"
+)]
 pub mod cf_static_runtime {}
 
 pub fn build_runtime_version() -> &'static sp_version::RuntimeVersion {

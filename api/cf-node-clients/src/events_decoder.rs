@@ -182,20 +182,14 @@ impl Default for EventsDecoder {
 
 impl EventsDecoder {
 	pub fn new(opaque_metadata: sp_core::OpaqueMetadata) -> Self {
-		let current_metadata = subxt::Metadata::try_from(
-			frame_metadata::RuntimeMetadataPrefixed::decode(&mut opaque_metadata.as_slice())
-				.expect("Runtime metadata should be valid."),
-		)
-		.expect("Metadata should be valid.");
+		let current_metadata = subxt::Metadata::decode(&mut opaque_metadata.as_ref())
+			.expect("Runtime metadata should be valid.");
 
 		// Get the old metadata
 		let static_opaque_metadata = state_chain_runtime::Runtime::metadata_at_version(15)
 			.expect("Version 15 should be supported by the runtime.");
-		let static_metadata = subxt::Metadata::try_from(
-			frame_metadata::RuntimeMetadataPrefixed::decode(&mut static_opaque_metadata.as_slice())
-				.expect("Runtime metadata should be valid."),
-		)
-		.expect("Metadata should be valid.");
+		let static_metadata = subxt::Metadata::decode(&mut static_opaque_metadata.as_ref())
+			.expect("Runtime metadata should be valid.");
 
 		Self { current_metadata, static_metadata }
 	}

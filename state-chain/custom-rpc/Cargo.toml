@@ -36,7 +36,6 @@ pallet-cf-lp = { workspace = true, default-features = true }
 pallet-cf-funding = { workspace = true, default-features = true }
 pallet-cf-environment = { workspace = true, default-features = true }
 
-subxt = { workspace = true, features = ["substrate-compat"] }
 sp-api = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
 sc-keystore = { workspace = true, default-features = true }
