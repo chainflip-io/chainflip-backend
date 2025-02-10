@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use crate::DepositTrackerSettings;
 use cf_primitives::EpochIndex;
 use cf_utilities::task_scope::Scope;
 use chainflip_engine::{
-	dot::retry_rpc::DotRetryRpcClient,
+	dot::{retry_rpc::DotRetryRpcClient, PolkadotHash},
 	settings::NodeContainer,
 	state_chain_observer::client::{
 		storage_api::StorageApi,
@@ -16,8 +17,6 @@ use chainflip_engine::{
 	},
 };
 use futures::Future;
-
-use crate::DepositTrackerSettings;
 
 use super::EnvironmentParameters;
 
@@ -41,7 +40,7 @@ where
 	let dot_client = DotRetryRpcClient::new(
 		scope,
 		NodeContainer { primary: settings.dot, backup: None },
-		env_params.dot_genesis_hash,
+		PolkadotHash::from_slice(env_params.dot_genesis_hash.as_bytes()),
 	)?;
 
 	let epoch_source = epoch_source

@@ -7,7 +7,7 @@ edition = "2021"
 env_logger = { workspace = true }
 scale-info = { workspace = true }
 log = { workspace = true }
-subxt = { workspace = true, features = ["substrate-compat"] }
+subxt = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 cf-utilities = { package = "utilities", path = ".." }
 hex = { workspace = true }

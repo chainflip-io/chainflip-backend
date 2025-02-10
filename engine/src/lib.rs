@@ -35,13 +35,13 @@ use state_chain_observer::client::{
 use self::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
-	dot::retry_rpc::DotRetryRpcClient,
+	dot::{retry_rpc::DotRetryRpcClient, PolkadotHash},
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	sol::retry_rpc::SolRetryRpcClient,
 };
 use anyhow::Context;
-use cf_chains::{dot::PolkadotHash, Chain};
+use cf_chains::Chain;
 use cf_primitives::AccountRole;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -287,13 +287,14 @@ async fn run_main(
 				BtcRetryRpcClient::new(scope, settings.btc.nodes, expected_btc_network).await?
 			};
 			let dot_client = {
-				let expected_dot_genesis_hash = PolkadotHash::from(
+				let expected_dot_genesis_hash = PolkadotHash::from_slice(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
 							state_chain_client.latest_finalized_block().hash,
 						)
 						.await
-						.expect(STATE_CHAIN_CONNECTION),
+						.expect(STATE_CHAIN_CONNECTION)
+						.as_bytes(),
 				);
 				DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?
 			};

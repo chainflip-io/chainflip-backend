@@ -4,11 +4,7 @@ use anyhow::Context;
 use cf_utilities::{dynamic_events::EventDecoder, scale_json::ext::JsonValue};
 use env_logger::Env;
 use std::str::FromStr;
-use subxt::{
-	backend::BackendExt,
-	ext::{futures::TryStreamExt, sp_core::H256},
-	SubstrateConfig,
-};
+use subxt::{backend::BackendExt, ext::futures::TryStreamExt, utils::H256, SubstrateConfig};
 
 const HELP: &str = r#"
 Usage: scale-json-event-logger <network> <latest|follow|0xhash> [path...]

@@ -3,7 +3,7 @@ mod dot_deposits;
 mod dot_source;
 
 use cf_chains::dot::{
-	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature,
+	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotSignature,
 	PolkadotTransactionId, PolkadotUncheckedExtrinsic,
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
@@ -24,7 +24,10 @@ use cf_utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
+	dot::{
+		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
+		PolkadotHash,
+	},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi,
 		storage_api::StorageApi,
@@ -33,6 +36,7 @@ use crate::{
 	},
 	witness::common::chain_source::extension::ChainSourceExt,
 };
+
 use anyhow::Result;
 pub use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 

@@ -809,7 +809,9 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				const MAX_UPDATE_VERSION_RETRIES: usize = 10;
 				let mut update_successful = false;
 				for retry in 1..=MAX_UPDATE_VERSION_RETRIES {
-					let block_hash = finalized_block_stream.cache().hash;
+					let block_hash = subxt::utils::H256::from_slice(
+						finalized_block_stream.cache().hash.as_bytes(),
+					);
 					let block_number = finalized_block_stream.cache().number;
 
 					// Submitting transaction with subxt sometimes gets stuck without returning any
