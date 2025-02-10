@@ -22,8 +22,7 @@ import { Logger } from '../shared/utils/logger';
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
 
-async function testRefundVaultSwap(
-) {
+async function testRefundVaultSwap() {
   testVaultSwapFeeCollection.log('Starting refund vault swap test...');
 
   const inputAsset = Assets.Btc;
@@ -34,7 +33,7 @@ async function testRefundVaultSwap(
   const refundAddress = await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
   const foKParams = {
     retryDurationBlocks: 100,
-    refundAddress: refundAddress,
+    refundAddress,
     minPriceX128: '0',
   };
 
@@ -55,7 +54,7 @@ async function testRefundVaultSwap(
   let btcBalance = false;
 
   for (let i = 0; i < balanceObserveTimeout; i++) {
-    let refundAddressBalance = await getBalance(Assets.Btc, refundAddress);
+    const refundAddressBalance = await getBalance(Assets.Btc, refundAddress);
     if (refundAddressBalance !== '0') {
       btcBalance = true;
       break;
