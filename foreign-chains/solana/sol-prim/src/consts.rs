@@ -18,8 +18,6 @@ pub const MAX_BASE58_LEN: usize = 44;
 /// Bit mask that indicates whether a serialized message is versioned.
 pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 
-pub const SIGNATURE_BYTES: usize = 64;
-
 pub const fn const_address(s: &'static str) -> Address {
 	Address(bs58_array(s))
 }
