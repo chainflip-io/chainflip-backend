@@ -2367,31 +2367,41 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 fn vault_swaps_gets_refunded_if_vault_transaction_was_aborted() {
 	new_test_ext().execute_with(|| {
 		let tx_id = H256::default();
-		AbortedVaultTransaction::<Test, ()>::insert(tx_id, ());
 
-		IngressEgress::process_vault_swap_request_full_witness(
-			0,
-			VaultDepositWitness {
-				input_asset: Asset::Eth.try_into().unwrap(),
-				deposit_address: Default::default(),
-				channel_id: Some(0),
-				deposit_amount: 100,
-				deposit_details: Default::default(),
-				output_asset: Asset::Eth,
-				destination_address: EncodedAddress::Eth(Default::default()),
-				deposit_metadata: Default::default(),
-				tx_id,
-				broker_fee: None,
-				affiliate_fees: Default::default(),
-				refund_params: Some(ChannelRefundParametersDecoded {
-					retry_duration: 0,
-					min_price: U256::from(0),
-					refund_address: ForeignChainAddress::Eth(Default::default()),
-				}),
-				dca_params: None,
-				boost_fee: 0,
-			},
+		let vault_swap = VaultDepositWitness {
+			input_asset: Asset::Eth.try_into().unwrap(),
+			deposit_address: Default::default(),
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details: Default::default(),
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			deposit_metadata: Default::default(),
+			tx_id,
+			broker_fee: None,
+			affiliate_fees: Default::default(),
+			refund_params: Some(ChannelRefundParametersDecoded {
+				retry_duration: 0,
+				min_price: U256::from(0),
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+			}),
+			dca_params: None,
+			boost_fee: 0,
+		};
+
+		IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
+
+		assert!(
+			AbortedVaultTransaction::<Test, ()>::get(tx_id).is_some(),
+			"Vault swap should have been marked as aborted!"
 		);
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(Event::VaultSwapRejected { tx_id: _ })
+		);
+
+		IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
 
 		assert!(
 			AbortedVaultTransaction::<Test, ()>::get(tx_id).is_none(),
@@ -2407,5 +2417,18 @@ fn vault_swaps_gets_refunded_if_vault_transaction_was_aborted() {
 			Test,
 			RuntimeEvent::IngressEgress(Event::VaultSwapRefunded { tx_id: _ })
 		);
+	});
+}
+
+#[test]
+fn vault_swap_reject_requirements_test() {
+	new_test_ext().execute_with(|| {
+		let should_fail = Some(Beneficiary { account: ALICE, bps: 0 });
+		let should_succeed = Some(Beneficiary { account: BROKER, bps: 0 });
+
+		assert!(IngressEgress::should_reject_vault_swap(&should_fail));
+		assert!(IngressEgress::should_reject_vault_swap(&None));
+
+		assert!(!IngressEgress::should_reject_vault_swap(&should_succeed));
 	});
 }
