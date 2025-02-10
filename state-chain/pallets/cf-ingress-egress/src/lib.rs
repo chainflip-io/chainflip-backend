@@ -2511,23 +2511,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			log::info!("Ignoring deposit since transcation was aborted.");
 
 			let refunded = refund_params.is_some_and(|refund_params| {
-				if let Ok(refund_address) = refund_params.refund_address.try_into() {
-					<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
-						TransferAssetParams {
-							asset: source_asset,
-							amount: deposit_amount,
-							to: refund_address,
-						},
-					)
-					.is_ok_and(|api_call| {
-						T::Broadcaster::threshold_sign_and_broadcast(api_call);
-						Self::deposit_event(Event::VaultSwapRefunded { tx_id: tx_id.clone() });
-						true
-					})
-				} else {
-					log::error!("Failed to refund vault swap for tx id: {tx_id:?} due to invalid refund address!");
-					false
-				}
+				<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
+					TransferAssetParams {
+						asset: source_asset,
+						amount: deposit_amount,
+						to: refund_params.refund_address,
+					},
+				)
+				.is_ok_and(|api_call| {
+					T::Broadcaster::threshold_sign_and_broadcast(api_call);
+					Self::deposit_event(Event::VaultSwapRefunded { tx_id: tx_id.clone() });
+					true
+				})
 			});
 
 			if !refunded {
