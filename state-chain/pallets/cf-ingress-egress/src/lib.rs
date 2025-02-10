@@ -2210,11 +2210,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		}: VaultDepositWitness<T, I>,
 	) {
-		if let Some(Beneficiary { account, .. }) = broker_fee.clone() {
-			if !T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker) {
-				AbortedVaultTransaction::<T, I>::insert(&tx_id, ());
-				return;
-			}
+		// We reject a vault swaps if the broker fee is not set or the account is not a broker.
+		let reject_vault_swap = match broker_fee.clone() {
+			Some(Beneficiary { account, .. }) =>
+				!T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker),
+			_ => true,
+		};
+
+		if reject_vault_swap {
+			AbortedVaultTransaction::<T, I>::insert(&tx_id, ());
+			return;
 		}
 
 		let destination_address_internal =
