@@ -59,9 +59,10 @@ jobs:
           sudo apt update
           sudo apt install -y bc xxd
 
-      - name: Download chainflip-backend binaries 📥
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+      - name: Download latest chainflip-backend binaries 📥
+        uses: dawidd6/action-download-artifact@v2
         with:
+          workflow: ci-main.yml
           name: chainflip-backend-bin-try-runtime
           path: chainflip-backend-bin
 
