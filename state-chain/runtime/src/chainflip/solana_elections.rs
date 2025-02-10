@@ -1,7 +1,8 @@
 use crate::{
-	AccountId, Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
-	SolanaIngressEgress, SolanaThresholdSigner,
+	chainflip::ReportFailedLivenessCheck, AccountId, Environment, Offence, Reputation, Runtime,
+	SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner,
 };
+
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, sol::Asset as SolAsset},
@@ -46,6 +47,8 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_primitives::chains::Bitcoin;
+use electoral_systems::liveness::Liveness;
 use sol_prim::SlotNumber;
 
 use super::SolEnvironment;
@@ -145,21 +148,14 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	<Runtime as Chainflip>::ValidatorId,
 >;
 
-pub type SolanaLiveness = electoral_systems::liveness::Liveness<
+pub type SolanaLiveness = Liveness<
 	<Solana as Chain>::ChainBlockNumber,
 	SolHash,
 	cf_primitives::BlockNumber,
-	OnCheckCompleteHook,
+	ReportFailedLivenessCheck<Solana>,
 	<Runtime as Chainflip>::ValidatorId,
 >;
 
-pub struct OnCheckCompleteHook;
-
-impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHook {
-	fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
-		Reputation::report_many(Offence::FailedLivenessCheck(ForeignChain::Solana), validator_ids);
-	}
-}
 pub type SolanaVaultSwapTracking =
 	electoral_systems::solana_vault_swap_accounts::SolanaVaultSwapAccounts<
 		VaultSwapAccountAndSender,

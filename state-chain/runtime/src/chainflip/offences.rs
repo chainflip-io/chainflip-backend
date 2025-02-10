@@ -1,10 +1,13 @@
 use crate::Runtime;
-use cf_chains::ForeignChain;
+use cf_chains::{ForeignChain, Get};
+use cf_traits::{offence_reporting::OffenceReporter, Chainflip};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::RuntimeDebug;
+use pallet_cf_elections::electoral_systems::liveness::OnCheckComplete;
 use pallet_cf_reputation::OffenceList;
 use pallet_grandpa::EquivocationOffence;
 use scale_info::TypeInfo;
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData};
 
 /// Offences that can be reported in this runtime.
 #[derive(
@@ -101,5 +104,19 @@ impl From<pallet_cf_witnesser::PalletOffence> for Offence {
 impl<T> From<EquivocationOffence<T>> for Offence {
 	fn from(_: EquivocationOffence<T>) -> Self {
 		Self::GrandpaEquivocation
+	}
+}
+
+pub struct ReportFailedLivenessCheck<C> {
+	phantom_data: PhantomData<C>,
+}
+impl<C: Get<ForeignChain>> OnCheckComplete<<Runtime as Chainflip>::ValidatorId>
+	for ReportFailedLivenessCheck<C>
+{
+	fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
+		<crate::Reputation as OffenceReporter>::report_many(
+			Offence::FailedLivenessCheck(C::get()),
+			validator_ids,
+		);
 	}
 }

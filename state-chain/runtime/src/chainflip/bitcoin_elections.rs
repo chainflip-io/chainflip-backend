@@ -6,11 +6,8 @@ use cf_chains::{
 };
 use cf_traits::Chainflip;
 use core::ops::RangeInclusive;
-use serde::{Deserialize, Serialize};
-use sp_core::Get;
-use sp_std::collections::btree_map::BTreeMap;
-
 use frame_support::__private::sp_tracing::event;
+use frame_system::pallet_prelude::BlockNumberFor;
 use log::warn;
 use pallet_cf_elections::{
 	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
@@ -28,7 +25,7 @@ use pallet_cf_elections::{
 			},
 		},
 		composite::{
-			tuple_2_impls::{DerivedElectoralAccess, Hooks},
+			tuple_3_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
 		state_machine::{
@@ -39,7 +36,12 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-use sp_core::{Decode, Encode, MaxEncodedLen};
+use serde::{Deserialize, Serialize};
+use sp_core::{Decode, Encode, Get, MaxEncodedLen};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	marker::PhantomData,
+};
 
 use pallet_cf_ingress_egress::{
 	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo, WitnessSafetyMargin,
@@ -47,12 +49,21 @@ use pallet_cf_ingress_egress::{
 use scale_info::TypeInfo;
 use sp_runtime::BoundedVec;
 
-use crate::chainflip::bitcoin_block_processor::{
-	BlockWitnessingProcessorDefinition, BtcEvent, DepositChannelWitnessingProcessor,
+use crate::{
+	chainflip::{
+		bitcoin_block_processor::{
+			BlockWitnessingProcessorDefinition, BtcEvent, DepositChannelWitnessingProcessor,
+		},
+		Offence, ReportFailedLivenessCheck,
+	},
+	Reputation,
 };
-use cf_chains::btc::BlockNumber;
+use cf_chains::btc::{BlockNumber, Hash};
+use cf_primitives::ForeignChain;
+use cf_traits::offence_reporting::OffenceReporter;
 use pallet_cf_elections::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
+	liveness::{Liveness, OnCheckComplete},
 	state_machine::{
 		core::{IndexOf, Indexed, Validate},
 		state_machine::StateMachine,
@@ -63,7 +74,7 @@ use sp_std::{vec, vec::Vec};
 pub(crate) const BUFFER_EVENTS: BlockNumber = 10;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
-	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing),
+	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinLiveness),
 	<Runtime as Chainflip>::ValidatorId,
 	RunnerStorageAccess<Runtime, BitcoinInstance>,
 	BitcoinElectionHooks,
@@ -302,11 +313,21 @@ impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>
 	}
 }
 
+pub type BitcoinLiveness = Liveness<
+	BlockNumber,
+	Hash,
+	cf_primitives::BlockNumber,
+	ReportFailedLivenessCheck<Bitcoin>,
+	<Runtime as Chainflip>::ValidatorId,
+>;
+
 pub struct BitcoinElectionHooks;
 
-impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for BitcoinElectionHooks {
+impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinLiveness>
+	for BitcoinElectionHooks
+{
 	fn on_finalize(
-		(block_height_tracking_identifiers, deposit_channel_witnessing_identifiers): (
+		(block_height_tracking_identifiers, deposit_channel_witnessing_identifiers, liveness_identifiers): (
 			Vec<
 				ElectionIdentifier<
 					<BitcoinBlockHeightTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
@@ -317,8 +338,15 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 					<BitcoinDepositChannelWitnessing as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
+			Vec<
+				ElectionIdentifier<
+					<BitcoinLiveness as ElectoralSystemTypes>::ElectionIdentifierExtra,
+				>,
+			>,
 		),
 	) -> Result<(), CorruptStorageError> {
+		let current_sc_block_number = crate::System::block_number();
+
 		log::info!("BitcoinElectionHooks::called");
 		let chain_progress = BitcoinBlockHeightTracking::on_finalize::<
 			DerivedElectoralAccess<
@@ -337,24 +365,39 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing> for Bitc
 			>,
 		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress)?;
 
+		// We use `ProcessedUpTo` as our upper limit to avoid not reaching consensus in
+		// case there is a reorg, using this block means safety margin will be kept into account for
+		// this election, and thus are much less likely to ask nodes to query for a block they don't
+		// have.
+		let last_processed_block = ProcessedUpTo::<Runtime, BitcoinInstance>::get();
+		BitcoinLiveness::on_finalize::<
+			DerivedElectoralAccess<
+				_,
+				BitcoinLiveness,
+				RunnerStorageAccess<Runtime, BitcoinInstance>,
+			>,
+		>(liveness_identifiers, &(current_sc_block_number, last_processed_block))?;
+
 		Ok(())
 	}
 }
+
+const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
 
 // Channel expiry:
 // We need to process elections in order, even after a safe mode pause. This is to ensure channel
 // expiry is done correctly. During safe mode pause, we could get into a situation where the current
 // state suggests that a channel is expired, but at the time of a previous block which we have not
 // yet processed, the channel was not expired.
-
 pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 	InitialState {
-		unsynchronised_state: (Default::default(), Default::default()),
+		unsynchronised_state: (Default::default(), Default::default(), Default::default()),
 		unsynchronised_settings: (
 			Default::default(),
 			// TODO: Write a migration to set this too.
 			BWSettings { max_concurrent_elections: 15 },
+			(),
 		),
-		settings: (Default::default(), Default::default()),
+		settings: (Default::default(), Default::default(), LIVENESS_CHECK_DURATION),
 	}
 }

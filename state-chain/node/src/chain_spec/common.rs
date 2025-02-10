@@ -69,6 +69,10 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 		Offence::FailedLivenessCheck(cf_chains::ForeignChain::Solana),
 		(LIVENESS_REPUTATION_PENALTY, 0),
 	),
+	(
+		Offence::FailedLivenessCheck(cf_chains::ForeignChain::Bitcoin),
+		(LIVENESS_REPUTATION_PENALTY, 0),
+	),
 ];
 
 /// Daily slashing rate 0.1% (of the bond) for offline authority

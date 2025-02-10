@@ -8,7 +8,7 @@ use cf_chains::{
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
-	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
+	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
 		block_height_tracking::{
 			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties,
@@ -16,14 +16,13 @@ use pallet_cf_elections::{
 		},
 		state_machine::core::ConstantIndex,
 	},
-	vote_storage::VoteStorage,
 	VoteOf,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
 	chainflip::bitcoin_elections::{
 		BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingTypes,
-		BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner,
+		BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner, BitcoinLiveness,
 	},
 	BitcoinInstance,
 };
@@ -39,6 +38,7 @@ use crate::{
 };
 use anyhow::Result;
 
+use sp_core::H256;
 use std::sync::Arc;
 
 use crate::btc::retry_rpc::BtcRetryRpcClient;
@@ -173,6 +173,22 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 	}
 }
 
+#[derive(Clone)]
+pub struct BitcoinLivenessVoter {
+	client: BtcRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinLiveness> for BitcoinLivenessVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinLiveness as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinLiveness as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinLiveness>>, anyhow::Error> {
+		Ok(Some(H256::from_slice(&self.client.block_hash(properties).await.to_byte_array())))
+	}
+}
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: BtcRetryRpcClient,
@@ -196,7 +212,8 @@ where
 					state_chain_client,
 					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
 						BitcoinBlockHeightTrackingVoter { client: client.clone() },
-						BitcoinDepositChannelWitnessingVoter { client },
+						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
+						BitcoinLivenessVoter { client },
 					)),
 				)
 				.continuously_vote()
