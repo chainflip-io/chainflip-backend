@@ -12,7 +12,7 @@ import {
 import { getEarnedBrokerFees } from './broker_fee_collection';
 import { openPrivateBtcChannel, registerAffiliate } from '../shared/btc_vault_swap';
 import { setupBrokerAccount } from '../shared/setup_account';
-import { performVaultSwap } from '../shared/perform_swap';
+import { executeVaultSwap, performVaultSwap } from '../shared/perform_swap';
 import { prepareSwap } from '../shared/swapping';
 import { getChainflipApi } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
@@ -21,6 +21,52 @@ import { Logger } from '../shared/utils/logger';
 
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
+
+async function testRefundVaultSwap(
+) {
+  testVaultSwapFeeCollection.log('Starting refund vault swap test...');
+
+  const inputAsset = Assets.Btc;
+  const destAsset = Assets.Usdc;
+  const balanceObserveTimeout = 60;
+  const depositAmount = defaultAssetAmounts(inputAsset);
+  const destAddress = await newAddress('Usdc', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
+  const refundAddress = await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
+  const foKParams = {
+    retryDurationBlocks: 100,
+    refundAddress: refundAddress,
+    minPriceX128: '0',
+  };
+
+  testVaultSwapFeeCollection.log('Sending vault swap...');
+
+  await executeVaultSwap(
+    inputAsset,
+    destAsset,
+    destAddress,
+    undefined,
+    depositAmount,
+    0, // boostFeeBps
+    foKParams,
+  );
+
+  testVaultSwapFeeCollection.log('Waiting for refund...');
+
+  let btcBalance = false;
+
+  for (let i = 0; i < balanceObserveTimeout; i++) {
+    let refundAddressBalance = await getBalance(Assets.Btc, refundAddress);
+    if (refundAddressBalance !== '0') {
+      btcBalance = true;
+      break;
+    }
+    await sleep(1000);
+  }
+
+  assert(btcBalance, `Vault swap refund failed 🙅‍♂️.`);
+
+  testVaultSwapFeeCollection.log('Refund vault swap completed ✅.');
+}
 
 async function testWithdrawCollectedAffiliateFees(
   logger: Logger,
@@ -142,5 +188,6 @@ export async function testVaultSwapFeeCollection(testContext: TestContext) {
 
   // Test the affiliate withdrawal functionality
   const [broker, affiliateId, refundAddress] = await testFeeCollection(Assets.Btc, testContext);
-  await testWithdrawCollectedAffiliateFees(testContext.logger, broker, affiliateId, refundAddress);
+  await testWithdrawCollectedAffiliateFees(broker, affiliateId, refundAddress, testContext.logger);
+  await testRefundVaultSwap();
 }
