@@ -12,6 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
+	hub::{Assethub, OutputAccountId},
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
 		SolAddress, SolApiEnvironment, SolHash, Solana, NONCE_NUMBER_CRITICAL_NONCES,
@@ -85,6 +86,8 @@ pub mod pallet {
 		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
 		/// On new key witnessed handler for Solana
 		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
+		/// On new key witnessed handler for Assethub
+		type AssethubVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Assethub>;
 
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
@@ -241,6 +244,25 @@ pub mod pallet {
 	#[pallet::getter(fn solana_api_environment)]
 	pub type SolanaApiEnvironment<T> = StorageValue<_, SolApiEnvironment, ValueQuery>;
 
+	// ASSETHUB CHAIN RELATED ENVIRONMENT ITEMS
+
+	#[pallet::storage]
+	#[pallet::getter(fn assethub_genesis_hash)]
+	pub type AssethubGenesisHash<T> = StorageValue<_, PolkadotHash, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn assethub_vault_account)]
+	/// The Assethub Vault Anonymous Account
+	pub type AssethubVaultAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
+
+	#[pallet::storage]
+	/// Current Nonce of the current Assethub Proxy Account
+	pub type AssethubProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
+
+	#[pallet::storage]
+	/// Current id used in "as_derivative" calls for CCM calls into Assethub
+	pub type AssethubOutputAccountId<T> = StorageValue<_, OutputAccountId, ValueQuery>;
+
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
@@ -287,6 +309,8 @@ pub mod pallet {
 		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
 		/// An Governance transaction was dispatched to a Solana Program.
 		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
+		/// Assethub Vault Account is successfully set
+		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
 	}
 
 	#[pallet::call]
@@ -504,24 +528,18 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// **READ WARNINGS BEFORE USING THIS**
+		/// Manually initiates Assethub vault key rotation completion steps so Epoch rotation can be
+		/// continued and sets the Assethub Pure Proxy Vault in environment pallet. The extrinsic
+		/// takes in the hub_pure_proxy_vault_key, which is obtained from the Assethub blockchain as
+		/// a result of creating an assethub vault which is done by executing the extrinsic
+		/// create_assethub_vault(), hub_witnessed_aggkey, the aggkey which initiated the assethub
+		/// creation transaction and the tx hash and block number of the Assethub block the
+		/// vault creation transaction was witnessed in. This extrinsic should complete the Assethub
+		/// initiation process and the vault should rotate successfully.
 		///
-		/// Allows Governance to dispatch calls to the Solana Contracts.
+		/// ## Events
 		///
-		/// Note this will only work as long as the Solana GovKey is the current AggKey, which might
-		/// change in the future.
-		///
-		/// Requires Governance Origin. This action is allowed to consume any nonce account because
-		/// it's a high priority action. Therefore, **DO NOT** execute this governance function
-		/// around a rotation as it could consume the nonce saved for rotations.
-		///
-		/// ## Events
-		///
-		/// - [OnSuccess](Event::SolanaGovCallDispatched)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [AssethubVaultCreationCallInitiated](Event::AssethubVaultCreationCallInitiated)
 		#[pallet::call_index(8)]
 		#[pallet::weight(Weight::zero())]
 		pub fn dispatch_solana_gov_call(
@@ -540,6 +558,48 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::SolanaGovCallDispatched { gov_call, broadcast_id });
 
 			Ok(())
+		}
+
+		/// **READ WARNINGS BEFORE USING THIS**
+		///
+		/// Allows Governance to dispatch calls to the Solana Contracts.
+		///
+		/// Note this will only work as long as the Solana GovKey is the current AggKey, which might
+		/// change in the future.
+		///
+		/// Requires Governance Origin. This action is allowed to consume any nonce account because
+		/// it's a high priority action. Therefore, **DO NOT** execute this governance function
+		/// around a rotation as it could consume the nonce saved for rotations.
+		///
+		/// ## Events
+		///
+		/// - [OnSuccess](Event::SolanaGovCallDispatched)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(unused_variables)]
+		#[pallet::call_index(9)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
+		pub fn witness_assethub_vault_creation(
+			origin: OriginFor<T>,
+			hub_pure_proxy_vault_key: PolkadotAccountId,
+			tx_id: TxId,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Set Assethub Pure Proxy Vault Account
+			AssethubVaultAccountId::<T>::put(hub_pure_proxy_vault_key);
+			Self::deposit_event(Event::<T>::AssethubVaultAccountSet {
+				assethub_vault_account_id: hub_pure_proxy_vault_key,
+			});
+
+			// Witness the agg_key rotation manually in the vaults pallet for assethub
+			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
 	}
 
@@ -565,6 +625,8 @@ pub mod pallet {
 		pub sol_genesis_hash: Option<SolHash>,
 		pub sol_api_env: SolApiEnvironment,
 		pub sol_durable_nonces_and_accounts: Vec<DurableNonceAndAccount>,
+		pub assethub_genesis_hash: PolkadotHash,
+		pub assethub_vault_account_id: Option<PolkadotAccountId>,
 		pub _config: PhantomData<T>,
 	}
 
@@ -598,6 +660,12 @@ pub mod pallet {
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 			SolanaApiEnvironment::<T>::set(self.sol_api_env);
 			SolanaAvailableNonceAccounts::<T>::set(self.sol_durable_nonces_and_accounts.clone());
+
+			AssethubGenesisHash::<T>::set(self.assethub_genesis_hash);
+			AssethubVaultAccountId::<T>::set(self.assethub_vault_account_id);
+			AssethubProxyAccountNonce::<T>::set(0);
+
+			AssethubOutputAccountId::<T>::set(1);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
@@ -800,6 +868,27 @@ impl<T: Config> Pallet<T> {
 		} else {
 			log::error!("Nonce account {nonce_account} not found in unavailable nonce accounts");
 		}
+	}
+
+	pub fn next_assethub_proxy_account_nonce(reset_nonce: bool) -> PolkadotIndex {
+		AssethubProxyAccountNonce::<T>::mutate(|nonce| {
+			let current_nonce = *nonce;
+
+			if reset_nonce {
+				*nonce = 0;
+			} else {
+				*nonce += 1;
+			}
+			current_nonce
+		})
+	}
+
+	pub fn next_assethub_output_account_id() -> OutputAccountId {
+		AssethubOutputAccountId::<T>::mutate(|id| {
+			let current_id = *id;
+			*id += 1;
+			current_id
+		})
 	}
 }
 

@@ -57,6 +57,7 @@ pub mod btc;
 pub mod dot;
 pub mod eth;
 pub mod evm;
+pub mod hub;
 pub mod none;
 pub mod sol;
 
@@ -432,6 +433,7 @@ impl<C: Chain> TransactionMetadata<C> for () {
 pub struct FetchAssetParams<C: Chain> {
 	pub deposit_fetch_id: <C as Chain>::DepositFetchId,
 	pub asset: <C as Chain>::ChainAsset,
+	pub amount: <C as Chain>::ChainAmount,
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
@@ -576,6 +578,8 @@ pub enum ExecutexSwapAndCallError {
 	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
 	/// Some other DispatchError occurred.
 	DispatchError(DispatchError),
+	/// No vault account exists yet.
+	NoVault,
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {

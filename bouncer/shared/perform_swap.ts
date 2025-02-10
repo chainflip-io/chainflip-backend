@@ -25,6 +25,7 @@ import {
   defaultAssetAmounts,
   newAddress,
   getContractAddress,
+  isPolkadotAsset,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
@@ -36,7 +37,7 @@ import { buildAndSendBtcVaultSwap } from './btc_vault_swap';
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
 
-  if (destAddress && destAsset === 'Dot') {
+  if (destAddress && isPolkadotAsset(destAsset)) {
     destAddress = encodeAddress(destAddress);
   } else if (shortChainFromAsset(destAsset) === 'Sol') {
     destAddress = getEncodedSolAddress(destAddress);
@@ -82,11 +83,11 @@ export async function requestNewSwap(
 
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
-          event.data.channelMetadata.message ===
-            (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
-          event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
-          event.data.channelMetadata.ccmAdditionalData ===
-            (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
+        event.data.channelMetadata.message ===
+        (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
+        event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
+        event.data.channelMetadata.ccmAdditionalData ===
+        (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
@@ -174,7 +175,7 @@ export async function doPerformSwap(
     ]);
 
     const chain = chainFromAsset(sourceAsset);
-    if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
+    if (chain !== 'Bitcoin' && chain !== 'Polkadot' && chain !== 'Assethub') {
       if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }
@@ -203,12 +204,11 @@ export async function performSwap(
 
   if (log)
     console.log(
-      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
-        messageMetadata
-          ? messageMetadata.message.substring(0, 6) +
-            '...' +
-            messageMetadata.message.substring(messageMetadata.message.length - 4)
-          : ''
+      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${messageMetadata
+        ? messageMetadata.message.substring(0, 6) +
+        '...' +
+        messageMetadata.message.substring(messageMetadata.message.length - 4)
+        : ''
       }`,
     );
 
