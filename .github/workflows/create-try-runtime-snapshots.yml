@@ -14,7 +14,6 @@ concurrency:
   #   # Run at midnight UTC every day
   #   - cron: '0 0 * * *'
   # Optional: Allow manual triggering
-  
 
 env:
   SISYPHOS_URI: "archive.sisyphos.chainflip.io:443"
@@ -50,7 +49,7 @@ jobs:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
-        
+
       - name: Install node dependencies 📦
         working-directory: bouncer
         run: pnpm install
@@ -59,23 +58,53 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y bc xxd
-      
+
+      - name: Download chainflip-backend binaries 📥
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: chainflip-backend-bin-try-runtime
+          path: chainflip-backend-bin
+
+      # We should be able to use the latest version, even if the runtime is older.
+      # As long as we don't use RPCs that could change.
+      - name: Startup all the nodes for the networks
+        run: |
+
       - name: Create directories
         run: |
           mkdir -p snapshots
-#           # (
-          #   for i in {1..10}; do
-          #     try-runtime create-snapshot --uri $PERSEVERANCE_URI "snapshots/perseverance_${PERSEVERANCE_VERSION}/snapshot_$i"
-          #   done
-          # ) &
-          
-          # (
-          #   for i in {1..10}; do
-          #     try-runtime create-snapshot --uri $MAINNET_URI "snapshots/mainnet_${MAINNET_VERSION}/snapshot_$i"
-          #   done
-          # ) &
+        #   for i in {1..10}; do
+        #     try-runtime create-snapshot --uri $PERSEVERANCE_URI "snapshots/perseverance_${PERSEVERANCE_VERSION}/snapshot_$i"
+        #   done
+        # ) &
+
+        # (
+        #   for i in {1..10}; do
+        #     try-runtime create-snapshot --uri $MAINNET_URI "snapshots/mainnet_${MAINNET_VERSION}/snapshot_$i"
+        #   done
+        # ) &
+      #           # (
       - name: Create snapshots in parallel
         run: |
+
+          # Sync sisyphos
+          ./chainflip-backend-bin/chainflip-node --chain ./state-chain/node/chainspecs/sisyphos.chainspec.raw.json --sync=warp --database=paritydb &
+
+          echo "Sisyphos is syncing"
+
+          # Wait for sisyphos to be ready
+          while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "system_health", "params": []}' http://localhost:9944; do
+            sleep 5
+          done
+
+          echo "Sisyphos is ready"
+
+          # Sync perseverance
+          # ./chainflip-node --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json --sync=warp --database=paritydb &
+
+          # Sync mainnet
+          # ./chainflip-node --chain ./state-chain/node/chainspecs/berghain.chainspec.raw.json --sync=warp --database=paritydb &
+
 
           # Add https:// prefix to URIs and ensure they're using wss:// for secure WebSocket
           SISYPHOS_URI="https://${SISYPHOS_URI}"
