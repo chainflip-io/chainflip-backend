@@ -12,6 +12,7 @@ use cf_chains::{
 			VaultSwapAccountAndSender,
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
+		sol_tx_core::SlotNumber,
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
 	CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
@@ -46,7 +47,6 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
-use sol_prim::SlotNumber;
 
 use super::SolEnvironment;
 

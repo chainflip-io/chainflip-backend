@@ -13326,7 +13326,6 @@ dependencies = [
  "paste",
  "scale-info",
  "serde",
- "sol-prim",
  "sp-api",
  "sp-block-builder",
  "sp-consensus-aura",

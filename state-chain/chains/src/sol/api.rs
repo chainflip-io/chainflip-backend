@@ -5,7 +5,6 @@ use core::marker::PhantomData;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sol_prim::{address_derivation::derive_associated_token_account, consts::SOL_USDC_DECIMAL};
 use sp_core::RuntimeDebug;
 use sp_std::{vec, vec::Vec};
 
@@ -15,8 +14,12 @@ use crate::{
 		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
 	},
 	sol::{
-		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolHash, SolLegacyTransaction, SolTrackedData, SolanaCrypto,
+		sol_tx_core::{
+			address_derivation::derive_associated_token_account, consts::SOL_USDC_DECIMAL,
+		},
+		transaction_builder::SolanaTransactionBuilder,
+		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolHash, SolLegacyTransaction,
+		SolTrackedData, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,

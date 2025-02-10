@@ -130,7 +130,7 @@ pub mod sol_test_values {
 		},
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
-	use sol_prim::consts::{const_address, const_hash};
+	use sol_prim::consts::{const_address, const_hash, MAX_TRANSACTION_LENGTH};
 	use sp_std::vec;
 
 	pub const VAULT_PROGRAM: SolAddress =
@@ -308,7 +308,7 @@ pub mod sol_test_values {
 			.finalize_and_serialize()
 			.expect("Transaction serialization must succeed");
 
-		assert!(serialized_tx.len() <= sol_prim::consts::MAX_TRANSACTION_LENGTH);
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH);
 
 		if serialized_tx != expected_serialized_tx {
 			panic!(

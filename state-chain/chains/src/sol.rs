@@ -4,11 +4,11 @@ use cf_primitives::ChannelId;
 use sp_core::ConstBool;
 use sp_std::{vec, vec::Vec};
 
-use sol_prim::{AccountBump, SlotNumber};
-
 use crate::{
-	address, assets, DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi,
-	FeeRefundCalculator, TypeInfo,
+	address, assets,
+	sol::sol_tx_core::{AccountBump, SlotNumber},
+	DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator,
+	TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{sp_runtime::RuntimeDebug, Parameter};
