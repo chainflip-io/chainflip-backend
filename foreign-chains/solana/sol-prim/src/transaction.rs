@@ -1,19 +1,12 @@
-use crate::sol::{
-	sol_tx_core::{
-		compile_instructions, short_vec, AddressLookupTableAccount, CompiledInstruction,
-		CompiledKeys, Hash, Instruction, MessageAddressTableLookup, MessageHeader, Pubkey,
-		RawSignature,
-	},
-	SolSignature,
+use crate::{
+	compile_instructions, consts::MESSAGE_VERSION_PREFIX, short_vec, AddressLookupTableAccount,
+	CompiledInstruction, CompiledKeys, Hash, Instruction, MessageAddressTableLookup, MessageHeader,
+	Pubkey, RawSignature, Signature,
 };
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-#[cfg(any(test, feature = "runtime-integration-tests"))]
-use sol_prim::errors::TransactionError;
 use sp_std::{vec, vec::Vec};
-
-use sol_prim::consts::MESSAGE_VERSION_PREFIX;
 
 use serde::{
 	de::{self, SeqAccess, Unexpected, Visitor},
@@ -23,10 +16,10 @@ use serde::{
 use sp_std::fmt;
 
 #[cfg(any(test, feature = "runtime-integration-tests"))]
-use crate::sol::sol_tx_core::signer::{Signer, SignerError, TestSigners};
-
-#[cfg(test)]
-use crate::sol::sol_tx_core::program_instructions;
+use crate::{
+	errors::TransactionError,
+	signer::{Signer, SignerError, TestSigners},
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
@@ -272,7 +265,7 @@ impl<'de> serde::Deserialize<'de> for VersionedMessage {
 pub struct VersionedTransaction {
 	/// List of signatures
 	#[serde(with = "short_vec")]
-	pub signatures: Vec<SolSignature>,
+	pub signatures: Vec<Signature>,
 	/// Message to sign.
 	pub message: VersionedMessage,
 }
@@ -290,7 +283,7 @@ impl VersionedTransaction {
 	pub fn new_unsigned(message: VersionedMessage) -> Self {
 		Self {
 			signatures: vec![
-				SolSignature::default();
+				Signature::default();
 				message.header().num_required_signatures as usize
 			],
 			message,
@@ -317,7 +310,7 @@ impl VersionedTransaction {
 			self.message.set_recent_blockhash(recent_blockhash);
 			self.signatures
 				.iter_mut()
-				.for_each(|signature| *signature = SolSignature::default());
+				.for_each(|signature| *signature = Signature::default());
 		}
 
 		let signatures = signers
@@ -346,7 +339,7 @@ impl VersionedTransaction {
 	}
 
 	pub fn is_signed(&self) -> bool {
-		self.signatures.iter().all(|signature| *signature != SolSignature::default())
+		self.signatures.iter().all(|signature| *signature != Signature::default())
 	}
 
 	/// Return the message containing all data that should be signed.
@@ -359,8 +352,8 @@ impl VersionedTransaction {
 		self.message().serialize()
 	}
 
-	/// Due to different Serialization between SolSignature and Solana native Signature type,
-	/// the SolSignatures needs to be converted into the RawSignature type before the
+	/// Due to different Serialization between Signature and Solana native Signature type,
+	/// the Signatures needs to be converted into the RawSignature type before the
 	/// transaction is serialized as whole.
 	pub fn finalize_and_serialize(self) -> Result<Vec<u8>, bincode::error::EncodeError> {
 		bincode::serde::encode_to_vec(RawTransaction::from(self), bincode::config::legacy())
@@ -386,7 +379,10 @@ impl VersionedTransaction {
 
 pub mod v0 {
 	use super::*;
-	use crate::sol::sol_tx_core::{AccountKeys, CompileError, MessageAddressTableLookup};
+	use crate::{AccountKeys, CompileError, MessageAddressTableLookup};
+
+	#[cfg(test)]
+	use crate::instructions::program_instructions;
 
 	/// A Solana transaction message (v0).
 	///
@@ -441,9 +437,6 @@ pub mod v0 {
 			lookup_tables: &[AddressLookupTableAccount],
 		) -> Self {
 			Self::try_compile(payer, instructions, lookup_tables, blockhash)
-				.map_err(|e| {
-					log::error!("Failed to compile Solana Message: {:?}", e);
-				})
 				.expect("Message construction should never fail.")
 		}
 
@@ -593,6 +586,9 @@ pub mod v0 {
 pub mod legacy {
 	use super::*;
 
+	#[cfg(test)]
+	use crate::instructions::program_instructions;
+
 	/// A Solana transaction message (legacy).
 	///
 	/// See the [`message`] module documentation for further description.
@@ -730,7 +726,7 @@ pub mod legacy {
 		/// [`num_required_signatures`]: crate::message::MessageHeader::num_required_signatures
 		// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
 		#[serde(with = "short_vec")]
-		pub signatures: Vec<SolSignature>,
+		pub signatures: Vec<Signature>,
 
 		/// The message to sign.
 		pub message: LegacyMessage,
@@ -740,7 +736,7 @@ pub mod legacy {
 		pub fn new_unsigned(message: LegacyMessage) -> Self {
 			Self {
 				signatures: vec![
-					SolSignature::default();
+					Signature::default();
 					message.header.num_required_signatures as usize
 				],
 				message,
@@ -801,7 +797,7 @@ pub mod legacy {
 				self.message.recent_blockhash = recent_blockhash;
 				self.signatures
 					.iter_mut()
-					.for_each(|signature| *signature = SolSignature::default());
+					.for_each(|signature| *signature = Signature::default());
 			}
 
 			let signatures = signers.try_sign_message(&self.message_data())?;
@@ -831,7 +827,7 @@ pub mod legacy {
 		}
 
 		pub fn is_signed(&self) -> bool {
-			self.signatures.iter().all(|signature| *signature != SolSignature::default())
+			self.signatures.iter().all(|signature| *signature != Signature::default())
 		}
 
 		/// Return the message containing all data that should be signed.
@@ -844,8 +840,8 @@ pub mod legacy {
 			self.message().serialize()
 		}
 
-		/// Due to different Serialization between SolSignature and Solana native Signature type,
-		/// the SolSignatures needs to be converted into the RawSignature type before the
+		/// Due to different Serialization between Signature and Solana native Signature type,
+		/// the Signatures needs to be converted into the RawSignature type before the
 		/// transaction is serialized as whole.
 		pub fn finalize_and_serialize(self) -> Result<Vec<u8>, bincode::error::EncodeError> {
 			bincode::serde::encode_to_vec(RawTransaction::from(self), bincode::config::legacy())

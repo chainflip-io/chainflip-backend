@@ -5,13 +5,14 @@
 //! Such Instruction can be signed and sent to the Program on Solana directly to invoke
 //! certain functions.
 
-use sol_prim::consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
-
 use crate::{
 	address::EncodedAddress,
 	sol::{
-		sol_tx_core::program_instructions::swap_endpoints::{
-			SwapEndpointProgram, SwapNativeParams, SwapTokenParams,
+		sol_tx_core::{
+			consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
+			program_instructions::swap_endpoints::{
+				SwapEndpointProgram, SwapNativeParams, SwapTokenParams,
+			},
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolInstruction, SolPubkey,
 	},

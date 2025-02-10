@@ -6,17 +6,8 @@ use sp_std::vec::Vec;
 
 use crate::sol::SolAddress;
 
-pub mod address_derivation;
-pub mod bpf_loader_instructions;
-pub mod compute_budget;
-pub mod program_instructions;
-pub mod token_instructions;
-pub mod transaction;
-
 pub use sol_prim::*;
 pub use transaction::legacy::{LegacyMessage, LegacyTransaction};
-
-pub mod tests;
 
 /// Provides alternative version of internal types that uses `Address` instead of Pubkey:
 ///

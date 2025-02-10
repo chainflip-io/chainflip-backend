@@ -21,6 +21,7 @@ pub mod api;
 pub mod benchmarking;
 pub mod instruction_builder;
 pub mod sol_tx_core;
+mod tests;
 pub mod transaction_builder;
 
 pub use crate::assets::sol::Asset as SolAsset;
@@ -31,14 +32,16 @@ pub use sol_prim::{
 		TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
+	transaction::legacy::{
+		LegacyMessage as SolLegacyMessage, LegacyTransaction as SolLegacyTransaction,
+	},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
-	Signature as SolSignature, SlotNumber as SolBlockNumber,
+	Hash as RawSolHash, Instruction as SolInstruction, InstructionRpc as SolInstructionRpc,
+	Pubkey as SolPubkey, Signature as SolSignature, SlotNumber as SolBlockNumber,
 };
 pub use sol_tx_core::{
 	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
-	CcmAddress as SolCcmAddress, Hash as RawSolHash, Instruction as SolInstruction,
-	InstructionRpc as SolInstructionRpc, LegacyMessage as SolLegacyMessage,
-	LegacyTransaction as SolLegacyTransaction, Pubkey as SolPubkey,
+	CcmAddress as SolCcmAddress,
 };
 
 // Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch

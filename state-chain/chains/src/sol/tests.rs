@@ -11,12 +11,16 @@ use crate::{
 				derive_token_supported_account,
 			},
 			compute_budget::ComputeBudgetInstruction,
+			consts::{
+				MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
+				TOKEN_PROGRAM_ID,
+			},
 			program_instructions::{InstructionExt, SystemProgramInstruction, VaultProgram},
 			signer::Signer,
 			sol_test_values::*,
 			token_instructions::AssociatedTokenAccountInstruction,
 			AccountMeta, CompiledInstruction, Hash, Instruction, LegacyMessage, LegacyTransaction,
-			MessageHeader, Pubkey,
+			MessageHeader, PdaAndBump, Pubkey,
 		},
 		SolAddress, SolHash, SolSignature,
 	},
@@ -24,14 +28,6 @@ use crate::{
 };
 
 use core::str::FromStr;
-
-use sol_prim::{
-	consts::{
-		MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
-		TOKEN_PROGRAM_ID,
-	},
-	PdaAndBump,
-};
 
 #[derive(BorshSerialize, BorshDeserialize)]
 enum BankInstruction {
@@ -42,29 +38,13 @@ enum BankInstruction {
 
 #[cfg(test)]
 mod versioned_transaction {
-	use sol_prim::{
+	use crate::sol::sol_tx_core::{
 		consts::{const_address, const_hash},
+		transaction::{v0::VersionedMessageV0, VersionedMessage, VersionedTransaction},
 		AddressLookupTableAccount,
 	};
 
-	use crate::sol::sol_tx_core::transaction::{
-		v0::VersionedMessageV0, VersionedMessage, VersionedTransaction,
-	};
-
 	use super::*;
-
-	#[test]
-	fn create_simple_tx() {
-		let program_id = Pubkey([0u8; 32]);
-		let payer = SolSigningKey::new();
-		let bank_instruction = BankInstruction::Initialize;
-
-		let instruction = Instruction::new_with_borsh(program_id, &bank_instruction, vec![]);
-
-		let mut tx =
-			VersionedTransaction::new_with_payer(&[instruction], Some(payer.pubkey()), &[]);
-		tx.sign(vec![payer].into(), Default::default());
-	}
 
 	#[test]
 	fn create_transfer_native_no_address_lookup_table() {

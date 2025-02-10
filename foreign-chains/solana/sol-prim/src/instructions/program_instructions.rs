@@ -1,12 +1,10 @@
-use super::{AccountMeta, Instruction, Pubkey};
+use crate::{consts::SYSTEM_PROGRAM_ID, AccountMeta, Instruction, Pubkey};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use cf_utilities::SliceToArray;
-use core::str::FromStr;
 use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
-use sol_prim::consts::SYSTEM_PROGRAM_ID;
-use sp_std::{vec, vec::Vec};
+use sp_std::{str::FromStr, vec, vec::Vec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum SystemProgramInstruction {
@@ -313,6 +311,7 @@ macro_rules! solana_program {
 			program_id: Pubkey,
 		}
 
+		#[allow(clippy::too_many_arguments)]
 		impl $program {
 			pub fn with_id(program_id: impl Into<Pubkey>) -> Self {
 				Self { program_id: program_id.into() }
@@ -402,7 +401,7 @@ macro_rules! solana_program {
 		mod test {
 			use super::*;
 			use std::collections::BTreeSet;
-			use $crate::sol::sol_tx_core::program_instructions::idl::Idl;
+			use $crate::instructions::program_instructions::idl::Idl;
 
 			const IDL_RAW: &str = include_str!($idl_path);
 
@@ -891,12 +890,6 @@ pub mod swap_endpoints {
 			},
 		]
 	);
-
-	impl From<crate::CcmChannelMetadata> for types::CcmParams {
-		fn from(ccm: crate::CcmChannelMetadata) -> Self {
-			types::CcmParams { message: ccm.message.to_vec(), gas_amount: ccm.gas_budget as u64 }
-		}
-	}
 
 	pub const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
 		types::SwapEvent::discriminator();
