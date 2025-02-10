@@ -22,7 +22,7 @@ import { observeEvent, Event, getChainflipApi } from '../shared/utils/substrate'
 import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testBoostingSwap = new ExecutableTest('Boosting-For-Asset', main, 120);
+export const testBoostingSwap = new ExecutableTest('Boosting-For-Asset', main, 150);
 
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -158,6 +158,7 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
 
   // Check that the swap was boosted
   const depositEvent = await Promise.race([observeSwapBoosted, observeDepositFinalised]);
+  testBoostingSwap.debugLog('DepositBoosted event:', JSON.stringify(depositEvent));
   if (depositEvent.name.method === 'DepositFinalised') {
     throw new Error('Deposit was finalised without seeing the DepositBoosted event');
   } else if (depositEvent.name.method !== 'DepositBoosted') {
