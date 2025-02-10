@@ -93,7 +93,14 @@ jobs:
           echo "Sisyphos is syncing"
 
           # Wait for sisyphos to be ready
-          while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "system_health", "params": []}' http://localhost:9944; do
+          while true; do
+            response=$(curl -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "system_health", "params": []}' http://localhost:9944)
+            if [ $? -eq 0 ] && [ ! -z "$response" ]; then
+              is_syncing=$(echo $response | jq -r '.result.isSyncing')
+              if [ "$is_syncing" = "false" ]; then
+                break
+              fi
+            fi
             sleep 5
           done
 
