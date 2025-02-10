@@ -32,7 +32,7 @@ pub enum Key {
 
 use Key::*;
 
-pub fn traces<ES: ElectoralSystemTypes>(data: ElectionData<ES>) -> Trace<Key, ()> {
+pub fn make_traces<ES: ElectoralSystemTypes>(data: ElectionData<ES>) -> Trace<Key, ()> {
     // let full_votes = data.votes.
     // let votes = data.bitmaps
     //     .iter()
@@ -45,24 +45,38 @@ pub fn traces<ES: ElectoralSystemTypes>(data: ElectionData<ES>) -> Trace<Key, ()
     //     .collect();
     // Trace::Composite((), votes)
 
-    Trace::Composite((), 
-        data.bitmaps
-            .into_iter()
-            .map(|(k,bitmaps)| (Election(k),
-                Trace::Composite((),
-                     bitmaps
-                    .iter()
-                    .map(|(component, bitmap)| 
-                        (
-                            Category(FullVote("vote".into())),
-                            Trace::Composite((), bitmap.iter().enumerate().map(|(id, bit)| (Validator(id as u64), Trace::Composite((), BTreeMap::new()))).collect())
-                        )
-                    )
-                    .collect()
-                )
-            ))
-            .collect()
-    )
+    let mut trace = Trace::new();
+    
+    for (k, bitmaps) in data.bitmaps {
+        trace.insert(vec![Election(k)], ());
+        for (component, bitmap) in bitmaps {
+            trace.insert(vec![Election(k), Category(FullVote("vote".into()))], ());
+            for (id, bit) in bitmap.iter().enumerate() {
+                trace.insert(vec![Election(k), Category(FullVote("vote".into())), Validator(id as u64)], ());
+            }
+        }
+    }
+
+    trace
+
+    // Trace::Composite((), 
+    //     data.bitmaps
+    //         .into_iter()
+    //         .map(|(k,bitmaps)| (Election(k),
+    //             Trace::Composite((),
+    //                  bitmaps
+    //                 .iter()
+    //                 .map(|(component, bitmap)| 
+    //                     (
+    //                         Category(FullVote("vote".into())),
+    //                         Trace::Composite((), bitmap.iter().enumerate().map(|(id, bit)| (Validator(id as u64), Trace::Composite((), BTreeMap::new()))).collect())
+    //                     )
+    //                 )
+    //                 .collect()
+    //             )
+    //         ))
+    //         .collect()
+    // )
 }
 
 // pub fn all_traces<ES: ElectoralSystemTypes + Ord>(data: BTreeMap<ElectionIdentifierOf<ES>,ElectionData<ES>>) -> Trace<Key<ES>, ()> {

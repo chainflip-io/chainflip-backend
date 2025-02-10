@@ -18,6 +18,9 @@ tokio = { version = "*", features = ["rt-multi-thread"]}
 bitvec = { workspace = true, default-features = false }
 codec = { workspace = true, default-features = false }
 futures-util = { workspace = true }
+futures = { workspace = true }
+futures-core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 # local dependencies
 pallet-cf-elections = { workspace = true, default-features = true }
