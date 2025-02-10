@@ -6,13 +6,15 @@ edition = "2024"
 [dependencies]
 # chainflip-state-observer-framework = {git = "https://github.com/chainflip-io/chainflip-state-observer-framework.git", branch = "feat/PRO-2014/create-observable-trait"}
 tracing = "0.1.41"
+tracing-core = "0.1.33"
 tracing-opentelemetry = "0.28.0"
 tracing-subscriber = "0.3.19"
 opentelemetry = "0.27.1"
-opentelemetry_sdk = { version =  "0.27.1", features = ["async-std", "rt-tokio"] }
+opentelemetry_sdk = { version =  "0.27.1", features = ["async-std", "rt-tokio", "trace"] }
 opentelemetry-otlp = { version = "0.27.0", features = ["grpc-tonic"] }
 opentelemetry-stdout = "0.27.0"
 tokio = { version = "*", features = ["rt-multi-thread"]}
+static_str_ops = "0.1.2"
 
 # workspaced deps
 bitvec = { workspace = true, default-features = false }

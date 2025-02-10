@@ -46,6 +46,7 @@ pub fn make_traces<ES: ElectoralSystemTypes>(data: ElectionData<ES>) -> Trace<Ke
     // Trace::Composite((), votes)
 
     let mut trace = Trace::new();
+    trace.insert(vec![], ());
     
     for (k, bitmaps) in data.bitmaps {
         trace.insert(vec![Election(k)], ());

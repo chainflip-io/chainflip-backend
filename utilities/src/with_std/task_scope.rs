@@ -293,6 +293,120 @@ pub fn task_scope<
 	}
 }
 
+
+#[track_caller]
+pub fn task_scope_local<
+	'a,
+	T,
+	Error: Debug + Send + 'static,
+	C: for<'b> FnOnce(&'b Scope<'a, Error>) -> futures::future::LocalBoxFuture<'b, Result<T, Error>>,
+>(
+	top_level_task: C,
+) -> impl Future<Output = Result<T, Error>> {
+	let location = core::panic::Location::caller();
+
+	async move {
+		tracing::info!(
+			target: "task_scope",
+			"scope opened: '{location}'",
+		);
+		let guard = scopeguard::guard((), move |_| {
+			if std::thread::panicking() {
+				tracing::error!(
+					target: "task_scope",
+					"scope closed by panic: '{location}'"
+				);
+			} else {
+				tracing::error!(
+					target: "task_scope",
+					"scope closed by cancellation: '{location}'"
+				);
+			}
+		});
+
+		let (scope, mut task_result_stream) = Scope::new();
+
+		// try_join ensures if the top level task returns an error we immediately drop
+		// `task_result_stream`, which in turn cancels all the tasks
+		let result = tokio::try_join!(
+			async move {
+				while let Some(task_result) = task_result_stream.next().await {
+					match task_result {
+						Err(error) => {
+							// Note we drop the task_result_stream on unwind causing all tasks to
+							// be cancelled/aborted
+							if let Ok(panic) = error.try_into_panic() {
+								std::panic::resume_unwind(panic);
+							} /* else: Can only occur if tokio's runtime is dropped during task
+							  * scope's lifetime, in this case we are about to be cancelled
+							  * ourselves */
+						},
+						Ok(future_result) => future_result?,
+					}
+				}
+				// task_result_stream has ended meaning scope has been dropped and all tasks
+				// (excluding the top-level task) have finished running
+				Ok(())
+			},
+			// This async move scope ensures scope is dropped when top_level_task and its returned
+			// future finish (Instead of when this function exits)
+			async move {
+				tracing::info!(
+					target: "task_scope",
+					"parent task started '{location}'"
+				);
+				let guard = scopeguard::guard((), move |_| {
+					if std::thread::panicking() {
+						tracing::error!(
+							target: "task_scope",
+							"parent task ended by panic: '{location}'"
+						);
+					} else {
+						tracing::error!(
+							target: "task_scope",
+							"parent task ended by cancellation: '{location}'"
+						);
+					}
+				});
+				let result = top_level_task(&scope).await;
+				scopeguard::ScopeGuard::into_inner(guard);
+				match &result {
+					Ok(_) => tracing::info!(
+						target: "task_scope",
+						"parent task ended: '{location}'"
+					),
+					Err(error) => tracing::error!(
+						target: "task_scope",
+						"parent task ended by error '{error:?}': '{location}'"
+					),
+				}
+				result
+			}
+		);
+
+		scopeguard::ScopeGuard::into_inner(guard);
+
+		match result {
+			Ok((_, t)) => {
+				tracing::info!(
+					target: "task_scope",
+					"scope closed: '{location}'"
+				);
+				Ok(t)
+			},
+			Err(error) => {
+				tracing::info!(
+					target: "task_scope",
+					"scope closed by error: {error:?} '{location}'"
+				);
+				Err(error)
+			},
+		}
+	}
+}
+
+
+
 type TaskFuture<Error> = Pin<Box<dyn 'static + Future<Output = Result<(), Error>> + Send>>;
 
 #[derive(Clone, Copy)]

@@ -1,5 +1,5 @@
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, os::unix::process};
 
 // #[derive(Debug)]
 // pub enum Trace<K,V> {
@@ -16,9 +16,28 @@ pub enum NodeDiff<V, W> {
     Both(V,W)
 }
 
+impl<V,W> NodeDiff<V,W> {
+
+    pub fn get_left(&self) -> Option<&W> {
+        match self {
+            Left(_) => None,
+            Right(a) => Some(a),
+            Both(_, a) => Some(a),
+        }
+    }
+
+    pub fn get_right(&self) -> Option<&W> {
+        match self {
+            Left(_) => None,
+            Right(a) => Some(a),
+            Both(_, a) => Some(a),
+        }
+    }
+}
+
 use NodeDiff::*;
 
-pub fn diff<K: Ord,V: PartialEq + Clone, W: PartialEq + Clone>(a: Trace<K,V>, b: Trace<K,W>) -> Trace<K,NodeDiff<V, W>> {
+pub fn diff<K: Ord,V, W>(a: Trace<K,V>, b: Trace<K,W>) -> Trace<K,NodeDiff<V, W>> {
     zip_with(a, b, |v,w| match (v,w) {
         (None, None) => None,
         (None, Some(w)) => Some(Right(w)),
@@ -29,6 +48,27 @@ pub fn diff<K: Ord,V: PartialEq + Clone, W: PartialEq + Clone>(a: Trace<K,V>, b:
 pub fn fmap<K: Ord, V, W>(this: BTreeMap<K,V>, f: &impl Fn(V) -> W) -> BTreeMap<K,W> {
     this.into_iter().map(|(k,v)| (k, f(v))).collect()
 }
+
+// TODO! This has currently a hardcoded 10!
+pub fn map_with_parent<K: Ord, V, W>(mut this: Trace<K,V>, f: impl Fn(&Vec<K>, Option<&W>, V) -> W) -> Trace<K,W> {
+    let mut processed = BTreeMap::new();
+    for length in (0..10) {
+        for (key, value) in this.extract_if(|k,_| k.len() == length) {
+            let parent_key = &key[0..key.len() - 1];
+            let p = processed.get(parent_key);
+            let v = f(&key, p, value);
+            processed.insert(key, v);
+        }
+    }
+    processed
+}
+
+
+pub fn get_key_name<K: Debug>(key: &Vec<K>) -> &'static str{
+    let name = key.last().map(|x| format!("{x:?}")).unwrap_or("root".into());
+    staticize(&name)
+}
+
 
 
 // impl<K: Ord,V> Trace<K,V> {
