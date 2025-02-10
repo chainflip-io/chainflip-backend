@@ -352,6 +352,12 @@ where
 					// confirmed deposits have been ingressed.
 					if ready_total.block_number >= details.close_block {
 						Sink::on_channel_closed(account.clone());
+						// Removes the state.
+						// We need to remove this if we decide to recycle Solana channels.
+						ElectoralAccess::set_unsynchronised_state_map(
+							(account.clone(), details.asset),
+							None,
+						);
 						new_properties.remove(account);
 					}
 				}

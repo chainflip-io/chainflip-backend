@@ -512,6 +512,8 @@ mod channel_closure {
 					Check::channel_closed_once(DEFAULT_CHANNEL_ACCOUNT),
 					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
 					Check::all_elections_deleted(),
+					// Channel state cleaned up.
+					Check::ended_at_state_map_state([]),
 				],
 			);
 	}
@@ -527,6 +529,8 @@ mod channel_closure {
 					Check::channel_closed_once(DEFAULT_CHANNEL_ACCOUNT),
 					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
 					Check::all_elections_deleted(),
+					// Channel state cleaned up.
+					Check::ended_at_state_map_state([]),
 				],
 			);
 	}
@@ -543,6 +547,12 @@ mod channel_closure {
 					Check::channel_not_closed(DEFAULT_CHANNEL_ACCOUNT),
 					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
 					Check::election_id_incremented(),
+					// Channel state not cleaned up yet, since the channel is not yet closed.
+					Check::ended_at_state_map_state([DepositChannel {
+						total_ingressed: DEPOSIT_AMOUNT,
+						block_number: DEPOSIT_BLOCK,
+						..DEFAULT_CHANNEL
+					}]),
 				],
 			)
 			// Chain tracking reaches close block, channel is closed.
@@ -553,147 +563,11 @@ mod channel_closure {
 					Check::channel_closed_once(DEFAULT_CHANNEL_ACCOUNT),
 					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
 					Check::all_elections_deleted(),
+					// Channel state cleaned up.
+					Check::ended_at_state_map_state([]),
 				],
 			);
 	}
-}
-
-#[test]
-fn test_deposit_channel_recycling() {
-	let channel_state_recycled_same_asset = vec![
-		DepositChannel {
-			account: 1u32,
-			asset: Asset::Sol,
-			total_ingressed: 20_000u64,
-			block_number: 4_000u64,
-			close_block: 4_000u64,
-		},
-		DepositChannel {
-			account: 2u32,
-			asset: Asset::SolUsdc,
-			total_ingressed: 30_000u64,
-			block_number: 4_000u64,
-			close_block: 4_000u64,
-		},
-	];
-
-	let channel_state_recycled_different_asset = vec![
-		DepositChannel {
-			account: 1u32,
-			asset: Asset::SolUsdc,
-			total_ingressed: 100_000u64,
-			block_number: 5_000u64,
-			close_block: 5_000u64,
-		},
-		DepositChannel {
-			account: 2u32,
-			asset: Asset::Sol,
-			total_ingressed: 200_000u64,
-			block_number: 5_000u64,
-			close_block: 5_000u64,
-		},
-	];
-
-	let initial_close_block = CHANNEL_STATE_CLOSED[1].close_block;
-	let recycled_same_asset_close_block = channel_state_recycled_same_asset[0].close_block;
-	let recycled_diff_asset_close_block = channel_state_recycled_different_asset[0].close_block;
-
-	with_default_setup()
-		.build()
-		.then(|| {
-			for deposit_channel in INITIAL_CHANNEL_STATE {
-				assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
-					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
-					deposit_channel.account,
-					deposit_channel.asset,
-					deposit_channel.close_block
-				));
-			}
-		})
-		.force_consensus_update(ConsensusStatus::Gained {
-			most_recent: None,
-			new: to_state(CHANNEL_STATE_CLOSED),
-		})
-		.test_on_finalize(
-			&initial_close_block,
-			|_| (),
-			vec![
-				Check::ended_at_state_map_state(CHANNEL_STATE_CLOSED),
-				Check::ingressed(vec![
-					(1u32, Asset::Sol, 4_000u64),
-					(2u32, Asset::SolUsdc, 6_000u64),
-				]),
-				Check::channels_closed_matches(vec![1u32, 2u32]),
-			],
-		)
-		.then(|| {
-			// Channels are recycled using the same asset. Only the difference in total amount is
-			// counted as ingressed
-			for deposit_channel in channel_state_recycled_same_asset.clone() {
-				assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
-					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
-					deposit_channel.account,
-					deposit_channel.asset,
-					deposit_channel.close_block
-				));
-			}
-		})
-		.force_consensus_update(ConsensusStatus::Gained {
-			most_recent: None,
-			new: to_state(channel_state_recycled_same_asset.clone()),
-		})
-		.test_on_finalize(
-			&recycled_same_asset_close_block,
-			|_| (),
-			vec![
-				Check::ended_at_state_map_state(channel_state_recycled_same_asset.clone()),
-				Check::ingressed(vec![
-					(1u32, Asset::Sol, 4_000u64),
-					(2u32, Asset::SolUsdc, 6_000u64),
-					// On recycled channels, only the diff amount is counted as ingress
-					(1u32, Asset::Sol, 16_000u64),
-					(2u32, Asset::SolUsdc, 24_000u64),
-				]),
-				Check::channels_closed_matches(vec![1u32, 2u32, 1u32, 2u32]),
-			],
-		)
-		.then(|| {
-			// Channels are recycled using the same asset. Only the difference in total amount is
-			// counted as ingressed
-			for deposit_channel in channel_state_recycled_different_asset.clone() {
-				assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
-					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
-					deposit_channel.account,
-					deposit_channel.asset,
-					deposit_channel.close_block
-				));
-			}
-		})
-		.force_consensus_update(ConsensusStatus::Gained {
-			most_recent: None,
-			new: to_state(channel_state_recycled_different_asset.clone()),
-		})
-		.test_on_finalize(
-			&recycled_diff_asset_close_block,
-			|_| (),
-			vec![
-				Check::ended_at_state_map_state(
-					[channel_state_recycled_different_asset, channel_state_recycled_same_asset]
-						.into_iter()
-						.flatten(),
-				),
-				Check::ingressed(vec![
-					(1u32, Asset::Sol, 4_000u64),
-					(2u32, Asset::SolUsdc, 6_000u64),
-					(1u32, Asset::Sol, 16_000u64),
-					(2u32, Asset::SolUsdc, 24_000u64),
-					// Total amount ingressed are accumulated per `(Account, Asset)` pair
-					(1u32, Asset::SolUsdc, 100_000u64),
-					(2u32, Asset::Sol, 200_000u64),
-				]),
-				Check::channels_closed_matches(vec![1u32, 2u32, 1u32, 2u32, 1u32, 2u32]),
-			],
-		);
 }
 
 #[test]
@@ -829,7 +703,8 @@ fn test_open_channel_with_existing_election() {
 			&channel_close_block,
 			|_| (),
 			vec![
-				Check::ended_at_state_map_state(combined_state_closed),
+				// All channels are close, their state should be deleted.
+				Check::ended_at_state_map_state([]),
 				Check::ingressed(vec![
 					(1u32, Asset::Sol, 1_000u64),
 					(2u32, Asset::SolUsdc, 2_000u64),
