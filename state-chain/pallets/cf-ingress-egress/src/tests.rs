@@ -2453,17 +2453,20 @@ mod vault_swap_refund {
 				"Vault swap should have been taken from aborted vault transaction!"
 			);
 
-			assert!(
-				MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
-				"No swaps should have been triggered!"
-			);
-
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::IngressEgress(Event::VaultSwapRefunded { tx_id: _ })
 			);
 
-			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+			assert!(
+				MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
+				"No swaps should have been triggered!"
+			);
+
+			assert!(
+				MockEgressBroadcaster::get_pending_api_calls().len() == 1,
+				"Refund broadcast should have been scheduled!"
+			);
 		});
 	}
 
@@ -2504,6 +2507,16 @@ mod vault_swap_refund {
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::IngressEgress(Event::VaultSwapRefundFailed { tx_id: _ })
+			);
+
+			assert!(
+				MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
+				"No swaps should have been triggered!"
+			);
+
+			assert!(
+				MockEgressBroadcaster::get_pending_api_calls().is_empty(),
+				"No egresses should have been broadcasted!"
 			);
 		});
 	}
