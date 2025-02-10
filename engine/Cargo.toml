@@ -46,7 +46,7 @@ serde = { workspace = true, default-features = true, features = [
 ] }
 serde_json = { workspace = true }
 sha2 = { workspace = true, default-features = true }
-subxt = { workspace = true, features = ["substrate-compat"] }
+subxt = { workspace = true }
 thiserror = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-stream = { workspace = true, features = ["sync"] }

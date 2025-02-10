@@ -144,7 +144,7 @@ sha2-const = { version = "0.1.2", default-features = false }
 ss58-registry = { version = "1.41" }
 strum = { version = "0.26.3", default-features = false }
 strum_macros = { version = "0.26.4", default-features = false }
-subxt = { version = "0.37.0" }
+subxt = { version = "0.39.0" }
 syn = { version = "2.0.53" }
 tempfile = { version = "3.8.1" }
 thiserror = { version = "1.0.50", default-features = false }

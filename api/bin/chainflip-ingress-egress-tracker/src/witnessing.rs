@@ -5,7 +5,6 @@ pub mod state_chain;
 
 use self::state_chain::handle_call;
 use crate::{settings::DepositTrackerSettings, store::RedisStore};
-use cf_chains::dot::PolkadotHash;
 use cf_utilities::task_scope;
 use chainflip_api::primitives::{
 	chains::assets::eth::Asset as EthAsset, Asset, NetworkEnvironment,
@@ -21,7 +20,7 @@ use chainflip_engine::{
 };
 
 use anyhow::anyhow;
-use sp_core::H160;
+use sp_core::{H160, H256};
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -33,7 +32,7 @@ pub(super) struct EnvironmentParameters {
 	usdc_contract_address: H160,
 	usdt_contract_address: H160,
 	supported_erc20_tokens: HashMap<H160, Asset>,
-	dot_genesis_hash: PolkadotHash,
+	dot_genesis_hash: H256,
 	pub chainflip_network: NetworkEnvironment,
 }
 

@@ -35,13 +35,13 @@ use state_chain_observer::client::{
 use self::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
-	dot::retry_rpc::DotRetryRpcClient,
+	dot::{retry_rpc::DotRetryRpcClient, PolkadotHash},
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	sol::retry_rpc::SolRetryRpcClient,
 };
 use anyhow::Context;
-use cf_chains::{dot::PolkadotHash, Chain};
+use cf_chains::Chain;
 use cf_primitives::AccountRole;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -74,42 +74,42 @@ pub fn settings_and_run_main(
 	};
 
 	match tokio::runtime::Builder::new_multi_thread()
-		.enable_all()
-		.build()
-		.unwrap()
-		.block_on(async {
-			// Note: the greeting should only be printed in normal mode (i.e. not for short-lived
-			// commands like `--version`), so we execute it only after the settings have been parsed.
-			cf_utilities::print_start_and_end!(async run_main(settings, if start_from == NO_START_FROM { None } else { Some(start_from) }))
-		}) {
-		Ok(()) => ExitStatus { status_code: SUCCESS, at_block: NO_START_FROM },
-		Err(ErrorType::Error(e)) => {
-			if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) =
-				e.downcast_ref::<CreateStateChainClientError>()
-			{
-				match block_compatibility.compatibility {
-					// we're no longer compatible, so we want to pass on the start to the one that is
-					// now compatible so that it can start from that number, ensuring we don't miss any blocks.
-					CfeCompatibility::NoLongerCompatible => ExitStatus {
-						status_code: engine_upgrade_utils::NO_LONGER_COMPATIBLE,
-						at_block: block_compatibility.at_block.number,
-					},
-					CfeCompatibility::NotYetCompatible => ExitStatus {
-						status_code: engine_upgrade_utils::NOT_YET_COMPATIBLE,
-						at_block: NO_START_FROM,
-					},
-					_ => {
-						unreachable!("We should never get here");
-					},
-				}
-			} else {
-				tracing::error!("Unknown error: {:?}", e);
-				ExitStatus { status_code: engine_upgrade_utils::UNKNOWN_ERROR, at_block: NO_START_FROM }
-			}
-		},
-		Err(ErrorType::Panic) =>
-			ExitStatus { status_code: engine_upgrade_utils::PANIC, at_block: NO_START_FROM },
-	}
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            // Note: the greeting should only be printed in normal mode (i.e. not for short-lived
+            // commands like `--version`), so we execute it only after the settings have been parsed.
+            cf_utilities::print_start_and_end!(async run_main(settings, if start_from == NO_START_FROM { None } else { Some(start_from) }))
+        }) {
+        Ok(()) => ExitStatus { status_code: SUCCESS, at_block: NO_START_FROM },
+        Err(ErrorType::Error(e)) => {
+            if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) =
+                e.downcast_ref::<CreateStateChainClientError>()
+            {
+                match block_compatibility.compatibility {
+                    // we're no longer compatible, so we want to pass on the start to the one that is
+                    // now compatible so that it can start from that number, ensuring we don't miss any blocks.
+                    CfeCompatibility::NoLongerCompatible => ExitStatus {
+                        status_code: engine_upgrade_utils::NO_LONGER_COMPATIBLE,
+                        at_block: block_compatibility.at_block.number,
+                    },
+                    CfeCompatibility::NotYetCompatible => ExitStatus {
+                        status_code: engine_upgrade_utils::NOT_YET_COMPATIBLE,
+                        at_block: NO_START_FROM,
+                    },
+                    _ => {
+                        unreachable!("We should never get here");
+                    },
+                }
+            } else {
+                tracing::error!("Unknown error: {:?}", e);
+                ExitStatus { status_code: engine_upgrade_utils::UNKNOWN_ERROR, at_block: NO_START_FROM }
+            }
+        },
+        Err(ErrorType::Panic) =>
+            ExitStatus { status_code: engine_upgrade_utils::PANIC, at_block: NO_START_FROM },
+    }
 }
 
 async fn run_main(
@@ -287,13 +287,14 @@ async fn run_main(
 				BtcRetryRpcClient::new(scope, settings.btc.nodes, expected_btc_network).await?
 			};
 			let dot_client = {
-				let expected_dot_genesis_hash = PolkadotHash::from(
+				let expected_dot_genesis_hash = PolkadotHash::from_slice(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
 							state_chain_client.latest_finalized_block().hash,
 						)
 						.await
-						.expect(STATE_CHAIN_CONNECTION),
+						.expect(STATE_CHAIN_CONNECTION)
+						.as_bytes(),
 				);
 				DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?
 			};

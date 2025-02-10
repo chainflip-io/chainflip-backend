@@ -4,29 +4,21 @@ use crate::{
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
-use cf_chains::{
-	dot::{PolkadotHash, RuntimeVersion},
-	Polkadot,
-};
+use cf_chains::{dot::RuntimeVersion, Polkadot};
 use cf_primitives::PolkadotBlockNumber;
 use cf_utilities::task_scope::Scope;
 use core::time::Duration;
 use futures_core::Stream;
-use sp_core::H256;
 use std::pin::Pin;
 use subxt::{
-	backend::legacy::rpc_methods::Bytes, config::Header as SubxtHeader, events::Events,
+	backend::legacy::rpc_methods::Bytes, config::Header as SubxtHeader, events::Events, Config,
 	PolkadotConfig,
 };
 
 use crate::retrier::{RequestLog, RetrierClient};
 
+use super::{http_rpc::DotHttpRpcClient, rpc::DotSubClient, PolkadotHash, PolkadotHeader};
 use anyhow::{anyhow, Result};
-
-use super::{
-	http_rpc::DotHttpRpcClient,
-	rpc::{DotSubClient, PolkadotHeader},
-};
 
 use crate::dot::rpc::DotRpcApi;
 
@@ -102,7 +94,7 @@ pub trait DotRetryRpcApi: Clone {
 		retry_limit: R,
 	) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
 
-	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
+	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
 
 	async fn submit_raw_encoded_extrinsic(
 		&self,
@@ -158,7 +150,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion {
+	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new("runtime_version".to_string(), None),
@@ -240,7 +232,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 #[async_trait::async_trait]
 impl ChainClient for DotRetryRpcClient {
 	type Index = <Polkadot as cf_chains::Chain>::ChainBlockNumber;
-	type Hash = PolkadotHash;
+	type Hash = <PolkadotConfig as Config>::Hash;
 	type Data = Events<PolkadotConfig>;
 
 	async fn header_at_index(
@@ -304,7 +296,7 @@ pub mod mocks {
 
 			async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, parent_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
 
-			async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
+			async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
 
 			async fn submit_raw_encoded_extrinsic(
 				&self,

@@ -1,25 +1,22 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use cf_chains::dot::{PolkadotHash, RuntimeVersion};
+use cf_chains::dot::RuntimeVersion;
 use cf_primitives::PolkadotBlockNumber;
 use cf_utilities::redact_endpoint_secret::SecretUrl;
 use futures::{Stream, StreamExt, TryStreamExt};
-use sp_core::H256;
 use std::sync::Arc;
 use subxt::{
 	backend::legacy::rpc_methods::{BlockDetails, Bytes},
 	events::Events,
-	Config, OnlineClient, PolkadotConfig,
+	OnlineClient, PolkadotConfig,
 };
 use tokio::sync::RwLock;
 use tracing::warn;
 
-use anyhow::{anyhow, bail, Result};
-
 use super::http_rpc::DotHttpRpcClient;
-
-pub type PolkadotHeader = <PolkadotConfig as Config>::Header;
+use crate::dot::{PolkadotHash, PolkadotHeader};
+use anyhow::{anyhow, bail, Result};
 
 #[derive(Clone)]
 pub struct DotRpcClient {
@@ -96,7 +93,7 @@ pub trait DotRpcApi: Send + Sync {
 		parent_hash: PolkadotHash,
 	) -> Result<Option<Events<PolkadotConfig>>>;
 
-	async fn runtime_version(&self, at: Option<H256>) -> Result<RuntimeVersion>;
+	async fn runtime_version(&self, at: Option<PolkadotHash>) -> Result<RuntimeVersion>;
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
 }
@@ -115,7 +112,7 @@ impl DotRpcApi for DotRpcClient {
 		self.http_client.block(block_hash).await
 	}
 
-	async fn runtime_version(&self, at: Option<H256>) -> Result<RuntimeVersion> {
+	async fn runtime_version(&self, at: Option<PolkadotHash>) -> Result<RuntimeVersion> {
 		self.http_client.runtime_version(at).await
 	}
 
