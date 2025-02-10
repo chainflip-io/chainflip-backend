@@ -31,8 +31,8 @@ use cf_chains::{
 	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
 	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall,
-	SwapOrigin, TransferAssetParams,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -939,6 +939,9 @@ pub mod pallet {
 		VaultSwapRefundFailed {
 			tx_id: TransactionInIdFor<T, I>,
 		},
+		VaultSwapRejected {
+			tx_id: TransactionInIdFor<T, I>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1507,8 +1510,6 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 	}
 }
 
-use cf_chains::TransferFallback;
-
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn mark_transaction_for_rejection_inner(
 		account_id: T::AccountId,
@@ -2036,6 +2037,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Returns true if the vault swap should be rejected.
+	///
+	/// A vault swap should be rejected if the broker fee is not set or the account is not a broker.
+	fn should_reject_vault_swap(broker_fee: &Option<Beneficiary<T::AccountId>>) -> bool {
+		match broker_fee {
+			Some(Beneficiary { account, .. }) =>
+				!T::AccountRoleRegistry::has_account_role(account, AccountRole::Broker),
+			_ => true,
+		}
+	}
+
 	fn assemble_broker_fees(
 		broker_fee: Option<Beneficiary<T::AccountId>>,
 		affiliate_fees: Affiliates<AffiliateShortId>,
@@ -2210,15 +2222,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		}: VaultDepositWitness<T, I>,
 	) {
-		// We reject a vault swaps if the broker fee is not set or the account is not a broker.
-		let reject_vault_swap = match broker_fee.clone() {
-			Some(Beneficiary { account, .. }) =>
-				!T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker),
-			_ => true,
-		};
-
-		if reject_vault_swap {
+		if Self::should_reject_vault_swap(&broker_fee) {
 			AbortedVaultTransaction::<T, I>::insert(&tx_id, ());
+			Self::deposit_event(Event::VaultSwapRejected { tx_id });
 			return;
 		}
 
