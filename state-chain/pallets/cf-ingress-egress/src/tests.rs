@@ -2368,6 +2368,12 @@ fn vault_swaps_gets_refunded_if_vault_transaction_was_aborted() {
 	new_test_ext().execute_with(|| {
 		let tx_id = H256::default();
 
+		let refund_params: ChannelRefundParameters<H160> = ChannelRefundParameters {
+			retry_duration: 0,
+			min_price: U256::from(0),
+			refund_address: H160::default(),
+		};
+
 		let vault_swap = VaultDepositWitness {
 			input_asset: Asset::Eth.try_into().unwrap(),
 			deposit_address: Default::default(),
@@ -2380,11 +2386,7 @@ fn vault_swaps_gets_refunded_if_vault_transaction_was_aborted() {
 			tx_id,
 			broker_fee: None,
 			affiliate_fees: Default::default(),
-			refund_params: Some(ChannelRefundParametersDecoded {
-				retry_duration: 0,
-				min_price: U256::from(0),
-				refund_address: ForeignChainAddress::Eth(Default::default()),
-			}),
+			refund_params: Some(refund_params),
 			dca_params: None,
 			boost_fee: 0,
 		};
