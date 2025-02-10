@@ -35,8 +35,6 @@ cf-runtime-utilities = { workspace = true }
 cf-traits = { workspace = true }
 cf-utilities = { workspace = true }
 
-sol-prim = { workspace = true }
-
 pallet-cf-account-roles = { workspace = true }
 pallet-cf-asset-balances = { workspace = true }
 pallet-cf-broadcast = { workspace = true }
@@ -190,7 +188,6 @@ std = [
   "pallet-cf-cfe-interface/std",
   "scale-info/std",
   "serde/std",
-  "sol-prim/std",
   "sp-api/std",
   "sp-block-builder/std",
   "sp-consensus-aura/std",

@@ -1,9 +1,11 @@
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
-	sol::{api::SolanaEnvironment, sol_tx_core::address_derivation::derive_deposit_address},
+	sol::{
+		api::SolanaEnvironment,
+		sol_tx_core::{address_derivation::derive_deposit_address, PdaAndBump},
+	},
 	Solana,
 };
-use sol_prim::PdaAndBump;
 
 use super::AddressDerivation;
 use crate::SolEnvironment;
