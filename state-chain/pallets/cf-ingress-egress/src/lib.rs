@@ -775,6 +775,8 @@ pub mod pallet {
 	pub(crate) type AbortedVaultTransaction<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, TransactionInIdFor<T, I>, ()>;
 
+	/// Stores the details of an aborted vault transaction. In case we fail to refund we store the
+	/// details in this storage item.
 	#[pallet::storage]
 	pub(crate) type AbortedVaultTransactionDetails<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, TransactionInIdFor<T, I>, VaultDepositWitness<T, I>>;
