@@ -39,6 +39,7 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 ///     - `Rules`: A hook to process block data and generate events.
 ///     - `Execute`: A hook to execute generated events.
 ///     - `DedupEvents`: A hook to deduplicate events.
+/// 	- `SafetyMargin`: A hook to retrieve the chain specific safety-margin
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
@@ -52,6 +53,7 @@ pub struct BlockProcessor<T: BWProcessorTypes> {
 	pub rules: T::Rules,
 	pub execute: T::Execute,
 	pub dedup_events: T::DedupEvents,
+	pub safety_margin: T::SafetyMargin,
 }
 impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 	for BlockProcessor<BlockWitnessingProcessorDefinition>
@@ -63,6 +65,7 @@ impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 			rules: Default::default(),
 			execute: Default::default(),
 			dedup_events: Default::default(),
+			safety_margin: Default::default(),
 		}
 	}
 }
@@ -222,14 +225,15 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	}
 	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
 		self.blocks_data
-			.retain(|_key, (_, next_age)| *next_age <= T::get_safety_margin());
+			.retain(|_key, (_, next_age)| *next_age <= self.safety_margin.run(()));
 		// Todo! Do we want to keep these events around for longer? is there any benefit?
 		// If we keep these for let's say 100 blocks we can then prevent double processing things
 		// that are reorged up to 100 blocks later, what are the chanches of smth like this
 		// happening? This still won't protect us from re-processing full Witness events since we
 		// remove the blocks from block_data as soon as safety margin is reached (we would have to
 		// increase the size of blocks_data as well)
-		self.reorg_events.retain(|key, _| *key > last_height - T::get_safety_margin());
+		self.reorg_events
+			.retain(|key, _| *key > last_height - self.safety_margin.run(()));
 	}
 }
 

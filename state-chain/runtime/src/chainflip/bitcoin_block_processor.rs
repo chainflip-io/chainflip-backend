@@ -147,6 +147,28 @@ impl Hook<Vec<(BlockNumber, BtcEvent)>, Vec<(BlockNumber, BtcEvent)>> for DedupE
 	}
 }
 
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	Default,
+)]
+pub struct SafetyMarginHook {}
+
+impl Hook<(), BlockNumber> for SafetyMarginHook {
+	fn run(&mut self, _input: ()) -> BlockNumber {
+		BitcoinIngressEgress::witness_safety_margin().unwrap()
+	}
+}
 #[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct BlockWitnessingProcessorDefinition {}
 
@@ -157,10 +179,7 @@ impl BWProcessorTypes for BlockWitnessingProcessorDefinition {
 	type Rules = ApplyRulesHook;
 	type Execute = ExecuteEventHook;
 	type DedupEvents = DedupEventsHook;
-
-	fn get_safety_margin() -> Self::ChainBlockNumber {
-		BitcoinIngressEgress::witness_safety_margin().unwrap()
-	}
+	type SafetyMargin = SafetyMarginHook;
 }
 
 #[cfg(test)]
@@ -168,7 +187,7 @@ mod tests {
 	use cf_chains::btc::BlockNumber;
 	use std::collections::BTreeMap;
 
-	use crate::chainflip::bitcoin_block_processor::ApplyRulesHook;
+	use crate::chainflip::bitcoin_block_processor::{ApplyRulesHook, SafetyMarginHook};
 	use codec::{Decode, Encode};
 	use core::ops::RangeInclusive;
 	use frame_support::pallet_prelude::TypeInfo;
@@ -215,6 +234,7 @@ mod tests {
 				rules: ApplyRulesHook {},
 				execute: IncreasingHook::<(BlockNumber, MockBtcEvent), ()>::default(),
 				dedup_events: DedupEventsHook {},
+				safety_margin: SafetyMarginHook {},
 			})
 			.boxed()
 	}
@@ -354,10 +374,7 @@ mod tests {
 		type Rules = ApplyRulesHook;
 		type Execute = IncreasingHook<(Self::ChainBlockNumber, Self::Event), ()>;
 		type DedupEvents = DedupEventsHook;
-
-		fn get_safety_margin() -> Self::ChainBlockNumber {
-			3
-		}
+		type SafetyMargin = SafetyMarginHook;
 	}
 
 	#[test]

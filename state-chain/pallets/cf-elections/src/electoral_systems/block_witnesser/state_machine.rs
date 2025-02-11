@@ -77,7 +77,7 @@ pub trait BWProcessorTypes {
 		+ Clone
 		+ Eq;
 
-	fn get_safety_margin() -> Self::ChainBlockNumber;
+	type SafetyMargin: Hook<(), Self::ChainBlockNumber> + Default + Serde + Debug + Clone + Eq;
 }
 
 #[derive(
