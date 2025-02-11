@@ -38,19 +38,23 @@ To connect to a remote network such as a Devnet, you need to set the following e
 
 The values for your network can be found in the `eth-contracts` vault in 1Password.
 
-### Useful commands
+## Useful commands
 
 The following commands should be executed from the bouncer directory.
+All of the checks must find 0 issues to pass the CI.
 
-- Check formatting:<br>
-  `pnpm prettier:check`
-- Format code:<br>
-  `pnpm prettier:write`
-- Check linting:<br>
-  `pnpm eslint:check`
-  `pnpm tsc --noEmit`
-- Fix linting:<br>
-  `pnpm eslint:fix`
+```sh
+# Check formatting
+pnpm prettier:check
+# Format code
+pnpm prettier:write
+# Check linting
+pnpm eslint:check
+# Fix linting
+pnpm eslint:fix
+# Check Compiler
+pnpm tsc --noEmit
+```
 
 ## How to create bouncer test
 
@@ -62,6 +66,7 @@ The main function to run the test must take the `TestContext` as the first argum
 The `TestContext` contains swap context and a logger that already has the test name attached to it (given in `Running the test` below).
 
 ```ts
+// bouncer/tests/myTest.ts
 export async function myNewTestFunction(testContext: TestContext, seed?: string) {
   /* Test code */
   testContext.debug('example message');
@@ -78,16 +83,20 @@ In summary, your test should:
 
 ### Running the test
 
-To run the test you must add it to one of the `.test.ts` files. We have 3 options. Depending on where you add the test, depends on how it will be ran by the ci.
+To run the test you must add it to one of the test groups in a `.test.ts` file.
+Choose the correct location for your test.
+This will determine how `vitest` and the CI run it.
 
-- Run on the ci = add to the `full_bouncer.test.ts` file.
-  - Run concurrently with the other tests = add to `ConcurrentTests` section.
-  - Run by its self = add to `SerialTests` section.
-- Not ran by the ci, just ran manually = add to the `other.tests.ts` file.
+| File                   | Test Group        | Description                                                  | ci-development | ci-main-merge |
+| ---------------------- | ----------------- | ------------------------------------------------------------ | -------------- | ------------- |
+| `fast_bouncer.test.ts` | `ConcurrentTests` | (Best Option) Tests that can run at the same time            | ✅             | ✅            |
+| `fast_bouncer.test.ts` | `SerialTests`     | Tests that must be ran one at a time                         | ✅             | ✅            |
+| `full_bouncer.test.ts` | `SlowTests`       | Low priority / low risk tests that must be ran one at a time | ❌             | ✅            |
 
 Using either the `concurrentTest` or `serialTest` function, add the test with with its name, main function (the one that takes `TestContext`) as the timeout in seconds.
 
 ```ts
+// bouncer/tests/fast_bouncer.test.ts
 describe('ConcurrentTests', () => {
   /* .. Other tests .. */
   concurrentTest('myNewTest', myNewTestFunction, 300);
@@ -101,4 +110,15 @@ pnpm vitest run -t "myNewTest"
 ```
 
 If your test uses the `SwapContext` within the `TestContext`, then the report will be automatically logged when the test finishes.
-If you would like to run your test with custom arguments, then you will have to create a test command file. See the `test_commands` folder for examples.
+If you would like to run your test with custom arguments, then you will have to create a test command file.
+See the `test_commands` folder for examples.
+
+Ways to run multiple test:
+
+```sh
+# Run just the tests in a test group
+pnpm vitest run -t "ConcurrentTests"
+
+# run all tests in a file
+pnpm vitest run -t ./tests/fast_bouncer.test.ts
+```
