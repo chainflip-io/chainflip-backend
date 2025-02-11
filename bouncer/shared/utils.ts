@@ -1184,3 +1184,34 @@ export async function createEvmWalletAndFund(logger: Logger, asset: Asset): Prom
   await send(logger, asset, wallet.address, undefined);
   return wallet;
 }
+
+// Add this utility function to handle retry logic
+// Will cancel the running promise if it is running for longer than timeoutMs to prevent
+// hanging.
+export async function retryRpcCall<T>(
+  rpcCall: () => Promise<T>,
+  options: { maxAttempts: number; timeoutMs: number; operation: string }
+): Promise<T> {
+  const { maxAttempts, timeoutMs, operation } = options;
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    try {
+      // Use Promise.race to handle timeout
+      return await Promise.race([
+        rpcCall(),
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
+        ),
+      ]);
+    } catch (error) {
+      attempt++;
+      console.warn(`Attempt ${attempt} failed for ${operation}: ${error}`);
+      if (attempt >= maxAttempts) {
+        throw new Error(`Failed to complete ${operation} after ${maxAttempts} attempts`);
+      }
+    }
+  }
+
+  throw new Error(`Failed to complete ${operation} after ${maxAttempts} attempts`);
+}
