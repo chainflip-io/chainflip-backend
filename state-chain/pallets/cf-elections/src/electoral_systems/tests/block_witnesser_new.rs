@@ -21,12 +21,12 @@ use super::{
 	register_checks,
 };
 use crate::{
-	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystem, ElectoralSystemTypes},
+	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::ChainProgress,
-		block_witnesser::*,
+		block_witnesser::{block_processor::test::MockBlockProcessorDefinition, *},
 		state_machine::{
-			core::{ConstantIndex, Hook, MultiIndexAndValue},
+			core::{ConstantIndex, Hook},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
@@ -38,7 +38,6 @@ use consensus::BWConsensus;
 use primitives::SafeModeStatus;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::Get;
 use sp_std::collections::btree_set::BTreeSet;
 use state_machine::{BWSettings, BWState, BWStateMachine, BWTypes};
 
@@ -97,7 +96,7 @@ impl BlockElectionPropertiesGenerator<ChainBlockNumber, Properties>
 }
 
 impl Hook<ChainBlockNumber, Properties> for MockGenerateElectionHook<ChainBlockNumber, Properties> {
-	fn run(&self, input: ChainBlockNumber) -> Properties {
+	fn run(&mut self, input: ChainBlockNumber) -> Properties {
 		println!("generate_election_hook called for {input}");
 		GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
 		// The properties are not important to the logic of the electoral system itself, so we can
@@ -106,17 +105,17 @@ impl Hook<ChainBlockNumber, Properties> for MockGenerateElectionHook<ChainBlockN
 	}
 }
 
-struct MockBlockProcessor<ChainBlockNumber, BlockData> {
-	_phantom: core::marker::PhantomData<(ChainBlockNumber, BlockData)>,
-}
-
-impl MockBlockProcessor<ChainBlockNumber, BlockData> {
-	pub fn set_block_data_to_return(block_data: Vec<(ChainBlockNumber, BlockData)>) {
-		PASS_THROUGH_BLOCK_DATA.with(|pass_through| pass_through.set(false));
-		PROCESS_BLOCK_DATA_TO_RETURN
-			.with(|block_data_to_return| *block_data_to_return.borrow_mut() = block_data);
-	}
-}
+// struct MockBlockProcessor<ChainBlockNumber, BlockData> {
+// 	_phantom: core::marker::PhantomData<(ChainBlockNumber, BlockData)>,
+// }
+//
+// impl MockBlockProcessor<ChainBlockNumber, BlockData> {
+// 	pub fn set_block_data_to_return(block_data: Vec<(ChainBlockNumber, BlockData)>) {
+// 		PASS_THROUGH_BLOCK_DATA.with(|pass_through| pass_through.set(false));
+// 		PROCESS_BLOCK_DATA_TO_RETURN
+// 			.with(|block_data_to_return| *block_data_to_return.borrow_mut() = block_data);
+// 	}
+// }
 
 // TODO: recreate this behavior with new `Hook<>` based testing method
 /*
@@ -199,7 +198,7 @@ type ElectionProperties = Properties;
 pub struct MockSafemodeEnabledHook {}
 
 impl Hook<(), SafeModeStatus> for MockSafemodeEnabledHook {
-	fn run(&self, _input: ()) -> SafeModeStatus {
+	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		SafeModeStatus::Disabled
 	}
 }
@@ -211,6 +210,7 @@ impl BWTypes for MockDepositChannelWitnessingDefinition {
 	type ElectionProperties = ElectionProperties;
 	type ElectionPropertiesHook = MockGenerateElectionHook<u64, Properties>;
 	type SafeModeEnabledHook = MockSafemodeEnabledHook;
+	type BWProcessorTypes = MockBlockProcessorDefinition;
 }
 
 /// Associating the ES related types to the struct
@@ -323,22 +323,22 @@ fn generate_votes(
 }
 
 // Util to create a successful set of votes, along with the consensus expectation.
-fn create_votes_expectation(
-	consensus: BlockData,
-) -> (
-	ConsensusVotes<SimpleBlockWitnesser>,
-	Option<<SimpleBlockWitnesser as ElectoralSystem>::Consensus>,
-) {
-	(
-		generate_votes(
-			(0..20).collect(),
-			Default::default(),
-			Default::default(),
-			consensus.clone(),
-		),
-		Some(ConstantIndex::new(consensus)),
-	)
-}
+// fn create_votes_expectation(
+// 	consensus: BlockData,
+// ) -> (
+// 	ConsensusVotes<SimpleBlockWitnesser>,
+// 	Option<<SimpleBlockWitnesser as ElectoralSystemTypes>::Consensus>,
+// ) {
+// 	(
+// 		generate_votes(
+// 			(0..20).collect(),
+// 			Default::default(),
+// 			Default::default(),
+// 			consensus.clone(),
+// 		),
+// 		Some(ConstantIndex::new(consensus)),
+// 	)
+// }
 
 const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 

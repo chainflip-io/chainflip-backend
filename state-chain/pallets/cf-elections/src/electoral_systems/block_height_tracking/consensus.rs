@@ -41,7 +41,7 @@ impl<T: BlockHeightTrackingTypes> ConsensusMechanism for BlockHeightTrackingCons
 			}
 
 			consensus
-				.check_consensus(&threshold)
+				.check_consensus(threshold)
 				.map(|result| {
 					let mut headers = VecDeque::new();
 					headers.push_back(result);
@@ -65,20 +65,19 @@ impl<T: BlockHeightTrackingTypes> ConsensusMechanism for BlockHeightTrackingCons
 				}
 
 				// we count a given vote as multiple votes for all nonempty subchains
-				while vote.0.len() > 0 {
+				while !vote.0.is_empty() {
 					consensus.insert_vote((vote.0.len(), vote.clone()));
 					vote.0.pop_back();
 				}
 			}
 
-			consensus.check_consensus(&threshold).map(|result| {
+			consensus.check_consensus(threshold).inspect(|result| {
 				log::info!(
 					"(witness_from: {:?}): successful consensus for ranges: {:?}..={:?}",
 					properties,
 					result.0.front(),
 					result.0.back()
 				);
-				result
 			})
 		}
 	}

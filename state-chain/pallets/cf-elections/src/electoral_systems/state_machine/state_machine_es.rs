@@ -1,10 +1,7 @@
 use cf_utilities::success_threshold_from_share_count;
-use frame_support::{
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	Parameter,
-};
+use frame_support::{pallet_prelude::Member, Parameter};
 use itertools::Either;
-use sp_std::{fmt::Debug, vec::Vec};
+use sp_std::{fmt::Debug, vec, vec::Vec};
 
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
@@ -164,7 +161,6 @@ where
 			Bounds::StateMachine::step(&mut state, input, &settings)
 				.map(|output| {
 					result.push(output);
-					()
 				})
 				.map_err(|err| {
 					log::error!("Electoral system moved into a bad state: {err:?}");
@@ -182,7 +178,7 @@ where
 		// step for each election that reached consensus
 		log::debug!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
 		for election_identifier in &election_identifiers {
-			let election_access = ElectoralAccess::election_mut(election_identifier.clone());
+			let election_access = ElectoralAccess::election_mut(*election_identifier);
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
 			if let Some(input) = election_access.check_consensus()?.has_consensus() {
 				log::debug!("ESSM: stepping with input {input:?}");
@@ -191,7 +187,8 @@ where
 		}
 
 		// gather the input indices after all state transitions
-		let input_indices: Vec<_> = Bounds::StateMachine::input_index(&state).into_iter().collect();
+		let input_indices: Vec<_> =
+			Bounds::StateMachine::input_index(&mut state).into_iter().collect();
 		let mut open_elections = Vec::new();
 
 		// delete elections which are no longer in the input indices
@@ -222,7 +219,7 @@ where
 		log::debug!("ESSM: setting state");
 		ElectoralAccess::set_unsynchronised_state(state)?;
 
-		return Ok(result);
+		Ok(result)
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
@@ -239,8 +236,7 @@ where
 		let mut consensus = Bounds::ConsensusMechanism::default();
 		let num_authorities = consensus_votes.num_authorities();
 
-		let mut properties_vec = Vec::new();
-		properties_vec.push(properties.clone());
+		let properties_vec = vec![properties.clone()];
 
 		for vote in consensus_votes.active_votes() {
 			// insert vote if it is valid for the given properties

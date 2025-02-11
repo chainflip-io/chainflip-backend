@@ -123,7 +123,7 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 				let header = self.client.block_header(index).await?;
 				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.
-				Ok::<Header<sp_core::H256, u64>, anyhow::Error>(header_from_btc_header(header)?)
+				header_from_btc_header(header)
 			}
 		};
 

@@ -110,6 +110,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+extern crate core;
+
 pub mod electoral_system;
 pub mod electoral_system_runner;
 pub mod electoral_systems;

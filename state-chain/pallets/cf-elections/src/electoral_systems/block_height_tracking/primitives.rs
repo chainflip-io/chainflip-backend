@@ -1,7 +1,4 @@
-use core::{
-	iter::Step,
-	ops::{Range, RangeInclusive},
-};
+use core::ops::{Range, RangeInclusive};
 
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -132,15 +129,15 @@ where
 	}
 }
 
-pub fn validate_vote_and_height<H: PartialEq + Clone, N: PartialEq>(
+pub fn validate_vote_and_height<H: PartialEq + Clone, N>(
 	next_height: N,
 	other: &VecDeque<Header<H, N>>,
 ) -> Result<(), VoteValidationError>
 where
-	N: Copy + SaturatingStep,
+	N: Copy + SaturatingStep + PartialEq,
 {
 	// a vote has to be nonempty
-	if other.len() == 0 {
+	if other.is_empty() {
 		return Err(VoteValidationError::EmptyVote)
 	}
 
@@ -176,7 +173,7 @@ impl<H: Eq + Clone, N: Copy + SaturatingStep + PartialEq> ChainBlocks<H, N> {
 		// assumption (1b)
 		let other_head = other
 			.front()
-			.ok_or(MergeFailure::InternalError("expected other to not be empty!".into()))?;
+			.ok_or(MergeFailure::InternalError("expected other to not be empty!"))?;
 
 		let self_next_height = self.headers.back().unwrap().block_height.saturating_forward(1);
 
@@ -206,9 +203,7 @@ impl<H: Eq + Clone, N: Copy + SaturatingStep + PartialEq> ChainBlocks<H, N> {
 			let self_head = self
 				.headers
 				.front()
-				.ok_or(MergeFailure::InternalError(
-					"case 2: expected self to not be empty!".into(),
-				))?
+				.ok_or(MergeFailure::InternalError("case 2: expected self to not be empty!"))?
 				.clone();
 
 			if self_head.block_height == other_head.block_height {
@@ -224,7 +219,7 @@ impl<H: Eq + Clone, N: Copy + SaturatingStep + PartialEq> ChainBlocks<H, N> {
 
 				Ok(MergeInfo { removed: self_headers, added: other_headers })
 			} else {
-				Err(MergeFailure::InternalError("expected either case 1 or case 2 to hold!".into()))
+				Err(MergeFailure::InternalError("expected either case 1 or case 2 to hold!"))
 			}
 		}
 	}

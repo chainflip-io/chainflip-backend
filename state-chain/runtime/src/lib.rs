@@ -82,7 +82,6 @@ use pallet_cf_pools::{
 };
 use pallet_cf_swapping::{BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap};
 use runtime_apis::ChainAccounts;
-use sp_std::marker::PhantomData;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
 
@@ -158,7 +157,6 @@ use chainflip::{
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
-use cf_traits::offence_reporting::OffenceReporter;
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_transaction_payment::ChargeTransactionPayment;
@@ -373,7 +371,6 @@ impl pallet_cf_vaults::Config<Instance5> for Runtime {
 }
 
 use chainflip::address_derivation::AddressDerivation;
-use pallet_cf_elections::electoral_systems::liveness::OnCheckComplete;
 
 impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;

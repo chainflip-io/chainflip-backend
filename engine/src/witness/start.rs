@@ -36,7 +36,7 @@ pub async fn start<StateChainClient>(
 	sol_client: SolRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
-	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
+	_unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
@@ -70,7 +70,7 @@ where
 		}
 	};
 
-	let prewitness_call = {
+	let _prewitness_call = {
 		let state_chain_client = state_chain_client.clone();
 		move |call, epoch_index| {
 			let state_chain_client = state_chain_client.clone();

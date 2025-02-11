@@ -1,14 +1,16 @@
-use crate::{BitcoinChainTracking, BitcoinIngressEgress, Runtime};
+use crate::{
+	chainflip::{
+		bitcoin_block_processor::BlockWitnessingProcessorDefinition, ReportFailedLivenessCheck,
+	},
+	BitcoinChainTracking, BitcoinIngressEgress, Runtime,
+};
 use cf_chains::{
-	btc::{self, BitcoinFeeInfo, BitcoinTrackedData},
+	btc::{self, BitcoinFeeInfo, BitcoinTrackedData, BlockNumber, Hash},
 	instances::BitcoinInstance,
 	Bitcoin,
 };
 use cf_traits::Chainflip;
-use core::ops::RangeInclusive;
-use frame_support::__private::sp_tracing::event;
 use frame_system::pallet_prelude::BlockNumberFor;
-use log::warn;
 use pallet_cf_elections::{
 	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
@@ -20,58 +22,28 @@ use pallet_cf_elections::{
 		block_witnesser::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
-			state_machine::{
-				BWSettings, BWState, BWStateMachine, BWTypes, BlockWitnesserProcessor,
-			},
+			state_machine::{BWSettings, BWState, BWStateMachine, BWTypes},
 		},
 		composite::{
 			tuple_3_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
+		liveness::Liveness,
 		state_machine::{
-			core::{ConstantIndex, Hook, MultiIndexAndValue},
+			core::{ConstantIndex, Hook},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-use serde::{Deserialize, Serialize};
-use sp_core::{Decode, Encode, Get, MaxEncodedLen};
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	marker::PhantomData,
-};
-
 use pallet_cf_ingress_egress::{
-	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo, WitnessSafetyMargin,
+	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo,
 };
 use scale_info::TypeInfo;
-use sp_runtime::BoundedVec;
-
-use crate::{
-	chainflip::{
-		bitcoin_block_processor::{
-			BlockWitnessingProcessorDefinition, BtcEvent, DepositChannelWitnessingProcessor,
-		},
-		Offence, ReportFailedLivenessCheck,
-	},
-	Reputation,
-};
-use cf_chains::btc::{BlockNumber, Hash};
-use cf_primitives::ForeignChain;
-use cf_traits::offence_reporting::OffenceReporter;
-use pallet_cf_elections::electoral_systems::{
-	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	liveness::{Liveness, OnCheckComplete},
-	state_machine::{
-		core::{IndexOf, Indexed, Validate},
-		state_machine::StateMachine,
-	},
-};
-use sp_std::{vec, vec::Vec};
-
-pub(crate) const BUFFER_EVENTS: BlockNumber = 10;
+use serde::{Deserialize, Serialize};
+use sp_core::{Decode, Encode, Get, MaxEncodedLen};
+use sp_std::vec::Vec;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinLiveness),
@@ -165,7 +137,7 @@ impl StateMachineES for BitcoinBlockHeightTrackingTypes {
 pub struct BitcoinBlockHeightChangeHook {}
 
 impl Hook<btc::BlockNumber, ()> for BitcoinBlockHeightChangeHook {
-	fn run(&self, block_height: btc::BlockNumber) {
+	fn run(&mut self, block_height: btc::BlockNumber) {
 		if let Err(err) = BitcoinChainTracking::inner_update_chain_state(cf_chains::ChainState {
 			block_height,
 			tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(0) },
@@ -219,7 +191,7 @@ pub(crate) type BlockData = Vec<DepositWitness<Bitcoin>>;
 pub struct BitcoinSafemodeEnabledHook {}
 
 impl Hook<(), SafeModeStatus> for BitcoinSafemodeEnabledHook {
-	fn run(&self, _input: ()) -> SafeModeStatus {
+	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
 			PalletSafeMode<BitcoinInstance>,
 		>>::get()
@@ -240,7 +212,6 @@ impl BWTypes for BitcoinDepositChannelWitnessingDefinition {
 	type ElectionPropertiesHook = BitcoinDepositChannelWitnessingGenerator;
 	type SafeModeEnabledHook = BitcoinSafemodeEnabledHook;
 	type BWProcessorTypes = BlockWitnessingProcessorDefinition;
-	type BlockProcessor = DepositChannelWitnessingProcessor<Self::BWProcessorTypes>;
 }
 
 /// Associating the ES related types to the struct
@@ -305,7 +276,7 @@ impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>
 	for BitcoinDepositChannelWitnessingGenerator
 {
 	fn run(
-		&self,
+		&mut self,
 		block_witness_root: btc::BlockNumber,
 	) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
 		// TODO: Channel expiry

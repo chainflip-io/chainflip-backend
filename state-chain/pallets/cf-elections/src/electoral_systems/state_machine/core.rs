@@ -1,16 +1,13 @@
-use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
-use core::iter::Step;
 use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::vec::Vec;
 
 pub trait Hook<A, B> {
-	fn run(&self, input: A) -> B;
+	fn run(&mut self, input: A) -> B;
 }
 
-#[cfg(test)]
 pub mod hook_test_utils {
 	use super::*;
 	use codec::MaxEncodedLen;
@@ -36,7 +33,46 @@ pub mod hook_test_utils {
 	}
 
 	impl<A, B: Clone> Hook<A, B> for ConstantHook<A, B> {
-		fn run(&self, _input: A) -> B {
+		fn run(&mut self, _input: A) -> B {
+			self.state.clone()
+		}
+	}
+
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+	)]
+	pub struct IncreasingHook<A, B> {
+		pub counter: u32,
+		pub state: B,
+		pub _phantom: sp_std::marker::PhantomData<A>,
+	}
+
+	impl<A, B> IncreasingHook<A, B> {
+		pub fn new(counter_value: u32, state: B) -> Self {
+			Self { counter: counter_value, state, _phantom: Default::default() }
+		}
+	}
+
+	impl<A, B: Default> Default for IncreasingHook<A, B> {
+		fn default() -> Self {
+			Self::new(Default::default(), Default::default())
+		}
+	}
+
+	impl<A, B: Clone> Hook<A, B> for IncreasingHook<A, B> {
+		fn run(&mut self, _input: A) -> B {
+			self.counter += 1;
 			self.state.clone()
 		}
 	}

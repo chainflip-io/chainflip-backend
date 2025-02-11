@@ -1,7 +1,6 @@
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::{iter::Step, ops::RangeInclusive};
-use frame_support::ensure;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_map::BTreeMap;
@@ -141,7 +140,7 @@ fn generate_new_reorg_id<'a, N: BlockZero + SaturatingStep + Ord + 'static>(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ChainProgressInner<ChainBlockNumber> {
+pub enum ChainProgressInner<ChainBlockNumber: SaturatingStep> {
 	Progress(ChainBlockNumber),
 	Reorg(RangeInclusive<ChainBlockNumber>),
 }
