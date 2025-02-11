@@ -369,7 +369,7 @@ where
 				}
 			}
 
-			let election_access = ElectoralAccess::election_mut(election_identifier);
+			let mut election_access = ElectoralAccess::election_mut(election_identifier);
 
 			if new_properties.is_empty() {
 				// Note: it's possible that there are still some remaining pending totals, but if
@@ -378,11 +378,15 @@ where
 				election_access.delete();
 			} else if new_properties != properties {
 				log::debug!("recreate delta based ingress election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
-				election_access.delete();
-				ElectoralAccess::new_election(
-					Default::default(),
+
+				election_access.clear_votes();
+				election_access.set_state(new_pending_ingress_totals)?;
+				election_access.refresh(
+					election_identifier
+						.extra()
+						.checked_add(1)
+						.ok_or_else(CorruptStorageError::new)?,
 					new_properties,
-					new_pending_ingress_totals,
 				)?;
 			} else {
 				log::debug!("recreate delta based ingress election: keeping old because properties didn't change: {properties:?}");
