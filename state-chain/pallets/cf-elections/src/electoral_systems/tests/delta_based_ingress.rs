@@ -542,7 +542,15 @@ mod channel_closure {
 				vec![
 					Check::channel_not_closed(DEFAULT_CHANNEL_ACCOUNT),
 					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
-					Check::election_id_incremented(),
+					Check::election_id_updated_by(|id| {
+						ElectionIdentifier::new(*id.unique_monotonic(), id.extra() + 1)
+					}),
+					// Channel state not cleaned up yet, since the channel is not yet closed.
+					Check::ended_at_state_map_state([DepositChannel {
+						total_ingressed: DEPOSIT_AMOUNT,
+						block_number: DEPOSIT_BLOCK,
+						..DEFAULT_CHANNEL
+					}]),
 				],
 			)
 			// Chain tracking reaches close block, channel is closed.
@@ -958,7 +966,9 @@ fn pending_ingresses_update_with_consensus() {
 					deposit_channel_pending.asset,
 					deposit_channel_pending.total_ingressed,
 				)]),
-				Check::election_id_incremented(),
+				Check::election_id_updated_by(|id| {
+					ElectionIdentifier::new(*id.unique_monotonic(), id.extra() + 1)
+				}),
 				Check::ended_at_state(to_state(vec![deposit_channel_with_next_deposit])),
 			],
 		)
@@ -1035,7 +1045,12 @@ mod multiple_deposits {
 			.test_on_finalize(
 				&{ TOTAL_1.block_number - 1 },
 				|_| {},
-				[Check::ingressed(vec![]), Check::election_id_incremented()],
+				[
+					Check::ingressed(vec![]),
+					Check::election_id_updated_by(|id| {
+						ElectionIdentifier::new(*id.unique_monotonic(), id.extra() + 1)
+					}),
+				],
 			)
 			// Simulate a second deposit at a later block.
 			.force_consensus_update(ConsensusStatus::Gained {
@@ -1049,7 +1064,9 @@ mod multiple_deposits {
 				|_| {},
 				[
 					Check::ingressed(vec![(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_1.amount)]),
-					Check::election_id_incremented(),
+					Check::election_id_updated_by(|id| {
+						ElectionIdentifier::new(*id.unique_monotonic(), id.extra() + 1)
+					}),
 				],
 			)
 			// Finalize with chain tracking at the block of the second deposit. Both should be
