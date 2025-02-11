@@ -6,6 +6,7 @@ import fs from 'fs';
 import { compileBinaries } from './utils/compile_binaries';
 import { mkTmpDir, execWithRustLog } from './utils/exec_with_log';
 import { getChainflipApi } from './utils/substrate';
+import { retryRpcCall } from './utils';
 
 async function createSnapshotFile(networkUrl: string, blockHash: string): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
@@ -79,7 +80,11 @@ export async function tryRuntimeUpgrade(
     while (blocksProcessed < lastN) {
       await tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
 
-      const currentBlockHeader = await api.rpc.chain.getHeader(nextHash);
+      const currentBlockHeader = await retryRpcCall(() => api.rpc.chain.getHeader(nextHash), {
+        maxAttempts: 10,
+        timeoutMs: 20000,
+        operation: 'get block header'
+      });
       nextHash = currentBlockHeader.parentHash;
       blocksProcessed++;
     }
