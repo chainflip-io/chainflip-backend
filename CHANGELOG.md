@@ -2,6 +2,16 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.8.1] - 2025-02-11
+
+### Features
+
+- Refresh solana ingress elections instead of recreate.
+
+### Fixes
+
+- Remove incorrect ccm gas warning ([#5628](https://github.com/chainflip-io/chainflip-backend/issues/5628))
+
 ## [1.8.0] - 2025-02-07
 
 ### Features
