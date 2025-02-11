@@ -5,6 +5,7 @@ pub mod trace;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::{Duration};
 // use std::task::ContextBuilder;
 
 use bitvec::vec::BitVec;
@@ -16,17 +17,21 @@ use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::RawRpcApi, extrinsic_api::signed::SignedExtrinsicApi, BlockInfo,
 	StateChainClient,
 };
-use opentelemetry::trace::{TraceContextExt as _, Tracer, TracerProvider as _};
+use opentelemetry::global::ObjectSafeSpan;
+use opentelemetry::trace::{mark_span_as_active, Span, TraceContextExt as _, Tracer, TracerProvider as _};
 use chainflip_engine::state_chain_observer::client::base_rpc_api::BaseRpcClient;
 use custom_rpc::CustomApiClient;
 use elections::make_traces;
+use tokio::time::sleep;
+use tracing::instrument::WithSubscriber;
 use tracing::{event, span, Instrument, Level};
 use tracing_core::Callsite;
+use tracing_opentelemetry::PreSampledTracer;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::Registry;
 // use tracing_subscriber::layer::{Context, SubscriberExt};
 use opentelemetry::{global, Context, KeyValue};
-use opentelemetry_sdk::trace::RandomIdGenerator;
+use opentelemetry_sdk::trace::{RandomIdGenerator, TracerProvider};
 use opentelemetry_sdk::Resource;
 use pallet_cf_elections::electoral_system::{BitmapComponentOf, ElectionData};
 use pallet_cf_elections::{ElectionDataFor, UniqueMonotonicIdentifier};
@@ -38,7 +43,7 @@ use futures::{stream, StreamExt, TryStreamExt};
 use pallet_cf_elections::{
 	electoral_systems::composite::tuple_6_impls::*,
 };
-use trace::{diff, map_with_parent, NodeDiff, Trace};
+use trace::{diff, get_key_name, map_with_parent, NodeDiff, Trace};
 use std::env;
 
 
@@ -59,30 +64,92 @@ async fn main() {
         // .with_max_events_per_span(64)
         // .with_max_attributes_per_span(16)
         // .with_max_events_per_span(16)
-        .with_resource(Resource::new(vec![KeyValue::new("service.name", "example")]))
+        .with_resource(Resource::new(vec![KeyValue::new("service.name", "example2")]))
         .build();
 
     global::set_tracer_provider(tracer_provider.clone());
     let tracer = tracer_provider.tracer("tracer-name-new");
 
     // Create a tracing layer with the configured tracer
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+    // let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
     // Use the tracing subscriber `Registry`, or any other subscriber that impls `LookupSpan`
-    let subscriber = Registry::default().with(telemetry);
+    // let subscriber = Registry::default().with(telemetry);
 
-    let _guard = tracing::subscriber::set_default(subscriber);
+    // let _guard = tracing::subscriber::set_default(subscriber);
 
-    event!(Level::INFO, "in hello!");
+    // event!(Level::INFO, "in hello!");
 
-	new_watch().await;
+	// new_watch(tracer).await;
 
+
+	{
+
+	let ctx = Context::new().with_value(KeyValue::new("key", "value"));
+	// let _guard = ctx.attach();
+
+	let builder = tracer.span_builder("test_proc")
+		.with_start_time(std::time::SystemTime::now())
+		.with_span_id(tracer.new_span_id());
+
+	let span = builder.start_with_context(&tracer, &ctx);
+
+	// .start_with_context("test_proc", &ctx);
+	let ctx1 = ctx.with_span(span);
+
+	sleep(Duration::from_secs(1)).await;
+
+	// mark_span_as_active(ctx1.span());
+
+	ctx1.span().end();
+
+	let _results = tracer_provider.force_flush();
+
+
+
+	// let span2 = tracer.start_with_context("test_proc_child", &ctx1);
+	// let ctx2 = ctx1.with_span(span2);
+
+	// sleep(Duration::from_secs(1)).await;
+
+	// let span3 = tracer.start_with_context("test_proc_child2", &ctx2);
+	// let ctx3 = ctx1.with_span(span3);
+
+	// ctx3.span().add_event("starting??", Vec::new());
+
+	// sleep(Duration::from_secs(1)).await;
+	// ctx3.span().end();
+
+
+	// ctx1.span().end();
+	// let x = ctx2.span().with_current_subscriber();
+	// x.inner().set_attributes([KeyValue::new("mykey", "myvalue")]);
+
+	// sleep(Duration::from_secs(1)).await;
+
+	// ctx2.span().end();
+	// sleep(Duration::from_secs(1)).await;
+
+	}
+
+	// let results = tracer_provider.force_flush();
+	// for result in results {
+	// 	println!("result: {result:?}");
+	// }
+
+	// let result = tracer_provider.shutdown();
+	// println!("{result:?}");
+
+	new_watch(tracer, tracer_provider).await;
 }
 
-// async fn new_watch<T: Tracer + Send>(tracer: T) 
-//  where T::Span : Send + Sync + 'static + Clone
+// #[derive(Debug, PartialEq)]
+// struct KeyValue(&'static str);
 
-async fn new_watch() 
+async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider) 
+ where T::Span : Span + Send + Sync + 'static
+
+// async fn new_watch() 
 {
 
 	// let root = span!(tracing::Level::TRACE, "app_start", work_units = 2);
@@ -98,11 +165,12 @@ async fn new_watch()
 
 		let traces = BTreeMap::new();
 
-		finalized_stream.fold((client, traces), async |(client, traces), block| {
+		finalized_stream.fold((client, traces, tracer), async |(client, traces, tracer), block| {
+
+			let _results = tracer_provider.force_flush();
 
 			// let block_hash = client.latest_finalized_block().hash;
 			let block_hash = block.hash;
-
 
 			let bitmaps : BTreeMap<UniqueMonotonicIdentifier,
 				_
@@ -125,17 +193,33 @@ async fn new_watch()
 			// println!("got election data: {traces:?}");
 
 			let δ = diff(traces, new_traces);
-			let traces = map_with_parent(δ, |k, p, d| match d {
-					trace::NodeDiff::Left(x) => {println!("closing trace {k:?}"); None},
+			let traces = map_with_parent(δ, |k, p: Option<&Option<Context>>, d: NodeDiff<Context, ()>| match d {
+					trace::NodeDiff::Left(context) => {
+						println!("closing trace {k:?}"); 
+						context.span().end();
+						None
+					},
 					trace::NodeDiff::Right(y) => {Some(
-						if let Some(Some(parent)) = p {
-							// tracer.start_with_context(format!("{k:?}"), &Context::current_with_span(parent.clone()))
+						if let Some(Some(context)) = p {
+
+							// let _guard = Context::attach(context.clone());
+
+
+							let key = get_key_name(k);
+
+							let span = tracer.start_with_context(key, &context);
+							let context = context.with_span(span);
+
+
 							println!("open trace {k:?}"); 
 							// span!(parent: parent, tracing::Level::TRACE, get_key_name(k), key = format!("{k:?}")).entered()
 
-							let name = "";
-							let target = module_path!();
-							let level = Level::TRACE;
+							// let name = "";
+							// let target = module_path!();
+							// let level = Level::TRACE;
+
+							(context)
+							
 
 							// let identifier = tracing_core::identify_callsite!();
 
@@ -228,12 +312,23 @@ async fn new_watch()
             // }
 
 						} else {
+
+							let key = get_key_name(k);
+
+							let context = Context::new().with_value(KeyValue::new("key", format!("{key:?}")));
+							let span = tracer.start_with_context(key, &context);
+							let context = context.with_span(span);
+							// start_with_context(key, &Context::current_with_span(parent.clone()));
+
 							// tracer.start(format!("{k:?}"))
 							println!("open trace {k:?} [NO PARENT]"); 
-							span!(tracing::Level::TRACE, "root", key = format!("{k:?}")).entered()
+							// span!(tracing::Level::TRACE, "root", key = format!("{k:?}")).entered()
+							context
 						}
 					)},
-					trace::NodeDiff::Both(x, _) => Some(x),
+					trace::NodeDiff::Both(x, _) => {
+						Some(x)
+					},
 				}
 			)
 			.into_iter().filter_map(|(k, v)| match v {Some(v) => Some((k,v)), None => None}).collect();
@@ -272,7 +367,7 @@ async fn new_watch()
 			// 	.map(|(value, ..)| value)
 			// 	.expect("could not get block height");
 
-			(client, traces)
+			(client, traces, tracer)
 
 		}).await;
 

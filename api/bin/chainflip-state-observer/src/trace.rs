@@ -35,6 +35,7 @@ impl<V,W> NodeDiff<V,W> {
     }
 }
 
+use static_str_ops::staticize;
 use NodeDiff::*;
 
 pub fn diff<K: Ord,V, W>(a: Trace<K,V>, b: Trace<K,W>) -> Trace<K,NodeDiff<V, W>> {
@@ -54,8 +55,13 @@ pub fn map_with_parent<K: Ord, V, W>(mut this: Trace<K,V>, f: impl Fn(&Vec<K>, O
     let mut processed = BTreeMap::new();
     for length in (0..10) {
         for (key, value) in this.extract_if(|k,_| k.len() == length) {
-            let parent_key = &key[0..key.len() - 1];
-            let p = processed.get(parent_key);
+            let p;
+            if key.len() > 0 {
+                let parent_key = &key[0..key.len() - 1];
+                p = processed.get(parent_key);
+            } else {
+                p = None;
+            }
             let v = f(&key, p, value);
             processed.insert(key, v);
         }
@@ -64,7 +70,7 @@ pub fn map_with_parent<K: Ord, V, W>(mut this: Trace<K,V>, f: impl Fn(&Vec<K>, O
 }
 
 
-pub fn get_key_name<K: Debug>(key: &Vec<K>) -> &'static str{
+pub fn get_key_name<K: std::fmt::Debug>(key: &Vec<K>) -> &'static str{
     let name = key.last().map(|x| format!("{x:?}")).unwrap_or("root".into());
     staticize(&name)
 }
