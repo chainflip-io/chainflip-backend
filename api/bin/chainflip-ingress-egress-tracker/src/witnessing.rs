@@ -20,7 +20,8 @@ use chainflip_engine::{
 };
 
 use anyhow::anyhow;
-use sp_core::{H160, H256};
+use chainflip_engine::dot::PolkadotHash;
+use sp_core::H160;
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -32,7 +33,7 @@ pub(super) struct EnvironmentParameters {
 	usdc_contract_address: H160,
 	usdt_contract_address: H160,
 	supported_erc20_tokens: HashMap<H160, Asset>,
-	dot_genesis_hash: H256,
+	dot_genesis_hash: PolkadotHash,
 	pub chainflip_network: NetworkEnvironment,
 }
 
@@ -81,12 +82,15 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let dot_genesis_hash = state_chain_client
-		.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
-		)
-		.await
-		.expect(STATE_CHAIN_CONNECTION);
+	let dot_genesis_hash = PolkadotHash::from_slice(
+		state_chain_client
+			.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
+				state_chain_client.latest_finalized_block().hash,
+			)
+			.await
+			.expect(STATE_CHAIN_CONNECTION)
+			.as_bytes(),
+	);
 
 	let chainflip_network = state_chain_client
 		.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(

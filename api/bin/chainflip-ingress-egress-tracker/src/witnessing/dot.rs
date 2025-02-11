@@ -5,7 +5,7 @@ use crate::DepositTrackerSettings;
 use cf_utilities::task_scope::Scope;
 use chainflip_api::primitives::EpochIndex;
 use chainflip_engine::{
-	dot::{retry_rpc::DotRetryRpcClient, PolkadotHash},
+	dot::retry_rpc::DotRetryRpcClient,
 	settings::NodeContainer,
 	state_chain_observer::client::{
 		storage_api::StorageApi,
@@ -39,7 +39,7 @@ where
 	let dot_client = DotRetryRpcClient::new(
 		scope,
 		NodeContainer { primary: settings.dot, backup: None },
-		PolkadotHash::from_slice(env_params.dot_genesis_hash.as_bytes()),
+		env_params.dot_genesis_hash,
 	)?;
 
 	let epoch_source = epoch_source

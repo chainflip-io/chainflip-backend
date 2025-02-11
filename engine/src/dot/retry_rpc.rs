@@ -11,7 +11,7 @@ use core::time::Duration;
 use futures_core::Stream;
 use std::pin::Pin;
 use subxt::{
-	backend::legacy::rpc_methods::Bytes, config::Header as SubxtHeader, events::Events, Config,
+	backend::legacy::rpc_methods::Bytes, config::Header as SubxtHeader, events::Events,
 	PolkadotConfig,
 };
 
@@ -232,7 +232,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 #[async_trait::async_trait]
 impl ChainClient for DotRetryRpcClient {
 	type Index = <Polkadot as cf_chains::Chain>::ChainBlockNumber;
-	type Hash = <PolkadotConfig as Config>::Hash;
+	type Hash = PolkadotHash;
 	type Data = Events<PolkadotConfig>;
 
 	async fn header_at_index(
