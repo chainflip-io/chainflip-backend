@@ -9,7 +9,7 @@ import {
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { ExecutableTest } from '../shared/executable_test';
 import { getSolanaVaultIdl } from '../shared/contract_interfaces';
-import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.1-swap-endpoint/vault';
+import { Vault } from '../../contract-interfaces/sol-program-idls/v0.1.1-alt-test/vault';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testSolanaVaultSettingsGovernance = new ExecutableTest(

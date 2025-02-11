@@ -451,7 +451,7 @@ pub mod signing_key {
 
 /// Solana Environment variables used when building the base API call.
 #[derive(
-	Encode, Decode, TypeInfo, Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize,
+	Encode, Decode, TypeInfo, Default, Clone, PartialEq, Eq, Debug, Serialize, Deserialize,
 )]
 pub struct SolApiEnvironment {
 	// For native Sol API calls.
@@ -468,6 +468,8 @@ pub struct SolApiEnvironment {
 	// For program swaps API calls.
 	pub swap_endpoint_program: SolAddress,
 	pub swap_endpoint_program_data_account: SolAddress,
+	pub alt_manager_program: SolAddress,
+	pub address_lookup_table_account: (SolAddress, Vec<SolAddress>),
 }
 
 impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}

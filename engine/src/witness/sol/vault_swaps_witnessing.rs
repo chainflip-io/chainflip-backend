@@ -39,7 +39,7 @@ const MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY: usize = 10;
 // 5. If they are not seen in the SC we query the account data. Then we parse the account data and
 //    ensure it's a valid a program swap. The new program swap needs to be reported to the SC.
 
-pub async fn get_program_swaps(
+pub async fn get_vault_swaps(
 	sol_rpc: &SolRetryRpcClient,
 	swap_endpoint_data_account_address: SolAddress,
 	sc_open_accounts: HashSet<SolAddress>,

@@ -108,11 +108,13 @@ pub struct StateChainEnvironment {
 	sol_usdc_token_mint_pubkey: SolAddress,
 	sol_token_vault_pda_account: SolAddress,
 	sol_usdc_token_vault_ata: SolAddress,
-	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 10], /* we inject 10 nonce
-	                                                                * accounts
-	                                                                * at genesis */
+	// We injected 10 nonce accounts at genesis and 40 more on an upgrade
+	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 50],
 	sol_swap_endpoint_program: SolAddress,
 	sol_swap_endpoint_program_data_account: SolAddress,
+	sol_alt_manager_program: SolAddress,
+	// Initialized with 65 accounts (50 of them nonces)
+	sol_address_lookup_table_account: (SolAddress, [SolAddress; 65]),
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -164,6 +166,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		SOL_SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
 		sol_swap_endpoint_program_data_account
 	);
+	from_env_var!(FromStr::from_str, SOL_ALT_MANAGER_PROGRAM, sol_alt_manager_program);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -191,6 +194,11 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	let sol_durable_nonces_and_accounts = match env::var("SOL_NONCES_AND_ACCOUNTS") {
 		Ok(_) => unimplemented!("Solana nonces and nonce accounts should not be supplied via environment variables since its a complex type"),
 		Err(_) => defaults.sol_durable_nonces_and_accounts,
+	};
+
+	let sol_address_lookup_table_account = match env::var("SOL_ADDRESS_LOOKUP_TABLE_ACCOUNT") {
+		Ok(_) => unimplemented!("Solana address lookup table account should not be supplied via environment variables since its a complex type"),
+		Err(_) => defaults.sol_address_lookup_table_account,
 	};
 
 	StateChainEnvironment {
@@ -226,6 +234,8 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		sol_durable_nonces_and_accounts,
 		sol_swap_endpoint_program,
 		sol_swap_endpoint_program_data_account,
+		sol_alt_manager_program,
+		sol_address_lookup_table_account,
 	}
 }
 
@@ -295,6 +305,8 @@ pub fn inner_cf_development_config(
 		sol_durable_nonces_and_accounts,
 		sol_swap_endpoint_program,
 		sol_swap_endpoint_program_data_account,
+		sol_alt_manager_program,
+		sol_address_lookup_table_account,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, Default::default())
 		.with_name("CF Develop")
@@ -334,6 +346,11 @@ pub fn inner_cf_development_config(
 					usdc_token_vault_ata: sol_usdc_token_vault_ata,
 					swap_endpoint_program: sol_swap_endpoint_program,
 					swap_endpoint_program_data_account: sol_swap_endpoint_program_data_account,
+					alt_manager_program: sol_alt_manager_program,
+					address_lookup_table_account: (
+						sol_address_lookup_table_account.0,
+						sol_address_lookup_table_account.1.to_vec(),
+					),
 				},
 				sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts.to_vec(),
 				network_environment: NetworkEnvironment::Development,
@@ -425,6 +442,8 @@ macro_rules! network_spec {
 					sol_durable_nonces_and_accounts,
 					sol_swap_endpoint_program,
 					sol_swap_endpoint_program_data_account,
+					sol_alt_manager_program,
+					sol_address_lookup_table_account,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -497,6 +516,11 @@ macro_rules! network_spec {
 								swap_endpoint_program: sol_swap_endpoint_program,
 								swap_endpoint_program_data_account:
 									sol_swap_endpoint_program_data_account,
+								alt_manager_program: sol_alt_manager_program,
+								address_lookup_table_account: (
+									sol_address_lookup_table_account.0,
+									sol_address_lookup_table_account.1.to_vec(),
+								),
 							},
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()

@@ -23,7 +23,7 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v1.18.17
-  SOLANA_PROGRAMS_VERSION: v1.0.1-swap-endpoint
+  SOLANA_PROGRAMS_VERSION: v0.1.1-alt-test
   NODE_COUNT: "1-node"
 
 permissions:
@@ -173,8 +173,20 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           touch ./localnet/.setup_complete
+          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana programs version.
+          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[0-9.]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
           ./localnet/manage.sh
           git reset --hard
+
+      # TODO: This is a temporary workaround to insert the image nonces for versioned transactions. Remove after it's is released.
+      - name: Nonce workaround
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./shared/force_sol_nonces.ts
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job

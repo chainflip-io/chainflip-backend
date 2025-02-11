@@ -50,3 +50,5 @@ The following commands should be executed from the bouncer directory.
   `pnpm eslint:check`
 - Fix linting:<br>
   `pnpm eslint:fix`
+- Type checking:<br>
+  `pnpm tsc --noEmit`

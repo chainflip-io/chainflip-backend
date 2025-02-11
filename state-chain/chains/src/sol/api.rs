@@ -342,6 +342,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			sol_api_environment.vault_program,
 			sol_api_environment.vault_program_data_account,
 			agg_key,
+			sol_api_environment.alt_manager_program,
 			durable_nonce,
 			compute_price,
 			address_lookup_tables,

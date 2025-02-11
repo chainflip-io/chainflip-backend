@@ -41,6 +41,8 @@ use crate::{
 };
 use sp_std::{vec, vec::Vec};
 
+use super::sol_tx_core::program_instructions::alt_managers::AltManagerProgram;
+
 fn system_program_id() -> SolAddress {
 	SYSTEM_PROGRAM_ID
 }
@@ -271,25 +273,38 @@ impl SolanaTransactionBuilder {
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
 		agg_key: SolAddress,
+		alt_manager: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
 		address_lookup_tables: Vec<SolAddressLookupTableAccount>,
 	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
-		let mut instructions = vec![VaultProgram::with_id(vault_program).rotate_agg_key(
-			false,
-			vault_program_data_account,
-			agg_key,
-			new_agg_key,
-			system_program_id(),
-		)];
-		instructions.extend(all_nonce_accounts.into_iter().map(|nonce_account| {
-			SystemProgramInstruction::nonce_authorize(
-				&nonce_account.into(),
-				&agg_key.into(),
-				&new_agg_key.into(),
-			)
-		}));
+		let all_nonce_accounts_meta: Vec<AccountMeta> = all_nonce_accounts
+			.into_iter()
+			.map(|nonce_account| AccountMeta::new(nonce_account.into(), false))
+			.collect();
 
+		// Rotate nonces must come before the agg Key rotation, otherwise the aggKey
+		// validation will fail on the rotate nonces instruction.
+		let instructions = vec![
+			AltManagerProgram::with_id(alt_manager)
+				.rotate_nonces(
+					vault_program_data_account,
+					agg_key,
+					new_agg_key,
+					system_program_id(),
+				)
+				.with_additional_accounts(all_nonce_accounts_meta),
+			VaultProgram::with_id(vault_program).rotate_agg_key(
+				false,
+				vault_program_data_account,
+				agg_key,
+				new_agg_key,
+				system_program_id(),
+			),
+		];
+
+		// TODO: This will fail for now due to transaction being too long. It will work only when we
+		// implement versioned transactions.
 		Self::build(
 			instructions,
 			durable_nonce,

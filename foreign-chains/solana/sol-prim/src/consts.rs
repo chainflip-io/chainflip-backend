@@ -44,6 +44,8 @@ pub const BPF_LOADER_UPGRADEABLE_ID: Address =
 	const_address("BPFLoaderUpgradeab1e11111111111111111111111");
 pub const COMPUTE_BUDGET_PROGRAM: Address =
 	const_address("ComputeBudget111111111111111111111111111111");
+pub const ADDRESS_LOOKUP_TABLE_PROGRAM: Address =
+	const_address("AddressLookupTab1e1111111111111111111111111");
 
 pub const MAX_TRANSACTION_LENGTH: usize = 1_232usize;
 pub const MAX_COMPUTE_UNITS_PER_TRANSACTION: u32 = 1_400_000u32;
