@@ -1,6 +1,6 @@
 use crate::{
-	chainflip::ReportFailedLivenessCheck, AccountId, Environment, Offence, Reputation, Runtime,
-	SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner,
+	chainflip::ReportFailedLivenessCheck, AccountId, Environment, Runtime, SolanaBroadcaster,
+	SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner,
 };
 
 use cf_chains::{
@@ -16,13 +16,13 @@ use cf_chains::{
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
 	CcmDepositMetadata, Chain, ChannelRefundParametersDecoded, FeeEstimationApi,
-	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
+	FetchAndCloseSolanaVaultSwapAccounts, Solana,
 };
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
-	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
+	AdjustedFeeEstimationApi, Broadcaster, Chainflip, ElectionEgressWitnesser, GetBlockHeight,
+	IngressSource, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -32,7 +32,6 @@ use pallet_cf_elections::{
 		self,
 		composite::{tuple_7_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
-		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
 		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
@@ -43,11 +42,10 @@ use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::vec::Vec;
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
-use cf_primitives::chains::Bitcoin;
 use electoral_systems::liveness::Liveness;
 use sol_prim::SlotNumber;
 

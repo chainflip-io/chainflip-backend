@@ -1,14 +1,16 @@
-use crate::{BitcoinChainTracking, BitcoinIngressEgress, Runtime};
+use crate::{
+	chainflip::{
+		bitcoin_block_processor::BlockWitnessingProcessorDefinition, ReportFailedLivenessCheck,
+	},
+	BitcoinChainTracking, BitcoinIngressEgress, Runtime,
+};
 use cf_chains::{
-	btc::{self, BitcoinFeeInfo, BitcoinTrackedData},
+	btc::{self, BitcoinFeeInfo, BitcoinTrackedData, BlockNumber, Hash},
 	instances::BitcoinInstance,
 	Bitcoin,
 };
 use cf_traits::Chainflip;
-use core::ops::RangeInclusive;
-use frame_support::__private::sp_tracing::event;
 use frame_system::pallet_prelude::BlockNumberFor;
-use log::warn;
 use pallet_cf_elections::{
 	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
@@ -26,6 +28,7 @@ use pallet_cf_elections::{
 			tuple_3_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
+		liveness::Liveness,
 		state_machine::{
 			core::{ConstantIndex, Hook},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
@@ -34,39 +37,12 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
+use pallet_cf_ingress_egress::{
+	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo,
+};
+use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	marker::PhantomData,
-};
-
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness, PalletSafeMode};
-use scale_info::TypeInfo;
-
-use crate::{
-	chainflip::{
-		bitcoin_block_processor::{
-			BlockWitnessingProcessorDefinition, BtcEvent, DepositChannelWitnessingProcessor,
-		},
-		Offence, ReportFailedLivenessCheck,
-	},
-	Reputation,
-};
-use cf_chains::btc::{BlockNumber, Hash};
-use cf_primitives::ForeignChain;
-use cf_traits::offence_reporting::OffenceReporter;
-use pallet_cf_elections::electoral_systems::{
-	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	liveness::{Liveness, OnCheckComplete},
-	state_machine::{
-		core::{IndexOf, Indexed, Validate},
-		state_machine::StateMachine,
-	},
-};
-use sp_std::{vec, vec::Vec};
-use crate::chainflip::bitcoin_block_processor::BlockWitnessingProcessorDefinition;
-
 use sp_std::vec::Vec;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<

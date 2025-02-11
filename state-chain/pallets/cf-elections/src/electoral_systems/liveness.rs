@@ -1,4 +1,4 @@
-use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData};
+use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{
 	electoral_system::{
@@ -8,15 +8,13 @@ use crate::{
 	},
 	vote_storage, CorruptStorageError,
 };
-use cf_primitives::{AuthorityCount, ForeignChain};
+use cf_primitives::AuthorityCount;
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
 
-use cf_chains::Get;
-use cf_traits::{offence_reporting::OffenceReporter, Chainflip};
 use itertools::Itertools;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 

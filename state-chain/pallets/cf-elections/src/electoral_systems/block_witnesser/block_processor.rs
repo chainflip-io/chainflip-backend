@@ -39,7 +39,7 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 ///     - `Rules`: A hook to process block data and generate events.
 ///     - `Execute`: A hook to execute generated events.
 ///     - `DedupEvents`: A hook to deduplicate events.
-/// 	- `SafetyMargin`: A hook to retrieve the chain specific safety-margin
+///     - `SafetyMargin`: A hook to retrieve the chain specific safety-margin
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
@@ -368,6 +368,28 @@ pub(crate) mod test {
 			chosen.into_values().collect()
 		}
 	}
+
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+		Default,
+	)]
+	pub struct MockSafetyMargin {}
+	impl Hook<(), BlockNumber> for MockSafetyMargin {
+		fn run(&mut self, _input: ()) -> BlockNumber {
+			3
+		}
+	}
 	impl BWProcessorTypes for MockBlockProcessorDefinition {
 		type ChainBlockNumber = BlockNumber;
 		type BlockData = MockBlockData;
@@ -375,10 +397,7 @@ pub(crate) mod test {
 		type Rules = MockApplyRulesHook;
 		type Execute = IncreasingHook<(BlockNumber, MockBtcEvent), ()>;
 		type DedupEvents = MockDedupEventsHook;
-
-		fn get_safety_margin() -> Self::ChainBlockNumber {
-			3
-		}
+		type SafetyMargin = MockSafetyMargin;
 	}
 
 	/// tests that the processor correcly keep up to SAFETY MARGIN blocks (3), and remove them once
