@@ -413,6 +413,13 @@ register_checks! {
 			"Expected the election id to be incremented.",
 		);
 	},
+	election_id_updated_by(pre_finalize, post_finalize, update: impl Fn(ElectionIdentifierOf<ES>) -> ElectionIdentifierOf<ES> + Clone + 'static) {
+		assert_eq!(
+			update(pre_finalize.election_identifiers[0]),
+			post_finalize.election_identifiers[0],
+			"Expected the election id to be updated by given `update` function.",
+		);
+	},
 	all_elections_deleted(pre_finalize, post_finalize) {
 		assert!(
 			!pre_finalize.election_identifiers.is_empty(),
