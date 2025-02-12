@@ -21,7 +21,9 @@ use opentelemetry::global::ObjectSafeSpan;
 use opentelemetry::trace::{mark_span_as_active, Span, TraceContextExt as _, Tracer, TracerProvider as _};
 use chainflip_engine::state_chain_observer::client::base_rpc_api::BaseRpcClient;
 use custom_rpc::CustomApiClient;
-use elections::make_traces;
+use elections::{make_traces, TraceInit};
+use pallet_cf_validator::AuthorityIndex;
+use state_chain_runtime::chainflip::solana_elections::SolanaElectoralSystemRunner;
 use tokio::time::sleep;
 use tracing::instrument::WithSubscriber;
 use tracing::{event, span, Instrument, Level};
@@ -33,8 +35,8 @@ use tracing_subscriber::Registry;
 use opentelemetry::{global, Context, KeyValue};
 use opentelemetry_sdk::trace::{RandomIdGenerator, TracerProvider};
 use opentelemetry_sdk::Resource;
-use pallet_cf_elections::electoral_system::{BitmapComponentOf, ElectionData};
-use pallet_cf_elections::{ElectionDataFor, UniqueMonotonicIdentifier};
+use pallet_cf_elections::electoral_system::{BitmapComponentOf};
+use pallet_cf_elections::{ElectionDataFor, ElectionProperties, ElectoralSystemTypes, IndividualComponentOf, UniqueMonotonicIdentifier};
 use state_chain_runtime::{Runtime, SolanaInstance};
 use cf_utilities::task_scope::{self, Scope};
 use futures_util::FutureExt;
@@ -45,6 +47,27 @@ use pallet_cf_elections::{
 };
 use trace::{diff, get_key_name, map_with_parent, NodeDiff, Trace};
 use std::env;
+
+
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct ElectionData<ES: ElectoralSystemTypes> {
+    // properties: ES::ElectionProperties,
+    // validators: Vec<ES::ValidatorId>,
+    // shared_votes: BTreeMap<SharedDataHash, <ES::VoteStorage as VoteStorage>::SharedData>,
+    pub bitmaps: BTreeMap<
+		UniqueMonotonicIdentifier,
+		Vec<(BitmapComponentOf<ES>, BitVec<u8, bitvec::order::Lsb0>)>
+		>,
+
+    pub individual_components: BTreeMap<
+		UniqueMonotonicIdentifier,
+		BTreeMap<usize, IndividualComponentOf<ES>>
+		>,
+
+	pub election_names: BTreeMap<UniqueMonotonicIdentifier, (String, ES::ElectionProperties)>,
+
+    pub _phantom: std::marker::PhantomData<ES>
+}
 
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
@@ -180,34 +203,72 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 				.expect("could not get storage")
 			;
 
+			let all_properties : BTreeMap<_,_> = client
+				.storage_map::<pallet_cf_elections::ElectionProperties::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
+				.await
+				.expect("could not get storage");
+
+			let validators : Vec<_> = client
+				.storage_value::<pallet_cf_validator::CurrentAuthorities::<Runtime>>(block_hash)
+				.await
+				.expect("could not get storage");
+
+			let mut individual_components = BTreeMap::new();
+			for (key, prop) in &all_properties {
+				for (validator_index, validator) in validators.iter().enumerate() {
+
+					if let Some((_, comp)) = client.storage_double_map_entry::<pallet_cf_elections::IndividualComponents::<Runtime, SolanaInstance>>(block_hash, key.unique_monotonic(), validator)
+					.await.expect("could not get storage") {
+						individual_components.entry(*key.unique_monotonic()).or_insert(BTreeMap::new()).insert(validator_index, comp);
+						// individual_components.insert(key.unique_monotonic(), comp);
+					}
+				}
+			}
+
 			let bitmaps = bitmaps.into_iter()
 				.map(|(k,v)| (k, v.bitmaps))
 				.collect();
 
-			let result : ElectionDataFor<Runtime, SolanaInstance> = ElectionData {
+			let election_names = all_properties.iter()
+				.map(|(key, val)| {
+					let name = match val {
+							CompositeElectionProperties::A(_)  => "Blockheight",
+							CompositeElectionProperties::B(_)  => "Ingress",
+							CompositeElectionProperties::C(_)  => "Nonce",
+							CompositeElectionProperties::D(_)  => "Egress",
+							CompositeElectionProperties::EE(_) => "Liveness",
+							CompositeElectionProperties::FF(_) => "Vaultswap",
+						};
+					(key.unique_monotonic().clone(), (name.into(), val.clone()))
+				})
+				.collect();
+
+			let result : ElectionData<SolanaElectoralSystemRunner> = ElectionData {
 				bitmaps,
-				_phantom: Default::default()
+				election_names,
+				individual_components,
+				_phantom: Default::default(),
 			};
 
 			let new_traces = make_traces(result);
 			// println!("got election data: {traces:?}");
 
 			let δ = diff(traces, new_traces);
-			let traces = map_with_parent(δ, |k, p: Option<&Option<Context>>, d: NodeDiff<Context, ()>| match d {
+			let traces = map_with_parent(δ, |k, p: Option<&Option<Context>>, d: NodeDiff<Context, TraceInit>| match d {
 					trace::NodeDiff::Left(context) => {
 						println!("closing trace {k:?}"); 
 						context.span().end();
 						None
 					},
-					trace::NodeDiff::Right(y) => {Some(
+					trace::NodeDiff::Right(TraceInit { end_immediately, values }) => {
+						let context = 
 						if let Some(Some(context)) = p {
-
-							// let _guard = Context::attach(context.clone());
 
 
 							let key = get_key_name(k);
 
-							let span = tracer.start_with_context(key, &context);
+							let mut span = tracer.start_with_context(key, &context);
+							span.add_event("values", values.into_iter().map(|(key, value)| KeyValue::new(key, value)).collect());
 							let context = context.with_span(span);
 
 
@@ -218,7 +279,7 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 							// let target = module_path!();
 							// let level = Level::TRACE;
 
-							(context)
+							context
 							
 
 							// let identifier = tracing_core::identify_callsite!();
@@ -324,8 +385,12 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 							println!("open trace {k:?} [NO PARENT]"); 
 							// span!(tracing::Level::TRACE, "root", key = format!("{k:?}")).entered()
 							context
+						};
+						if end_immediately {
+							context.span().end();
 						}
-					)},
+						Some(context)
+					},
 					trace::NodeDiff::Both(x, _) => {
 						Some(x)
 					},

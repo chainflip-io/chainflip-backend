@@ -2021,6 +2021,7 @@ dependencies = [
  "opentelemetry-stdout",
  "opentelemetry_sdk",
  "pallet-cf-elections",
+ "pallet-cf-validator",
  "parity-scale-codec",
  "serde",
  "state-chain-runtime",

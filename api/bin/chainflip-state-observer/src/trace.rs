@@ -70,8 +70,8 @@ pub fn map_with_parent<K: Ord, V, W>(mut this: Trace<K,V>, f: impl Fn(&Vec<K>, O
 }
 
 
-pub fn get_key_name<K: std::fmt::Debug>(key: &Vec<K>) -> &'static str{
-    let name = key.last().map(|x| format!("{x:?}")).unwrap_or("root".into());
+pub fn get_key_name<K: std::fmt::Display>(key: &Vec<K>) -> &'static str{
+    let name = key.last().map(|x| format!("{x}")).unwrap_or("root".into());
     staticize(&name)
 }
 

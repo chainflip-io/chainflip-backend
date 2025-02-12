@@ -180,6 +180,14 @@ pub trait StorageApi {
 			.map(|(_k, v)| v)
 			.collect())
 	}
+
+	// async fn storage_double_map<
+	// 	StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static,
+	// 	ReturnedIter: FromIterator<((<StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key1, <StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key2), StorageDoubleMap::Value)> + 'static,
+	// >(
+	// 	&self,
+	// 	block_hash: state_chain_runtime::Hash,
+	// ) -> RpcResult<ReturnedIter>;
 }
 
 #[async_trait]
@@ -276,6 +284,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 			})
 			.collect())
 	}
+
 }
 
 #[async_trait]
@@ -352,6 +361,17 @@ impl<
 	) -> RpcResult<ReturnedIter> {
 		self.base_rpc_client.storage_map::<StorageMap, _>(block_hash).await
 	}
+
+	// #[track_caller]
+	// async fn storage_double_map<
+	// 	StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static,
+	// 	ReturnedIter: FromIterator<((<StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key1, <StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key2), StorageDoubleMap::Value)> + 'static,
+	// >(
+	// 	&self,
+	// 	block_hash: state_chain_runtime::Hash,
+	// ) -> RpcResult<ReturnedIter> {
+	// 	self.base_rpc_client.storage_double_map::<StorageDoubleMap, _>(block_hash).await
+	// }
 }
 
 #[derive(Debug)]
