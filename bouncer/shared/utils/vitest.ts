@@ -10,6 +10,18 @@ afterEach<{ testContext: TestContext }>((context) => {
   context.testContext.printReport();
 });
 
+function createTestFunction(name: string, testFunction: (context: TestContext) => Promise<void>) {
+  return async (context: { testContext: TestContext }) => {
+    // Attach the test name to the logger
+    context.testContext.logger = context.testContext.logger.child({ test: name });
+    // Run the test with the test context
+    await testFunction(context.testContext).catch((error) => {
+      // We must catch the error here to be able to log it
+      context.testContext.error(error);
+      throw error;
+    });
+  };
+}
 export function concurrentTest(
   name: string,
   testFunction: (context: TestContext) => Promise<void>,
@@ -17,20 +29,10 @@ export function concurrentTest(
 ) {
   it.concurrent<{ testContext: TestContext }>(
     name,
-    async (context) => {
-      // Attach the test name to the logger
-      context.testContext.logger = context.testContext.logger.child({ test: name });
-      // Run the test with the test context
-      await testFunction(context.testContext).catch((error) => {
-        // We must catch the error here to be able to log it
-        context.testContext.error(error);
-        throw error;
-      });
-    },
+    createTestFunction(name, testFunction),
     timeoutSeconds * 1000,
   );
 }
-
 export function serialTest(
   name: string,
   testFunction: (context: TestContext) => Promise<void>,
@@ -38,16 +40,7 @@ export function serialTest(
 ) {
   it<{ testContext: TestContext }>(
     name,
-    async (context) => {
-      // Attach the test name to the logger
-      context.testContext.logger = context.testContext.logger.child({ test: name });
-      // Run the test with the test context
-      await testFunction(context.testContext).catch((error) => {
-        // We must catch the error here to be able to log it
-        context.testContext.error(error);
-        throw error;
-      });
-    },
+    createTestFunction(name, testFunction),
     timeoutSeconds * 1000,
   );
 }

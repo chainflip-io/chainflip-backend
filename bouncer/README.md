@@ -87,11 +87,11 @@ To run the test you must add it to one of the test groups in a `.test.ts` file.
 Choose the correct location for your test.
 This will determine how `vitest` and the CI run it.
 
-| File                   | Test Group        | Description                                                  | ci-development | ci-main-merge |
-| ---------------------- | ----------------- | ------------------------------------------------------------ | -------------- | ------------- |
-| `fast_bouncer.test.ts` | `ConcurrentTests` | (Best Option) Tests that can run at the same time            | ✅             | ✅            |
-| `fast_bouncer.test.ts` | `SerialTests`     | Tests that must be ran one at a time                         | ✅             | ✅            |
-| `full_bouncer.test.ts` | `SlowTests`       | Low priority / low risk tests that must be ran one at a time | ❌             | ✅            |
+| File                   | Test Group        | Description                                                      | ci-development | ci-main-merge |
+| ---------------------- | ----------------- | ---------------------------------------------------------------- | -------------- | ------------- |
+| `fast_bouncer.test.ts` | `ConcurrentTests` | (Best Option) Tests that can run at the same time                | ✅             | ✅            |
+| `full_bouncer.test.ts` | `SerialTests1`    | Tests that must be ran one at a time before the concurrent tests | ❌             | ✅            |
+| `full_bouncer.test.ts` | `SerialTests2`    | Tests that must be ran one at a time after the concurrent tests  | ❌             | ✅            |
 
 Using either the `concurrentTest` or `serialTest` function, add the test with with its name, main function (the one that takes `TestContext`) as the timeout in seconds.
 
