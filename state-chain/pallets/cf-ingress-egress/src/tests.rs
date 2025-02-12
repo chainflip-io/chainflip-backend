@@ -1784,7 +1784,7 @@ fn invalid_fetches_do_not_get_scheduled_and_do_not_block_other_fetches() {
 		);
 
 		for address in channel_addresses.iter().take(fetch_limits) {
-			IngressEgress::recycle_channel(&mut Weight::zero(), address.clone());
+			IngressEgress::recycle_channel(&mut Weight::zero(), *address);
 		}
 
 		IngressEgress::on_finalize(1);
@@ -1795,7 +1795,7 @@ fn invalid_fetches_do_not_get_scheduled_and_do_not_block_other_fetches() {
 			ScheduledEgressFetchOrTransfer::<Test, ()>::get()
 				.iter()
 				.filter_map(|f_or_t| match f_or_t {
-					FetchOrTransfer::Fetch { deposit_address, .. } => Some(deposit_address.clone()),
+					FetchOrTransfer::Fetch { deposit_address, .. } => Some(*deposit_address),
 					_ => None,
 				})
 				.collect::<Vec<_>>(),

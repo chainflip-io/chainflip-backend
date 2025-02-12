@@ -1641,8 +1641,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									//    have fetches remaining.
 									// And we must be able to fetch the channel (it must exist and
 									// can_fetch must be true)
-									if (maybe_no_of_fetches_remaining.is_none() ||
-										maybe_no_of_fetches_remaining.is_some_and(|n| n > 0)) &&
+									if (maybe_no_of_fetches_remaining.is_none_or(|n| n > 0)) &&
 										DepositChannelLookup::<T, I>::mutate(
 											deposit_address,
 											|details| {
