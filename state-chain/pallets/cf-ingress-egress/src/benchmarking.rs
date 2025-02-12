@@ -315,11 +315,11 @@ mod benchmarks {
 				deposit_details: BenchmarkValue::benchmark_value(),
 				broker_fee: None,
 				affiliate_fees: Default::default(),
-				refund_params: Some(ChannelRefundParameters {
+				refund_params: ChannelRefundParameters {
 					retry_duration: Default::default(),
 					refund_address: BenchmarkValue::benchmark_value(),
 					min_price: Default::default(),
-				}),
+				},
 				dca_params: None,
 				boost_fee: 0,
 				channel_id: None,
