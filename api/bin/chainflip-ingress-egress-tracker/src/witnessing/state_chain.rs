@@ -288,10 +288,8 @@ where
 				.collect::<Vec<Beneficiary<AccountId32>>>()
 				.try_into()
 				.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same."),
-			refund_params: self.refund_params.map(
-				|params| params.map_address(
-					|a| TrackerAddress::from(a.into_foreign_chain_address().to_encoded_address(network))
-				)
+			refund_params: Some(self.refund_params.map_address(
+					|a| TrackerAddress::from(a.into_foreign_chain_address().to_encoded_address(network)))
 			),
 			dca_params: self.dca_params,
 			max_boost_fee: self.boost_fee,
@@ -945,11 +943,11 @@ mod tests {
 						bps: 10
 					}])
 					.unwrap(),
-					refund_params: Some(ChannelRefundParameters {
+					refund_params: ChannelRefundParameters {
 						refund_address: eth_address,
 						retry_duration: Default::default(),
 						min_price: Default::default(),
-					}),
+					},
 					dca_params: Some(DcaParameters { number_of_chunks: 5, chunk_interval: 100 }),
 					boost_fee: 5,
 				},

@@ -415,7 +415,7 @@ pub mod pallet {
 		pub tx_id: TransactionInIdFor<T, I>,
 		pub broker_fee: Option<Beneficiary<T::AccountId>>,
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
-		pub refund_params: Option<ChannelRefundParameters<TargetChainAccount<T, I>>>,
+		pub refund_params: ChannelRefundParameters<TargetChainAccount<T, I>>,
 		pub dca_params: Option<DcaParameters>,
 		pub boost_fee: BasisPoints,
 	}
@@ -2352,8 +2352,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_asset: output_asset,
 			destination_address: destination_address_internal,
 			broker_fees,
-			refund_params: refund_params
-				.map(|params| params.map_address(|address| address.into_foreign_chain_address())),
+			refund_params: Some(
+				refund_params.map_address(|address| address.into_foreign_chain_address()),
+			),
 			dca_params,
 			channel_metadata,
 		};
@@ -2667,15 +2668,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(None, None)
 		};
 
-		if let Some(refund_params) = refund_params.clone() {
-			if let Err(_err) =
-				T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
-			{
-				emit_deposit_failed_event(DepositFailedReason::InvalidRefundParameters);
-				return;
-			}
-		} else {
-			log::warn!("No refund parameter provided for tx id: {tx_id:?}!");
+		if let Err(_err) =
+			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
+		{
+			emit_deposit_failed_event(DepositFailedReason::InvalidRefundParameters);
+			return;
 		}
 
 		if let Some(params) = &dca_params {
@@ -2690,8 +2687,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_address: destination_address_internal,
 			broker_fees,
 			channel_metadata: channel_metadata.clone(),
-			refund_params: refund_params
-				.map(|params| params.map_address(|address| address.into_foreign_chain_address())),
+			refund_params: Some(
+				refund_params.map_address(|address| address.into_foreign_chain_address()),
+			),
 			dca_params: dca_params.clone(),
 		};
 
