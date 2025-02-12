@@ -1800,8 +1800,8 @@ fn invalid_fetches_do_not_get_scheduled_and_do_not_block_other_fetches() {
 				})
 				.collect::<Vec<_>>(),
 			channel_addresses[0..fetch_limits],
-			// Note: Ideally this shouldn't be the case since we wouldn't fetches scheduled that
-			// can never be scheduled. However, at least we do not block ones that can be
+			// Note: Ideally this shouldn't be the case since we don't want to keep holding fetches
+			// that will never be scheduled. However, at least we do not block ones that can be
 			// scheduled.
 			"The channels that expired should be the same as the scheduled egresses!"
 		);
