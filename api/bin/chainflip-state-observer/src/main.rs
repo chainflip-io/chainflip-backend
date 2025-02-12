@@ -230,11 +230,9 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 
 		let rpc_url = env::var("CF_RPC_NODE").expect("CF_RPC_NODE required");
 
-		let (finalized_stream, _, client) = StateChainClient::connect_without_account(&scope, &rpc_url).await.unwrap();
+		let (finalized_stream, unfinalized_stream, client) = StateChainClient::connect_without_account(&scope, &rpc_url).await.unwrap();
 
-		let traces = BTreeMap::new();
-
-		finalized_stream.fold((client, traces, tracer), async |(client, traces, tracer), block| {
+		unfinalized_stream.fold((client, (BTreeMap::new(), BTreeMap::new()), tracer), async |(client, (overview_trace, detailed_traces), tracer), block| {
 
 			let _results = tracer_provider.force_flush();
 
@@ -265,6 +263,7 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 
 					if let Some((_, comp)) = client.storage_double_map_entry::<pallet_cf_elections::IndividualComponents::<Runtime, SolanaInstance>>(block_hash, key.unique_monotonic(), validator)
 					.await.expect("could not get storage") {
+						println!("got individual component for election {key:?} for vld {validator_index}: {comp:?}");
 						individual_components.entry(*key.unique_monotonic()).or_insert(BTreeMap::new()).insert(validator_index, comp);
 						// individual_components.insert(key.unique_monotonic(), comp);
 					}
@@ -305,8 +304,12 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 				],
 			};
 
-			let new_traces = make_traces(result);
-			let traces = push_traces(&tracer, traces, new_traces);
+			let new_full_trace = make_traces(result);
+			let new_overview_trace = new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() <= 3).collect::<BTreeMap<_,_>>();
+			let new_detailed_traces = new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() >= 1).collect::<BTreeMap<_,_>>();
+
+			let overview_trace = push_traces(&tracer, overview_trace, new_overview_trace);
+			let detailed_traces = push_traces(&tracer, detailed_traces, new_detailed_traces);
 
 
 				// δ.into_iter().filter_map(|(k,d)| match d ).collect();
@@ -343,7 +346,7 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 			// 	.map(|(value, ..)| value)
 			// 	.expect("could not get block height");
 
-			(client, traces, tracer)
+			(client, (overview_trace, detailed_traces), tracer)
 
 		}).await;
 
