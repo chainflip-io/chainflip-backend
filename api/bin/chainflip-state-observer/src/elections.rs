@@ -6,14 +6,6 @@ use codec::{Decode, Encode};
 use pallet_cf_elections::{bitmap_components::ElectionBitmapComponents, electoral_system::BitmapComponentOf, vote_storage::VoteStorage, ElectionIdentifierOf, ElectoralSystemTypes, IndividualComponentOf, SharedDataHash, UniqueMonotonicIdentifier};
 use bitvec::prelude::*;
 
-// pub struct ElectionData<ES: ElectoralSystemTypes> {
-//     properties: ES::ElectionProperties,
-//     validators: Vec<ES::ValidatorId>,
-//     shared_votes: BTreeMap<SharedDataHash, <ES::VoteStorage as VoteStorage>::SharedData>,
-//     bitmaps: Vec<(BitmapComponentOf<ES>, BitVec<u8, bitvec::order::Lsb0>)>,
-
-//     _phantom: std::marker::PhantomData<ES>
-// }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Category {
@@ -85,17 +77,6 @@ impl TraceInit {
 pub fn make_traces<ES: ElectoralSystemTypes>(data: ElectionData<ES>) -> Trace<Key, TraceInit> 
 where IndividualComponentOf<ES>: Encode
 {
-    // let full_votes = data.votes.
-    // let votes = data.bitmaps
-    //     .iter()
-    //     .map(|(component, bitmap)| 
-    //         (
-    //             Category(FullVote("vote".into())),
-    //             Trace::Composite((), bitmap.iter().enumerate().map(|(id, bit)| (Validator(id as u64), Trace::Single(()))).collect())
-    //         )
-    //     )
-    //     .collect();
-    // Trace::Composite((), votes)
 
     let end = TraceInit {
         end_immediately: true,
@@ -123,13 +104,13 @@ where IndividualComponentOf<ES>: Encode
 
         // general
         trace.insert(cloned_vec([&key0]), end.clone());
-        trace.insert(cloned_vec([&key0, &key1]), end.clone());
+        trace.insert(cloned_vec([&key0, &key1]), start.clone());
 
         // properties
         let key2 = Category(Properties);
-        trace.insert(cloned_vec([&key0, &key1, &key2]), end.clone());
+        trace.insert(cloned_vec([&key0, &key1]), end.clone());
         trace.insert(
-            cloned_vec([&key0, &key1, &key2, &State { summary: "new_properties".into() }]), 
+            cloned_vec([&key0, &key1, &State { summary: format!("new properties ({key2})") }]), 
             start.with_value("properties".into(), format!("{properties:?}"))
         );
 
@@ -152,9 +133,7 @@ where IndividualComponentOf<ES>: Encode
         // components
         if let Some(individual_components) = data.individual_components.get(identifier) {
             for (authority_index, component) in individual_components {
-                // let mut hasher = DefaultHasher::new();
                 let x = component.encode();
-                // let result = hasher.finish();
                 trace.insert(cloned_vec([&key0, &key1, &Category(IndividualVote(format!("{x:x?}")))]), start.clone());
                 trace.insert(cloned_vec([&key0, &key1, &Category(IndividualVote(format!("{x:x?}"))), &Validator(*authority_index as u64)]), start.clone());
             }
@@ -164,25 +143,5 @@ where IndividualComponentOf<ES>: Encode
 
     trace
 
-    // Trace::Composite((), 
-    //     data.bitmaps
-    //         .into_iter()
-    //         .map(|(k,bitmaps)| (Election(k),
-    //             Trace::Composite((),
-    //                  bitmaps
-    //                 .iter()
-    //                 .map(|(component, bitmap)| 
-    //                     (
-    //                         Category(FullVote("vote".into())),
-    //                         Trace::Composite((), bitmap.iter().enumerate().map(|(id, bit)| (Validator(id as u64), Trace::Composite((), BTreeMap::new()))).collect())
-    //                     )
-    //                 )
-    //                 .collect()
-    //             )
-    //         ))
-    //         .collect()
-    // )
 }
 
-// pub fn all_traces<ES: ElectoralSystemTypes + Ord>(data: BTreeMap<ElectionIdentifierOf<ES>,ElectionData<ES>>) -> Trace<Key<ES>, ()> {
-// }

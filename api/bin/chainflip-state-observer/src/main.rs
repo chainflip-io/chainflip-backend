@@ -51,9 +51,6 @@ use std::env;
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct ElectionData<ES: ElectoralSystemTypes> {
-    // properties: ES::ElectionProperties,
-    // validators: Vec<ES::ValidatorId>,
-    // shared_votes: BTreeMap<SharedDataHash, <ES::VoteStorage as VoteStorage>::SharedData>,
     pub bitmaps: BTreeMap<
 		UniqueMonotonicIdentifier,
 		Vec<(BitmapComponentOf<ES>, BitVec<u8, bitvec::order::Lsb0>)>
@@ -87,7 +84,7 @@ async fn main() {
         // .with_max_events_per_span(64)
         // .with_max_attributes_per_span(16)
         // .with_max_events_per_span(16)
-        .with_resource(Resource::new(vec![KeyValue::new("service.name", "example2")]))
+        .with_resource(Resource::new(vec![KeyValue::new("service.name", "es-overview")]))
         .build();
 
     global::set_tracer_provider(tracer_provider.clone());
@@ -166,19 +163,12 @@ async fn main() {
 	new_watch(tracer, tracer_provider).await;
 }
 
-// #[derive(Debug, PartialEq)]
-// struct KeyValue(&'static str);
 
 async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider) 
  where T::Span : Span + Send + Sync + 'static
 
-// async fn new_watch() 
 {
 
-	// let root = span!(tracing::Level::TRACE, "app_start", work_units = 2);
-	// let _enter = root.enter();
-
-	// let (scope, stream) = Scope::new();
 
 	task_scope::task_scope_local(|scope| async move { 
 
@@ -273,104 +263,8 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 
 
 							println!("open trace {k:?}"); 
-							// span!(parent: parent, tracing::Level::TRACE, get_key_name(k), key = format!("{k:?}")).entered()
-
-							// let name = "";
-							// let target = module_path!();
-							// let level = Level::TRACE;
 
 							context
-							
-
-							// let identifier = tracing_core::identify_callsite!();
-
-
-							// struct MyCallsite<'a> {
-							// 	metadata: Option<tracing::Metadata<'a>>
-
-							// };
-							// impl<'a> Callsite for MyCallsite<'a> {
-							// 		fn set_interest(&self, interest: tracing_core::Interest) {
-							// 		}
-							
-							// 		fn metadata(&self) -> &tracing::Metadata<'_> {
-							// 			&self.metadata
-							// 		}
-							// 	};
-
-							// let __CALLSITE: tracing::__macro_support::MacroCallsite =  {
-
-							// 	let META: tracing::Metadata<'static> = {
-							// 		tracing::metadata::Metadata::new(
-							// 			name,
-							// 			target,
-							// 			level,
-							// 			tracing::__macro_support::Option::Some(tracing::__macro_support::file!()),
-							// 			tracing::__macro_support::Option::Some(0u32),
-							// 			tracing::__macro_support::Option::Some(
-							// 				module_path!(),
-							// 			),
-							// 			tracing::field::FieldSet::new(
-							// 				(&[]),
-							// 				// tracing::callsite::Identifier((&__CALLSITE)),
-							// 				// tracing::callsite::Identifier((&__CALLSITE)),
-							// 				identifier
-							// 			),
-							// 			(tracing::metadata::Kind::SPAN),
-							// 		)
-							// 	};
-							// 	tracing::callsite::DefaultCallsite::new(&META)
-							// }
-							
-							// tracing::callsite2! {
-							// 	name: name,
-							// 	kind: tracing::metadata::Kind::SPAN,
-							// 	target: target,
-							// 	level: level,
-							// 	fields: 
-							// };
-            // let mut interest = $crate::subscriber::Interest::never();
-            // if $crate::level_enabled!($lvl)
-            //     && { interest = __CALLSITE.interest(); !interest.is_never() }
-            //     && $crate::__macro_support::__is_enabled(__CALLSITE.metadata(), interest)
-            // {
-							// let callsite = Box::new(MyCallsite { metadata: None });
-							// let callsite: &'static mut MyCallsite = Box::leak(callsite);
-							// let meta = 
-							// 		tracing::metadata::Metadata::new(
-							// 			name,
-							// 			target,
-							// 			level,
-							// 			tracing::__macro_support::Option::Some(tracing::__macro_support::file!()),
-							// 			tracing::__macro_support::Option::Some(0u32),
-							// 			tracing::__macro_support::Option::Some(
-							// 				module_path!(),
-							// 			),
-							// 			tracing::field::FieldSet::new(
-							// 				(&[]),
-							// 				// tracing::callsite::Identifier((&__CALLSITE)),
-							// 				// tracing::callsite::Identifier((&__CALLSITE)),
-							// 				tracing::callsite::Identifier(callsite)
-							// 				// identifier
-							// 			),
-							// 			(tracing::metadata::Kind::SPAN),
-							// 		);
-							// callsite.metadata = Some(meta);
-							// // let meta = __CALLSITE.metadata();
-							// // span with explicit parent
-							// tracing::Span::child_of(
-							// 	parent,
-							// 	&meta,
-							// 	&tracing::valueset!(meta.fields(), ),
-							// 	// &tracing::valueset!(meta.fields(), $($fields)*),
-							// ).entered()
-            // } else {
-            //     let span = $crate::__macro_support::__disabled_span(__CALLSITE.metadata());
-            //     $crate::if_log_enabled! { $lvl, {
-            //         span.record_all(&$crate::valueset!(__CALLSITE.metadata().fields(), $($fields)*));
-            //     }};
-            //     span
-            // }
 
 						} else {
 
@@ -379,11 +273,7 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 							let context = Context::new().with_value(KeyValue::new("key", format!("{key:?}")));
 							let span = tracer.start_with_context(key, &context);
 							let context = context.with_span(span);
-							// start_with_context(key, &Context::current_with_span(parent.clone()));
-
-							// tracer.start(format!("{k:?}"))
 							println!("open trace {k:?} [NO PARENT]"); 
-							// span!(tracing::Level::TRACE, "root", key = format!("{k:?}")).entered()
 							context
 						};
 						if end_immediately {
@@ -436,78 +326,12 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 
 		}).await;
 
-		// stream.all(|_| true).await;
-
 		Ok(())
 
 	 }.boxed_local()).await.unwrap()
 }
 
 
-
-// async fn watch_stuck_solana_ingress() {
-
-// 	task_scope::task_scope(|scope| async move { 
-
-// 		// StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi,
-// 		let (_, _, client) = StateChainClient::connect_without_account(scope, "ws://localhost:9944").await.unwrap();
-
-// 		let block_hash = client.latest_finalized_block().hash;
-
-// 		let all_properties : BTreeMap<_,_> = client
-// 			.storage_map::<pallet_cf_elections::ElectionProperties::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
-// 			.await
-// 			.expect("could not get storage");
-
-// 		let delta_properties : Vec<_> =
-// 			all_properties.iter().map(|(_, value)| match value {
-// 				pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::B(props) => Some(props),
-// 				_ => None
-// 			})
-// 			.collect();
-
-// 		let block_height_properties : Vec<_> =
-// 			all_properties.iter().filter_map(|(_, value)| match value {
-// 				pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::A(props) => Some(props),
-// 				_ => None
-// 			})
-// 			.collect();
-
-// 		for delta_prop in delta_properties {
-// 			println!("delta: {delta_prop:?}");
-// 		}
-
-
-
-
-
-
-// 		/*
-// 		let bitmaps : BTreeMap<UniqueMonotonicIdentifier, _ > = client
-// 			.storage_map::<pallet_cf_elections::BitmapComponents::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
-// 			.await
-// 			.expect("could not get storage")
-// 		;
-
-// 		let bitmaps = bitmaps.into_iter()
-// 			.map(|(k,v)| (k, v.bitmaps))
-// 			.collect();
-
-// 		let result : ElectionDataFor<Runtime, SolanaInstance> = ElectionData {
-// 			bitmaps,
-// 			_phantom: Default::default()
-// 		};
-
-// 		let traces = traces(result);
-
-// 		println!("got election data: {traces:?}");
-
-// 		*/
-
-// 		Ok(())
-
-// 	 }.boxed()).await.unwrap()
-// }
 
 
 
