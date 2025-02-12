@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.8.2] - 2025-02-12
+
+- Prevent blocking of fetches due to small edge case ([#5631](https://github.com/chainflip-io/chainflip-backend/pull/5631))
+
 ## [1.8.1] - 2025-02-11
 
 ### Features
