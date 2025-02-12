@@ -1,5 +1,5 @@
 
-use std::{collections::BTreeMap, fmt::Display, hash::{DefaultHasher, Hash, Hasher}};
+use std::{collections::BTreeMap, fmt::{format, Display}, hash::{DefaultHasher, Hash, Hasher}};
 
 use crate::{trace::Trace, ElectionData};
 use codec::{Decode, Encode};
@@ -7,13 +7,12 @@ use pallet_cf_elections::{bitmap_components::ElectionBitmapComponents, electoral
 use bitvec::prelude::*;
 
 
+// NOTE! the order is important for ordering the traces!
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Category {
+    Properties,
     NoVote,
-    BitmapVote(String),
-    IndividualVote(String),
-    PartialVote(String),
-    Properties
+    Vote(String),
 }
 use self::Category::*;
 
@@ -21,10 +20,10 @@ impl Display for Category {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NoVote => write!(f, "No Vote"),
-            BitmapVote(s) => write!(f, "Bitmap: {s}"),
-            IndividualVote(s) => write!(f, "Individual: {s}"),
-            PartialVote(s) => write!(f, "Partial: {s}"),
+            Vote(s) => write!(f, "Vote: {s}"),
             Properties => write!(f, "Properties"),
+            // IndividualVote(s) => write!(f, "Individual: {s}"),
+            // PartialVote(s) => write!(f, "Partial: {s}"),
         }
     }
 }
@@ -34,8 +33,8 @@ impl Display for Category {
 pub enum Key {
     ElectoralSystem(String),
     Election(String),
-    Category(Category),
-    Validator(u64),
+    Category(String, Category),
+    Validator(u32),
     State{summary: String},
 }
 
@@ -43,7 +42,7 @@ impl Display for Key {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Election(e) => write!(f, "{e}"),
-            Key::Category(category) => write!(f, "{category}"),
+            Key::Category(extra, category) => write!(f, "[{extra}] {category}"),
             Validator(x) => write!(f, "Validator {x}"),
             ElectoralSystem(name) => write!(f, "ES {name}"),
             State { summary } => write!(f, "{summary}"),
@@ -63,14 +62,26 @@ where X : Clone + 'a
 #[derive(Clone)]
 pub struct TraceInit {
     pub end_immediately: bool,
-    pub values: Vec<(String, String)>
+    pub attributes: Vec<(String, String)>
 }
 
 impl TraceInit {
-    pub fn with_value(&self, key: String, value: String) -> Self {
+    pub fn with_attribute(&self, key: String, value: String) -> Self {
         let mut result = self.clone();
-        result.values.push((key, value));
+        result.attributes.push((key, value));
         result
+    }
+}
+
+
+struct AsHex(Vec<u8>);
+
+impl Display for AsHex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for b in &self.0 {
+            write!(f, "{b:x}")?;
+        }
+        Ok(())
     }
 }
 
@@ -78,64 +89,75 @@ pub fn make_traces<ES: ElectoralSystemTypes>(data: ElectionData<ES>) -> Trace<Ke
 where IndividualComponentOf<ES>: Encode
 {
 
+    let mut votes: BTreeMap<(ElectionIdentifierOf<ES>, u32), String> = BTreeMap::new();
+
+    for (identifier, (name, properties)) in &data.elections {
+
+        if let Some(bitmaps) = data.bitmaps.get(identifier.unique_monotonic()) {
+
+            for (component, bitmap) in bitmaps {
+                for (id, bit) in bitmap.iter().enumerate() {
+                    let key3 = Validator(id as u32);
+                    if *bit {
+                        votes.insert((*identifier, id as u32), AsHex(component.encode()).to_string());
+                    }
+                }
+            }
+        }
+
+        if let Some(individual_components) = data.individual_components.get(identifier.unique_monotonic()) {
+            for (authority_index, component) in individual_components {
+                votes.insert((*identifier, *authority_index as u32), AsHex(component.encode()).to_string());
+            }
+        }
+    }
+
     let end = TraceInit {
         end_immediately: true,
-        values: Vec::new()
+        attributes: Vec::new()
     };
     let start = TraceInit {
         end_immediately: false,
-        values: Vec::new()
+        attributes: Vec::new()
     };
 
     let mut trace = Trace::new();
     trace.insert(vec![], end.clone());
 
-    for (identifier, (name, properties)) in &data.election_names {
+    for name in data.electoral_system_names {
+        trace.insert(vec![ElectoralSystem(name.clone())], end.clone());
+    }
 
-    // } 
-    // for (k, bitmaps) in data.bitmaps {
-        // let name = data.election_names.get(&k).cloned().unwrap_or(format!("{k:?}"));
+    for (identifier, (name, properties)) in &data.elections {
+
         let input = identifier.encode();
         let mut other: &[u8] = &input;
         let id: u64 = Decode::decode(&mut other).unwrap();
+        let extra = format!("{:?}", identifier.extra());
 
         let key0 = ElectoralSystem(name.clone());
         let key1 = Election(format!("{name} ({id})"));
 
-        // general
-        trace.insert(cloned_vec([&key0]), end.clone());
-        trace.insert(cloned_vec([&key0, &key1]), start.clone());
+        // election id
+        trace.insert(cloned_vec([&key0, &key1]), end.clone());
 
         // properties
-        let key2 = Category(Properties);
-        trace.insert(cloned_vec([&key0, &key1]), end.clone());
-        trace.insert(
-            cloned_vec([&key0, &key1, &State { summary: format!("new properties ({key2})") }]), 
-            start.with_value("properties".into(), format!("{properties:?}"))
-        );
+        let key2 = Category(extra.clone(), Properties);
+        trace.insert(cloned_vec([&key0, &key1, &key2]), end.with_attribute("Properties".into(), format!("{properties:#?}")));
 
-        // bitmaps
-        if let Some(bitmaps) = data.bitmaps.get(identifier) {
-
-            for (component, bitmap) in bitmaps {
-                let key2 = Category(BitmapVote("vote".into()));
-                trace.insert(cloned_vec([&key0, &key1, &key2]), start.clone());
-                for (id, bit) in bitmap.iter().enumerate() {
-                    let key3 = Validator(id as u64);
-                    if *bit {
-                        trace.insert(cloned_vec([&key0, &key1, &key2, &key3]), start.clone());
-                    }
-                }
+        // no votes
+        for authority_id in 0..data.validators {
+            if votes.get(&(*identifier, authority_id)).is_none() {
+                trace.insert(cloned_vec([&key0, &key1, &Category(extra.clone(), NoVote)]), start.clone());
+                trace.insert(cloned_vec([&key0, &key1, &Category(extra.clone(), NoVote), &Validator(authority_id)]), start.clone());
             }
-
         }
 
-        // components
-        if let Some(individual_components) = data.individual_components.get(identifier) {
-            for (authority_index, component) in individual_components {
-                let x = component.encode();
-                trace.insert(cloned_vec([&key0, &key1, &Category(IndividualVote(format!("{x:x?}")))]), start.clone());
-                trace.insert(cloned_vec([&key0, &key1, &Category(IndividualVote(format!("{x:x?}"))), &Validator(*authority_index as u64)]), start.clone());
+        // votes
+        for authority_id in 0..data.validators {
+            if let Some(s) = votes.get(&(*identifier, authority_id)) {
+                trace.insert(cloned_vec([&key0, &key1, &Category(extra.clone(), Vote(s.clone()))]), start.clone());
+                trace.insert(cloned_vec([&key0, &key1, &Category(extra.clone(), Vote(s.clone())), &Validator(authority_id)]), start.clone());
             }
         }
 

@@ -17,7 +17,7 @@ use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::RawRpcApi, extrinsic_api::signed::SignedExtrinsicApi, BlockInfo,
 	StateChainClient,
 };
-use opentelemetry::global::ObjectSafeSpan;
+// use opentelemetry::global::ObjectSafeSpan;
 use opentelemetry::trace::{mark_span_as_active, Span, TraceContextExt as _, Tracer, TracerProvider as _};
 use chainflip_engine::state_chain_observer::client::base_rpc_api::BaseRpcClient;
 use custom_rpc::CustomApiClient;
@@ -36,7 +36,7 @@ use opentelemetry::{global, Context, KeyValue};
 use opentelemetry_sdk::trace::{RandomIdGenerator, TracerProvider};
 use opentelemetry_sdk::Resource;
 use pallet_cf_elections::electoral_system::{BitmapComponentOf};
-use pallet_cf_elections::{ElectionDataFor, ElectionProperties, ElectoralSystemTypes, IndividualComponentOf, UniqueMonotonicIdentifier};
+use pallet_cf_elections::{ElectionDataFor, ElectionIdentifierOf, ElectionProperties, ElectoralSystemTypes, IndividualComponentOf, UniqueMonotonicIdentifier};
 use state_chain_runtime::{Runtime, SolanaInstance};
 use cf_utilities::task_scope::{self, Scope};
 use futures_util::FutureExt;
@@ -61,7 +61,11 @@ pub struct ElectionData<ES: ElectoralSystemTypes> {
 		BTreeMap<usize, IndividualComponentOf<ES>>
 		>,
 
-	pub election_names: BTreeMap<UniqueMonotonicIdentifier, (String, ES::ElectionProperties)>,
+	pub elections: BTreeMap<ElectionIdentifierOf<ES>, (String, ES::ElectionProperties)>,
+
+	pub electoral_system_names: Vec<String>,
+
+	pub validators: u32,
 
     pub _phantom: std::marker::PhantomData<ES>
 }
@@ -219,7 +223,7 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 				.map(|(k,v)| (k, v.bitmaps))
 				.collect();
 
-			let election_names = all_properties.iter()
+			let elections = all_properties.iter()
 				.map(|(key, val)| {
 					let name = match val {
 							CompositeElectionProperties::A(_)  => "Blockheight",
@@ -229,15 +233,24 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 							CompositeElectionProperties::EE(_) => "Liveness",
 							CompositeElectionProperties::FF(_) => "Vaultswap",
 						};
-					(key.unique_monotonic().clone(), (name.into(), val.clone()))
+					(key.clone(), (name.into(), val.clone()))
 				})
 				.collect();
 
 			let result : ElectionData<SolanaElectoralSystemRunner> = ElectionData {
 				bitmaps,
-				election_names,
+				elections,
 				individual_components,
+				validators: validators.len() as u32,
 				_phantom: Default::default(),
+				electoral_system_names: vec![
+							"Blockheight".into(),
+							"Ingress".into(),
+							"Nonce".into(),
+							"Egress".into(),
+							"Liveness".into(),
+							"Vaultswap".into(),
+				],
 			};
 
 			let new_traces = make_traces(result);
@@ -250,7 +263,7 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 						context.span().end();
 						None
 					},
-					trace::NodeDiff::Right(TraceInit { end_immediately, values }) => {
+					trace::NodeDiff::Right(TraceInit { end_immediately, attributes: values }) => {
 						let context = 
 						if let Some(Some(context)) = p {
 
@@ -258,7 +271,9 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 							let key = get_key_name(k);
 
 							let mut span = tracer.start_with_context(key, &context);
-							span.add_event("values", values.into_iter().map(|(key, value)| KeyValue::new(key, value)).collect());
+							for  (key, value) in values {
+								span.set_attribute(KeyValue::new(key, value));
+							}
 							let context = context.with_span(span);
 
 
