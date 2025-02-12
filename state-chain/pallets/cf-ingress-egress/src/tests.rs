@@ -1891,7 +1891,7 @@ fn submit_vault_swap_request(
 			tx_id,
 			broker_fee: Some(broker_fee),
 			affiliate_fees,
-			refund_params: Some(refund_params),
+			refund_params,
 			dca_params,
 			boost_fee,
 		}),

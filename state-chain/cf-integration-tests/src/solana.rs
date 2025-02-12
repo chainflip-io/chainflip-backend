@@ -380,7 +380,7 @@ fn vault_swap_deposit_witness(
 		deposit_details: (),
 		broker_fee: None,
 		affiliate_fees: Default::default(),
-		refund_params: Some(REFUND_PARAMS),
+		refund_params: REFUND_PARAMS,
 		dca_params: None,
 		boost_fee: 0,
 		deposit_address: Some(SolAddress([2u8; 32])),
