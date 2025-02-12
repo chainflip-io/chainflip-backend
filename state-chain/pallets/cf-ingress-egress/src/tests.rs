@@ -1738,6 +1738,7 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 
 		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
+		// We should have fetched all except the exceess fetch.
 		assert_eq!(scheduled_egresses.len(), EXCESS_FETCHES, "Wrong amount of left egresses!");
 
 		IngressEgress::on_finalize(2);
