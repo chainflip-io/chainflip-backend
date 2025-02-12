@@ -1695,36 +1695,48 @@ fn do_not_batch_more_transfers_than_the_limit_allows() {
 	});
 }
 
+fn trigger_n_fetches(n: usize) -> Vec<H160> {
+	let mut channel_addresses = vec![];
+
+	const ASSET: EthAsset = EthAsset::Eth;
+
+	for i in 1..=n {
+		let (_, address, ..) = IngressEgress::request_liquidity_deposit_address(
+			i.try_into().unwrap(),
+			ASSET,
+			0,
+			ForeignChainAddress::Eth(Default::default()),
+		)
+		.unwrap();
+
+		let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+
+		channel_addresses.push(address);
+
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&DepositWitness {
+				deposit_address: address,
+				asset: ASSET,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: Default::default(),
+			},
+			Default::default()
+		));
+	}
+
+	channel_addresses
+}
+
 #[test]
 fn do_not_batch_more_fetches_than_the_limit_allows() {
 	new_test_ext().execute_with(|| {
 		MockFetchesTransfersLimitProvider::enable_limits();
 
 		const EXCESS_FETCHES: usize = 1;
-		const ASSET: EthAsset = EthAsset::Eth;
 
 		let fetch_limits = MockFetchesTransfersLimitProvider::maybe_fetches_limit().unwrap();
 
-		for i in 1..=fetch_limits + EXCESS_FETCHES {
-			let (_, address, ..) = IngressEgress::request_liquidity_deposit_address(
-				i.try_into().unwrap(),
-				ASSET,
-				0,
-				ForeignChainAddress::Eth(Default::default()),
-			)
-			.unwrap();
-			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
-				&DepositWitness {
-					deposit_address: address,
-					asset: ASSET,
-					amount: DEFAULT_DEPOSIT_AMOUNT,
-					deposit_details: Default::default(),
-				},
-				Default::default()
-			));
-		}
+		trigger_n_fetches(fetch_limits + EXCESS_FETCHES);
 
 		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
@@ -1755,7 +1767,6 @@ fn invalid_fetches_do_not_get_scheduled_and_do_not_block_other_fetches() {
 		MockFetchesTransfersLimitProvider::enable_limits();
 
 		const EXCESS_FETCHES: usize = 5;
-		const ASSET: EthAsset = EthAsset::Eth;
 
 		let fetch_limits = MockFetchesTransfersLimitProvider::maybe_fetches_limit().unwrap();
 
@@ -1764,30 +1775,7 @@ fn invalid_fetches_do_not_get_scheduled_and_do_not_block_other_fetches() {
 			"We assume excess_fetches can be processed in a single on_finalize for this test"
 		);
 
-		let mut channel_addresses = vec![];
-
-		for i in 1..=fetch_limits + EXCESS_FETCHES {
-			let (_, address, ..) = IngressEgress::request_liquidity_deposit_address(
-				i.try_into().unwrap(),
-				ASSET,
-				0,
-				ForeignChainAddress::Eth(Default::default()),
-			)
-			.unwrap();
-			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-
-			channel_addresses.push(address);
-
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
-				&DepositWitness {
-					deposit_address: address,
-					asset: ASSET,
-					amount: DEFAULT_DEPOSIT_AMOUNT,
-					deposit_details: Default::default(),
-				},
-				Default::default()
-			));
-		}
+		let channel_addresses = trigger_n_fetches(fetch_limits + EXCESS_FETCHES);
 
 		assert_eq!(
 			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
