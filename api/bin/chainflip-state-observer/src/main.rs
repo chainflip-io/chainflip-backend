@@ -21,7 +21,7 @@ use chainflip_engine::state_chain_observer::client::{
 use opentelemetry::trace::{mark_span_as_active, Span, TraceContextExt as _, Tracer, TracerProvider as _};
 use chainflip_engine::state_chain_observer::client::base_rpc_api::BaseRpcClient;
 use custom_rpc::CustomApiClient;
-use elections::{make_traces, TraceInit};
+use elections::{make_traces, Key, TraceInit};
 use pallet_cf_validator::AuthorityIndex;
 use state_chain_runtime::chainflip::solana_elections::SolanaElectoralSystemRunner;
 use tokio::time::sleep;
@@ -168,6 +168,58 @@ async fn main() {
 }
 
 
+fn push_traces<T: Tracer + Send>(tracer: &T, current: Trace<Key, Context>, new: Trace<Key, TraceInit>) -> Trace<Key, Context> 
+ where T::Span : Span + Send + Sync + 'static
+{
+			let δ = diff(current, new);
+			let traces = map_with_parent(δ, |k, p: Option<&Option<Context>>, d: NodeDiff<Context, TraceInit>| match d {
+					trace::NodeDiff::Left(context) => {
+						println!("closing trace {k:?}"); 
+						context.span().end();
+						None
+					},
+					trace::NodeDiff::Right(TraceInit { end_immediately, attributes: values }) => {
+						let context = 
+						if let Some(Some(context)) = p {
+
+
+							let key = get_key_name(k);
+
+							let mut span = tracer.start_with_context(key, &context);
+							for  (key, value) in values {
+								span.set_attribute(KeyValue::new(key, value));
+							}
+							let context = context.with_span(span);
+
+
+							println!("open trace {k:?}"); 
+
+							context
+
+						} else {
+
+							let key = get_key_name(k);
+
+							let context = Context::new().with_value(KeyValue::new("key", format!("{key:?}")));
+							let span = tracer.start_with_context(key, &context);
+							let context = context.with_span(span);
+							println!("open trace {k:?} [NO PARENT]"); 
+							context
+						};
+						if end_immediately {
+							context.span().end();
+						}
+						Some(context)
+					},
+					trace::NodeDiff::Both(x, _) => {
+						Some(x)
+					},
+				}
+			)
+			.into_iter().filter_map(|(k, v)| match v {Some(v) => Some((k,v)), None => None}).collect();
+		traces
+}
+
 async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider) 
  where T::Span : Span + Send + Sync + 'static
 
@@ -254,54 +306,8 @@ async fn new_watch<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider)
 			};
 
 			let new_traces = make_traces(result);
-			// println!("got election data: {traces:?}");
+			let traces = push_traces(&tracer, traces, new_traces);
 
-			let δ = diff(traces, new_traces);
-			let traces = map_with_parent(δ, |k, p: Option<&Option<Context>>, d: NodeDiff<Context, TraceInit>| match d {
-					trace::NodeDiff::Left(context) => {
-						println!("closing trace {k:?}"); 
-						context.span().end();
-						None
-					},
-					trace::NodeDiff::Right(TraceInit { end_immediately, attributes: values }) => {
-						let context = 
-						if let Some(Some(context)) = p {
-
-
-							let key = get_key_name(k);
-
-							let mut span = tracer.start_with_context(key, &context);
-							for  (key, value) in values {
-								span.set_attribute(KeyValue::new(key, value));
-							}
-							let context = context.with_span(span);
-
-
-							println!("open trace {k:?}"); 
-
-							context
-
-						} else {
-
-							let key = get_key_name(k);
-
-							let context = Context::new().with_value(KeyValue::new("key", format!("{key:?}")));
-							let span = tracer.start_with_context(key, &context);
-							let context = context.with_span(span);
-							println!("open trace {k:?} [NO PARENT]"); 
-							context
-						};
-						if end_immediately {
-							context.span().end();
-						}
-						Some(context)
-					},
-					trace::NodeDiff::Both(x, _) => {
-						Some(x)
-					},
-				}
-			)
-			.into_iter().filter_map(|(k, v)| match v {Some(v) => Some((k,v)), None => None}).collect();
 
 				// δ.into_iter().filter_map(|(k,d)| match d ).collect();
 
