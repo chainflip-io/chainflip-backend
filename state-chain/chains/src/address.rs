@@ -147,6 +147,12 @@ impl TryFrom<EncodedAddress> for SolPubkey {
 	}
 }
 
+impl From<SolAddress> for EncodedAddress {
+	fn from(from: SolAddress) -> EncodedAddress {
+		EncodedAddress::Sol(from.0)
+	}
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AddressError {
 	InvalidAddress,
@@ -185,7 +191,6 @@ impl TryFrom<ForeignChainAddress> for ScriptPubkey {
 		}
 	}
 }
-
 pub trait IntoForeignChainAddress<C: Chain> {
 	fn into_foreign_chain_address(self) -> ForeignChainAddress;
 }

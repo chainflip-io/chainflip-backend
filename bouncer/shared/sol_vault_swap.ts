@@ -9,7 +9,6 @@ import {
   Transaction,
   AccountMeta,
 } from '@solana/web3.js';
-import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import BigNumber from 'bignumber.js';
 import {
   getContractAddress,
@@ -108,18 +107,11 @@ export async function executeSolVaultSwap(
     event_data_account: decodeSolAddress(newEventAccountKeypair.publicKey.toBase58()),
     input_amount: '0x' + new BigNumber(amountToSwap).toString(16),
     refund_parameters: refundParams,
-    from_token_account:
-      srcAsset === 'Sol'
-        ? undefined
-        : getAssociatedTokenAddressSync(
-            new PublicKey(getContractAddress('Solana', 'SolUsdc')),
-            whaleKeypair.publicKey,
-            false,
-          ).toString(),
+    from_token_account: undefined,
   };
 
   const vaultSwapDetails = (await chainflip.rpc(
-    `cf_get_vault_swap_details`,
+    `cf_request_swap_parameter_encoding`,
     brokerFees.account,
     { chain: chainFromAsset(srcAsset), asset: stateChainAssetFromAsset(srcAsset) },
     { chain: chainFromAsset(destAsset), asset: stateChainAssetFromAsset(destAsset) },

@@ -1,4 +1,5 @@
 #[cfg(feature = "str")]
+#[cfg(test)]
 mod from_and_to_str {
 	use core::fmt::Write;
 

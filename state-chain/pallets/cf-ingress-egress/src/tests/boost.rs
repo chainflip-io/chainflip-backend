@@ -1,6 +1,6 @@
 use super::*;
 
-use cf_chains::{ChannelRefundParametersDecoded, DepositOriginType, FeeEstimationApi};
+use cf_chains::{DepositOriginType, FeeEstimationApi};
 use cf_primitives::{AssetAmount, BasisPoints, PrewitnessedDepositId, SwapRequestId};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -1150,6 +1150,7 @@ fn taking_network_fee_from_boost_fee() {
 
 mod vault_swaps {
 
+	use cf_chains::ChannelRefundParameters;
 	use cf_traits::SwapOutputAction;
 
 	use crate::BoostedVaultTransactions;
@@ -1202,9 +1203,9 @@ mod vault_swaps {
 				tx_id,
 				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
 				affiliate_fees: Default::default(),
-				refund_params: Some(ChannelRefundParametersDecoded {
+				refund_params: Some(ChannelRefundParameters {
 					retry_duration: 2,
-					refund_address: ForeignChainAddress::Eth([2; 20].into()),
+					refund_address: [2; 20].into(),
 					min_price: Default::default(),
 				}),
 				dca_params: None,

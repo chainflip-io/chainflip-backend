@@ -247,7 +247,8 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 				)
 			}
 
-			/// Calculate the gas limit for this evm chain's call. This is only for CCM calls.
+			/// Calculate the gas limit for this evm chain's call. For CCM calls the gas limit is calculated from the gas budget
+			/// while for regular calls the gas limit is set to None and the engines will estimate the gas required on broadcast.
 			fn calculate_gas_limit(call: &$chain_api<$env>) -> Option<U256> {
 				if let (Some((gas_budget, message_length, transfer_asset)), Some(native_asset)) =
 					(call.ccm_transfer_data(), <$env as EvmEnvironmentProvider<$chain>>::token_address($chain::GAS_ASSET)) {
@@ -261,7 +262,6 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 
 						Some(gas_limit.into())
 				} else {
-					log::warn!("CCM calls should have all the data. This should never happen. Please check {}", $chain::NAME);
 					None
 				}
 			}

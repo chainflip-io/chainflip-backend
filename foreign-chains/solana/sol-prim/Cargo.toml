@@ -26,12 +26,15 @@ bs58 = { workspace = true, optional = true }
 digest = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 sha2 = { workspace = true, optional = true }
+sha2-const = { workspace = true }
 thiserror = { workspace = true, optional = true }
 codec = { workspace = true, optional = true, features = ["derive"] }
 scale-info = { workspace = true, optional = true, features = ["derive"] }
+heck = { workspace = true }
 
 sp-std = { workspace = true }
 sp-core = { workspace = true }
+cf-primitives = { workspace = true } 
 
 [dev-dependencies]
 serde_json = { workspace = true }
@@ -59,4 +62,6 @@ std = [
 	"bincode/std",
 	"sp-std/std",
 	"sp-core/std",
+	"cf-primitives/std",
 ]
+runtime-integration-tests = ["std", "ed25519-dalek/rand_core"]

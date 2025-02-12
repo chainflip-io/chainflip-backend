@@ -88,7 +88,7 @@ export async function executeEvmVaultSwap(
   };
 
   const vaultSwapDetails = (await chainflip.rpc(
-    `cf_get_vault_swap_details`,
+    `cf_request_swap_parameter_encoding`,
     brokerAddress,
     { chain: srcChain, asset: stateChainAssetFromAsset(sourceAsset) },
     { chain: destChain, asset: stateChainAssetFromAsset(destAsset) },

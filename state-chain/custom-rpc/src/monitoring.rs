@@ -5,7 +5,6 @@ use cf_utilities::rpc::NumberOrHex;
 use jsonrpsee::proc_macros::rpc;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
-use sp_api::ApiExt;
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
 	self,
@@ -15,7 +14,6 @@ use state_chain_runtime::{
 		LastRuntimeUpgradeInfo, MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts,
 		PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
-	Block,
 };
 impl From<EpochState> for RpcEpochState {
 	fn from(rotation_state: EpochState) -> Self {
@@ -37,25 +35,6 @@ pub struct RpcEpochState {
 	pub rotation_phase: String,
 }
 
-// Temporary struct to hold the deprecated blocks_per_epoch field.
-// Can be deleted after v1.7 is released (meaning: after the version is bumped to 1.8).
-#[derive(Serialize, Deserialize, Clone)]
-pub struct RpcEpochStateV2 {
-	#[deprecated(
-		since = "1.8.0",
-		note = "This field is deprecated and will be removed in v1.8. Use blocks_per_epoch instead."
-	)]
-	blocks_per_epoch: u32,
-	#[serde(flatten)]
-	epoch_state: RpcEpochState,
-}
-
-impl From<EpochState> for RpcEpochStateV2 {
-	fn from(epoch_state: EpochState) -> Self {
-		Self { blocks_per_epoch: epoch_state.epoch_duration, epoch_state: epoch_state.into() }
-	}
-}
-
 #[rpc(server, client, namespace = "cf_monitoring")]
 pub trait MonitoringApi {
 	#[method(name = "authorities")]
@@ -75,7 +54,7 @@ pub trait MonitoringApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(Offence, u32)>>;
 	#[method(name = "epoch_state")]
-	fn cf_epoch_state(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEpochStateV2>;
+	fn cf_epoch_state(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEpochState>;
 	#[method(name = "redemptions")]
 	fn cf_redemptions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RedemptionsInfo>;
 	#[method(name = "pending_broadcasts")]
@@ -145,7 +124,7 @@ where
 		cf_btc_utxos() -> BtcUtxos,
 		cf_dot_aggkey() -> PolkadotAccountId,
 		cf_suspended_validators() -> Vec<(Offence, u32)>,
-		cf_epoch_state() -> RpcEpochStateV2 [map: RpcEpochStateV2::from],
+		cf_epoch_state() -> RpcEpochState [map: Into::into],
 		cf_redemptions() -> RedemptionsInfo,
 		cf_pending_broadcasts_count() -> PendingBroadcasts,
 		cf_pending_tss_ceremonies_count() -> PendingTssCeremonies,
@@ -155,7 +134,8 @@ where
 		cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds,
 		cf_sol_nonces() -> SolanaNonces,
 		cf_sol_aggkey() -> SolAddress,
-		cf_sol_onchain_key() -> SolAddress
+		cf_sol_onchain_key() -> SolAddress,
+		cf_monitoring_data() -> RpcMonitoringData [map: Into::into],
 	}
 
 	fn cf_fee_imbalance(
@@ -166,20 +146,6 @@ where
 			.map(|imbalance| imbalance.map(|i| (*i).into()))
 	}
 
-	fn cf_monitoring_data(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcMonitoringData> {
-		self.with_runtime_api(at, |api, hash| {
-			if api.api_version::<dyn MonitoringRuntimeApi<Block>>(hash).unwrap().unwrap() < 2 {
-				let old_result = api.cf_monitoring_data_before_version_2(hash)?;
-				Ok(old_result.into())
-			} else {
-				api.cf_monitoring_data(hash)
-			}
-		})
-		.map(Into::into)
-	}
 	fn cf_accounts_info(
 		&self,
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,

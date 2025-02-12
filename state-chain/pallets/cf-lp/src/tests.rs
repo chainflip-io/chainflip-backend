@@ -8,7 +8,7 @@ use cf_traits::{
 	mocks::swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	AccountRoleRegistry, BalanceApi, Chainflip, SetSafeMode, SwapOutputAction, SwapRequestType,
 };
-use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
+use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
 
 #[test]
 fn egress_chain_and_asset_must_match() {
@@ -89,6 +89,21 @@ fn liquidity_providers_can_move_assets_internally() {
 			),
 			Error::<Test>::CannotTransferToOriginAccount
 		);
+
+		assert_err!(
+			LiquidityProvider::transfer_asset(
+				RuntimeOrigin::signed(LP_ACCOUNT),
+				TRANSFER_AMOUNT,
+				Asset::Eth,
+				LP_ACCOUNT_2,
+			),
+			Error::<Test>::NoLiquidityRefundAddressRegistered
+		);
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			RuntimeOrigin::signed(LP_ACCOUNT_2),
+			EncodedAddress::Eth(Default::default())
+		));
 
 		assert_ok!(LiquidityProvider::transfer_asset(
 			RuntimeOrigin::signed(LP_ACCOUNT),

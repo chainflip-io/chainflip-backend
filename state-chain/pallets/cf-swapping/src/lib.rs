@@ -1135,16 +1135,19 @@ pub mod pallet {
 				let destination_chain: ForeignChain = destination_asset.into();
 				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
 
-				let _ = T::CcmValidityChecker::check_and_decode(ccm, destination_asset).map_err(
-					|e| {
-						log::warn!(
-							"Failed to open channel due to invalid CCM. Broker: {:?}, Error: {:?}",
-							broker,
-							e
-						);
-						Error::<T>::InvalidCcm
-					},
-				)?;
+				let _ = T::CcmValidityChecker::check_and_decode(
+					ccm,
+					destination_asset,
+					destination_address.clone(),
+				)
+				.map_err(|e| {
+					log::warn!(
+						"Failed to open channel due to invalid CCM. Broker: {:?}, Error: {:?}",
+						broker,
+						e
+					);
+					Error::<T>::InvalidCcm
+				})?;
 			}
 
 			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =

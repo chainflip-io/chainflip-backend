@@ -1,20 +1,18 @@
 use anyhow::ensure;
 use base64::Engine;
-use cf_chains::sol::{
-	sol_tx_core::{
-		address_derivation::{derive_associated_token_account, derive_fetch_account},
-		program_instructions::{
-			types::DepositChannelHistoricalFetch, ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
-		},
-	},
-	SolAddress, SolAmount,
-};
+use cf_chains::sol::{SolAddress, SolAmount};
 use cf_primitives::chains::assets::sol::Asset;
 use futures::{stream, StreamExt, TryStreamExt};
 use pallet_cf_elections::electoral_systems::blockchain::delta_based_ingress::{
 	ChannelTotalIngressed, ChannelTotalIngressedFor, OpenChannelDetailsFor,
 };
 use serde_json::Value;
+use sol_prim::{
+	address_derivation::{derive_associated_token_account, derive_fetch_account},
+	program_instructions::{
+		types::DepositChannelHistoricalFetch, ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
+	},
+};
 use sp_runtime::SaturatedConversion;
 use state_chain_runtime::SolanaIngressEgress;
 use std::{collections::BTreeMap, str::FromStr};

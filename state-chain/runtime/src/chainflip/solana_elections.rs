@@ -12,9 +12,10 @@ use cf_chains::{
 			VaultSwapAccountAndSender,
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
+		sol_tx_core::SlotNumber,
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
-	CcmDepositMetadata, Chain, ChannelRefundParametersDecoded, FeeEstimationApi,
+	CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
 	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
 };
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
@@ -46,7 +47,6 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
-use sol_prim::SlotNumber;
 
 use super::SolEnvironment;
 
@@ -495,7 +495,7 @@ pub struct SolanaVaultSwapDetails {
 	pub swap_account: SolAddress,
 	pub creation_slot: u64,
 	pub broker_fee: Beneficiary<AccountId>,
-	pub refund_params: ChannelRefundParametersDecoded,
+	pub refund_params: ChannelRefundParameters<SolAddress>,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: u8,
 	pub affiliate_fees: Affiliates<AffiliateShortId>,

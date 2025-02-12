@@ -28,16 +28,17 @@ use cf_chains::{
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
 	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParametersDecoded, ConsolidateCall,
-	DepositChannel, DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain,
-	RefundParametersExtended, RejectCall, SwapOrigin, TransferAssetParams,
+	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
+	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
+	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall,
+	SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
 	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
 	EpochIndex, ForeignChain, GasAmount, PrewitnessedDepositId, SwapRequestId,
-	ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -406,12 +407,15 @@ pub mod pallet {
 		pub deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 		pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		pub output_asset: Asset,
+		// Note we use EncodedAddress here rather than eg. ForeignChainAddress because this
+		// value can be populated by the submitter of the vault deposit and is not verified
+		// in the engine, so we need to verify on-chain.
 		pub destination_address: EncodedAddress,
 		pub deposit_metadata: Option<CcmDepositMetadata>,
 		pub tx_id: TransactionInIdFor<T, I>,
 		pub broker_fee: Option<Beneficiary<T::AccountId>>,
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
-		pub refund_params: Option<ChannelRefundParametersDecoded>,
+		pub refund_params: Option<ChannelRefundParameters<TargetChainAccount<T, I>>>,
 		pub dca_params: Option<DcaParameters>,
 		pub boost_fee: BasisPoints,
 	}
@@ -465,7 +469,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadata>,
-			refund_params: Option<ChannelRefundParametersDecoded>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -1427,38 +1431,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// TODO: remove these deprecated calls after runtime version 1.8
-		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::vault_swap_request())]
-		pub fn vault_swap_request_deprecated(
-			origin: OriginFor<T>,
-			_from: Asset,
-			_to: Asset,
-			_deposit_amount: AssetAmount,
-			_destination_address: EncodedAddress,
-			_tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Err(DispatchError::Other("deprecated"))
-		}
-
-		#[pallet::call_index(11)]
-		#[pallet::weight(T::WeightInfo::vault_swap_request())]
-		pub fn vault_ccm_swap_request_deprecated(
-			origin: OriginFor<T>,
-			_source_asset: Asset,
-			_deposit_amount: AssetAmount,
-			_destination_asset: Asset,
-			_destination_address: EncodedAddress,
-			_deposit_metadata: CcmDepositMetadata,
-			_tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Err(DispatchError::Other("deprecated"))
-		}
-
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::mark_transaction_for_rejection())]
 		pub fn mark_transaction_for_rejection(
@@ -2210,8 +2182,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			};
 
 		if let Some(metadata) = deposit_metadata.clone() {
-			if T::CcmValidityChecker::check_and_decode(&metadata.channel_metadata, output_asset)
-				.is_err()
+			if T::CcmValidityChecker::check_and_decode(
+				&metadata.channel_metadata,
+				output_asset,
+				destination_address,
+			)
+			.is_err()
 			{
 				log::warn!("Failed to process vault swap due to invalid CCM metadata");
 				return;
@@ -2241,7 +2217,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_asset: output_asset,
 			destination_address: destination_address_internal,
 			broker_fees,
-			refund_params,
+			refund_params: refund_params
+				.map(|params| params.map_address(|address| address.into_foreign_chain_address())),
 			dca_params,
 			channel_metadata,
 		};
@@ -2509,6 +2486,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if T::CcmValidityChecker::check_and_decode(
 				&metadata.channel_metadata,
 				destination_asset,
+				destination_address,
 			)
 			.is_err()
 			{
@@ -2550,7 +2528,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_address: destination_address_internal,
 			broker_fees,
 			channel_metadata: channel_metadata.clone(),
-			refund_params: refund_params.clone(),
+			refund_params: refund_params
+				.map(|params| params.map_address(|address| address.into_foreign_chain_address())),
 			dca_params: dca_params.clone(),
 		};
 

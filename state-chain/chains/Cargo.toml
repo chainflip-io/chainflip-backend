@@ -47,7 +47,6 @@ bincode = { version = "2.0.0-rc.3", default-features = false, features = [
   "serde",
 ] }
 curve25519-dalek = { workspace = true, optional = true }
-sha2-const = { workspace = true }
 ed25519-dalek = { workspace = true, optional = true }
 
 # Other
@@ -72,11 +71,11 @@ sp-std = { workspace = true }
 sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
+sha2-const = { workspace = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true }
 serde_json = { workspace = true }
-heck = { workspace = true }
 rand = { workspace = true, features = ["std"] }
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
 
@@ -132,4 +131,4 @@ try-runtime = [
   "cf-runtime-utilities/try-runtime",
 ]
 
-runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core"]
+runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core", "sol-prim/runtime-integration-tests"]

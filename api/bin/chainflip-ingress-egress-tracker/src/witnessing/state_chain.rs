@@ -3,7 +3,7 @@ use crate::{
 	utils::get_broadcast_id,
 };
 use cf_chains::{
-	address::EncodedAddress,
+	address::{EncodedAddress, IntoForeignChainAddress},
 	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
@@ -288,7 +288,11 @@ where
 				.collect::<Vec<Beneficiary<AccountId32>>>()
 				.try_into()
 				.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same."),
-			refund_params: self.refund_params.map(|params| params.map_address(|a| TrackerAddress::from(a.to_encoded_address(network)))),
+			refund_params: self.refund_params.map(
+				|params| params.map_address(
+					|a| TrackerAddress::from(a.into_foreign_chain_address().to_encoded_address(network))
+				)
+			),
 			dca_params: self.dca_params,
 			max_boost_fee: self.boost_fee,
 		}
@@ -887,7 +891,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_handle_vault_deposit_calls() {
-		use cf_chains::ChannelRefundParametersDecoded;
 		chainflip_api::use_chainflip_account_id_encoding();
 		let (eth_address, _) = parse_eth_address("0x541f563237A309B3A61E33BDf07a8930Bdba8D99");
 		let affiliate_short_id = AffiliateShortId::from(69);
@@ -942,8 +945,8 @@ mod tests {
 						bps: 10
 					}])
 					.unwrap(),
-					refund_params: Some(ChannelRefundParametersDecoded {
-						refund_address: ForeignChainAddress::Eth(eth_address),
+					refund_params: Some(ChannelRefundParameters {
+						refund_address: eth_address,
 						retry_duration: Default::default(),
 						min_price: Default::default(),
 					}),

@@ -5,7 +5,6 @@ use core::marker::PhantomData;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sol_prim::consts::SOL_USDC_DECIMAL;
 use sp_core::RuntimeDebug;
 use sp_std::{vec, vec::Vec};
 
@@ -15,8 +14,12 @@ use crate::{
 		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
 	},
 	sol::{
-		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolHash, SolLegacyTransaction, SolTrackedData, SolanaCrypto,
+		sol_tx_core::{
+			address_derivation::derive_associated_token_account, consts::SOL_USDC_DECIMAL,
+		},
+		transaction_builder::SolanaTransactionBuilder,
+		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolHash, SolLegacyTransaction,
+		SolTrackedData, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
@@ -264,8 +267,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 						compute_price,
 					),
 					SolAsset::SolUsdc => {
-						let ata =
-						crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+						let ata = derive_associated_token_account(
 							transfer_param.to,
 							sol_api_environment.usdc_token_mint_pubkey,
 						)
@@ -364,6 +366,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					.expect("This is parsed from bounded vec, therefore the size must fit"),
 			},
 			transfer_param.asset.into(),
+			transfer_param.to.into(),
 		)
 		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
 
@@ -420,12 +423,11 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				compute_limit,
 			),
 			SolAsset::SolUsdc => {
-				let ata =
-					crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
-						transfer_param.to,
-						sol_api_environment.usdc_token_mint_pubkey,
-					)
-					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+				let ata = derive_associated_token_account(
+					transfer_param.to,
+					sol_api_environment.usdc_token_mint_pubkey,
+				)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
 				SolanaTransactionBuilder::ccm_transfer_token(
 					ata.address,

@@ -129,7 +129,7 @@ async function testFeeCollection(inputAsset: Asset): Promise<[KeyringPair, strin
   testVaultSwapFeeCollection.debugLog('Earned affiliate fees after:', earnedAffiliateFeesAfter);
   assert(
     earnedBrokerFeesAfter > earnedBrokerFeesBefore,
-    `No increase in earned broker fees after ${inputAsset} swap`,
+    `No increase in earned broker fees after ${tag}(${inputAsset} -> ${destAsset}) vault swap: ${{ account: broker.address, commissionBps }}, ${earnedBrokerFeesBefore} -> ${earnedBrokerFeesAfter}`,
   );
   assert(
     earnedAffiliateFeesAfter > earnedAffiliateFeesBefore,

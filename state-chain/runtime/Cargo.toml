@@ -1,6 +1,6 @@
 [package]
 name = "state-chain-runtime"
-version = "1.8.0"
+version = "1.9.0"
 authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 edition = "2021"
 homepage = "https://chainflip.io"
@@ -34,8 +34,6 @@ cf-session-benchmarking = { workspace = true, optional = true }
 cf-runtime-utilities = { workspace = true }
 cf-traits = { workspace = true }
 cf-utilities = { workspace = true }
-
-sol-prim = { workspace = true }
 
 pallet-cf-account-roles = { workspace = true }
 pallet-cf-asset-balances = { workspace = true }
@@ -190,7 +188,6 @@ std = [
   "pallet-cf-cfe-interface/std",
   "scale-info/std",
   "serde/std",
-  "sol-prim/std",
   "sp-api/std",
   "sp-block-builder/std",
   "sp-consensus-aura/std",

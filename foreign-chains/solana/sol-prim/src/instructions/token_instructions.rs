@@ -1,7 +1,10 @@
 //! Program instructions
-use super::{AccountMeta, Instruction, Pubkey};
-use crate::vec;
+use crate::{
+	consts::{ASSOCIATED_TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
+	AccountMeta, Instruction, Pubkey,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
+use sp_std::vec;
 
 // https://docs.rs/spl-associated-token-account/2.3.0/src/spl_associated_token_account/instruction.rs.html#1-161
 
@@ -65,12 +68,12 @@ impl AssociatedTokenAccountInstruction {
 			AccountMeta::new(*associated_account_address, false),
 			AccountMeta::new_readonly(*wallet_address, false),
 			AccountMeta::new_readonly(*token_mint_address, false),
-			AccountMeta::new_readonly(sol_prim::consts::SYSTEM_PROGRAM_ID.into(), false),
-			AccountMeta::new_readonly(sol_prim::consts::TOKEN_PROGRAM_ID.into(), false),
+			AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
+			AccountMeta::new_readonly(TOKEN_PROGRAM_ID.into(), false),
 		];
 		Instruction::new_with_borsh(
 			// program id of the system program
-			sol_prim::consts::ASSOCIATED_TOKEN_PROGRAM_ID.into(),
+			ASSOCIATED_TOKEN_PROGRAM_ID.into(),
 			&Self::CreateIdempotent,
 			account_metas,
 		)

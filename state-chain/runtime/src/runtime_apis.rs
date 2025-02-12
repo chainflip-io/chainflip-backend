@@ -449,7 +449,7 @@ decl_runtime_apis!(
 		fn cf_validate_refund_params(
 			retry_duration: BlockNumber,
 		) -> Result<(), DispatchErrorWithMessage>;
-		fn cf_get_vault_swap_details(
+		fn cf_request_swap_parameter_encoding(
 			broker: AccountId32,
 			source_asset: Asset,
 			destination_asset: Asset,
