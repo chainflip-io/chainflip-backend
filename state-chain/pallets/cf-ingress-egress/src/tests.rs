@@ -1749,6 +1749,77 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 }
 
 #[test]
+fn invalid_fetches_do_not_get_scheduled_and_do_not_block_other_fetches() {
+	new_test_ext().execute_with(|| {
+		MockFetchesTransfersLimitProvider::enable_limits();
+
+		const EXCESS_FETCHES: usize = 5;
+		const ASSET: EthAsset = EthAsset::Eth;
+
+		let fetch_limits = MockFetchesTransfersLimitProvider::maybe_fetches_limit().unwrap();
+
+		assert!(
+			fetch_limits > EXCESS_FETCHES,
+			"We assume excess_fetches can be processed in a single on_finalize for this test"
+		);
+
+		let mut channel_addresses = vec![];
+
+		for i in 1..=fetch_limits + EXCESS_FETCHES {
+			let (_, address, ..) = IngressEgress::request_liquidity_deposit_address(
+				i.try_into().unwrap(),
+				ASSET,
+				0,
+				ForeignChainAddress::Eth(Default::default()),
+			)
+			.unwrap();
+			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+
+			channel_addresses.push(address);
+
+			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+				&DepositWitness {
+					deposit_address: address,
+					asset: ASSET,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details: Default::default(),
+				},
+				Default::default()
+			));
+		}
+
+		assert_eq!(
+			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+			fetch_limits + EXCESS_FETCHES,
+			"All the fetches should have been scheduled!"
+		);
+
+		for address in channel_addresses.iter().take(fetch_limits) {
+			IngressEgress::recycle_channel(&mut Weight::zero(), address.clone());
+		}
+
+		IngressEgress::on_finalize(1);
+
+		// Check the addresses are the same as the expired ones, we can do this by comparing
+		// the scheduled egresses with the expired addresses
+		assert_eq!(
+			ScheduledEgressFetchOrTransfer::<Test, ()>::get()
+				.iter()
+				.filter_map(|f_or_t| match f_or_t {
+					FetchOrTransfer::Fetch { deposit_address, .. } => Some(deposit_address.clone()),
+					_ => None,
+				})
+				.collect::<Vec<_>>(),
+			channel_addresses[0..fetch_limits],
+			// Note: Ideally this shouldn't be the case since we wouldn't fetches scheduled that
+			// can never be scheduled. However, at least we do not block ones that can be
+			// scheduled.
+			"The channels that expired should be the same as the scheduled egresses!"
+		);
+	});
+}
+
+#[test]
 fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 	new_test_ext().execute_with(|| {
 		MockFetchesTransfersLimitProvider::enable_limits();
