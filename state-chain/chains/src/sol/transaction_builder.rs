@@ -28,8 +28,8 @@ use crate::{
 				TOKEN_PROGRAM_ID,
 			},
 			program_instructions::{
-				swap_endpoints::SwapEndpointProgram, InstructionExt, SystemProgramInstruction,
-				VaultProgram,
+				alt_managers::AltManagerProgram, swap_endpoints::SwapEndpointProgram,
+				InstructionExt, SystemProgramInstruction, VaultProgram,
 			},
 			token_instructions::AssociatedTokenAccountInstruction,
 			AccountMeta,
@@ -41,8 +41,6 @@ use crate::{
 	FetchAssetParams, ForeignChainAddress,
 };
 use sp_std::{vec, vec::Vec};
-
-use super::sol_tx_core::program_instructions::alt_managers::AltManagerProgram;
 
 fn system_program_id() -> SolAddress {
 	SYSTEM_PROGRAM_ID

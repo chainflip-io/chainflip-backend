@@ -163,6 +163,8 @@ pub mod compute_units_costs {
 		compute_limit_value * 3 / 2
 	}
 
+	// TODO: Revisit all units (check localnet) if we aim to use versioned transactions for all of
+	// them.
 	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 450u32;
 	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 25_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32;
