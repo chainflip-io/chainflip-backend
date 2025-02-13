@@ -2069,10 +2069,12 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 				},
 			},]
 		);
+        
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::VaultSwapRefunded {
+			tx_id: H256::default(),
+        }));
 
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::UnknownBroker {
-			broker_id: NOT_A_BROKER,
-		}));
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
 }
 
@@ -2212,7 +2214,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			Some(ccm_deposit_metadata.clone()),
 			Default::default(),
 			DepositDetails { tx_hashes: None },
-			Beneficiary { account: 0, bps: 0 },
+			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
 			ETH_REFUND_PARAMS,
 			None,
@@ -2363,16 +2365,12 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 	});
 }
 
-#[cfg(test)]
-mod vault_swap_refund {
-	use super::*;
-	use crate::{AbortedVaultTransaction, AbortedVaultTransactionDetails};
+#[test]
+fn gets_refunded_if_vault_transaction_was_aborted() {
+	new_test_ext().execute_with(|| {
+		let tx_id = H256::default();
 
-	fn build_vault_deposit_witness(
-		tx_id: H256,
-		refund_params: bool,
-	) -> VaultDepositWitness<Test, ()> {
-		VaultDepositWitness {
+		let vault_swap = VaultDepositWitness {
 			input_asset: Asset::Eth.try_into().unwrap(),
 			deposit_address: Default::default(),
 			channel_id: Some(0),
@@ -2384,111 +2382,45 @@ mod vault_swap_refund {
 			tx_id,
 			broker_fee: None,
 			affiliate_fees: Default::default(),
-			refund_params: if refund_params {
-				Some(ChannelRefundParameters {
-					retry_duration: 0,
-					min_price: U256::from(0),
-					refund_address: H160::default(),
-				})
-			} else {
-				None
-			},
+			refund_params: Some(ChannelRefundParameters {
+				retry_duration: 0,
+				min_price: U256::from(0),
+				refund_address: H160::default(),
+			}),
 			dca_params: None,
 			boost_fee: 0,
-		}
-	}
+		};
 
-	#[test]
-	fn gets_refunded_if_vault_transaction_was_aborted() {
-		new_test_ext().execute_with(|| {
-			let tx_id = H256::default();
+		IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
 
-			let vault_swap = build_vault_deposit_witness(tx_id, true);
+		IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
 
-			IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(Event::VaultSwapRefunded { tx_id: _ })
+		);
 
-			assert!(
-				AbortedVaultTransaction::<Test, ()>::get(tx_id).is_some(),
-				"Vault swap should have been marked as aborted!"
-			);
+		assert!(
+			MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
+			"No swaps should have been triggered!"
+		);
 
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::IngressEgress(Event::VaultSwapRejected { tx_id: _ })
-			);
+		assert!(
+			MockEgressBroadcaster::get_pending_api_calls().len() == 1,
+			"Refund broadcast should have been scheduled!"
+		);
+	});
+}
 
-			IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
+#[test]
+fn reject_requirements_test() {
+	new_test_ext().execute_with(|| {
+		let should_fail = Some(Beneficiary { account: ALICE, bps: 0 });
+		let should_succeed = Some(Beneficiary { account: BROKER, bps: 0 });
 
-			assert!(
-				AbortedVaultTransaction::<Test, ()>::get(tx_id).is_none(),
-				"Vault swap should have been taken from aborted vault transaction!"
-			);
+		assert!(IngressEgress::should_reject_vault_swap(&should_fail));
+		assert!(IngressEgress::should_reject_vault_swap(&None));
 
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::IngressEgress(Event::VaultSwapRefunded { tx_id: _ })
-			);
-
-			assert!(
-				MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
-				"No swaps should have been triggered!"
-			);
-
-			assert!(
-				MockEgressBroadcaster::get_pending_api_calls().len() == 1,
-				"Refund broadcast should have been scheduled!"
-			);
-		});
-	}
-
-	#[test]
-	fn reject_requirements_test() {
-		new_test_ext().execute_with(|| {
-			let should_fail = Some(Beneficiary { account: ALICE, bps: 0 });
-			let should_succeed = Some(Beneficiary { account: BROKER, bps: 0 });
-
-			assert!(IngressEgress::should_reject_vault_swap(&should_fail));
-			assert!(IngressEgress::should_reject_vault_swap(&None));
-
-			assert!(!IngressEgress::should_reject_vault_swap(&should_succeed));
-		});
-	}
-
-	#[test]
-	fn details_are_getting_saved_if_refund_is_not_possible() {
-		new_test_ext().execute_with(|| {
-			let tx_id = H256::default();
-
-			let vault_swap = build_vault_deposit_witness(tx_id, false);
-
-			IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
-
-			assert!(AbortedVaultTransaction::<Test, ()>::get(tx_id).is_some());
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::IngressEgress(Event::VaultSwapRejected { tx_id: _ })
-			);
-
-			IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
-
-			assert!(AbortedVaultTransaction::<Test, ()>::get(tx_id).is_none());
-			assert!(AbortedVaultTransactionDetails::<Test, ()>::get(tx_id).is_some());
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::IngressEgress(Event::VaultSwapRefundFailed { tx_id: _ })
-			);
-
-			assert!(
-				MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
-				"No swaps should have been triggered!"
-			);
-
-			assert!(
-				MockEgressBroadcaster::get_pending_api_calls().is_empty(),
-				"No egresses should have been broadcasted!"
-			);
-		});
-	}
+		assert!(!IngressEgress::should_reject_vault_swap(&should_succeed));
+	});
 }
