@@ -18,7 +18,7 @@ on:
 
 env:
   FORCE_COLOR: 1
-  SOLANA_VERSION: v2.0.26
+  SOLANA_VERSION: v2.1.13
   NODE_COUNT: "${{ inputs.node-count }}-node"
 
 permissions:

@@ -22,7 +22,7 @@ on:
         default: true
 env:
   FORCE_COLOR: 1
-  SOLANA_VERSION: v2.0.26
+  SOLANA_VERSION: v2.1.13
   SOLANA_PROGRAMS_VERSION: v0.1.1-alt-test
   NODE_COUNT: "1-node"
 
