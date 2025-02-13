@@ -284,7 +284,7 @@ fn broker_bps_is_limited() {
 				None,
 				0,
 				Default::default(),
-				None,
+				generate_channel_refund_parameters(),
 				None,
 			),
 			Error::<Test>::BrokerCommissionBpsTooHigh

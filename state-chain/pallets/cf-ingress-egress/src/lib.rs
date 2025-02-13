@@ -238,7 +238,7 @@ use deposit_origin::DepositOrigin;
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
 #[scale_info(skip_type_params(T, I))]
 pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
-	pub refund_address: Option<ForeignChainAddress>,
+	pub refund_address: ForeignChainAddress,
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
 	pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
@@ -469,12 +469,12 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadata>,
-			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+			refund_params: ChannelRefundParameters<ForeignChainAddress>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
-			refund_address: Option<ForeignChainAddress>,
+			refund_address: ForeignChainAddress,
 		},
 	}
 
@@ -1115,7 +1115,7 @@ pub mod pallet {
 			}
 
 			for tx in ScheduledTransactionsForRejection::<T, I>::take() {
-				if let Some(Ok(refund_address)) = tx.refund_address.clone().map(TryInto::try_into) {
+				if let Ok(refund_address) = tx.refund_address.clone().try_into() {
 					if let Ok(api_call) =
 						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
 							tx.deposit_details.clone(),
@@ -1135,11 +1135,6 @@ pub mod pallet {
 							tx_id: tx.deposit_details,
 						});
 					}
-				} else {
-					FailedRejections::<T, I>::append(tx.clone());
-					Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-						tx_id: tx.deposit_details,
-					});
 				}
 			}
 		}
@@ -1912,12 +1907,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 					},
 					broker_fees,
-					refund_params.map(|params| RefundParametersExtended {
-						retry_duration: params.retry_duration,
+					Some(RefundParametersExtended {
+						retry_duration: refund_params.retry_duration,
 						refund_destination: cf_chains::AccountOrAddress::ExternalAddress(
-							params.refund_address,
+							refund_params.refund_address,
 						),
-						min_price: params.min_price,
+						min_price: refund_params.min_price,
 					}),
 					dca_params,
 					origin.into(),
@@ -2240,9 +2235,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_asset: output_asset,
 			destination_address: destination_address_internal,
 			broker_fees,
-			refund_params: Some(
-				refund_params.map_address(|address| address.into_foreign_chain_address()),
-			),
+			refund_params: refund_params
+				.map_address(|address| address.into_foreign_chain_address()),
 			dca_params,
 			channel_metadata,
 		};
@@ -2293,9 +2287,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// since by boosting the protocol is committing to accept the deposit.
 				if TransactionsMarkedForRejection::<T, I>::take(broker_id, &tx_id).is_some() {
 					let refund_address = match &action {
-						ChannelAction::Swap { refund_params, .. } => refund_params
-							.as_ref()
-							.map(|refund_params| refund_params.refund_address.clone()),
+						ChannelAction::Swap { refund_params, .. } =>
+							refund_params.refund_address.clone(),
 						ChannelAction::LiquidityProvision { refund_address, .. } =>
 							refund_address.clone(),
 					};
@@ -2542,9 +2535,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_address: destination_address_internal,
 			broker_fees,
 			channel_metadata: channel_metadata.clone(),
-			refund_params: Some(
-				refund_params.map_address(|address| address.into_foreign_chain_address()),
-			),
+			refund_params: refund_params
+				.map_address(|address| address.into_foreign_chain_address()),
 			dca_params: dca_params.clone(),
 		};
 
@@ -2920,10 +2912,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
 			&lp_account,
 			source_asset,
-			ChannelAction::LiquidityProvision {
-				lp_account: lp_account.clone(),
-				refund_address: Some(refund_address),
-			},
+			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
 			boost_fee,
 		)?;
 
@@ -2944,15 +2933,13 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParametersDecoded>,
+		refund_params: ChannelRefundParametersDecoded,
 		dca_params: Option<DcaParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		if let Some(params) = &refund_params {
-			T::SwapLimitsProvider::validate_refund_params(params.retry_duration)?;
-		}
+		T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)?;
 		if let Some(params) = &dca_params {
 			T::SwapLimitsProvider::validate_dca_params(params)?;
 		}
