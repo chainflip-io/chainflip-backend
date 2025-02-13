@@ -1695,36 +1695,48 @@ fn do_not_batch_more_transfers_than_the_limit_allows() {
 	});
 }
 
+fn trigger_n_fetches(n: usize) -> Vec<H160> {
+	let mut channel_addresses = vec![];
+
+	const ASSET: EthAsset = EthAsset::Eth;
+
+	for i in 1..=n {
+		let (_, address, ..) = IngressEgress::request_liquidity_deposit_address(
+			i.try_into().unwrap(),
+			ASSET,
+			0,
+			ForeignChainAddress::Eth(Default::default()),
+		)
+		.unwrap();
+
+		let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+
+		channel_addresses.push(address);
+
+		assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
+			&DepositWitness {
+				deposit_address: address,
+				asset: ASSET,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: Default::default(),
+			},
+			Default::default()
+		));
+	}
+
+	channel_addresses
+}
+
 #[test]
 fn do_not_batch_more_fetches_than_the_limit_allows() {
 	new_test_ext().execute_with(|| {
 		MockFetchesTransfersLimitProvider::enable_limits();
 
 		const EXCESS_FETCHES: usize = 1;
-		const ASSET: EthAsset = EthAsset::Eth;
 
 		let fetch_limits = MockFetchesTransfersLimitProvider::maybe_fetches_limit().unwrap();
 
-		for i in 1..=fetch_limits + EXCESS_FETCHES {
-			let (_, address, ..) = IngressEgress::request_liquidity_deposit_address(
-				i.try_into().unwrap(),
-				ASSET,
-				0,
-				ForeignChainAddress::Eth(Default::default()),
-			)
-			.unwrap();
-			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-
-			assert_ok!(IngressEgress::process_channel_deposit_full_witness_inner(
-				&DepositWitness {
-					deposit_address: address,
-					asset: ASSET,
-					amount: DEFAULT_DEPOSIT_AMOUNT,
-					deposit_details: Default::default(),
-				},
-				Default::default()
-			));
-		}
+		trigger_n_fetches(fetch_limits + EXCESS_FETCHES);
 
 		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
@@ -1738,6 +1750,7 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 
 		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
+		// We should have fetched all except the exceess fetch.
 		assert_eq!(scheduled_egresses.len(), EXCESS_FETCHES, "Wrong amount of left egresses!");
 
 		IngressEgress::on_finalize(2);
@@ -1745,6 +1758,53 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
 		assert_eq!(scheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
+	});
+}
+
+#[test]
+fn invalid_fetches_do_not_get_scheduled_and_do_not_block_other_fetches() {
+	new_test_ext().execute_with(|| {
+		MockFetchesTransfersLimitProvider::enable_limits();
+
+		const EXCESS_FETCHES: usize = 5;
+
+		let fetch_limits = MockFetchesTransfersLimitProvider::maybe_fetches_limit().unwrap();
+
+		assert!(
+			fetch_limits > EXCESS_FETCHES,
+			"We assume excess_fetches can be processed in a single on_finalize for this test"
+		);
+
+		let channel_addresses = trigger_n_fetches(fetch_limits + EXCESS_FETCHES);
+
+		assert_eq!(
+			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+			fetch_limits + EXCESS_FETCHES,
+			"All the fetches should have been scheduled!"
+		);
+
+		for address in channel_addresses.iter().take(fetch_limits) {
+			IngressEgress::recycle_channel(&mut Weight::zero(), *address);
+		}
+
+		IngressEgress::on_finalize(1);
+
+		// Check the addresses are the same as the expired ones, we can do this by comparing
+		// the scheduled egresses with the expired addresses
+		assert_eq!(
+			ScheduledEgressFetchOrTransfer::<Test, ()>::get()
+				.iter()
+				.filter_map(|f_or_t| match f_or_t {
+					FetchOrTransfer::Fetch { deposit_address, .. } => Some(*deposit_address),
+					_ => None,
+				})
+				.collect::<Vec<_>>(),
+			channel_addresses[0..fetch_limits],
+			// Note: Ideally this shouldn't be the case since we don't want to keep holding fetches
+			// that will never be scheduled. However, at least we do not block ones that can be
+			// scheduled.
+			"The channels that expired should be the same as the scheduled egresses!"
+		);
 	});
 }
 
