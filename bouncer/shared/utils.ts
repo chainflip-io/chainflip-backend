@@ -1183,11 +1183,11 @@ export async function checkAvailabilityAllSolanaNonces() {
     const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .toJSON() as any[];
-    if (availableNonces.length === solanaNumberOfNonces) {
+    if (availableNonces.length === solanaNumberOfNonces + solanaNumberOfAdditionalNonces) {
       break;
     } else if (attempt === maxRetries - 1) {
       throw new Error(
-        `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces}`,
+        `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces + solanaNumberOfAdditionalNonces}`,
       );
     } else {
       await sleep(6000);
