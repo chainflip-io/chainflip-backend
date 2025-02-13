@@ -430,11 +430,13 @@ impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
 pub struct SolanaIngress;
 impl IngressSource for SolanaIngress {
 	type Chain = Solana;
+	type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
 	fn open_channel(
 		channel: <Self::Chain as Chain>::ChainAccount,
 		asset: <Self::Chain as Chain>::ChainAsset,
 		close_block: <Self::Chain as Chain>::ChainBlockNumber,
+		current_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> DispatchResult {
 		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_election_identifiers(
 			|composite_election_identifiers| {
@@ -448,7 +450,13 @@ impl IngressSource for SolanaIngress {
 								SolanaIngressTracking,
 								RunnerStorageAccess<Runtime, SolanaInstance>,
 							>,
-						>(election_identifiers, channel, asset, close_block)
+						>(
+							election_identifiers,
+							channel,
+							asset,
+							close_block,
+							current_state_chain_block_number,
+						)
 					},
 				)
 			},

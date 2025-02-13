@@ -84,7 +84,8 @@ impl DepositChannel {
 			TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 			self.account,
 			self.asset,
-			self.close_block
+			self.close_block,
+			Default::default()
 		));
 	}
 }
@@ -125,25 +126,34 @@ fn to_state_map(
 
 fn to_properties(
 	channels: impl IntoIterator<Item = DepositChannel>,
-) -> BTreeMap<
-	AccountId,
-	(OpenChannelDetailsFor<MockIngressSink>, ChannelTotalIngressedFor<MockIngressSink>),
-> {
-	channels
-		.into_iter()
-		.map(|channel| {
-			(
-				channel.account,
+) -> (
+	BTreeMap<
+		AccountId,
+		(OpenChannelDetailsFor<MockIngressSink>, ChannelTotalIngressedFor<MockIngressSink>),
+	>,
+	u32,
+) {
+	(
+		channels
+			.into_iter()
+			.map(|channel| {
 				(
-					OpenChannelDetails { asset: channel.asset, close_block: channel.close_block },
-					ChannelTotalIngressed {
-						amount: channel.total_ingressed,
-						block_number: channel.block_number,
-					},
-				),
-			)
-		})
-		.collect::<BTreeMap<_, _>>()
+					channel.account,
+					(
+						OpenChannelDetails {
+							asset: channel.asset,
+							close_block: channel.close_block,
+						},
+						ChannelTotalIngressed {
+							amount: channel.total_ingressed,
+							block_number: channel.block_number,
+						},
+					),
+				)
+			})
+			.collect::<BTreeMap<_, _>>(),
+		Default::default(),
+	)
 }
 
 const INITIAL_CHANNEL_STATE: [DepositChannel; 2] = [
@@ -616,7 +626,8 @@ fn test_deposit_channel_recycling() {
 					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 					deposit_channel.account,
 					deposit_channel.asset,
-					deposit_channel.close_block
+					deposit_channel.close_block,
+					Default::default()
 				));
 			}
 		})
@@ -644,7 +655,8 @@ fn test_deposit_channel_recycling() {
 					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 					deposit_channel.account,
 					deposit_channel.asset,
-					deposit_channel.close_block
+					deposit_channel.close_block,
+					Default::default()
 				));
 			}
 		})
@@ -675,7 +687,8 @@ fn test_deposit_channel_recycling() {
 					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 					deposit_channel.account,
 					deposit_channel.asset,
-					deposit_channel.close_block
+					deposit_channel.close_block,
+					Default::default()
 				));
 			}
 		})
@@ -800,7 +813,8 @@ fn test_open_channel_with_existing_election() {
 					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 					deposit_channel.account,
 					deposit_channel.asset,
-					deposit_channel.close_block
+					deposit_channel.close_block,
+					Default::default()
 				));
 			}
 		})
@@ -827,7 +841,8 @@ fn test_open_channel_with_existing_election() {
 					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 					deposit_channel.account,
 					deposit_channel.asset,
-					deposit_channel.close_block
+					deposit_channel.close_block,
+					Default::default()
 				));
 			}
 		})
@@ -873,7 +888,8 @@ fn start_new_election_if_too_many_channels_in_current_election() {
 				TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 				deposit_channel.account,
 				deposit_channel.asset,
-				deposit_channel.close_block
+				deposit_channel.close_block,
+				Default::default()
 			));
 		}
 		assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
@@ -881,6 +897,7 @@ fn start_new_election_if_too_many_channels_in_current_election() {
 			51u32,
 			Asset::Sol,
 			channel_close_block,
+			Default::default()
 		));
 
 		assert_eq!(
@@ -1124,9 +1141,3 @@ mod multiple_deposits {
 			);
 	}
 }
-
-// // backoff pointing is an eletoral settings
-// #[test]
-// fn vote_desired_backs_off_after_backoff_point() {
-// 	with_default_setup()
-// }

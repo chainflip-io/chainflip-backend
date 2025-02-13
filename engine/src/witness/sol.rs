@@ -76,7 +76,7 @@ impl VoterApi<SolanaIngressTracking> for SolanaIngressTrackingVoter {
 			&self.client,
 			settings.0.vault_program,
 			settings.0.usdc_token_mint_pubkey,
-			properties,
+			properties.0,
 		)
 		.await
 		.and_then(|vote| {

@@ -548,7 +548,10 @@ pub mod pallet {
 		const MANAGE_CHANNEL_LIFETIME: bool;
 
 		/// A hook to tell witnesses to start witnessing an opened channel.
-		type IngressSource: IngressSource<Chain = Self::TargetChain>;
+		type IngressSource: IngressSource<
+			Chain = Self::TargetChain,
+			StateChainBlockNumber = BlockNumberFor<Self>,
+		>;
 
 		/// Marks which chain this pallet is interacting with.
 		type TargetChain: Chain + Get<ForeignChain>;
@@ -2660,6 +2663,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_address.clone(),
 			source_asset,
 			expiry_height,
+			<frame_system::Pallet<T>>::block_number(),
 		)?;
 
 		Ok((channel_id, deposit_address, expiry_height, channel_opening_fee))

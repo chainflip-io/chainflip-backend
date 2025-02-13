@@ -87,6 +87,7 @@ where
 		channel: Sink::Account,
 		asset: Sink::Asset,
 		close_block: Sink::BlockNumber,
+		current_state_chain_block_number: StateChainBlockNumber,
 	) -> Result<(), CorruptStorageError> {
 		let channel_details = (
 			OpenChannelDetails { asset, close_block },
@@ -96,7 +97,7 @@ where
 		);
 		if let Some(election_identifier) = election_identifiers.last() {
 			let mut election_access = ElectoralAccess::election_mut(*election_identifier);
-			let mut channels = election_access.properties()?;
+			let (mut channels, _last_channel_opened_at) = election_access.properties()?;
 			if channels.len() < MAXIMUM_CHANNELS_PER_ELECTION as usize {
 				channels.insert(channel, channel_details);
 				election_access.refresh(
@@ -104,7 +105,7 @@ where
 						.extra()
 						.checked_add(1)
 						.ok_or_else(CorruptStorageError::new)?,
-					channels,
+					(channels, current_state_chain_block_number),
 				)?;
 				return Ok(())
 			}
@@ -113,7 +114,7 @@ where
 		ElectoralAccess::new_election(
 			Default::default(), /* We use the lowest value, so we can refresh the elections the
 			                     * maximum number of times */
-			[(channel, channel_details)].into_iter().collect(),
+			([(channel, channel_details)].into_iter().collect(), current_state_chain_block_number),
 			Default::default(),
 		)?;
 
@@ -145,8 +146,11 @@ where
 	type ElectionIdentifierExtra = u32;
 
 	// Stores the channels a given election is witnessing, and a recent total ingressed value.
-	type ElectionProperties =
-		BTreeMap<Sink::Account, (OpenChannelDetailsFor<Sink>, ChannelTotalIngressedFor<Sink>)>;
+	type ElectionProperties = (
+		BTreeMap<Sink::Account, (OpenChannelDetailsFor<Sink>, ChannelTotalIngressedFor<Sink>)>,
+		// Last Channel Opened At
+		StateChainBlockNumber,
+	);
 
 	// Stores the any pending total ingressed values that are waiting for
 	// the safety margin to pass.
@@ -210,7 +214,11 @@ where
 		chain_tracking: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
-			let (properties, pending_ingress_totals, option_consensus) = {
+			let (
+				(old_channel_properties, last_channel_opened_at),
+				pending_ingress_totals,
+				option_consensus,
+			) = {
 				let election_access = ElectoralAccess::election_mut(election_identifier);
 				(
 					election_access.properties()?,
@@ -219,10 +227,10 @@ where
 				)
 			};
 
-			let mut new_properties = properties.clone();
+			let mut new_properties = old_channel_properties.clone();
 			let mut new_pending_ingress_totals =
 				<Self as ElectoralSystemTypes>::ElectionState::default();
-			for (account, (details, _)) in &properties {
+			for (account, (details, _)) in &old_channel_properties {
 				// We currently split the ingressed amount into two parts:
 				// 1. The consensus amount with a block number *earlier* than chain tracking. i.e.
 				//    Chain tracking is *ahead*, deposit witnessing is lagging.
@@ -372,8 +380,8 @@ where
 				// the channel is expired, we need to close it, otherwise an attacker could keep it
 				// open indeifitely by streaming small deposits.
 				election_access.delete();
-			} else if new_properties != properties {
-				log::debug!("recreate delta based ingress election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
+			} else if new_properties != old_channel_properties {
+				log::debug!("recreate delta based ingress election: recreate since properties changed from: {old_channel_properties:?}, to: {new_properties:?}");
 
 				election_access.clear_votes();
 				election_access.set_state(new_pending_ingress_totals)?;
@@ -382,10 +390,10 @@ where
 						.extra()
 						.checked_add(1)
 						.ok_or_else(CorruptStorageError::new)?,
-					new_properties,
+					(new_properties, last_channel_opened_at),
 				)?;
 			} else {
-				log::debug!("recreate delta based ingress election: keeping old because properties didn't change: {properties:?}");
+				log::debug!("recreate delta based ingress election: keeping old because properties didn't change: {old_channel_properties:?}");
 				election_access.set_state(new_pending_ingress_totals)?;
 			}
 		}
@@ -403,8 +411,7 @@ where
 		let active_votes = consensus_votes.active_votes();
 		let num_active_votes = active_votes.len() as u32;
 		if num_active_votes >= threshold {
-			let election_channels = election_access.properties()?;
-			let last_channel_opened_at = election_access.state()?;
+			let (election_channels, last_channel_opened_at) = election_access.properties()?;
 
 			let mut votes_grouped_by_channel = BTreeMap::<_, Vec<_>>::new();
 			for (account, channel_vote) in active_votes.into_iter().flatten() {

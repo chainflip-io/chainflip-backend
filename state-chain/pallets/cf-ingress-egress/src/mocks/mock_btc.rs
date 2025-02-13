@@ -27,6 +27,7 @@ use cf_traits::{
 	DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::ConstBool;
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -86,7 +87,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Bitcoin>;
+	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Test>>;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
