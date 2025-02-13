@@ -168,7 +168,8 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32;
 	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32;
-	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
+	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 5_000u32;
+	pub const COMPUTE_UNITS_PER_NONCE_ROTATION: SolComputeLimit = 4_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
 	pub const COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS: SolComputeLimit = 20_000u32;

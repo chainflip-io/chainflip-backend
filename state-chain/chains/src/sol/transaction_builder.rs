@@ -12,9 +12,10 @@ use crate::{
 			COMPUTE_UNITS_PER_BUMP_DERIVATION, COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
 			COMPUTE_UNITS_PER_ENABLE_TOKEN_SUPPORT,
 			COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS, COMPUTE_UNITS_PER_FETCH_NATIVE,
-			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
-			COMPUTE_UNITS_PER_SET_GOV_KEY, COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS,
-			COMPUTE_UNITS_PER_TRANSFER_NATIVE, COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_NONCE_ROTATION,
+			COMPUTE_UNITS_PER_ROTATION, COMPUTE_UNITS_PER_SET_GOV_KEY,
+			COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS, COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+			COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 		},
 		sol_tx_core::{
 			address_derivation::{
@@ -278,6 +279,7 @@ impl SolanaTransactionBuilder {
 		compute_price: SolAmount,
 		address_lookup_tables: Vec<SolAddressLookupTableAccount>,
 	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
+		let number_of_nonces = all_nonce_accounts.len() as u32;
 		let all_nonce_accounts_meta: Vec<AccountMeta> = all_nonce_accounts
 			.into_iter()
 			.map(|nonce_account| AccountMeta::new(nonce_account.into(), false))
@@ -310,7 +312,9 @@ impl SolanaTransactionBuilder {
 			durable_nonce,
 			agg_key.into(),
 			compute_price,
-			compute_limit_with_buffer(COMPUTE_UNITS_PER_ROTATION),
+			compute_limit_with_buffer(
+				COMPUTE_UNITS_PER_ROTATION + COMPUTE_UNITS_PER_NONCE_ROTATION * number_of_nonces,
+			),
 			address_lookup_tables,
 		)
 	}
