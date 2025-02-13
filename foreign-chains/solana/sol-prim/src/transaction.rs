@@ -92,6 +92,13 @@ impl VersionedMessage {
 		}
 	}
 
+	pub fn set_static_account_keys(&mut self, new_keys: Vec<Pubkey>) {
+		match self {
+			Self::Legacy(message) => message.account_keys = new_keys,
+			Self::V0(message) => message.account_keys = new_keys,
+		}
+	}
+
 	pub fn address_table_lookups(&self) -> Option<&[MessageAddressTableLookup]> {
 		match self {
 			Self::Legacy(_) => None,
