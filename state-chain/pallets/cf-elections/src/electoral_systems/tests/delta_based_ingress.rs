@@ -124,8 +124,10 @@ fn to_state_map(
 		.collect::<BTreeMap<_, _>>()
 }
 
+#[allow(clippy::type_complexity)]
 fn to_properties(
 	channels: impl IntoIterator<Item = DepositChannel>,
+	last_channel_opened_at: StateChainBlockNumber,
 ) -> (
 	BTreeMap<
 		AccountId,
@@ -152,7 +154,7 @@ fn to_properties(
 				)
 			})
 			.collect::<BTreeMap<_, _>>(),
-		Default::default(),
+		last_channel_opened_at,
 	)
 }
 
@@ -223,13 +225,17 @@ const CHANNEL_STATE_CLOSED: [DepositChannel; 2] = [
 	},
 ];
 
+const BACKOFF_SETTINGS: BackoffSettings<StateChainBlockNumber> =
+	BackoffSettings { backoff_after_blocks: 100, backoff_frequency: 100 };
+
 fn with_default_setup() -> TestSetup<SimpleDeltaBasedIngress> {
 	TestSetup::<_>::default()
 		.with_initial_election_state(
 			1u32,
-			to_properties(INITIAL_CHANNEL_STATE),
+			to_properties(INITIAL_CHANNEL_STATE, 0),
 			to_state(INITIAL_CHANNEL_STATE),
 		)
+		.with_electoral_settings(((), BACKOFF_SETTINGS))
 		.with_initial_state_map(to_state_map(INITIAL_CHANNEL_STATE).into_iter().collect::<Vec<_>>())
 }
 
@@ -1140,4 +1146,25 @@ mod multiple_deposits {
 				[Check::ingressed(vec![(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_2.amount)])],
 			);
 	}
+}
+
+#[test]
+fn is_vote_desired_backs_off_as_expected() {
+	// No chain progress, and we defaulted properties to have 0 as last_channel_opened_at.
+
+	const STILL_YOUNG_ELECTION: StateChainBlockNumber = 10;
+
+	with_default_setup()
+		.build_with_initial_election()
+		.expect_is_voted_desired(true, 0)
+		.expect_is_voted_desired(true, STILL_YOUNG_ELECTION)
+		.expect_is_voted_desired(false, BACKOFF_SETTINGS.backoff_after_blocks + 1)
+		.expect_is_voted_desired(
+			true,
+			BACKOFF_SETTINGS.backoff_after_blocks + BACKOFF_SETTINGS.backoff_frequency,
+		)
+		.expect_is_voted_desired(
+			false,
+			BACKOFF_SETTINGS.backoff_after_blocks + BACKOFF_SETTINGS.backoff_frequency + 1,
+		);
 }
