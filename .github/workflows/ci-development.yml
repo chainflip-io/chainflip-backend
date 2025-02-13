@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - "release/*"
-      - "feat/solana-versioned-transaction-*"
+      - "feat/solana-versioned-transaction*"
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
