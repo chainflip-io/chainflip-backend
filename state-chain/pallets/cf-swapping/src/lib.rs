@@ -648,6 +648,7 @@ pub mod pallet {
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
+			broker_id: T::AccountId,
 			egress_id: EgressId,
 			egress_asset: Asset,
 			egress_amount: AssetAmount,
@@ -1405,6 +1406,7 @@ pub mod pallet {
 				.map_err(Into::into)?;
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
+				broker_id: account_id.clone(),
 				egress_amount,
 				egress_asset: asset,
 				egress_fee: fee_withheld,
