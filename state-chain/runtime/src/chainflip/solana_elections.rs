@@ -13,12 +13,13 @@ use cf_chains::{
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
 		sol_tx_core::SlotNumber,
-		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
+		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
+		SolanaCrypto,
 	},
 	CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
 	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
 };
-use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
+use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, SwapRequestId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
@@ -31,7 +32,7 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		self,
 		blockchain::delta_based_ingress::BackoffSettings,
-		composite::{tuple_6_impls::Hooks, CompositeRunner},
+		composite::{tuple_7_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
@@ -61,6 +62,7 @@ pub type SolanaElectoralSystemRunner = CompositeRunner<
 		SolanaEgressWitnessing,
 		SolanaLiveness,
 		SolanaVaultSwapTracking,
+		SolanaAltWitnessing,
 	),
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
@@ -86,8 +88,9 @@ pub fn initial_state(
 			(),
 			(),
 			0u32,
+			(),
 		),
-		unsynchronised_settings: ((), (), (), (), (), ()),
+		unsynchronised_settings: ((), (), (), (), (), (), ()),
 		settings: (
 			(),
 			(
@@ -98,6 +101,7 @@ pub fn initial_state(
 			(),
 			LIVENESS_CHECK_DURATION,
 			SolanaVaultSwapsSettings { swap_endpoint_data_account_address, usdc_token_mint_pubkey },
+			(),
 		),
 	}
 }
@@ -163,6 +167,46 @@ pub type SolanaVaultSwapTracking =
 		<Runtime as Chainflip>::ValidatorId,
 		SolanaTransactionBuildingError,
 	>;
+
+#[derive(
+	Serialize,
+	Deserialize,
+	Default,
+	Debug,
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	TypeInfo,
+	Ord,
+	PartialOrd,
+)]
+pub struct SolanaAltWitnessingIdentifier {
+	pub swap_request_id: SwapRequestId,
+	pub alt_address: SolAddress,
+}
+
+pub type SolanaAltWitnessing = electoral_systems::egress_success::EgressSuccess<
+	SolanaAltWitnessingIdentifier,
+	SolAddressLookupTableAccount,
+	(),
+	SolanaAltWitnessingHook,
+	<Runtime as Chainflip>::ValidatorId,
+>;
+
+pub struct SolanaAltWitnessingHook;
+
+impl OnEgressSuccess<SolanaAltWitnessingIdentifier, SolAddressLookupTableAccount>
+	for SolanaAltWitnessingHook
+{
+	fn on_egress_success(
+		alt_identifier: SolanaAltWitnessingIdentifier,
+		alt: SolAddressLookupTableAccount,
+	) {
+		Environment::add_sol_ccm_swap_alt(alt_identifier.swap_request_id, alt);
+	}
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
@@ -245,6 +289,7 @@ impl
 		SolanaEgressWitnessing,
 		SolanaLiveness,
 		SolanaVaultSwapTracking,
+		SolanaAltWitnessing,
 	> for SolanaElectionHooks
 {
 	fn on_finalize(
@@ -255,6 +300,7 @@ impl
 			egress_witnessing_identifiers,
 			liveness_identifiers,
 			vault_swap_identifiers,
+			alt_witnessing_identifiers,
 		): (
 			Vec<
 				ElectionIdentifier<
@@ -284,6 +330,11 @@ impl
 			Vec<
 				ElectionIdentifier<
 					<SolanaVaultSwapTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
+				>,
+			>,
+			Vec<
+				ElectionIdentifier<
+					<SolanaAltWitnessing as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 		),
@@ -327,6 +378,13 @@ impl
 				RunnerStorageAccess<Runtime, SolanaInstance>,
 			>,
 		>(vault_swap_identifiers, &current_sc_block_number)?;
+		SolanaAltWitnessing::on_finalize::<
+			DerivedElectoralAccess<
+				_,
+				SolanaAltWitnessing,
+				RunnerStorageAccess<Runtime, SolanaInstance>,
+			>,
+		>(alt_witnessing_identifiers, &())?;
 		Ok(())
 	}
 }
@@ -347,7 +405,7 @@ impl BenchmarkValue for SolanaIngressSettings {
 	}
 }
 
-use pallet_cf_elections::electoral_systems::composite::tuple_6_impls::DerivedElectoralAccess;
+use pallet_cf_elections::electoral_systems::composite::tuple_7_impls::DerivedElectoralAccess;
 
 pub struct SolanaChainTrackingProvider;
 impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
