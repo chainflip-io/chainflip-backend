@@ -3,9 +3,9 @@ use crate::{
 	sol::{
 		sol_tx_core::consts::{
 			ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
-			SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
+			MAX_CCM_USER_ALTS, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 		},
-		SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC,
+		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC,
 	},
 	CcmChannelMetadata,
 };
@@ -13,7 +13,7 @@ use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::DispatchError;
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, vec, vec::Vec};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
@@ -22,6 +22,7 @@ pub enum CcmValidityError {
 	CcmAdditionalDataContainsInvalidAccounts,
 	RedundantDataSupplied,
 	InvalidDestinationAddress,
+	TooManyAddressLookupTables,
 }
 impl From<CcmValidityError> for DispatchError {
 	fn from(value: CcmValidityError) -> Self {
@@ -35,6 +36,8 @@ impl From<CcmValidityError> for DispatchError {
 				"Invalid Ccm: Additional data supplied but they will not be used".into(),
 			CcmValidityError::InvalidDestinationAddress =>
 				"Invalid Ccm: Destination address is not compatible with the target Chain.".into(),
+			CcmValidityError::TooManyAddressLookupTables =>
+				"Invalid Ccm: Too many Address Lookup tables supplied".into(),
 		}
 	}
 }
@@ -44,6 +47,13 @@ pub trait CcmValidityCheck {
 		_ccm: &CcmChannelMetadata,
 		_egress_asset: cf_primitives::Asset,
 		_destination: EncodedAddress,
+	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
+		Ok(DecodedCcmAdditionalData::NotRequired)
+	}
+
+	fn decode_unchecked(
+		_ccm: &CcmChannelMetadata,
+		_chain: ForeignChain,
 	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
 		Ok(DecodedCcmAdditionalData::NotRequired)
 	}
@@ -58,6 +68,23 @@ pub enum DecodedCcmAdditionalData {
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub enum VersionedSolanaCcmAdditionalData {
 	V0(SolCcmAccounts),
+	V1 { ccm_accounts: SolCcmAccounts, alts: Vec<SolAddress> },
+}
+
+impl VersionedSolanaCcmAdditionalData {
+	pub fn ccm_accounts(&self) -> SolCcmAccounts {
+		match self {
+			VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => ccm_accounts.clone(),
+			VersionedSolanaCcmAdditionalData::V1 { ccm_accounts, .. } => ccm_accounts.clone(),
+		}
+	}
+
+	pub fn address_lookup_tables(&self) -> Vec<SolAddress> {
+		match self {
+			VersionedSolanaCcmAdditionalData::V0(..) => vec![],
+			VersionedSolanaCcmAdditionalData::V1 { alts, .. } => alts.clone(),
+		}
+	}
 }
 
 pub struct CcmValidityChecker;
@@ -80,63 +107,76 @@ impl CcmValidityCheck for CcmValidityChecker {
 				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
 
 			// Check if the cf_parameter can be decoded
-			match VersionedSolanaCcmAdditionalData::decode(
-				&mut &ccm.ccm_additional_data.clone()[..],
-			)
-			.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?
-			{
-				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => {
-					// It's hard at this stage to compute exactly the length of the finally build
-					// transaction from the message and the additional accounts. Duplicated
-					// accounts only take one reference byte while new accounts take 32 bytes.
-					// Technically it shouldn't be necessary to pass duplicated accounts as
-					// it will all be executed in the same instruction. However when integrating
-					// with other protocols, many of the account's values are part of a returned
-					// payload from an API and it makes it cumbersome to then dedpulicate on the
-					// fly and then make it match with the receiver contract. It can be done
-					// but it then requires extra configuration bytes in the payload, which
-					// then defeats the purpose.
-					// Therefore we want to allow for duplicated accounts, both duplicated
-					// within the additional accounts and with our accounts. Then we can
-					// calculate the length accordingly.
-					// The Chainflip accounts are anyway irrelevant to the user except for a
-					// few that are acounted for here. The only relevant is the token
-					let mut seen_addresses = BTreeSet::from_iter([
-						SYSTEM_PROGRAM_ID,
-						SYS_VAR_INSTRUCTIONS,
-						destination_address.into(),
-						ccm_accounts.cf_receiver.pubkey.into(),
-					]);
+			let decoded_data =
+				VersionedSolanaCcmAdditionalData::decode(&mut &ccm.ccm_additional_data.clone()[..])
+					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 
-					if asset == SolAsset::SolUsdc {
-						seen_addresses.insert(TOKEN_PROGRAM_ID);
-					}
-					let mut accounts_length = ccm_accounts.additional_accounts.len() *
-						ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
+			let ccm_accounts = decoded_data.ccm_accounts();
 
-					for ccm_address in &ccm_accounts.additional_accounts {
-						if seen_addresses.insert(ccm_address.pubkey.into()) {
-							accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
-						}
-					}
+			// It's hard at this stage to compute exactly the length of the finally build
+			// transaction from the message and the additional accounts. Duplicated
+			// accounts only take one reference byte while new accounts take 32 bytes.
+			// Technically it shouldn't be necessary to pass duplicated accounts as
+			// it will all be executed in the same instruction. However when integrating
+			// with other protocols, many of the account's values are part of a returned
+			// payload from an API and it makes it cumbersome to then deduplicate on the
+			// fly and then make it match with the receiver contract. It can be done
+			// but it then requires extra configuration bytes in the payload, which
+			// then defeats the purpose.
+			// Therefore we want to allow for duplicated accounts, both duplicated
+			// within the additional accounts and with our accounts. Then we can
+			// calculate the length accordingly.
+			// The Chainflip accounts are irrelevant to the user except for a
+			// few that are accounted for here.
+			let mut seen_addresses = BTreeSet::from_iter([
+				SYSTEM_PROGRAM_ID,
+				SYS_VAR_INSTRUCTIONS,
+				destination_address.into(),
+				ccm_accounts.cf_receiver.pubkey.into(),
+			]);
 
-					let ccm_length = ccm.message.len() + accounts_length;
-
-					if ccm_length >
-						match asset {
-							SolAsset::Sol => MAX_CCM_BYTES_SOL,
-							SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
-						} {
-						return Err(CcmValidityError::CcmIsTooLong)
-					}
-
-					Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(
-						ccm_accounts,
-					)))
-				},
+			if asset == SolAsset::SolUsdc {
+				seen_addresses.insert(TOKEN_PROGRAM_ID);
 			}
+			let mut accounts_length =
+				ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
+
+			for ccm_address in &ccm_accounts.additional_accounts {
+				if seen_addresses.insert(ccm_address.pubkey.into()) {
+					accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
+				}
+			}
+
+			let ccm_length = ccm.message.len() + accounts_length;
+
+			if ccm_length >
+				match asset {
+					SolAsset::Sol => MAX_CCM_BYTES_SOL,
+					SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
+				} {
+				return Err(CcmValidityError::CcmIsTooLong)
+			}
+
+			if decoded_data.address_lookup_tables().len() > MAX_CCM_USER_ALTS as usize {
+				return Err(CcmValidityError::TooManyAddressLookupTables)
+			}
+
+			Ok(DecodedCcmAdditionalData::Solana(decoded_data))
 		} else if !ccm.ccm_additional_data.is_empty() {
 			Err(CcmValidityError::RedundantDataSupplied)
+		} else {
+			Ok(DecodedCcmAdditionalData::NotRequired)
+		}
+	}
+
+	fn decode_unchecked(
+		ccm: &CcmChannelMetadata,
+		chain: ForeignChain,
+	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
+		if chain == ForeignChain::Solana {
+			VersionedSolanaCcmAdditionalData::decode(&mut &ccm.ccm_additional_data.clone()[..])
+				.map(DecodedCcmAdditionalData::Solana)
+				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)
 		} else {
 			Ok(DecodedCcmAdditionalData::NotRequired)
 		}
@@ -166,7 +206,10 @@ mod test {
 	use Asset;
 
 	use super::*;
-	use crate::sol::{sol_tx_core::sol_test_values, SolCcmAddress, SolPubkey, MAX_CCM_BYTES_SOL};
+	use crate::sol::{
+		sol_tx_core::sol_test_values::{self, ccm_accounts, ccm_parameter_v1, user_alt},
+		SolCcmAddress, SolPubkey, MAX_CCM_BYTES_SOL,
+	};
 
 	pub const DEST_ADDR: EncodedAddress = EncodedAddress::Sol([0x00; 32]);
 	pub const MOCK_ADDR: SolPubkey = SolPubkey([0x01; 32]);
@@ -381,7 +424,7 @@ mod test {
 					pubkey: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT.into(),
 					is_writable: false,
 				},
-				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
+				SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 			],
 			fallback_address: FALLBACK_ADDR,
 		};
@@ -398,7 +441,7 @@ mod test {
 			},
 			additional_accounts: vec![
 				SolCcmAddress { pubkey: MOCK_ADDR, is_writable: false },
-				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
+				SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 			],
 			fallback_address: FALLBACK_ADDR,
 		};
@@ -411,7 +454,7 @@ mod test {
 			cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
 			additional_accounts: vec![
 				SolCcmAddress { pubkey: sol_test_values::agg_key().into(), is_writable: false },
-				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
+				SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 			],
 			fallback_address: FALLBACK_ADDR,
 		};
@@ -547,6 +590,70 @@ mod test {
 		assert_eq!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, INVALID_DEST_ADDR),
 			Err(CcmValidityError::InvalidDestinationAddress)
+		);
+	}
+
+	#[test]
+	fn can_decode_unchecked() {
+		let ccm = sol_test_values::ccm_parameter().channel_metadata;
+		assert_ok!(CcmValidityChecker::decode_unchecked(&ccm, ForeignChain::Solana));
+		assert_eq!(
+			CcmValidityChecker::decode_unchecked(&ccm, ForeignChain::Ethereum),
+			Ok(DecodedCcmAdditionalData::NotRequired)
+		);
+	}
+
+	#[test]
+	fn can_decode_unchecked_ccm_v1() {
+		let ccm = sol_test_values::ccm_parameter_v1().channel_metadata;
+		assert_ok!(CcmValidityChecker::decode_unchecked(&ccm, ForeignChain::Solana));
+		assert_eq!(
+			CcmValidityChecker::decode_unchecked(&ccm, ForeignChain::Ethereum),
+			Ok(DecodedCcmAdditionalData::NotRequired)
+		);
+	}
+
+	#[test]
+	fn additional_data_v1_support_works() {
+		let mut ccm = sol_test_values::ccm_parameter_v1().channel_metadata;
+		assert_eq!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, DEST_ADDR),
+			Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V1 {
+				ccm_accounts: sol_test_values::ccm_accounts(),
+				alts: vec![user_alt().key.into()],
+			}))
+		);
+
+		assert_eq!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth, DEST_ADDR),
+			Err(CcmValidityError::RedundantDataSupplied)
+		);
+
+		ccm.ccm_additional_data.clear();
+		assert_eq!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth, DEST_ADDR),
+			Ok(DecodedCcmAdditionalData::NotRequired)
+		);
+
+		assert_eq!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, INVALID_DEST_ADDR),
+			Err(CcmValidityError::InvalidDestinationAddress)
+		);
+	}
+
+	#[test]
+	fn can_check_for_too_many_alts() {
+		let mut ccm = ccm_parameter_v1().channel_metadata;
+		ccm.ccm_additional_data = codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
+			ccm_accounts: ccm_accounts(),
+			alts: (0..=MAX_CCM_USER_ALTS).map(|i| SolAddress([i; 32])).collect(),
+		})
+		.try_into()
+		.unwrap();
+
+		assert_eq!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, DEST_ADDR),
+			Err(CcmValidityError::TooManyAddressLookupTables)
 		);
 	}
 }

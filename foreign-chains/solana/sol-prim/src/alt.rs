@@ -1,12 +1,16 @@
 pub use crate::{
 	short_vec, Address, CompileError, CompiledInstruction, Digest, Instruction, Pubkey, Signature,
 };
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// Address table lookups describe an on-chain address lookup table to use
 /// for loading more readonly and writable accounts in a single tx.
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+#[derive(
+	Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageAddressTableLookup {
 	/// Address lookup table account key
@@ -26,6 +30,19 @@ pub struct MessageAddressTableLookup {
 pub struct AddressLookupTableAccount {
 	pub key: Pubkey,
 	pub addresses: Vec<Pubkey>,
+}
+
+impl AddressLookupTableAccount {
+	pub fn new(key: Address, addresses: Vec<Address>) -> AddressLookupTableAccount {
+		AddressLookupTableAccount {
+			key: key.into(),
+			addresses: addresses.into_iter().map(|a| a.into()).collect::<Vec<_>>(),
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.addresses.is_empty()
+	}
 }
 
 /// Collection of static and dynamically loaded keys used to load accounts

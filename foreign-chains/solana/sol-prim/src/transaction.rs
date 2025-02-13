@@ -15,7 +15,7 @@ use serde::{
 };
 use sp_std::fmt;
 
-#[cfg(any(test, feature = "runtime-integration-tests"))]
+#[cfg(feature = "std")]
 use crate::{
 	errors::TransactionError,
 	signer::{Signer, SignerError, TestSigners},
@@ -46,13 +46,27 @@ pub enum Legacy {
 /// which message version is serialized starting from version `0`. If the first
 /// is bit is not set, all bytes are used to encode the legacy `Message`
 /// format.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub enum VersionedMessage {
 	Legacy(legacy::LegacyMessage),
 	V0(v0::VersionedMessageV0),
 }
 
 impl VersionedMessage {
+	pub fn new(
+		instructions: &[Instruction],
+		payer: Option<Pubkey>,
+		blockhash: Option<Hash>,
+		lookup_tables: &[AddressLookupTableAccount],
+	) -> VersionedMessage {
+		VersionedMessage::V0(v0::VersionedMessageV0::new_with_blockhash(
+			instructions,
+			payer,
+			blockhash.unwrap_or_default(),
+			lookup_tables,
+		))
+	}
+
 	pub fn header(&self) -> &MessageHeader {
 		match self {
 			Self::Legacy(message) => &message.header,
@@ -64,6 +78,26 @@ impl VersionedMessage {
 		match self {
 			Self::Legacy(message) => &message.account_keys,
 			Self::V0(message) => &message.account_keys,
+		}
+	}
+
+	pub fn map_static_account_keys(&mut self, f: impl Fn(Pubkey) -> Pubkey) {
+		match self {
+			Self::Legacy(message) =>
+				for k in message.account_keys.iter_mut() {
+					*k = f(*k);
+				},
+			Self::V0(message) =>
+				for k in message.account_keys.iter_mut() {
+					*k = f(*k);
+				},
+		}
+	}
+
+	pub fn set_static_account_keys(&mut self, new_keys: Vec<Pubkey>) {
+		match self {
+			Self::Legacy(message) => message.account_keys = new_keys,
+			Self::V0(message) => message.account_keys = new_keys,
 		}
 	}
 
@@ -261,7 +295,9 @@ impl<'de> serde::Deserialize<'de> for VersionedMessage {
 
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
 /// An atomic transaction
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
+#[derive(
+	Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo,
+)]
 pub struct VersionedTransaction {
 	/// List of signatures
 	#[serde(with = "short_vec")]
@@ -290,19 +326,8 @@ impl VersionedTransaction {
 		}
 	}
 
-	#[cfg(any(test, feature = "runtime-integration-tests"))]
-	pub fn new_with_payer(
-		instructions: &[Instruction],
-		payer: Option<Pubkey>,
-		lookup_tables: &[AddressLookupTableAccount],
-	) -> Self {
-		let message =
-			VersionedMessage::V0(v0::VersionedMessageV0::new(instructions, payer, lookup_tables));
-		Self::new_unsigned(message)
-	}
-
-	#[cfg(any(test, feature = "runtime-integration-tests"))]
-	pub fn sign<S: Signer>(&mut self, signers: TestSigners<S>, recent_blockhash: Hash) {
+	#[cfg(feature = "std")]
+	pub fn test_only_sign<S: Signer>(&mut self, signers: TestSigners<S>, recent_blockhash: Hash) {
 		let positions = self.get_signing_keypair_positions(signers.pubkeys());
 
 		// if you change the blockhash, you're re-signing...
@@ -321,8 +346,8 @@ impl VersionedTransaction {
 		}
 	}
 
-	#[cfg(any(test, feature = "runtime-integration-tests"))]
-	pub fn get_signing_keypair_positions(&self, pubkeys: Vec<Pubkey>) -> Vec<usize> {
+	#[cfg(feature = "std")]
+	fn get_signing_keypair_positions(&self, pubkeys: Vec<Pubkey>) -> Vec<usize> {
 		let account_keys = self.message.static_account_keys();
 		let required_sigs = self.message.header().num_required_signatures as usize;
 		if account_keys.len() < required_sigs {
@@ -392,7 +417,9 @@ pub mod v0 {
 	/// See the [`message`] module documentation for further description.
 	///
 	/// [`message`]: crate::message
-	#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+	#[derive(
+		Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo,
+	)]
 	#[serde(rename_all = "camelCase")]
 	pub struct VersionedMessageV0 {
 		/// The message header, identifying signed and read-only `account_keys`.
@@ -743,21 +770,19 @@ pub mod legacy {
 			}
 		}
 
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
-			let message = LegacyMessage::new(instructions, payer);
-			Self::new_unsigned(message)
-		}
-
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn sign<S: Signer>(&mut self, signers: TestSigners<S>, recent_blockhash: Hash) {
+		#[cfg(feature = "std")]
+		pub fn test_only_sign<S: Signer>(
+			&mut self,
+			signers: TestSigners<S>,
+			recent_blockhash: Hash,
+		) {
 			if let Err(e) = self.try_sign(signers, recent_blockhash) {
 				panic!("Transaction::sign failed with error {e:?}");
 			}
 		}
 
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn try_sign<S: Signer>(
+		#[cfg(feature = "std")]
+		fn try_sign<S: Signer>(
 			&mut self,
 			signers: TestSigners<S>,
 			recent_blockhash: Hash,
@@ -771,8 +796,8 @@ pub mod legacy {
 			}
 		}
 
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn try_partial_sign<S: Signer>(
+		#[cfg(feature = "std")]
+		fn try_partial_sign<S: Signer>(
 			&mut self,
 			signers: TestSigners<S>,
 			recent_blockhash: Hash,
@@ -785,8 +810,8 @@ pub mod legacy {
 			self.try_partial_sign_unchecked(signers, positions, recent_blockhash)
 		}
 
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn try_partial_sign_unchecked<S: Signer>(
+		#[cfg(feature = "std")]
+		fn try_partial_sign_unchecked<S: Signer>(
 			&mut self,
 			signers: TestSigners<S>,
 			positions: Vec<usize>,
@@ -807,8 +832,8 @@ pub mod legacy {
 			Ok(())
 		}
 
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn get_signing_keypair_positions(
+		#[cfg(feature = "std")]
+		fn get_signing_keypair_positions(
 			&self,
 			pubkeys: Vec<Pubkey>,
 		) -> Result<Vec<Option<usize>>, TransactionError> {

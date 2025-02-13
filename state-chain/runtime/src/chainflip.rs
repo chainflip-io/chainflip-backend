@@ -50,12 +50,12 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
-			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
-			SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ChainflipAddressLookupTable, ComputePrice,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
+			RecoverDurableNonce, SolanaAddressLookupTables, SolanaApi, SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
-		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
+		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
+		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
@@ -371,11 +371,14 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 						RequiresSignatureRefresh::False,
 						|active_epoch_key| {
 							let current_aggkey = active_epoch_key.key;
-							for key in modified_call.transaction.message.account_keys.iter_mut() {
-								if *key == signer.into() {
-									*key = current_aggkey.into()
+							modified_call.transaction.message.map_static_account_keys(|key| {
+								if key == signer.into() {
+									current_aggkey.into()
+								} else {
+									key
 								}
-							}
+							});
+
 							for sig in modified_call.transaction.signatures.iter_mut() {
 								*sig = Default::default()
 							}
@@ -590,6 +593,24 @@ impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for SolEnvi
 impl RecoverDurableNonce for SolEnvironment {
 	fn recover_durable_nonce(nonce_account: SolAddress) {
 		Environment::recover_sol_durable_nonce(nonce_account)
+	}
+}
+
+impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccount>>
+	for SolEnvironment
+{
+	fn lookup(_s: SolanaAddressLookupTables) -> Option<Vec<SolAddressLookupTableAccount>> {
+		// TODO Ramiz: Lookup SolanaElection pallet for the ALTS using the given SwapRequestId
+		None
+	}
+}
+
+impl ChainEnvironment<ChainflipAddressLookupTable, SolAddressLookupTableAccount>
+	for SolEnvironment
+{
+	fn lookup(_s: ChainflipAddressLookupTable) -> Option<SolAddressLookupTableAccount> {
+		// TODO Roy: Read Chainflip's ALT from the Environment pallet.
+		None
 	}
 }
 

@@ -7,11 +7,11 @@ use cf_chains::{
 	eth,
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
-			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
-			SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ChainflipAddressLookupTable, ComputePrice,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
+			RecoverDurableNonce, SolanaAddressLookupTables, SolanaApi, SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolHash,
+		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,
 	},
 	ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, ChainEnvironment, Polkadot, Solana,
 };
@@ -183,6 +183,22 @@ impl RecoverDurableNonce for MockSolEnvironment {
 		unimplemented!();
 	}
 }
+
+impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccount>>
+	for MockSolEnvironment
+{
+	fn lookup(_s: SolanaAddressLookupTables) -> Option<Vec<SolAddressLookupTableAccount>> {
+		unimplemented!()
+	}
+}
+impl ChainEnvironment<ChainflipAddressLookupTable, SolAddressLookupTableAccount>
+	for MockSolEnvironment
+{
+	fn lookup(_s: ChainflipAddressLookupTable) -> Option<SolAddressLookupTableAccount> {
+		unimplemented!()
+	}
+}
+
 impl SolanaEnvironment for MockSolEnvironment {}
 
 pub struct MockSolanaBroadcaster;

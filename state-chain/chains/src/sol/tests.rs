@@ -19,8 +19,8 @@ use crate::{
 			signer::Signer,
 			sol_test_values::*,
 			token_instructions::AssociatedTokenAccountInstruction,
-			AccountMeta, CompiledInstruction, Hash, Instruction, LegacyMessage, LegacyTransaction,
-			MessageHeader, PdaAndBump, Pubkey,
+			transaction::legacy::{LegacyMessage, LegacyTransaction},
+			AccountMeta, CompiledInstruction, Hash, Instruction, MessageHeader, PdaAndBump, Pubkey,
 		},
 		SolAddress, SolHash, SolSignature,
 	},
@@ -38,10 +38,10 @@ enum BankInstruction {
 
 #[cfg(test)]
 mod versioned_transaction {
-	use crate::sol::sol_tx_core::{
-		consts::{const_address, const_hash},
-		transaction::{v0::VersionedMessageV0, VersionedMessage, VersionedTransaction},
-		AddressLookupTableAccount,
+	use crate::sol::{
+		sol_tx_core::consts::{const_address, const_hash},
+		SolAddressLookupTableAccount, SolVersionedMessage, SolVersionedMessageV0,
+		SolVersionedTransaction,
 	};
 
 	use super::*;
@@ -62,14 +62,14 @@ mod versioned_transaction {
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, TRANSFER_AMOUNT),
 		];
-		let message = VersionedMessage::V0(VersionedMessageV0::new_with_blockhash(
+		let message = SolVersionedMessage::V0(SolVersionedMessageV0::new_with_blockhash(
 			&instructions,
 			Some(agg_key_pubkey),
 			durable_nonce,
 			&[],
 		));
-		let mut tx = VersionedTransaction::new_unsigned(message);
-		tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+		let mut tx = SolVersionedTransaction::new_unsigned(message);
+		tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = "012e1beb02a24f6e59148fc4eb64aeaeaad291e5f241b8b2d01775a6d3956392ac7186fbee0963d6ca0720bddb5d8b555ada6beb2cd3e9bd0415c343a5ca0cde0b8001000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400030200020c0200000000ca9a3b0000000000";
@@ -84,7 +84,7 @@ mod versioned_transaction {
 			const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").into(),
 			const_hash("2qVz58R5aPmF5Q61VaKXnpWQtngdh4Jgbeko32fEcECu").into(),
 		);
-		let alt = AddressLookupTableAccount {
+		let alt = SolAddressLookupTableAccount {
 			key: const_address("4EQ4ZTskvNwkBaQjBJW5grcmV5Js82sUooNLHNTpdHdi").into(),
 			addresses: vec![const_address("CFnQk1nVmkPThKvLU8EUPFtTuJro45JLSoqux4v23ZGy").into()],
 		};
@@ -99,14 +99,14 @@ mod versioned_transaction {
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, TRANSFER_AMOUNT),
 		];
-		let message = VersionedMessage::V0(VersionedMessageV0::new_with_blockhash(
+		let message = SolVersionedMessage::V0(SolVersionedMessageV0::new_with_blockhash(
 			&instructions,
 			Some(agg_key_pubkey),
 			durable_nonce.1,
 			&[alt],
 		));
-		let mut tx = VersionedTransaction::new_unsigned(message);
-		tx.sign(vec![agg_key_keypair].into(), durable_nonce.1);
+		let mut tx = SolVersionedTransaction::new_unsigned(message);
+		tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce.1);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
 		let expected_serialized_tx = "01ed1357672e0e660e9afd6dd948bee446639a232171900b89a1d403e78e58ad30d8da3986888c9e07ec066b19198b59f99428c00fcf858040e669185473ded5008001000305f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19200000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000001b48568b09b08111ebdcf9a5073d86a4506a3c3fe2a6d47a8a5ce0c459a65bce04020301040004040000000300090340420f000000000003000502e0930400020200050c0200000000ca9a3b00000000013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a1010000";
@@ -114,18 +114,6 @@ mod versioned_transaction {
 		assert_eq!(hex::encode(serialized_tx.clone()), expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
-}
-
-#[test]
-fn create_simple_tx() {
-	let program_id = Pubkey([0u8; 32]);
-	let payer = SolSigningKey::new();
-	let bank_instruction = BankInstruction::Initialize;
-
-	let instruction = Instruction::new_with_borsh(program_id, &bank_instruction, vec![]);
-
-	let mut tx = LegacyTransaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-	tx.sign(vec![payer].into(), Default::default());
 }
 
 #[test]
@@ -143,7 +131,7 @@ fn create_transfer_native() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = hex_literal::hex!("01345c86d1be2bcdf2c93c75b6054b6232e5b1e7f2fe7b3ca241d48c8a5f993af3e474bf581b2e9a1543af13104b3f3a53530d849731cc403418da313743a57e0401000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400030200020c0200000000ca9a3b00000000").to_vec();
@@ -169,7 +157,7 @@ fn create_transfer_cu_priority_fees() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = hex_literal::hex!("017036ecc82313548a7f1ef280b9d7c53f9747e23abcb4e76d86c8df6aa87e82d460ad7cea2e8d972a833d3e1802341448a99be200ad4648c454b9d5a5e2d5020d01000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000012c57218f6315b83818802f3522fe7e04c596ae4fe08841e7940bc2f958aaaea04030301050004040000000400090340420f000000000004000502e0930400030200020c0200000040420f0000000000").to_vec();
@@ -207,7 +195,7 @@ fn create_fetch_native() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx =
 		tx.finalize_and_serialize().expect("Transaction serialization should succeed");
@@ -262,7 +250,7 @@ fn create_fetch_native_in_batch() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx =
 		tx.finalize_and_serialize().expect("Transaction serialization should succeed");
@@ -334,7 +322,7 @@ fn create_fetch_tokens() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = hex_literal::hex!("01399c2b68c7fae634a32d15c3417c2a92e3632707fff366cf9f92a085642344915b7de51181defe33f87ac0a718cd6df5849e229d54d7a06b362b621855c367010100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19242ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d910ae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21fe91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050301070004040000000600090340420f000000000006000502e09304000b090c000a02040908030516494710642cb0c646080000000000000000000000ff06").to_vec();
@@ -411,7 +399,7 @@ fn create_batch_fetch() {
 	];
 	let message = LegacyMessage::new(&instructions, Some(&agg_key_pubkey));
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = hex_literal::hex!("018117c8fd4d21069f04599ab5c79c6d093991392ca54dacfcefac64585928ae13ae81a9aa51a003a10a47a0d9372301e36df2ca2a0e7797d179d030b30563b20d01000912f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921ad0968d57ee79348476716f9b2cd44ec4284b8f52c36648d560949e41589a5540de1c0451cccb6edd1fda9b4a48c282b279350b55a7a9716800cc0132b6f0b042ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d910a140fd3d05766f0087d57bf99df05731e894392ffcc8e8d7e960ba73c09824aaae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21fb4baefcd4965beb1c71311a2ffe76419d4b8f8d35fbc4cf514b1bd02da2df2e3e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060903010b0004040000000a00090340420f00000000000a000502e09304000f0911000e04080d0c060916494710642cb0c646080000000000000000000000ff060f0911001002080d0c030916494710642cb0c646080000000100000000000000ff060f051100050709158e24658f6c59298c080000000200000000000000ff").to_vec();
@@ -455,7 +443,7 @@ fn create_transfer_tokens() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = hex_literal::hex!("012c77634fbfac44e246e991202e24d1b6c2fc438482fa9dbea617b0387aa3d19e2561dd12929db8cc2ae43ccd0f19185882bfac2ef6f7baf1438929cd5b99dd0701000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301060004040000000500090340420f000000000005000502e09304000b0600020908040701010a070c000d030208071136b4eeaf4a557ebc00ca9a3b0000000006").to_vec();
@@ -496,7 +484,7 @@ fn create_full_rotation() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = hex_literal::hex!("0118e0ec3502ff3656ffeecb9c56cc0e6676bba9ac1026a535e24ab3e2f9ef78353e1c3698bd3582a1e711b68cc0e39802c04dd48a298a572e55fd2e2a6bc2770101000411f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1926744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900448541f57201f277c5f3ffb631d0212e26e7f47749c26c4808718174a0ab2a09a18cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adba1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bcd644e45426a41a7cb8369b8a0c1c89bb3f86cf278fdd9cc38b0f69784ad5667e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864e5e1869817a4fd88ddf7ab7a5f7252d7c345b39721769888608592912e8ca9acf0f13460b3fd04b7d53d7421fc874ec00eec769cf36480895e1a407bf1249475f2b2e24122be016983be9369965246cc45e1f621d40fba300c56c7ac50c3874df4f83bd213a59c9785110cf83c718f9486c3484f918593bce20c61dc6a96036afecc89e3b031824af6363174d19bbec12d3a13c4a173e5aeb349b63042bc138f00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000e0d03010f0004040000000e00090340420f00000000000e000502e093040010040500020d094e518fabdda5d68b000d02010024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020b0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02090024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020a0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02070024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02060024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02030024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020c0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02080024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02040024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
@@ -538,7 +526,7 @@ fn create_ccm_native_transfer() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = hex_literal::hex!("01be5b6acac88600095a934dc7ae8af889c78281664e6b561f3a18bc26887ae95f35fc76d892da32f4a7314a253c0abed2da1c89d5e6daede4d70cacd37942090a0100070bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd47417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed4800000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00ba73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301070004040000000500090340420f000000000005000502e0930400040200020c0200000000ca9a3b0000000008070900020304060a347d050be38042e0b20100000014000000ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
@@ -600,7 +588,7 @@ fn create_ccm_token_transfer() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = hex_literal::hex!("01bd5f6ad13bbce1d97011814f8b7758b42a392ecc0b993c7b0be88499cbb089b3b364eaed5f3998f1dd97670f5a4b146c3be9681cb2d71fc81066657b7423d40501000c11f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec46167417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed48e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00ba73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5ab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890006050301080004040000000600090340420f000000000006000502e09304000d0600020b0a050901010c070e001004020a091136b4eeaf4a557ebc00ca9a3b00000000060c080e000203090a070f346cb8a27b9fdeaa230100000014000000ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
@@ -634,7 +622,7 @@ fn create_idempotent_associated_token_account() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = hex_literal::hex!("01eb287ff9329fbaf83592ec56709d52d3d7f7edcab7ab53fc8371acff871016c51dfadde692630545a91d6534095bb5697b5fb9ee17dc292552eabf9ab6e3390601000609f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192ca03f3e6d6fd79aaf8ebd4ce053492a34f22d0edafbfa88a380848d9a4735150000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c944220f1b83220b1108ea0e171b5391e6c0157370c8353516b74e962f855be6d787038c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f85921b22d7dfc8cdeba6027384563948d038a11eba06289de51a15c3d649d1f7e2c020303010400040400000008060002060703050101").to_vec();
@@ -670,7 +658,7 @@ fn create_set_program_swaps_parameters() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = [
@@ -723,7 +711,7 @@ fn create_enable_token_support() {
 	let message =
 		LegacyMessage::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 	let mut tx = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![agg_key_keypair].into(), durable_nonce);
+	tx.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
 
 	let serialized_tx = tx.finalize_and_serialize().unwrap();
 	let expected_serialized_tx = [
@@ -773,7 +761,7 @@ fn create_sample_transaction() -> LegacyTransaction {
 	let instruction = Instruction::new_with_bincode(program_id, &(1u8, 2u8, 3u8), account_metas);
 	let message = LegacyMessage::new(&[instruction], Some(&keypair.pubkey()));
 	let mut tx: LegacyTransaction = LegacyTransaction::new_unsigned(message);
-	tx.sign(vec![keypair].into(), Hash::default());
+	tx.test_only_sign(vec![keypair].into(), Hash::default());
 	tx
 }
 
