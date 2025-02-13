@@ -521,7 +521,7 @@ where
 	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress. Once the
 	/// extrinsic is in a block, `ExtrinsicData` is returned. `ExtrinsicData` contains dynamic
 	/// events of type `DynamicEvents`, these events are decoded dynamically using the current
-	/// runtime metadata. This means that if a runtime upgrade changes the event signature this
+	/// runtime metadata. This means that if a runtime upgrade changes the event signature, this
 	/// function can decode the changed event.
 	/// `until_finalized` param determines whether to wait until the extrinsic is in a block or in
 	/// a finalized block. This is a blocking call, if until_finalized == false it takes around 1

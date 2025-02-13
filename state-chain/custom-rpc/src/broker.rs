@@ -4,7 +4,7 @@ use cf_chains::{
 	address::AddressString, CcmChannelMetadata, ChannelRefundParametersEncoded,
 	ChannelRefundParametersGeneric,
 };
-use cf_node_clients::cf_static_runtime;
+use cf_node_clients::{cf_static_runtime, extract_dynamic_event};
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters,
 };
@@ -346,50 +346,29 @@ where
 			)
 			.await?;
 
-		match dynamic_events
-			.find_static_event::<cf_static_runtime::swapping::events::PrivateBrokerChannelOpened>(
-				true,
-			)?
-			.map(|event| event.channel_id)
-		{
-			Some(channel_id) => Ok(channel_id),
-			None => Err(anyhow!("No PrivateBrokerChannelOpened event was found").into()),
-		}
-
-		// let (_, events, _, _) = self
-		// 	.signed_pool_client
-		// 	.submit_watch(
-		// 		RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
-		// 		false,
-		// 		true,
-		// 	)
-		// 	.await?;
-		//
-		// Ok(extract_event!(
-		// 	events,
-		// 	state_chain_runtime::RuntimeEvent::Swapping,
-		// 	pallet_cf_swapping::Event::PrivateBrokerChannelOpened,
-		// 	{ channel_id, .. },
-		// 	*channel_id
-		// )?)
+		Ok(extract_dynamic_event!(
+			dynamic_events,
+			cf_static_runtime::swapping::events::PrivateBrokerChannelOpened,
+			{ channel_id },
+			channel_id
+		)?)
 	}
 
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		let (_, events, _, _) = self
+		let (_, dynamic_events, _, _) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::close_private_btc_channel {}),
 				false,
 				true,
 			)
 			.await?;
 
-		Ok(extract_event!(
-			events,
-			state_chain_runtime::RuntimeEvent::Swapping,
-			pallet_cf_swapping::Event::PrivateBrokerChannelClosed,
-			{ channel_id, .. },
-			*channel_id
+		Ok(extract_dynamic_event!(
+			dynamic_events,
+			cf_static_runtime::swapping::events::PrivateBrokerChannelClosed,
+			{ channel_id },
+			channel_id
 		)?)
 	}
 
@@ -416,9 +395,9 @@ where
 			find_lowest_unused_short_id(&used_ids)?
 		};
 
-		let (_, events, _, _) = self
+		let (_, dynamic_events, _, _) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::register_affiliate {
 					affiliate_id,
 					short_id: register_as_id,
@@ -428,12 +407,11 @@ where
 			)
 			.await?;
 
-		Ok(extract_event!(
-			events,
-			state_chain_runtime::RuntimeEvent::Swapping,
-			pallet_cf_swapping::Event::AffiliateRegistrationUpdated,
-			{ affiliate_short_id, .. },
-			*affiliate_short_id
+		Ok(extract_dynamic_event!(
+			dynamic_events,
+			cf_static_runtime::swapping::events::AffiliateRegistrationUpdated,
+			{ affiliate_short_id },
+			AffiliateShortId::from(affiliate_short_id.0)
 		)?)
 	}
 

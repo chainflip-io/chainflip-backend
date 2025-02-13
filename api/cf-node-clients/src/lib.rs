@@ -86,3 +86,17 @@ impl RuntimeDecoder {
 		self.error_decoder.decode_dispatch_error(dispatch_error)
 	}
 }
+
+/// Common macro to extract dynamic events
+#[macro_export]
+macro_rules! extract_dynamic_event {
+    ($dynamic_events:expr, $cf_static_event_variant:path, { $($field:ident),* }, $result:expr) => {
+
+		match $dynamic_events
+			.find_static_event::<$cf_static_event_variant>(true)?
+		{
+			Some($cf_static_event_variant { $($field),*, .. } ) => Ok($result),
+			None => Err($crate::events_decoder::DynamicEventError::StaticEventNotFound(stringify!($cf_static_event_variant)))
+		}
+    };
+}

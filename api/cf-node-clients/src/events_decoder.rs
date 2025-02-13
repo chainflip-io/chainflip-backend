@@ -13,10 +13,12 @@ pub enum DynamicEventError {
 	SubxtError(#[from] subxt_core::Error),
 	#[error("Unexpected chain behaviour, ExtrinsicSuccess or ExtrinsicFailed event not found.")]
 	UnexpectedChainBehaviour,
-	#[error("Could not decode event, please consider upgrading your node. {0}")]
+	#[error("Could not decode event, it might be because you running an old binary please consider upgrading. {0}")]
 	EventDecodeError(String),
 	#[error("Event unknown to static metadata, it might be because you running an old binary please consider upgrading your node")]
 	EventUnknownToStaticMetadata,
+	#[error("{0} event was not found")]
+	StaticEventNotFound(&'static str),
 }
 
 #[derive(Debug, Clone)]
