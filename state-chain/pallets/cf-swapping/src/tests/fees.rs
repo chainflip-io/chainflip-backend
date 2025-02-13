@@ -418,6 +418,7 @@ fn withdraw_broker_fees() {
 		assert!(egresses.len() == 1);
 		assert_eq!(egresses.pop().expect("must exist").amount(), 200);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::WithdrawalRequested {
+			account_id: BROKER,
 			egress_id: (ForeignChain::Ethereum, 1),
 			egress_asset: Asset::Eth,
 			egress_amount: 200,
