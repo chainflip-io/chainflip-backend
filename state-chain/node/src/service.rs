@@ -359,7 +359,6 @@ pub fn new_full<
 						signed_pool_client: SignedPoolClient::new(
 							client.clone(),
 							pool.clone(),
-							executor.clone(),
 							pair.clone(),
 						),
 					}))?;
@@ -372,7 +371,6 @@ pub fn new_full<
 						signed_pool_client: SignedPoolClient::new(
 							client.clone(),
 							pool.clone(),
-							executor.clone(),
 							pair.clone(),
 						),
 					}))?;

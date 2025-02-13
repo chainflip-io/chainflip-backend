@@ -8,7 +8,6 @@ use codec::{Decode, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::StreamExt;
 use jsonrpsee::tokio::sync::{RwLock, RwLockReadGuard};
-use log::warn;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
 };
@@ -26,7 +25,7 @@ use state_chain_runtime::{
 	constants::common::SIGNED_EXTRINSIC_LIFETIME, runtime_apis::CustomRuntimeApi, AccountId, Hash,
 	Nonce, RuntimeCall,
 };
-use std::{collections::HashMap, marker::PhantomData, ops::Deref, sync::Arc};
+use std::{collections::HashMap, future::Future, marker::PhantomData, ops::Deref, sync::Arc};
 
 pub struct SignedPoolClient<C, B, BE>
 where
@@ -51,9 +50,8 @@ where
 {
 	pub client: Arc<C>,
 	pub pool: Arc<FullPool<B, C>>,
-	pub executor: Arc<dyn sp_core::traits::SpawnNamed>,
-	pub _phantom: PhantomData<B>,
-	pub _phantom_b: PhantomData<BE>,
+	pub _phantom_b: PhantomData<B>,
+	pub _phantom_be: PhantomData<BE>,
 	pub pair_signer: PairSigner<sp_core::sr25519::Pair>,
 	pub runtime_decoders: Arc<RwLock<HashMap<u32, RuntimeDecoder>>>,
 	pub nonce: Arc<RwLock<Option<Nonce>>>,
@@ -80,18 +78,12 @@ where
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
-	pub fn new(
-		client: Arc<C>,
-		pool: Arc<FullPool<B, C>>,
-		executor: Arc<dyn sp_core::traits::SpawnNamed>,
-		pair: sp_core::sr25519::Pair,
-	) -> Self {
+	pub fn new(client: Arc<C>, pool: Arc<FullPool<B, C>>, pair: sp_core::sr25519::Pair) -> Self {
 		Self {
 			client,
 			pool,
-			executor,
-			_phantom: Default::default(),
 			_phantom_b: Default::default(),
+			_phantom_be: Default::default(),
 			pair_signer: PairSigner::new(pair),
 			runtime_decoders: Arc::new(RwLock::new(HashMap::new())),
 			nonce: Arc::new(RwLock::new(None)),
@@ -233,11 +225,6 @@ where
 			.await?
 			.decode_extrinsic_events(extrinsic_index, raw_events)?;
 
-		warn!(
-			"------ get_extrinsic_data build_runtime_version: {:?}",
-			build_runtime_version().spec_version
-		);
-
 		let tx_hash =
 			<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(extrinsic);
 
@@ -270,8 +257,6 @@ where
 				block_hash,
 			)?;
 
-		//warn!("------ block_events: {:?}", block_events);
-
 		let extrinsic_events = block_events
 			.iter()
 			.filter_map(|event_record| match event_record.as_ref() {
@@ -283,12 +268,6 @@ where
 				_ => None,
 			})
 			.collect::<Vec<_>>();
-
-		warn!(
-			"------ get_extrinsic_details build_runtime_version: {:?}",
-			build_runtime_version().spec_version
-		);
-		//warn!("------ extrinsic_events: {:?}", extrinsic_events);
 
 		let tx_hash =
 			<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(extrinsic);
@@ -439,17 +418,17 @@ where
 		}
 	}
 
-	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
-	/// `until_finalized` param determines whether to wait until the extrinsic is in a block or in
-	/// a finalized block. Once the extrinsic is in a block, `ExtrinsicDetails` is returned.
-	/// NB: This is a blocking call, if until_finalized == false it takes around 1 block (6 secs)
-	/// and if until_finalized == true it takes around >12 secs
-	pub async fn submit_watch(
+	async fn submit_watch_generic<T, Fut, F>(
 		&self,
 		call: RuntimeCall,
 		until_finalized: bool,
 		dry_run: bool,
-	) -> RpcResult<ExtrinsicDetails> {
+		get_extrinsic_fn: F,
+	) -> RpcResult<T>
+	where
+		Fut: Future<Output = RpcResult<T>> + Send,
+		F: Fn(Hash, usize) -> Fut + Send,
+	{
 		if dry_run {
 			self.dry_run_extrinsic(call.clone()).await?;
 		}
@@ -470,11 +449,11 @@ where
 						match status {
 							TransactionStatus::InBlock((block_hash, tx_index)) =>
 								if !until_finalized {
-									return self.get_extrinsic_details(block_hash, tx_index).await;
+									return get_extrinsic_fn(block_hash, tx_index).await;
 								},
 							TransactionStatus::Finalized((block_hash, tx_index)) =>
 								if until_finalized {
-									return self.get_extrinsic_details(block_hash, tx_index).await;
+									return get_extrinsic_fn(block_hash, tx_index).await;
 								},
 							TransactionStatus::Future |
 							TransactionStatus::Ready |
@@ -518,77 +497,44 @@ where
 		}
 	}
 
-	pub async fn submit_watch_v2(
+	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress. Once the
+	/// extrinsic is in a block, `ExtrinsicDetails` is returned. `ExtrinsicDetails` contains
+	/// static events (event types known at compile time) of type
+	/// `state_chain_runtime::RuntimeEvent`. This means if a runtime upgrade changes an event
+	/// signature, this function can't decode the changed event anymore. Use the alternative
+	/// `submit_watch_dynamic` to be able to dynamically decode events.
+	/// `until_finalized` param determines whether to wait until the extrinsic is in a block or in
+	/// a finalized block. This is a blocking call, if until_finalized == false it takes around 1
+	/// block and if until_finalized == true it takes >2 blocks
+	pub async fn submit_watch(
+		&self,
+		call: RuntimeCall,
+		until_finalized: bool,
+		dry_run: bool,
+	) -> RpcResult<ExtrinsicDetails> {
+		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, tx_index| {
+			self.get_extrinsic_details(block_hash, tx_index)
+		})
+		.await
+	}
+
+	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress. Once the
+	/// extrinsic is in a block, `ExtrinsicData` is returned. `ExtrinsicData` contains dynamic
+	/// events of type `DynamicEvents`, these events are decoded dynamically using the current
+	/// runtime metadata. This means that if a runtime upgrade changes the event signature this
+	/// function can decode the changed event.
+	/// `until_finalized` param determines whether to wait until the extrinsic is in a block or in
+	/// a finalized block. This is a blocking call, if until_finalized == false it takes around 1
+	/// block and if until_finalized == true it takes >2 blocks
+	pub async fn submit_watch_dynamic(
 		&self,
 		call: RuntimeCall,
 		until_finalized: bool,
 		dry_run: bool,
 	) -> RpcResult<ExtrinsicData> {
-		if dry_run {
-			self.dry_run_extrinsic(call.clone()).await?;
-		}
-
-		loop {
-			let at_block = self.client.info().best_hash;
-			let extrinsic =
-				self.create_signed_extrinsic(call.clone(), self.next_nonce(at_block).await?)?;
-
-			match self
-				.pool
-				.submit_and_watch(at_block, TransactionSource::External, extrinsic)
-				.await
-			{
-				Ok(mut status_stream) => {
-					// Periodically poll the transaction pool to check inclusion status
-					while let Some(status) = status_stream.next().await {
-						match status {
-							TransactionStatus::InBlock((block_hash, tx_index)) =>
-								if !until_finalized {
-									return self.get_extrinsic_data(block_hash, tx_index).await;
-								},
-							TransactionStatus::Finalized((block_hash, tx_index)) =>
-								if until_finalized {
-									return self.get_extrinsic_data(block_hash, tx_index).await;
-								},
-							TransactionStatus::Future |
-							TransactionStatus::Ready |
-							TransactionStatus::Broadcast(_) => continue,
-							TransactionStatus::Invalid => {
-								//log::warn!("Transaction failed status: {:?}", status);
-								return Err(CfApiError::OtherError(anyhow!(
-									"transaction is no longer valid in the current state. "
-								)))
-							},
-							TransactionStatus::Dropped => {
-								log::warn!("Transaction failed status: {:?}", status);
-								return Err(CfApiError::OtherError(anyhow!(
-									"transaction was dropped from the pool because of the limit"
-								)))
-							},
-							TransactionStatus::Usurped(_hash) => {
-								log::warn!("Transaction failed status: {:?}", status);
-								return Err(CfApiError::OtherError(anyhow!(
-									"Transaction has been replaced in the pool, "
-								)))
-							},
-							TransactionStatus::FinalityTimeout(_block_hash) => {
-								log::warn!("Transaction failed status: {:?}", status);
-								//return Err(CfApiError::OtherError(anyhow!("Maximum number of
-								// finality watchers has been reached")))
-								continue
-							},
-							TransactionStatus::Retracted(_block_hash) => {
-								log::warn!("Transaction failed status: {:?}", status);
-								Err(CfApiError::OtherError(anyhow!("The block this transaction was included in has been retracted.")))?
-							},
-						}
-					}
-					return Err(CfApiError::OtherError(anyhow!("transaction unexpected error")))
-				},
-				Err(e) => {
-					self.handle_transaction_pool_error(e).await?;
-				},
-			};
-		}
+		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, tx_index| {
+			self.get_extrinsic_data(block_hash, tx_index)
+		})
+		.await
 	}
 }
