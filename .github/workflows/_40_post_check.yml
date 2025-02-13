@@ -18,7 +18,7 @@ on:
 
 env:
   FORCE_COLOR: 1
-  SOLANA_VERSION: v1.18.17
+  SOLANA_VERSION: v2.0.26
   NODE_COUNT: "${{ inputs.node-count }}-node"
 
 permissions:
@@ -81,8 +81,7 @@ jobs:
 
       - name: Install solana ☀️
         run: |
-          sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
-
+          sh -c "$(curl -sSfL https://release.anza.xyz/$SOLANA_VERSION/install)"
       - name: Start a localnet 🚀
         env:
           BINARY_ROOT_PATH: .

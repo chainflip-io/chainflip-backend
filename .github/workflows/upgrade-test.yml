@@ -22,7 +22,7 @@ on:
         default: true
 env:
   FORCE_COLOR: 1
-  SOLANA_VERSION: v1.18.17
+  SOLANA_VERSION: v2.0.26
   SOLANA_PROGRAMS_VERSION: v0.1.1-alt-test
   NODE_COUNT: "1-node"
 
@@ -149,7 +149,7 @@ jobs:
       - name: Install solana ☀️
         if: inputs.run-job
         run: |
-          sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
+          sh -c "$(curl -sSfL https://release.anza.xyz/$SOLANA_VERSION/install)"
 
       - name: Start a localnet from upgrade-from version 🚀
         if: inputs.run-job
