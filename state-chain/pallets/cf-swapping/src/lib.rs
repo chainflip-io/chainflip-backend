@@ -712,6 +712,7 @@ pub mod pallet {
 		AffiliateRegistration {
 			broker_id: T::AccountId,
 			short_id: AffiliateShortId,
+			withdrawal_address: EthereumAddress,
 			affiliate_id: T::AccountId,
 		},
 		BrokerBondSet {
@@ -1273,6 +1274,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::AffiliateRegistration {
 				broker_id,
 				short_id,
+				withdrawal_address,
 				affiliate_id,
 			});
 
