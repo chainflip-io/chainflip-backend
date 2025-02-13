@@ -1965,6 +1965,7 @@ mod affiliates {
 					Event::<Test>::AffiliateRegistration {
 						broker_id: BROKER,
 						short_id: SHORT_ID,
+						withdrawal_address,
 						affiliate_id: affiliate_account_id,
 					},
 				));

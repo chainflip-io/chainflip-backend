@@ -650,6 +650,7 @@ pub mod pallet {
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
+			account_id: T::AccountId,
 			egress_id: EgressId,
 			egress_asset: Asset,
 			egress_amount: AssetAmount,
@@ -713,6 +714,7 @@ pub mod pallet {
 		AffiliateRegistration {
 			broker_id: T::AccountId,
 			short_id: AffiliateShortId,
+			withdrawal_address: EthereumAddress,
 			affiliate_id: T::AccountId,
 		},
 		BrokerBondSet {
@@ -1282,6 +1284,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::AffiliateRegistration {
 				broker_id,
 				short_id,
+				withdrawal_address,
 				affiliate_id,
 			});
 
@@ -1415,6 +1418,7 @@ pub mod pallet {
 				.map_err(Into::into)?;
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
+				account_id: account_id.clone(),
 				egress_amount,
 				egress_asset: asset,
 				egress_fee: fee_withheld,
