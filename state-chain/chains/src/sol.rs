@@ -37,9 +37,10 @@ pub use sol_prim::{
 		VersionedTransaction as SolVersionedTransaction,
 	},
 	Address as SolAddress, AddressLookupTableAccount as SolAddressLookupTableAccount,
-	Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash, Hash as RawSolHash,
-	Instruction as SolInstruction, InstructionRpc as SolInstructionRpc, Pubkey as SolPubkey,
-	Signature as SolSignature, SlotNumber as SolBlockNumber,
+	AddressLookupTableAccount, Amount as SolAmount, ComputeLimit as SolComputeLimit,
+	Digest as SolHash, Hash as RawSolHash, Instruction as SolInstruction,
+	InstructionRpc as SolInstructionRpc, Pubkey as SolPubkey, Signature as SolSignature,
+	SlotNumber as SolBlockNumber,
 };
 pub use sol_tx_core::{
 	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
@@ -469,7 +470,7 @@ pub struct SolApiEnvironment {
 	pub swap_endpoint_program: SolAddress,
 	pub swap_endpoint_program_data_account: SolAddress,
 	pub alt_manager_program: SolAddress,
-	pub address_lookup_table_account: (SolAddress, Vec<SolAddress>),
+	pub address_lookup_table_account: AddressLookupTableAccount,
 }
 
 impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}

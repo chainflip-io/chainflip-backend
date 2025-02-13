@@ -7,9 +7,9 @@ use cf_chains::{
 	eth,
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ChainflipAddressLookupTable, ComputePrice,
-			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
-			RecoverDurableNonce, SolanaAddressLookupTables, SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaAddressLookupTables,
+			SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,
 	},
@@ -188,13 +188,6 @@ impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccoun
 	for MockSolEnvironment
 {
 	fn lookup(_s: SolanaAddressLookupTables) -> Option<Vec<SolAddressLookupTableAccount>> {
-		None
-	}
-}
-impl ChainEnvironment<ChainflipAddressLookupTable, SolAddressLookupTableAccount>
-	for MockSolEnvironment
-{
-	fn lookup(_s: ChainflipAddressLookupTable) -> Option<SolAddressLookupTableAccount> {
 		None
 	}
 }

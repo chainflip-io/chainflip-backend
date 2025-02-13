@@ -6,7 +6,7 @@ use cf_chains::{
 	evm::H256,
 	sol::{
 		sol_tx_core::consts::{const_address, const_hash},
-		SolAddress,
+		AddressLookupTableAccount, SolAddress,
 	},
 };
 use cf_utilities::bs58_array;
@@ -94,197 +94,261 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for SolApiEnvironmentMigr
 									vec![
 										const_address(
 											"BttvFNSRKrkHugwDP6SpnBejCKKskHowJif1HGgBtTfG",
-										),
+										)
+										.into(),
 										const_address(
 											"SysvarRecentB1ockHashes11111111111111111111",
-										),
+										)
+										.into(),
 										const_address(
 											"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-										),
+										)
+										.into(),
 										const_address(
 											"7B13iu7bUbBX88eVBqTZkQqrErnTMazPmGLdE5RqdyKZ",
-										),
+										)
+										.into(),
 										const_address(
 											"9CGLwcPknpYs3atgwtjMX7RhgvBgaqK8wwCvXnmjEoL9",
-										),
+										)
+										.into(),
 										const_address(
 											"24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p",
-										),
+										)
+										.into(),
 										const_address(
 											"Sysvar1nstructions1111111111111111111111111",
-										),
+										)
+										.into(),
 										const_address(
 											"2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9",
-										),
+										)
+										.into(),
 										const_address(
 											"EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN",
-										),
+										)
+										.into(),
 										const_address(
 											"So11111111111111111111111111111111111111112",
-										),
+										)
+										.into(),
 										const_address(
 											"ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-										),
-										const_address("11111111111111111111111111111111"),
+										)
+										.into(),
+										const_address("11111111111111111111111111111111").into(),
 										const_address(
 											"8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf",
-										),
+										)
+										.into(),
 										const_address(
 											"35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT",
-										),
+										)
+										.into(),
 										const_address(
 											"49XegQyykAXwzigc6u7gXbaLjhKfNadWMZwFiovzjwUw",
-										),
+										)
+										.into(),
 										const_address(
 											"2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw",
-										),
+										)
+										.into(),
 										const_address(
 											"HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo",
-										),
+										)
+										.into(),
 										const_address(
 											"HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p",
-										),
+										)
+										.into(),
 										const_address(
 											"HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2",
-										),
+										)
+										.into(),
 										const_address(
 											"GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM",
-										),
+										)
+										.into(),
 										const_address(
 											"EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn",
-										),
+										)
+										.into(),
 										const_address(
 											"9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa",
-										),
+										)
+										.into(),
 										const_address(
 											"J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna",
-										),
+										)
+										.into(),
 										const_address(
 											"GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55",
-										),
+										)
+										.into(),
 										const_address(
 											"AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv",
-										),
+										)
+										.into(),
 										const_address(
 											"BN2vyodNYQQTrx3gtaDAL2UGGVtZwFeF5M8krE5aYYES",
-										),
+										)
+										.into(),
 										const_address(
 											"Gwq9TAQCjbJtdnmtxQa3PbHFfbr6YTUBMDjEP9x2uXnH",
-										),
+										)
+										.into(),
 										const_address(
 											"3pGbKatko2ckoLEy139McfKiirNgy9brYxieNqFGdN1W",
-										),
+										)
+										.into(),
 										const_address(
 											"9Mcd8BTievK2yTvyiqG9Ft4HfDFf6mjGFBWMnCSRQP8S",
-										),
+										)
+										.into(),
 										const_address(
 											"AEZG74RoqM6sxf79eTizq5ShB4JTuCkMVwUgtnC8H94z",
-										),
+										)
+										.into(),
 										const_address(
 											"APLkgyCWi8DFAMF4KikjTu8YnUG1r7sMjVEfDiaBRZnS",
-										),
+										)
+										.into(),
 										const_address(
 											"4ShNXTTHvpVt6bQdZTRdyW6yWXDzrPupdMuxajbEoGE4",
-										),
+										)
+										.into(),
 										const_address(
 											"FgZp6NJYWw15U51ynfXCfU9vq3eVgDDAHMSfJ8fFBZZ8",
-										),
+										)
+										.into(),
 										const_address(
 											"ENQ9Mmg87KFLX8ncXRPDBSd7jhKCtPBi8QzAh4rkREgP",
-										),
+										)
+										.into(),
 										const_address(
 											"Hhay1UwkzkFUgrGUYuiCvUwv7kErNzAcZnVRQ2fetT7K",
-										),
+										)
+										.into(),
 										const_address(
 											"2fUVR42opcHgGLrY1eguDXLYfQPHQe9ReJNmRorVt9v8",
-										),
+										)
+										.into(),
 										const_address(
 											"HfKr1wJASkW5UHs8yNWAqMeaYJdp8K2mdYwkbdVRdVrm",
-										),
+										)
+										.into(),
 										const_address(
 											"DrpYkMpJWkpNqX9yYgQfc3uZrCVYobJ3RbTABcSkHJkM",
-										),
+										)
+										.into(),
 										const_address(
 											"HCXc3o2go1Y2KhfnykLYXEvofLifXTb7GT13w4GsFmGw",
-										),
+										)
+										.into(),
 										const_address(
 											"FFKYhae4HSnMmA6JJfe8NNtZeySA9yRWLaHzE2jqfhBr",
-										),
+										)
+										.into(),
 										const_address(
 											"AaRrJovR9Npna4fuCJ17AB3cJAMzoNDaZymRTbGGzUZm",
-										),
+										)
+										.into(),
 										const_address(
 											"5S8DzBBLvJUeyJccV4DekAK8KJA5PDcjwxRxCvgdyBEi",
-										),
+										)
+										.into(),
 										const_address(
 											"Cot1DQZpm859brrre7swrDhTYLj2NJbg3hdMKCHk5zSk",
-										),
+										)
+										.into(),
 										const_address(
 											"4mfDv7PisvtMhiyGmvD6vxRdVpB842XbUhimAZYxMEn9",
-										),
+										)
+										.into(),
 										const_address(
 											"BHW7qFCNHTX5QD5yJpT1hn1VM817Ji5ksZqiXMfqGrsj",
-										),
+										)
+										.into(),
 										const_address(
 											"EJqZLeaxi2gVsJgQW4nbmxyWJukK25n7jB8qWKoDgWUN",
-										),
+										)
+										.into(),
 										const_address(
 											"BJqTPWyoqqgzhkLh1pbPh4KWBqg8kCUNzJ81avitSQrm",
-										),
+										)
+										.into(),
 										const_address(
 											"EkmPmEmSbwm8EDDYtLtaDgcfuLNtW7MbKx5w3FUpaGjv",
-										),
+										)
+										.into(),
 										const_address(
 											"CgwtCv8HQ67imnHEkz24TfXfyA2H5jurxcLGxAgDmNQj",
-										),
+										)
+										.into(),
 										const_address(
 											"zfKsXSxJ4cTpKS7S6aHL1Hy3m1CEjQuySKSwkWvukQX",
-										),
+										)
+										.into(),
 										const_address(
 											"2VvN1s6txNYyBdKpaC8b6AZKVqUQiQT2Exrpa7ffCgV6",
-										),
+										)
+										.into(),
 										const_address(
 											"A2DT1dc4rA1uMry7WCLwoUEQQNjCAsAMkB4X9Lgo88zd",
-										),
+										)
+										.into(),
 										const_address(
 											"9mNBRGfTMLsSsQUn4YZfRDBVXfQ6juEWbNUTwv2ir9gC",
-										),
+										)
+										.into(),
 										const_address(
 											"3jXiydxPx1P7Ggdja5yt384ryLJAW2c8LRGV8PPRT54C",
-										),
+										)
+										.into(),
 										const_address(
 											"7ztGR1z28NpYjUaXyrGBzBGu62u1f9H9Pj9UVSKnT3yu",
-										),
+										)
+										.into(),
 										const_address(
 											"4GdnDTr5X4eJFHuzTEBLrz3tsREo8rQro7S9YDqrbMZ9",
-										),
+										)
+										.into(),
 										const_address(
 											"ALxnH6TBKJPBFRfFZspQkxDjb9nGLUP5oxFFdZNRFgUu",
-										),
+										)
+										.into(),
 										const_address(
 											"Bu3sdWtBh5TJishgK3vneh2zJg1rjLqWN5mFTHxWspwJ",
-										),
+										)
+										.into(),
 										const_address(
 											"GvBbUTE312RXU5iXAcNWt6CuVbfsPs5Nk28D6qvU6NF3",
-										),
+										)
+										.into(),
 										const_address(
 											"2LLct8SsnkW3sD9Gu8CfxmDEjKAWtFXqLvA8ymMyuq8u",
-										),
+										)
+										.into(),
 										const_address(
 											"CQ9vUhC3dSa4LyZCpWVpNbXhSn6f7J3NQXWDDvMMk6aW",
-										),
+										)
+										.into(),
 										const_address(
 											"Cw8GqRmKzCbp7UFfafECC9sf9f936Chgx3BkbSgnXfmU",
-										),
+										)
+										.into(),
 										const_address(
 											"GFJ6m6YdNT1tUfAxyD2BiPSx8gwt3xe4jVAKdtdSUt8W",
-										),
+										)
+										.into(),
 										const_address(
 											"7bphTuo5BKs4JJw5WPusCevmnoRk9ocFiB8EGgfwnh4c",
-										),
+										)
+										.into(),
 										const_address(
 											"EFbUq18Mcdi2gGauRzmbNeD5ixaB7EYVk5JZgAF34LoS",
-										),
+										)
+										.into(),
 									],
 								),
 							),
@@ -301,7 +365,10 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for SolApiEnvironmentMigr
 
 						// Newly inserted values
 						alt_manager_program,
-						address_lookup_table_account,
+						address_lookup_table_account: AddressLookupTableAccount {
+							key: address_lookup_table_account.0.into(),
+							addresses: address_lookup_table_account.1,
+						},
 					}
 				},
 			)

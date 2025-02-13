@@ -4,7 +4,10 @@ use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT},
 	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, SolTrackedData},
+	sol::{
+		api::DurableNonceAndAccount, AddressLookupTableAccount, SolAddress, SolApiEnvironment,
+		SolHash, SolTrackedData,
+	},
 	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use cf_primitives::{
@@ -347,10 +350,14 @@ pub fn inner_cf_development_config(
 					swap_endpoint_program: sol_swap_endpoint_program,
 					swap_endpoint_program_data_account: sol_swap_endpoint_program_data_account,
 					alt_manager_program: sol_alt_manager_program,
-					address_lookup_table_account: (
-						sol_address_lookup_table_account.0,
-						sol_address_lookup_table_account.1.to_vec(),
-					),
+					address_lookup_table_account: AddressLookupTableAccount {
+						key: sol_address_lookup_table_account.0.into(),
+						addresses: sol_address_lookup_table_account
+							.1
+							.into_iter()
+							.map(|addr| addr.into())
+							.collect(),
+					},
 				},
 				sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts.to_vec(),
 				network_environment: NetworkEnvironment::Development,
@@ -517,10 +524,14 @@ macro_rules! network_spec {
 								swap_endpoint_program_data_account:
 									sol_swap_endpoint_program_data_account,
 								alt_manager_program: sol_alt_manager_program,
-								address_lookup_table_account: (
-									sol_address_lookup_table_account.0,
-									sol_address_lookup_table_account.1.to_vec(),
-								),
+								address_lookup_table_account: AddressLookupTableAccount {
+									key: sol_address_lookup_table_account.0.into(),
+									addresses: sol_address_lookup_table_account
+										.1
+										.into_iter()
+										.map(|addr| addr.into())
+										.collect(),
+								},
 							},
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()
