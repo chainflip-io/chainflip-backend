@@ -246,7 +246,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker; do
+  select SERVICE in node engine broker lp polkadot1 polkadot2 assethub geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker; do
     if [[ $SERVICE == "all" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f $CHAINFLIP_BASE_PATH/*/chainflip-*.log

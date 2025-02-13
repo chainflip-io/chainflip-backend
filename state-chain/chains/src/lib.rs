@@ -3,17 +3,21 @@
 #![feature(extract_if)]
 #![feature(split_array)]
 use crate::{
-	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, none::NoneChainCrypto,
-	sol::SolanaCrypto,
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
+	btc::BitcoinCrypto,
+	dot::PolkadotCrypto,
+	evm::EvmCrypto,
+	none::NoneChainCrypto,
+	sol::{
+		api::SolanaTransactionBuildingError,
+		sol_tx_core::instructions::program_instructions::swap_endpoints::types::CcmParams,
+		SolanaCrypto, SolanaTransactionInId,
+	},
 };
 use core::{fmt::Display, iter::Step};
 use sol::api::VaultSwapAccountAndSender;
 use sp_std::marker::PhantomData;
 
-use crate::{
-	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
-	sol::{api::SolanaTransactionBuildingError, SolanaTransactionInId},
-};
 pub use address::ForeignChainAddress;
 use address::{
 	AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
@@ -775,6 +779,12 @@ impl BenchmarkValue for CcmChannelMetadata {
 			gas_budget: BenchmarkValue::benchmark_value(),
 			ccm_additional_data: BenchmarkValue::benchmark_value(),
 		}
+	}
+}
+
+impl From<CcmChannelMetadata> for CcmParams {
+	fn from(ccm: crate::CcmChannelMetadata) -> Self {
+		CcmParams { message: ccm.message.to_vec(), gas_amount: ccm.gas_budget as u64 }
 	}
 }
 

@@ -10,6 +10,14 @@ pub const SOLANA_PDA_MAX_SEEDS: u8 = 16;
 pub const SOLANA_PDA_MAX_SEED_LEN: usize = 32;
 pub const SOLANA_PDA_MARKER: &[u8; 21] = b"ProgramDerivedAddress";
 
+pub const HASH_BYTES: usize = 32;
+
+/// Maximum string length of a base58 encoded pubkey
+pub const MAX_BASE58_LEN: usize = 44;
+
+/// Bit mask that indicates whether a serialized message is versioned.
+pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
+
 pub const fn const_address(s: &'static str) -> Address {
 	Address(bs58_array(s))
 }
@@ -27,6 +35,9 @@ pub const SYS_VAR_RECENT_BLOCKHASHES: Address =
 	const_address("SysvarRecentB1ockHashes11111111111111111111");
 pub const SYS_VAR_INSTRUCTIONS: Address =
 	const_address("Sysvar1nstructions1111111111111111111111111");
+pub const ADDRESS_LOOKUP_TABLE_PROGRAM_ID: Address =
+	const_address("AddressLookupTab1e1111111111111111111111111");
+
 pub const SYS_VAR_RENT: Address = const_address("SysvarRent111111111111111111111111111111111");
 pub const SYS_VAR_CLOCK: Address = const_address("SysvarC1ock11111111111111111111111111111111");
 pub const BPF_LOADER_UPGRADEABLE_ID: Address =

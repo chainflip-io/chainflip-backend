@@ -1,4 +1,7 @@
+#![cfg(test)]
+
 #[cfg(feature = "str")]
+#[cfg(test)]
 mod from_and_to_str {
 	use core::fmt::Write;
 
@@ -39,6 +42,7 @@ mod from_and_to_str {
 }
 
 #[cfg(feature = "serde")]
+#[cfg(test)]
 mod feature_serde {
 	use crate::{address::Address, consts};
 

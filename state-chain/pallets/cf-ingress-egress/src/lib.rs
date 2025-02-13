@@ -38,7 +38,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
 	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
 	EpochIndex, ForeignChain, GasAmount, PrewitnessedDepositId, SwapRequestId,
-	ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -1434,38 +1434,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// TODO: remove these deprecated calls after runtime version 1.8
-		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::vault_swap_request())]
-		pub fn vault_swap_request_deprecated(
-			origin: OriginFor<T>,
-			_from: Asset,
-			_to: Asset,
-			_deposit_amount: AssetAmount,
-			_destination_address: EncodedAddress,
-			_tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Err(DispatchError::Other("deprecated"))
-		}
-
-		#[pallet::call_index(11)]
-		#[pallet::weight(T::WeightInfo::vault_swap_request())]
-		pub fn vault_ccm_swap_request_deprecated(
-			origin: OriginFor<T>,
-			_source_asset: Asset,
-			_deposit_amount: AssetAmount,
-			_destination_asset: Asset,
-			_destination_address: EncodedAddress,
-			_deposit_metadata: CcmDepositMetadata,
-			_tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Err(DispatchError::Other("deprecated"))
-		}
-
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::mark_transaction_for_rejection())]
 		pub fn mark_transaction_for_rejection(
@@ -1637,32 +1605,52 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									deposit_address,
 									deposit_fetch_id,
 									..
-								} =>
-									Self::should_fetch_or_transfer(
-										&mut maybe_no_of_fetches_remaining,
-									) && DepositChannelLookup::<T, I>::mutate(
-										deposit_address,
-										|details| {
-											details
-												.as_mut()
-												.map(|details| {
-													let can_fetch =
-														details.deposit_channel.state.can_fetch();
-
-													if can_fetch {
-														deposit_fetch_id.replace(
-															details.deposit_channel.fetch_id(),
-														);
-														details
+								} => {
+									// Either:
+									// 1. We always want to fetch
+									// 2. We have a restriction on fetches, in which case we need to
+									//    have fetches remaining.
+									// And we must be able to fetch the channel (it must exist and
+									// can_fetch must be true)
+									if (maybe_no_of_fetches_remaining.is_none_or(|n| n > 0)) &&
+										DepositChannelLookup::<T, I>::mutate(
+											deposit_address,
+											|details| {
+												details
+													.as_mut()
+													.map(|details| {
+														let can_fetch = details
 															.deposit_channel
 															.state
-															.on_fetch_scheduled();
-													}
-													can_fetch
-												})
-												.unwrap_or(false)
-										},
-									),
+															.can_fetch();
+
+														if can_fetch {
+															deposit_fetch_id.replace(
+																details.deposit_channel.fetch_id(),
+															);
+															details
+																.deposit_channel
+																.state
+																.on_fetch_scheduled();
+														}
+														can_fetch
+													})
+													.unwrap_or(false)
+											},
+										) {
+										if let Some(n) = maybe_no_of_fetches_remaining.as_mut() {
+											*n = n.saturating_sub(1);
+										}
+										true
+									} else {
+										// If we have a restriction on fetches, but we have no fetch
+										// slots remaining then we don't want to fetch any
+										// more. OR:
+										// If the channel is expired / `can_fetch` returns
+										// false then we can't/shouldn't fetch.
+										false
+									}
+								},
 								FetchOrTransfer::Transfer { .. } => Self::should_fetch_or_transfer(
 									&mut maybe_no_of_transfers_remaining,
 								),

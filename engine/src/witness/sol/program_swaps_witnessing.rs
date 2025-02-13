@@ -11,19 +11,16 @@ use cf_chains::{
 	cf_parameters::{
 		CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
 	},
-	sol::{
-		api::VaultSwapAccountAndSender,
-		sol_tx_core::program_instructions::{
-			swap_endpoints::types::{SwapEndpointDataAccount, SwapEvent},
-			ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
-		},
-		SolAddress,
-	},
+	sol::{api::VaultSwapAccountAndSender, SolAddress},
 	CcmChannelMetadata, CcmDepositMetadata, ForeignChainAddress,
 };
 use codec::Decode;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
+use sol_prim::program_instructions::{
+	swap_endpoints::types::{SwapEndpointDataAccount, SwapEvent},
+	ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
+};
 use state_chain_runtime::chainflip::solana_elections::SolanaVaultSwapDetails;
 use std::collections::{BTreeSet, HashSet};
 use tracing::warn;

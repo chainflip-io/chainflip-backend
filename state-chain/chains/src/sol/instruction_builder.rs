@@ -5,13 +5,14 @@
 //! Such Instruction can be signed and sent to the Program on Solana directly to invoke
 //! certain functions.
 
-use sol_prim::consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
-
 use crate::{
 	address::EncodedAddress,
 	sol::{
-		sol_tx_core::program_instructions::swap_endpoints::{
-			SwapEndpointProgram, SwapNativeParams, SwapTokenParams,
+		sol_tx_core::{
+			consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
+			program_instructions::swap_endpoints::{
+				SwapEndpointProgram, SwapNativeParams, SwapTokenParams,
+			},
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolInstruction, SolPubkey,
 	},
@@ -102,8 +103,12 @@ mod test {
 	use crate::{
 		cf_parameters::build_cf_parameters,
 		sol::{
-			signing_key::SolSigningKey, sol_tx_core::sol_test_values::*, SolAddress, SolHash,
-			SolLegacyMessage, SolLegacyTransaction,
+			signing_key::SolSigningKey,
+			sol_tx_core::{
+				consts::{const_address, MAX_TRANSACTION_LENGTH},
+				sol_test_values::*,
+			},
+			SolAddress, SolHash, SolLegacyMessage, SolLegacyTransaction,
 		},
 		ChannelRefundParameters,
 	};
@@ -111,7 +116,6 @@ mod test {
 		chains::Solana, AccountId, AffiliateAndFee, AffiliateShortId, BasisPoints, DcaParameters,
 		MAX_AFFILIATES,
 	};
-	use sol_prim::consts::{const_address, MAX_TRANSACTION_LENGTH};
 	use sp_core::ConstU32;
 	use sp_runtime::BoundedVec;
 

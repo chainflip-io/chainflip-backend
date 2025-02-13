@@ -50,7 +50,7 @@ export async function buildAndSendBtcVaultSwap(
   };
 
   const BtcVaultSwapDetails = (await chainflip.rpc(
-    `cf_get_vault_swap_details`,
+    `cf_request_swap_parameter_encoding`,
     brokerFees.account,
     { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
     { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },

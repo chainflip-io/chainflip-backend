@@ -4,11 +4,6 @@
 //! Transactions with some level of abstraction.
 //! This avoids the need to deal with low level Solana core types.
 
-use sol_prim::consts::{
-	MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
-	TOKEN_PROGRAM_ID,
-};
-
 use crate::{
 	sol::{
 		api::{DurableNonceAndAccount, SolanaTransactionBuildingError, VaultSwapAccountAndSender},
@@ -27,6 +22,10 @@ use crate::{
 				derive_swap_endpoint_native_vault_account, derive_token_supported_account,
 			},
 			compute_budget::ComputeBudgetInstruction,
+			consts::{
+				MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
+				TOKEN_PROGRAM_ID,
+			},
 			program_instructions::{
 				swap_endpoints::SwapEndpointProgram, InstructionExt, SystemProgramInstruction,
 				VaultProgram,
@@ -534,13 +533,14 @@ pub mod test {
 	use super::*;
 	use crate::{
 		sol::{
-			sol_tx_core::{address_derivation::derive_deposit_address, sol_test_values::*},
+			sol_tx_core::{
+				address_derivation::derive_deposit_address, consts::SOL_USDC_DECIMAL,
+				sol_test_values::*, PdaAndBump,
+			},
 			SolanaDepositFetchId, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 		},
 		TransferAssetParams,
 	};
-
-	use sol_prim::{consts::SOL_USDC_DECIMAL, PdaAndBump};
 
 	fn get_fetch_params(
 		channel_id: Option<ChannelId>,

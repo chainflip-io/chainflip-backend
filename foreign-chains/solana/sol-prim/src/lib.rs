@@ -19,9 +19,16 @@ pub mod pda;
 #[cfg(test)]
 mod tests;
 
+pub mod address_derivation;
+pub mod alt;
 pub mod consts;
 pub mod errors;
+pub mod instructions;
 pub mod short_vec;
+pub mod transaction;
+
+pub use alt::*;
+pub use instructions::*;
 
 #[cfg(feature = "std")]
 pub mod signer;
@@ -33,6 +40,8 @@ pub type SlotNumber = u64;
 pub type ComputeLimit = u32;
 pub type AccountBump = u8;
 
+use crate::consts::{HASH_BYTES, MAX_BASE58_LEN, SOLANA_SIGNATURE_LEN};
+
 define_binary!(address, Address, crate::consts::SOLANA_ADDRESS_LEN, "A");
 define_binary!(digest, Digest, crate::consts::SOLANA_DIGEST_LEN, "D");
 define_binary!(signature, Signature, crate::consts::SOLANA_SIGNATURE_LEN, "S");
@@ -43,11 +52,6 @@ pub struct PdaAndBump {
 	pub address: Address,
 	pub bump: AccountBump,
 }
-
-pub const HASH_BYTES: usize = 32;
-
-/// Maximum string length of a base58 encoded pubkey
-pub const MAX_BASE58_LEN: usize = 44;
 
 /// A directive for a single invocation of a Solana program.
 ///
@@ -359,6 +363,66 @@ impl CompiledKeys {
 
 		Ok((header, static_account_keys))
 	}
+
+	pub fn try_extract_table_lookup(
+		&mut self,
+		lookup_table_account: &AddressLookupTableAccount,
+	) -> Result<Option<(MessageAddressTableLookup, LoadedAddresses)>, CompileError> {
+		let (writable_indexes, drained_writable_keys) = self
+			.try_drain_keys_found_in_lookup_table(&lookup_table_account.addresses, |meta| {
+				!meta.is_signer && !meta.is_invoked && meta.is_writable
+			})?;
+		let (readonly_indexes, drained_readonly_keys) = self
+			.try_drain_keys_found_in_lookup_table(&lookup_table_account.addresses, |meta| {
+				!meta.is_signer && !meta.is_invoked && !meta.is_writable
+			})?;
+
+		// Don't extract lookup if no keys were found
+		if writable_indexes.is_empty() && readonly_indexes.is_empty() {
+			return Ok(None);
+		}
+
+		Ok(Some((
+			MessageAddressTableLookup {
+				account_key: lookup_table_account.key,
+				writable_indexes,
+				readonly_indexes,
+			},
+			LoadedAddresses { writable: drained_writable_keys, readonly: drained_readonly_keys },
+		)))
+	}
+
+	fn try_drain_keys_found_in_lookup_table(
+		&mut self,
+		lookup_table_addresses: &[Pubkey],
+		key_meta_filter: impl Fn(&CompiledKeyMeta) -> bool,
+	) -> Result<(Vec<u8>, Vec<Pubkey>), CompileError> {
+		let mut lookup_table_indexes = Vec::new();
+		let mut drained_keys = Vec::new();
+
+		for search_key in self
+			.key_meta_map
+			.iter()
+			.filter_map(|(key, meta)| key_meta_filter(meta).then_some(key))
+		{
+			for (key_index, key) in lookup_table_addresses.iter().enumerate() {
+				if key == search_key {
+					let lookup_table_index = u8::try_from(key_index)
+						.map_err(|_| CompileError::AddressTableLookupIndexOverflow)?;
+
+					lookup_table_indexes.push(lookup_table_index);
+					drained_keys.push(*search_key);
+					break;
+				}
+			}
+		}
+
+		for key in &drained_keys {
+			self.key_meta_map.remove_entry(key);
+		}
+
+		Ok((lookup_table_indexes, drained_keys))
+	}
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -481,7 +545,7 @@ impl TryFrom<Vec<u8>> for Pubkey {
 
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Copy)]
 pub struct RawSignature(GenericArray<u8, U64>);
-const SIGNATURE_BYTES: usize = 64;
+
 impl RawSignature {
 	#[cfg(test)]
 	pub(self) fn verify_verbose(
@@ -500,8 +564,8 @@ impl RawSignature {
 	}
 }
 
-impl From<[u8; SIGNATURE_BYTES]> for RawSignature {
-	fn from(signature: [u8; SIGNATURE_BYTES]) -> Self {
+impl From<[u8; SOLANA_SIGNATURE_LEN]> for RawSignature {
+	fn from(signature: [u8; SOLANA_SIGNATURE_LEN]) -> Self {
 		Self(GenericArray::from(signature))
 	}
 }

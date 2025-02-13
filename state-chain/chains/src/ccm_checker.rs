@@ -1,16 +1,18 @@
 use crate::{
 	address::EncodedAddress,
 	hub::AssethubRuntimeCall,
-	sol::{SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC},
+	sol::{
+		sol_tx_core::consts::{
+			ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
+			SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
+		},
+		SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC,
+	},
 	CcmChannelMetadata,
 };
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sol_prim::consts::{
-	ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION, SYSTEM_PROGRAM_ID,
-	SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
-};
 use sp_runtime::DispatchError;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 

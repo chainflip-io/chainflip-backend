@@ -28,9 +28,9 @@ ws_endpoint = "ws://localhost:9947"
 http_endpoint = "http://localhost:9947"
 
 # optional
-#[dot.backup_rpc]
-#ws_endpoint = "ws://localhost:8000"
-#http_endpoint = "http://localhost:8000"
+[dot.backup_rpc]
+ws_endpoint = "ws://localhost:9948"
+http_endpoint = "http://localhost:9948"
 
 [hub.rpc]
 ws_endpoint = "ws://localhost:9955"

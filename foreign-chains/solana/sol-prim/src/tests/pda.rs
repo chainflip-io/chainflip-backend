@@ -1,14 +1,12 @@
 #![cfg(feature = "pda")]
 
-use crate::{
-	address::Address,
-	pda::{Pda, PdaError},
-};
-
+#[cfg(test)]
 mod failures {
-	use crate::{consts, PdaAndBump};
-
-	use super::*;
+	use crate::{
+		consts,
+		pda::{Pda, PdaError},
+		Address, PdaAndBump,
+	};
 
 	#[test]
 	fn seed_too_long() {
@@ -55,10 +53,10 @@ mod failures {
 	}
 }
 
+#[cfg(test)]
 mod happy {
-	use crate::PdaAndBump;
+	use crate::{pda::Pda, Address, PdaAndBump};
 
-	use super::*;
 	fn run_single(public_key: &str, seeds: &[&str], expected_pda: &str) {
 		let public_key: Address = public_key.parse().expect("public-key");
 		let expected_pda: Address = expected_pda.parse().expect("expected-pda");
