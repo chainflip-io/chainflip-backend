@@ -128,6 +128,7 @@ async function deltaBasedIngressTest(
   }
 }
 
+// TODO: PRO-1581 Delete this test. It is not being ran by the bouncer.
 export async function testDeltaBasedIngress(
   testContext: TestContext,
   binariesPath = './../target/debug',

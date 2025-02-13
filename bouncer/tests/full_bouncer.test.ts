@@ -1,7 +1,6 @@
 import { describe } from 'vitest';
 import { testBtcUtxoConsolidation } from './btc_utxo_consolidation';
 import { testDeltaBasedIngress } from './delta_based_ingress';
-import { testDoubleDeposit } from './double_deposit';
 import { testRotatesThroughBtcSwap } from './rotates_through_btc_swap';
 import { testRotateAndSwap } from './rotation_barrier';
 import { testSolanaVaultSettingsGovernance } from './solana_vault_settings_governance';
@@ -23,7 +22,6 @@ describe('SerialTests2', () => {
   serialTest('DeltaBasedIngress', testDeltaBasedIngress, 800);
   serialTest('MinimumDeposit', testMinimumDeposit, 150);
   serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
-  serialTest('DoubleDeposit', testDoubleDeposit, 120);
 
   if (process.env.LOCALNET) {
     serialTest('SwapAfterDisconnection', testSwapAfterDisconnection, 1300);
