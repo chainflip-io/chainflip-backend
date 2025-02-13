@@ -181,6 +181,7 @@ async function testGasLimitSwapToSolana(sourceAsset: Asset, destAsset: Asset) {
 
   const transaction = await connection.getTransaction(txSignature, {
     commitment: 'confirmed',
+    maxSupportedTransactionVersion: 0,
   });
   // Checking that the compute limit is set correctly (and < MAX_CAP) is cumbersome without manually parsing instructions
   const totalFee =
