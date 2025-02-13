@@ -171,21 +171,12 @@ pub struct EventsDecoder {
 	static_metadata: subxt::Metadata,
 }
 
-impl Default for EventsDecoder {
-	fn default() -> Self {
-		let opaque_metadata = state_chain_runtime::Runtime::metadata_at_version(15)
-			.expect("Version 15 should be supported by the runtime.");
-
-		Self::new(opaque_metadata)
-	}
-}
-
 impl EventsDecoder {
-	pub fn new(opaque_metadata: sp_core::OpaqueMetadata) -> Self {
+	pub fn new(opaque_metadata: &sp_core::OpaqueMetadata) -> Self {
 		let current_metadata = subxt::Metadata::decode(&mut opaque_metadata.as_ref())
 			.expect("Runtime metadata should be valid.");
 
-		// Get the old metadata
+		// Get the compile time static metadata
 		let static_opaque_metadata = state_chain_runtime::Runtime::metadata_at_version(15)
 			.expect("Version 15 should be supported by the runtime.");
 		let static_metadata = subxt::Metadata::decode(&mut static_opaque_metadata.as_ref())

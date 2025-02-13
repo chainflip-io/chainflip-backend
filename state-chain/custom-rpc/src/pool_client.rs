@@ -1,8 +1,8 @@
 use crate::{internal_error, CfApiError, RpcResult, StorageQueryApi};
 use anyhow::anyhow;
 use cf_node_clients::{
-	build_runtime_version, error_decoder::ErrorDecoder, events_decoder::EventsDecoder,
-	signer::PairSigner, ExtrinsicData, ExtrinsicDetails, WaitFor, WaitForResult,
+	build_runtime_version, signer::PairSigner, ExtrinsicData, ExtrinsicDetails, RuntimeDecoder,
+	WaitFor, WaitForResult,
 };
 use codec::{Decode, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
@@ -55,8 +55,7 @@ where
 	pub _phantom: PhantomData<B>,
 	pub _phantom_b: PhantomData<BE>,
 	pub pair_signer: PairSigner<sp_core::sr25519::Pair>,
-	pub error_decoders: Arc<RwLock<HashMap<u32, ErrorDecoder>>>,
-	pub events_decoders: Arc<RwLock<HashMap<u32, EventsDecoder>>>,
+	pub runtime_decoders: Arc<RwLock<HashMap<u32, RuntimeDecoder>>>,
 	pub nonce: Arc<RwLock<Option<Nonce>>>,
 }
 
@@ -94,8 +93,7 @@ where
 			_phantom: Default::default(),
 			_phantom_b: Default::default(),
 			pair_signer: PairSigner::new(pair),
-			error_decoders: Arc::new(RwLock::new(HashMap::new())),
-			events_decoders: Arc::new(RwLock::new(HashMap::new())),
+			runtime_decoders: Arc::new(RwLock::new(HashMap::new())),
 			nonce: Arc::new(RwLock::new(None)),
 		}
 	}
@@ -130,17 +128,18 @@ where
 		*current_nonce = None;
 	}
 
-	/// Returns the error_decoder at the given block. first it acquires the runtime version at the
-	/// given block then it returns a reference to an error_decoder from error_decoders hash map.
-	/// If not found it creates a new one and inserts inside the map for future quick access
-	async fn error_decoder(
+	/// Returns the `RuntimeDecoder` at the given block. first it acquires the runtime version at
+	/// the given block then it returns a reference to an `RuntimeDecoder` from `runtime_decoders`
+	/// hash map. If not found it creates a new one and inserts inside the map for future quick
+	/// access
+	async fn runtime_decoder(
 		&self,
 		block_hash: Hash,
-	) -> RpcResult<impl Deref<Target = ErrorDecoder> + '_> {
+	) -> RpcResult<impl Deref<Target = RuntimeDecoder> + '_> {
 		let block_spec_version = self.client.runtime_version_at(block_hash)?.spec_version;
 
-		// Acquire a read guard for the error_decoders map
-		let decoders_read_guard = self.error_decoders.read().await;
+		// Acquire a read guard for the runtime_decoders map
+		let decoders_read_guard = self.runtime_decoders.read().await;
 
 		// Check if we have an error decoder corresponding to the runtime of the given block
 		if decoders_read_guard.contains_key(&block_spec_version) {
@@ -154,82 +153,31 @@ where
 				.runtime_api()
 				.metadata_at_version(block_hash, 15)
 				.expect("Version 15 should be supported by the runtime.")
-				.map(ErrorDecoder::new);
+				.map(RuntimeDecoder::new);
 
 			// Upgrade the read guard to a write guard
 			drop(decoders_read_guard);
-			let mut decoders_write_guard = self.error_decoders.write().await;
-
-			// Insert the new ErrorDecoder. if anything goes wrong while creating it, return or
-			// insert a default build time ErrorDecoder with the build runtime_version as key
-			let new_decoder_key = match maybe_new_decoder {
-				Some(new_error_decoder) => {
-					decoders_write_guard.entry(block_spec_version).or_insert(new_error_decoder);
-					block_spec_version
-				},
-				None => {
-					let default_spec_version = build_runtime_version().spec_version;
-					decoders_write_guard
-						.entry(default_spec_version)
-						.or_insert(ErrorDecoder::default());
-					default_spec_version
-				},
-			};
-
-			// Downgrade the write guard to a read guard and return the reference
-			drop(decoders_write_guard);
-			Ok(RwLockReadGuard::map(self.error_decoders.read().await, |decoders_map| {
-				decoders_map.get(&new_decoder_key).unwrap()
-			}))
-		}
-	}
-
-	async fn events_decoder(
-		&self,
-		block_hash: Hash,
-	) -> RpcResult<impl Deref<Target = EventsDecoder> + '_> {
-		let block_spec_version = self.client.runtime_version_at(block_hash)?.spec_version;
-
-		// Acquire a read guard for the error_decoders map
-		let decoders_read_guard = self.events_decoders.read().await;
-
-		// Check if we have an error decoder corresponding to the runtime of the given block
-		if decoders_read_guard.contains_key(&block_spec_version) {
-			Ok(RwLockReadGuard::map(decoders_read_guard, |decoders_map| {
-				decoders_map.get(&block_spec_version).unwrap()
-			}))
-		} else {
-			// Here we need to create a new error decoder for the runtime at the given block_hash
-			let maybe_new_decoder = self
-				.client
-				.runtime_api()
-				.metadata_at_version(block_hash, 15)
-				.expect("Version 15 should be supported by the runtime.")
-				.map(EventsDecoder::new);
-
-			// Upgrade the read guard to a write guard
-			drop(decoders_read_guard);
-			let mut decoders_write_guard = self.events_decoders.write().await;
+			let mut decoders_write_guard = self.runtime_decoders.write().await;
 
 			// Insert the new EventsDecoder. if anything goes wrong while creating it, return or
 			// insert a default build time EventsDecoder with the build runtime_version as key
 			let new_decoder_key = match maybe_new_decoder {
-				Some(new_error_decoder) => {
-					decoders_write_guard.entry(block_spec_version).or_insert(new_error_decoder);
+				Some(new_runtime_decoder) => {
+					decoders_write_guard.entry(block_spec_version).or_insert(new_runtime_decoder);
 					block_spec_version
 				},
 				None => {
 					let default_spec_version = build_runtime_version().spec_version;
 					decoders_write_guard
 						.entry(default_spec_version)
-						.or_insert(EventsDecoder::default());
+						.or_insert(RuntimeDecoder::default());
 					default_spec_version
 				},
 			};
 
 			// Downgrade the write guard to a read guard and return the reference
 			drop(decoders_write_guard);
-			Ok(RwLockReadGuard::map(self.events_decoders.read().await, |decoders_map| {
+			Ok(RwLockReadGuard::map(self.runtime_decoders.read().await, |decoders_map| {
 				decoders_map.get(&new_decoder_key).unwrap()
 			}))
 		}
@@ -281,7 +229,7 @@ where
 		let raw_events = self.client.storage(block_hash, &events_storage_key)?.map(|v| v.0);
 
 		let dynamic_events = self
-			.events_decoder(block_hash)
+			.runtime_decoder(block_hash)
 			.await?
 			.decode_extrinsic_events(extrinsic_index, raw_events)?;
 
@@ -297,7 +245,7 @@ where
 			Either::Left(dispatch_info) =>
 				Ok((tx_hash, dynamic_events, signed_block.block.header().clone(), dispatch_info)),
 			Either::Right(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
-				self.error_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
+				self.runtime_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
 			)),
 		}
 	}
@@ -366,7 +314,7 @@ where
 		match result {
 			Ok(details) => Ok(details),
 			Err(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
-				self.error_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
+				self.runtime_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
 			)),
 		}
 	}
@@ -440,7 +388,7 @@ where
 			Ok(dispatch_result) => match dispatch_result {
 				Ok(_) => Ok(()),
 				Err(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
-					self.error_decoder(best_block).await?.decode_dispatch_error(dispatch_error),
+					self.runtime_decoder(best_block).await?.decode_dispatch_error(dispatch_error),
 				)),
 			},
 			Err(e) => Err(e.into()),
