@@ -6,7 +6,7 @@ use crate::{
 	electoral_systems::{tests::utils::generate_votes, unsafe_median::*},
 };
 
-type SimpleUnsafeMedian = UnsafeMedian<u64, (), (), ()>;
+type SimpleUnsafeMedian = UnsafeMedian<u64, (), (), (), u32>;
 
 const INIT_UNSYNCHRONISED_STATE: u64 = 22;
 const NEW_UNSYNCHRONISED_STATE: u64 = 33;

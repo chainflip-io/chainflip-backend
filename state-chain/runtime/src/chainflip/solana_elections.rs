@@ -30,7 +30,7 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		self,
-		blockchain::delta_based_ingress::{self, BackoffSettings},
+		blockchain::delta_based_ingress::BackoffSettings,
 		composite::{tuple_6_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
@@ -63,6 +63,7 @@ pub type SolanaElectoralSystemRunner = CompositeRunner<
 		SolanaVaultSwapTracking,
 	),
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 	RunnerStorageAccess<Runtime, SolanaInstance>,
 	SolanaElectionHooks,
 >;
@@ -106,6 +107,7 @@ pub type SolanaBlockHeightTracking = electoral_systems::monotonic_median::Monoto
 	(),
 	SolanaBlockHeightTrackingHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub type SolanaIngressTracking =
@@ -123,6 +125,7 @@ pub type SolanaNonceTracking = electoral_systems::monotonic_change::MonotonicCha
 	(),
 	SolanaNonceTrackingHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSuccess<
@@ -131,6 +134,7 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	(),
 	SolanaEgressWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub type SolanaLiveness = electoral_systems::liveness::Liveness<
@@ -139,6 +143,7 @@ pub type SolanaLiveness = electoral_systems::liveness::Liveness<
 	cf_primitives::BlockNumber,
 	OnCheckCompleteHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub struct OnCheckCompleteHook;

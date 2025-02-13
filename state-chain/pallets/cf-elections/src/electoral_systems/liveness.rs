@@ -18,13 +18,21 @@ use frame_support::{
 use itertools::Itertools;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-pub struct Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, ValidatorId> {
+pub struct Liveness<
+	ChainBlockNumber,
+	ChainBlockHash,
+	BlockNumber,
+	Hook,
+	ValidatorId,
+	StateChainBlockNumber,
+> {
 	_phantom: core::marker::PhantomData<(
 		ChainBlockNumber,
 		ChainBlockHash,
 		BlockNumber,
 		Hook,
 		ValidatorId,
+		StateChainBlockNumber,
 	)>,
 }
 
@@ -44,10 +52,19 @@ impl<
 			+ Copy,
 		Hook: OnCheckComplete<ValidatorId> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystemTypes
-	for Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, ValidatorId>
+	for Liveness<
+		ChainBlockNumber,
+		ChainBlockHash,
+		BlockNumber,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+	>
 {
 	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -81,7 +98,16 @@ impl<
 			+ Copy,
 		Hook: OnCheckComplete<ValidatorId> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem
+	for Liveness<
+		ChainBlockNumber,
+		ChainBlockHash,
+		BlockNumber,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+	>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -94,6 +120,7 @@ impl<
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(current_vote.is_none())
 	}

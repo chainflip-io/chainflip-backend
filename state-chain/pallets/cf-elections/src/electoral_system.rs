@@ -40,6 +40,8 @@ impl<ES: ElectoralSystemTypes> ConsensusVotes<ES> {
 pub trait ElectoralSystemTypes: 'static + Sized {
 	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
 
+	type StateChainBlockNumber: Parameter + Member + Ord + MaybeSerializeDeserialize;
+
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
 	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
 	/// by the engine.
@@ -147,6 +149,7 @@ pub trait ElectoralSystem: ElectoralSystemTypes {
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(current_vote.is_none())
 	}

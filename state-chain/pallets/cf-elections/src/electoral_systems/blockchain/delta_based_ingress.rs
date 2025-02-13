@@ -45,6 +45,7 @@ pub struct OpenChannelDetails<Asset, BlockNumber> {
 
 pub type ChannelTotalIngressedFor<Sink> =
 	ChannelTotalIngressed<<Sink as IngressSink>::BlockNumber, <Sink as IngressSink>::Amount>;
+
 pub type OpenChannelDetailsFor<Sink> =
 	OpenChannelDetails<<Sink as IngressSink>::Asset, <Sink as IngressSink>::BlockNumber>;
 
@@ -130,7 +131,7 @@ where
 	StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	type ValidatorId = ValidatorId;
-
+	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = ();
 
 	// Stores the total ingressed amounts for all channels that have already been dispatched i.e. we
@@ -178,10 +179,13 @@ where
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		current_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		// election settings...
-		let (settings, backoff_settings) = election_access.settings()?;
+		let (_settings, backoff_settings) = election_access.settings()?;
 		log::info!("backoff_settings: {:?}", backoff_settings);
+
+		// when was the election created?? We need to store this in the state?
 
 		Ok(true)
 	}
@@ -400,6 +404,7 @@ where
 		let num_active_votes = active_votes.len() as u32;
 		if num_active_votes >= threshold {
 			let election_channels = election_access.properties()?;
+			let last_channel_opened_at = election_access.state()?;
 
 			let mut votes_grouped_by_channel = BTreeMap::<_, Vec<_>>::new();
 			for (account, channel_vote) in active_votes.into_iter().flatten() {

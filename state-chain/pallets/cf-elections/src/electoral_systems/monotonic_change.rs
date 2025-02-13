@@ -24,9 +24,24 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 ///
 /// Authorities only need to vote if their observed value is different than the one specified in the
 /// `ElectionProperties`.
-pub struct MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId> {
-	_phantom:
-		core::marker::PhantomData<(Identifier, Value, BlockHeight, Settings, Hook, ValidatorId)>,
+pub struct MonotonicChange<
+	Identifier,
+	Value,
+	BlockHeight,
+	Settings,
+	Hook,
+	ValidatorId,
+	StateChainBlockNumber,
+> {
+	_phantom: core::marker::PhantomData<(
+		Identifier,
+		Value,
+		BlockHeight,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+	)>,
 }
 
 pub trait OnChangeHook<Identifier, Value> {
@@ -40,7 +55,9 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	>
+	MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	pub fn watch_for_change<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		identifier: Identifier,
@@ -59,10 +76,20 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystemTypes
-	for MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
+	for MonotonicChange<
+		Identifier,
+		Value,
+		BlockHeight,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+	>
 {
 	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = Identifier;
 	type ElectoralUnsynchronisedStateMapValue = BlockHeight;
@@ -84,12 +111,22 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystem
-	for MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
+	for MonotonicChange<
+		Identifier,
+		Value,
+		BlockHeight,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+	>
 {
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(true)
 	}
