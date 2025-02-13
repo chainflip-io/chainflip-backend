@@ -749,6 +749,7 @@ pub mod test {
 			env.vault_program,
 			env.vault_program_data_account,
 			agg_key(),
+			env.alt_manager_program,
 			durable_nonce(),
 			compute_price(),
 			vec![chainflip_alt()],

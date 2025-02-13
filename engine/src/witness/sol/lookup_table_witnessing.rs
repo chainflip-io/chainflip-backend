@@ -17,6 +17,7 @@ use std::str::FromStr;
 // only error if the rpc call fails or returns an unrecognized format respons. That is
 // because this address will be provided by the user (user alts) and in case of the address
 // not being a valid ALT we still want to reach consensus.
+#[allow(dead_code)]
 pub async fn get_lookup_table_state<SolRetryRpcClient>(
 	sol_rpc: &SolRetryRpcClient,
 	lookup_table_address: SolAddress,
@@ -147,7 +148,7 @@ mod tests {
 
 				// Check the first one just to make sure it's working
 				assert_eq!(
-					addresses.iter().next().unwrap(),
+					addresses.first().unwrap(),
 					&SolAddress::from_str("11111111111111111111111111111111").unwrap()
 				);
 

@@ -11,8 +11,8 @@ use cf_chains::{
 		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
-		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
-		SolanaCrypto,
+		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
+		SolHash, SolPubkey, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
@@ -84,6 +84,11 @@ fn setup_sol_environments() {
 		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 		swap_endpoint_program: sol_test_values::SWAP_ENDPOINT_PROGRAM,
 		swap_endpoint_program_data_account: sol_test_values::SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
+		alt_manager_program: sol_test_values::ALT_MANAGER_PROGRAM,
+		address_lookup_table_account: SolAddressLookupTableAccount {
+			key: sol_test_values::ADDRESS_LOOKUP_TABLE_ACCOUNT.into(),
+			addresses: vec![],
+		},
 	});
 
 	// Environment::AvailableDurableNonces

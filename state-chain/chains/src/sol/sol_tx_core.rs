@@ -166,6 +166,10 @@ pub mod sol_test_values {
 		const_address("35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT");
 	pub const SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT: SolAddress =
 		const_address("2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9");
+	pub const ALT_MANAGER_PROGRAM: SolAddress =
+		const_address("49XegQyykAXwzigc6u7gXbaLjhKfNadWMZwFiovzjwUw");
+	pub const ADDRESS_LOOKUP_TABLE_ACCOUNT: SolAddress =
+		const_address("7drVSq2ymJLNnXyCciHbNqHyzuSt1SL4iQSEThiESN2c");
 	pub const EVENT_AND_SENDER_ACCOUNTS: [VaultSwapAccountAndSender; 11] = [
 		VaultSwapAccountAndSender {
 			vault_swap_account: const_address("2cHcSNtikMpjxJfwwoYL3udpy7hedRExyhakk2eZ6cYA"),
@@ -248,6 +252,11 @@ pub mod sol_test_values {
 			usdc_token_vault_ata: USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 			swap_endpoint_program: SWAP_ENDPOINT_PROGRAM,
 			swap_endpoint_program_data_account: SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
+			alt_manager_program: ALT_MANAGER_PROGRAM,
+			address_lookup_table_account: SolAddressLookupTableAccount {
+				key: ADDRESS_LOOKUP_TABLE_ACCOUNT.into(),
+				addresses: vec![],
+			},
 		}
 	}
 
