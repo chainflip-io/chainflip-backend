@@ -74,8 +74,8 @@ impl VoterApi<SolanaIngressTracking> for SolanaIngressTrackingVoter {
 	) -> Result<Option<VoteOf<SolanaIngressTracking>>, anyhow::Error> {
 		sol_deposits::get_channel_ingress_amounts(
 			&self.client,
-			settings.vault_program,
-			settings.usdc_token_mint_pubkey,
+			settings.0.vault_program,
+			settings.0.usdc_token_mint_pubkey,
 			properties,
 		)
 		.await

@@ -18,6 +18,7 @@ thread_local! {
 type AccountId = u32;
 type Amount = u64;
 type BlockNumber = u64;
+type StateChainBlockNumber = u32;
 
 struct MockIngressSink;
 impl IngressSink for MockIngressSink {
@@ -48,7 +49,8 @@ impl IngressSink for MockIngressSink {
 	}
 }
 
-type SimpleDeltaBasedIngress = DeltaBasedIngress<MockIngressSink, (), AccountId>;
+type SimpleDeltaBasedIngress =
+	DeltaBasedIngress<MockIngressSink, (), AccountId, StateChainBlockNumber>;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encode, Decode)]
 struct DepositChannel {
@@ -1122,3 +1124,9 @@ mod multiple_deposits {
 			);
 	}
 }
+
+// // backoff pointing is an eletoral settings
+// #[test]
+// fn vote_desired_backs_off_after_backoff_point() {
+// 	with_default_setup()
+// }

@@ -5,6 +5,7 @@ use crate::{
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifier,
 };
+use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::IngressSink;
 use cf_utilities::success_threshold_from_share_count;
@@ -23,6 +24,8 @@ use sp_std::{
 	vec,
 	vec::Vec,
 };
+
+use serde::{Deserialize, Serialize};
 
 pub const MAXIMUM_CHANNELS_PER_ELECTION: u32 = 50;
 
@@ -45,16 +48,36 @@ pub type ChannelTotalIngressedFor<Sink> =
 pub type OpenChannelDetailsFor<Sink> =
 	OpenChannelDetails<<Sink as IngressSink>::Asset, <Sink as IngressSink>::BlockNumber>;
 
-pub struct DeltaBasedIngress<Sink: IngressSink, Settings, ValidatorId> {
-	_phantom: core::marker::PhantomData<(Sink, Settings, ValidatorId)>,
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+)]
+pub struct BackoffSettings<StateChainBlockNumber> {
+	// After this number of state chain blocks, we will backoff request frequency. To
+	// request every 10 mintutes / 100 blocks.
+	pub backoff_after_blocks: StateChainBlockNumber,
+	// The frequency of requests after the backoff period.
+	pub backoff_frequency: StateChainBlockNumber,
 }
-impl<Sink, Settings, ValidatorId> DeltaBasedIngress<Sink, Settings, ValidatorId>
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for BackoffSettings<u32> {
+	fn benchmark_value() -> Self {
+		Self { backoff_after_blocks: 600, backoff_frequency: 100 }
+	}
+}
+
+pub struct DeltaBasedIngress<Sink: IngressSink, Settings, ValidatorId, StateChainBlockNumber> {
+	_phantom: core::marker::PhantomData<(Sink, Settings, ValidatorId, StateChainBlockNumber)>,
+}
+impl<Sink, Settings, ValidatorId, StateChainBlockNumber>
+	DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
 where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	pub fn open_channel<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<
@@ -96,14 +119,15 @@ where
 		Ok(())
 	}
 }
-impl<Sink, Settings, ValidatorId> ElectoralSystemTypes
-	for DeltaBasedIngress<Sink, Settings, ValidatorId>
+impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystemTypes
+	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
 where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	type ValidatorId = ValidatorId;
 
@@ -116,7 +140,7 @@ where
 	type ElectoralUnsynchronisedStateMapValue = ChannelTotalIngressedFor<Sink>;
 
 	type ElectoralUnsynchronisedSettings = ();
-	type ElectoralSettings = Settings;
+	type ElectoralSettings = (Settings, BackoffSettings<StateChainBlockNumber>);
 	type ElectionIdentifierExtra = u32;
 
 	// Stores the channels a given election is witnessing, and a recent total ingressed value.
@@ -141,18 +165,24 @@ where
 	type OnFinalizeReturn = ();
 }
 
-impl<Sink, Settings, ValidatorId> ElectoralSystem for DeltaBasedIngress<Sink, Settings, ValidatorId>
+impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystem
+	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
 where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_access: &ElectionAccess,
+		election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
+		// election settings...
+		let (settings, backoff_settings) = election_access.settings()?;
+		log::info!("backoff_settings: {:?}", backoff_settings);
+
 		Ok(true)
 	}
 

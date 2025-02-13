@@ -30,6 +30,7 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		self,
+		blockchain::delta_based_ingress::{self, BackoffSettings},
 		composite::{tuple_6_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
@@ -88,7 +89,10 @@ pub fn initial_state(
 		unsynchronised_settings: ((), (), (), (), (), ()),
 		settings: (
 			(),
-			SolanaIngressSettings { vault_program, usdc_token_mint_pubkey },
+			(
+				SolanaIngressSettings { vault_program, usdc_token_mint_pubkey },
+				BackoffSettings { backoff_after_blocks: 600, backoff_frequency: 100 },
+			),
 			(),
 			(),
 			LIVENESS_CHECK_DURATION,
@@ -109,6 +113,7 @@ pub type SolanaIngressTracking =
 		pallet_cf_ingress_egress::Pallet<Runtime, Instance>,
 		SolanaIngressSettings,
 		<Runtime as Chainflip>::ValidatorId,
+		BlockNumberFor<Runtime>,
 	>;
 
 pub type SolanaNonceTracking = electoral_systems::monotonic_change::MonotonicChange<
