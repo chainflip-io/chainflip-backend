@@ -31,8 +31,8 @@ use cf_chains::{
 	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
 	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
-	TransferAssetParams,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall,
+	SwapOrigin, TransferAssetParams, TransferFallback,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -769,18 +769,6 @@ pub mod pallet {
 	pub type NetworkFeeDeductionFromBoostPercent<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Percent, ValueQuery>;
 
-	/// Stores the tx_id of an aborted vault transaction. At the moment we consider a vault
-	/// swap as aborted if there is no broker provided or the provided account is no broker.
-	#[pallet::storage]
-	pub(crate) type AbortedVaultTransaction<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TransactionInIdFor<T, I>, ()>;
-
-	/// Stores the details of an aborted vault transaction. In case we fail to refund we store the
-	/// details in this storage item.
-	#[pallet::storage]
-	pub(crate) type AbortedVaultTransactionDetails<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TransactionInIdFor<T, I>, VaultDepositWitness<T, I>>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -936,12 +924,6 @@ pub mod pallet {
 			deduction_percent: Percent,
 		},
 		VaultSwapRefunded {
-			tx_id: TransactionInIdFor<T, I>,
-		},
-		VaultSwapRefundFailed {
-			tx_id: TransactionInIdFor<T, I>,
-		},
-		VaultSwapRejected {
 			tx_id: TransactionInIdFor<T, I>,
 		},
 	}
@@ -2225,8 +2207,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}: VaultDepositWitness<T, I>,
 	) {
 		if Self::should_reject_vault_swap(&broker_fee) {
-			AbortedVaultTransaction::<T, I>::insert(&tx_id, ());
-			Self::deposit_event(Event::VaultSwapRejected { tx_id });
 			return;
 		}
 
@@ -2507,31 +2487,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		} = vault_deposit_witness.clone();
 
-		if AbortedVaultTransaction::<T, I>::take(&tx_id).is_some() {
-			log::info!("Ignoring deposit since transcation was aborted.");
-
-			let refunded = refund_params.is_some_and(|refund_params| {
-				<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
-					TransferAssetParams {
-						asset: source_asset,
-						amount: deposit_amount,
-						to: refund_params.refund_address,
-					},
-				)
-				.is_ok_and(|api_call| {
+		if Self::should_reject_vault_swap(&broker_fee) {
+			// TODO: We are going to make refund_params mandatory so we can remove this if let check
+			// as soon the other PR is merged.
+			if let Some(refund_params) = refund_params {
+				if let Ok(api_call) =
+					<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
+						TransferAssetParams {
+							asset: source_asset,
+							amount: deposit_amount,
+							to: refund_params.refund_address,
+						},
+					) {
 					T::Broadcaster::threshold_sign_and_broadcast(api_call);
 					Self::deposit_event(Event::VaultSwapRefunded { tx_id: tx_id.clone() });
-					true
-				})
-			});
-
-			if !refunded {
-				AbortedVaultTransactionDetails::<T, I>::insert(
-					tx_id.clone(),
-					vault_deposit_witness,
-				);
-				Self::deposit_event(Event::VaultSwapRefundFailed { tx_id });
-			}
+				} else {
+					log_or_panic!("Failed to create refund api call for vault swap.");
+				}
+			};
 
 			return;
 		}
