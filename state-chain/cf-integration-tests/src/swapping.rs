@@ -19,8 +19,9 @@ use cf_chains::{
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ChannelRefundParameters,
-	DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall, ForeignChain, ForeignChainAddress,
-	RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
+	ChannelRefundParametersEncoded, DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall,
+	ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin, TransactionBuilder,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, SwapId, FLIPPERINOS_PER_FLIP,
@@ -267,7 +268,11 @@ fn basic_pool_setup_provision_and_swap() {
 				None,
 				0u16,
 				Default::default(),
-				None,
+				ChannelRefundParametersEncoded {
+					retry_duration: 0,
+					refund_address: EncodedAddress::Eth([1u8; 20]),
+					min_price: sp_core::U256::zero(),
+				},
 				None,
 			));
 
@@ -391,7 +396,11 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Some(message),
 			0u16,
 			Default::default(),
-			None,
+			ChannelRefundParametersEncoded {
+				retry_duration: 0,
+				refund_address: EncodedAddress::Eth([1u8; 20]),
+				min_price: sp_core::U256::zero(),
+			},
 			None,
 		));
 

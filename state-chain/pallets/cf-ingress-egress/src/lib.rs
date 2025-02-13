@@ -238,7 +238,7 @@ use deposit_origin::DepositOrigin;
 #[scale_info(skip_type_params(T, I))]
 pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 	pub deposit_address: Option<TargetChainAccount<T, I>>,
-	pub refund_address: Option<ForeignChainAddress>,
+	pub refund_address: ForeignChainAddress,
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
 	pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
@@ -469,12 +469,12 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadata>,
-			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+			refund_params: ChannelRefundParameters<ForeignChainAddress>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
-			refund_address: Option<ForeignChainAddress>,
+			refund_address: ForeignChainAddress,
 		},
 	}
 
@@ -1126,8 +1126,8 @@ pub mod pallet {
 			if T::AllowTransactionReports::get() {
 				let mut deferred_rejections = Vec::new();
 				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
-					if let Some(Ok(refund_address)) =
-						tx.refund_address.clone().map(TryInto::try_into)
+					if let Ok(refund_address) =
+						tx.refund_address.clone().try_into())
 					{
 						let deposit_fetch_id =
 							tx.deposit_address.as_ref().and_then(|deposit_address| {
@@ -2013,7 +2013,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						output_address: destination_address,
 					},
 					broker_fees,
-					refund_params,
+					Some(refund_params),
 					dca_params,
 					origin.into(),
 				);
@@ -2352,9 +2352,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_asset: output_asset,
 			destination_address: destination_address_internal,
 			broker_fees,
-			refund_params: Some(
-				refund_params.map_address(|address| address.into_foreign_chain_address()),
-			),
+			refund_params: refund_params
+				.map_address(|address| address.into_foreign_chain_address()),
 			dca_params,
 			channel_metadata,
 		};
@@ -2430,9 +2429,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 					if is_marked_by_broker_or_screening_id {
 						let refund_address = match &action {
-							ChannelAction::Swap { refund_params, .. } => refund_params
-								.as_ref()
-								.map(|refund_params| refund_params.refund_address.clone()),
+							ChannelAction::Swap { refund_params, .. } => refund_params.refund_address.clone(),
 							ChannelAction::LiquidityProvision { refund_address, .. } =>
 								refund_address.clone(),
 						};
@@ -2687,9 +2684,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_address: destination_address_internal,
 			broker_fees,
 			channel_metadata: channel_metadata.clone(),
-			refund_params: Some(
-				refund_params.map_address(|address| address.into_foreign_chain_address()),
-			),
+			refund_params: refund_params
+				.map_address(|address| address.into_foreign_chain_address()),
 			dca_params: dca_params.clone(),
 		};
 
@@ -3070,10 +3066,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
 			&lp_account,
 			source_asset,
-			ChannelAction::LiquidityProvision {
-				lp_account: lp_account.clone(),
-				refund_address: Some(refund_address),
-			},
+			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
 			boost_fee,
 		)?;
 
@@ -3094,15 +3087,13 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParametersDecoded>,
+		refund_params: ChannelRefundParametersDecoded,
 		dca_params: Option<DcaParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		if let Some(params) = &refund_params {
-			T::SwapLimitsProvider::validate_refund_params(params.retry_duration)?;
-		}
+		T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)?;
 		if let Some(params) = &dca_params {
 			T::SwapLimitsProvider::validate_dca_params(params)?;
 		}
