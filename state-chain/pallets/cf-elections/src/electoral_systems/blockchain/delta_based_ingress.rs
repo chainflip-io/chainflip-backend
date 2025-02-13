@@ -196,6 +196,11 @@ where
 		let (_settings, backoff_settings) = election_access.settings()?;
 		let (_channel_properties, last_channel_opened_at) = election_access.properties()?;
 
+		// We want to vote if:
+		// 1. We are still in the first few blocks (before the backoff_after_blocks period has
+		//    elapsed)
+		// 2. The backoff_after_blocks period has elapsed, but we are on a block that is a multiple
+		//    of backoff_frequency
 		Ok(!((current_state_chain_block_number.clone() >
 			last_channel_opened_at + backoff_settings.backoff_after_blocks) &&
 			(current_state_chain_block_number.clone() % backoff_settings.backoff_frequency !=
