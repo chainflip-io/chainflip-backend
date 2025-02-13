@@ -1,12 +1,13 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 use crate::{DepositWitness, PalletSafeMode};
 
-use cf_chains::eth::EthereumTrackedData;
-pub use cf_chains::{
+use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
-	eth::Address as EthereumAddress,
-	CcmDepositMetadata, Chain,
+	eth::{Address as EthereumAddress, EthereumTrackedData},
+	evm::U256,
+	ChannelRefundParametersDecoded,
 };
+pub use cf_chains::{CcmDepositMetadata, Chain};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -276,7 +277,11 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						BROKER,
 						None,
 						0,
-						None,
+						ChannelRefundParametersDecoded {
+							retry_duration: 100,
+							refund_address: ForeignChainAddress::Eth([1; 20].into()),
+							min_price: U256::from(0),
+						},
 						None,
 					)
 					.map(|(channel_id, deposit_address, ..)| {

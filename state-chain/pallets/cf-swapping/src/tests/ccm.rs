@@ -89,6 +89,12 @@ fn can_process_ccms_via_swap_deposit_address() {
 
 			let ccm_deposit_metadata = generate_ccm_deposit();
 
+			let refund_params = ChannelRefundParametersEncoded {
+				retry_duration: 100,
+				refund_address: EncodedAddress::Eth([1; 20].into()),
+				min_price: U256::from(0),
+			};
+
 			// Can process CCM via Swap deposit
 			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 				RuntimeOrigin::signed(BROKER),
@@ -99,7 +105,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				Some(request_ccm),
 				0,
 				Default::default(),
-				None,
+				refund_params,
 				None,
 			));
 

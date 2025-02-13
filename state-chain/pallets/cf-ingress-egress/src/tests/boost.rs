@@ -1017,7 +1017,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 		let (_, address, _, _) = IngressEgress::open_channel(
 			&ALICE,
 			EthAsset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()) },
 			TIER_5_BPS,
 		)
 		.unwrap();
