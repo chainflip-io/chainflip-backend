@@ -21,6 +21,7 @@ use scale_info::TypeInfo;
 use sp_core::ConstU32;
 use sp_std::{
 	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+	ops::{Add, Rem},
 	vec,
 	vec::Vec,
 };
@@ -148,7 +149,8 @@ where
 	// Stores the channels a given election is witnessing, and a recent total ingressed value.
 	type ElectionProperties = (
 		BTreeMap<Sink::Account, (OpenChannelDetailsFor<Sink>, ChannelTotalIngressedFor<Sink>)>,
-		// Last Channel Opened At
+		// Last Channel Opened At - We use this to determin when it is ok to backoff
+		// request frequency.
 		StateChainBlockNumber,
 	);
 
@@ -178,20 +180,26 @@ where
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	StateChainBlockNumber: Member
+		+ Parameter
+		+ Ord
+		+ MaybeSerializeDeserialize
+		+ Add<Output = StateChainBlockNumber>
+		+ Rem<Output = StateChainBlockNumber>
+		+ frame_support::sp_runtime::traits::Zero,
 {
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 		current_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
-		// election settings...
 		let (_settings, backoff_settings) = election_access.settings()?;
-		log::info!("backoff_settings: {:?}", backoff_settings);
+		let (_channel_properties, last_channel_opened_at) = election_access.properties()?;
 
-		// when was the election created?? We need to store this in the state?
-
-		Ok(true)
+		Ok(!((current_state_chain_block_number.clone() >
+			last_channel_opened_at + backoff_settings.backoff_after_blocks) &&
+			(current_state_chain_block_number.clone() % backoff_settings.backoff_frequency !=
+				Zero::zero())))
 	}
 
 	fn is_vote_needed(
@@ -411,7 +419,7 @@ where
 		let active_votes = consensus_votes.active_votes();
 		let num_active_votes = active_votes.len() as u32;
 		if num_active_votes >= threshold {
-			let (election_channels, last_channel_opened_at) = election_access.properties()?;
+			let (election_channels, _last_channel_opened_at) = election_access.properties()?;
 
 			let mut votes_grouped_by_channel = BTreeMap::<_, Vec<_>>::new();
 			for (account, channel_vote) in active_votes.into_iter().flatten() {
