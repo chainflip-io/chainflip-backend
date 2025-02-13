@@ -770,16 +770,16 @@ pub mod pallet {
 		StorageValue<_, Percent, ValueQuery>;
 
 	/// Stores the tx_id of an aborted vault transaction. At the moment we consider a vault
-	/// transaction as aborted if
+	/// swap as aborted if there is no broker provided or the provided account is no broker.
 	#[pallet::storage]
 	pub(crate) type AbortedVaultTransaction<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, TransactionInIdFor<T, I>, ()>;
+		StorageMap<_, Twox64Concat, TransactionInIdFor<T, I>, ()>;
 
 	/// Stores the details of an aborted vault transaction. In case we fail to refund we store the
 	/// details in this storage item.
 	#[pallet::storage]
 	pub(crate) type AbortedVaultTransactionDetails<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, TransactionInIdFor<T, I>, VaultDepositWitness<T, I>>;
+		StorageMap<_, Twox64Concat, TransactionInIdFor<T, I>, VaultDepositWitness<T, I>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
