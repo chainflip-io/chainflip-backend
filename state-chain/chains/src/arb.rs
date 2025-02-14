@@ -89,10 +89,10 @@ impl ArbitrumTrackedData {
 	// Estimating gas as described in Arbitrum's docs:
 	// https://docs.arbitrum.io/build-decentralized-apps/how-to-estimate-gas
 	//
-	// We assume the user's gas budget has been estimated via `eth.estimate_gas` and
-	// therefore covers the Arbitrum gas overhead so we just need to account for the
-	// extra gas from our Vault logic. That also covers the extra gas required that
-	// is dependant on the message's length.
+	// We assume the user's gas budget is just the amount of gas they need on the receiver
+	// smart contract. Chainflip computes the entire overhead of the Vault transaction and
+	// adjusts the final gas limit according to the L1 fees, including the user's part of
+	// the transaction(gas budget).
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		is_native_asset: bool,
@@ -111,13 +111,11 @@ impl ArbitrumTrackedData {
 		// passing the message through the Vault. The extra l2 gas per message's calldata byte
 		// should be included in the user's gas budget together with the receiving logic's gas
 		// required.
-		let l2g = vault_gas_overhead.saturating_add(message_length as u128);
+		let l2g = vault_gas_overhead.saturating_add(message_length as u128).saturating_add(gas_budget);
 		let l1p = self.l1_base_fee_estimate * L1_GAS_PER_BYTES;
 		let p = self.base_fee;
 
-		// The user's estimation via `eth.estimate_gas` will already contain the fixed Arbitrum
-		// gas overhead of bytes according to the current Arbitrum documentation.
-		let l1s = CCM_VAULT_BYTES_OVERHEAD + CCM_BUFFER_BYTES_OVERHEAD;
+		let l1s = CCM_VAULT_BYTES_OVERHEAD + CCM_BUFFER_BYTES_OVERHEAD + CCM_ARBITRUM_BYTES_OVERHEAD + message_length as u128;
 
 		let l1c = l1p.saturating_mul(l1s);
 
@@ -145,7 +143,11 @@ pub mod fees {
 	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 120_000;
 	// Arbitrum specific ccm gas limit calculation constants
 	pub const CCM_VAULT_BYTES_OVERHEAD: u128 = 356;
-	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 36; // ~10%
+	pub const CCM_ARBITRUM_BYTES_OVERHEAD: u128 = 140;
+	// This is an extra buffer added to ensure that the user will
+	// receive the desired gas amount. Might need to be adjusted
+	// according to Arbitrum's compression rate.
+	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 100; // ~33%
 	pub const L1_GAS_PER_BYTES: u128 = 16;
 }
 
@@ -248,7 +250,7 @@ mod test {
 		};
 
 		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(gas_limit, 1858469u128);
+		assert_eq!(gas_limit, 2526102u128);
 
 		let gas_budget_extra = 1_000_000u128;
 		let gas_limit_extra = arb_tracked_data.calculate_ccm_gas_limit(

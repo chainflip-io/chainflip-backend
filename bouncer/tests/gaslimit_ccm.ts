@@ -1,6 +1,6 @@
 import Web3 from 'web3';
 import { InternalAsset as Asset, Chain } from '@chainflip/cli';
-import { newCcmMetadata, prepareSwap } from '../shared/swapping';
+import { EVM_GAS_PER_BYTE, EVM_GAS_PER_EVENT_BYTE, newCcmMetadata, OVERHEAD_GAS_UNITS, prepareSwap } from '../shared/swapping';
 import {
   ccmSupportedChains,
   chainFromAsset,
@@ -15,7 +15,7 @@ import {
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
-import { estimateCcmCfTesterGas, spamEvm } from '../shared/send_evm';
+import { spamEvm } from '../shared/send_evm';
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
@@ -235,19 +235,17 @@ async function testGasLimitSwapToEvm(
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
   );
 
-  // Estimating gas separately. We can't rely on the default gas estimation in `newCcmMetadata()`
-  // because the CF tester gas consumption depends on the gas limit, making this a circular calculation.
-  // Instead, we get a base calculation with an empty message that doesn't run the gas consumption.
-  const baseCfTesterGas = await estimateCcmCfTesterGas(destChain, '0x');
+  const gasBudget = OVERHEAD_GAS_UNITS + (ccmMetadata.message.slice(2).length/ 2) * (EVM_GAS_PER_BYTE + EVM_GAS_PER_EVENT_BYTE);
 
   // Adding buffers on both ends to avoid flakiness.
   if (abortTest) {
+    // TODO: Revisit this?
     // Chainflip overestimates the overhead for safety so we use a 25% buffer to ensure that
-    // the gas budget is too low.We also apply a 50% on the baseCfTesterGas since it's highly unreliable.
-    ccmMetadata.gasBudget = Math.round(gasConsumption * 0.75 + baseCfTesterGas * 0.5).toString();
+    // the gas budget is too low. We also apply a 50% on the baseCfTesterGas since it's highly unreliable.
+    ccmMetadata.gasBudget = Math.round(gasConsumption * 0.75 + gasBudget * 0.5).toString();
   } else {
     // A small buffer should work (10%) as CF should be overestimate, not underestimate
-    ccmMetadata.gasBudget = (baseCfTesterGas + Math.round(gasConsumption * 1.1)).toString();
+    ccmMetadata.gasBudget = (gasBudget + Math.round(gasConsumption * 1.1)).toString();
   }
 
   const testTag = abortTest ? `InsufficientGas` : '';

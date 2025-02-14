@@ -129,7 +129,12 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
   return newCcmArbitraryBytes(length);
 }
 // Minimum overhead to ensure simple CCM transactions succeed
-const OVERHEAD_COMPUTE_UNITS = 20000;
+export const OVERHEAD_COMPUTE_UNITS = 20000;
+// 25k seems good for Ethereum
+export const OVERHEAD_GAS_UNITS = 25000;
+// export const OVERHEAD_GAS_UNITS = 150000;
+export const EVM_GAS_PER_BYTE = 16;
+export const EVM_GAS_PER_EVENT_BYTE = 8;
 
 export async function newCcmMetadata(
   destAsset: Asset,
@@ -142,12 +147,9 @@ export async function newCcmMetadata(
 
   let userLogicGasBudget;
   if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
-    // Do the gas estimation of the call to the CF Tester contract. CF will then add the extra
-    // overhead on top. This is particularly relevant for Arbitrum where estimating the gas here
-    // required for execution is very complicated without using `eth_estimateGas` on the user's side.
-    // This is what integrators are expected to do and it''ll give a good estimate of the gas
-    // needed for the user logic.
-    userLogicGasBudget = await estimateCcmCfTesterGas(destChain, message);
+    // Gas needed to execute the logic on the receiver contract. The constant part is basic overhead
+    // and the variable part is the message length.
+    userLogicGasBudget = (OVERHEAD_GAS_UNITS + (message.slice(2).length/ 2) * (EVM_GAS_PER_BYTE + EVM_GAS_PER_EVENT_BYTE)).toString();
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
