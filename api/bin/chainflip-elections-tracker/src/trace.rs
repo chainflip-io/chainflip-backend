@@ -48,13 +48,12 @@ pub fn map_with_parent<K: Ord, V, W>(
 	let mut processed = BTreeMap::new();
 	for length in 0..10 {
 		for (key, value) in this.extract_if(|k, _| k.len() == length) {
-			let p;
-			if key.len() > 0 {
+			let p = if !key.is_empty() {
 				let parent_key = &key[0..key.len() - 1];
-				p = processed.get(parent_key);
+				processed.get(parent_key)
 			} else {
-				p = None;
-			}
+				None
+			};
 			let v = f(&key, p, value);
 			processed.insert(key, v);
 		}
@@ -62,7 +61,7 @@ pub fn map_with_parent<K: Ord, V, W>(
 	processed
 }
 
-pub fn get_key_name<'a, K: std::fmt::Display>(key: &'a Vec<K>) -> String {
+pub fn get_key_name<K: std::fmt::Display>(key: &[K]) -> String {
 	key.last().map(|x| format!("{x}")).unwrap_or("root".into())
 }
 

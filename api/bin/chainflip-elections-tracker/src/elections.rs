@@ -11,6 +11,7 @@ use pallet_cf_elections::{
 pub struct ElectionData<ES: ElectoralSystemTypes> {
 	pub height: u32,
 
+	#[allow(clippy::type_complexity)]
 	pub bitmaps: BTreeMap<
 		UniqueMonotonicIdentifier,
 		Vec<(BitmapComponentOf<ES>, BitVec<u8, bitvec::order::Lsb0>)>,
@@ -169,7 +170,7 @@ where
 
 		// no votes
 		for authority_id in 0..data.validators {
-			if votes.get(&(*identifier, authority_id)).is_none() {
+			if !votes.contains_key(&(*identifier, authority_id)) {
 				trace.insert(
 					cloned_vec([&key0, &key1, &key2, &Category(extra.clone(), NoVote)]),
 					start.clone(),

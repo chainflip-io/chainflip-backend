@@ -65,7 +65,7 @@ async fn observe_elections<T: Tracer + Send>(
 {
 	task_scope::task_scope(|scope| async move {
 
-		let (_finalized_stream, unfinalized_stream, client) = StateChainClient::connect_without_account(&scope, &rpc_url).await.unwrap();
+		let (_finalized_stream, unfinalized_stream, client) = StateChainClient::connect_without_account(scope, &rpc_url).await.unwrap();
 
 		unfinalized_stream.fold((client, (BTreeMap::new(), BTreeMap::new()), tracer), async |(client, (overview_trace, detailed_traces), tracer), block| {
 
@@ -92,7 +92,7 @@ async fn observe_elections<T: Tracer + Send>(
 				.expect("could not get storage");
 
 			let mut individual_components = BTreeMap::new();
-			for (key, _prop) in &all_properties {
+			for key in all_properties.keys() {
 				for (validator_index, validator) in validators.iter().enumerate() {
 
 					if let Some((_, comp)) = client.storage_double_map_entry::<pallet_cf_elections::IndividualComponents::<Runtime, SolanaInstance>>(block_hash, key.unique_monotonic(), validator)
@@ -117,7 +117,7 @@ async fn observe_elections<T: Tracer + Send>(
 							CompositeElectionProperties::EE(_) => "Liveness",
 							CompositeElectionProperties::FF(_) => "Vaultswap",
 						};
-					(key.clone(), (name.into(), val.clone()))
+					(*key, (name.into(), val.clone()))
 				})
 				.collect();
 
@@ -174,7 +174,7 @@ where
 				let context = if let Some(Some(context)) = p {
 					let key = get_key_name(k);
 
-					let mut span = tracer.start_with_context(key, &context);
+					let mut span = tracer.start_with_context(key, context);
 					for (key, value) in values {
 						span.set_attribute(KeyValue::new(key, value));
 					}
@@ -205,10 +205,7 @@ where
 		},
 	)
 	.into_iter()
-	.filter_map(|(k, v)| match v {
-		Some(v) => Some((k, v)),
-		None => None,
-	})
+	.filter_map(|(k, v)| v.map(|v| (k, v)))
 	.collect();
 	traces
 }
