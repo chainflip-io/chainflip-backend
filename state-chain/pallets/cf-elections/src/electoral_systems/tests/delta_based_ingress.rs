@@ -80,12 +80,15 @@ impl Default for DepositChannel {
 
 impl DepositChannel {
 	pub fn open(&self) {
+		self.open_at(Default::default());
+	}
+	pub fn open_at(&self, sc_block_number: StateChainBlockNumber) {
 		assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
 			TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 			self.account,
 			self.asset,
 			self.close_block,
-			Default::default()
+			sc_block_number,
 		));
 	}
 }
@@ -1154,6 +1157,9 @@ fn is_vote_desired_backs_off_as_expected() {
 
 	const STILL_YOUNG_ELECTION: StateChainBlockNumber = 10;
 
+	// allows us to make the tests a little simpler.
+	assert!(BACKOFF_SETTINGS.backoff_after_blocks % BACKOFF_SETTINGS.backoff_frequency == 0);
+
 	with_default_setup()
 		.build_with_initial_election()
 		.expect_is_voted_desired(true, 0)
@@ -1166,5 +1172,26 @@ fn is_vote_desired_backs_off_as_expected() {
 		.expect_is_voted_desired(
 			false,
 			BACKOFF_SETTINGS.backoff_after_blocks + BACKOFF_SETTINGS.backoff_frequency + 1,
+		)
+		.then(|| {
+			// Open a channel after the backoff period has elapsed - meaning the election properties
+			// should be updated to have the last_channel_opened_at set to the block number of the
+			// channel.
+			DepositChannel {
+				account: 1,
+				asset: Asset::Sol,
+				close_block: 100,
+				total_ingressed: 0,
+				block_number: 0,
+			}
+			.open_at(BACKOFF_SETTINGS.backoff_after_blocks);
+		})
+		.expect_is_voted_desired(true, BACKOFF_SETTINGS.backoff_after_blocks)
+		.expect_is_voted_desired(true, BACKOFF_SETTINGS.backoff_after_blocks + STILL_YOUNG_ELECTION)
+		// beyond the backoff period, but not a multiple of the backoff point
+		.expect_is_voted_desired(false, BACKOFF_SETTINGS.backoff_after_blocks * 2 + 1)
+		.expect_is_voted_desired(
+			true,
+			BACKOFF_SETTINGS.backoff_after_blocks * 2 + BACKOFF_SETTINGS.backoff_frequency,
 		);
 }
