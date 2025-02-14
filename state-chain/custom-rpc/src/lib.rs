@@ -241,6 +241,7 @@ pub enum RpcAccountInfo {
 	Broker {
 		flip_balance: NumberOrHex,
 		bond: NumberOrHex,
+		#[deprecated(note = "This field is deprecated and will be replaced in a future release")]
 		earned_fees: any::AssetMap<NumberOrHex>,
 		affiliates: Vec<(AffiliateShortId, AccountId)>,
 		btc_vault_deposit_address: Option<String>,
