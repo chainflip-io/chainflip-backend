@@ -115,9 +115,10 @@ impl ArbitrumTrackedData {
 		let l1p = self.l1_base_fee_estimate * L1_GAS_PER_BYTES;
 		let p = self.base_fee;
 
-		let l1s = CCM_VAULT_BYTES_OVERHEAD + CCM_BUFFER_BYTES_OVERHEAD + CCM_ARBITRUM_BYTES_OVERHEAD + message_length as u128;
+		let l1s = CCM_VAULT_BYTES_OVERHEAD + CCM_ARBITRUM_BYTES_OVERHEAD + message_length as u128;
 
-		let l1c = l1p.saturating_mul(l1s);
+		// Add a multiplier on the l1s as the main contributor of fees
+		let l1c = l1p.saturating_mul(l1s.saturating_add(l1s/CCM_L1_SIZE_MULTIPLIER));
 
 		let b = l1c.div_ceil(p);
 
@@ -147,7 +148,7 @@ pub mod fees {
 	// This is an extra buffer added to ensure that the user will
 	// receive the desired gas amount. Might need to be adjusted
 	// according to Arbitrum's compression rate.
-	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 100; // ~25%
+	pub const CCM_L1_SIZE_MULTIPLIER: u128 = 5; // 5% buffer
 	pub const L1_GAS_PER_BYTES: u128 = 16;
 }
 

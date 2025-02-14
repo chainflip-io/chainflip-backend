@@ -140,5 +140,8 @@ export async function estimateCcmCfTesterGas(message: string) {
     message.slice(2);
 
   // Estimate needs to be done using "from: vault" to prevent logic revertion
-  return (await web3.eth.estimateGas({ data, to: cfTester, from: vault })) - EVM_BASE_GAS_LIMIT;
+  const gasEstimation = await web3.eth.estimateGas({ data, to: cfTester, from: vault });
+  console.log("gasEstimation", gasEstimation);
+
+  return gasEstimation - EVM_BASE_GAS_LIMIT;
 }
