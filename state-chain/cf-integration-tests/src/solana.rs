@@ -541,7 +541,7 @@ fn solana_ccm_fails_with_invalid_input() {
 }
 
 #[test]
-fn failed_ccm_does_not_consume_durable_nonce() {
+fn failed_rotation_does_not_consume_durable_nonce() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
@@ -574,7 +574,7 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 
 			// Failed Rotate Key message does not consume DurableNonce
 			// Add extra Durable nonces to make RotateAggkey too long
-			let available_nonces = (0..20)
+			let available_nonces = (0..100)
 				.map(|x| (SolAddress([x as u8; 32]), SolHash::default()))
 				.collect::<Vec<_>>();
 			pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(

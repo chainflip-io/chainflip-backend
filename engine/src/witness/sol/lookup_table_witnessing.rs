@@ -85,12 +85,17 @@ where
 
 			let addresses_vector: Vec<SolAddress> = addresses
 				.iter()
-				.filter_map(|address| address.as_str()) // This will now work with the array elements
+				.filter_map(|address| address.as_str())
 				.map(|address| SolAddress::from_str(address).unwrap())
 				.collect();
 
+			// We might want to return an AddressLookupTable Account type, it depends on how the
+			// elections are setup.
 			Ok(Some(addresses_vector))
 		},
+		// If the account is not JsonParsed as a Lookup Table we assume it's either empty or another
+		// account. We can also consider not returning an Option and instead return an empty
+		// vector if the ALT is not found.
 		Some(_) => {
 			tracing::info!(
 				"Address lookup table account encoding is not JsonParsed for account {:?}: {:?}",
@@ -118,7 +123,7 @@ mod tests {
 	use super::*;
 
 	#[tokio::test]
-	#[ignore = "requires a running localnet"]
+	#[ignore = "requires an external endpoint"]
 	async fn test_get_lookup_table_state() {
 		task_scope::task_scope(|scope| {
 			async {
@@ -140,8 +145,6 @@ mod tests {
 				// Mainnet-beta deployed address lookup table account
 				let mainnet_alt_address: SolAddress =
 					SolAddress::from_str("2immgwYNHBbyVQKVGCEkgWpi53bLwWNRMB5G2nbgYV17").unwrap();
-				// let localnet_alt_addres: SolAddress =
-				// 	SolAddress::from_str("752wqonipWUGyz8Ss9rpPE4uwuhFDPGKUusLapSzdJeh").unwrap();
 
 				let addresses =
 					get_lookup_table_state(&client, mainnet_alt_address).await.unwrap().unwrap();
@@ -168,6 +171,49 @@ mod tests {
 				)
 				.await
 				.unwrap();
+				assert_eq!(addresses, None);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	#[ignore = "requires an external endpoint"]
+	async fn test_get_non_lookup_table() {
+		task_scope::task_scope(|scope| {
+			async {
+				let client = SolRetryRpcClient::new(
+					scope,
+					NodeContainer {
+						primary: HttpEndpoint {
+							http_endpoint: "https://api.mainnet-beta.solana.com".into(),
+						},
+						backup: None,
+					},
+					None,
+					Solana::WITNESS_PERIOD,
+				)
+				.await
+				.unwrap();
+
+				let mainnet_empty_address: SolAddress =
+					SolAddress::from_str("ASriuNGwqUosyrUYNrpjMNUsGYAKFAVB4e3bVpeaRC7Y").unwrap();
+
+				let addresses =
+					get_lookup_table_state(&client, mainnet_empty_address).await.unwrap();
+
+				assert_eq!(addresses, None);
+
+				let mainnet_nonce_account: SolAddress =
+					SolAddress::from_str("3bVqyf58hQHsxbjnqnSkopnoyEHB9v9KQwhZj7h1DucW").unwrap();
+
+				let addresses =
+					get_lookup_table_state(&client, mainnet_nonce_account).await.unwrap();
+
 				assert_eq!(addresses, None);
 
 				Ok(())
