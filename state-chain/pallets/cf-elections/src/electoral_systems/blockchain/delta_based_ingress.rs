@@ -201,10 +201,10 @@ where
 		//    elapsed)
 		// 2. The backoff_after_blocks period has elapsed, but we are on a block that is a multiple
 		//    of backoff_frequency
-		Ok(!((current_state_chain_block_number.clone() >
-			last_channel_opened_at + backoff_settings.backoff_after_blocks) &&
-			(current_state_chain_block_number.clone() % backoff_settings.backoff_frequency !=
-				Zero::zero())))
+		Ok((current_state_chain_block_number.clone() <=
+			last_channel_opened_at + backoff_settings.backoff_after_blocks) ||
+			(current_state_chain_block_number.clone() % backoff_settings.backoff_frequency ==
+				Zero::zero()))
 	}
 
 	fn is_vote_needed(
