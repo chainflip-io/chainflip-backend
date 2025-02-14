@@ -236,6 +236,7 @@ impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo
 pub enum RpcAccountInfo {
 	Unregistered {
 		flip_balance: NumberOrHex,
+		asset_balances: any::AssetMap<NumberOrHex>,
 	},
 	Broker {
 		flip_balance: NumberOrHex,
@@ -269,8 +270,13 @@ pub enum RpcAccountInfo {
 }
 
 impl RpcAccountInfo {
-	fn unregistered(balance: u128) -> Self {
-		Self::Unregistered { flip_balance: balance.into() }
+	fn unregistered(balance: u128, asset_balances: any::AssetMap<u128>) -> Self {
+		Self::Unregistered {
+			flip_balance: balance.into(),
+			asset_balances: cf_chains::assets::any::AssetMap::from_iter_or_default(
+				asset_balances.iter().map(|(asset, balance)| (asset, (*balance).into())),
+			),
+		}
 	}
 
 	fn broker(broker_info: BrokerInfo, balance: u128) -> Self {
@@ -1374,13 +1380,15 @@ where
 	) -> RpcResult<RpcAccountInfo> {
 		self.with_runtime_api(at, |api, hash| {
 			let balance = api.cf_account_flip_balance(hash, &account_id)?;
+			let asset_balances = api.cf_free_balances(hash, account_id.clone())?;
 
 			Ok::<_, CfApiError>(
 				match api
 					.cf_account_role(hash, account_id.clone())?
 					.unwrap_or(AccountRole::Unregistered)
 				{
-					AccountRole::Unregistered => RpcAccountInfo::unregistered(balance),
+					AccountRole::Unregistered =>
+						RpcAccountInfo::unregistered(balance, asset_balances),
 					AccountRole::Broker => {
 						let info = api.cf_broker_info(hash, account_id)?;
 
@@ -2158,7 +2166,11 @@ mod test {
 
 	#[test]
 	fn test_no_account_serialization() {
-		insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::unregistered(0)).unwrap());
+		insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::unregistered(
+			0,
+			any::AssetMap::default()
+		))
+		.unwrap());
 	}
 
 	#[test]
