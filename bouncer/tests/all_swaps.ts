@@ -14,11 +14,10 @@ import {
   vaultSwapSupportedChains,
 } from '../shared/utils';
 import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
-import { SwapContext } from '../shared/utils/swap_context';
 import { TestContext } from '../shared/utils/test_context';
 
 export async function initiateSwap(
-  swapContext: SwapContext,
+  testContext: TestContext,
   sourceAsset: Asset,
   destAsset: Asset,
   functionCall: typeof testSwap | typeof testVaultSwap,
@@ -35,21 +34,29 @@ export async function initiateSwap(
   if (destAsset === 'Btc') {
     const btcAddressTypesArray = Object.values(btcAddressTypes);
     return functionCall(
+      testContext.logger,
       sourceAsset,
       destAsset,
       btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
       ccmSwapMetadata,
-      swapContext,
+      testContext.swapContext,
     );
   }
-  return functionCall(sourceAsset, destAsset, undefined, ccmSwapMetadata, swapContext);
+  return functionCall(
+    testContext.logger,
+    sourceAsset,
+    destAsset,
+    undefined,
+    ccmSwapMetadata,
+    testContext.swapContext,
+  );
 }
 
 export async function testAllSwaps(textContext: TestContext) {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
 
   // Open a private BTC channel to be used for btc vault swaps
-  await openPrivateBtcChannel('//BROKER_1');
+  await openPrivateBtcChannel(textContext.logger, '//BROKER_1');
 
   function appendSwap(
     sourceAsset: Asset,
@@ -57,9 +64,7 @@ export async function testAllSwaps(textContext: TestContext) {
     functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
-    allSwaps.push(
-      initiateSwap(textContext.swapContext, sourceAsset, destAsset, functionCall, ccmSwap),
-    );
+    allSwaps.push(initiateSwap(textContext, sourceAsset, destAsset, functionCall, ccmSwap));
   }
 
   Object.values(Assets).forEach((sourceAsset) => {

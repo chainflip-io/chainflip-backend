@@ -122,3 +122,88 @@ pnpm vitest run -t "ConcurrentTests"
 # run all tests in a file
 pnpm vitest run -t ./tests/fast_bouncer.test.ts
 ```
+
+## Logging
+
+In the bouncer we use `Pino` as our logging framework. It has been configured to output the logs to:
+
+- `stdout` at `INFO` level in pretty format
+- `/tmp/chainflip/bouncer.log` at `TRACE` level in `JSON` format
+
+Note: To keep the `stdout` clean, that output is configured to ignore the common `test`, `tag` and `module` bindings that ar attached to log messages.
+
+### Logging in a test
+
+Use the `Logger` that is attached to the `TestContext`.
+This logger already has the name of the test attached to it.
+Do not use `console.log` as it will not be logged to the file.
+
+```ts
+import { TestContext } from '../shared/utils/test_context';
+import { Logger, throwError } from '../shared/utils/logger';
+
+async function testCase(parentLogger: Logger, asset: Asset) {
+  // Attach any contextual data to the logger as a binding. {"inputAsset": "Eth"}.
+  const logger = parentLogger.child({ inputAsset: asset });
+
+  // Basic logging
+  logger.debug('About to foo');
+
+  // Throwing an error with all of the loggers contextual data (bindings) added to the error message.
+  // No need to catch this, it will be logged as at `Error` level.
+  if (foo) {
+    throwError(logger, new Error('Foo happened'));
+  }
+}
+
+export async function myTest(testContext: TestContext) {
+  await testCase(testContext.logger, 'Eth');
+
+  // You can log directly from the `TestContext` as well
+  testContext.info('Goodbye');
+}
+```
+
+Another option for adding information to the logger is using the custom `loggerChild` function.
+This will append the given string to the `module` binding.
+
+```ts
+import { loggerChild } from '../shared/utils/logger';
+
+const logger1 = loggerChild(parentLogger, `myTestCase`);
+const logger2 = loggerChild(logger1, `setupFunction`);
+const logger3 = loggerChild(logger2, `myFunction`);
+// {"module": `myTestCase::setupFunction::myFunction`}
+```
+
+### Logging outside of a test
+
+If you need use the logger in a command or any other non-test code, you can use the `globalLogger`.
+It has no bindings attached to it.
+It will still output to both `stdout` and the `bouncer.log` file.
+
+```ts
+import { globalLogger } from '../shared/utils/logger';
+
+globalLogger.info('Executing my command');
+await observeEvent(globalLogger, 'someEvent');
+```
+
+### Debugging
+
+To debug a failed test you can use the `bouncer.log` file. It will have logs at `Trace` level of all test that where ran.
+To filter for the test you are debugging, you can use the `test` value that should be on all log messages (Excluding logs from commands, setup scripts and thrown errors).
+
+An example of using `jq` to filter the logs for an individual test and put them in another file:
+
+```sh copy
+jq 'select(.test=="BoostingForAsset")' /tmp/chainflip/bouncer.log > /tmp/chainflip/failed_test.log
+```
+
+If you want to run a test and have the `stdout` logs be at different level, you can use the `BOUNCER_LOG_LEVEL` environment variable (Does not effect the `bouncer.log` file).
+
+```sh copy
+BOUNCER_LOG_LEVEL=debug pnpm vitest run -t "BoostingForAsset"
+```
+
+Note: you can use the `BOUNCER_LOG_PATH` environment variable to output the logs to a different file.

@@ -64,13 +64,14 @@ async function deltaBasedIngressTest(
   };
 
   // Monitor swap events to make sure there is only one
-  let swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
+  let swapScheduledHandle = observeEvent(logger, 'swapping:SwapScheduled', {
     test: (event) => handleSwapScheduled(event, amountFirstDeposit, 1),
     abortable: true,
   });
 
   // Initiate swap from Solana
   const swapParams = await testSwap(
+    logger,
     sourceAsset,
     destAsset,
     undefined,
@@ -100,6 +101,7 @@ async function deltaBasedIngressTest(
 
   // Start another swap doing another deposit to the same address
   const swapHandle = doPerformSwap(
+    logger,
     swapParams,
     `[${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit]`,
     undefined,
@@ -107,7 +109,7 @@ async function deltaBasedIngressTest(
     amountSecondDeposit,
   );
 
-  swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
+  swapScheduledHandle = observeEvent(logger, 'swapping:SwapScheduled', {
     test: (event) => handleSwapScheduled(event, amountSecondDeposit, 2),
     abortable: true,
   });

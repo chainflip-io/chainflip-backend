@@ -2,6 +2,7 @@ import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
 import { deferredPromise, sleep } from '../utils';
+import { Logger } from './logger';
 
 // @ts-expect-error polyfilling
 Symbol.asyncDispose ??= Symbol('asyncDispose');
@@ -369,13 +370,19 @@ type AbortableObserver<T> = {
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export function observeEvents<T = any>(eventName: EventName): Observer<T>;
-export function observeEvents<T = any>(eventName: EventName, opts: Options<T>): Observer<T>;
+export function observeEvents<T = any>(logger: Logger, eventName: EventName): Observer<T>;
 export function observeEvents<T = any>(
+  logger: Logger,
+  eventName: EventName,
+  opts: Options<T>,
+): Observer<T>;
+export function observeEvents<T = any>(
+  logger: Logger,
   eventName: EventName,
   opts: AbortableOptions<T>,
 ): AbortableObserver<T>;
 export function observeEvents<T = any>(
+  logger: Logger,
   eventName: EventName,
   {
     chain = 'chainflip',
@@ -386,6 +393,7 @@ export function observeEvents<T = any>(
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
+  logger.trace(`Observing event ${eventName}`);
 
   const controller = abortable ? new AbortController() : undefined;
 
@@ -402,6 +410,7 @@ export function observeEvents<T = any>(
           test(event)
         ) {
           foundEvents.push(event);
+          logger.trace(`Found event ${eventName} in block ${event.block}`);
         }
       }
     }
@@ -421,6 +430,7 @@ export function observeEvents<T = any>(
           test(event)
         ) {
           foundEvents.push(event);
+          logger.trace(`Found event ${eventName} in block ${event.block}`);
         }
       }
       if (foundEvents.length > 0) {
@@ -445,17 +455,20 @@ type SingleEventObserver<T> = {
   event: Promise<Event<T>>;
 };
 
-export function observeEvent<T = any>(eventName: EventName): SingleEventObserver<T>;
+export function observeEvent<T = any>(logger: Logger, eventName: EventName): SingleEventObserver<T>;
 export function observeEvent<T = any>(
+  logger: Logger,
   eventName: EventName,
   opts: Options<T>,
 ): SingleEventObserver<T>;
 export function observeEvent<T = any>(
+  logger: Logger,
   eventName: EventName,
   opts: AbortableOptions<T>,
 ): SingleEventAbortableObserver<T>;
 
 export function observeEvent<T = any>(
+  logger: Logger,
   eventName: EventName,
   {
     chain = 'chainflip',
@@ -466,7 +479,7 @@ export function observeEvent<T = any>(
   }: Options<T> | AbortableOptions<T> = {},
 ): SingleEventObserver<T> | SingleEventAbortableObserver<T> {
   if (abortable) {
-    const observer = observeEvents(eventName, {
+    const observer = observeEvents(logger, eventName, {
       chain,
       test,
       finalized,
@@ -480,7 +493,7 @@ export function observeEvent<T = any>(
     } as SingleEventAbortableObserver<T>;
   }
 
-  const observer = observeEvents(eventName, {
+  const observer = observeEvents(logger, eventName, {
     chain,
     test,
     finalized,
@@ -496,10 +509,11 @@ export function observeEvent<T = any>(
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function observeBadEvent<T = any>(
+  logger: Logger,
   eventName: EventName,
-  { test, label }: { test?: EventTest<T>; label?: string },
+  { test }: { test?: EventTest<T> },
 ): { stop: () => Promise<void> } {
-  const observer = observeEvent(eventName, { test, abortable: true });
+  const observer = observeEvent(logger, eventName, { test, abortable: true });
 
   return {
     stop: async () => {
@@ -508,7 +522,7 @@ export function observeBadEvent<T = any>(
       await observer.event.then((event) => {
         if (event) {
           throw new Error(
-            `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block} [${label}]`,
+            `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block}`,
           );
         }
       });

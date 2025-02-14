@@ -49,18 +49,19 @@ async function testMinPriceRefund(
   if (!swapViaVault) {
     logger.debug(`Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`);
     const swapRequest = await requestNewSwap(
+      logger,
       inputAsset,
       destAsset,
       destAddress,
       'FoK_Test',
       undefined, // messageMetadata
       0, // brokerCommissionBps
-      false, // log
       0, // boostFeeBps
       refundParameters,
     );
     const depositAddress = swapRequest.depositAddress;
     swapRequestedHandle = observeSwapRequested(
+      logger,
       inputAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: swapRequest.channelId },
@@ -68,7 +69,7 @@ async function testMinPriceRefund(
     );
 
     // Deposit the asset
-    await send(inputAsset, depositAddress, amount.toString());
+    await send(logger, inputAsset, depositAddress, amount.toString());
     logger.debug(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
   } else {
     logger.debug(
@@ -76,6 +77,7 @@ async function testMinPriceRefund(
     );
 
     const { transactionId } = await executeVaultSwap(
+      logger,
       inputAsset,
       destAsset,
       destAddress,
@@ -86,6 +88,7 @@ async function testMinPriceRefund(
     );
 
     swapRequestedHandle = observeSwapRequested(
+      logger,
       inputAsset,
       destAsset,
       transactionId,
@@ -97,7 +100,7 @@ async function testMinPriceRefund(
   const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
   logger.debug(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
-  const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {
+  const observeSwapExecuted = observeEvent(logger, `swapping:SwapExecuted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
     historicalCheckBlocks: 10,
   }).event;
@@ -105,7 +108,7 @@ async function testMinPriceRefund(
   // Wait for the swap to execute or get refunded
   const executeOrRefund = await Promise.race([
     observeSwapExecuted,
-    observeBalanceIncrease(inputAsset, refundAddress, refundBalanceBefore),
+    observeBalanceIncrease(logger, inputAsset, refundAddress, refundBalanceBefore),
   ]);
 
   if (typeof executeOrRefund !== 'number') {

@@ -20,17 +20,17 @@ const gasErrorMargin = 0.1;
 
 /// Redeems the flip and observed the balance increase
 async function redeemAndObserve(
+  logger: Logger,
   seed: string,
   redeemEthAddress: HexString,
   redeemAmount: RedeemAmount,
-  logger: Logger,
 ): Promise<number> {
   const initBalance = await getBalance('Flip', redeemEthAddress);
   logger.debug(`Initial ERC20-Flip balance: ${initBalance}`);
 
-  await redeemFlip(seed, redeemEthAddress, redeemAmount);
+  await redeemFlip(logger, seed, redeemEthAddress, redeemAmount);
 
-  const newBalance = await observeBalanceIncrease('Flip', redeemEthAddress, initBalance);
+  const newBalance = await observeBalanceIncrease(logger, 'Flip', redeemEthAddress, initBalance);
   const balanceIncrease = newBalance - parseFloat(initBalance);
   logger.debug(
     `Redemption success! New balance: ${newBalance.toString()}, Increase: ${balanceIncrease}`,
@@ -59,17 +59,17 @@ async function main(logger: Logger, providedSeed?: string) {
   logger.debug(`Eth  Redeem address: ${redeemEthAddress}`);
 
   // Fund the SC address for the tests
-  await fundFlip(redeemSCAddress, fundAmount.toString());
+  await fundFlip(logger, redeemSCAddress, fundAmount.toString());
 
   // Test redeeming an exact amount with a portion of the funded flip
   const exactAmount = fundAmount / 4;
   const exactRedeemAmount = { Exact: exactAmount.toString() };
   logger.debug(`Testing redeem exact amount: ${exactRedeemAmount.Exact}`);
   const redeemedExact = await redeemAndObserve(
+    logger,
     seed,
     redeemEthAddress as HexString,
     exactRedeemAmount,
-    logger,
   );
   logger.debug(`Expected balance increase amount: ${exactAmount}`);
   assert.strictEqual(
@@ -81,7 +81,7 @@ async function main(logger: Logger, providedSeed?: string) {
 
   // Test redeeming the rest of the flip with a 'Max' redeem amount
   logger.debug(`Testing redeem all`);
-  const redeemedAll = await redeemAndObserve(seed, redeemEthAddress as HexString, 'Max', logger);
+  const redeemedAll = await redeemAndObserve(logger, seed, redeemEthAddress as HexString, 'Max');
   // We expect to redeem the entire amount minus the exact amount redeemed above + tax & gas for both redemptions
   const expectedRedeemAllAmount = fundAmount - redeemedExact - redemptionTaxAmount * 2;
   assert(

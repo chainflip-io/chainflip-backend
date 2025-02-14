@@ -75,7 +75,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
 
   // we need to manually create the swap channel and observe the relative event
   // because we want to use a separate broker to not interfere with other tests
-  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', {
+  const addressPromise = observeEvent(logger, 'swapping:SwapDepositAddressReady', {
     test: (event) => {
       // Find deposit address for the right swap by looking at destination address:
       const destAddressEvent = event.data.destinationAddress[shortChainFromAsset(destAsset)];
@@ -105,20 +105,21 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
   const channelId = Number(res.channelId);
 
   const swapRequestedHandle = observeSwapRequested(
+    logger,
     inputAsset,
     destAsset,
     { type: TransactionOrigin.DepositChannel, channelId },
     SwapRequestType.Regular,
   );
 
-  await send(inputAsset, depositAddress, rawDepositForSwapAmount, true /* log */);
+  await send(logger, inputAsset, depositAddress, rawDepositForSwapAmount);
 
   const swapRequestedEvent = (await swapRequestedHandle).data;
 
   // Get values from the swap event
   const requestId = swapRequestedEvent.swapRequestId;
 
-  const swapExecutedEvent = await observeEvent('swapping:SwapExecuted', {
+  const swapExecutedEvent = await observeEvent(logger, 'swapping:SwapExecuted', {
     test: (event) => event.data.swapRequestId === requestId,
   }).event;
 
@@ -153,7 +154,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
   logger.debug(
     `Withdrawing broker fees to ${withdrawalAddress}, balance before: ${balanceBeforeWithdrawal}`,
   );
-  const observeWithdrawalRequested = observeEvent('swapping:WithdrawalRequested', {
+  const observeWithdrawalRequested = observeEvent(logger, 'swapping:WithdrawalRequested', {
     test: (event) =>
       event.data.destinationAddress[chain]?.toLowerCase() === withdrawalAddress.toLowerCase(),
   });
@@ -167,7 +168,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
 
   logger.debug(`Withdrawal requested, egressId: ${withdrawalRequestedEvent.data.egressId}`);
 
-  await observeBalanceIncrease(feeAsset, withdrawalAddress, balanceBeforeWithdrawal);
+  await observeBalanceIncrease(logger, feeAsset, withdrawalAddress, balanceBeforeWithdrawal);
 
   // Check that the balance after withdrawal is correct after deducting withdrawal fee
   const balanceAfterWithdrawal = await getBalance(feeAsset, withdrawalAddress);

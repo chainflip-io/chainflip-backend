@@ -10,36 +10,44 @@ async function rotatesThroughBtcSwap(testContext: TestContext) {
   const destAsset = 'Dot';
 
   const { destAddress, tag } = await prepareSwap(
+    logger,
     sourceAsset,
     destAsset,
     undefined,
     undefined,
     'through rotation',
-    true,
     testContext.swapContext,
   );
 
   logger.debug('Generated Dot address: ' + destAddress);
 
-  const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
+  const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress, tag);
 
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   logger.info(`Vault rotation initiated. Awaiting new epoch.`);
-  await observeEvent('validator:NewEpoch').event;
+  await observeEvent(logger, 'validator:NewEpoch').event;
   logger.info('Vault rotated!');
 
   await doPerformSwap(
+    logger,
     swapParams,
     tag,
     undefined,
     undefined,
     undefined,
-    true,
     testContext.swapContext,
   );
 }
 
 export async function testRotatesThroughBtcSwap(testContext: TestContext) {
   await rotatesThroughBtcSwap(testContext);
-  await testSwap('Dot', 'Btc', undefined, undefined, testContext.swapContext, 'after rotation');
+  await testSwap(
+    testContext.logger,
+    'Dot',
+    'Btc',
+    undefined,
+    undefined,
+    testContext.swapContext,
+    'after rotation',
+  );
 }

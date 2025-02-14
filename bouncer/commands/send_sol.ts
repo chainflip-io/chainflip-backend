@@ -12,13 +12,14 @@
 
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { sendSol } from '../shared/send_sol';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main() {
   const solanaAddress = process.argv[2];
   const solAmount = process.argv[3].trim();
 
-  console.log('Transferring ' + solAmount + ' Sol to ' + solanaAddress);
-  await sendSol(solanaAddress, solAmount);
+  globalLogger.info(`Transferring ${solAmount} Sol to ${solanaAddress}`);
+  await sendSol(globalLogger, solanaAddress, solAmount);
 }
 
 await runWithTimeoutAndExit(main(), 20);

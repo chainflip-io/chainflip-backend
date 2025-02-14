@@ -61,14 +61,8 @@ export async function newBtcAddress(seed: string, type: BtcAddressType): Promise
     params: ['addr(' + address + ')'],
   };
 
-  let walletDescriptor;
-  try {
-    walletDescriptor = (await axios.post(btcEndpoint, getDescriptorData, axiosConfig)).data.result
-      .descriptor;
-  } catch (err) {
-    console.log(err);
-    process.exit(-1);
-  }
+  const walletDescriptor = (await axios.post(btcEndpoint, getDescriptorData, axiosConfig)).data
+    .result.descriptor;
 
   const registerAddressData = {
     jsonrpc: '1.0',

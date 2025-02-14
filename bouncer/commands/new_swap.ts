@@ -19,6 +19,7 @@ import {
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
+import { globalLogger } from '../shared/utils/logger';
 
 interface Args {
   sourceAsset: string;
@@ -121,13 +122,13 @@ async function newSwapCommand() {
       : undefined;
 
   await requestNewSwap(
+    globalLogger,
     parseAssetString(args.sourceAsset) as InternalAsset,
     parseAssetString(args.destAsset) as InternalAsset,
     args.destAddress,
     undefined, // tag
     undefined, // messageMetadata
     undefined, // brokerCommissionBps
-    true, // log
     args.maxBoostFeeBps,
     refundParameters,
     dcaParameters,

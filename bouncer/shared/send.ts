@@ -16,59 +16,65 @@ import { approveErc20 } from './approve_erc20';
 import { getCFTesterAbi } from './contract_interfaces';
 import { sendSol } from './send_sol';
 import { sendSolUsdc } from './send_solusdc';
+import { Logger } from './utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-export async function send(asset: Asset, address: string, amount?: string, log = true) {
+export async function send(logger: Logger, asset: Asset, address: string, amount?: string) {
   switch (asset) {
     case 'Btc':
-      await sendBtc(address, amount ?? defaultAssetAmounts(asset));
+      await sendBtc(logger, address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'Eth':
-      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log);
+      await sendEvmNative(logger, 'Ethereum', address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'ArbEth':
-      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log);
+      await sendEvmNative(logger, 'Arbitrum', address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'Dot':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'Sol':
-      await sendSol(address, amount ?? defaultAssetAmounts(asset));
+      await sendSol(logger, address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'Usdc':
     case 'Usdt':
     case 'Flip': {
       const contractAddress = getContractAddress('Ethereum', asset);
       await sendErc20(
+        logger,
         'Ethereum',
         address,
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
-        log,
       );
       break;
     }
     case 'ArbUsdc': {
       const contractAddress = getContractAddress('Arbitrum', asset);
       await sendErc20(
+        logger,
         'Arbitrum',
         address,
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
-        log,
       );
       break;
     }
     case 'SolUsdc':
-      await sendSolUsdc(address, amount ?? defaultAssetAmounts(asset));
+      await sendSolUsdc(logger, address, amount ?? defaultAssetAmounts(asset));
       break;
     default:
       throw new Error(`Unsupported asset type: ${asset}`);
   }
 }
 
-export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: string) {
+export async function sendViaCfTester(
+  logger: Logger,
+  asset: Asset,
+  toAddress: string,
+  amount?: string,
+) {
   const chain = chainFromAsset(asset);
 
   const web3 = new Web3(getEvmEndpoint(chain));
@@ -86,7 +92,7 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
       break;
     case 'Usdc':
     case 'Flip': {
-      await approveErc20(asset, cfTesterAddress, amount ?? defaultAssetAmounts(asset));
+      await approveErc20(logger, asset, cfTesterAddress, amount ?? defaultAssetAmounts(asset));
       txData = cfTesterContract.methods
         .transferToken(
           toAddress,
@@ -100,5 +106,5 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
       throw new Error(`Unsupported asset type: ${asset}`);
   }
 
-  await signAndSendTxEvm(chain, cfTesterAddress, value, txData);
+  await signAndSendTxEvm(logger, chain, cfTesterAddress, value, txData);
 }

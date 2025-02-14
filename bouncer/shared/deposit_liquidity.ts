@@ -15,8 +15,10 @@ import {
 } from '../shared/utils';
 import { send } from '../shared/send';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { Logger } from './utils/logger';
 
 export async function depositLiquidity(
+  logger: Logger,
   ccy: Asset,
   amount: number,
   waitForFinalization = false,
@@ -40,7 +42,7 @@ export async function depositLiquidity(
     refundAddress = chain === 'Dot' ? decodeDotAddressForContract(refundAddress) : refundAddress;
     refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
-    console.log('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);
+    logger.debug('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);
     await lpMutex.runExclusive(async () => {
       await chainflip.tx.liquidityProvider
         .registerLiquidityRefundAddress({ [chain]: refundAddress })
@@ -48,11 +50,11 @@ export async function depositLiquidity(
     });
   }
 
-  let eventHandle = observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
+  let eventHandle = observeEvent(logger, 'liquidityProvider:LiquidityDepositAddressReady', {
     test: (event) => event.data.asset === ccy && event.data.accountId === lp.address,
   }).event;
 
-  console.log('Requesting ' + ccy + ' deposit address');
+  logger.debug('Requesting ' + ccy + ' deposit address');
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(ccy, null)
@@ -61,9 +63,9 @@ export async function depositLiquidity(
 
   const ingressAddress = (await eventHandle).data.depositAddress[chain];
 
-  console.log('Received ' + ccy + ' address: ' + ingressAddress);
-  console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
-  eventHandle = observeEvent('assetBalances:AccountCredited', {
+  logger.debug('Received ' + ccy + ' address: ' + ingressAddress);
+  logger.debug('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
+  eventHandle = observeEvent(logger, 'assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === ccy &&
       event.data.accountId === lp.address &&
@@ -74,7 +76,7 @@ export async function depositLiquidity(
     finalized: waitForFinalization,
   }).event;
 
-  await send(ccy, ingressAddress, String(amount));
+  await send(logger, ccy, ingressAddress, String(amount));
 
   return eventHandle;
 }

@@ -18,6 +18,7 @@ import {
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 import { getChainflipApi } from './utils/substrate';
 import { ChannelRefundParameters } from './sol_vault_swap';
+import { Logger } from './utils/logger';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
@@ -35,6 +36,7 @@ interface EvmVaultSwapExtraParameters {
 }
 
 export async function executeEvmVaultSwap(
+  logger: Logger,
   brokerAddress: string,
   sourceAsset: Asset,
   destAsset: Asset,
@@ -61,7 +63,7 @@ export async function executeEvmVaultSwap(
     minPriceX128: '0',
   };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
-  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(logger, sourceAsset));
 
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.
@@ -87,6 +89,7 @@ export async function executeEvmVaultSwap(
     refund_parameters: refundParams,
   };
 
+  logger.trace('Requesting vault swap parameter encoding');
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     brokerAddress,
@@ -119,6 +122,7 @@ export async function executeEvmVaultSwap(
     gas: srcChain === 'Arbitrum' ? 32000000 : 5000000,
   };
 
+  logger.trace('Signing and Sending EVM vault swap transaction');
   const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
   const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
 

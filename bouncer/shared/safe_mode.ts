@@ -1,8 +1,9 @@
 import { submitGovernanceExtrinsic } from './cf_governance';
+import { globalLogger } from './utils/logger';
 import { observeEvent } from './utils/substrate';
 
 async function setSafeMode(mode: string, options?: TranslatedOptions) {
-  const eventHandle = observeEvent('environment:RuntimeSafeModeUpdated');
+  const eventHandle = observeEvent(globalLogger, 'environment:RuntimeSafeModeUpdated');
   await submitGovernanceExtrinsic((api) => api.tx.environment.updateSafeMode({ [mode]: options }));
 
   await eventHandle.event;
@@ -36,7 +37,7 @@ export async function setSafeModeToAmber(options: string[]) {
       const entry = x.split('_');
       translatedOptions[entry[0]][entry[1]] = true;
     } catch {
-      console.log('The provided feature flag ' + x + ' is not supported!');
+      globalLogger.error(`The provided feature flag ${x} is not supported!`);
       process.exit(-1);
     }
   });

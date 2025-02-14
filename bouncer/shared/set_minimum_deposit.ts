@@ -1,9 +1,10 @@
 import { submitGovernanceExtrinsic } from './cf_governance';
 import { observeEvent } from './utils/substrate';
 import { Asset } from './utils';
+import { Logger } from './utils/logger';
 
-export async function setMinimumDeposit(asset: Asset, amount: bigint) {
-  const eventHandle = observeEvent('IngressEgress:MinimumDepositSet');
+export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bigint) {
+  const eventHandle = observeEvent(logger, 'IngressEgress:MinimumDepositSet');
   switch (asset) {
     case 'Btc':
       await submitGovernanceExtrinsic((api) =>

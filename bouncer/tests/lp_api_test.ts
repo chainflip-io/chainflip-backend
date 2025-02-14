@@ -22,6 +22,7 @@ import { sendEvmNative } from '../shared/send_evm';
 import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { TestContext } from '../shared/utils/test_context';
+import { Logger, loggerChild } from '../shared/utils/logger';
 
 type RpcAsset = {
   asset: string;
@@ -40,18 +41,18 @@ const testAssetAmount = parseInt(
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
-async function provideLiquidityAndTestAssetBalances() {
+async function provideLiquidityAndTestAssetBalances(logger: Logger) {
   const fineAmountToProvide = parseInt(
     amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
-  await depositLiquidity(testAsset, amountToProvide, true, '//LP_API');
+  await depositLiquidity(logger, testAsset, amountToProvide, true, '//LP_API');
 
   // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;
   let ethBalance = 0;
   do {
-    const balances = await lpApiRpc(`lp_asset_balances`, []);
+    const balances = await lpApiRpc(logger, `lp_asset_balances`, []);
     ethBalance = parseInt(balances.Ethereum.Eth);
     retryCount++;
     if (retryCount > 14) {
@@ -65,15 +66,17 @@ async function provideLiquidityAndTestAssetBalances() {
   } while (ethBalance < fineAmountToProvide);
 }
 
-async function testRegisterLiquidityRefundAddress() {
+async function testRegisterLiquidityRefundAddress(parentLogger: Logger) {
+  const logger = loggerChild(parentLogger, 'testRegisterLiquidityRefundAddress');
   const observeRefundAddressRegisteredEvent = observeEvent(
+    logger,
     'liquidityProvider:LiquidityRefundAddressRegistered',
     {
       test: (event) => event.data.address.Eth === testAddress,
     },
   );
 
-  const registerRefundAddress = await lpApiRpc(`lp_register_liquidity_refund_address`, [
+  const registerRefundAddress = await lpApiRpc(logger, `lp_register_liquidity_refund_address`, [
     'Ethereum',
     testAddress,
   ]);
@@ -85,8 +88,9 @@ async function testRegisterLiquidityRefundAddress() {
   // TODO: Check that the correct address is now set on the SC
 }
 
-async function testLiquidityDeposit() {
+async function testLiquidityDeposit(logger: Logger) {
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
+    logger,
     'liquidityProvider:LiquidityDepositAddressReady',
     {
       test: (event) => event.data.depositAddress.Eth,
@@ -94,7 +98,7 @@ async function testLiquidityDeposit() {
   ).event;
 
   const liquidityDepositAddress = (
-    await lpApiRpc(`lp_liquidity_deposit`, [testRpcAsset, 'InBlock'])
+    await lpApiRpc(logger, `lp_liquidity_deposit`, [testRpcAsset, 'InBlock'])
   ).tx_details.response;
   const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
@@ -109,7 +113,7 @@ async function testLiquidityDeposit() {
   );
 
   // Send funds to the deposit address and watch for deposit event
-  const observeAccountCreditedEvent = observeEvent('assetBalances:AccountCredited', {
+  const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === testAsset &&
       isWithinOnePercent(
@@ -117,14 +121,19 @@ async function testLiquidityDeposit() {
         BigInt(testAssetAmount),
       ),
   }).event;
-  await sendEvmNative(chainFromAsset(testAsset), liquidityDepositAddress, String(testAmount));
+  await sendEvmNative(
+    logger,
+    chainFromAsset(testAsset),
+    liquidityDepositAddress,
+    String(testAmount),
+  );
   await observeAccountCreditedEvent;
 }
 
-async function testWithdrawAsset() {
+async function testWithdrawAsset(logger: Logger) {
   const oldBalance = await getBalance(testAsset, testAddress);
 
-  const result = await lpApiRpc(`lp_withdraw_asset`, [
+  const result = await lpApiRpc(logger, `lp_withdraw_asset`, [
     testAssetAmount,
     testRpcAsset,
     testAddress,
@@ -135,10 +144,10 @@ async function testWithdrawAsset() {
   assert.strictEqual(chain, testRpcAsset.chain, `Unexpected withdraw asset result`);
   assert(egressId > 0, `Unexpected egressId: ${egressId}`);
 
-  await observeBalanceIncrease(testAsset, testAddress, oldBalance);
+  await observeBalanceIncrease(logger, testAsset, testAddress, oldBalance);
 }
 
-async function testTransferAsset() {
+async function testTransferAsset(logger: Logger) {
   await using chainflip = await getChainflipApi();
   const amountToTransfer = testAssetAmount.toString(16);
 
@@ -161,7 +170,7 @@ async function testTransferAsset() {
   const oldBalanceSource = await getLpBalance(sourceLpAccount.address);
   const oldBalanceDestination = await getLpBalance(destinationLpAccount.address);
 
-  const result = await lpApiRpc(`lp_transfer_asset`, [
+  const result = await lpApiRpc(logger, `lp_transfer_asset`, [
     amountToTransfer,
     testRpcAsset,
     destinationLpAccount.address,
@@ -196,9 +205,9 @@ async function testTransferAsset() {
   );
 }
 
-async function testRegisterWithExistingLpAccount() {
+async function testRegisterWithExistingLpAccount(logger: Logger) {
   try {
-    await lpApiRpc(`lp_register_account`, []);
+    await lpApiRpc(logger, `lp_register_account`, []);
     throw new Error(`Unexpected lp_register_account result`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
@@ -211,7 +220,7 @@ async function testRegisterWithExistingLpAccount() {
 }
 
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
-async function testRangeOrder() {
+async function testRangeOrder(logger: Logger) {
   const range = { start: 1, end: 2 };
   const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
   const zeroAssetAmounts = {
@@ -222,7 +231,7 @@ async function testRangeOrder() {
   };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_range_order`, [
+  await lpApiRpc(logger, `lp_set_range_order`, [
     testRpcAsset,
     'USDC',
     orderId,
@@ -233,7 +242,7 @@ async function testRangeOrder() {
 
   // Mint a range order
   const mintRangeOrder = (
-    await lpApiRpc(`lp_set_range_order`, [
+    await lpApiRpc(logger, `lp_set_range_order`, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -255,7 +264,7 @@ async function testRangeOrder() {
 
   // Update the range order
   const updateRangeOrder = (
-    await lpApiRpc(`lp_update_range_order`, [
+    await lpApiRpc(logger, `lp_update_range_order`, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -285,7 +294,7 @@ async function testRangeOrder() {
 
   // Burn the range order
   const burnRangeOrder = (
-    await lpApiRpc(`lp_set_range_order`, [
+    await lpApiRpc(logger, `lp_set_range_order`, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -307,9 +316,9 @@ async function testRangeOrder() {
   assert.strictEqual(matchBurn, true, `Expected burn of range order to decrease liquidity to 0`);
 }
 
-async function testGetOpenSwapChannels() {
+async function testGetOpenSwapChannels(logger: Logger) {
   // TODO: Test with some SwapChannelInfo data
-  const openSwapChannels = await lpApiRpc(`lp_get_open_swap_channels`, []);
+  const openSwapChannels = await lpApiRpc(logger, `lp_get_open_swap_channels`, []);
   assert(openSwapChannels.ethereum, `Missing ethereum swap channel info`);
   assert(openSwapChannels.polkadot, `Missing polkadot swap channel info`);
   assert(openSwapChannels.bitcoin, `Missing bitcoin swap channel info`);
@@ -317,16 +326,16 @@ async function testGetOpenSwapChannels() {
 
 /// Test lp_set_limit_order and lp_update_limit_order by minting, updating, and burning a limit order.
 
-async function testLimitOrder() {
+async function testLimitOrder(logger: Logger) {
   const orderId = 98432; // Arbitrary order id so it does not interfere with other tests
   const tick = 2;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0]);
+  await lpApiRpc(logger, `lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0]);
 
   // Mint a limit order
   const mintLimitOrder = (
-    await lpApiRpc(`lp_set_limit_order`, [
+    await lpApiRpc(logger, `lp_set_limit_order`, [
       testRpcAsset,
       'USDC',
       'sell',
@@ -350,7 +359,7 @@ async function testLimitOrder() {
 
   // Update the limit order
   const updateLimitOrder = (
-    await lpApiRpc(`lp_update_limit_order`, [
+    await lpApiRpc(logger, `lp_update_limit_order`, [
       testRpcAsset,
       'USDC',
       'sell',
@@ -381,7 +390,7 @@ async function testLimitOrder() {
 
   // Burn the limit order
   const burnLimitOrder = (
-    await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0])
+    await lpApiRpc(logger, `lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0])
   ).tx_details.response;
 
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
@@ -399,19 +408,19 @@ async function testLimitOrder() {
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
-export async function testLpApi(_testContext: TestContext) {
+export async function testLpApi(testContext: TestContext) {
   // Provide the amount of liquidity needed for the tests
-  await provideLiquidityAndTestAssetBalances();
+  await provideLiquidityAndTestAssetBalances(testContext.logger);
 
   await Promise.all([
-    testRegisterLiquidityRefundAddress,
-    testLiquidityDeposit,
-    testWithdrawAsset,
-    testRegisterWithExistingLpAccount,
-    testRangeOrder,
-    testLimitOrder,
-    testGetOpenSwapChannels,
+    testRegisterLiquidityRefundAddress(testContext.logger),
+    testLiquidityDeposit(testContext.logger),
+    testWithdrawAsset(testContext.logger),
+    testRegisterWithExistingLpAccount(testContext.logger),
+    testRangeOrder(testContext.logger),
+    testLimitOrder(testContext.logger),
+    testGetOpenSwapChannels(testContext.logger),
   ]);
 
-  await testTransferAsset;
+  await testTransferAsset(testContext.logger);
 }

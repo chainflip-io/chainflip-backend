@@ -15,6 +15,7 @@ import { requestNewSwap } from '../shared/perform_swap';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { getBtcBalance } from '../shared/get_btc_balance';
 import { TestContext } from '../shared/utils/test_context';
+import { Logger } from '../shared/utils/logger';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
@@ -148,6 +149,7 @@ async function ensureHealth() {
  * @returns - The the channel id of the deposit channel.
  */
 async function brokerLevelScreeningTestScenario(
+  logger: Logger,
   amount: string,
   doBoost: boolean,
   refundAddress: string,
@@ -160,17 +162,17 @@ async function brokerLevelScreeningTestScenario(
     minPriceX128: '0',
   };
   const swapParams = await requestNewSwap(
+    logger,
     'Btc',
     'Usdc',
     destinationAddressForUsdc,
     'brokerLevelScreeningTest',
     undefined,
     0,
-    true,
     doBoost ? 100 : 0,
     refundParameters,
   );
-  const txId = await sendBtc(swapParams.depositAddress, amount, 0);
+  const txId = await sendBtc(logger, swapParams.depositAddress, amount, 0);
   await reportFunction(txId);
   return swapParams.channelId.toString();
 }
@@ -197,11 +199,11 @@ export async function testBrokerLevelScreening(
   logger.debug('Testing broker level screening with no boost...');
   let btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, async (txId) =>
+  await brokerLevelScreeningTestScenario(logger, '0.2', false, btcRefundAddress, async (txId) =>
     setTxRiskScore(txId, 9.0),
   );
 
-  await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
+  await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
@@ -214,10 +216,10 @@ export async function testBrokerLevelScreening(
     logger.debug('Testing broker level screening with boost and a early tx report...');
     btcRefundAddress = await newAssetAddress('Btc');
 
-    await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, async (txId) =>
+    await brokerLevelScreeningTestScenario(logger, '0.2', true, btcRefundAddress, async (txId) =>
       setTxRiskScore(txId, 9.0),
     );
-    await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
+    await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
     if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
       throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
@@ -230,6 +232,7 @@ export async function testBrokerLevelScreening(
     btcRefundAddress = await newAssetAddress('Btc');
 
     const channelId = await brokerLevelScreeningTestScenario(
+      logger,
       '0.2',
       true,
       btcRefundAddress,
@@ -242,7 +245,7 @@ export async function testBrokerLevelScreening(
       },
     );
 
-    await observeEvent('bitcoinIngressEgress:DepositFinalised', {
+    await observeEvent(logger, 'bitcoinIngressEgress:DepositFinalised', {
       test: (event) => event.data.channelId === channelId,
     }).event;
 

@@ -12,15 +12,17 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { stopBoosting } from '../tests/boost';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
   const event = await stopBoosting(
+    globalLogger,
     process.argv[2] as Asset,
     Number(process.argv[3]),
     process.argv[4],
     true,
   );
-  console.log(`Stopped boosting event: ${JSON.stringify(event)}`);
+  globalLogger.info(`Stopped boosting event: ${JSON.stringify(event)}`);
 }
 
 await runWithTimeoutAndExit(main(), 30);

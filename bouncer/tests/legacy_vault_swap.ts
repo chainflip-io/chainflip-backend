@@ -52,7 +52,7 @@ async function legacyEvmVaultSwap(
     (await getEvmVaultAbi()) as any,
     vaultAddress,
   );
-  const evmWallet = await createEvmWalletAndFund(sourceAsset);
+  const evmWallet = await createEvmWalletAndFund(logger, sourceAsset);
 
   const cfParametersList = ['', '0x', 'deadbeef', '0xdeadbeef', 'deadc0de', '0xdeadc0de'];
   const cfParameters = Math.floor(Math.random() * cfParametersList.length);
@@ -128,6 +128,7 @@ async function legacyEvmVaultSwap(
 
   // Look after Swap Requested of data.origin.Vault.tx_hash
   const swapRequestedHandle = observeSwapRequested(
+    logger,
     sourceAsset,
     destAsset,
     { type: TransactionOrigin.VaultSwapEvm, txHash: receipt.transactionHash },
@@ -138,17 +139,17 @@ async function legacyEvmVaultSwap(
   logger.debug(`${sourceAsset} swap via vault, swapRequestId: ${swapRequestId}`);
 
   // Wait for the swap to complete
-  await observeEvent(`swapping:SwapRequestCompleted`, {
+  await observeEvent(logger, `swapping:SwapRequestCompleted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
   }).event;
 
-  await observeEvent(`swapping:SwapExecuted`, {
+  await observeEvent(logger, `swapping:SwapExecuted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
     historicalCheckBlocks: 10,
   }).event;
 
   logger.debug(`swapRequestId: ${swapRequestId} executed. Waiting for balance to increase.`);
-  await observeBalanceIncrease(destAsset, destAddress, destBalanceBefore);
+  await observeBalanceIncrease(logger, destAsset, destAddress, destBalanceBefore);
   logger.debug(`swapRequestId: ${swapRequestId} - swap success`);
 }
 

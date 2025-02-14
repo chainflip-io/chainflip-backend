@@ -14,6 +14,7 @@ import {
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { fundFlip } from '../shared/fund_flip';
+import { Logger } from './utils/logger';
 
 interface BtcVaultSwapDetails {
   chain: string;
@@ -28,6 +29,7 @@ interface BtcVaultSwapExtraParameters {
 }
 
 export async function buildAndSendBtcVaultSwap(
+  logger: Logger,
   depositAmountBtc: number,
   destinationAsset: Asset,
   destinationAddress: string,
@@ -49,6 +51,7 @@ export async function buildAndSendBtcVaultSwap(
     retry_duration: 0,
   };
 
+  logger.trace('Requesting vault swap parameter encoding');
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     brokerFees.account,
@@ -67,18 +70,19 @@ export async function buildAndSendBtcVaultSwap(
 
   assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
 
+  logger.trace('Sending BTC vault swap transaction');
   const txid = await sendVaultTransaction(
     BtcVaultSwapDetails.nulldata_payload,
     depositAmountBtc,
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
   );
-  await waitForBtcTransaction(txid);
+  await waitForBtcTransaction(logger, txid);
 
   return txid;
 }
 
-export async function openPrivateBtcChannel(brokerUri: string): Promise<number> {
+export async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise<number> {
   // Check if the channel is already open
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
@@ -96,12 +100,13 @@ export async function openPrivateBtcChannel(brokerUri: string): Promise<number> 
     (await chainflip.query.swapping.brokerBond()) as any as string,
     assetDecimals('Flip'),
   );
-  await fundFlip(broker.address, fundAmount);
+  await fundFlip(logger, broker.address, fundAmount);
 
   // Open the private channel
-  const openedChannelEvent = observeEvent('swapping:PrivateBrokerChannelOpened', {
+  const openedChannelEvent = observeEvent(logger, 'swapping:PrivateBrokerChannelOpened', {
     test: (event) => event.data.brokerId === broker.address,
   }).event;
+  logger.trace('Opening private BTC channel');
   await brokerMutex.runExclusive(async () => {
     await chainflip.tx.swapping
       .openPrivateBtcChannel()
@@ -110,14 +115,19 @@ export async function openPrivateBtcChannel(brokerUri: string): Promise<number> 
   return Number((await openedChannelEvent).data.channelId);
 }
 
-export async function registerAffiliate(brokerUri: string, withdrawalAddress: string) {
+export async function registerAffiliate(
+  logger: Logger,
+  brokerUri: string,
+  withdrawalAddress: string,
+) {
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
 
-  const registeredEvent = observeEvent('swapping:AffiliateRegistration', {
+  const registeredEvent = observeEvent(logger, 'swapping:AffiliateRegistration', {
     test: (event) => event.data.brokerId === broker.address,
   }).event;
 
+  logger.trace('Registering affiliate');
   await brokerMutex.runExclusive(async () => {
     await chainflip.tx.swapping
       .registerAffiliate(withdrawalAddress)

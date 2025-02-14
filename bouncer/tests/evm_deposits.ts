@@ -24,6 +24,7 @@ import { send } from '../shared/send';
 
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 import { TestContext } from '../shared/utils/test_context';
+import { Logger, throwError } from '../shared/utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -33,6 +34,7 @@ async function testSuccessiveDepositEvm(
   testContext: TestContext,
 ) {
   const swapParams = await testSwap(
+    testContext.logger,
     sourceAsset,
     destAsset,
     undefined,
@@ -44,7 +46,11 @@ async function testSuccessiveDepositEvm(
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`);
+  await doPerformSwap(
+    testContext.logger,
+    swapParams,
+    `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`,
+  );
 }
 
 async function testNoDuplicateWitnessing(
@@ -53,6 +59,7 @@ async function testNoDuplicateWitnessing(
   testContext: TestContext,
 ) {
   const swapParams = await testSwap(
+    testContext.logger,
     sourceAsset,
     destAsset,
     undefined,
@@ -62,7 +69,7 @@ async function testNoDuplicateWitnessing(
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
-  const observingSwapScheduled = observeBadEvent('swapping:SwapScheduled', {
+  const observingSwapScheduled = observeBadEvent(testContext.logger, 'swapping:SwapScheduled', {
     test: (event) => {
       if (typeof event.data.origin === 'object' && 'DepositChannel' in event.data.origin) {
         const channelMatches =
@@ -85,11 +92,12 @@ async function testNoDuplicateWitnessing(
 
 // Not supporting Btc to avoid adding more unnecessary complexity with address encoding.
 async function testTxMultipleVaultSwaps(
+  parentLogger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
-  testContext: TestContext,
 ) {
-  const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
+  const { destAddress, tag } = await prepareSwap(parentLogger, sourceAsset, destAsset);
+  const logger = parentLogger.child({ tag });
 
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
 
@@ -113,6 +121,7 @@ async function testTxMultipleVaultSwaps(
     )
     .encodeABI();
   const receipt = await signAndSendTxEvm(
+    logger,
     chainFromAsset(sourceAsset),
     cfTesterAddress,
     (amount * BigInt(numSwaps)).toString(),
@@ -120,7 +129,7 @@ async function testTxMultipleVaultSwaps(
   );
 
   let eventCounter = 0;
-  const observingEvent = observeEvent('swapping:SwapRequested', {
+  const observingEvent = observeEvent(logger, 'swapping:SwapRequested', {
     test: (event) => {
       if (
         typeof event.data.origin === 'object' &&
@@ -128,7 +137,7 @@ async function testTxMultipleVaultSwaps(
         event.data.origin.Vault.txId.Evm === receipt.transactionHash
       ) {
         if (++eventCounter > 1) {
-          throw new Error('Multiple swap scheduled events detected');
+          throwError(logger, new Error('Multiple swap scheduled events detected'));
         }
       }
       return false;
@@ -139,34 +148,35 @@ async function testTxMultipleVaultSwaps(
   while (eventCounter === 0) {
     await sleep(2000);
   }
-  testContext.debug(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
-  // Wait some more time after the first event to ensure another one is not emited
+  // Wait some more time after the first event to ensure another one is not emitted
   await sleep(30000);
 
   observingEvent.stop();
   await observingEvent.event;
 }
 
-async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset, _testContext: TestContext) {
+async function testDoubleDeposit(logger: Logger, sourceAsset: Asset, destAsset: Asset) {
   const { destAddress, tag } = await prepareSwap(
+    logger,
     sourceAsset,
     destAsset,
     undefined,
     undefined,
     ' EvmDoubleDepositTest',
   );
-  const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
+  const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress, tag);
 
   {
     const swapRequestedHandle = observeSwapRequested(
+      logger,
       sourceAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
       SwapRequestType.Regular,
     );
 
-    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+    await send(logger, sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
     await swapRequestedHandle;
   }
 
@@ -174,13 +184,14 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset, _testCont
   // should be scheduled when we deposit again.
   {
     const swapRequestedHandle = observeSwapRequested(
+      logger,
       sourceAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
       SwapRequestType.Regular,
     );
 
-    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+    await send(logger, sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
     await swapRequestedHandle;
   }
 }
@@ -205,17 +216,17 @@ export async function testEvmDeposits(testContext: TestContext) {
   ]);
 
   const multipleTxSwapsTest = Promise.all([
-    testTxMultipleVaultSwaps('Eth', 'Dot', testContext),
-    testTxMultipleVaultSwaps('Eth', 'Flip', testContext),
-    testTxMultipleVaultSwaps('ArbEth', 'Dot', testContext),
-    testTxMultipleVaultSwaps('ArbEth', 'Flip', testContext),
+    testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Dot'),
+    testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Flip'),
+    testTxMultipleVaultSwaps(testContext.logger, 'ArbEth', 'Dot'),
+    testTxMultipleVaultSwaps(testContext.logger, 'ArbEth', 'Flip'),
   ]);
 
   const doubleDepositTests = Promise.all([
-    testDoubleDeposit('Eth', 'Dot', testContext),
-    testDoubleDeposit('Usdc', 'Flip', testContext),
-    testDoubleDeposit('ArbEth', 'Dot', testContext),
-    testDoubleDeposit('ArbUsdc', 'Btc', testContext),
+    testDoubleDeposit(testContext.logger, 'Eth', 'Dot'),
+    testDoubleDeposit(testContext.logger, 'Usdc', 'Flip'),
+    testDoubleDeposit(testContext.logger, 'ArbEth', 'Dot'),
+    testDoubleDeposit(testContext.logger, 'ArbUsdc', 'Btc'),
   ]);
 
   await Promise.all([

@@ -5,6 +5,7 @@ import toml from '@iarna/toml';
 import { compareSemVer } from '../shared/utils';
 import { jsonRpc } from '../shared/json_rpc';
 import { specVersion } from '../shared/utils/spec_version';
+import { globalLogger as logger } from '../shared/utils/logger';
 
 const projectRoot = process.argv[2];
 const engineReleaseVersion = process.argv[3];
@@ -66,7 +67,7 @@ if (
 ) {
   throw Error('All versions should be the same');
 } else if (compareSemVer(engineTomlVersion, releaseVersion) === 'greater') {
-  console.log(
+  logger.info(
     `Binary versions are correct. Your branch has version ${engineTomlVersion} greater than the current release ${releaseVersion}.`,
   );
 } else {
@@ -92,15 +93,19 @@ switch (network) {
 }
 
 const releaseSpecVersion = Number(
-  ((await jsonRpc('state_getRuntimeVersion', [], endpoint)) as any).specVersion,
+  ((await jsonRpc(logger, 'state_getRuntimeVersion', [], endpoint)) as any).specVersion,
 );
-console.log(`Release spec version: ${releaseSpecVersion}`);
+logger.info(`Release spec version: ${releaseSpecVersion}`);
 
-const specVersionInSource = specVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, 'read');
-console.log(`Spec version in runtime/src/lib.rs: ${specVersionInSource}`);
+const specVersionInSource = specVersion(
+  logger,
+  `${projectRoot}/state-chain/runtime/src/lib.rs`,
+  'read',
+);
+logger.info(`Spec version in runtime/src/lib.rs: ${specVersionInSource}`);
 
 if (specVersionInSource >= releaseSpecVersion) {
-  console.log(
+  logger.info(
     `Spec version is correct. Version in TOML is greater than or equal to the release spec version.`,
   );
 } else {

@@ -3,15 +3,16 @@ import { Chain } from '@chainflip/cli';
 import { signAndSendTxEvm } from './send_evm';
 import { amountToFineAmount, getEvmEndpoint } from './utils';
 import { getErc20abi } from './contract_interfaces';
+import { Logger } from './utils/logger';
 
 const erc20abi = await getErc20abi();
 
 export async function sendErc20(
+  logger: Logger,
   chain: Chain,
   destinationAddress: string,
   contractAddress: string,
   amount: string,
-  log = true,
 ) {
   const web3 = new Web3(getEvmEndpoint(chain));
 
@@ -24,7 +25,7 @@ export async function sendErc20(
 
   const txData = contract.methods.transfer(destinationAddress, fineAmount).encodeABI();
 
-  if (log) console.log('Transferring ' + amount + ' ' + symbol + ' to ' + destinationAddress);
+  logger.trace(`Transferring ${amount} ${symbol} to ${destinationAddress}`);
 
-  await signAndSendTxEvm(chain, contractAddress, '0', txData, undefined, log);
+  await signAndSendTxEvm(logger, chain, contractAddress, '0', txData, undefined);
 }

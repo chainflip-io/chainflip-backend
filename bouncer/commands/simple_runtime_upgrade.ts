@@ -10,9 +10,10 @@
 import path from 'path';
 import { simpleRuntimeUpgrade } from '../shared/simple_runtime_upgrade';
 import { runWithTimeoutAndExit } from '../shared/utils';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
-  await simpleRuntimeUpgrade(path.dirname(process.cwd()));
+  await simpleRuntimeUpgrade(globalLogger, path.dirname(process.cwd()));
 }
 
 // 15 minute timeout. We need to wait for user input, compile, and potentially run tests. This is deliberately quite long.

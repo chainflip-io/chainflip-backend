@@ -9,17 +9,21 @@ export async function testSwapAfterDisconnection(testContext: TestContext) {
   const allExternalNodes = ['bitcoin', 'geth'];
 
   await Promise.all(
-    allExternalNodes.map((container) => disconnectContainerFromNetwork(container, networkName)),
+    allExternalNodes.map((container) =>
+      disconnectContainerFromNetwork(testContext.logger, container, networkName),
+    ),
   );
 
   await sleep(10000);
 
   await Promise.all(
-    allExternalNodes.map((container) => connectContainerToNetwork(container, networkName)),
+    allExternalNodes.map((container) =>
+      connectContainerToNetwork(testContext.logger, container, networkName),
+    ),
   );
 
   await Promise.all([
-    testSwap('Btc', 'Flip', undefined, undefined, testContext.swapContext),
-    testSwap('Eth', 'Usdc', undefined, undefined, testContext.swapContext),
+    testSwap(testContext.logger, 'Btc', 'Flip', undefined, undefined, testContext.swapContext),
+    testSwap(testContext.logger, 'Eth', 'Usdc', undefined, undefined, testContext.swapContext),
   ]);
 }
