@@ -1295,7 +1295,6 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-#[allow(unused)]
 macro_rules! instanced_migrations {
 	(
 		module: $module:ident,
@@ -1328,7 +1327,17 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_9 = ();
+use frame_support::migrations::VersionedMigration;
+type MigrationsForV1_9 = (
+	instanced_migrations!(
+		module: pallet_cf_elections,
+		migration: migrations::backoff_settings_migration::SolanaBackoffSettingsMigration,
+		from: 5,
+		to: 6,
+		include_instances: [SolanaInstance],
+		exclude_instances: [],
+	),
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
