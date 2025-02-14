@@ -1,16 +1,11 @@
-use std::{
-	collections::BTreeMap,
-	fmt::Display,
-};
+use std::{collections::BTreeMap, fmt::Display};
 
 use bitvec::prelude::*;
 use codec::{Decode, Encode};
 use pallet_cf_elections::{
-	ElectionIdentifierOf, ElectoralSystemTypes, IndividualComponentOf,
-	UniqueMonotonicIdentifier,
+	ElectionIdentifierOf, ElectoralSystemTypes, IndividualComponentOf, UniqueMonotonicIdentifier,
 	electoral_system::BitmapComponentOf,
 };
-
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct ElectionData<ES: ElectoralSystemTypes> {
@@ -78,7 +73,6 @@ impl Display for Key {
 		}
 	}
 }
-
 
 pub fn cloned_vec<'a, XS: IntoIterator<Item = &'a X>, X>(xs: XS) -> Vec<X>
 where
@@ -168,8 +162,9 @@ where
 
 		// properties
 		let key3 = Category(extra.clone(), Properties);
-		trace.insert(cloned_vec([&key0, &key1, &key2, &key3]), 
-			end.with_attribute("Properties".into(), format!("{properties:#?}"))
+		trace.insert(
+			cloned_vec([&key0, &key1, &key2, &key3]),
+			end.with_attribute("Properties".into(), format!("{properties:#?}")),
 		);
 
 		// no votes

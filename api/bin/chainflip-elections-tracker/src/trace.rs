@@ -66,7 +66,6 @@ pub fn get_key_name<'a, K: std::fmt::Display>(key: &'a Vec<K>) -> String {
 	key.last().map(|x| format!("{x}")).unwrap_or("root".into())
 }
 
-
 fn zip_with<K: Ord, V, W, X>(
 	x: BTreeMap<K, V>,
 	mut y: BTreeMap<K, W>,

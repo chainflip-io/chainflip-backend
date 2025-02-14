@@ -1,3 +1,5 @@
+//! The chainflip elections tracker.
+
 #![feature(btree_extract_if)]
 
 pub mod elections;
@@ -5,45 +7,42 @@ pub mod trace;
 
 use std::collections::BTreeMap;
 
-use chainflip_engine::state_chain_observer::client::StateChainClient;
-use elections::{Key, TraceInit, make_traces, ElectionData};
-use opentelemetry::trace::{
-	Span, TraceContextExt as _, Tracer, TracerProvider as _,
-};
-use state_chain_runtime::chainflip::solana_elections::SolanaElectoralSystemRunner;
 use cf_utilities::task_scope::{self};
-use chainflip_engine::state_chain_observer::client::storage_api::StorageApi;
+use chainflip_engine::state_chain_observer::client::{StateChainClient, storage_api::StorageApi};
+use elections::{ElectionData, Key, TraceInit, make_traces};
 use futures::StreamExt;
 use futures_util::FutureExt;
-use opentelemetry::{Context, KeyValue, global};
+use opentelemetry::{
+	Context, KeyValue, global,
+	trace::{Span, TraceContextExt as _, Tracer, TracerProvider as _},
+};
+use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
 	Resource,
 	trace::{RandomIdGenerator, TracerProvider},
 };
-use opentelemetry_otlp::WithExportConfig;
 use pallet_cf_elections::{
-	UniqueMonotonicIdentifier,
-	electoral_systems::composite::tuple_6_impls::*,
+	UniqueMonotonicIdentifier, electoral_systems::composite::tuple_6_impls::*,
 };
-use state_chain_runtime::{Runtime, SolanaInstance};
+use state_chain_runtime::{
+	Runtime, SolanaInstance, chainflip::solana_elections::SolanaElectoralSystemRunner,
+};
 use std::env;
 use trace::{NodeDiff, StateTree, diff, get_key_name, map_with_parent};
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() {
-
-
 	// get env vars
-	let rpc_url = env::var("CF_RPC_NODE").expect("CF_RPC_NODE required");
-	let opentelemetry_backend_url = env::var("OPTL_BACKEND_URL")
-		.unwrap_or("http://localhost:4317".into());
+	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("http://localhost:9944".into());
+	let opentelemetry_backend_url =
+		env::var("OTLP_BACKEND").unwrap_or("http://localhost:4317".into());
 
 	// setup opentelemetry tracer
 	let tracer_provider = opentelemetry_sdk::trace::TracerProvider::builder()
 		.with_batch_exporter(
 			opentelemetry_otlp::SpanExporter::builder()
 				.with_tonic()
-        		.with_endpoint(&opentelemetry_backend_url)
+				.with_endpoint(&opentelemetry_backend_url)
 				.build()
 				.unwrap(),
 			opentelemetry_sdk::runtime::Tokio,
@@ -57,9 +56,11 @@ async fn main() {
 	observe_elections(tracer, tracer_provider, rpc_url).await;
 }
 
-
-async fn observe_elections<T: Tracer + Send>(tracer: T, tracer_provider: TracerProvider, rpc_url: String)
-where
+async fn observe_elections<T: Tracer + Send>(
+	tracer: T,
+	tracer_provider: TracerProvider,
+	rpc_url: String,
+) where
 	T::Span: Span + Send + Sync + 'static,
 {
 	task_scope::task_scope(|scope| async move {
@@ -161,53 +162,53 @@ fn push_traces<T: Tracer + Send>(
 where
 	T::Span: Span + Send + Sync + 'static,
 {
-	let traces =
-		map_with_parent(diff(current, new), |k, p: Option<&Option<Context>>, d: NodeDiff<Context, TraceInit>| {
-			match d {
-				trace::NodeDiff::Left(context) => {
-					println!("closing trace {k:?}");
-					context.span().end();
-					None
-				},
-				trace::NodeDiff::Right(TraceInit { end_immediately, attributes: values }) => {
-					let context = if let Some(Some(context)) = p {
-						let key = get_key_name(k);
+	let traces = map_with_parent(
+		diff(current, new),
+		|k, p: Option<&Option<Context>>, d: NodeDiff<Context, TraceInit>| match d {
+			trace::NodeDiff::Left(context) => {
+				println!("closing trace {k:?}");
+				context.span().end();
+				None
+			},
+			trace::NodeDiff::Right(TraceInit { end_immediately, attributes: values }) => {
+				let context = if let Some(Some(context)) = p {
+					let key = get_key_name(k);
 
-						let mut span = tracer.start_with_context(key, &context);
-						for (key, value) in values {
-							span.set_attribute(KeyValue::new(key, value));
-						}
-						let context = context.with_span(span);
-
-						println!("open trace {k:?}");
-
-						context
-					} else {
-						let key = get_key_name(k);
-
-						let context =
-							Context::new().with_value(KeyValue::new("key", format!("{key:?}")));
-						let mut span = tracer.start_with_context(key, &context);
-						for (key, value) in values {
-							span.set_attribute(KeyValue::new(key, value));
-						}
-						let context = context.with_span(span);
-						println!("open trace {k:?} [NO PARENT]");
-						context
-					};
-					if end_immediately {
-						context.span().end();
+					let mut span = tracer.start_with_context(key, &context);
+					for (key, value) in values {
+						span.set_attribute(KeyValue::new(key, value));
 					}
-					Some(context)
-				},
-				trace::NodeDiff::Both(x, _) => Some(x),
-			}
-		})
-		.into_iter()
-		.filter_map(|(k, v)| match v {
-			Some(v) => Some((k, v)),
-			None => None,
-		})
-		.collect();
+					let context = context.with_span(span);
+
+					println!("open trace {k:?}");
+
+					context
+				} else {
+					let key = get_key_name(k);
+
+					let context =
+						Context::new().with_value(KeyValue::new("key", format!("{key:?}")));
+					let mut span = tracer.start_with_context(key, &context);
+					for (key, value) in values {
+						span.set_attribute(KeyValue::new(key, value));
+					}
+					let context = context.with_span(span);
+					println!("open trace {k:?} [NO PARENT]");
+					context
+				};
+				if end_immediately {
+					context.span().end();
+				}
+				Some(context)
+			},
+			trace::NodeDiff::Both(x, _) => Some(x),
+		},
+	)
+	.into_iter()
+	.filter_map(|(k, v)| match v {
+		Some(v) => Some((k, v)),
+		None => None,
+	})
+	.collect();
 	traces
 }
