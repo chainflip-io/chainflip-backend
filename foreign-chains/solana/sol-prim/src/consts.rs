@@ -59,4 +59,4 @@ pub const SOL_USDC_DECIMAL: u8 = 6u8;
 pub const ACCOUNT_KEY_LENGTH_IN_TRANSACTION: usize = 32usize;
 pub const ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION: usize = 1usize;
 
-pub const MAX_CCM_USER_ALTS: u8 = 5u8; // TODO: Albert come up with a good number for this
+pub const MAX_CCM_USER_ALTS: u8 = 3u8;
