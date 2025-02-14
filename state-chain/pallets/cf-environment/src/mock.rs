@@ -188,14 +188,14 @@ impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccoun
 	for MockSolEnvironment
 {
 	fn lookup(_s: SolanaAddressLookupTables) -> Option<Vec<SolAddressLookupTableAccount>> {
-		unimplemented!()
+		None
 	}
 }
 impl ChainEnvironment<ChainflipAddressLookupTable, SolAddressLookupTableAccount>
 	for MockSolEnvironment
 {
 	fn lookup(_s: ChainflipAddressLookupTable) -> Option<SolAddressLookupTableAccount> {
-		unimplemented!()
+		None
 	}
 }
 
