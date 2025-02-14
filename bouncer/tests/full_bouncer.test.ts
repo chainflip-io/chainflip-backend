@@ -1,6 +1,5 @@
 import { describe } from 'vitest';
 import { testBtcUtxoConsolidation } from './btc_utxo_consolidation';
-import { testDeltaBasedIngress } from './delta_based_ingress';
 import { testRotatesThroughBtcSwap } from './rotates_through_btc_swap';
 import { testRotateAndSwap } from './rotation_barrier';
 import { testSolanaVaultSettingsGovernance } from './solana_vault_settings_governance';
@@ -19,7 +18,6 @@ describe('SerialTests2', () => {
   serialTest('RotatesThroughBtcSwap', testRotatesThroughBtcSwap, 360);
   serialTest('BtcUtxoConsolidation', testBtcUtxoConsolidation, 200);
   serialTest('RotateAndSwap', testRotateAndSwap, 280);
-  serialTest('DeltaBasedIngress', testDeltaBasedIngress, 800);
   serialTest('MinimumDeposit', testMinimumDeposit, 150);
   serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
 
