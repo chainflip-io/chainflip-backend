@@ -147,7 +147,7 @@ pub mod fees {
 	// This is an extra buffer added to ensure that the user will
 	// receive the desired gas amount. Might need to be adjusted
 	// according to Arbitrum's compression rate.
-	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 100; // ~33%
+	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 100; // ~25%
 	pub const L1_GAS_PER_BYTES: u128 = 16;
 }
 

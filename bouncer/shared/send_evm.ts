@@ -126,7 +126,7 @@ export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => 
 
 const EVM_BASE_GAS_LIMIT = 21000;
 
-// Estimate on Ethereum as a rederence for gas without the Arbitrum gas specs
+// Estimate on Ethereum as a reference for gas without the Arbitrum gas l1 gas costs
 export async function estimateCcmCfTesterGas(message: string) {
   const web3 = new Web3(getEvmEndpoint("Ethereum"));
   const cfTester = getContractAddress("Ethereum", 'CFTESTER');
