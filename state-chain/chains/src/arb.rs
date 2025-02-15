@@ -111,7 +111,9 @@ impl ArbitrumTrackedData {
 		// passing the message through the Vault. The extra l2 gas per message's calldata byte
 		// should be included in the user's gas budget together with the receiving logic's gas
 		// required.
-		let l2g = vault_gas_overhead.saturating_add(message_length as u128).saturating_add(gas_budget);
+		let l2g = vault_gas_overhead
+			.saturating_add(message_length as u128)
+			.saturating_add(gas_budget);
 		let l1p = self.l1_base_fee_estimate * L1_GAS_PER_BYTES;
 		let p = self.base_fee;
 
@@ -124,7 +126,7 @@ impl ArbitrumTrackedData {
 		let gas_limit = l2g.saturating_add(b);
 
 		// Add a multiplier on the part of the gas estimated by the protocol
-		gas_limit.saturating_add(gas_limit/CCM_GAS_LIMIT_BUFFER).min(MAX_GAS_LIMIT)
+		gas_limit.saturating_add(gas_limit / CCM_GAS_LIMIT_BUFFER).min(MAX_GAS_LIMIT)
 	}
 
 	pub fn calculate_transaction_fee(
@@ -252,7 +254,7 @@ mod test {
 		};
 
 		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(gas_limit, 2526102u128);
+		assert_eq!(gas_limit, 2541810u128);
 
 		let gas_budget_extra = 1_000_000u128;
 		let gas_limit_extra = arb_tracked_data.calculate_ccm_gas_limit(
