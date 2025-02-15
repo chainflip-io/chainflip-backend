@@ -128,9 +128,9 @@ const EVM_BASE_GAS_LIMIT = 21000;
 
 // Estimate on Ethereum as a reference for gas without the Arbitrum gas l1 gas costs
 export async function estimateCcmCfTesterGas(message: string) {
-  const web3 = new Web3(getEvmEndpoint("Ethereum"));
-  const cfTester = getContractAddress("Ethereum", 'CFTESTER');
-  const vault = getContractAddress("Ethereum", 'VAULT');
+  const web3 = new Web3(getEvmEndpoint('Ethereum'));
+  const cfTester = getContractAddress('Ethereum', 'CFTESTER');
+  const vault = getContractAddress('Ethereum', 'VAULT');
   const messageLength = message.slice(2).length / 2;
 
   // Use a dummy valid call to the CfTester contract appending the actual message.
@@ -141,7 +141,7 @@ export async function estimateCcmCfTesterGas(message: string) {
 
   // Estimate needs to be done using "from: vault" to prevent logic revertion
   const gasEstimation = await web3.eth.estimateGas({ data, to: cfTester, from: vault });
-  console.log("gasEstimation", gasEstimation);
+  console.log('gasEstimation', gasEstimation);
 
   return gasEstimation - EVM_BASE_GAS_LIMIT;
 }

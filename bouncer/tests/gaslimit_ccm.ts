@@ -15,7 +15,7 @@ import {
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
-import { estimateCcmCfTesterGas, spamEvm } from '../shared/send_evm';
+import { spamEvm } from '../shared/send_evm';
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
@@ -28,7 +28,7 @@ export const testGasLimitCcmSwaps = new ExecutableTest('Gas-Limit-Ccm-Swaps', ma
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
 const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> = {
   Ethereum: { min: 150000, max: 1000000 },
-  Arbitrum: { min: 3000000, max: 5000000 },
+  Arbitrum: { min: 5000000, max: 15000000 },
 };
 
 const LOOP_TIMEOUT = 15;
@@ -229,26 +229,20 @@ async function testGasLimitSwapToEvm(
   }
 
   const gasConsumption = getRandomGasConsumption(chainFromAsset(destAsset));
-
+  console.log('gasConsumption', gasConsumption);
   const ccmMetadata = await newCcmMetadata(
     destAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
   );
 
-  // Estimating gas separately. We can't rely on the default gas estimation in `newCcmMetadata()`
-  // because the CF tester gas consumption depends on the gas limit, making this a circular calculation.
-  // Instead, we get a base calculation with an empty message that doesn't run the gas consumption.
-  const baseCfTesterGas = await estimateCcmCfTesterGas('0x');
-
   // Adding buffers on both ends to avoid flakiness.
   if (abortTest) {
-    // TODO: Revisit this, it should hopefully enough with 25% everywhere
-    // Chainflip overestimates the overhead for safety so we use a 25% buffer to ensure that
-    // the gas budget is too low.We also apply a 50% on the baseCfTesterGas since it's highly unreliable.
-    ccmMetadata.gasBudget = Math.round(gasConsumption * 0.75 + baseCfTesterGas * 0.5).toString();
+    // Adding extra buffer for Arbitrum where the gas is very unreliable and the SC overestimates.
+    ccmMetadata.gasBudget = Math.round(
+      Number(ccmMetadata.gasBudget) * (destChain === 'Arbitrum' ? 0.75 : 0.9),
+    ).toString();
   } else {
-    // A small buffer should work (10%) as CF should be overestimate, not underestimate
-    ccmMetadata.gasBudget = (baseCfTesterGas + Math.round(gasConsumption * 1.1)).toString();
+    ccmMetadata.gasBudget = Math.round(Number(ccmMetadata.gasBudget) * 1.1).toString();
   }
 
   const testTag = abortTest ? `InsufficientGas` : '';
@@ -396,40 +390,39 @@ export async function main() {
   }
 
   const insufficientGasTestEvm = [
-    // testEvmInsufficientGas('Dot', 'Flip'),
-    // testEvmInsufficientGas('Eth', 'Usdc'),
-    // testEvmInsufficientGas('Eth', 'Usdt'),
-    // testEvmInsufficientGas('Flip', 'Eth'),
-    // testEvmInsufficientGas('Btc', 'Eth'),
-    // testEvmInsufficientGas('Dot', 'ArbEth'),
-    // testEvmInsufficientGas('Eth', 'ArbUsdc'),
-    // testEvmInsufficientGas('Flip', 'ArbEth'),
-    // testEvmInsufficientGas('ArbEth', 'Eth'),
-    // testEvmInsufficientGas('Sol', 'ArbUsdc'),
-    // testEvmInsufficientGas('SolUsdc', 'Eth'),
+    testEvmInsufficientGas('Dot', 'Flip'),
+    testEvmInsufficientGas('Eth', 'Usdc'),
+    testEvmInsufficientGas('Eth', 'Usdt'),
+    testEvmInsufficientGas('Flip', 'Eth'),
+    testEvmInsufficientGas('Btc', 'Eth'),
+    testEvmInsufficientGas('Dot', 'ArbEth'),
+    testEvmInsufficientGas('Eth', 'ArbUsdc'),
+    testEvmInsufficientGas('Flip', 'ArbEth'),
+    testEvmInsufficientGas('ArbEth', 'Eth'),
+    testEvmInsufficientGas('Sol', 'ArbUsdc'),
+    testEvmInsufficientGas('SolUsdc', 'Eth'),
   ];
 
   const gasLimitSwapsSufBudget = [
-    // testGasLimitSwapToEvm('Dot', 'Usdc'),
-    // testGasLimitSwapToEvm('Usdc', 'Eth'),
-    // testGasLimitSwapToEvm('Flip', 'Usdt'),
-    // testGasLimitSwapToEvm('Usdt', 'Eth'),
-    // testGasLimitSwapToEvm('Btc', 'Flip'),
-    // testGasLimitSwapToEvm('Dot', 'ArbEth'),
-    // testGasLimitSwapToEvm('Eth', 'ArbUsdc'),
-    // testGasLimitSwapToEvm('ArbEth', 'Flip'),
-    // testGasLimitSwapToEvm('Btc', 'ArbUsdc'),
-    // testGasLimitSwapToEvm('Eth', 'ArbEth'),
-    // testGasLimitSwapToEvm('ArbUsdc', 'Flip'),
-    // testGasLimitSwapToEvm('Sol', 'Usdc'),
-    testGasLimitSwapToEvm('ArbUsdc', 'ArbEth'),
-    // testGasLimitSwapToSolana('Usdc', 'Sol'),
-    // testGasLimitSwapToSolana('Btc', 'Sol'),
-    // testGasLimitSwapToSolana('Dot', 'Sol'),
-    // testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc'),
-    // testGasLimitSwapToSolana('Eth', 'SolUsdc'),
+    testGasLimitSwapToEvm('Dot', 'Usdc'),
+    testGasLimitSwapToEvm('Usdc', 'Eth'),
+    testGasLimitSwapToEvm('Flip', 'Usdt'),
+    testGasLimitSwapToEvm('Usdt', 'Eth'),
+    testGasLimitSwapToEvm('Btc', 'Flip'),
+    testGasLimitSwapToEvm('Dot', 'ArbEth'),
+    testGasLimitSwapToEvm('Eth', 'ArbUsdc'),
+    testGasLimitSwapToEvm('ArbEth', 'Flip'),
+    testGasLimitSwapToEvm('Btc', 'ArbUsdc'),
+    testGasLimitSwapToEvm('Eth', 'ArbEth'),
+    testGasLimitSwapToEvm('ArbUsdc', 'Flip'),
+    testGasLimitSwapToEvm('Sol', 'Usdc'),
+    testGasLimitSwapToEvm('SolUsdc', 'ArbEth'),
+    testGasLimitSwapToSolana('Usdc', 'Sol'),
+    testGasLimitSwapToSolana('Btc', 'Sol'),
+    testGasLimitSwapToSolana('Dot', 'Sol'),
+    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc'),
+    testGasLimitSwapToSolana('Eth', 'SolUsdc'),
   ];
-
   await Promise.all([...gasLimitSwapsSufBudget, ...insufficientGasTestEvm]);
 
   spam = false;
