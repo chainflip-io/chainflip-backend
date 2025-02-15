@@ -238,7 +238,7 @@ async function testGasLimitSwapToEvm(
   if (abortTest) {
     // Adding extra buffer for Arbitrum where the gas is very unreliable and the SC overestimates.
     ccmMetadata.gasBudget = Math.round(
-      Number(ccmMetadata.gasBudget) * (destChain === 'Arbitrum' ? 0.75 : 0.9),
+      Number(ccmMetadata.gasBudget) * (destChain === 'Arbitrum' ? 0.7 : 0.8),
     ).toString();
   } else {
     ccmMetadata.gasBudget = Math.round(Number(ccmMetadata.gasBudget) * 1.1).toString();
