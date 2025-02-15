@@ -229,7 +229,6 @@ async function testGasLimitSwapToEvm(
   }
 
   const gasConsumption = getRandomGasConsumption(chainFromAsset(destAsset));
-  console.log('gasConsumption', gasConsumption);
   const ccmMetadata = await newCcmMetadata(
     destAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
