@@ -276,9 +276,7 @@ async function testGasLimitSwapToEvm(
       () => stopObservingCcmReceived,
     ).then((event) => {
       if (event !== undefined) {
-        throw new Error(
-          `${tag} CCM event emitted. Transaction should not have been broadcasted! Message length: ${ccmMetadata.message.slice(2).length / 2}`,
-        );
+        throw new Error(`${tag} CCM event emitted. Transaction should not have been broadcasted!`);
       }
     });
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
@@ -295,7 +293,7 @@ async function testGasLimitSwapToEvm(
           const aborted = event.data.broadcastId === broadcastId;
           if (aborted) {
             throw new Error(
-              `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${event.data.broadcastId}. Gas budget: ${gasLimitBudget}. Message length: ${ccmMetadata.message.slice(2).length / 2}`,
+              `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${event.data.broadcastId}. Gas budget: ${gasLimitBudget}`,
             );
           }
           return aborted;
@@ -426,6 +424,7 @@ export async function main() {
     testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc'),
     testGasLimitSwapToSolana('Eth', 'SolUsdc'),
   ];
+
   await Promise.all([...gasLimitSwapsSufBudget, ...insufficientGasTestEvm]);
 
   spam = false;

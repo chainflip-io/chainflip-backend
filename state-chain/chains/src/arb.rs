@@ -258,7 +258,7 @@ mod test {
 
 		let gas_limit_token =
 			arb_tracked_data.calculate_ccm_gas_limit(false, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(gas_limit_token, 3541810u128);
+		assert_eq!(gas_limit_token, 2574810u128);
 	}
 
 	#[test]
