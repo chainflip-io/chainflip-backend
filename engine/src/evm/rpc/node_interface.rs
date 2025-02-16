@@ -57,7 +57,7 @@ impl NodeInterfaceRpcApi for EvmRpcSigningClient {
 #[cfg(test)]
 mod tests {
 
-	use crate::{evm::rpc::EvmRpcApi, settings::Settings};
+	use crate::settings::Settings;
 
 	use super::*;
 
@@ -74,7 +74,6 @@ mod tests {
 		)
 		.unwrap()
 		.await;
-		let chain_id = client.chain_id().await.unwrap();
 
 		let (_, _, l2_base_fee, l1_base_fee_estimate) = client
 			.gas_estimate_components(H160::default(), false, Bytes::default())

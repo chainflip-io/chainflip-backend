@@ -240,7 +240,7 @@ async function testGasLimitSwapToEvm(
     // Not using the default estimation in newCcmMetadata for the abort broadcast
     // scenario as it has a default buffer. Instead underestimate the gas budget.
     ccmMetadata.gasBudget = Math.round(
-      gasConsumption * (destChain === 'Arbitrum' ? 0.75 : 0.9),
+      gasConsumption * (destChain === 'Arbitrum' ? 0.6 : 0.8),
     ).toString();
   }
   const testTag = abortTest ? `InsufficientGas` : '';

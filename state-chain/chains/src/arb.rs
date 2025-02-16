@@ -125,7 +125,7 @@ impl ArbitrumTrackedData {
 
 		let gas_limit = l2g.saturating_add(b);
 
-		// Add a multiplier on the part of the gas estimated by the protocol
+		// Add a multiplier to slightly overestimate gas and minimize the risk of running out of gas
 		gas_limit.saturating_add(gas_limit / CCM_GAS_LIMIT_BUFFER).min(MAX_GAS_LIMIT)
 	}
 
@@ -143,8 +143,8 @@ pub mod fees {
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 	pub const MAX_GAS_LIMIT: u128 = 25_000_000;
-	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 90_000;
-	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 120_000;
+	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 100_000;
+	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 130_000;
 	// Arbitrum specific ccm gas limit calculation constants
 	pub const CCM_VAULT_BYTES_OVERHEAD: u128 = 356;
 	pub const CCM_ARBITRUM_BYTES_OVERHEAD: u128 = 140;

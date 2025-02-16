@@ -146,7 +146,7 @@ export async function newCcmMetadata(
     // This is what integrators are expected to do and it'll give a good estimate of the gas
     // needed for the user logic. Extra buffer for Arbitrum due to the gas estimation uncertainties.
     userLogicGasBudget = Math.trunc(
-      (await estimateCcmCfTesterGas(message)) * (destChain === 'Arbitrum' ? 1.3 : 1.15),
+      (await estimateCcmCfTesterGas(message)) * (destChain === 'Arbitrum' ? 1.75 : 1.2),
     );
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
@@ -177,7 +177,7 @@ export async function newVaultSwapCcmMetadata(
   if (sourceChain === 'Solana') {
     messageMaxLength = MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH;
     metadataMaxLength = MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH;
-    if (ccmMessage && ccmMessage.length / 2 > messageMaxLength) {
+    if (ccmMessage && ccmMessage.slice(2).length / 2 > messageMaxLength) {
       throw new Error(
         `Message length for Solana vault swap must be less than ${messageMaxLength} bytes`,
       );
@@ -189,7 +189,7 @@ export async function newVaultSwapCcmMetadata(
     }
   } else if (sourceChain === 'Arbitrum') {
     messageMaxLength = ARB_MAX_CCM_MSG_LENGTH;
-    if (ccmMessage && ccmMessage.length / 2 > messageMaxLength) {
+    if (ccmMessage && ccmMessage.slice(2).length / 2 > messageMaxLength) {
       throw new Error(
         `Message length for Solana vault swap must be less than ${messageMaxLength} bytes`,
       );
