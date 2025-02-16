@@ -209,7 +209,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./tests/all_concurrent_tests.ts
+          pnpm vitest run -t "ConcurrentTests"
 
       - name: Print chainflip-engine logs 🚗
         if: always()

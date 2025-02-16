@@ -30,6 +30,7 @@ import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.1-
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
 import { getBalance } from './get_balance';
+import { TestContext } from './utils/test_context';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
 
@@ -174,9 +175,11 @@ export async function executeSolVaultSwap(
 
 const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES = 5;
 export async function checkSolEventAccountsClosure(
+  testContext: TestContext,
   eventAccounts: [PublicKey, boolean][] = createdEventAccounts,
 ) {
-  console.log('=== Checking Solana Vault Swap Account Closure ===');
+  const logger = testContext.logger;
+  logger.info('=== Checking Solana Vault Swap Account Closure ===');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();

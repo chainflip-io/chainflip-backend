@@ -22,15 +22,18 @@ import {
 } from '../shared/utils';
 import { observeEvent } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
-import { ExecutableTest } from '../shared/executable_test';
 import { newVaultSwapCcmMetadata } from '../shared/swapping';
 import { getEvmVaultAbi } from '../shared/contract_interfaces';
 import { approveEvmTokenVault } from '../shared/evm_vault_swap';
+import { TestContext } from '../shared/utils/test_context';
+import { Logger } from '../shared/utils/logger';
 
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const legacyEvmVaultSwaps = new ExecutableTest('Legacy-EVM-Vault-Swaps', main, 300);
-
-async function legacyEvmVaultSwap(sourceAsset: Asset, destAsset: Asset, ccmSwap: boolean = false) {
+async function legacyEvmVaultSwap(
+  logger: Logger,
+  sourceAsset: Asset,
+  destAsset: Asset,
+  ccmSwap: boolean = false,
+) {
   const destAddress = ccmSwap
     ? getContractAddress(chainFromAsset(destAsset), 'CFTESTER')
     : await newAddress(destAsset, randomBytes(32).toString('hex'));
@@ -121,7 +124,7 @@ async function legacyEvmVaultSwap(sourceAsset: Asset, destAsset: Asset, ccmSwap:
   const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
   const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
 
-  legacyEvmVaultSwaps.log(`Vault swap executed, tx hash: ${receipt.transactionHash}`);
+  logger.debug(`Vault swap executed, tx hash: ${receipt.transactionHash}`);
 
   // Look after Swap Requested of data.origin.Vault.tx_hash
   const swapRequestedHandle = observeSwapRequested(
@@ -132,7 +135,7 @@ async function legacyEvmVaultSwap(sourceAsset: Asset, destAsset: Asset, ccmSwap:
   );
 
   const swapRequestId = Number((await swapRequestedHandle).data.swapRequestId.replaceAll(',', ''));
-  legacyEvmVaultSwaps.debugLog(`${sourceAsset} swap via vault, swapRequestId: ${swapRequestId}`);
+  logger.debug(`${sourceAsset} swap via vault, swapRequestId: ${swapRequestId}`);
 
   // Wait for the swap to complete
   await observeEvent(`swapping:SwapRequestCompleted`, {
@@ -144,18 +147,16 @@ async function legacyEvmVaultSwap(sourceAsset: Asset, destAsset: Asset, ccmSwap:
     historicalCheckBlocks: 10,
   }).event;
 
-  legacyEvmVaultSwaps.debugLog(
-    `swapRequestId: ${swapRequestId} executed. Waiting for balance to increase.`,
-  );
+  logger.debug(`swapRequestId: ${swapRequestId} executed. Waiting for balance to increase.`);
   await observeBalanceIncrease(destAsset, destAddress, destBalanceBefore);
-  legacyEvmVaultSwaps.debugLog(`swapRequestId: ${swapRequestId} - swap success`);
+  logger.debug(`swapRequestId: ${swapRequestId} - swap success`);
 }
 
-export async function main() {
+export async function legacyEvmVaultSwaps(testContext: TestContext) {
   await Promise.all([
-    legacyEvmVaultSwap(Assets.Eth, Assets.ArbUsdc),
-    legacyEvmVaultSwap(Assets.ArbEth, Assets.Eth, true),
-    legacyEvmVaultSwap(Assets.ArbUsdc, Assets.Usdt),
-    legacyEvmVaultSwap(Assets.Usdc, Assets.Eth, true),
+    legacyEvmVaultSwap(testContext.logger, Assets.Eth, Assets.ArbUsdc),
+    legacyEvmVaultSwap(testContext.logger, Assets.ArbEth, Assets.Eth, true),
+    legacyEvmVaultSwap(testContext.logger, Assets.ArbUsdc, Assets.Usdt),
+    legacyEvmVaultSwap(testContext.logger, Assets.Usdc, Assets.Eth, true),
   ]);
 }
