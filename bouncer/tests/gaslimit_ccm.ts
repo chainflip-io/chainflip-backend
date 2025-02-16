@@ -387,9 +387,6 @@ export async function main() {
     await sleep(500);
   }
 
-  console.log('Ethereum priority fee', (await getChainFees('Ethereum')).priorityFee);
-  console.log('Arbitrum base fee', (await getChainFees('Arbitrum')).baseFee);
-
   const insufficientGasTestEvm = [
     testEvmInsufficientGas('Dot', 'Flip'),
     testEvmInsufficientGas('Eth', 'Usdc'),
