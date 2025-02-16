@@ -237,13 +237,12 @@ async function testGasLimitSwapToEvm(
   // Adding buffers on both ends to avoid flakiness, especially for the abort test.
   // Extra buffer for Arbitrum due to the gas estimation uncertainties.
   if (abortTest) {
+    // Not using the default estimation in newCcmMetadata for the abort broadcast
+    // scenario as it has a default buffer. Instead underestimate the gas budget.
     ccmMetadata.gasBudget = Math.round(
-      Number(ccmMetadata.gasBudget) * (destChain === 'Arbitrum' ? 0.5 : 0.8),
+      gasConsumption * (destChain === 'Arbitrum' ? 0.75 : 0.9),
     ).toString();
-  } else {
-    ccmMetadata.gasBudget = Math.round(Number(ccmMetadata.gasBudget) * 1.1).toString();
   }
-
   const testTag = abortTest ? `InsufficientGas` : '';
 
   const { tag, destAddress, broadcastId, txPayload } = await executeAndTrackCcmSwap(

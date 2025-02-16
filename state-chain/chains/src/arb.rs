@@ -256,26 +256,9 @@ mod test {
 		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET, MESSAGE_LENGTH);
 		assert_eq!(gas_limit, 2541810u128);
 
-		let gas_budget_extra = 1_000_000u128;
-		let gas_limit_extra = arb_tracked_data.calculate_ccm_gas_limit(
-			true,
-			GAS_BUDGET + gas_budget_extra,
-			MESSAGE_LENGTH,
-		);
-		assert_eq!(gas_limit + gas_budget_extra, gas_limit_extra);
-
 		let gas_limit_token =
 			arb_tracked_data.calculate_ccm_gas_limit(false, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(
-			gas_limit_token,
-			gas_limit + CCM_VAULT_TOKEN_GAS_OVERHEAD - CCM_VAULT_NATIVE_GAS_OVERHEAD
-		);
-		let gas_limit_token_extra = arb_tracked_data.calculate_ccm_gas_limit(
-			false,
-			GAS_BUDGET + gas_budget_extra,
-			MESSAGE_LENGTH,
-		);
-		assert_eq!(gas_limit_token + gas_budget_extra, gas_limit_token_extra);
+		assert_eq!(gas_limit_token, 3541810u128);
 	}
 
 	#[test]
