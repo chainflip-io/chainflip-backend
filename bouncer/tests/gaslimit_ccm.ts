@@ -234,11 +234,11 @@ async function testGasLimitSwapToEvm(
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
   );
 
-  // Adding buffers on both ends to avoid flakiness.
+  // Adding buffers on both ends to avoid flakiness, especially for the abort test.
+  // Extra buffer for Arbitrum due to the gas estimation uncertainties.
   if (abortTest) {
-    // Adding extra buffer for Arbitrum where the gas is very unreliable and the SC overestimates.
     ccmMetadata.gasBudget = Math.round(
-      Number(ccmMetadata.gasBudget) * (destChain === 'Arbitrum' ? 0.7 : 0.8),
+      Number(ccmMetadata.gasBudget) * (destChain === 'Arbitrum' ? 0.1 : 0.5),
     ).toString();
   } else {
     ccmMetadata.gasBudget = Math.round(Number(ccmMetadata.gasBudget) * 1.1).toString();

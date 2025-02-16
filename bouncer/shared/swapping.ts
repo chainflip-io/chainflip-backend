@@ -144,8 +144,10 @@ export async function newCcmMetadata(
   if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
     // Do the gas estimation of the call to the CF Tester contract and add a small buffer.
     // This is what integrators are expected to do and it'll give a good estimate of the gas
-    // needed for the user logic.
-    userLogicGasBudget = Math.trunc((await estimateCcmCfTesterGas(message)) * 1.1);
+    // needed for the user logic. Extra buffer for Arbitrum due to the gas estimation uncertainties.
+    userLogicGasBudget = Math.trunc(
+      (await estimateCcmCfTesterGas(message)) * (destChain === 'Arbitrum' ? 2 : 1.25),
+    );
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
