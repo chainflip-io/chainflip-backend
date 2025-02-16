@@ -238,7 +238,7 @@ async function testGasLimitSwapToEvm(
   // Extra buffer for Arbitrum due to the gas estimation uncertainties.
   if (abortTest) {
     ccmMetadata.gasBudget = Math.round(
-      Number(ccmMetadata.gasBudget) * (destChain === 'Arbitrum' ? 0.1 : 0.5),
+      Number(ccmMetadata.gasBudget) * (destChain === 'Arbitrum' ? 0.5 : 0.8),
     ).toString();
   } else {
     ccmMetadata.gasBudget = Math.round(Number(ccmMetadata.gasBudget) * 1.1).toString();
@@ -277,7 +277,9 @@ async function testGasLimitSwapToEvm(
       () => stopObservingCcmReceived,
     ).then((event) => {
       if (event !== undefined) {
-        throw new Error(`${tag} CCM event emitted. Transaction should not have been broadcasted!`);
+        throw new Error(
+          `${tag} CCM event emitted. Transaction should not have been broadcasted! Message length: ${ccmMetadata.message.slice(2).length / 2}`,
+        );
       }
     });
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
@@ -294,7 +296,7 @@ async function testGasLimitSwapToEvm(
           const aborted = event.data.broadcastId === broadcastId;
           if (aborted) {
             throw new Error(
-              `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${event.data.broadcastId}. Gas budget: ${gasLimitBudget}`,
+              `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${event.data.broadcastId}. Gas budget: ${gasLimitBudget}. Message length: ${ccmMetadata.message.slice(2).length / 2}`,
             );
           }
           return aborted;
@@ -387,6 +389,9 @@ export async function main() {
     }
     await sleep(500);
   }
+
+  console.log('Ethereum priority fee', (await getChainFees('Ethereum')).priorityFee);
+  console.log('Arbitrum base fee', (await getChainFees('Arbitrum')).baseFee);
 
   const insufficientGasTestEvm = [
     testEvmInsufficientGas('Dot', 'Flip'),

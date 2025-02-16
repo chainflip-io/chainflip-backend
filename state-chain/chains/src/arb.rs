@@ -143,8 +143,6 @@ pub mod fees {
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 	pub const MAX_GAS_LIMIT: u128 = 25_000_000;
-	// TODO: Look into increasign this since we see that the Solana
-	// Vault swaps are the ones failing (very short messages)
 	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 90_000;
 	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 120_000;
 	// Arbitrum specific ccm gas limit calculation constants
