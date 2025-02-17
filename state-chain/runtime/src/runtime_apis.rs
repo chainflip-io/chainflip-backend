@@ -191,12 +191,23 @@ pub struct LiquidityProviderInfo {
 	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, TypeInfo, Default)]
 pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 	pub btc_vault_deposit_address: Option<String>,
-	pub affiliates: Vec<(AffiliateShortId, AccountId32)>,
+	pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
 	pub bond: AssetAmount,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct BrokerInfoLegacy {
+	pub earned_fees: Vec<(Asset, AssetAmount)>,
+}
+
+impl From<BrokerInfoLegacy> for BrokerInfo {
+	fn from(legacy: BrokerInfoLegacy) -> Self {
+		BrokerInfo { earned_fees: legacy.earned_fees, ..Default::default() }
+	}
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
@@ -414,6 +425,8 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 		) -> Vec<(SwapLegInfo, BlockNumber)>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
+		#[changed_in(3)]
+		fn cf_broker_info(account_id: AccountId32) -> BrokerInfoLegacy;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;

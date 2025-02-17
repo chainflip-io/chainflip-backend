@@ -14,9 +14,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountId, AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
-	BlockNumber, BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
-	SwapId, SwapRequestId,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -49,7 +48,7 @@ use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
-	Percent, Permill,
+	AccountId32, Percent, Permill,
 };
 use sp_state_machine::InspectState;
 use state_chain_runtime::{
@@ -230,6 +229,19 @@ impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo
 	}
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RpcAffiliate {
+	pub account_id: AccountId32,
+	#[serde(flatten)]
+	pub details: AffiliateDetails,
+}
+
+impl From<(AccountId32, AffiliateDetails)> for RpcAffiliate {
+	fn from((account_id, details): (AccountId32, AffiliateDetails)) -> Self {
+		Self { account_id, details }
+	}
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "role", rename_all = "snake_case")]
@@ -243,7 +255,9 @@ pub enum RpcAccountInfo {
 		bond: NumberOrHex,
 		#[deprecated(note = "This field is deprecated and will be replaced in a future release")]
 		earned_fees: any::AssetMap<NumberOrHex>,
-		affiliates: Vec<(AffiliateShortId, AccountId, Option<EthereumAddress>)>,
+		#[serde(skip_serializing_if = "Vec::is_empty")]
+		affiliates: Vec<RpcAffiliate>,
+		#[serde(skip_serializing_if = "Option::is_none")]
 		btc_vault_deposit_address: Option<String>,
 	},
 	LiquidityProvider {
@@ -278,11 +292,7 @@ impl RpcAccountInfo {
 		}
 	}
 
-	fn broker(
-		broker_info: BrokerInfo,
-		balance: u128,
-		affiliate_details: BTreeMap<AccountId, AffiliateDetails>,
-	) -> Self {
+	fn broker(broker_info: BrokerInfo, balance: u128) -> Self {
 		Self::Broker {
 			flip_balance: balance.into(),
 			bond: broker_info.bond.into(),
@@ -293,16 +303,7 @@ impl RpcAccountInfo {
 					.iter()
 					.map(|(asset, balance)| (*asset, (*balance).into())),
 			),
-			affiliates: broker_info
-				.affiliates
-				.into_iter()
-				.map(|(short_id, account_id)| {
-					let withdrawal_address = affiliate_details
-						.get(&account_id)
-						.map(|AffiliateDetails { withdrawal_address, .. }| *withdrawal_address);
-					(short_id, account_id, withdrawal_address)
-				})
-				.collect(),
+			affiliates: broker_info.affiliates.into_iter().map(Into::into).collect(),
 		}
 	}
 
@@ -1402,23 +1403,17 @@ where
 					AccountRole::Unregistered =>
 						RpcAccountInfo::unregistered(balance, asset_balances),
 					AccountRole::Broker => {
-						let info = api.cf_broker_info(hash, account_id.clone())?;
-
 						let api_version = api
 							.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)?
 							.unwrap_or_default();
 
-						RpcAccountInfo::broker(
-							info,
-							balance,
-							if api_version >= 3 {
-								api.cf_affiliate_details(hash, account_id, None)?
-									.into_iter()
-									.collect()
-							} else {
-								Default::default()
-							},
-						)
+						let info = if api_version < 3 {
+							api.cf_broker_info_before_version_3(hash, account_id.clone())?.into()
+						} else {
+							api.cf_broker_info(hash, account_id.clone())?
+						};
+
+						RpcAccountInfo::broker(info, balance)
 					},
 					AccountRole::LiquidityProvider => {
 						let info = api.cf_liquidity_provider_info(hash, account_id)?;
@@ -2202,22 +2197,6 @@ mod test {
 	#[test]
 	fn test_broker_serialization() {
 		use cf_chains::btc::BitcoinNetwork;
-		struct AffiliateTestDetails {
-			short_id: cf_primitives::AffiliateShortId,
-			account_id: AccountId32,
-			withdrawal_address: H160,
-		}
-		impl AffiliateTestDetails {
-			fn new(i: u8) -> Self {
-				Self {
-					short_id: cf_primitives::AffiliateShortId(i),
-					account_id: AccountId32::new([i; 32]),
-					withdrawal_address: H160::from([i; 20]),
-				}
-			}
-		}
-		let legacy_affiliate = AffiliateTestDetails::new(1);
-		let fully_delegated_affiliate = AffiliateTestDetails::new(2);
 		let broker = RpcAccountInfo::broker(
 			BrokerInfo {
 				earned_fees: vec![
@@ -2235,28 +2214,18 @@ mod test {
 				btc_vault_deposit_address: Some(
 					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 				),
-				affiliates: vec![
-					(legacy_affiliate.short_id, legacy_affiliate.account_id),
-					(
-						fully_delegated_affiliate.short_id,
-						fully_delegated_affiliate.account_id.clone(),
-					),
-				],
 				bond: 0,
+				affiliates: vec![(
+					AccountId32::new([1; 32]),
+					AffiliateDetails {
+						short_id: 1.into(),
+						withdrawal_address: H160::from([0xcf; 20]),
+					},
+				)],
 			},
 			0,
-			// Only the fully delegated affiliate has a withdrawal address
-			[(
-				fully_delegated_affiliate.account_id.clone(),
-				AffiliateDetails {
-					short_id: fully_delegated_affiliate.short_id,
-					withdrawal_address: fully_delegated_affiliate.withdrawal_address,
-				},
-			)]
-			.into_iter()
-			.collect(),
 		);
-		insta::assert_snapshot!(serde_json::to_value(broker).unwrap());
+		insta::assert_json_snapshot!(broker);
 	}
 
 	#[test]
