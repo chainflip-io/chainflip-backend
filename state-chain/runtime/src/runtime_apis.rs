@@ -10,9 +10,9 @@ use cf_chains::{
 	VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
-	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount,
-	NetworkEnvironment, PrewitnessedDepositId, SemVer,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount, NetworkEnvironment,
+	PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
