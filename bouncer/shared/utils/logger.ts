@@ -81,3 +81,6 @@ export function throwError(parentLogger: Logger, error: Error): never {
   }
   throw newError;
 }
+
+// Log something to avoid strange `RangeError` when an error is thrown before the logger has finished initializing
+globalLogger.trace('Logger initialized');

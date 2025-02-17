@@ -103,10 +103,16 @@ describe('ConcurrentTests', () => {
 });
 ```
 
-Now that the test is added, we can run it using the `vitest` command.
+Now that the test is added, we can run it using the `vitest` command:
 
 ```sh copy
 pnpm vitest run -t "myNewTest"
+```
+
+You can use `vitest`s `list` command to find the name of that test you what to run:
+
+```sh copy
+pnpm vitest list
 ```
 
 If your test uses the `SwapContext` within the `TestContext`, then the report will be automatically logged when the test finishes.
