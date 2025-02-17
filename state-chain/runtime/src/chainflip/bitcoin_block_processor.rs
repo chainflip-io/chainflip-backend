@@ -1,4 +1,4 @@
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec, iter::Step};
+use sp_std::{collections::btree_map::BTreeMap, iter::Step, vec, vec::Vec};
 
 use crate::{chainflip::bitcoin_elections::BlockData, BitcoinIngressEgress, Runtime};
 use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
@@ -85,7 +85,10 @@ impl Hook<(BlockNumber, u32, BlockData), Vec<(BlockNumber, BtcEvent)>> for Apply
 				.collect::<Vec<(BlockNumber, BtcEvent)>>();
 		}
 		//Full witness rule
-		if age == u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32 {
+		if age ==
+			u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
+				as u32
+		{
 			return block_data
 				.iter()
 				.map(|deposit_witness| (block, BtcEvent::Witness(deposit_witness.clone())))
@@ -305,9 +308,7 @@ mod tests {
 		}
 	}
 
-	impl Hook<(BlockNumber, u32, MockBlockData), Vec<(BlockNumber, MockBtcEvent)>>
-		for ApplyRulesHook
-	{
+	impl Hook<(BlockNumber, u32, MockBlockData), Vec<(BlockNumber, MockBtcEvent)>> for ApplyRulesHook {
 		fn run(
 			&mut self,
 			(block, age, block_data): (BlockNumber, u32, MockBlockData),

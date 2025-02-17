@@ -8,9 +8,9 @@ use crate::electoral_systems::{
 	},
 };
 use cf_chains::witness_period::SaturatingStep;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode};
 use derive_where::derive_where;
-use frame_support::{pallet_prelude::TypeInfo, CloneNoBound, Deserialize, Serialize};
+use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
 ///
@@ -45,25 +45,25 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 ///     - `DedupEvents`: A hook to deduplicate events.
 ///     - `SafetyMargin`: A hook to retrieve the chain specific safety-margin
 // #[derive(
-// 	Debug, CloneNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
-// )]
+// 	Debug, CloneNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize,
+// Deserialize, )]
 
 #[derive_where(Debug, Clone, PartialEq, Eq;
-	T::ChainBlockNumber: Debug + Clone + Eq, 
-	T::BlockData: Debug + Clone + Eq, 
+	T::ChainBlockNumber: Debug + Clone + Eq,
+	T::BlockData: Debug + Clone + Eq,
 	T::Event: Debug + Clone + Eq,
-	T::Rules: Debug + Clone + Eq, 
-	T::Execute: Debug + Clone + Eq, 
+	T::Rules: Debug + Clone + Eq,
+	T::Execute: Debug + Clone + Eq,
 	T::DedupEvents: Debug + Clone + Eq,
 	T::SafetyMargin: Debug + Clone + Eq,
 )]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
-	T::ChainBlockNumber: Encode, 
-	T::BlockData: Encode, 
+	T::ChainBlockNumber: Encode,
+	T::BlockData: Encode,
 	T::Event: Encode,
-	T::Rules: Encode, 
-	T::Execute: Encode, 
+	T::Rules: Encode,
+	T::Execute: Encode,
 	T::DedupEvents: Encode,
 	T::SafetyMargin: Encode,
 ))]
@@ -147,7 +147,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 					let block_data = self.blocks_data.remove(&n);
 					if let Some((data, next_age)) = block_data {
 						// We need to get only events already processed (next_age not included)
-						for age in 0..next_age as u32 {
+						for age in 0..next_age {
 							let events = self
 								.process_rules_for_age_and_block(n, age, &data)
 								.into_iter()
@@ -196,17 +196,13 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		let mut last_events: Vec<(T::ChainBlockNumber, T::Event)> = vec![];
 		for (block_height, (data, next_age)) in self.blocks_data.clone() {
 			let current_age = T::ChainBlockNumber::steps_between(&block_height, &last_height).0;
-			for age in next_age..=current_age as u32
-			{
+			for age in next_age..=current_age as u32 {
 				last_events = last_events
 					.into_iter()
 					.chain(self.process_rules_for_age_and_block(block_height, age, &data))
 					.collect();
 			}
-			self.blocks_data.insert(
-				block_height,
-				(data.clone(), current_age as u32 + 1),
-			);
+			self.blocks_data.insert(block_height, (data.clone(), current_age as u32 + 1));
 		}
 		last_events
 	}
@@ -251,15 +247,16 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	}
 	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
 		self.blocks_data
-			.retain(|_key, (_, next_age)| *next_age as u32 <= self.safety_margin.run(()));
+			.retain(|_key, (_, next_age)| *next_age <= self.safety_margin.run(()));
 		// Todo! Do we want to keep these events around for longer? is there any benefit?
 		// If we keep these for let's say 100 blocks we can then prevent double processing things
 		// that are reorged up to 100 blocks later, what are the chanches of smth like this
 		// happening? This still won't protect us from re-processing full Witness events since we
 		// remove the blocks from block_data as soon as safety margin is reached (we would have to
 		// increase the size of blocks_data as well)
-		self.reorg_events
-			.retain(|key, _| key.saturating_forward(self.safety_margin.run(()) as usize) > last_height);
+		self.reorg_events.retain(|key, _| {
+			key.saturating_forward(self.safety_margin.run(()) as usize) > last_height
+		});
 	}
 }
 
@@ -443,6 +440,15 @@ pub(crate) mod test {
 			3,
 			"Max three (SAFETY MARGIN) blocks stored at any time"
 		);
+	}
+
+	/// temp test, checking large progress delta
+	#[test]
+	fn temp_large_delta() {
+		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
+
+		processor
+			.process_block_data(ChainProgressInner::Progress(u32::MAX as u64), Some((9, vec![1])));
 	}
 
 	/// test that a reorg cause the processor to discard all the reorged blocks

@@ -17,7 +17,7 @@ use core::iter::Step;
 use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{fmt::Debug, ops::Sub, vec::Vec};
+use sp_std::{fmt::Debug, vec::Vec};
 
 pub trait BWTypes: 'static {
 	type ChainBlockNumber: Serde
@@ -98,15 +98,15 @@ pub struct BWSettings {
 #[derive_where(Debug, Clone, PartialEq, Eq;
 	T::SafeModeEnabledHook: Debug + Clone + Eq,
 	T::ElectionPropertiesHook: Debug + Clone + Eq,
-	BlockProcessor<T::BWProcessorTypes>: Debug + Clone + Eq, 
+	BlockProcessor<T::BWProcessorTypes>: Debug + Clone + Eq,
 )]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
-	T::ChainBlockNumber: Encode, 
-	T::ElectionPropertiesHook: Encode, 
+	T::ChainBlockNumber: Encode,
+	T::ElectionPropertiesHook: Encode,
 	T::SafeModeEnabledHook: Encode,
 
-	BlockProcessor<T::BWProcessorTypes>: Encode, 
+	BlockProcessor<T::BWProcessorTypes>: Encode,
 ))]
 pub struct BWState<T: BWTypes> {
 	pub elections: ElectionTracker<T::ChainBlockNumber>,
@@ -358,50 +358,63 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 #[cfg(test)]
 mod tests {
 	use std::collections::BTreeMap;
-	
+
 	use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
 	use proptest::{
-		prelude::{any, Arbitrary, BoxedStrategy, Just, Strategy}, prop_oneof, sample::select, strategy::LazyJust
+		prelude::{any, Arbitrary, BoxedStrategy, Just, Strategy},
+		prop_oneof,
+		sample::select,
+		strategy::LazyJust,
 	};
-	
+
 	use super::*;
 	use crate::prop_do;
 	use hook_test_utils::*;
-	
-	fn generate_state<T: BWTypes<SafeModeEnabledHook = ConstantHook<(), SafeModeStatus>>>(
-	) -> impl Strategy<Value = BWState<T>>
+
+	fn generate_state<
+		T: BWTypes<SafeModeEnabledHook = ConstantHook<(), SafeModeStatus>, BWProcessorTypes = BPT>,
+		BPT: BWProcessorTypes<SafetyMargin = ConstantHook<(), u32>>,
+	>() -> impl Strategy<Value = BWState<T>>
 	where
 		T::ChainBlockNumber: Arbitrary,
-		T::ElectionPropertiesHook: Default + Clone + Debug + Eq ,
+		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
+		BPT::BlockData: Default + Clone + Debug + Eq,
 	{
 		prop_do! {
-			let (highest_election, highest_scheduled,
-				 highest_started_and_touched_by_reorg, reorg_id,
+			let (highest_election, highest_witnessed,
+				 highest_priority, reorg_id,
 				safemode_enabled) in (
-		 		any::<T::ChainBlockNumber>(),
+				 any::<T::ChainBlockNumber>(),
 				any::<T::ChainBlockNumber>(),
 				any::<T::ChainBlockNumber>(),
 				any::<u8>(),
 				any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else {SafeModeStatus::Disabled})
 			);
-	
+
 			let ongoing in proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<u8>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height <= highest_election));
 			LazyJust::new(move || BWState {
 				elections: ElectionTracker {
-					highest_election: highest_election.clone(),
-					highest_witnessed: highest_scheduled.clone(),
-					highest_priority: highest_started_and_touched_by_reorg.clone(),
+					highest_election,
+					highest_witnessed,
+					highest_priority,
 					ongoing: BTreeMap::from_iter(ongoing.clone()),
 					reorg_id
 				},
 				generate_election_properties_hook: Default::default(),
 				safemode_enabled: ConstantHook::new(safemode_enabled),
-				block_processor: Default::default(),
+				block_processor: BlockProcessor {
+					blocks_data: Default::default(),
+					reorg_events: Default::default(),
+					rules: Default::default(),
+					execute: Default::default(),
+					dedup_events: Default::default(),
+					safety_margin: ConstantHook::new(1),
+				},
 				_phantom: core::marker::PhantomData,
 			})
 		}
 	}
-	
+
 	fn generate_input<T: BWTypes<BlockData = ()>>(
 		indices: IndexOf<<BWStateMachine<T> as StateMachine>::Input>,
 	) -> BoxedStrategy<<BWStateMachine<T> as StateMachine>::Input>
@@ -422,7 +435,7 @@ mod tests {
 				.prop_map(SMInput::Context)
 			]
 		};
-	
+
 		if indices.len() > 0 {
 			prop_do! {
 				let index in select(indices);
@@ -434,20 +447,27 @@ mod tests {
 		}
 	}
 
-	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static> BWProcessorTypes for N {
+	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
+		BWProcessorTypes for N
+	{
 		type ChainBlockNumber = N;
 		type BlockData = ();
 		type Event = ();
 		type Rules = ConstantHook<
 			(Self::ChainBlockNumber, u32, Self::BlockData),
 			Vec<(Self::ChainBlockNumber, Self::Event)>,
-		> ;
+		>;
 		type Execute = ConstantHook<(Self::ChainBlockNumber, Self::Event), ()>;
-		type DedupEvents = ConstantHook<Vec<(Self::ChainBlockNumber, Self::Event)>, Vec<(Self::ChainBlockNumber, Self::Event)>>;
+		type DedupEvents = ConstantHook<
+			Vec<(Self::ChainBlockNumber, Self::Event)>,
+			Vec<(Self::ChainBlockNumber, Self::Event)>,
+		>;
 		type SafetyMargin = ConstantHook<(), u32>;
 	}
-	
-	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static> BWTypes for N {
+
+	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
+		BWTypes for N
+	{
 		type BlockData = ();
 		type ElectionProperties = ();
 		type ElectionPropertiesHook = ConstantHook<N, ()>;
@@ -455,7 +475,7 @@ mod tests {
 		type BWProcessorTypes = N;
 		type ChainBlockNumber = N;
 	}
-	
+
 	#[test]
 	pub fn test_bw_statemachine() {
 		BWStateMachine::<u32>::test(
@@ -468,13 +488,13 @@ mod tests {
 			generate_input::<u32>,
 		);
 	}
-	
+
 	struct TestChain {}
 	impl ChainWitnessConfig for TestChain {
 		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 		type ChainBlockNumber = u32;
 	}
-	
+
 	#[test]
 	pub fn test_bw_statemachine2() {
 		BWStateMachine::<BlockWitnessRange<TestChain>>::test(
