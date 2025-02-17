@@ -240,7 +240,7 @@ where
 				)
 			};
 
-			let mut new_properties = old_channel_properties.clone();
+			let mut new_channel_properties = old_channel_properties.clone();
 			let mut new_pending_ingress_totals =
 				<Self as ElectoralSystemTypes>::ElectionState::default();
 			for (account, (details, _)) in &old_channel_properties {
@@ -353,7 +353,7 @@ where
 								(account.clone(), details.asset),
 								Some(*ready_total),
 							);
-							new_properties.entry(account.clone()).and_modify(
+							new_channel_properties.entry(account.clone()).and_modify(
 								|(_details, total)| {
 									*total = *ready_total;
 								},
@@ -375,26 +375,28 @@ where
 					// confirmed deposits have been ingressed.
 					if ready_total.block_number >= details.close_block {
 						Sink::on_channel_closed(account.clone());
-						new_properties.remove(account);
+						new_channel_properties.remove(account);
 					}
 				}
 				if let Some(future_total) = future_total {
-					new_properties.entry(account.clone()).and_modify(|(_details, total)| {
-						*total = *future_total;
-					});
+					new_channel_properties.entry(account.clone()).and_modify(
+						|(_details, total)| {
+							*total = *future_total;
+						},
+					);
 					new_pending_ingress_totals.insert(account.clone(), *future_total);
 				}
 			}
 
 			let mut election_access = ElectoralAccess::election_mut(election_identifier);
 
-			if new_properties.is_empty() {
+			if new_channel_properties.is_empty() {
 				// Note: it's possible that there are still some remaining pending totals, but if
 				// the channel is expired, we need to close it, otherwise an attacker could keep it
 				// open indeifitely by streaming small deposits.
 				election_access.delete();
-			} else if new_properties != old_channel_properties {
-				log::debug!("recreate delta based ingress election: recreate since properties changed from: {old_channel_properties:?}, to: {new_properties:?}");
+			} else if new_channel_properties != old_channel_properties {
+				log::debug!("recreate delta based ingress election: recreate since properties changed from: {old_channel_properties:?}, to: {new_channel_properties:?}");
 
 				election_access.clear_votes();
 				election_access.set_state(new_pending_ingress_totals)?;
@@ -403,7 +405,7 @@ where
 						.extra()
 						.checked_add(1)
 						.ok_or_else(CorruptStorageError::new)?,
-					(new_properties, last_channel_opened_at),
+					(new_channel_properties, last_channel_opened_at),
 				)?;
 			} else {
 				log::debug!("recreate delta based ingress election: keeping old because properties didn't change: {old_channel_properties:?}");
