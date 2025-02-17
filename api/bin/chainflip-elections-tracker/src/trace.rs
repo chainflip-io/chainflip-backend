@@ -8,45 +8,37 @@ pub enum NodeDiff<V, W> {
 	Both(V, W),
 }
 
-impl<V, W> NodeDiff<V, W> {
-	pub fn get_left(&self) -> Option<&W> {
-		match self {
-			Left(_) => None,
-			Right(a) => Some(a),
-			Both(_, a) => Some(a),
-		}
-	}
-
-	pub fn get_right(&self) -> Option<&W> {
-		match self {
-			Left(_) => None,
-			Right(a) => Some(a),
-			Both(_, a) => Some(a),
-		}
-	}
-}
-
 use NodeDiff::*;
 
-pub fn diff<K: Ord, V, W>(a: StateTree<K, V>, b: StateTree<K, W>) -> StateTree<K, NodeDiff<V, W>> {
-	zip_with(a, b, |v, w| match (v, w) {
-		(None, None) => None,
-		(None, Some(w)) => Some(Right(w)),
-		(Some(v), None) => Some(Left(v)),
-		(Some(v), Some(w)) => Some(Both(v, w)),
-	})
+pub fn diff<K: Ord, V, W>(
+	a: StateTree<K, V>,
+	mut b: StateTree<K, W>,
+) -> StateTree<K, NodeDiff<V, W>> {
+	let mut result = BTreeMap::new();
+	for (k, v) in a.into_iter() {
+		if let Some(w) = b.remove(&k) {
+			result.insert(k, Both(v, w));
+		} else {
+			result.insert(k, Left(v));
+		}
+	}
+	for (k, w) in b.into_iter() {
+		result.insert(k, Right(w));
+	}
+	result
 }
+
 pub fn fmap<K: Ord, V, W>(this: BTreeMap<K, V>, f: &impl Fn(V) -> W) -> BTreeMap<K, W> {
 	this.into_iter().map(|(k, v)| (k, f(v))).collect()
 }
 
-// TODO! This has currently a hardcoded 10!
 pub fn map_with_parent<K: Ord, V, W>(
 	mut this: StateTree<K, V>,
 	f: impl Fn(&Vec<K>, Option<&W>, V) -> W,
 ) -> StateTree<K, W> {
+	let max_key_length = this.keys().map(|key| key.len()).max().unwrap_or(0);
 	let mut processed = BTreeMap::new();
-	for length in 0..10 {
+	for length in 0..=max_key_length {
 		for (key, value) in this.extract_if(|k, _| k.len() == length) {
 			let p = if !key.is_empty() {
 				let parent_key = &key[0..key.len() - 1];
@@ -63,23 +55,4 @@ pub fn map_with_parent<K: Ord, V, W>(
 
 pub fn get_key_name<K: std::fmt::Display>(key: &[K]) -> String {
 	key.last().map(|x| format!("{x}")).unwrap_or("root".into())
-}
-
-fn zip_with<K: Ord, V, W, X>(
-	x: BTreeMap<K, V>,
-	mut y: BTreeMap<K, W>,
-	f: impl Fn(Option<V>, Option<W>) -> Option<X>,
-) -> BTreeMap<K, X> {
-	let mut result = BTreeMap::new();
-	for (k, v) in x.into_iter() {
-		if let Some(x) = f(Some(v), y.remove(&k)) {
-			result.insert(k, x);
-		}
-	}
-	for (k, w) in y.into_iter() {
-		if let Some(x) = f(None, Some(w)) {
-			result.insert(k, x);
-		}
-	}
-	result
 }

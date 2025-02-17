@@ -7,6 +7,15 @@ use pallet_cf_elections::{
 	electoral_system::BitmapComponentOf,
 };
 
+/// Since spans can only be submitted when they end, it is not possible to
+/// have an infinitely running root span to which we attach all child spans.
+/// Also, the trace view of Grafana becomes unreadable if we add more and more
+/// as time goes on.
+/// So what we do instead is that we split statechain blocks into 5 minute intervals,
+/// and every 5 minutes create a new set of traces. Since statechain blocks have a frequency
+/// of 6 seconds, we get that 50 blocks go into each trace.
+const BLOCKS_PER_TRACE: u32 = 50;
+
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct ElectionData<ES: ElectoralSystemTypes> {
 	pub height: u32,
@@ -24,7 +33,7 @@ pub struct ElectionData<ES: ElectoralSystemTypes> {
 
 	pub electoral_system_names: Vec<String>,
 
-	pub validators: u32,
+	pub validators_count: u32,
 
 	pub _phantom: std::marker::PhantomData<ES>,
 }
@@ -65,7 +74,7 @@ use Key::*;
 impl Display for Key {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			RootBlockHeight(h) => write!(f, "blocks {h}-..."),
+			RootBlockHeight(h) => write!(f, "blocks {h}-{}", h + BLOCKS_PER_TRACE - 1),
 			Election(e) => write!(f, "{e}"),
 			Key::Category(extra, category) => write!(f, "[{extra}] {category}"),
 			Validator(x) => write!(f, "Validator {x}"),
@@ -145,7 +154,7 @@ where
 
 	let mut trace = StateTree::new();
 
-	let root_height = data.height - (data.height % 50);
+	let root_height = data.height - (data.height % BLOCKS_PER_TRACE);
 	let key0 = RootBlockHeight(root_height);
 	trace.insert(vec![key0.clone()], end.with_attribute("height".into(), format!("{root_height}")));
 
@@ -168,44 +177,21 @@ where
 			end.with_attribute("Properties".into(), format!("{properties:#?}")),
 		);
 
-		// no votes
-		for authority_id in 0..data.validators {
-			if !votes.contains_key(&(*identifier, authority_id)) {
-				trace.insert(
-					cloned_vec([&key0, &key1, &key2, &Category(extra.clone(), NoVote)]),
-					start.clone(),
-				);
-				trace.insert(
-					cloned_vec([
-						&key0,
-						&key1,
-						&key2,
-						&Category(extra.clone(), NoVote),
-						&Validator(authority_id),
-					]),
-					start.clone(),
-				);
-			}
-		}
+		// votes and no-votes
+		for authority_id in 0..data.validators_count {
+			let (key, trace_init) = match votes.get(&(*identifier, authority_id)) {
+				Some(s) => (
+					Category(extra.clone(), Vote(s.0.clone())),
+					start.with_attribute("vote".into(), s.1.clone()),
+				),
+				None => (Category(extra.clone(), NoVote), start.clone()),
+			};
 
-		// votes
-		for authority_id in 0..data.validators {
-			if let Some(s) = votes.get(&(*identifier, authority_id)) {
-				trace.insert(
-					cloned_vec([&key0, &key1, &key2, &Category(extra.clone(), Vote(s.0.clone()))]),
-					start.with_attribute("vote".into(), s.1.clone()),
-				);
-				trace.insert(
-					cloned_vec([
-						&key0,
-						&key1,
-						&key2,
-						&Category(extra.clone(), Vote(s.0.clone())),
-						&Validator(authority_id),
-					]),
-					start.with_attribute("vote".into(), s.1.clone()),
-				);
-			}
+			trace.insert(cloned_vec([&key0, &key1, &key2, &key]), trace_init.clone());
+			trace.insert(
+				cloned_vec([&key0, &key1, &key2, &key3, &Validator(authority_id)]),
+				trace_init,
+			);
 		}
 	}
 

@@ -126,7 +126,7 @@ async fn observe_elections<T: Tracer + Send>(
 				bitmaps,
 				elections,
 				individual_components,
-				validators: validators.len() as u32,
+				validators_count: validators.len() as u32,
 				_phantom: Default::default(),
 				electoral_system_names: vec![
 							"Blockheight".into(),
