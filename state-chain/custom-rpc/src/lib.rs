@@ -297,9 +297,9 @@ impl RpcAccountInfo {
 				.affiliates
 				.into_iter()
 				.map(|(short_id, account_id)| {
-					let withdrawal_address = affiliate_details.get(&account_id).map(
-						|AffiliateDetails { withdrawal_address, .. }| withdrawal_address.clone(),
-					);
+					let withdrawal_address = affiliate_details
+						.get(&account_id)
+						.map(|AffiliateDetails { withdrawal_address, .. }| *withdrawal_address);
 					(short_id, account_id, withdrawal_address)
 				})
 				.collect(),
@@ -2202,6 +2202,22 @@ mod test {
 	#[test]
 	fn test_broker_serialization() {
 		use cf_chains::btc::BitcoinNetwork;
+		struct AffiliateTestDetails {
+			short_id: cf_primitives::AffiliateShortId,
+			account_id: AccountId32,
+			withdrawal_address: H160,
+		}
+		impl AffiliateTestDetails {
+			fn new(i: u8) -> Self {
+				Self {
+					short_id: cf_primitives::AffiliateShortId(i),
+					account_id: AccountId32::new([i; 32]),
+					withdrawal_address: H160::from([i; 20]),
+				}
+			}
+		}
+		let legacy_affiliate = AffiliateTestDetails::new(1);
+		let fully_delegated_affiliate = AffiliateTestDetails::new(2);
 		let broker = RpcAccountInfo::broker(
 			BrokerInfo {
 				earned_fees: vec![
@@ -2219,10 +2235,26 @@ mod test {
 				btc_vault_deposit_address: Some(
 					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 				),
-				affiliates: vec![(cf_primitives::AffiliateShortId(1), AccountId32::new([1; 32]))],
+				affiliates: vec![
+					(legacy_affiliate.short_id, legacy_affiliate.account_id),
+					(
+						fully_delegated_affiliate.short_id,
+						fully_delegated_affiliate.account_id.clone(),
+					),
+				],
 				bond: 0,
 			},
 			0,
+			// Only the fully delegated affiliate has a withdrawal address
+			[(
+				fully_delegated_affiliate.account_id.clone(),
+				AffiliateDetails {
+					short_id: fully_delegated_affiliate.short_id,
+					withdrawal_address: fully_delegated_affiliate.withdrawal_address,
+				},
+			)]
+			.into_iter()
+			.collect(),
 		);
 		insta::assert_snapshot!(serde_json::to_value(broker).unwrap());
 	}
