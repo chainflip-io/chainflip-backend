@@ -2,7 +2,7 @@
 # Chainflip Elections Tracker
 
 This binary runs alongside a chainflip node, and tracks the state of elections.
-It computes which parts of the state changed and pushes this information in form
+It computes which parts of the state changed and pushes this information in the form
 of OTLP traces to a given OTLP endpoint. 
 
 ## Configuration
