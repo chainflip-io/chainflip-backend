@@ -149,7 +149,7 @@ where
 	// Stores the channels a given election is witnessing, and a recent total ingressed value.
 	type ElectionProperties = (
 		BTreeMap<Sink::Account, (OpenChannelDetailsFor<Sink>, ChannelTotalIngressedFor<Sink>)>,
-		// Last Channel Opened At - We use this to determin when it is ok to backoff
+		// Last Channel Opened At - We use this to determine when it is ok to backoff
 		// request frequency.
 		StateChainBlockNumber,
 	);
