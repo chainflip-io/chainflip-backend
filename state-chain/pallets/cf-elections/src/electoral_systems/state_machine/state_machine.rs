@@ -178,7 +178,8 @@ pub fn run_with_timeout<
 					tokio::task::spawn_blocking(move || f2(a2)),
 				)
 				.await
-				.map_err(move |_| format!("task failed with input {:?}", a3))
+				.map_err(move |_| format!("task failed with input {:#?}", a3))
+				.map_err(|err| {println!("{err}"); err})
 				.unwrap()
 			})
 			.unwrap()

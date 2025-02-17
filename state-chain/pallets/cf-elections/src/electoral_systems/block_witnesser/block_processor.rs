@@ -1,3 +1,5 @@
+use core::iter::Step;
+
 use crate::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
 	state_machine::{
@@ -5,8 +7,10 @@ use crate::electoral_systems::{
 		state_machine::StateMachine,
 	},
 };
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
+use derive_where::derive_where;
+use frame_support::{pallet_prelude::TypeInfo, CloneNoBound, Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
 ///
@@ -40,15 +44,35 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 ///     - `Execute`: A hook to execute generated events.
 ///     - `DedupEvents`: A hook to deduplicate events.
 ///     - `SafetyMargin`: A hook to retrieve the chain specific safety-margin
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
+// #[derive(
+// 	Debug, CloneNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
+// )]
+
+#[derive_where(Debug, Clone, PartialEq, Eq;
+	T::ChainBlockNumber: Debug + Clone + Eq, 
+	T::BlockData: Debug + Clone + Eq, 
+	T::Event: Debug + Clone + Eq,
+	T::Rules: Debug + Clone + Eq, 
+	T::Execute: Debug + Clone + Eq, 
+	T::DedupEvents: Debug + Clone + Eq,
+	T::SafetyMargin: Debug + Clone + Eq,
 )]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[codec(encode_bound(
+	T::ChainBlockNumber: Encode, 
+	T::BlockData: Encode, 
+	T::Event: Encode,
+	T::Rules: Encode, 
+	T::Execute: Encode, 
+	T::DedupEvents: Encode,
+	T::SafetyMargin: Encode,
+))]
 pub struct BlockProcessor<T: BWProcessorTypes> {
 	/// A mapping from block numbers to their corresponding block data and the next age to be
 	/// processed. The "age" represents the block height difference between head of the chain and
 	/// block that we are processing, and it's used to know what rules have already been processed
 	/// for such block
-	pub blocks_data: BTreeMap<T::ChainBlockNumber, (T::BlockData, T::ChainBlockNumber)>,
+	pub blocks_data: BTreeMap<T::ChainBlockNumber, (T::BlockData, u32)>,
 	pub reorg_events: BTreeMap<T::ChainBlockNumber, Vec<T::Event>>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
@@ -123,9 +147,9 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 					let block_data = self.blocks_data.remove(&n);
 					if let Some((data, next_age)) = block_data {
 						// We need to get only events already processed (next_age not included)
-						for age in 0..next_age.into() {
+						for age in 0..next_age as u32 {
 							let events = self
-								.process_rules_for_age_and_block(n, age.into(), &data)
+								.process_rules_for_age_and_block(n, age, &data)
 								.into_iter()
 								.map(|(_, event)| event)
 								.collect::<Vec<_>>();
@@ -170,16 +194,18 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		last_height: T::ChainBlockNumber,
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
 		let mut last_events: Vec<(T::ChainBlockNumber, T::Event)> = vec![];
-		for (block, (data, next_age)) in self.blocks_data.clone() {
-			for age in next_age.into()..=last_height.into().saturating_sub(block.into()) {
+		for (block_height, (data, next_age)) in self.blocks_data.clone() {
+			let current_age = T::ChainBlockNumber::steps_between(&block_height, &last_height).0;
+			for age in next_age..=current_age as u32
+			{
 				last_events = last_events
 					.into_iter()
-					.chain(self.process_rules_for_age_and_block(block, age.into(), &data))
+					.chain(self.process_rules_for_age_and_block(block_height, age, &data))
 					.collect();
 			}
 			self.blocks_data.insert(
-				block,
-				(data.clone(), (last_height.into().saturating_sub(block.into()) + 1).into()),
+				block_height,
+				(data.clone(), current_age as u32 + 1),
 			);
 		}
 		last_events
@@ -207,7 +233,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	fn process_rules_for_age_and_block(
 		&mut self,
 		block: T::ChainBlockNumber,
-		age: T::ChainBlockNumber,
+		age: u32,
 		data: &T::BlockData,
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
 		let events: Vec<(T::ChainBlockNumber, T::Event)> =
@@ -225,7 +251,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	}
 	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
 		self.blocks_data
-			.retain(|_key, (_, next_age)| *next_age <= self.safety_margin.run(()));
+			.retain(|_key, (_, next_age)| *next_age as u32 <= self.safety_margin.run(()));
 		// Todo! Do we want to keep these events around for longer? is there any benefit?
 		// If we keep these for let's say 100 blocks we can then prevent double processing things
 		// that are reorged up to 100 blocks later, what are the chanches of smth like this
@@ -233,7 +259,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		// remove the blocks from block_data as soon as safety margin is reached (we would have to
 		// increase the size of blocks_data as well)
 		self.reorg_events
-			.retain(|key, _| *key > last_height - self.safety_margin.run(()));
+			.retain(|key, _| key.saturating_forward(self.safety_margin.run(()) as usize) > last_height);
 	}
 }
 
@@ -254,7 +280,7 @@ pub(crate) mod test {
 	use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 	use std::collections::BTreeMap;
 
-	const SAFETY_MARGIN: u64 = 3;
+	const SAFETY_MARGIN: usize = 3;
 	type BlockNumber = u64;
 	#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct MockBlockProcessorDefinition {}
@@ -290,12 +316,12 @@ pub(crate) mod test {
 		Default,
 	)]
 	pub struct MockApplyRulesHook {}
-	impl Hook<(BlockNumber, BlockNumber, MockBlockData), Vec<(BlockNumber, MockBtcEvent)>>
+	impl Hook<(BlockNumber, u32, MockBlockData), Vec<(BlockNumber, MockBtcEvent)>>
 		for MockApplyRulesHook
 	{
 		fn run(
 			&mut self,
-			(block, age, block_data): (BlockNumber, BlockNumber, MockBlockData),
+			(block, age, block_data): (BlockNumber, u32, MockBlockData),
 		) -> Vec<(BlockNumber, MockBtcEvent)> {
 			// Prewitness rule
 			if age == 0 {
@@ -305,7 +331,7 @@ pub(crate) mod test {
 					.collect::<Vec<(BlockNumber, MockBtcEvent)>>();
 			}
 			//Full witness rule
-			if age == SAFETY_MARGIN {
+			if age == SAFETY_MARGIN as u32 {
 				return block_data
 					.iter()
 					.map(|deposit_witness| (block, MockBtcEvent::Witness(*deposit_witness)))
@@ -385,8 +411,8 @@ pub(crate) mod test {
 		Default,
 	)]
 	pub struct MockSafetyMargin {}
-	impl Hook<(), BlockNumber> for MockSafetyMargin {
-		fn run(&mut self, _input: ()) -> BlockNumber {
+	impl Hook<(), u32> for MockSafetyMargin {
+		fn run(&mut self, _input: ()) -> u32 {
 			3
 		}
 	}

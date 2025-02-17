@@ -13,7 +13,7 @@ pub mod hook_test_utils {
 	use codec::MaxEncodedLen;
 
 	#[derive(
-		Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen,
+		Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize
 	)]
 	pub struct ConstantHook<A, B> {
 		pub state: B,

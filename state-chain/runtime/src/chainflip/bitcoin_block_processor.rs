@@ -1,4 +1,4 @@
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec, iter::Step};
 
 use crate::{chainflip::bitcoin_elections::BlockData, BitcoinIngressEgress, Runtime};
 use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
@@ -72,10 +72,10 @@ impl Hook<(BlockNumber, BtcEvent), ()> for ExecuteEventHook {
 	Default,
 )]
 pub struct ApplyRulesHook {}
-impl Hook<(BlockNumber, BlockNumber, BlockData), Vec<(BlockNumber, BtcEvent)>> for ApplyRulesHook {
+impl Hook<(BlockNumber, u32, BlockData), Vec<(BlockNumber, BtcEvent)>> for ApplyRulesHook {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, BlockNumber, BlockData),
+		(block, age, block_data): (BlockNumber, u32, BlockData),
 	) -> Vec<(BlockNumber, BtcEvent)> {
 		// Prewitness rule
 		if age == 0 {
@@ -85,7 +85,7 @@ impl Hook<(BlockNumber, BlockNumber, BlockData), Vec<(BlockNumber, BtcEvent)>> f
 				.collect::<Vec<(BlockNumber, BtcEvent)>>();
 		}
 		//Full witness rule
-		if age == BitcoinIngressEgress::witness_safety_margin().unwrap() {
+		if age == u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32 {
 			return block_data
 				.iter()
 				.map(|deposit_witness| (block, BtcEvent::Witness(deposit_witness.clone())))
@@ -164,9 +164,9 @@ impl Hook<Vec<(BlockNumber, BtcEvent)>, Vec<(BlockNumber, BtcEvent)>> for DedupE
 )]
 pub struct SafetyMarginHook {}
 
-impl Hook<(), BlockNumber> for SafetyMarginHook {
-	fn run(&mut self, _input: ()) -> BlockNumber {
-		BitcoinIngressEgress::witness_safety_margin().unwrap()
+impl Hook<(), u32> for SafetyMarginHook {
+	fn run(&mut self, _input: ()) -> u32 {
+		u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32
 	}
 }
 #[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -217,10 +217,10 @@ mod tests {
 	#[allow(dead_code)]
 	fn blocks_data(
 		number_of_blocks: u64,
-	) -> BoxedStrategy<BTreeMap<BlockNumber, (MockBlockData, BlockNumber)>> {
+	) -> BoxedStrategy<BTreeMap<BlockNumber, (MockBlockData, u32)>> {
 		prop::collection::btree_map(
 			0..number_of_blocks,
-			(vec![block_data()], (0..=0u64)),
+			(vec![block_data()], (0..=0u32)),
 			RangeInclusive::new(0, number_of_blocks as usize),
 		)
 		.boxed()
@@ -305,12 +305,12 @@ mod tests {
 		}
 	}
 
-	impl Hook<(BlockNumber, BlockNumber, MockBlockData), Vec<(BlockNumber, MockBtcEvent)>>
+	impl Hook<(BlockNumber, u32, MockBlockData), Vec<(BlockNumber, MockBtcEvent)>>
 		for ApplyRulesHook
 	{
 		fn run(
 			&mut self,
-			(block, age, block_data): (BlockNumber, BlockNumber, MockBlockData),
+			(block, age, block_data): (BlockNumber, u32, MockBlockData),
 		) -> Vec<(BlockNumber, MockBtcEvent)> {
 			// Prewitness rule
 			if age == 0 {

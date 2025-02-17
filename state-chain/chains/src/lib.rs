@@ -72,6 +72,19 @@ pub mod instances;
 
 pub mod mocks;
 
+
+
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive( Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
+pub struct Steps(u32);
+
+impl Steps {
+	pub fn one() -> Self {
+		Steps(1)
+	}
+}
+
+
 pub mod witness_period {
 	use crate::ChainWitnessConfig;
 	use codec::{Decode, Encode};
