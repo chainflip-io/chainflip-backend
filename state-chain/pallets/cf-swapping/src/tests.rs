@@ -1961,6 +1961,10 @@ mod affiliates {
 				let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
 					.expect("Affiliate must be registered!");
 
+				assert!(
+					frame_system::Account::<Test>::contains_key(affiliate_account_id),
+					"Account not created"
+				);
 				System::assert_has_event(RuntimeEvent::Swapping(
 					Event::<Test>::AffiliateRegistration {
 						broker_id: BROKER,
@@ -1998,6 +2002,7 @@ mod affiliates {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::System(frame_system::Event::NewAccount { .. }),
 				RuntimeEvent::Swapping(Event::AffiliateRegistration { .. }),
 				RuntimeEvent::Swapping(Event::WithdrawalRequested { .. }),
 			);
@@ -2079,6 +2084,10 @@ mod affiliates {
 			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
 				.expect("Affiliate must be registered!");
 
+			assert!(
+				frame_system::Account::<Test>::contains_key(affiliate_account_id),
+				"Account not created"
+			);
 			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
 
 			assert_noop!(
@@ -2092,6 +2101,10 @@ mod affiliates {
 
 			assert!(AffiliateAccountDetails::<Test>::get(BROKER, affiliate_account_id).is_none());
 			assert!(AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID).is_none());
+			assert!(
+				!frame_system::Account::<Test>::contains_key(affiliate_account_id),
+				"Account not deleted"
+			);
 		});
 	}
 }
