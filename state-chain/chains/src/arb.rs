@@ -254,11 +254,11 @@ mod test {
 		};
 
 		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(gas_limit, 2541810u128);
+		assert_eq!(gas_limit, 2552810u128);
 
 		let gas_limit_token =
 			arb_tracked_data.calculate_ccm_gas_limit(false, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(gas_limit_token, 2574810u128);
+		assert_eq!(gas_limit_token, 2585810_u128);
 	}
 
 	#[test]

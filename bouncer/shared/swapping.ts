@@ -143,11 +143,16 @@ export async function newCcmMetadata(
   let userLogicGasBudget;
   if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
     // Do the gas estimation of the call to the CF Tester contract and add a small buffer.
-    // This is what integrators are expected to do and it'll give a good estimate of the gas
-    // needed for the user logic. Extra buffer for Arbitrum due to the gas estimation uncertainties.
-    userLogicGasBudget = Math.trunc(
-      (await estimateCcmCfTesterGas(message)) * (destChain === 'Arbitrum' ? 1.75 : 1.2),
-    );
+    // A 5-10% works for almost all swaps. However, there is some flakiness in Arbitrum for
+    // swaps that require small amounts of gas. That is because Arbitrum's fees in localnet
+    // are extremely high (two orders of magniture larger than in mainnnet) so small gas
+    // fluctuations cause flakiness for those CCM swaps with low gas.
+    // Therefore we apply a minimum gas budget to ensure the swap succeeds.
+    userLogicGasBudget = Math.trunc((await estimateCcmCfTesterGas(message)) * 1.1);
+    if (destChain === 'Arbitrum') {
+      const minGasBudget = 30000;
+      userLogicGasBudget = userLogicGasBudget < minGasBudget ? minGasBudget : userLogicGasBudget;
+    }
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
