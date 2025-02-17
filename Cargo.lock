@@ -2012,6 +2012,7 @@ name = "cf-node-clients"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "frame-metadata 16.0.0",
  "frame-metadata-hash-extension 0.5.0",
  "frame-support 37.0.0",

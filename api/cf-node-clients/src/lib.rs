@@ -35,6 +35,10 @@ pub mod subxt_state_chain_config;
 		with = "::subxt::utils::Static<cf_chains::address::EncodedAddress>"
 	),
 	substitute_type(
+		path = "cf_primitives::chains::ForeignChain",
+		with = "::subxt::utils::Static<cf_primitives::chains::ForeignChain>"
+	),
+	substitute_type(
 		path = "cf_chains::ChannelRefundParametersGeneric<A>",
 		with = "::subxt::utils::Static<cf_chains::ChannelRefundParametersGeneric<A>>"
 	)

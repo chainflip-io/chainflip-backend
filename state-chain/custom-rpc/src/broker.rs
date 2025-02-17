@@ -1,5 +1,4 @@
 use crate::{pool_client::SignedPoolClient, CfApiError, RpcResult};
-use anyhow::anyhow;
 use cf_chains::{
 	address::AddressString, CcmChannelMetadata, ChannelRefundParametersEncoded,
 	ChannelRefundParametersGeneric,
@@ -8,12 +7,9 @@ use cf_node_clients::{cf_static_runtime, extract_dynamic_event};
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters,
 };
-use cf_rpc_types::{
-	broker::{
-		find_lowest_unused_short_id, GetOpenDepositChannelsQuery, RefundParameters,
-		SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
-	},
-	extract_event,
+use cf_rpc_types::broker::{
+	find_lowest_unused_short_id, GetOpenDepositChannelsQuery, RefundParameters, SwapDepositAddress,
+	TransactionInId, WithdrawFeesDetail,
 };
 use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
 use jsonrpsee::{core::async_trait, proc_macros::rpc};
@@ -233,9 +229,9 @@ where
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
-		let (tx_hash, events, _, _) = self
+		let (tx_hash, dynamic_events, _, _) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
 					asset,
 					destination_address: destination_address
@@ -247,23 +243,21 @@ where
 			)
 			.await?;
 
-		Ok(extract_event!(
-			events,
-			state_chain_runtime::RuntimeEvent::Swapping,
-			pallet_cf_swapping::Event::WithdrawalRequested,
+		Ok(extract_dynamic_event!(
+			dynamic_events,
+			cf_static_runtime::swapping::events::WithdrawalRequested,
 			{
 				egress_amount,
 				egress_fee,
 				destination_address,
-				egress_id,
-				..
+				egress_id
 			},
 			WithdrawFeesDetail {
 				tx_hash,
-				egress_id: *egress_id,
-				egress_amount: (*egress_amount).into(),
-				egress_fee: (*egress_fee).into(),
-				destination_address: AddressString::from_encoded_address(destination_address),
+				egress_id: (egress_id.0.0, egress_id.1),
+				egress_amount: egress_amount.into(),
+				egress_fee: egress_fee.into(),
+				destination_address: AddressString::from_encoded_address(destination_address.0),
 			}
 		)?)
 	}
