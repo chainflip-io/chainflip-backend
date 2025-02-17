@@ -4,6 +4,13 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ## [1.8.2] - 2025-02-12
 
+### Features
+
+- Return affiliate account details with broker info ([#5641](https://github.com/chainflip-io/chainflip-backend/pull/5641))
+- feat: add account id / withdrawal address to affiliate events ([#5643](https://github.com/chainflip-io/chainflip-backend/pull/5643))
+
+### Fixes
+
 - Prevent blocking of fetches due to small edge case ([#5631](https://github.com/chainflip-io/chainflip-backend/pull/5631))
 
 ## [1.8.1] - 2025-02-11
