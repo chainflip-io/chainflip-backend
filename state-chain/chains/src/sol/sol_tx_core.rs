@@ -253,10 +253,7 @@ pub mod sol_test_values {
 			swap_endpoint_program: SWAP_ENDPOINT_PROGRAM,
 			swap_endpoint_program_data_account: SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
 			alt_manager_program: ALT_MANAGER_PROGRAM,
-			address_lookup_table_account: SolAddressLookupTableAccount {
-				key: ADDRESS_LOOKUP_TABLE_ACCOUNT.into(),
-				addresses: vec![],
-			},
+			address_lookup_table_account: user_alt(),
 		}
 	}
 
@@ -340,10 +337,7 @@ pub mod sol_test_values {
 	}
 
 	pub fn user_alt() -> SolAddressLookupTableAccount {
-		SolAddressLookupTableAccount {
-			key: const_address("3VBLeVu7rZciyk19M9V7VbHBM2uFm9YbnKKPB33mGRW8").into(),
-			addresses: vec![TRANSFER_TO_ACCOUNT.into()],
-		}
+		SolAddressLookupTableAccount { key: ADDRESS_LOOKUP_TABLE_ACCOUNT.into(), addresses: vec![] }
 	}
 
 	#[track_caller]

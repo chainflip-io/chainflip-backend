@@ -107,7 +107,7 @@ pub trait SolanaEnvironment:
 			.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
 	}
 
-	/// Get any relevant Address lookup tables from the Environment. Those are user-defined.
+	/// Get any user-defined Address lookup tables from the Environment.
 	fn get_address_lookup_tables(id: SwapRequestId) -> Vec<SolAddressLookupTableAccount> {
 		Self::lookup(SolanaAddressLookupTables(id)).unwrap_or_default()
 	}
@@ -236,7 +236,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let sol_api_environment = Environment::api_environment()?;
 		let compute_price = Environment::compute_price()?;
 		let durable_nonce = Environment::nonce_account()?;
-		let address_lookup_tables = Environment::get_address_lookup_tables(None);
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::fetch_from(
@@ -245,7 +244,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			agg_key,
 			durable_nonce,
 			compute_price,
-			address_lookup_tables,
 		)?;
 
 		Ok(Self {
@@ -263,7 +261,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
 		let compute_price = Environment::compute_price()?;
-		let address_lookup_tables = Environment::get_address_lookup_tables(None);
 
 		transfer_params
 			.into_iter()
@@ -296,7 +293,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							durable_nonce,
 							compute_price,
 							SOL_USDC_DECIMAL,
-							address_lookup_tables.clone(),
+							vec![sol_api_environment.address_lookup_table_account.clone()],
 						)
 					},
 				}?;
@@ -399,11 +396,11 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		let sol_api_environment = Environment::api_environment()?;
 		let agg_key = Environment::current_agg_key()?;
-		// TODO roy: Coordinate with Ramiz on the interface for getting ALTS
-		let user_address_lookup_tables = Environment::get_address_lookup_tables(swap_request_id);
 
+		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
+		// TODO roy: Coordinate with Ramiz on the interface for getting ALTS
 		let mut address_lookup_tables = vec![sol_api_environment.address_lookup_table_account];
-		address_lookup_tables.extend(user_address_lookup_tables);
+		address_lookup_tables.extend(Environment::get_address_lookup_tables(swap_request_id));
 
 		// Ensure the CCM parameters do not contain blacklisted accounts.
 		check_ccm_for_blacklisted_accounts(
@@ -722,7 +719,6 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 		let sol_api_environment = Environment::api_environment().map_err(|_e| ())?;
 		let compute_price = Environment::compute_price().map_err(|_e| ())?;
 		let durable_nonce = Environment::nonce_account().map_err(|_e| ())?;
-		let address_lookup_tables = Environment::get_address_lookup_tables(None);
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::set_gov_key_with_agg_key(
@@ -732,7 +728,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 			agg_key,
 			durable_nonce,
 			compute_price,
-			address_lookup_tables,
+			vec![sol_api_environment.address_lookup_table_account],
 		)
 		.map_err(|e| {
 			// SetGovKeyWithAggKey call building NOT transactional - meaning when this fails,
