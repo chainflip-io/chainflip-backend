@@ -248,6 +248,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let sol_api_environment = Environment::api_environment()?;
 		let compute_price = Environment::compute_price()?;
 		let durable_nonce = Environment::nonce_account()?;
+		let address_lookup_tables = Environment::get_address_lookup_tables(None);
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::fetch_from(
@@ -256,6 +257,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			agg_key,
 			durable_nonce,
 			compute_price,
+			address_lookup_tables,
 		)?;
 
 		Ok(Self {
@@ -273,6 +275,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
 		let compute_price = Environment::compute_price()?;
+		let address_lookup_tables = Environment::get_address_lookup_tables(None);
 
 		transfer_params
 			.into_iter()
@@ -305,6 +308,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							durable_nonce,
 							compute_price,
 							SOL_USDC_DECIMAL,
+							address_lookup_tables.clone(),
 						)
 					},
 				}?;
@@ -730,6 +734,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 		let sol_api_environment = Environment::api_environment().map_err(|_e| ())?;
 		let compute_price = Environment::compute_price().map_err(|_e| ())?;
 		let durable_nonce = Environment::nonce_account().map_err(|_e| ())?;
+		let address_lookup_tables = Environment::get_address_lookup_tables(None);
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::set_gov_key_with_agg_key(
@@ -739,6 +744,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 			agg_key,
 			durable_nonce,
 			compute_price,
+			address_lookup_tables,
 		)
 		.map_err(|e| {
 			// SetGovKeyWithAggKey call building NOT transactional - meaning when this fails,
