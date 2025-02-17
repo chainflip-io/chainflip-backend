@@ -45,7 +45,7 @@ use sc_rpc_spec_v2::chain_head::{
 	api::ChainHeadApiServer, ChainHead, ChainHeadConfig, FollowEvent,
 };
 use serde::{Deserialize, Serialize};
-use sp_api::{ApiError, CallApiAt};
+use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
@@ -243,7 +243,7 @@ pub enum RpcAccountInfo {
 		bond: NumberOrHex,
 		#[deprecated(note = "This field is deprecated and will be replaced in a future release")]
 		earned_fees: any::AssetMap<NumberOrHex>,
-		affiliates: Vec<(AffiliateShortId, AccountId)>,
+		affiliates: Vec<(AffiliateShortId, AccountId, Option<EthereumAddress>)>,
 		btc_vault_deposit_address: Option<String>,
 	},
 	LiquidityProvider {
@@ -278,7 +278,11 @@ impl RpcAccountInfo {
 		}
 	}
 
-	fn broker(broker_info: BrokerInfo, balance: u128) -> Self {
+	fn broker(
+		broker_info: BrokerInfo,
+		balance: u128,
+		affiliate_details: BTreeMap<AccountId, AffiliateDetails>,
+	) -> Self {
 		Self::Broker {
 			flip_balance: balance.into(),
 			bond: broker_info.bond.into(),
@@ -289,7 +293,16 @@ impl RpcAccountInfo {
 					.iter()
 					.map(|(asset, balance)| (*asset, (*balance).into())),
 			),
-			affiliates: broker_info.affiliates,
+			affiliates: broker_info
+				.affiliates
+				.into_iter()
+				.map(|(short_id, account_id)| {
+					let withdrawal_address = affiliate_details.get(&account_id).map(
+						|AffiliateDetails { withdrawal_address, .. }| withdrawal_address.clone(),
+					);
+					(short_id, account_id, withdrawal_address)
+				})
+				.collect(),
 		}
 	}
 
@@ -1389,9 +1402,23 @@ where
 					AccountRole::Unregistered =>
 						RpcAccountInfo::unregistered(balance, asset_balances),
 					AccountRole::Broker => {
-						let info = api.cf_broker_info(hash, account_id)?;
+						let info = api.cf_broker_info(hash, account_id.clone())?;
 
-						RpcAccountInfo::broker(info, balance)
+						let api_version = api
+							.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)?
+							.unwrap_or_default();
+
+						RpcAccountInfo::broker(
+							info,
+							balance,
+							if api_version >= 3 {
+								api.cf_affiliate_details(hash, account_id, None)?
+									.into_iter()
+									.collect()
+							} else {
+								Default::default()
+							},
+						)
 					},
 					AccountRole::LiquidityProvider => {
 						let info = api.cf_liquidity_provider_info(hash, account_id)?;
