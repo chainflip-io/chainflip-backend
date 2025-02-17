@@ -14,9 +14,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountId, AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
-	BlockNumber, BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
-	SwapId, SwapRequestId,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -45,11 +44,11 @@ use sc_rpc_spec_v2::chain_head::{
 	api::ChainHeadApiServer, ChainHead, ChainHeadConfig, FollowEvent,
 };
 use serde::{Deserialize, Serialize};
-use sp_api::{ApiError, CallApiAt};
+use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
-	Percent, Permill,
+	AccountId32, Percent, Permill,
 };
 use sp_state_machine::InspectState;
 use state_chain_runtime::{
@@ -230,18 +229,35 @@ impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo
 	}
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RpcAffiliate {
+	pub account_id: AccountId32,
+	#[serde(flatten)]
+	pub details: AffiliateDetails,
+}
+
+impl From<(AccountId32, AffiliateDetails)> for RpcAffiliate {
+	fn from((account_id, details): (AccountId32, AffiliateDetails)) -> Self {
+		Self { account_id, details }
+	}
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
 	Unregistered {
 		flip_balance: NumberOrHex,
+		asset_balances: any::AssetMap<NumberOrHex>,
 	},
 	Broker {
 		flip_balance: NumberOrHex,
 		bond: NumberOrHex,
+		#[deprecated(note = "This field is deprecated and will be replaced in a future release")]
 		earned_fees: any::AssetMap<NumberOrHex>,
-		affiliates: Vec<(AffiliateShortId, AccountId)>,
+		#[serde(skip_serializing_if = "Vec::is_empty")]
+		affiliates: Vec<RpcAffiliate>,
+		#[serde(skip_serializing_if = "Option::is_none")]
 		btc_vault_deposit_address: Option<String>,
 	},
 	LiquidityProvider {
@@ -269,8 +285,11 @@ pub enum RpcAccountInfo {
 }
 
 impl RpcAccountInfo {
-	fn unregistered(balance: u128) -> Self {
-		Self::Unregistered { flip_balance: balance.into() }
+	fn unregistered(balance: u128, asset_balances: any::AssetMap<u128>) -> Self {
+		Self::Unregistered {
+			flip_balance: balance.into(),
+			asset_balances: asset_balances.map(Into::into),
+		}
 	}
 
 	fn broker(broker_info: BrokerInfo, balance: u128) -> Self {
@@ -284,7 +303,7 @@ impl RpcAccountInfo {
 					.iter()
 					.map(|(asset, balance)| (*asset, (*balance).into())),
 			),
-			affiliates: broker_info.affiliates,
+			affiliates: broker_info.affiliates.into_iter().map(Into::into).collect(),
 		}
 	}
 
@@ -1374,15 +1393,25 @@ where
 	) -> RpcResult<RpcAccountInfo> {
 		self.with_runtime_api(at, |api, hash| {
 			let balance = api.cf_account_flip_balance(hash, &account_id)?;
+			let asset_balances = api.cf_free_balances(hash, account_id.clone())?;
 
 			Ok::<_, CfApiError>(
 				match api
 					.cf_account_role(hash, account_id.clone())?
 					.unwrap_or(AccountRole::Unregistered)
 				{
-					AccountRole::Unregistered => RpcAccountInfo::unregistered(balance),
+					AccountRole::Unregistered =>
+						RpcAccountInfo::unregistered(balance, asset_balances),
 					AccountRole::Broker => {
-						let info = api.cf_broker_info(hash, account_id)?;
+						let api_version = api
+							.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)?
+							.unwrap_or_default();
+
+						let info = if api_version < 3 {
+							api.cf_broker_info_before_version_3(hash, account_id.clone())?.into()
+						} else {
+							api.cf_broker_info(hash, account_id.clone())?
+						};
 
 						RpcAccountInfo::broker(info, balance)
 					},
@@ -2158,7 +2187,11 @@ mod test {
 
 	#[test]
 	fn test_no_account_serialization() {
-		insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::unregistered(0)).unwrap());
+		insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::unregistered(
+			0,
+			any::AssetMap::default()
+		))
+		.unwrap());
 	}
 
 	#[test]
@@ -2181,12 +2214,18 @@ mod test {
 				btc_vault_deposit_address: Some(
 					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 				),
-				affiliates: vec![(cf_primitives::AffiliateShortId(1), AccountId32::new([1; 32]))],
 				bond: 0,
+				affiliates: vec![(
+					AccountId32::new([1; 32]),
+					AffiliateDetails {
+						short_id: 1.into(),
+						withdrawal_address: H160::from([0xcf; 20]),
+					},
+				)],
 			},
 			0,
 		);
-		insta::assert_snapshot!(serde_json::to_value(broker).unwrap());
+		insta::assert_json_snapshot!(broker);
 	}
 
 	#[test]
