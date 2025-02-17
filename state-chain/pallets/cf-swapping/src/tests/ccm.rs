@@ -1,5 +1,6 @@
 use super::*;
 use cf_primitives::GasAmount;
+use cf_traits::SwapOutputActionEncoded;
 use sp_core::H256;
 
 #[track_caller]
@@ -17,8 +18,10 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 		input_amount,
 		output_asset,
 		SwapRequestType::Regular {
-			ccm_deposit_metadata: Some(ccm_deposit_metadata.clone()),
-			output_address,
+			output_action: SwapOutputAction::Egress {
+				ccm_deposit_metadata: Some(ccm_deposit_metadata.clone()),
+				output_address,
+			},
 		},
 		Default::default(),
 		None,
@@ -32,10 +35,12 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 		output_asset,
 		input_amount,
 		request_type: SwapRequestTypeEncoded::Regular {
-			ccm_deposit_metadata: Some(
-				ccm_deposit_metadata.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
-			),
-			output_address: encoded_output_address,
+			output_action: SwapOutputActionEncoded::Egress {
+				ccm_deposit_metadata: Some(
+					ccm_deposit_metadata.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
+				),
+				output_address: encoded_output_address,
+			},
 		},
 		dca_parameters: None,
 		refund_parameters: None,
@@ -103,8 +108,10 @@ fn can_process_ccms_via_swap_deposit_address() {
 				DEPOSIT_AMOUNT,
 				Asset::Eth,
 				SwapRequestType::Regular {
-					ccm_deposit_metadata: Some(ccm_deposit_metadata.clone()),
-					output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+					output_action: SwapOutputAction::Egress {
+						ccm_deposit_metadata: Some(ccm_deposit_metadata.clone()),
+						output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+					},
 				},
 				Default::default(),
 				None,

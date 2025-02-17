@@ -34,8 +34,10 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					INPUT_AMOUNT,
 					to,
 					SwapRequestType::Regular {
-						output_address: ForeignChainAddress::Eth(H160::zero()),
-						ccm_deposit_metadata: None,
+						output_action: SwapOutputAction::Egress {
+							ccm_deposit_metadata: None,
+							output_address: ForeignChainAddress::Eth(H160::zero()),
+						},
 					},
 					Default::default(),
 					None,
@@ -365,8 +367,10 @@ fn input_amount_excludes_network_fee() {
 				AMOUNT,
 				TO_ASSET,
 				SwapRequestType::Regular {
-					output_address: output_address.clone(),
-					ccm_deposit_metadata: None,
+					output_action: SwapOutputAction::Egress {
+						ccm_deposit_metadata: None,
+						output_address: output_address.clone(),
+					},
 				},
 				bounded_vec![],
 				None,
@@ -571,8 +575,10 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 				INPUT_AMOUNT,
 				TO,
 				SwapRequestType::Regular {
-					output_address: ForeignChainAddress::Eth(H160::zero()),
-					ccm_deposit_metadata: None,
+					output_action: SwapOutputAction::Egress {
+						ccm_deposit_metadata: None,
+						output_address: ForeignChainAddress::Eth(H160::zero()),
+					},
 				},
 				Default::default(),
 				None,

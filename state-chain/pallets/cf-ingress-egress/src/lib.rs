@@ -31,8 +31,8 @@ use cf_chains::{
 	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
 	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
-	TransferAssetParams,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall,
+	SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -47,7 +47,7 @@ use cf_traits::{
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
 	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapLimitsProvider,
-	SwapRequestHandler, SwapRequestType,
+	SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -1903,11 +1903,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount_after_fees.into(),
 					destination_asset,
 					SwapRequestType::Regular {
-						ccm_deposit_metadata: deposit_metadata,
-						output_address: destination_address,
+						output_action: SwapOutputAction::Egress {
+							ccm_deposit_metadata: deposit_metadata,
+							output_address: destination_address,
+						},
 					},
 					broker_fees,
-					refund_params,
+					refund_params.map(|params| RefundParametersExtended {
+						retry_duration: params.retry_duration,
+						refund_destination: cf_chains::AccountOrAddress::ExternalAddress(
+							params.refund_address,
+						),
+						min_price: params.min_price,
+					}),
 					dca_params,
 					origin.into(),
 				);

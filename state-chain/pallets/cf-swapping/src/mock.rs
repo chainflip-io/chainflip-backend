@@ -189,11 +189,15 @@ impl pallet_cf_swapping::Config for Test {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 789u64;
 pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
+pub const LP_ACCOUNT: u64 = 119;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&BROKER).unwrap();
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&LP_ACCOUNT,
+		).unwrap();
 	},
 }

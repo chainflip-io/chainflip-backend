@@ -686,6 +686,7 @@ pub enum SwapOrigin<AccountId> {
 		broker_id: Option<AccountId>,
 	},
 	Internal,
+	OnChainAccount(AccountId),
 }
 
 impl<AccountId> SwapOrigin<AccountId> {
@@ -694,6 +695,7 @@ impl<AccountId> SwapOrigin<AccountId> {
 			Self::DepositChannel { ref broker_id, .. } => Some(broker_id),
 			Self::Vault { ref broker_id, .. } => broker_id.as_ref(),
 			Self::Internal => None,
+			Self::OnChainAccount(_) => None,
 		}
 	}
 }
@@ -921,6 +923,49 @@ pub struct ChannelRefundParameters<A> {
 	pub min_price: Price,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
+pub struct RefundParametersExtendedGeneric<Address, AccountId> {
+	pub retry_duration: cf_primitives::BlockNumber,
+	pub refund_destination: AccountOrAddress<Address, AccountId>,
+	pub min_price: Price,
+}
+
+pub type RefundParametersExtended<AccountId> =
+	RefundParametersExtendedGeneric<ForeignChainAddress, AccountId>;
+pub type RefundParametersExtendedEncoded<AccountId> =
+	RefundParametersExtendedGeneric<EncodedAddress, AccountId>;
+
+impl<AccountId> RefundParametersExtended<AccountId> {
+	pub fn to_encoded<Converter: AddressConverter>(
+		self,
+	) -> RefundParametersExtendedEncoded<AccountId> {
+		RefundParametersExtendedEncoded {
+			retry_duration: self.retry_duration,
+			refund_destination: match self.refund_destination {
+				AccountOrAddress::ExternalAddress(address) =>
+					AccountOrAddress::ExternalAddress(Converter::to_encoded_address(address)),
+				AccountOrAddress::InternalAccount(account_id) =>
+					AccountOrAddress::InternalAccount(account_id),
+			},
+			min_price: self.min_price,
+		}
+	}
+
+	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
+		use sp_runtime::traits::UniqueSaturatedInto;
+		cf_amm_math::output_amount_ceil(input_amount.into(), self.min_price).unique_saturated_into()
+	}
+}
+
+/// AccountOrAddress is a enum that can represent an internal account or an external address.
+/// This is used to represent the destination address for an egress or an internal account
+/// to move funds internally.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+pub enum AccountOrAddress<Address, AccountId> {
+	InternalAccount(AccountId),
+	ExternalAddress(Address),
+}
+
 #[cfg(feature = "runtime-benchmarks")]
 impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
 	fn benchmark_value() -> Self {
@@ -931,6 +976,7 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
 		}
 	}
 }
+
 #[cfg(feature = "std")]
 pub type RefundParametersRpc = ChannelRefundParameters<crate::address::AddressString>;
 pub type ChannelRefundParametersDecoded = ChannelRefundParameters<ForeignChainAddress>;
@@ -953,10 +999,6 @@ impl<A: Clone> ChannelRefundParameters<A> {
 			refund_address: f(self.refund_address.clone())?,
 			min_price: self.min_price,
 		})
-	}
-	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
-		use sp_runtime::traits::UniqueSaturatedInto;
-		cf_amm_math::output_amount_ceil(input_amount.into(), self.min_price).unique_saturated_into()
 	}
 }
 

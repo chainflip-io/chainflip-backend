@@ -382,7 +382,7 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
-	
+
 	fn affiliate_withdrawal_request() -> Weight {
 		Weight::from_parts(100, 0)
 	}
