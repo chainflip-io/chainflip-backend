@@ -274,9 +274,7 @@ impl RpcAccountInfo {
 	fn unregistered(balance: u128, asset_balances: any::AssetMap<u128>) -> Self {
 		Self::Unregistered {
 			flip_balance: balance.into(),
-			asset_balances: cf_chains::assets::any::AssetMap::from_iter_or_default(
-				asset_balances.iter().map(|(asset, balance)| (asset, (*balance).into())),
-			),
+			asset_balances: asset_balances.map(Into::into),
 		}
 	}
 
