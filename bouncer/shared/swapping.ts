@@ -150,7 +150,7 @@ export async function newCcmMetadata(
     // Therefore we apply a minimum gas budget to ensure the swap succeeds.
     userLogicGasBudget = Math.trunc((await estimateCcmCfTesterGas(message)) * 1.1);
     if (destChain === 'Arbitrum') {
-      const minGasBudget = 75000;
+      const minGasBudget = 100000;
       userLogicGasBudget = userLogicGasBudget < minGasBudget ? minGasBudget : userLogicGasBudget;
     }
   } else if (destChain === 'Solana') {
