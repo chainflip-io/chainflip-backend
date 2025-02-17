@@ -746,8 +746,6 @@ pub mod pallet {
 		NoFundsAvailable,
 		/// The target chain does not support CCM.
 		CcmUnsupportedForTargetChain,
-		/// The deposited amount is insufficient to pay for the gas budget.
-		CcmInsufficientDepositAmount,
 		/// The provided address could not be decoded.
 		InvalidDestinationAddress,
 		/// Withdrawals are disabled due to Safe Mode.
@@ -782,8 +780,6 @@ pub mod pallet {
 		BoostFeeTooHigh,
 		/// The broker fee is too large to fit in a u8.
 		BrokerFeeTooHigh,
-		/// Unsupported source asset for vault swap
-		UnsupportedSourceAsset,
 		/// Broker cannot deregister or open a new private channel because one already exists.
 		PrivateChannelExistsForBroker,
 		/// The Broker does not have an open private channel.
@@ -792,8 +788,6 @@ pub mod pallet {
 		AffiliateFeeTooHigh,
 		/// The affiliate id is not registered for the broker.
 		AffiliateNotRegisteredForBroker,
-		/// Bitcoin vault swaps only support up to 2 affiliates.
-		TooManyAffiliates,
 		/// The Bonder does not have enough Funds to cover the bond.
 		InsufficientFunds,
 		/// The affiliate is already registered.
