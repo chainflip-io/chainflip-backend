@@ -44,10 +44,6 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 ///     - `Execute`: A hook to execute generated events.
 ///     - `DedupEvents`: A hook to deduplicate events.
 ///     - `SafetyMargin`: A hook to retrieve the chain specific safety-margin
-// #[derive(
-// 	Debug, CloneNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize,
-// Deserialize, )]
-
 #[derive_where(Debug, Clone, PartialEq, Eq;
 	T::ChainBlockNumber: Debug + Clone + Eq,
 	T::BlockData: Debug + Clone + Eq,
