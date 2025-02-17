@@ -22,8 +22,8 @@ import { Logger } from '../shared/utils/logger';
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
 
-async function testRefundVaultSwap() {
-  testVaultSwapFeeCollection.log('Starting refund vault swap test...');
+async function testRefundVaultSwap(logger: Logger) {
+  logger.info('Starting refund vault swap test...');
 
   const inputAsset = Assets.Btc;
   const destAsset = Assets.Usdc;
@@ -37,7 +37,7 @@ async function testRefundVaultSwap() {
     minPriceX128: '0',
   };
 
-  testVaultSwapFeeCollection.log('Sending vault swap...');
+  logger.info('Sending vault swap...');
 
   await executeVaultSwap(
     inputAsset,
@@ -49,7 +49,7 @@ async function testRefundVaultSwap() {
     foKParams,
   );
 
-  testVaultSwapFeeCollection.log('Waiting for refund...');
+  logger.info('Waiting for refund...');
 
   let btcBalance = false;
 
@@ -64,7 +64,7 @@ async function testRefundVaultSwap() {
 
   assert(btcBalance, `Vault swap refund failed 🙅‍♂️.`);
 
-  testVaultSwapFeeCollection.log('Refund vault swap completed ✅.');
+  logger.info('Refund vault swap completed ✅.');
 }
 
 async function testWithdrawCollectedAffiliateFees(
@@ -178,7 +178,7 @@ async function testFeeCollection(
   return Promise.resolve([broker, affiliateId, refundAddress]);
 }
 
-export async function testVaultSwapFeeCollection(testContext: TestContext) {
+export async function testVaultSwap(testContext: TestContext) {
   await Promise.all([
     testFeeCollection(Assets.Eth, testContext),
     testFeeCollection(Assets.ArbEth, testContext),
@@ -188,5 +188,5 @@ export async function testVaultSwapFeeCollection(testContext: TestContext) {
   // Test the affiliate withdrawal functionality
   const [broker, affiliateId, refundAddress] = await testFeeCollection(Assets.Btc, testContext);
   await testWithdrawCollectedAffiliateFees(broker, affiliateId, refundAddress, testContext.logger);
-  await testRefundVaultSwap();
+  await testRefundVaultSwap(testContext.logger);
 }
