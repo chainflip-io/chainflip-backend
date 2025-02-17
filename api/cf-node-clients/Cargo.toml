@@ -26,6 +26,9 @@ frame-metadata = { workspace = true, default-features = true, features = [
 frame-metadata-hash-extension = { workspace = true }
 subxt = { workspace = true, features = ["runtime-metadata-path"] }
 
+cf-chains = { workspace = true, default-features = true }
+
+
 [dev-dependencies]
 pallet-cf-funding = { workspace = true, default-features = true }
 

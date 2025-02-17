@@ -1,3 +1,7 @@
+use crate::{
+	error_decoder::{DispatchError, ErrorDecoder},
+	events_decoder::{DynamicEventError, DynamicEvents, EventsDecoder},
+};
 use frame_support::dispatch::DispatchInfo;
 use sp_api::runtime_decl_for_core::CoreV5;
 use sp_core::{
@@ -6,18 +10,34 @@ use sp_core::{
 };
 use std::sync::OnceLock;
 
-use crate::{
-	error_decoder::{DispatchError, ErrorDecoder},
-	events_decoder::{DynamicEventError, DynamicEvents, EventsDecoder},
-};
-
 pub mod error_decoder;
 pub mod events_decoder;
 pub mod signer;
 pub mod subxt_state_chain_config;
 
+/// This macro generates a strongly typed API from a WASM file. All types are substituted with
+/// corresponding types that implement some traits, allowing subxt to scale encode/decode these
+/// types. However, this makes it challenging to convert from the new generated types to cf types,
+/// especially for hierarchical types. The trick is use the `substitute_type` directive to instruct
+/// the subxt macro to use certain types in place of the default generated types. Example:
+/// ```ignore
+/// substitute_type(path = "cf_chains::ChannelRefundParametersGeneric<A>", with = "::subxt::utils::Static<cf_chains::ChannelRefundParametersGeneric<A>>")
+/// ```
+/// * This will generate: ::subxt::utils::Static<cf_chains::ChannelRefundParametersGeneric<A>> in
+///   place of the default runtime_types::cf_chains::ChannelRefundParametersGeneric<A>
+/// * The `::subxt::utils::Static` is required to wrap the type and implement the necessary
+///   `EncodeAsType` and `DecodeAsType` traits.
+/// * Any cf type that needs to be substituted must be defined in the `substitute_type` directive.
 #[subxt::subxt(
-	runtime_path = "../../target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm"
+	runtime_path = "../../target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm",
+	substitute_type(
+		path = "cf_chains::address::EncodedAddress",
+		with = "::subxt::utils::Static<cf_chains::address::EncodedAddress>"
+	),
+	substitute_type(
+		path = "cf_chains::ChannelRefundParametersGeneric<A>",
+		with = "::subxt::utils::Static<cf_chains::ChannelRefundParametersGeneric<A>>"
+	)
 )]
 pub mod cf_static_runtime {}
 

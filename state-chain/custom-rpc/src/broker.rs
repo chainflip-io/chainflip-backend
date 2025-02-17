@@ -172,9 +172,9 @@ where
 			.try_parse_to_encoded_address(destination_asset.into())
 			.map_err(anyhow::Error::msg)?;
 
-		let (_, events, header, _) = self
+		let (_, dynamic_events, header, _) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_dynamic(
 				RuntimeCall::from(
 					pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 						source_asset,
@@ -203,27 +203,25 @@ where
 			)
 			.await?;
 
-		Ok(extract_event!(
-			events,
-			state_chain_runtime::RuntimeEvent::Swapping,
-			pallet_cf_swapping::Event::SwapDepositAddressReady,
+		Ok(extract_dynamic_event!(
+			dynamic_events,
+			cf_static_runtime::swapping::events::SwapDepositAddressReady,
 			{
 				deposit_address,
 				channel_id,
 				source_chain_expiry_block,
 				channel_opening_fee,
-				refund_parameters,
-				..
+				refund_parameters
 			},
 			SwapDepositAddress {
-				address: AddressString::from_encoded_address(deposit_address),
+				address: AddressString::from_encoded_address(deposit_address.0),
 				issued_block: header.number,
-				channel_id: *channel_id,
-				source_chain_expiry_block: (*source_chain_expiry_block).into(),
-				channel_opening_fee: (*channel_opening_fee).into(),
+				channel_id,
+				source_chain_expiry_block: source_chain_expiry_block.into(),
+				channel_opening_fee: channel_opening_fee.into(),
 				refund_parameters: refund_parameters.as_ref().map(|params| {
 					params.map_address(|refund_address| {
-						AddressString::from_encoded_address(&refund_address)
+						AddressString::from_encoded_address(&refund_address.0)
 					})
 				}),
 			}
