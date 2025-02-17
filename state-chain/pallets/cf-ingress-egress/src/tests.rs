@@ -2049,30 +2049,9 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 			0
 		));
 
-		// The request is recorded as not having any broker fees:
-		assert_eq!(
-			MockSwapRequestHandler::<Test>::get_swap_requests(),
-			vec![MockSwapRequest {
-				input_asset: INPUT_ASSET,
-				output_asset: OUTPUT_ASSET,
-				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular {
-					output_action: SwapOutputAction::Egress {
-						output_address,
-						ccm_deposit_metadata: None
-					}
-				},
-				broker_fees: Default::default(),
-				origin: SwapOrigin::Vault {
-					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(NOT_A_BROKER),
-				},
-			},]
-		);
-        
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::VaultSwapRefunded {
 			tx_id: H256::default(),
-        }));
+		}));
 
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
