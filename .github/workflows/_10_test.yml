@@ -8,10 +8,7 @@ jobs:
   unit-tests:
     runs-on: namespace-profile-rust-builder
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2025-01-10"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
 
     steps:
       - name: Checkout 🛒
