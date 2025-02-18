@@ -135,6 +135,7 @@ pub fn evm_vault_swap<A>(
 		channel_metadata.as_ref(),
 	);
 
+	let mut token_approval_required = None;
 	let calldata = match source_asset {
 		Asset::Eth | Asset::ArbEth =>
 			if let Some(ccm) = channel_metadata {
@@ -168,6 +169,7 @@ pub fn evm_vault_swap<A>(
 				_ => unreachable!("Unreachable for non-Ethereum/Arbitrum assets"),
 			}
 			.ok_or(DispatchErrorWithMessage::from("Failed to look up EVM token address"))?;
+			token_approval_required.insert(source_token_address);
 
 			if let Some(ccm) = channel_metadata {
 				Ok(cf_chains::evm::api::x_call_token::XCallToken::new(
@@ -202,6 +204,7 @@ pub fn evm_vault_swap<A>(
 			// Only return `amount` for native currently. 0 for Tokens
 			value: (source_asset == Asset::Eth).then_some(U256::from(amount)).unwrap_or_default(),
 			to: Environment::eth_vault_address(),
+			token_approval_required,
 		})),
 		ForeignChain::Arbitrum => Ok(VaultSwapDetails::arbitrum(EvmVaultSwapDetails {
 			calldata,
@@ -210,6 +213,7 @@ pub fn evm_vault_swap<A>(
 				.then_some(U256::from(amount))
 				.unwrap_or_default(),
 			to: Environment::arb_vault_address(),
+			token_approval_required,
 		})),
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",
