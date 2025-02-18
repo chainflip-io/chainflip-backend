@@ -28,7 +28,7 @@ export const testGasLimitCcmSwaps = new ExecutableTest('Gas-Limit-Ccm-Swaps', ma
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
 const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> = {
   Ethereum: { min: 150000, max: 1000000 },
-  Arbitrum: { min: 3000000, max: 5000000 },
+  Arbitrum: { min: 8000000, max: 15000000 },
 };
 
 const LOOP_TIMEOUT = 15;
