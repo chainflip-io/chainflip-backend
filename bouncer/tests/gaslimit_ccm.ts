@@ -230,26 +230,20 @@ async function testGasLimitSwapToEvm(
 
   const gasConsumption = getRandomGasConsumption(chainFromAsset(destAsset));
 
+  const message = web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]);
   const ccmMetadata = await newCcmMetadata(
     destAsset,
-    web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
+    message,
   );
 
-  // Estimating gas separately. We can't rely on the default gas estimation in `newCcmMetadata()`
-  // because the CF tester gas consumption depends on the gas limit, making this a circular calculation.
-  // Instead, we get a base calculation with an empty message that doesn't run the gas consumption.
-  const baseCfTesterGas = await estimateCcmCfTesterGas(destChain, '0x');
-
-  // Adding buffers on both ends to avoid flakiness.
   if (abortTest) {
-    // Chainflip overestimates the overhead for safety so we use a 25% buffer to ensure that
-    // the gas budget is too low.We also apply a 50% on the baseCfTesterGas since it's highly unreliable.
-    ccmMetadata.gasBudget = Math.round(gasConsumption * 0.75 + baseCfTesterGas * 0.5).toString();
-  } else {
-    // A small buffer should work (10%) as CF should be overestimate, not underestimate
-    ccmMetadata.gasBudget = (baseCfTesterGas + Math.round(gasConsumption * 1.1)).toString();
+    // Not using the default estimation in newCcmMetadata for the abort broadcast
+    // scenario as it has a default buffer. Instead underestimate the gas budget.
+    // Extra buffer for Arbitrum because the localnet l1BaseFee is huge (100x mainnet
+    // value) and it decreases over time making this test flaky otherwise.
+    const estimatedGasAmount = await estimateCcmCfTesterGas(destChain, message);
+    ccmMetadata.gasBudget = Math.round(estimatedGasAmount * (destChain === 'Arbitrum' ? 0.7 : 0.85)).toString();
   }
-
   const testTag = abortTest ? `InsufficientGas` : '';
 
   const { tag, destAddress, broadcastId, txPayload } = await executeAndTrackCcmSwap(

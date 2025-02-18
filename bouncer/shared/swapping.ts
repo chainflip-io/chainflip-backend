@@ -147,7 +147,7 @@ export async function newCcmMetadata(
     // required for execution is very complicated without using `eth_estimateGas` on the user's side.
     // This is what integrators are expected to do and it''ll give a good estimate of the gas
     // needed for the user logic.
-    userLogicGasBudget = await estimateCcmCfTesterGas(destChain, message);
+    userLogicGasBudget = Math.trunc((await estimateCcmCfTesterGas(destChain, message)) * 1.1);
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
@@ -177,7 +177,7 @@ export async function newVaultSwapCcmMetadata(
   if (sourceChain === 'Solana') {
     messageMaxLength = MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH;
     metadataMaxLength = MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH;
-    if (ccmMessage && ccmMessage.length / 2 > messageMaxLength) {
+    if (ccmMessage && ccmMessage.slice(2).length / 2 > messageMaxLength) {
       throw new Error(
         `Message length for Solana vault swap must be less than ${messageMaxLength} bytes`,
       );
@@ -189,7 +189,7 @@ export async function newVaultSwapCcmMetadata(
     }
   } else if (sourceChain === 'Arbitrum') {
     messageMaxLength = ARB_MAX_CCM_MSG_LENGTH;
-    if (ccmMessage && ccmMessage.length / 2 > messageMaxLength) {
+    if (ccmMessage && ccmMessage.slice(2).length / 2 > messageMaxLength) {
       throw new Error(
         `Message length for Solana vault swap must be less than ${messageMaxLength} bytes`,
       );

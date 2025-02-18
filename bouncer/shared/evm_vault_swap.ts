@@ -97,7 +97,7 @@ export async function executeEvmVaultSwap(
     extraParameters,
     messageMetadata && {
       message: messageMetadata.message as `0x${string}`,
-      gas_budget: messageMetadata.gasBudget,
+      gas_budget: parseInt(messageMetadata.gasBudget, 10).toString(16) as `0x${string}`,
       ccm_additional_data: messageMetadata.ccmAdditionalData,
     },
     boostFeeBps ?? 0,
