@@ -17,6 +17,7 @@ substrate-wasm-builder = { workspace = true, optional = true }
 workspace = true
 
 [dependencies]
+derive-where = { workspace = true }
 hex-literal = { workspace = true }
 hex = { workspace = true }
 log = { workspace = true }

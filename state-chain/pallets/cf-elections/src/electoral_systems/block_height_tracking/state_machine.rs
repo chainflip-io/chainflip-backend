@@ -86,20 +86,9 @@ impl<T: BlockHeightTrackingTypes> Validate for BHWState<T> {
 	}
 }
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	TypeInfo,
-	Deserialize,
-	Serialize,
-	Ord,
-	PartialOrd,
-	Default,
-)]
+#[derive( Debug, Clone, PartialEq, Eq, Encode)]
+#[derive( Decode, TypeInfo, Deserialize, Serialize)]
+#[derive( Ord, PartialOrd, Default,)]
 pub struct BHWStateWrapper<T: BlockHeightTrackingTypes> {
 	pub state: BHWState<T>,
 	pub block_height_update: T::BlockHeightChangeHook,

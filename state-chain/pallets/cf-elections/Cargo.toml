@@ -32,8 +32,8 @@ itertools = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 nanorand = { workspace = true, features = ["wyrand"] }
+derive-where = { workspace = true }
 duplicate = "2.0.0"
-derive-where = "1.2.7"
 
 # Parity deps
 codec = { workspace = true, features = ["derive", "bit-vec"] }

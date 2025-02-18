@@ -13,6 +13,8 @@ mod signer_nomination;
 
 // Election pallet implementations
 mod bitcoin_block_processor;
+#[macro_use]
+pub mod elections;
 pub mod bitcoin_elections;
 pub mod solana_elections;
 pub mod vault_swaps;

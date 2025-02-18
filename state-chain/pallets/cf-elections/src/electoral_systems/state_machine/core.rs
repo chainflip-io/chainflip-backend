@@ -8,6 +8,7 @@ pub trait Hook<A, B> {
 	fn run(&mut self, input: A) -> B;
 }
 
+
 pub mod hook_test_utils {
 	use super::*;
 	use codec::MaxEncodedLen;

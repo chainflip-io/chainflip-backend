@@ -45,8 +45,10 @@ use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
 use sp_std::vec::Vec;
 
+use super::elections::{StatelessHookFor, TypesFor};
+
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
-	(BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinLiveness),
+	(BitcoinBlockHeightTrackingES, BitcoinDepositChannelWitnessingES, BitcoinLiveness),
 	<Runtime as Chainflip>::ValidatorId,
 	RunnerStorageAccess<Runtime, BitcoinInstance>,
 	BitcoinElectionHooks,
@@ -58,85 +60,63 @@ pub struct OpenChannelDetails<ChainBlockNumber> {
 	pub close_block: ChainBlockNumber,
 }
 
+pub struct BitcoinBlockHeightTracking;
+
 // ------------------------ block height tracking ---------------------------
 /// The electoral system for block height tracking
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Default,
-)]
-pub struct BitcoinBlockHeightTrackingTypes {}
+pub type BitcoinBlockHeightTrackingTypes = TypesFor<BitcoinBlockHeightTracking>;
 
-/// Associating the SM related types to the struct
-impl BlockHeightTrackingTypes for BitcoinBlockHeightTrackingTypes {
-	const BLOCK_BUFFER_SIZE: usize = 6;
-	type ChainBlockNumber = btc::BlockNumber;
-	type ChainBlockHash = btc::Hash;
-	type BlockHeightChangeHook = BitcoinBlockHeightChangeHook;
+impls!{
+	for TypesFor<BitcoinBlockHeightTracking>:
+
+	/// Associating the SM related types to the struct
+	BlockHeightTrackingTypes {
+		const BLOCK_BUFFER_SIZE: usize = 6;
+		type ChainBlockNumber = btc::BlockNumber;
+		type ChainBlockHash = btc::Hash;
+		type BlockHeightChangeHook = StatelessHookFor<BitcoinBlockHeightChange>;
+	}
+
+	/// Associating the ES related types to the struct
+	ElectoralSystemTypes {
+		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
+		type ElectoralUnsynchronisedState = BHWStateWrapper<BitcoinBlockHeightTrackingTypes>;
+		type ElectoralUnsynchronisedStateMapKey = ();
+		type ElectoralUnsynchronisedStateMapValue = ();
+		type ElectoralUnsynchronisedSettings = ();
+		type ElectoralSettings = ();
+		type ElectionIdentifierExtra = ();
+		type ElectionProperties = BlockHeightTrackingProperties<btc::BlockNumber>;
+		type ElectionState = ();
+		type VoteStorage = vote_storage::bitmap::Bitmap<InputHeaders<BitcoinBlockHeightTrackingTypes>>;
+		type Consensus = InputHeaders<BitcoinBlockHeightTrackingTypes>;
+		type OnFinalizeContext = Vec<()>;
+		type OnFinalizeReturn = Vec<ChainProgress<btc::BlockNumber>>;
+	}
+
+	/// Associating the state machine and consensus mechanism to the struct
+	StateMachineES {
+		// both context and return have to be vectors, these are the item types
+		type OnFinalizeContextItem = ();
+		type OnFinalizeReturnItem = ChainProgress<btc::BlockNumber>;
+
+		// restating types since we have to prove that they have the correct bounds
+		type Consensus2 = InputHeaders<BitcoinBlockHeightTrackingTypes>;
+		type Vote2 = InputHeaders<BitcoinBlockHeightTrackingTypes>;
+		type VoteStorage2 = vote_storage::bitmap::Bitmap<InputHeaders<BitcoinBlockHeightTrackingTypes>>;
+
+		// the actual state machine and consensus mechanisms of this ES
+		type ConsensusMechanism = BlockHeightTrackingConsensus<BitcoinBlockHeightTrackingTypes>;
+		type StateMachine = BlockHeightTrackingSM<BitcoinBlockHeightTrackingTypes>;
+	}
+
 }
 
-/// Associating the ES related types to the struct
-impl ElectoralSystemTypes for BitcoinBlockHeightTrackingTypes {
-	type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-	type ElectoralUnsynchronisedState = BHWStateWrapper<BitcoinBlockHeightTrackingTypes>;
-	type ElectoralUnsynchronisedStateMapKey = ();
-	type ElectoralUnsynchronisedStateMapValue = ();
-	type ElectoralUnsynchronisedSettings = ();
-	type ElectoralSettings = ();
-	type ElectionIdentifierExtra = ();
-	type ElectionProperties = BlockHeightTrackingProperties<btc::BlockNumber>;
-	type ElectionState = ();
-	type VoteStorage = vote_storage::bitmap::Bitmap<InputHeaders<BitcoinBlockHeightTrackingTypes>>;
-	type Consensus = InputHeaders<BitcoinBlockHeightTrackingTypes>;
-	type OnFinalizeContext = Vec<()>;
-	type OnFinalizeReturn = Vec<ChainProgress<btc::BlockNumber>>;
-}
-
-/// Associating the state machine and consensus mechanism to the struct
-impl StateMachineES for BitcoinBlockHeightTrackingTypes {
-	// both context and return have to be vectors, these are the item types
-	type OnFinalizeContextItem = ();
-	type OnFinalizeReturnItem = ChainProgress<btc::BlockNumber>;
-
-	// restating types since we have to prove that they have the correct bounds
-	type Consensus2 = InputHeaders<BitcoinBlockHeightTrackingTypes>;
-	type Vote2 = InputHeaders<BitcoinBlockHeightTrackingTypes>;
-	type VoteStorage2 = vote_storage::bitmap::Bitmap<InputHeaders<BitcoinBlockHeightTrackingTypes>>;
-
-	// the actual state machine and consensus mechanisms of this ES
-	type ConsensusMechanism = BlockHeightTrackingConsensus<BitcoinBlockHeightTrackingTypes>;
-	type StateMachine = BlockHeightTrackingSM<BitcoinBlockHeightTrackingTypes>;
-}
 
 /// Hooks
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	Default,
-)]
-pub struct BitcoinBlockHeightChangeHook {}
+pub struct BitcoinBlockHeightChange;
 
-impl Hook<btc::BlockNumber, ()> for BitcoinBlockHeightChangeHook {
+impl Hook<btc::BlockNumber, ()> for StatelessHookFor<BitcoinBlockHeightChange> {
 	fn run(&mut self, block_height: btc::BlockNumber) {
 		if let Err(err) = BitcoinChainTracking::inner_update_chain_state(cf_chains::ChainState {
 			block_height,
@@ -148,49 +128,19 @@ impl Hook<btc::BlockNumber, ()> for BitcoinBlockHeightChangeHook {
 }
 
 /// Generating the state machine-based electoral system
-pub type BitcoinBlockHeightTracking = StateMachineESInstance<BitcoinBlockHeightTrackingTypes>;
+pub type BitcoinBlockHeightTrackingES = StateMachineESInstance<BitcoinBlockHeightTrackingTypes>;
 
 // ------------------------ deposit channel witnessing ---------------------------
 /// The electoral system for deposit channel witnessing
 
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	Default,
-)]
-pub struct BitcoinDepositChannelWitnessingDefinition {}
+pub struct BitcoinDepositChannelWitnessing;
 
 type ElectionProperties = Vec<DepositChannelDetails<Runtime, BitcoinInstance>>;
 pub(crate) type BlockData = Vec<DepositWitness<Bitcoin>>;
 
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	Default,
-)]
-pub struct BitcoinSafemodeEnabledHook {}
+pub struct BitcoinSafemodeEnabled {}
 
-impl Hook<(), SafeModeStatus> for BitcoinSafemodeEnabledHook {
+impl Hook<(), SafeModeStatus> for StatelessHookFor<BitcoinSafemodeEnabled> {
 	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
 			PalletSafeMode<BitcoinInstance>,
@@ -204,76 +154,66 @@ impl Hook<(), SafeModeStatus> for BitcoinSafemodeEnabledHook {
 	}
 }
 
-/// Associating BW types to the struct
-impl BWTypes for BitcoinDepositChannelWitnessingDefinition {
-	type ChainBlockNumber = btc::BlockNumber;
-	type BlockData = BlockData;
-	type ElectionProperties = ElectionProperties;
-	type ElectionPropertiesHook = BitcoinDepositChannelWitnessingGenerator;
-	type SafeModeEnabledHook = BitcoinSafemodeEnabledHook;
-	type BWProcessorTypes = BlockWitnessingProcessorDefinition;
+impls!{
+	for TypesFor<BitcoinDepositChannelWitnessing>:
+
+	/// Associating BW types to the struct
+	BWTypes {
+		type ChainBlockNumber = btc::BlockNumber;
+		type BlockData = BlockData;
+		type ElectionProperties = ElectionProperties;
+		type ElectionPropertiesHook = StatelessHookFor<BitcoinDepositChannelWitnessingGenerator>;
+		type SafeModeEnabledHook = StatelessHookFor<BitcoinSafemodeEnabled>;
+		type BWProcessorTypes = BlockWitnessingProcessorDefinition;
+	}
+
+	/// Associating the ES related types to the struct
+	ElectoralSystemTypes {
+		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
+		type ElectoralUnsynchronisedState = BWState<Self>;
+		type ElectoralUnsynchronisedStateMapKey = ();
+		type ElectoralUnsynchronisedStateMapValue = ();
+		type ElectoralUnsynchronisedSettings = BWSettings;
+		type ElectoralSettings = ();
+		type ElectionIdentifierExtra = ();
+		type ElectionProperties = (btc::BlockNumber, ElectionProperties, u8);
+		type ElectionState = ();
+		type VoteStorage = vote_storage::bitmap::Bitmap<
+			ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>,
+		>;
+		type Consensus = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
+		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
+		type OnFinalizeReturn = Vec<()>;
+	}
+
+	/// Associating the state machine and consensus mechanism to the struct
+	StateMachineES {
+		// both context and return have to be vectors, these are the item types
+		type OnFinalizeContextItem = ChainProgress<btc::BlockNumber>;
+		type OnFinalizeReturnItem = ();
+
+		// restating types since we have to prove that they have the correct bounds
+		type Consensus2 = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
+		type Vote2 = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
+		type VoteStorage2 = vote_storage::bitmap::Bitmap<
+			ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>,
+		>;
+
+		// the actual state machine and consensus mechanisms of this ES
+		type StateMachine = BWStateMachine<Self>;
+		type ConsensusMechanism = BWConsensus<BlockData, btc::BlockNumber, ElectionProperties>;
+	}
 }
 
-/// Associating the ES related types to the struct
-impl ElectoralSystemTypes for BitcoinDepositChannelWitnessingDefinition {
-	type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-	type ElectoralUnsynchronisedState = BWState<BitcoinDepositChannelWitnessingDefinition>;
-	type ElectoralUnsynchronisedStateMapKey = ();
-	type ElectoralUnsynchronisedStateMapValue = ();
-	type ElectoralUnsynchronisedSettings = BWSettings;
-	type ElectoralSettings = ();
-	type ElectionIdentifierExtra = ();
-	type ElectionProperties = (btc::BlockNumber, ElectionProperties, u8);
-	type ElectionState = ();
-	type VoteStorage = vote_storage::bitmap::Bitmap<
-		ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>,
-	>;
-	type Consensus = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
-	type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
-	type OnFinalizeReturn = Vec<()>;
-}
-
-/// Associating the state machine and consensus mechanism to the struct
-impl StateMachineES for BitcoinDepositChannelWitnessingDefinition {
-	// both context and return have to be vectors, these are the item types
-	type OnFinalizeContextItem = ChainProgress<btc::BlockNumber>;
-	type OnFinalizeReturnItem = ();
-
-	// restating types since we have to prove that they have the correct bounds
-	type Consensus2 = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
-	type Vote2 = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
-	type VoteStorage2 = vote_storage::bitmap::Bitmap<
-		ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>,
-	>;
-
-	// the actual state machine and consensus mechanisms of this ES
-	type StateMachine = BWStateMachine<BitcoinDepositChannelWitnessingDefinition>;
-	type ConsensusMechanism = BWConsensus<BlockData, btc::BlockNumber, ElectionProperties>;
-}
 
 /// Generating the state machine-based electoral system
-pub type BitcoinDepositChannelWitnessing =
-	StateMachineESInstance<BitcoinDepositChannelWitnessingDefinition>;
+pub type BitcoinDepositChannelWitnessingES =
+	StateMachineESInstance<TypesFor<BitcoinDepositChannelWitnessing>>;
 
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	Default,
-)]
 pub struct BitcoinDepositChannelWitnessingGenerator;
 
 impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>>
-	for BitcoinDepositChannelWitnessingGenerator
+	for StatelessHookFor<BitcoinDepositChannelWitnessingGenerator>
 {
 	fn run(
 		&mut self,
@@ -294,19 +234,19 @@ pub type BitcoinLiveness = Liveness<
 
 pub struct BitcoinElectionHooks;
 
-impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinLiveness>
+impl Hooks<BitcoinBlockHeightTrackingES, BitcoinDepositChannelWitnessingES, BitcoinLiveness>
 	for BitcoinElectionHooks
 {
 	fn on_finalize(
 		(block_height_tracking_identifiers, deposit_channel_witnessing_identifiers, liveness_identifiers): (
 			Vec<
 				ElectionIdentifier<
-					<BitcoinBlockHeightTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
 				ElectionIdentifier<
-					<BitcoinDepositChannelWitnessing as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
@@ -319,19 +259,19 @@ impl Hooks<BitcoinBlockHeightTracking, BitcoinDepositChannelWitnessing, BitcoinL
 		let current_sc_block_number = crate::System::block_number();
 
 		log::info!("BitcoinElectionHooks::called");
-		let chain_progress = BitcoinBlockHeightTracking::on_finalize::<
+		let chain_progress = BitcoinBlockHeightTrackingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
-				BitcoinBlockHeightTracking,
+				BitcoinBlockHeightTrackingES,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
 		>(block_height_tracking_identifiers, &Vec::from([()]))?;
 
 		log::info!("BitcoinElectionHooks::on_finalize: {:?}", chain_progress);
-		BitcoinDepositChannelWitnessing::on_finalize::<
+		BitcoinDepositChannelWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
-				BitcoinDepositChannelWitnessing,
+				BitcoinDepositChannelWitnessingES,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
 		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress)?;
