@@ -27,7 +27,7 @@ export const testGasLimitCcmSwaps = new ExecutableTest('Gas-Limit-Ccm-Swaps', ma
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
 const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> = {
-  Ethereum: { min: 150000, max: 1000000 },
+  Ethereum: { min: 200000, max: 1000000 },
   Arbitrum: { min: 8000000, max: 15000000 },
 };
 
@@ -242,7 +242,7 @@ async function testGasLimitSwapToEvm(
     // Extra buffer for Arbitrum because the localnet l1BaseFee is huge (100x mainnet
     // value) and it decreases over time making this test flaky otherwise.
     const estimatedGasAmount = await estimateCcmCfTesterGas(destChain, message);
-    ccmMetadata.gasBudget = Math.round(estimatedGasAmount * (destChain === 'Arbitrum' ? 0.6 : 0.8)).toString();
+    ccmMetadata.gasBudget = Math.round(estimatedGasAmount * (destChain === 'Arbitrum' ? 0.7 : 0.85)).toString();
   }
   const testTag = abortTest ? `InsufficientGas` : '';
 
