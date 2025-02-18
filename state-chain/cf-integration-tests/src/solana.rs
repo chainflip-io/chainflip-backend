@@ -634,11 +634,11 @@ fn solana_resigning() {
 			).unwrap();
 			transaction.signatures = vec![[1u8; 64].into()];
 
-			let original_account_keys = transaction.message.account_keys.clone();
+			let original_account_keys = transaction.message.static_account_keys();
 
 			let apicall = SolanaApi {
 				call_type: cf_chains::sol::api::SolanaTransactionType::Transfer,
-				transaction,
+				transaction: transaction.clone(),
 				signer: Some(CURRENT_SIGNER.into()),
 				_phantom: PhantomData::<SolEnvironment>,
 			};
@@ -651,7 +651,7 @@ fn solana_resigning() {
 			if let RequiresSignatureRefresh::True(call) = modified_call {
 				let agg_key = <SolEnvironment as SolanaEnvironment>::current_agg_key().unwrap();
 				let transaction = call.clone().unwrap().transaction;
-				for (modified_key, original_key) in transaction.message.account_keys.iter().zip(original_account_keys.iter()) {
+				for (modified_key, original_key) in transaction.message.static_account_keys().iter().zip(original_account_keys.iter()) {
 					if *original_key != SolPubkey::from(CURRENT_SIGNER) {
 						assert_eq!(modified_key, original_key);
 						assert_ne!(*modified_key, SolPubkey::from(agg_key));
@@ -665,7 +665,8 @@ fn solana_resigning() {
 
 				// Compare against a manually crafted transaction that works with the current test values and
 				// agg_key. Not the signature itself
-				let expected_serialized_tx = hex_literal::hex!("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000306f68d61e8d834034cf583f486f2a08ef53ce4134ed41c4d88f4720c39518745b617eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192cf1dd130e0341d60a0771ac40ea7900106a423354d2ecd6e609bd5e2ed833dec00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090380969800000000000400050284030000030200020c020000008096980000000000").to_vec();
+				let expected_serialized_tx = hex_literal::hex!("01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008001000306f68d61e8d834034cf583f486f2a08ef53ce4134ed41c4d88f4720c39518745b617eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192cf1dd130e0341d60a0771ac40ea7900106a423354d2ecd6e609bd5e2ed833dec00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090380969800000000000400050284030000030200020c02000000809698000000000000").to_vec();
+
 				assert_eq!(&serialized_tx[1+64..], &expected_serialized_tx[1+64..]);
 				assert_eq!(&serialized_tx[0], &expected_serialized_tx[0]);
 			} else {
