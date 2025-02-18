@@ -9,7 +9,7 @@ on:
 env:
   FORCE_COLOR: 1
   REGISTRY: nscr.io/n0ie27k9ikobs
-  IMAGE_NAME: "${{ github.repository }}/rust-base"
+  IMAGE_NAME: "chainflip-backend/rust-base"
 
 jobs:
   build:
