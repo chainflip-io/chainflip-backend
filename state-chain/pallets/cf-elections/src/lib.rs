@@ -933,7 +933,7 @@ pub mod pallet {
 		pub struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
 			epoch: EpochIndex,
 			#[allow(clippy::type_complexity)]
-			bitmaps:
+			pub bitmaps:
 				Vec<(BitmapComponentOf<T::ElectoralSystemRunner>, BitVec<u8, bitvec::order::Lsb0>)>,
 			#[codec(skip)]
 			_phantom: core::marker::PhantomData<(T, I)>,
