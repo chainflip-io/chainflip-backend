@@ -71,7 +71,7 @@ pub struct EvmVaultSwapDetails {
 	/// The address of the source token that requires user approval for the swap to succeed, if
 	/// any.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub token_approval_required: Option<sp_core::H160>,
+	pub source_token_address: Option<sp_core::H160>,
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
