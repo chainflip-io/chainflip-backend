@@ -769,6 +769,10 @@ export async function observeEVMEvent(
           ) {
             break;
           } else if (k === parameterNames.length - 1) {
+            const txHash = events[j].transactionHash;
+            const transaction = await web3.eth.getTransaction(txHash);
+            const receipt = await web3.eth.getTransactionReceipt(txHash);
+            console.log('Chain', chain, 'Gas Used:', receipt.gasUsed, 'Gas Limit:', transaction.gas);
             return {
               name: events[j].event,
               address: events[j].address,
