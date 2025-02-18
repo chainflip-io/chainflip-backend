@@ -22,7 +22,7 @@ use cf_chains::{
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, RejectCall, RejectError,
 	TransferAssetParams, TransferFallback, TransferFallbackError,
 };
-use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount};
+use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount, SwapRequestId};
 use codec::{Decode, Encode};
 use frame_support::{sp_runtime::DispatchError, CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -167,6 +167,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
+		_swap_request_id: SwapRequestId,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
@@ -304,6 +305,7 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
+		_swap_request_id: SwapRequestId,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockBtcEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))

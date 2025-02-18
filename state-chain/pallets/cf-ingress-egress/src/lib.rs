@@ -274,6 +274,7 @@ pub struct CrossChainMessage<C: Chain> {
 	// Where funds might be returned to if the message fails.
 	pub ccm_additional_data: CcmAdditionalData,
 	pub gas_budget: GasAmount,
+	pub swap_request_id: SwapRequestId,
 }
 
 impl<C: Chain> CrossChainMessage<C> {
@@ -1758,6 +1759,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.gas_budget,
 				ccm.message.to_vec(),
 				ccm.ccm_additional_data.to_vec(),
+				ccm.swap_request_id,
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -2852,6 +2854,8 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_chain,
 						source_address,
 						gas_budget,
+						swap_request_id: Default::default(), /* TODO Ramiz: Pass this in as a
+						                                      * parameter */
 					});
 
 					Ok(ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld))

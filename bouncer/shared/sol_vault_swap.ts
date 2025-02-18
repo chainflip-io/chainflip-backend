@@ -170,7 +170,10 @@ export async function executeSolVaultSwap(
     { commitment: 'confirmed' },
   );
 
-  const transactionData = await connection.getTransaction(txHash, { commitment: 'confirmed' });
+  const transactionData = await connection.getTransaction(txHash, {
+    commitment: 'confirmed',
+    maxSupportedTransactionVersion: 0,
+  });
   if (transactionData === null) {
     throwError(logger, new Error('Solana TransactionData is empty'));
   }
