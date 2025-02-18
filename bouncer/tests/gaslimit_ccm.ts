@@ -242,7 +242,7 @@ async function testGasLimitSwapToEvm(
     // Extra buffer for Arbitrum because the localnet l1BaseFee is huge (100x mainnet
     // value) and it decreases over time making this test flaky otherwise.
     const estimatedGasAmount = await estimateCcmCfTesterGas(destChain, message);
-    ccmMetadata.gasBudget = Math.round(estimatedGasAmount * (destChain === 'Arbitrum' ? 0.75 : 0.85)).toString();
+    ccmMetadata.gasBudget = Math.round(estimatedGasAmount * (destChain === 'Arbitrum' ? 0.7 : 0.8)).toString();
   }
   const testTag = abortTest ? `InsufficientGas` : '';
 
