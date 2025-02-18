@@ -149,9 +149,6 @@ export async function newCcmMetadata(
     // fluctuations cause flakiness for those CCM swaps with low gas.
     // Therefore we apply a minimum gas budget to ensure the swap succeeds.
     userLogicGasBudget = Math.trunc((await estimateCcmCfTesterGas(message)) * 1.1);
-    if (destChain === 'Arbitrum') {
-      userLogicGasBudget = Math.max(userLogicGasBudget, 100000);
-    }
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
