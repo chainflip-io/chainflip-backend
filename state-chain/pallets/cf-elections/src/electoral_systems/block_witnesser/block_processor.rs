@@ -256,15 +256,18 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	}
 }
 
+
+
 #[cfg(test)]
 pub(crate) mod test {
+
 	use crate::{
 		electoral_systems::{
 			block_witnesser::{
 				block_processor::BlockProcessor, primitives::ChainProgressInner,
-				state_machine::BWProcessorTypes,
+				state_machine::{BWProcessorTypes, HookTypeFor, RulesHook, SafetyMarginHook, DedupEventsHook, ExecuteHook},
 			},
-			state_machine::core::{hook_test_utils::IncreasingHook, Hook},
+			state_machine::core::{hook_test_utils::IncreasingHook, Hook, TypesFor},
 		},
 		*,
 	};
@@ -275,8 +278,10 @@ pub(crate) mod test {
 
 	const SAFETY_MARGIN: usize = 3;
 	type BlockNumber = u64;
-	#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-	pub struct MockBlockProcessorDefinition {}
+
+	pub struct MockBlockProcessorDefinition;
+
+	type Types = TypesFor<MockBlockProcessorDefinition>;
 
 	type MockBlockData = Vec<u8>;
 
@@ -293,24 +298,7 @@ pub(crate) mod test {
 		}
 	}
 
-	#[derive(
-		Clone,
-		PartialEq,
-		Eq,
-		PartialOrd,
-		Ord,
-		Debug,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Serialize,
-		Deserialize,
-		Default,
-	)]
-	pub struct MockApplyRulesHook {}
-	impl Hook<(BlockNumber, u32, MockBlockData), Vec<(BlockNumber, MockBtcEvent)>>
-		for MockApplyRulesHook
+	impl Hook<HookTypeFor<Types, RulesHook>> for Types
 	{
 		fn run(
 			&mut self,
@@ -334,24 +322,7 @@ pub(crate) mod test {
 		}
 	}
 
-	#[derive(
-		Clone,
-		PartialEq,
-		Eq,
-		PartialOrd,
-		Ord,
-		Debug,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Serialize,
-		Deserialize,
-		Default,
-	)]
-	pub struct MockDedupEventsHook {}
-	impl Hook<Vec<(BlockNumber, MockBtcEvent)>, Vec<(BlockNumber, MockBtcEvent)>>
-		for MockDedupEventsHook
+	impl Hook<HookTypeFor<Types, DedupEventsHook>> for Types
 	{
 		fn run(
 			&mut self,
@@ -388,42 +359,27 @@ pub(crate) mod test {
 		}
 	}
 
-	#[derive(
-		Clone,
-		PartialEq,
-		Eq,
-		PartialOrd,
-		Ord,
-		Debug,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Serialize,
-		Deserialize,
-		Default,
-	)]
-	pub struct MockSafetyMargin {}
-	impl Hook<(), u32> for MockSafetyMargin {
+	impl Hook<HookTypeFor<Types, SafetyMarginHook>> for Types {
 		fn run(&mut self, _input: ()) -> u32 {
 			3
 		}
 	}
-	impl BWProcessorTypes for MockBlockProcessorDefinition {
+
+	impl BWProcessorTypes for TypesFor<MockBlockProcessorDefinition> {
 		type ChainBlockNumber = BlockNumber;
 		type BlockData = MockBlockData;
 		type Event = MockBtcEvent;
-		type Rules = MockApplyRulesHook;
-		type Execute = IncreasingHook<(BlockNumber, MockBtcEvent), ()>;
-		type DedupEvents = MockDedupEventsHook;
-		type SafetyMargin = MockSafetyMargin;
+		type Rules = Types;
+		type Execute = IncreasingHook<HookTypeFor<Types, ExecuteHook>>;
+		type DedupEvents = Types;
+		type SafetyMargin = Types;
 	}
 
 	/// tests that the processor correcly keep up to SAFETY MARGIN blocks (3), and remove them once
 	/// the safety margin elapsed
 	#[test]
 	fn blocks_correctly_inserted_and_removed() {
-		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<Types>::default();
 
 		processor.process_block_data(ChainProgressInner::Progress(11), Some((9, vec![1])));
 		assert_eq!(processor.blocks_data.len(), 1, "Only one blockdata added to the processor");
@@ -441,7 +397,7 @@ pub(crate) mod test {
 	/// temp test, checking large progress delta
 	#[test]
 	fn temp_large_delta() {
-		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<Types>::default();
 
 		processor
 			.process_block_data(ChainProgressInner::Progress(u32::MAX as u64), Some((9, vec![1])));
@@ -450,7 +406,7 @@ pub(crate) mod test {
 	/// test that a reorg cause the processor to discard all the reorged blocks
 	#[test]
 	fn reorgs_remove_block_data() {
-		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<Types>::default();
 
 		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
 		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4, 5, 6])));
@@ -464,7 +420,7 @@ pub(crate) mod test {
 	/// test that a reorg is properly handled by saving all the events executed so far
 	#[test]
 	fn reorgs_events_saved_and_removed() {
-		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<Types>::default();
 
 		let mut events: Vec<_> =
 			processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
@@ -495,7 +451,7 @@ pub(crate) mod test {
 	/// action even if the deposit ends up in a different block,
 	#[test]
 	fn already_executed_events_are_not_reprocessed_after_reorg() {
-		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<Types>::default();
 
 		// We processed pre-witnessing (boost) for the followings deposit
 		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
@@ -522,7 +478,7 @@ pub(crate) mod test {
 	/// make the user pay for boost if the block was effectivily not processed in advance
 	#[test]
 	fn no_boost_if_full_witness_in_same_block() {
-		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<Types>::default();
 		let events =
 			processor.process_block_data(ChainProgressInner::Progress(15), Some((9, vec![4, 7])));
 
@@ -532,7 +488,7 @@ pub(crate) mod test {
 	/// test that the hook executing the events is called the correct number of times
 	#[test]
 	fn number_of_events_executed_is_correct() {
-		let mut processor = BlockProcessor::<MockBlockProcessorDefinition>::default();
+		let mut processor = BlockProcessor::<Types>::default();
 
 		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4])));
 		processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![6])));
@@ -605,6 +561,7 @@ impl<T: BWProcessorTypes + 'static> StateMachine for SMBlockProcessor<T> {
 		}
 	}
 }
+
 
 // #[cfg(test)]
 // fn step_specification(

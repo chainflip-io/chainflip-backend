@@ -32,7 +32,7 @@ pub struct TypesFor<Tag> {
 
 
 macro_rules! impls {
-    (for $name:ty: $(#[doc = $doc_text:tt])? $trait:ident {$($trait_impl:tt)*} $($rest:tt)*) => {
+    (for $name:ty: $(#[doc = $doc_text:tt])? $trait:ty {$($trait_impl:tt)*} $($rest:tt)*) => {
         $(#[doc = $doc_text])?
         impl $trait for $name {
             $($trait_impl)*

@@ -3,9 +3,30 @@ use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::vec::Vec;
+use derive_where::derive_where;
 
-pub trait Hook<A, B> {
-	fn run(&mut self, input: A) -> B;
+
+/// Type which can be used for implementing traits that 
+/// contain only type definitions, as used in many parts of
+/// the state machine based electoral systems.
+#[derive_where(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord;)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[codec(encode_bound())]
+#[serde(bound="")]
+#[scale_info(skip_type_params(Tag))]
+pub(crate) struct TypesFor<Tag> {
+	_phantom: sp_std::marker::PhantomData<Tag>
+}
+
+
+
+pub trait HookType {
+	type Input;
+	type Output;
+}
+
+pub trait Hook<T: HookType> {
+	fn run(&mut self, input: T::Input) -> T::Output;
 }
 
 
@@ -27,25 +48,29 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
-	pub struct ConstantHook<A, B> {
-		pub state: B,
-		pub _phantom: sp_std::marker::PhantomData<A>,
+	pub struct ConstantHook<T: HookType> {
+		pub state: T::Output,
+		pub _phantom: sp_std::marker::PhantomData<T>,
 	}
 
-	impl<A, B> ConstantHook<A, B> {
-		pub fn new(b: B) -> Self {
+	impl<T: HookType> ConstantHook<T> {
+		pub fn new(b: T::Output) -> Self {
 			Self { state: b, _phantom: Default::default() }
 		}
 	}
 
-	impl<A, B: Default> Default for ConstantHook<A, B> {
+	impl<T: HookType> Default for ConstantHook<T> 
+	where T::Output: Default
+	{
 		fn default() -> Self {
 			Self::new(Default::default())
 		}
 	}
 
-	impl<A, B: Clone> Hook<A, B> for ConstantHook<A, B> {
-		fn run(&mut self, _input: A) -> B {
+	impl<T: HookType> Hook<T> for ConstantHook<T> 
+	where T::Output: Clone
+	{
+		fn run(&mut self, _input: T::Input) -> T::Output {
 			self.state.clone()
 		}
 	}
@@ -64,26 +89,30 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
-	pub struct IncreasingHook<A, B> {
+	pub struct IncreasingHook<T: HookType> {
 		pub counter: u32,
-		pub state: B,
-		pub _phantom: sp_std::marker::PhantomData<A>,
+		pub state: T::Output,
+		pub _phantom: sp_std::marker::PhantomData<T>,
 	}
 
-	impl<A, B> IncreasingHook<A, B> {
-		pub fn new(counter_value: u32, state: B) -> Self {
+	impl<T: HookType> IncreasingHook<T> {
+		pub fn new(counter_value: u32, state: T::Output) -> Self {
 			Self { counter: counter_value, state, _phantom: Default::default() }
 		}
 	}
 
-	impl<A, B: Default> Default for IncreasingHook<A, B> {
+	impl<T: HookType> Default for IncreasingHook<T> 
+	where T::Output: Default
+	{
 		fn default() -> Self {
 			Self::new(Default::default(), Default::default())
 		}
 	}
 
-	impl<A, B: Clone> Hook<A, B> for IncreasingHook<A, B> {
-		fn run(&mut self, _input: A) -> B {
+	impl<T: HookType> Hook<T> for IncreasingHook<T> 
+	where T::Output: Clone
+	{
+		fn run(&mut self, _input: T::Input) -> T::Output {
 			self.counter += 1;
 			self.state.clone()
 		}

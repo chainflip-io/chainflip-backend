@@ -15,14 +15,12 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::{
-			consensus::BlockHeightTrackingConsensus,
-			state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders},
-			BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
+			consensus::BlockHeightTrackingConsensus, state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders}, BlockHeightChangeHook, BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
-			state_machine::{BWSettings, BWState, BWStateMachine, BWTypes},
+			state_machine::{BWProcessorTypes, BWSettings, BWState, BWStateMachine, BWTypes, ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook},
 		},
 		composite::{
 			tuple_3_impls::{DerivedElectoralAccess, Hooks},
@@ -41,11 +39,11 @@ use pallet_cf_ingress_egress::{
 	DepositChannelDetails, DepositWitness, PalletSafeMode, ProcessedUpTo,
 };
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
 use sp_std::vec::Vec;
 
-use super::elections::{StatelessHookFor, TypesFor};
+use super::{bitcoin_block_processor::BtcEvent, elections::TypesFor};
+
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(BitcoinBlockHeightTrackingES, BitcoinDepositChannelWitnessingES, BitcoinLiveness),
@@ -74,7 +72,7 @@ impls!{
 		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = btc::BlockNumber;
 		type ChainBlockHash = btc::Hash;
-		type BlockHeightChangeHook = StatelessHookFor<BitcoinBlockHeightChange>;
+		type BlockHeightChangeHook = Self;
 	}
 
 	/// Associating the ES related types to the struct
@@ -110,22 +108,19 @@ impls!{
 		type StateMachine = BlockHeightTrackingSM<BitcoinBlockHeightTrackingTypes>;
 	}
 
-}
-
-
-/// Hooks
-pub struct BitcoinBlockHeightChange;
-
-impl Hook<btc::BlockNumber, ()> for StatelessHookFor<BitcoinBlockHeightChange> {
-	fn run(&mut self, block_height: btc::BlockNumber) {
-		if let Err(err) = BitcoinChainTracking::inner_update_chain_state(cf_chains::ChainState {
-			block_height,
-			tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(0) },
-		}) {
-			log::error!("Failed to update chain state: {:?}", err);
+	Hook<HookTypeFor<Self, BlockHeightChangeHook>> {
+		fn run(&mut self, block_height: btc::BlockNumber) {
+			if let Err(err) = BitcoinChainTracking::inner_update_chain_state(cf_chains::ChainState {
+				block_height,
+				tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(0) },
+			}) {
+				log::error!("Failed to update chain state: {:?}", err);
+			}
 		}
 	}
+
 }
+
 
 /// Generating the state machine-based electoral system
 pub type BitcoinBlockHeightTrackingES = StateMachineESInstance<BitcoinBlockHeightTrackingTypes>;
@@ -138,33 +133,27 @@ pub struct BitcoinDepositChannelWitnessing;
 type ElectionProperties = Vec<DepositChannelDetails<Runtime, BitcoinInstance>>;
 pub(crate) type BlockData = Vec<DepositWitness<Bitcoin>>;
 
-pub struct BitcoinSafemodeEnabled {}
-
-impl Hook<(), SafeModeStatus> for StatelessHookFor<BitcoinSafemodeEnabled> {
-	fn run(&mut self, _input: ()) -> SafeModeStatus {
-		if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
-			PalletSafeMode<BitcoinInstance>,
-		>>::get()
-		.deposits_enabled
-		{
-			SafeModeStatus::Disabled
-		} else {
-			SafeModeStatus::Enabled
-		}
-	}
-}
 
 impls!{
 	for TypesFor<BitcoinDepositChannelWitnessing>:
 
-	/// Associating BW types to the struct
-	BWTypes {
+	/// Associating BW processor types
+	BWProcessorTypes {
 		type ChainBlockNumber = btc::BlockNumber;
 		type BlockData = BlockData;
+
+		type Event = BtcEvent;
+		type Rules = Self;
+		type Execute = Self;
+		type DedupEvents = Self;
+		type SafetyMargin = Self;
+	}
+
+	/// Associating BW types to the struct
+	BWTypes {
 		type ElectionProperties = ElectionProperties;
-		type ElectionPropertiesHook = StatelessHookFor<BitcoinDepositChannelWitnessingGenerator>;
-		type SafeModeEnabledHook = StatelessHookFor<BitcoinSafemodeEnabled>;
-		type BWProcessorTypes = BlockWitnessingProcessorDefinition;
+		type ElectionPropertiesHook = Self;
+		type SafeModeEnabledHook = Self;
 	}
 
 	/// Associating the ES related types to the struct
@@ -203,6 +192,33 @@ impls!{
 		type StateMachine = BWStateMachine<Self>;
 		type ConsensusMechanism = BWConsensus<BlockData, btc::BlockNumber, ElectionProperties>;
 	}
+
+	/// implementation of safe mode reading hook
+	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
+		fn run(&mut self, _input: ()) -> SafeModeStatus {
+			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
+				PalletSafeMode<BitcoinInstance>,
+			>>::get()
+			.deposits_enabled
+			{
+				SafeModeStatus::Disabled
+			} else {
+				SafeModeStatus::Enabled
+			}
+		}
+	}
+
+	/// implementation of reading deposit channels hook
+	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
+		fn run(
+			&mut self,
+			block_witness_root: btc::BlockNumber,
+		) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
+			// TODO: Channel expiry
+			BitcoinIngressEgress::active_deposit_channels_at(block_witness_root)
+		}
+	}
+
 }
 
 
@@ -210,19 +226,6 @@ impls!{
 pub type BitcoinDepositChannelWitnessingES =
 	StateMachineESInstance<TypesFor<BitcoinDepositChannelWitnessing>>;
 
-pub struct BitcoinDepositChannelWitnessingGenerator;
-
-impl Hook<btc::BlockNumber, Vec<DepositChannelDetails<Runtime, BitcoinInstance>>>
-	for StatelessHookFor<BitcoinDepositChannelWitnessingGenerator>
-{
-	fn run(
-		&mut self,
-		block_witness_root: btc::BlockNumber,
-	) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
-		// TODO: Channel expiry
-		BitcoinIngressEgress::active_deposit_channels_at(block_witness_root)
-	}
-}
 
 pub type BitcoinLiveness = Liveness<
 	BlockNumber,

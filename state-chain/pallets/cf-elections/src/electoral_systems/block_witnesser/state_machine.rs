@@ -19,27 +19,79 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 
-pub trait BWTypes: 'static {
-	type ChainBlockNumber: Serde
-		+ Copy
-		+ Eq
-		+ Ord
-		+ SaturatingStep
-		+ Step
-		+ BlockZero
-		+ Debug
-		+ 'static;
-	type BlockData: PartialEq + Clone + Debug + Eq + 'static;
-	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
-	type ElectionPropertiesHook: Hook<Self::ChainBlockNumber, Self::ElectionProperties>;
-	type SafeModeEnabledHook: Hook<(), SafeModeStatus>;
-	type BWProcessorTypes: BWProcessorTypes<
-		ChainBlockNumber = Self::ChainBlockNumber,
-		BlockData = Self::BlockData,
-	>;
+
+/// Type which can be used for implementing traits that 
+/// contain only type definitions, as used in many parts of
+/// the state machine based electoral systems.
+#[derive_where(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord;)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[codec(encode_bound())]
+#[serde(bound="")]
+#[scale_info(skip_type_params(Tag1, Tag2))]
+pub struct HookTypeFor<Tag1,Tag2> {
+	_phantom: sp_std::marker::PhantomData<(Tag1, Tag2)>
 }
 
-pub trait BWProcessorTypes {
+
+pub trait BWTypes: 'static + Sized + BWProcessorTypes {
+	// type ChainBlockNumber: Serde
+	// 	+ Copy
+	// 	+ Eq
+	// 	+ Ord
+	// 	+ SaturatingStep
+	// 	+ Step
+	// 	+ BlockZero
+	// 	+ Debug
+	// 	+ 'static;
+	// type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
+	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
+	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>>;
+	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>>;
+
+}
+
+// hook types
+pub struct SafeModeEnabledHook;
+impl<T: BWTypes> HookType for HookTypeFor<T, SafeModeEnabledHook> {
+	type Input = ();
+	type Output = SafeModeStatus;
+}
+
+pub struct ElectionPropertiesHook;
+impl<T: BWTypes> HookType for HookTypeFor<T, ElectionPropertiesHook> {
+	type Input = T::ChainBlockNumber;
+	type Output = T::ElectionProperties;
+}
+
+pub struct RulesHook;
+impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
+	type Input = (T::ChainBlockNumber, u32, T::BlockData);
+	type Output = Vec<(T::ChainBlockNumber, T::Event)>;
+}
+
+pub struct ExecuteHook;
+impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
+	type Input =(T::ChainBlockNumber, T::Event);
+	type Output = ();
+}
+
+pub struct DedupEventsHook;
+impl<T: BWProcessorTypes> HookType for HookTypeFor<T, DedupEventsHook> {
+	type Input = Vec<(T::ChainBlockNumber, T::Event)>;
+	type Output = Vec<(T::ChainBlockNumber, T::Event)>;
+}
+
+pub struct SafetyMarginHook;
+impl<T: BWProcessorTypes> HookType for HookTypeFor<T, SafetyMarginHook> {
+	type Input = ();
+	type Output = u32;
+}
+
+
+
+
+pub trait BWProcessorTypes : Sized {
+
 	type ChainBlockNumber: Serde
 		+ Copy
 		+ Eq
@@ -48,33 +100,43 @@ pub trait BWProcessorTypes {
 		+ Step
 		+ BlockZero
 		+ Debug
-		+ Default
 		+ 'static;
+	type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
 
-	type BlockData: Serde + Clone;
+	// type ChainBlockNumber: Serde
+	// 	+ Copy
+	// 	+ Eq
+	// 	+ Ord
+	// 	+ SaturatingStep
+	// 	+ Step
+	// 	+ BlockZero
+	// 	+ Debug
+	// 	+ Default
+	// 	+ 'static;
+
+	// type BlockData: Serde + Clone;
+
 	type Event: Serde + Debug + Clone + Eq;
-	type Rules: Hook<
-			(Self::ChainBlockNumber, u32, Self::BlockData),
-			Vec<(Self::ChainBlockNumber, Self::Event)>,
-		> + Default
+	type Rules: Hook<HookTypeFor<Self, RulesHook>>
+			 + Default
 		+ Serde
 		+ Debug
 		+ Clone
 		+ Eq;
-	type Execute: Hook<(Self::ChainBlockNumber, Self::Event), ()>
+	type Execute: Hook<HookTypeFor<Self, ExecuteHook>>
 		+ Default
 		+ Serde
 		+ Debug
 		+ Clone
 		+ Eq;
-	type DedupEvents: Hook<Vec<(Self::ChainBlockNumber, Self::Event)>, Vec<(Self::ChainBlockNumber, Self::Event)>>
+	type DedupEvents: Hook<HookTypeFor<Self, DedupEventsHook>>
 		+ Default
 		+ Serde
 		+ Debug
 		+ Clone
 		+ Eq;
 
-	type SafetyMargin: Hook<(), u32> + Default + Serde + Debug + Clone + Eq;
+	type SafetyMargin: Hook<HookTypeFor<Self, SafetyMarginHook>> + Default + Serde + Debug + Clone + Eq;
 }
 
 #[derive(
@@ -98,7 +160,7 @@ pub struct BWSettings {
 #[derive_where(Debug, Clone, PartialEq, Eq;
 	T::SafeModeEnabledHook: Debug + Clone + Eq,
 	T::ElectionPropertiesHook: Debug + Clone + Eq,
-	BlockProcessor<T::BWProcessorTypes>: Debug + Clone + Eq,
+	BlockProcessor<T>: Debug + Clone + Eq,
 )]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
@@ -106,13 +168,13 @@ pub struct BWSettings {
 	T::ElectionPropertiesHook: Encode,
 	T::SafeModeEnabledHook: Encode,
 
-	BlockProcessor<T::BWProcessorTypes>: Encode,
+	BlockProcessor<T>: Encode,
 ))]
 pub struct BWState<T: BWTypes> {
 	pub elections: ElectionTracker<T::ChainBlockNumber>,
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
 	pub safemode_enabled: T::SafeModeEnabledHook,
-	pub block_processor: BlockProcessor<T::BWProcessorTypes>,
+	pub block_processor: BlockProcessor<T>,
 	_phantom: sp_std::marker::PhantomData<T>,
 }
 
@@ -372,13 +434,15 @@ mod tests {
 	use hook_test_utils::*;
 
 	fn generate_state<
-		T: BWTypes<SafeModeEnabledHook = ConstantHook<(), SafeModeStatus>, BWProcessorTypes = BPT>,
-		BPT: BWProcessorTypes<SafetyMargin = ConstantHook<(), u32>>,
+		T: BWTypes<SafeModeEnabledHook = ConstantHook<HookTypeFor<T, SafeModeEnabledHook>>,
+			SafetyMargin = ConstantHook<HookTypeFor<T, SafetyMarginHook>>
+		>,
 	>() -> impl Strategy<Value = BWState<T>>
+
 	where
 		T::ChainBlockNumber: Arbitrary,
 		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
-		BPT::BlockData: Default + Clone + Debug + Eq,
+		T::BlockData: Default + Clone + Debug + Eq,
 	{
 		prop_do! {
 			let (highest_election, highest_witnessed,
@@ -448,32 +512,25 @@ mod tests {
 	}
 
 	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
-		BWProcessorTypes for N
+		BWProcessorTypes for N 
 	{
 		type ChainBlockNumber = N;
 		type BlockData = ();
 		type Event = ();
-		type Rules = ConstantHook<
-			(Self::ChainBlockNumber, u32, Self::BlockData),
-			Vec<(Self::ChainBlockNumber, Self::Event)>,
-		>;
-		type Execute = ConstantHook<(Self::ChainBlockNumber, Self::Event), ()>;
-		type DedupEvents = ConstantHook<
-			Vec<(Self::ChainBlockNumber, Self::Event)>,
-			Vec<(Self::ChainBlockNumber, Self::Event)>,
-		>;
-		type SafetyMargin = ConstantHook<(), u32>;
+		type Rules = ConstantHook<HookTypeFor<Self, RulesHook>>;
+		type Execute = ConstantHook<HookTypeFor<Self, ExecuteHook>>;
+		type DedupEvents = ConstantHook<HookTypeFor<Self, DedupEventsHook>>;
+		type SafetyMargin = ConstantHook<HookTypeFor<Self, SafetyMarginHook>>;
+
 	}
+
 
 	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
 		BWTypes for N
 	{
-		type BlockData = ();
 		type ElectionProperties = ();
-		type ElectionPropertiesHook = ConstantHook<N, ()>;
-		type SafeModeEnabledHook = ConstantHook<(), SafeModeStatus>;
-		type BWProcessorTypes = N;
-		type ChainBlockNumber = N;
+		type ElectionPropertiesHook = ConstantHook<HookTypeFor<Self, ElectionPropertiesHook>>;
+		type SafeModeEnabledHook = ConstantHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 	}
 
 	#[test]

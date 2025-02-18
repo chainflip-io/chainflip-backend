@@ -14,6 +14,7 @@
 // State partially processed, how do we test that the state still gets processed until all the state
 // is processed.
 
+
 use core::ops::RangeInclusive;
 
 use super::{
@@ -24,9 +25,9 @@ use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::ChainProgress,
-		block_witnesser::{block_processor::test::MockBlockProcessorDefinition, *},
+		block_witnesser::{block_processor::test::MockBlockProcessorDefinition, state_machine::{ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook}, *},
 		state_machine::{
-			core::{ConstantIndex, Hook},
+			core::{ConstantIndex, Hook, TypesFor},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
@@ -57,24 +58,6 @@ pub type ValidatorId = u16;
 
 pub type BlockData = Vec<u8>;
 
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-)]
-pub struct MockGenerateElectionHook<ChainBlockNumber, Properties> {
-	_phantom: core::marker::PhantomData<(ChainBlockNumber, Properties)>,
-}
 
 fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
 	assert!(count > 0);
@@ -84,18 +67,19 @@ fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
 
 pub type Properties = BTreeSet<u16>;
 
-impl BlockElectionPropertiesGenerator<ChainBlockNumber, Properties>
-	for MockGenerateElectionHook<ChainBlockNumber, Properties>
-{
-	fn generate_election_properties(_root_to_witness: ChainBlockNumber) -> Properties {
-		// GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
-		// The properties are not important to the logic of the electoral system itself, so we can
-		// return empty.
-		BTreeSet::new()
-	}
-}
+// impl BlockElectionPropertiesGenerator<ChainBlockNumber, Properties>
+// 	for MockGenerateElectionHook<ChainBlockNumber, Properties>
+// {
+// 	fn generate_election_properties(_root_to_witness: ChainBlockNumber) -> Properties {
+// 		// GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
+// 		// The properties are not important to the logic of the electoral system itself, so we can
+// 		// return empty.
+// 		BTreeSet::new()
+// 	}
+// }
 
-impl Hook<ChainBlockNumber, Properties> for MockGenerateElectionHook<ChainBlockNumber, Properties> {
+
+impl Hook<HookTypeFor<Types, ElectionPropertiesHook>> for Types {
 	fn run(&mut self, input: ChainBlockNumber) -> Properties {
 		println!("generate_election_hook called for {input}");
 		GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
@@ -161,62 +145,30 @@ impl ProcessBlockData<ChainBlockNumber, BlockData>
 }
  */
 
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-)]
-pub struct MockDepositChannelWitnessingDefinition {}
+
+type Types = TypesFor<MockBlockProcessorDefinition>;
 
 type ElectionProperties = Properties;
 
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-)]
-pub struct MockSafemodeEnabledHook {}
 
-impl Hook<(), SafeModeStatus> for MockSafemodeEnabledHook {
+impl Hook<HookTypeFor<Types, SafeModeEnabledHook>> for Types {
 	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		SafeModeStatus::Disabled
 	}
 }
 
+
 /// Associating BW types to the struct
-impl BWTypes for MockDepositChannelWitnessingDefinition {
-	type ChainBlockNumber = u64;
-	type BlockData = BlockData;
+impl BWTypes for Types {
 	type ElectionProperties = ElectionProperties;
-	type ElectionPropertiesHook = MockGenerateElectionHook<u64, Properties>;
-	type SafeModeEnabledHook = MockSafemodeEnabledHook;
-	type BWProcessorTypes = MockBlockProcessorDefinition;
+	type ElectionPropertiesHook = Self;
+	type SafeModeEnabledHook = Self;
 }
 
 /// Associating the ES related types to the struct
-impl ElectoralSystemTypes for MockDepositChannelWitnessingDefinition {
+impl ElectoralSystemTypes for Types {
 	type ValidatorId = ValidatorId;
-	type ElectoralUnsynchronisedState = BWState<MockDepositChannelWitnessingDefinition>;
+	type ElectoralUnsynchronisedState = BWState<Self>;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
 	type ElectoralUnsynchronisedSettings = BWSettings;
@@ -232,7 +184,7 @@ impl ElectoralSystemTypes for MockDepositChannelWitnessingDefinition {
 }
 
 /// Associating the state machine and consensus mechanism to the struct
-impl StateMachineES for MockDepositChannelWitnessingDefinition {
+impl StateMachineES for Types {
 	// both context and return have to be vectors, these are the item types
 	type OnFinalizeContextItem = ChainProgress<u64>;
 	type OnFinalizeReturnItem = ();
@@ -244,12 +196,12 @@ impl StateMachineES for MockDepositChannelWitnessingDefinition {
 		vote_storage::bitmap::Bitmap<ConstantIndex<(u64, ElectionProperties, u8), BlockData>>;
 
 	// the actual state machine and consensus mechanisms of this ES
-	type StateMachine = BWStateMachine<MockDepositChannelWitnessingDefinition>;
+	type StateMachine = BWStateMachine<Self>;
 	type ConsensusMechanism = BWConsensus<BlockData, u64, ElectionProperties>;
 }
 
 /// Generating the state machine-based electoral system
-pub type SimpleBlockWitnesser = StateMachineESInstance<MockDepositChannelWitnessingDefinition>;
+pub type SimpleBlockWitnesser = StateMachineESInstance<Types>;
 
 // We need to provide a mock chain here... MockEthereum might be what we're after
 // type SimpleBlockWitnesser = BlockWitnesser<
