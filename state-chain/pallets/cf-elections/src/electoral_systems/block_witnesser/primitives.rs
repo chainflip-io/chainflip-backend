@@ -3,7 +3,7 @@ use codec::{Decode, Encode};
 use core::{iter::Step, ops::RangeInclusive};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::electoral_systems::state_machine::core::Validate;
 
@@ -94,7 +94,8 @@ impl<N: Ord + SaturatingStep + Step + Copy> ElectionTracker<N> {
 
 			// and it's going to have a fresh `reorg_id` which forces the ES to recreate this
 			// election
-			self.reorg_id = generate_new_reorg_id(self.ongoing.values());
+			self.reorg_id =
+				generate_new_reorg_id(&self.ongoing.values().cloned().collect::<Vec<_>>());
 		}
 
 		// QUESTION: currently, the following check ensures that
@@ -129,11 +130,9 @@ impl<N: BlockZero + Ord> Default for ElectionTracker<N> {
 }
 
 /// Generates an element which is not in `indices`.
-fn generate_new_reorg_id<'a, N: BlockZero + SaturatingStep + Ord + 'static>(
-	mut indices: impl Iterator<Item = &'a N> + Clone,
-) -> N {
+fn generate_new_reorg_id<N: BlockZero + SaturatingStep + Ord + 'static>(indices: &[N]) -> N {
 	let mut index = N::zero();
-	while indices.any(|ix| *ix == index) {
+	while indices.iter().any(|ix| *ix == index) {
 		index = index.saturating_forward(1);
 	}
 	index
@@ -154,7 +153,7 @@ mod tests {
 	proptest! {
 		#[test]
 		fn indices_are_new(xs in prop::collection::vec(any::<u8>(), 0..3)) {
-			assert!(!xs.contains(&generate_new_reorg_id(xs.iter())));
+			assert!(!xs.contains(&generate_new_reorg_id(&xs)));
 		}
 	}
 }

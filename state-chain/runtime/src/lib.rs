@@ -1,4 +1,5 @@
 #![feature(btree_extract_if)]
+#![feature(step_trait)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "256"]
 pub mod chainflip;

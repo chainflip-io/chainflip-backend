@@ -89,6 +89,10 @@ macro_rules! asserts {
 		assert!($expr, $description);
 		asserts!{$($tail)*}
 	};
+	($description:tt in $expr:expr, else $($vars:expr), +; $($tail:tt)*) => {
+		assert!($expr, $description, $($vars), +);
+		asserts!{$($tail)*}
+	};
 	($description:tt in $expr:expr, where {$($tt:tt)*} $($tail:tt)*) => {
 		{
 			$($tt)*

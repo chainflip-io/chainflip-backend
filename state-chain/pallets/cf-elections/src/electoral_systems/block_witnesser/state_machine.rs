@@ -17,7 +17,7 @@ use core::iter::Step;
 use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{fmt::Debug, ops::Sub, vec::Vec};
+use sp_std::{fmt::Debug, vec::Vec};
 
 pub trait BWTypes: 'static {
 	type ChainBlockNumber: Serde
@@ -48,16 +48,13 @@ pub trait BWProcessorTypes {
 		+ Step
 		+ BlockZero
 		+ Debug
-		+ Into<u64>
 		+ Default
-		+ From<u64>
-		+ Sub<Output = Self::ChainBlockNumber>
 		+ 'static;
 
 	type BlockData: Serde + Clone;
 	type Event: Serde + Debug + Clone + Eq;
 	type Rules: Hook<
-			(Self::ChainBlockNumber, Self::ChainBlockNumber, Self::BlockData),
+			(Self::ChainBlockNumber, u32, Self::BlockData),
 			Vec<(Self::ChainBlockNumber, Self::Event)>,
 		> + Default
 		+ Serde
@@ -77,7 +74,7 @@ pub trait BWProcessorTypes {
 		+ Clone
 		+ Eq;
 
-	type SafetyMargin: Hook<(), Self::ChainBlockNumber> + Default + Serde + Debug + Clone + Eq;
+	type SafetyMargin: Hook<(), u32> + Default + Serde + Debug + Clone + Eq;
 }
 
 #[derive(
@@ -98,8 +95,19 @@ pub struct BWSettings {
 	pub max_concurrent_elections: u16,
 }
 
-#[derive_where(Debug, Clone, PartialEq, Eq; T::SafeModeEnabledHook: Debug + Clone + Eq, T::ElectionPropertiesHook: Debug + Clone + Eq, T::BWProcessorTypes: Debug + Clone + Eq)]
+#[derive_where(Debug, Clone, PartialEq, Eq;
+	T::SafeModeEnabledHook: Debug + Clone + Eq,
+	T::ElectionPropertiesHook: Debug + Clone + Eq,
+	BlockProcessor<T::BWProcessorTypes>: Debug + Clone + Eq,
+)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[codec(encode_bound(
+	T::ChainBlockNumber: Encode,
+	T::ElectionPropertiesHook: Encode,
+	T::SafeModeEnabledHook: Encode,
+
+	BlockProcessor<T::BWProcessorTypes>: Encode,
+))]
 pub struct BWState<T: BWTypes> {
 	pub elections: ElectionTracker<T::ChainBlockNumber>,
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
@@ -254,8 +262,8 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 			"an increase of `highest_priority` can only happen if `could_increase` holds before"
 			in (before.elections.highest_priority < after.elections.highest_priority).implies(could_increase(before));
 
-			"if an increase happens, afterwards no increase can happen"
-			in (before.elections.highest_priority < after.elections.highest_priority).implies(!could_increase(after));
+			"if safemode is enabled, if an increase happens, afterwards no increase can happen"
+			in (before.elections.highest_priority < after.elections.highest_priority && safemode_enabled).implies(!could_increase(after));
 
 			"if no increase can happen, then as long as we have safemode, it can't happen in the future as well"
 			in (!could_increase(before) && safemode_enabled && !is_first_consensus).implies(!could_increase(after));
@@ -340,27 +348,6 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 							)
 					}
 				}
-				// } else {
-				// if safe mode is enabled, ongoing elections shouldn't change
-				// assert!(
-				// 	before.elections.ongoing == after.elections.ongoing,
-				// 	"if safemode is enabled, ongoing elections shouldn't change (except being closed
-				// when they come to consensus)" );
-
-				// but the next_election should still be updated in order to restart the
-				// reorg'ed elections after safemode is disabled
-				// if *range.start() < before_next_election {
-				// 	// assert!(
-				// 	// 	after.elections.next_election == *range.start(),
-				// 	// 	"if safemode is enabled, and a reorg happens, next_election should be the
-				// start of the reorg range" 	// );
-				// } else {
-				// 	assert!(
-				// 		after.elections.next_election == before_next_election,
-				// 		"if safemode is enabled, and no (relevant) reorg happens, next_election should
-				// not be udpated" 	);
-				// }
-				// }
 			},
 
 			Context(None) => (),
@@ -370,150 +357,154 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 
 #[cfg(test)]
 mod tests {
-	// use std::collections::BTreeMap;
-	//
-	// use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
-	// use proptest::{
-	// 	prelude::{any, Arbitrary, BoxedStrategy, Just, Strategy},
-	// 	strategy::LazyJust,
-	// };
-	//
-	// use super::*;
-	// use crate::prop_do;
-	// use hook_test_utils::*;
-	//
-	// fn generate_state<T: BWTypes<SafeModeEnabledHook = ConstantHook<(), SafeModeStatus>>>(
-	// ) -> impl Strategy<Value = BWState<T>>
-	// where
-	// 	T::ChainBlockNumber: Arbitrary,
-	// 	T::ElectionPropertiesHook: Default + Clone + Debug + Eq , <T as BWTypes>::BlockProcessor:
-	// Default, {
-	// 	prop_do! {
-	// 		// let next_election in any::<T::ChainBlockNumber>();
-	// 		// let highest_scheduled in any::<T::ChainBlockNumber>();
-	// 		// let highest_started_and_touched_by_reorg in any::<T::ChainBlockNumber>();
-	// 		// let reorg_id in any::<u8>();
-	// 		// let safemode_enabled in any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else
-	// {SafeModeStatus::Disabled});
-	//
-	// 		let (highest_election, highest_scheduled, highest_started_and_touched_by_reorg, reorg_id,
-	// safemode_enabled) in ( 			// Just(T::ChainBlockNumber::zero()),
-	// 			any::<T::ChainBlockNumber>(),
-	// 			any::<T::ChainBlockNumber>(),
-	// 			any::<T::ChainBlockNumber>(),
-	// 			any::<u8>(),
-	// 			any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else {SafeModeStatus::Disabled})
-	// 		);
-	//
-	// 		// let ongoing in prop::collection::vec((any::<T::ChainBlockNumber>(), any::<u8>()),
-	// 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election));
-	// 		LazyJust::new(move || BWState {
-	// 			elections: ElectionTracker {
-	// 				highest_election: highest_election.clone(),
-	// 				highest_witnessed: highest_scheduled.clone(),
-	// 				highest_priority: highest_started_and_touched_by_reorg.clone(),
-	// 				ongoing: BTreeMap::new(), // BTreeMap::from_iter(ongoing.clone()),
-	// 				reorg_id
-	// 			},
-	// 			generate_election_properties_hook: Default::default(),
-	// 			safemode_enabled: ConstantHook::new(safemode_enabled),
-	// 			block_processor: Default::default(),
-	// 			_phantom: core::marker::PhantomData,
-	// 		})
-	// 	}
-	//
-	// 	// Just(
-	// 	// 	BWState {
-	// 	// 	elections: ElectionTracker {
-	// 	// 		next_election: BlockZero::zero(),
-	// 	// 		highest_seen: BlockZero::zero(),
-	// 	// 		highest_priority: BlockZero::zero(),
-	// 	// 		ongoing: BTreeMap::new(),
-	// 	// 		reorg_id: 0,
-	// 	// 	},
-	// 	// 	generate_election_properties_hook: Default::default(),
-	// 	// 	safemode_enabled: ConstantHook::new(SafeModeStatus::Disabled),
-	// 	// 	_phantom: core::marker::PhantomData,
-	// 	// }
-	// 	// )
-	// }
-	//
-	// fn generate_input<T: BWTypes<BlockData = ()>>(
-	// 	indices: IndexOf<<BWStateMachine<T> as StateMachine>::Input>,
-	// ) -> BoxedStrategy<<BWStateMachine<T> as StateMachine>::Input>
-	// where
-	// 	T::ChainBlockNumber: Arbitrary,
-	// {
-	// 	/*
-	// 	let generate_input = |index| {
-	// 		prop_oneof![
-	// 			Just(SMInput::Vote(MultiIndexAndValue(index, ConstantIndex::new(())))),
-	// 			prop_oneof![
-	// 				Just(ChainProgress::None),
-	// 				(any::<T::ChainBlockNumber>(), 0..20usize)
-	// 					.prop_map(|(a, b)| ChainProgress::Range(a..=a.saturating_forward(b))),
-	// 				(any::<T::ChainBlockNumber>(), 0..20usize).prop_map(|(a, b)| {
-	// 					ChainProgress::FirstConsensus(a..=a.saturating_forward(b))
-	// 				})
-	// 			]
-	// 			.prop_map(SMInput::Context)
-	// 		]
-	// 	};
-	//
-	// 	if indices.len() > 0 {
-	// 		prop_do! {
-	// 			let index in select(indices);
-	// 			generate_input(index.clone())
-	// 			// return SMInput::Vote(MultiIndexAndValue(index, ConstantIndex::new(input)))
-	// 		}
-	// 		.boxed()
-	// 	} else {
-	// 		Just(SMInput::Context(ChainProgress::None)).boxed()
-	// 	}
-	// 	*/
-	//
-	// 	Just(SMInput::Context(ChainProgress::None)).boxed()
-	// }
-	//
-	// // impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + 'static> BWTypes
-	// for N { // 	type ChainBlockNumber = N;
-	// // 	type BlockData = ();
-	// // 	type ElectionProperties = ();
-	// // 	type ElectionPropertiesHook = ConstantHook<N, ()>;
-	// // 	type SafeModeEnabledHook = ConstantHook<(), SafeModeStatus>;
-	// // 	type BWProcessorTypes = ();
-	// // 	type BlockProcessor = ();
-	// // }
-	//
-	// // #[test]
-	// // pub fn test_bw_statemachine() {
-	// // 	BWStateMachine::<u8>::test(
-	// // 		file!(),
-	// // 		generate_state(),
-	// // 		prop_do! {
-	// // 			let max_concurrent_elections in 0..10u16;
-	// // 			return BWSettings { max_concurrent_elections }
-	// // 		},
-	// // 		generate_input::<u8>,
-	// // 	);
-	// // }
-	//
-	// struct TestChain {}
-	// impl ChainWitnessConfig for TestChain {
-	// 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-	// 	type ChainBlockNumber = u32;
-	// }
-	//
-	// // #[test]
-	// // pub fn test_bw_statemachine2() {
-	// // 	BWStateMachine::<BlockWitnessRange<TestChain>>::test(
-	// // 		file!(),
-	// // 		generate_state(),
-	// // 		prop_do! {
-	// // 			let max_concurrent_elections in 0..10u16;
-	// // 			return BWSettings { max_concurrent_elections }
-	// // 		},
-	// // 		generate_input::<BlockWitnessRange<TestChain>>,
-	// // 	);
-	// // }
+	use std::collections::BTreeMap;
+
+	use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
+	use proptest::{
+		prelude::{any, Arbitrary, BoxedStrategy, Just, Strategy},
+		prop_oneof,
+		sample::select,
+		strategy::LazyJust,
+	};
+
+	use super::*;
+	use crate::prop_do;
+	use hook_test_utils::*;
+
+	fn generate_state<
+		T: BWTypes<SafeModeEnabledHook = ConstantHook<(), SafeModeStatus>, BWProcessorTypes = BPT>,
+		BPT: BWProcessorTypes<SafetyMargin = ConstantHook<(), u32>>,
+	>() -> impl Strategy<Value = BWState<T>>
+	where
+		T::ChainBlockNumber: Arbitrary,
+		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
+		BPT::BlockData: Default + Clone + Debug + Eq,
+	{
+		prop_do! {
+			let (highest_election, highest_witnessed,
+				 highest_priority, reorg_id,
+				safemode_enabled) in (
+				 any::<T::ChainBlockNumber>(),
+				any::<T::ChainBlockNumber>(),
+				any::<T::ChainBlockNumber>(),
+				any::<u8>(),
+				any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else {SafeModeStatus::Disabled})
+			);
+
+			let ongoing in proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<u8>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height <= highest_election));
+			LazyJust::new(move || BWState {
+				elections: ElectionTracker {
+					highest_election,
+					highest_witnessed,
+					highest_priority,
+					ongoing: BTreeMap::from_iter(ongoing.clone()),
+					reorg_id
+				},
+				generate_election_properties_hook: Default::default(),
+				safemode_enabled: ConstantHook::new(safemode_enabled),
+				block_processor: BlockProcessor {
+					blocks_data: Default::default(),
+					reorg_events: Default::default(),
+					rules: Default::default(),
+					execute: Default::default(),
+					dedup_events: Default::default(),
+					safety_margin: ConstantHook::new(1),
+				},
+				_phantom: core::marker::PhantomData,
+			})
+		}
+	}
+
+	fn generate_input<T: BWTypes<BlockData = ()>>(
+		indices: IndexOf<<BWStateMachine<T> as StateMachine>::Input>,
+	) -> BoxedStrategy<<BWStateMachine<T> as StateMachine>::Input>
+	where
+		T::ChainBlockNumber: Arbitrary,
+	{
+		let generate_input = |index| {
+			prop_oneof![
+				Just(SMInput::Vote(MultiIndexAndValue(index, ConstantIndex::new(())))),
+				prop_oneof![
+					Just(ChainProgress::None),
+					(any::<T::ChainBlockNumber>(), 0..20usize)
+						.prop_map(|(a, b)| ChainProgress::Range(a..=a.saturating_forward(b))),
+					(any::<T::ChainBlockNumber>(), 0..20usize).prop_map(|(a, b)| {
+						ChainProgress::FirstConsensus(a..=a.saturating_forward(b))
+					})
+				]
+				.prop_map(SMInput::Context)
+			]
+		};
+
+		if indices.len() > 0 {
+			prop_do! {
+				let index in select(indices);
+				generate_input(index.clone())
+			}
+			.boxed()
+		} else {
+			Just(SMInput::Context(ChainProgress::None)).boxed()
+		}
+	}
+
+	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
+		BWProcessorTypes for N
+	{
+		type ChainBlockNumber = N;
+		type BlockData = ();
+		type Event = ();
+		type Rules = ConstantHook<
+			(Self::ChainBlockNumber, u32, Self::BlockData),
+			Vec<(Self::ChainBlockNumber, Self::Event)>,
+		>;
+		type Execute = ConstantHook<(Self::ChainBlockNumber, Self::Event), ()>;
+		type DedupEvents = ConstantHook<
+			Vec<(Self::ChainBlockNumber, Self::Event)>,
+			Vec<(Self::ChainBlockNumber, Self::Event)>,
+		>;
+		type SafetyMargin = ConstantHook<(), u32>;
+	}
+
+	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
+		BWTypes for N
+	{
+		type BlockData = ();
+		type ElectionProperties = ();
+		type ElectionPropertiesHook = ConstantHook<N, ()>;
+		type SafeModeEnabledHook = ConstantHook<(), SafeModeStatus>;
+		type BWProcessorTypes = N;
+		type ChainBlockNumber = N;
+	}
+
+	#[test]
+	pub fn test_bw_statemachine() {
+		BWStateMachine::<u32>::test(
+			file!(),
+			generate_state(),
+			prop_do! {
+				let max_concurrent_elections in 0..10u16;
+				return BWSettings { max_concurrent_elections }
+			},
+			generate_input::<u32>,
+		);
+	}
+
+	struct TestChain {}
+	impl ChainWitnessConfig for TestChain {
+		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+		type ChainBlockNumber = u32;
+	}
+
+	#[test]
+	pub fn test_bw_statemachine2() {
+		BWStateMachine::<BlockWitnessRange<TestChain>>::test(
+			file!(),
+			generate_state(),
+			prop_do! {
+				let max_concurrent_elections in 0..10u16;
+				return BWSettings { max_concurrent_elections }
+			},
+			generate_input::<BlockWitnessRange<TestChain>>,
+		);
+	}
 }
