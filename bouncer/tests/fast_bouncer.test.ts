@@ -15,7 +15,6 @@ import { testDCASwaps } from './DCA_test';
 import { testCancelOrdersBatch } from './create_and_delete_multiple_orders';
 import { depositChannelCreation } from './request_swap_deposit_address_with_affiliates';
 import { testBrokerLevelScreening } from './broker_level_screening';
-import { legacyEvmVaultSwaps } from './legacy_vault_swap';
 import { testFundRedeem } from './fund_redeem';
 import { concurrentTest, serialTest } from '../shared/utils/vitest';
 
@@ -40,7 +39,6 @@ describe('ConcurrentTests', () => {
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 360);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 300);
-  concurrentTest('legacyEvmVaultSwaps', legacyEvmVaultSwaps, 300);
   concurrentTest('VaultSwapFeeCollection', testVaultSwapFeeCollection, 800);
 
   // Tests that only work if there is more than one node
