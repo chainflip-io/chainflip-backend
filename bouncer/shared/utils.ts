@@ -800,7 +800,9 @@ export async function observeSolanaCcmEvent(
   for (let i = 0; i < 300; i++) {
     const txSignatures = await connection.getSignaturesForAddress(cfTesterAddress);
     for (const txSignature of txSignatures) {
-      const tx = await connection.getTransaction(txSignature.signature);
+      const tx = await connection.getTransaction(txSignature.signature, {
+        maxSupportedTransactionVersion: 0,
+      });
       if (tx) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const eventParser = new EventParser(cfTesterAddress, new BorshCoder(idl as any));

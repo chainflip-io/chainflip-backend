@@ -21,6 +21,7 @@ log = { workspace = true }
 [dev-dependencies]
 libsecp256k1 = { workspace = true, default-features = true, features = ["static-context"] }
 rand = { workspace = true, default-features = true }
+hex = { workspace = true }
 hex-literal = { workspace = true, default-features = true }
 secp256k1 = { workspace = true, features = ["rand-std"] }
 arrayref = { workspace = true }

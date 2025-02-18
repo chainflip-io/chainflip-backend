@@ -1,7 +1,7 @@
 use crate::{
-	compile_instructions, consts::MESSAGE_VERSION_PREFIX, short_vec, AddressLookupTableAccount,
-	CompiledInstruction, CompiledKeys, Hash, Instruction, MessageAddressTableLookup, MessageHeader,
-	Pubkey, RawSignature, Signature,
+	consts::MESSAGE_VERSION_PREFIX, short_vec, AddressLookupTableAccount, CompiledInstruction,
+	CompiledKeys, Hash, Instruction, MessageAddressTableLookup, MessageHeader, Pubkey,
+	RawSignature, Signature,
 };
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -14,12 +14,10 @@ use serde::{
 	Deserializer, Serializer,
 };
 use sp_std::fmt;
+use v0::VersionedMessageV0;
 
-#[cfg(any(test, feature = "runtime-integration-tests"))]
-use crate::{
-	errors::TransactionError,
-	signer::{Signer, SignerError, TestSigners},
-};
+#[cfg(feature = "std")]
+use crate::signer::{Signer, TestSigners};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
@@ -46,13 +44,27 @@ pub enum Legacy {
 /// which message version is serialized starting from version `0`. If the first
 /// is bit is not set, all bytes are used to encode the legacy `Message`
 /// format.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub enum VersionedMessage {
-	Legacy(legacy::LegacyMessage),
+	Legacy(legacy::DeprecatedLegacyMessage),
 	V0(v0::VersionedMessageV0),
 }
 
 impl VersionedMessage {
+	pub fn new(
+		instructions: &[Instruction],
+		payer: Option<Pubkey>,
+		blockhash: Option<Hash>,
+		lookup_tables: &[AddressLookupTableAccount],
+	) -> VersionedMessage {
+		VersionedMessage::V0(v0::VersionedMessageV0::new_with_blockhash(
+			instructions,
+			payer,
+			blockhash.unwrap_or_default(),
+			lookup_tables,
+		))
+	}
+
 	pub fn header(&self) -> &MessageHeader {
 		match self {
 			Self::Legacy(message) => &message.header,
@@ -64,6 +76,19 @@ impl VersionedMessage {
 		match self {
 			Self::Legacy(message) => &message.account_keys,
 			Self::V0(message) => &message.account_keys,
+		}
+	}
+
+	pub fn map_static_account_keys(&mut self, f: impl Fn(Pubkey) -> Pubkey) {
+		match self {
+			Self::Legacy(message) =>
+				for k in message.account_keys.iter_mut() {
+					*k = f(*k);
+				},
+			Self::V0(message) =>
+				for k in message.account_keys.iter_mut() {
+					*k = f(*k);
+				},
 		}
 	}
 
@@ -110,7 +135,7 @@ impl VersionedMessage {
 
 impl Default for VersionedMessage {
 	fn default() -> Self {
-		Self::Legacy(legacy::LegacyMessage::default())
+		Self::V0(VersionedMessageV0::default())
 	}
 }
 
@@ -218,7 +243,7 @@ impl<'de> serde::Deserialize<'de> for VersionedMessage {
 								de::Error::invalid_length(1, &self)
 							})?;
 
-						Ok(VersionedMessage::Legacy(legacy::LegacyMessage {
+						Ok(VersionedMessage::Legacy(legacy::DeprecatedLegacyMessage {
 							header: MessageHeader {
 								num_required_signatures,
 								num_readonly_signed_accounts: message.num_readonly_signed_accounts,
@@ -261,22 +286,15 @@ impl<'de> serde::Deserialize<'de> for VersionedMessage {
 
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
 /// An atomic transaction
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
+#[derive(
+	Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo,
+)]
 pub struct VersionedTransaction {
 	/// List of signatures
 	#[serde(with = "short_vec")]
 	pub signatures: Vec<Signature>,
 	/// Message to sign.
 	pub message: VersionedMessage,
-}
-
-impl From<legacy::LegacyTransaction> for VersionedTransaction {
-	fn from(transaction: legacy::LegacyTransaction) -> Self {
-		Self {
-			signatures: transaction.signatures,
-			message: VersionedMessage::Legacy(transaction.message),
-		}
-	}
 }
 
 impl VersionedTransaction {
@@ -290,19 +308,8 @@ impl VersionedTransaction {
 		}
 	}
 
-	#[cfg(any(test, feature = "runtime-integration-tests"))]
-	pub fn new_with_payer(
-		instructions: &[Instruction],
-		payer: Option<Pubkey>,
-		lookup_tables: &[AddressLookupTableAccount],
-	) -> Self {
-		let message =
-			VersionedMessage::V0(v0::VersionedMessageV0::new(instructions, payer, lookup_tables));
-		Self::new_unsigned(message)
-	}
-
-	#[cfg(any(test, feature = "runtime-integration-tests"))]
-	pub fn sign<S: Signer>(&mut self, signers: TestSigners<S>, recent_blockhash: Hash) {
+	#[cfg(feature = "std")]
+	pub fn test_only_sign<S: Signer>(&mut self, signers: TestSigners<S>, recent_blockhash: Hash) {
 		let positions = self.get_signing_keypair_positions(signers.pubkeys());
 
 		// if you change the blockhash, you're re-signing...
@@ -321,8 +328,8 @@ impl VersionedTransaction {
 		}
 	}
 
-	#[cfg(any(test, feature = "runtime-integration-tests"))]
-	pub fn get_signing_keypair_positions(&self, pubkeys: Vec<Pubkey>) -> Vec<usize> {
+	#[cfg(feature = "std")]
+	fn get_signing_keypair_positions(&self, pubkeys: Vec<Pubkey>) -> Vec<usize> {
 		let account_keys = self.message.static_account_keys();
 		let required_sigs = self.message.header().num_required_signatures as usize;
 		if account_keys.len() < required_sigs {
@@ -366,15 +373,6 @@ impl VersionedTransaction {
 			VersionedMessage::V0(_) => TransactionVersion::Number(0),
 		}
 	}
-
-	/// Returns a legacy transaction if the transaction message is legacy.
-	pub fn into_legacy_transaction(self) -> Option<legacy::LegacyTransaction> {
-		match self.message {
-			VersionedMessage::Legacy(message) =>
-				Some(legacy::LegacyTransaction { signatures: self.signatures, message }),
-			_ => None,
-		}
-	}
 }
 
 pub mod v0 {
@@ -392,7 +390,9 @@ pub mod v0 {
 	/// See the [`message`] module documentation for further description.
 	///
 	/// [`message`]: crate::message
-	#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+	#[derive(
+		Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo,
+	)]
 	#[serde(rename_all = "camelCase")]
 	pub struct VersionedMessageV0 {
 		/// The message header, identifying signed and read-only `account_keys`.
@@ -583,11 +583,10 @@ pub mod v0 {
 	}
 }
 
+/// Placeholder code for Solana's Legacy Message and Transaction. This code
+/// is no longer used by Chainflip. The code is kept here for placeholder purpose.
 pub mod legacy {
 	use super::*;
-
-	#[cfg(test)]
-	use crate::instructions::program_instructions;
 
 	/// A Solana transaction message (legacy).
 	///
@@ -609,7 +608,7 @@ pub mod legacy {
 		Encode, Decode, TypeInfo, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone,
 	)]
 	#[serde(rename_all = "camelCase")]
-	pub struct LegacyMessage {
+	pub struct DeprecatedLegacyMessage {
 		/// The message header, identifying signed and read-only `account_keys`.
 		// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
 		pub header: MessageHeader,
@@ -625,71 +624,6 @@ pub mod legacy {
 		/// all succeed.
 		#[serde(with = "short_vec")]
 		pub instructions: Vec<CompiledInstruction>,
-	}
-
-	impl LegacyMessage {
-		pub fn new_with_blockhash(
-			instructions: &[Instruction],
-			payer: Option<&Pubkey>,
-			blockhash: &Hash,
-		) -> Self {
-			let compiled_keys = CompiledKeys::compile(instructions, payer.cloned());
-			let (header, account_keys) = compiled_keys
-				.try_into_message_components()
-				.expect("overflow when compiling message keys");
-			let instructions = compile_instructions(instructions, &account_keys);
-			Self::new_with_compiled_instructions(
-				header.num_required_signatures,
-				header.num_readonly_signed_accounts,
-				header.num_readonly_unsigned_accounts,
-				account_keys,
-				*blockhash,
-				instructions,
-			)
-		}
-
-		pub fn new(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
-			Self::new_with_blockhash(instructions, payer, &Hash::default())
-		}
-
-		#[cfg(test)]
-		pub fn new_with_nonce(
-			mut instructions: Vec<Instruction>,
-			payer: Option<&Pubkey>,
-			nonce_account_pubkey: &Pubkey,
-			nonce_authority_pubkey: &Pubkey,
-		) -> Self {
-			let nonce_ix = program_instructions::SystemProgramInstruction::advance_nonce_account(
-				nonce_account_pubkey,
-				nonce_authority_pubkey,
-			);
-			instructions.insert(0, nonce_ix);
-			Self::new(&instructions, payer)
-		}
-
-		fn new_with_compiled_instructions(
-			num_required_signatures: u8,
-			num_readonly_signed_accounts: u8,
-			num_readonly_unsigned_accounts: u8,
-			account_keys: Vec<Pubkey>,
-			recent_blockhash: Hash,
-			instructions: Vec<CompiledInstruction>,
-		) -> Self {
-			Self {
-				header: MessageHeader {
-					num_required_signatures,
-					num_readonly_signed_accounts,
-					num_readonly_unsigned_accounts,
-				},
-				account_keys,
-				recent_blockhash,
-				instructions,
-			}
-		}
-
-		pub fn serialize(&self) -> Vec<u8> {
-			bincode::serde::encode_to_vec(self, bincode::config::legacy()).unwrap()
-		}
 	}
 
 	/// An atomically-committed sequence of instructions.
@@ -715,7 +649,7 @@ pub mod legacy {
 	#[derive(
 		Encode, Decode, TypeInfo, Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize,
 	)]
-	pub struct LegacyTransaction {
+	pub struct DeprecatedLegacyTransaction {
 		/// A set of signatures of a serialized [`Message`], signed by the first
 		/// keys of the `Message`'s [`account_keys`], where the number of signatures
 		/// is equal to [`num_required_signatures`] of the `Message`'s
@@ -729,144 +663,19 @@ pub mod legacy {
 		pub signatures: Vec<Signature>,
 
 		/// The message to sign.
-		pub message: LegacyMessage,
-	}
-
-	impl LegacyTransaction {
-		pub fn new_unsigned(message: LegacyMessage) -> Self {
-			Self {
-				signatures: vec![
-					Signature::default();
-					message.header.num_required_signatures as usize
-				],
-				message,
-			}
-		}
-
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
-			let message = LegacyMessage::new(instructions, payer);
-			Self::new_unsigned(message)
-		}
-
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn sign<S: Signer>(&mut self, signers: TestSigners<S>, recent_blockhash: Hash) {
-			if let Err(e) = self.try_sign(signers, recent_blockhash) {
-				panic!("Transaction::sign failed with error {e:?}");
-			}
-		}
-
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn try_sign<S: Signer>(
-			&mut self,
-			signers: TestSigners<S>,
-			recent_blockhash: Hash,
-		) -> Result<(), SignerError> {
-			self.try_partial_sign(signers, recent_blockhash)?;
-
-			if !self.is_signed() {
-				Err(SignerError::NotEnoughSigners)
-			} else {
-				Ok(())
-			}
-		}
-
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn try_partial_sign<S: Signer>(
-			&mut self,
-			signers: TestSigners<S>,
-			recent_blockhash: Hash,
-		) -> Result<(), SignerError> {
-			let positions = self.get_signing_keypair_positions(signers.pubkeys())?;
-			if positions.iter().any(|pos| pos.is_none()) {
-				return Err(SignerError::KeypairPubkeyMismatch)
-			}
-			let positions: Vec<usize> = positions.iter().map(|pos| pos.unwrap()).collect();
-			self.try_partial_sign_unchecked(signers, positions, recent_blockhash)
-		}
-
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn try_partial_sign_unchecked<S: Signer>(
-			&mut self,
-			signers: TestSigners<S>,
-			positions: Vec<usize>,
-			recent_blockhash: Hash,
-		) -> Result<(), SignerError> {
-			// if you change the blockhash, you're re-signing...
-			if recent_blockhash != self.message.recent_blockhash {
-				self.message.recent_blockhash = recent_blockhash;
-				self.signatures
-					.iter_mut()
-					.for_each(|signature| *signature = Signature::default());
-			}
-
-			let signatures = signers.try_sign_message(&self.message_data())?;
-			for i in 0..positions.len() {
-				self.signatures[positions[i]] = signatures[i];
-			}
-			Ok(())
-		}
-
-		#[cfg(any(test, feature = "runtime-integration-tests"))]
-		pub fn get_signing_keypair_positions(
-			&self,
-			pubkeys: Vec<Pubkey>,
-		) -> Result<Vec<Option<usize>>, TransactionError> {
-			if self.message.account_keys.len() <
-				self.message.header.num_required_signatures as usize
-			{
-				return Err(TransactionError::InvalidAccountIndex)
-			}
-			let signed_keys =
-				&self.message.account_keys[0..self.message.header.num_required_signatures as usize];
-
-			Ok(pubkeys
-				.iter()
-				.map(|pubkey| signed_keys.iter().position(|x| x == pubkey))
-				.collect())
-		}
-
-		pub fn is_signed(&self) -> bool {
-			self.signatures.iter().all(|signature| *signature != Signature::default())
-		}
-
-		/// Return the message containing all data that should be signed.
-		pub fn message(&self) -> &LegacyMessage {
-			&self.message
-		}
-
-		/// Return the serialized message data to sign.
-		pub fn message_data(&self) -> Vec<u8> {
-			self.message().serialize()
-		}
-
-		/// Due to different Serialization between Signature and Solana native Signature type,
-		/// the Signatures needs to be converted into the RawSignature type before the
-		/// transaction is serialized as whole.
-		pub fn finalize_and_serialize(self) -> Result<Vec<u8>, bincode::error::EncodeError> {
-			bincode::serde::encode_to_vec(RawTransaction::from(self), bincode::config::legacy())
-		}
+		pub message: DeprecatedLegacyMessage,
 	}
 }
 
 /// Internal raw transaction type used for correct Serialization and Encoding
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
-struct RawTransaction<Message> {
+struct RawTransaction {
 	#[serde(with = "short_vec")]
 	pub signatures: Vec<RawSignature>,
-	pub message: Message,
+	pub message: VersionedMessage,
 }
 
-impl From<legacy::LegacyTransaction> for RawTransaction<legacy::LegacyMessage> {
-	fn from(from: legacy::LegacyTransaction) -> Self {
-		Self {
-			signatures: from.signatures.into_iter().map(RawSignature::from).collect(),
-			message: from.message,
-		}
-	}
-}
-
-impl From<VersionedTransaction> for RawTransaction<VersionedMessage> {
+impl From<VersionedTransaction> for RawTransaction {
 	fn from(from: VersionedTransaction) -> Self {
 		Self {
 			signatures: from.signatures.into_iter().map(RawSignature::from).collect(),

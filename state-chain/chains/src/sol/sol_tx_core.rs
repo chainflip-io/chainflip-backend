@@ -7,7 +7,6 @@ use sp_std::vec::Vec;
 use crate::sol::SolAddress;
 
 pub use sol_prim::*;
-pub use transaction::legacy::{LegacyMessage, LegacyTransaction};
 
 /// Provides alternative version of internal types that uses `Address` instead of Pubkey:
 ///
@@ -125,11 +124,12 @@ pub mod sol_test_values {
 			api::{DurableNonceAndAccount, VaultSwapAccountAndSender},
 			signing_key::SolSigningKey,
 			sol_tx_core::signer::{Signer, TestSigners},
-			SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts, SolCcmAddress,
-			SolComputeLimit, SolHash,
+			SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolAsset,
+			SolCcmAccounts, SolCcmAddress, SolComputeLimit, SolHash, SolVersionedTransaction,
 		},
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
+	use itertools::Itertools;
 	use sol_prim::consts::{const_address, const_hash, MAX_TRANSACTION_LENGTH};
 	use sp_std::vec;
 
@@ -289,19 +289,63 @@ pub mod sol_test_values {
 		}
 	}
 
+	pub fn ccm_parameter_v1() -> CcmDepositMetadata {
+		let mut ccm = ccm_parameter();
+		ccm.channel_metadata.ccm_additional_data =
+			codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
+				ccm_accounts: ccm_accounts(),
+				alts: vec![user_alt().key.into()],
+			})
+			.try_into()
+			.unwrap();
+		ccm
+	}
+
 	pub fn agg_key() -> SolAddress {
 		SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap().pubkey().into()
 	}
 
+	pub fn chainflip_alt() -> SolAddressLookupTableAccount {
+		SolAddressLookupTableAccount {
+			key: const_address("4EQ4ZTskvNwkBaQjBJW5grcmV5Js82sUooNLHNTpdHdi").into(),
+			addresses: vec![
+				vec![
+					VAULT_PROGRAM,
+					VAULT_PROGRAM_DATA_ADDRESS,
+					VAULT_PROGRAM_DATA_ACCOUNT,
+					USDC_TOKEN_MINT_PUB_KEY,
+					TOKEN_VAULT_PDA_ACCOUNT,
+					USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+					SWAP_ENDPOINT_DATA_ACCOUNT_ADDRESS,
+					SWAP_ENDPOINT_PROGRAM,
+					SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
+				],
+				NONCE_ACCOUNTS.to_vec(),
+			]
+			.into_iter()
+			.concat()
+			.into_iter()
+			.map(|a| a.into())
+			.collect::<Vec<_>>(),
+		}
+	}
+
+	pub fn user_alt() -> SolAddressLookupTableAccount {
+		SolAddressLookupTableAccount {
+			key: const_address("3VBLeVu7rZciyk19M9V7VbHBM2uFm9YbnKKPB33mGRW8").into(),
+			addresses: vec![TRANSFER_TO_ACCOUNT.into()],
+		}
+	}
+
 	#[track_caller]
 	pub fn test_constructed_transaction_with_signer<S: Signer>(
-		mut transaction: crate::sol::SolLegacyTransaction,
+		mut transaction: SolVersionedTransaction,
 		expected_serialized_tx: Vec<u8>,
 		signers: TestSigners<S>,
 		blockhash: super::Hash,
 	) {
 		// Sign the transaction with the given singers and blockhash.
-		transaction.sign(signers, blockhash);
+		transaction.test_only_sign(signers, blockhash);
 
 		let serialized_tx = transaction
 			.clone()
@@ -321,7 +365,7 @@ pub mod sol_test_values {
 
 	#[track_caller]
 	pub fn test_constructed_transaction(
-		transaction: crate::sol::SolLegacyTransaction,
+		transaction: SolVersionedTransaction,
 		expected_serialized_tx: Vec<u8>,
 	) {
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();

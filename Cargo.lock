@@ -1475,6 +1475,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
+ "hex",
  "hex-literal",
  "libsecp256k1",
  "log",

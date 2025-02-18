@@ -32,12 +32,14 @@ pub use sol_prim::{
 		TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
-	transaction::legacy::{
-		LegacyMessage as SolLegacyMessage, LegacyTransaction as SolLegacyTransaction,
+	transaction::{
+		v0::VersionedMessageV0 as SolVersionedMessageV0, VersionedMessage as SolVersionedMessage,
+		VersionedTransaction as SolVersionedTransaction,
 	},
-	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
-	Hash as RawSolHash, Instruction as SolInstruction, InstructionRpc as SolInstructionRpc,
-	Pubkey as SolPubkey, Signature as SolSignature, SlotNumber as SolBlockNumber,
+	Address as SolAddress, AddressLookupTableAccount as SolAddressLookupTableAccount,
+	Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash, Hash as RawSolHash,
+	Instruction as SolInstruction, InstructionRpc as SolInstructionRpc, Pubkey as SolPubkey,
+	Signature as SolSignature, SlotNumber as SolBlockNumber,
 };
 pub use sol_tx_core::{
 	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
@@ -107,7 +109,7 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
-	type Payload = SolLegacyMessage;
+	type Payload = SolVersionedMessage;
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolanaTransactionInId;
 	type TransactionOutId = Self::ThresholdSignature;
@@ -130,7 +132,7 @@ impl ChainCrypto for SolanaCrypto {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
-		SolLegacyMessage::new(&[], Some(&SolPubkey::from(agg_key)))
+		SolVersionedMessage::new(&[], Some(SolPubkey::from(agg_key)), None, &[])
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(
