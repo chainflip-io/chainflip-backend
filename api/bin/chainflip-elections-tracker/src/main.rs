@@ -107,17 +107,19 @@ async fn observe_elections<T: Tracer + Send>(
 				.map(|(k,v)| (k, v.bitmaps))
 				.collect();
 
+			const ELECTORAL_SYSTEM_NAMES : [&'static str; 6] = ["Blockheight", "Ingress", "Nonce", "Egress", "Liveness", "Vaultswap"];
+
 			let elections = all_properties.iter()
 				.map(|(key, val)| {
-					let name = match val {
-							CompositeElectionProperties::A(_)  => "Blockheight",
-							CompositeElectionProperties::B(_)  => "Ingress",
-							CompositeElectionProperties::C(_)  => "Nonce",
-							CompositeElectionProperties::D(_)  => "Egress",
-							CompositeElectionProperties::EE(_) => "Liveness",
-							CompositeElectionProperties::FF(_) => "Vaultswap",
+					let index = match val {
+							CompositeElectionProperties::A(_)  => 0,
+							CompositeElectionProperties::B(_)  => 1,
+							CompositeElectionProperties::C(_)  => 2,
+							CompositeElectionProperties::D(_)  => 3,
+							CompositeElectionProperties::EE(_) => 4,
+							CompositeElectionProperties::FF(_) => 5,
 						};
-					(*key, (name.into(), val.clone()))
+					(*key, (ELECTORAL_SYSTEM_NAMES[index].into(), val.clone()))
 				})
 				.collect();
 
@@ -128,14 +130,7 @@ async fn observe_elections<T: Tracer + Send>(
 				individual_components,
 				validators_count: validators.len() as u32,
 				_phantom: Default::default(),
-				electoral_system_names: vec![
-							"Blockheight".into(),
-							"Ingress".into(),
-							"Nonce".into(),
-							"Egress".into(),
-							"Liveness".into(),
-							"Vaultswap".into(),
-				],
+				electoral_system_names: ELECTORAL_SYSTEM_NAMES.iter().map(|name| (*name).into()).collect(),
 			};
 
 			let new_full_trace = make_traces(result);
