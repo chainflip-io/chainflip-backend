@@ -179,7 +179,7 @@ import { loggerChild } from '../shared/utils/logger';
 const logger1 = loggerChild(parentLogger, `myTestCase`);
 const logger2 = loggerChild(logger1, `setupFunction`);
 const logger3 = loggerChild(logger2, `myFunction`);
-logger3.info("This message will have the full module path attached")
+logger3.info('This message will have the full module path attached');
 // {"module": `myTestCase::setupFunction::myFunction`}
 ```
 
