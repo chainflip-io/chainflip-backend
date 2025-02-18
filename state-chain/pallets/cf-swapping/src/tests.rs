@@ -18,8 +18,7 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	dot::PolkadotAccountId,
 	evm::H256,
-	AnyChain, CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters, Ethereum,
-	TransactionInIdForAnyChain,
+	AnyChain, CcmChannelMetadata, CcmDepositMetadata, Ethereum, TransactionInIdForAnyChain,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
@@ -240,7 +239,7 @@ fn generate_ccm_deposit() -> CcmDepositMetadata {
 fn generate_channel_refund_parameters() -> ChannelRefundParametersEncoded {
 	ChannelRefundParametersEncoded {
 		retry_duration: 100,
-		refund_address: EncodedAddress::Eth([1; 20].into()),
+		refund_address: EncodedAddress::Eth([1; 20]),
 		min_price: U256::from(0),
 	}
 }

@@ -86,7 +86,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 
 			let refund_params = ChannelRefundParametersEncoded {
 				retry_duration: 100,
-				refund_address: EncodedAddress::Eth([1; 20].into()),
+				refund_address: EncodedAddress::Eth([1; 20]),
 				min_price: U256::from(0),
 			};
 
