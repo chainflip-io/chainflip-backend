@@ -135,6 +135,7 @@ pub fn evm_vault_swap<A>(
 		channel_metadata.as_ref(),
 	);
 
+	let mut source_token_address = None;
 	let calldata = match source_asset {
 		Asset::Eth | Asset::ArbEth =>
 			if let Some(ccm) = channel_metadata {
@@ -156,18 +157,20 @@ pub fn evm_vault_swap<A>(
 			},
 		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::ArbUsdc => {
 			// Lookup Token addresses depending on the Chain
-			let source_token_address = match source_asset {
-				Asset::Flip | Asset::Usdc | Asset::Usdt =>
-					<EvmEnvironment as EvmEnvironmentProvider<Ethereum>>::token_address(
-						source_asset.try_into().expect("Only Ethereum asset is processed here"),
-					),
-				Asset::ArbUsdc =>
-					<EvmEnvironment as EvmEnvironmentProvider<Arbitrum>>::token_address(
-						cf_chains::assets::arb::Asset::ArbUsdc,
-					),
-				_ => unreachable!("Unreachable for non-Ethereum/Arbitrum assets"),
-			}
-			.ok_or(DispatchErrorWithMessage::from("Failed to look up EVM token address"))?;
+			let source_token_address_ref = source_token_address.insert(
+				match source_asset {
+					Asset::Flip | Asset::Usdc | Asset::Usdt =>
+						<EvmEnvironment as EvmEnvironmentProvider<Ethereum>>::token_address(
+							source_asset.try_into().expect("Only Ethereum asset is processed here"),
+						),
+					Asset::ArbUsdc =>
+						<EvmEnvironment as EvmEnvironmentProvider<Arbitrum>>::token_address(
+							cf_chains::assets::arb::Asset::ArbUsdc,
+						),
+					_ => unreachable!("Unreachable for non-Ethereum/Arbitrum assets"),
+				}
+				.ok_or(DispatchErrorWithMessage::from("Failed to look up EVM token address"))?,
+			);
 
 			if let Some(ccm) = channel_metadata {
 				Ok(cf_chains::evm::api::x_call_token::XCallToken::new(
@@ -175,7 +178,7 @@ pub fn evm_vault_swap<A>(
 					destination_asset,
 					ccm.message.to_vec(),
 					ccm.gas_budget,
-					source_token_address,
+					*source_token_address_ref,
 					amount,
 					cf_parameters,
 				)
@@ -184,7 +187,7 @@ pub fn evm_vault_swap<A>(
 				Ok(cf_chains::evm::api::x_swap_token::XSwapToken::new(
 					destination_address,
 					destination_asset,
-					source_token_address,
+					*source_token_address_ref,
 					amount,
 					cf_parameters,
 				)
@@ -202,6 +205,7 @@ pub fn evm_vault_swap<A>(
 			// Only return `amount` for native currently. 0 for Tokens
 			value: (source_asset == Asset::Eth).then_some(U256::from(amount)).unwrap_or_default(),
 			to: Environment::eth_vault_address(),
+			source_token_address,
 		})),
 		ForeignChain::Arbitrum => Ok(VaultSwapDetails::arbitrum(EvmVaultSwapDetails {
 			calldata,
@@ -210,6 +214,7 @@ pub fn evm_vault_swap<A>(
 				.then_some(U256::from(amount))
 				.unwrap_or_default(),
 			to: Environment::arb_vault_address(),
+			source_token_address,
 		})),
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",

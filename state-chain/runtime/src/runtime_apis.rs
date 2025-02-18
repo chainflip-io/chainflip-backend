@@ -61,10 +61,17 @@ pub enum VaultSwapDetails<BtcAddress> {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct EvmVaultSwapDetails {
+	/// The encoded calldata payload including function selector.
 	#[serde(with = "sp_core::bytes")]
-	pub calldata: Vec<u8>, // The encoded calldata payload including function selector
-	pub value: sp_core::U256, // The ETH amount, or 0 for ERC-20 tokens
-	pub to: sp_core::H160,    // The vault address for either Ethereum or Arbitrum
+	pub calldata: Vec<u8>,
+	/// The ETH/ArbETH amount. Always 0 for ERC-20 tokens.
+	pub value: sp_core::U256,
+	/// The vault address for either Ethereum or Arbitrum.
+	pub to: sp_core::H160,
+	/// The address of the source token that requires user approval for the swap to succeed, if
+	/// any.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub source_token_address: Option<sp_core::H160>,
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
