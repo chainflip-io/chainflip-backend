@@ -142,11 +142,8 @@ export async function newCcmMetadata(
 
   let userLogicGasBudget;
   if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
-    // Do the gas estimation of the call to the CF Tester contract. CF will then add the extra
-    // overhead on top. This is particularly relevant for Arbitrum where estimating the gas here
-    // required for execution is very complicated without using `eth_estimateGas` on the user's side.
-    // This is what integrators are expected to do and it''ll give a good estimate of the gas
-    // needed for the user logic.
+    // Do the gas estimation of the call to the CF Tester contract. For Arbitrum this will also
+    // the l1 inclusion fees. Adding a 5% buffer to the gas estimation to avoid failures.
     userLogicGasBudget = Math.trunc((await estimateCcmCfTesterGas(destChain, message)) * 1.05);
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
