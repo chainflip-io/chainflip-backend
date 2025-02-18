@@ -49,11 +49,10 @@ async function testDCASwap(
 
   if (!swapViaVault) {
     const swapRequest = await requestNewSwap(
-      logger,
+      logger.child({ tag: `DCA_test_${inputAsset}` }),
       inputAsset,
       destAsset,
       destAddress,
-      'DCA_Test',
       undefined, // messageMetadata
       0, // brokerCommissionBps
       0, // boostFeeBps

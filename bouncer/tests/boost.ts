@@ -144,7 +144,6 @@ async function testBoostingForAsset(
     swapAsset,
     destAddress,
     undefined,
-    undefined,
     0,
     boostFee,
   );

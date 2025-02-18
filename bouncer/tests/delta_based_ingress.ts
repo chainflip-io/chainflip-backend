@@ -101,9 +101,8 @@ async function deltaBasedIngressTest(
 
   // Start another swap doing another deposit to the same address
   const swapHandle = doPerformSwap(
-    logger,
+    logger.child({ tag: `[${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit]` }),
     swapParams,
-    `[${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit]`,
     undefined,
     undefined,
     amountSecondDeposit,

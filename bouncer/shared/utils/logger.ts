@@ -72,15 +72,17 @@ export function loggerChild(parentLogger: Logger, name: string): Logger {
   return parentLogger.child({ module: newModule });
 }
 
-// Takes all of the contextual information attached to the logger and appends it to the error message before throwing it
-export function throwError(parentLogger: Logger, error: Error): never {
+// Takes all of the contextual information attached to the logger and appends it to the error message
+export function loggerError(parentLogger: Logger, error: Error): Error {
   const bindings = parentLogger.bindings();
   const newError = error;
   for (const [key, value] of Object.entries(bindings)) {
     newError.message += `\n   ${key}: ${value}`;
   }
-  throw newError;
+  return newError;
 }
 
-// Log something to avoid strange `RangeError` when an error is thrown before the logger has finished initializing
-globalLogger.trace('Logger initialized');
+// Takes all of the contextual information attached to the logger and appends it to the error message before throwing it
+export function throwError(parentLogger: Logger, error: Error): never {
+  throw loggerError(parentLogger, error);
+}

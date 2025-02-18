@@ -55,18 +55,16 @@ export type SwapParams = {
 };
 
 export async function requestNewSwap(
-  parentLogger: Logger,
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  tag = '',
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps?: number,
   boostFeeBps = 0,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
 ): Promise<SwapParams> {
-  const logger = tag ? parentLogger.child({ tag }) : parentLogger;
   const addressPromise = observeEvent(logger, 'swapping:SwapDepositAddressReady', {
     test: (event) => {
       // Find deposit address for the right swap by looking at destination address:
@@ -130,16 +128,15 @@ export enum SenderType {
   Vault,
 }
 
+// Note: if using the swap context, the logger must contain the tag
 export async function doPerformSwap(
-  parentLogger: Logger,
+  logger: Logger,
   { sourceAsset, destAsset, destAddress, depositAddress, channelId }: SwapParams,
-  tag = '',
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
   amount?: string,
   swapContext?: SwapContext,
 ) {
-  const logger = parentLogger.child({ tag });
   const oldBalance = await getBalance(destAsset, destAddress);
 
   logger.trace(`Old balance: ${oldBalance}`);
@@ -162,11 +159,11 @@ export async function doPerformSwap(
 
   logger.trace(`Funded the address`);
 
-  swapContext?.updateStatus(tag, SwapStatus.Funded);
+  swapContext?.updateStatus(logger, SwapStatus.Funded);
 
   await swapRequestedHandle;
 
-  swapContext?.updateStatus(tag, SwapStatus.SwapScheduled);
+  swapContext?.updateStatus(logger, SwapStatus.SwapScheduled);
 
   logger.trace(`Waiting for balance to update`);
 
@@ -183,28 +180,25 @@ export async function doPerformSwap(
     }
 
     logger.trace(`Swap success! New balance: ${newBalance}!`);
-    swapContext?.updateStatus(tag, SwapStatus.Success);
+    swapContext?.updateStatus(logger, SwapStatus.Success);
   } catch (err) {
-    swapContext?.updateStatus(tag, SwapStatus.Failure);
-    throw new Error(`${tag} ${err}`);
+    swapContext?.updateStatus(logger, SwapStatus.Failure);
+    throwError(logger, new Error(`$${err}`));
   }
 }
 
+// Note: if using the swap context, the logger must contain the tag
 export async function performSwap(
-  parentLogger: Logger,
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
   amount?: string,
   brokerCommissionBps?: number,
   swapContext?: SwapContext,
 ) {
-  const tag = swapTag ?? '';
-  const logger = tag ? parentLogger.child({ tag }) : parentLogger;
-
   logger.trace(
     `The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
       messageMetadata
@@ -220,26 +214,23 @@ export async function performSwap(
     sourceAsset,
     destAsset,
     destAddress,
-    undefined,
     messageMetadata,
     brokerCommissionBps,
   );
 
-  await doPerformSwap(logger, swapParams, tag, messageMetadata, senderType, amount, swapContext);
+  await doPerformSwap(logger, swapParams, messageMetadata, senderType, amount, swapContext);
 
   return swapParams;
 }
 
 // function to create a swap and track it until we detect the corresponding broadcast success
 export async function performAndTrackSwap(
-  parentLogger: Logger,
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
   amount?: string,
-  tag?: string,
 ) {
-  const logger = tag ? parentLogger.child({ tag }) : parentLogger;
   await using chainflipApi = await getChainflipApi();
 
   const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress);
@@ -250,8 +241,11 @@ export async function performAndTrackSwap(
   // SwapScheduled, SwapExecuted, SwapEgressScheduled, BatchBroadcastRequested
   const broadcastId = await observeSwapEvents(logger, swapParams, chainflipApi);
 
-  if (broadcastId) await observeBroadcastSuccess(logger, broadcastId);
-  else throwError(logger, new Error(`Failed to retrieve broadcastId!`));
+  if (broadcastId) {
+    await observeBroadcastSuccess(logger, broadcastId);
+  } else {
+    throwError(logger, new Error(`Failed to retrieve broadcastId!`));
+  }
   logger.debug(`Broadcast executed successfully, swap is complete!`);
 }
 
@@ -353,11 +347,10 @@ export async function executeVaultSwap(
 }
 
 export async function performVaultSwap(
-  parentLogger: Logger,
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  swapTag = '',
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
   amount?: string,
@@ -373,9 +366,6 @@ export async function performVaultSwap(
     commissionBps: number;
   }[] = [],
 ): Promise<VaultSwapParams> {
-  const tag = swapTag ?? '';
-  const logger = tag ? parentLogger.child({ tag }) : parentLogger;
-
   const oldBalance = await getBalance(destAsset, destAddress);
 
   logger.trace(`Old balance: ${oldBalance}`);
@@ -397,7 +387,7 @@ export async function performVaultSwap(
       brokerFees,
       affiliateFees,
     );
-    swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapInitiated);
+    swapContext?.updateStatus(logger, SwapStatus.VaultSwapInitiated);
 
     await observeSwapRequested(
       logger,
@@ -407,7 +397,7 @@ export async function performVaultSwap(
       SwapRequestType.Regular,
     );
 
-    swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapScheduled);
+    swapContext?.updateStatus(logger, SwapStatus.VaultSwapScheduled);
 
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
@@ -430,7 +420,7 @@ export async function performVaultSwap(
       );
       await observeFetch(sourceAsset, swapEndpointNativeVaultAddress);
     }
-    swapContext?.updateStatus(swapTag, SwapStatus.Success);
+    swapContext?.updateStatus(logger, SwapStatus.Success);
     return {
       sourceAsset,
       destAsset,
@@ -438,7 +428,7 @@ export async function performVaultSwap(
       transactionId,
     };
   } catch (err) {
-    swapContext?.updateStatus(swapTag, SwapStatus.Failure);
+    swapContext?.updateStatus(logger, SwapStatus.Failure);
     if (err instanceof Error) {
       logger.trace(err.stack);
     }

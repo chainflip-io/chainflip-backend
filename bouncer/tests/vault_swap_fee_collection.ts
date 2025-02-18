@@ -61,8 +61,7 @@ async function testFeeCollection(
   inputAsset: Asset,
   testContext: TestContext,
 ): Promise<[KeyringPair, string, string]> {
-  const logger = testContext.logger.child({ asset: inputAsset });
-
+  let logger = testContext.logger;
   // Setup broker accounts. Different for each asset and specific to this test.
   const brokerUri = `//BROKER_VAULT_FEE_COLLECTION_${inputAsset}`;
   const broker = createStateChainKeypair(brokerUri);
@@ -93,6 +92,7 @@ async function testFeeCollection(
     'VaultSwapFeeTest',
     testContext.swapContext,
   );
+  logger = logger.child({ tag });
 
   // Amounts before swap
   const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker.address);
@@ -106,7 +106,6 @@ async function testFeeCollection(
     inputAsset,
     destAsset,
     destAddress,
-    tag,
     undefined, // messageMetadata
     testContext.swapContext,
     depositAmount,

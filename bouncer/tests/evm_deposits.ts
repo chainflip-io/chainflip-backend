@@ -47,9 +47,8 @@ async function testSuccessiveDepositEvm(
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
   await doPerformSwap(
-    testContext.logger,
+    testContext.logger.child({ tag: `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]` }),
     swapParams,
-    `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`,
   );
 }
 
@@ -156,16 +155,17 @@ async function testTxMultipleVaultSwaps(
   await observingEvent.event;
 }
 
-async function testDoubleDeposit(logger: Logger, sourceAsset: Asset, destAsset: Asset) {
+async function testDoubleDeposit(parentLogger: Logger, sourceAsset: Asset, destAsset: Asset) {
   const { destAddress, tag } = await prepareSwap(
-    logger,
+    parentLogger,
     sourceAsset,
     destAsset,
     undefined,
     undefined,
-    ' EvmDoubleDepositTest',
+    'EvmDoubleDepositTest',
   );
-  const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress, tag);
+  const logger = parentLogger.child({ tag });
+  const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress);
 
   {
     const swapRequestedHandle = observeSwapRequested(

@@ -30,7 +30,7 @@ export async function swapLessThanED(textContext: TestContext) {
     );
     logger.debug(`Generated Dot address: ${address}`);
 
-    await performAndTrackSwap(logger, 'Usdc', 'Dot', address, inputAmount, tag);
+    await performAndTrackSwap(logger, 'Usdc', 'Dot', address, inputAmount);
     // if for some reason the balance after swapping is > 0 it means that the output was larger than
     // ED, so we'll retry the test with a lower input
     if (parseFloat(await getDotBalance(address)) > 0) {

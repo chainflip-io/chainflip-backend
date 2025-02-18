@@ -237,7 +237,7 @@ export async function prepareSwap(
     logger.trace(`Created new ${destAsset} address: ${destAddress}`);
   }
 
-  swapContext?.updateStatus(tag, SwapStatus.Initiated);
+  swapContext?.updateStatus(logger, SwapStatus.Initiated);
 
   return { destAddress, tag };
 }
@@ -263,11 +263,10 @@ export async function testSwap(
   );
 
   return performSwap(
-    logger,
+    logger.child({ tag }),
     sourceAsset,
     destAsset,
     destAddress,
-    tag,
     messageMetadata,
     undefined,
     amount,
@@ -295,11 +294,10 @@ export async function testVaultSwap(
   );
 
   return performVaultSwap(
-    logger,
+    logger.child({ tag }),
     sourceAsset,
     destAsset,
     destAddress,
-    tag,
     messageMetadata,
     swapContext,
   );

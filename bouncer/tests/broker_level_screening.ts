@@ -162,11 +162,10 @@ async function brokerLevelScreeningTestScenario(
     minPriceX128: '0',
   };
   const swapParams = await requestNewSwap(
-    logger,
+    logger.child({ tag: 'brokerLevelScreeningTest' }),
     'Btc',
     'Usdc',
     destinationAddressForUsdc,
-    'brokerLevelScreeningTest',
     undefined,
     0,
     doBoost ? 100 : 0,

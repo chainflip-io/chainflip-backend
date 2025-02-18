@@ -87,7 +87,7 @@ async function getChainFees(logger: Logger, chain: Chain) {
 }
 
 async function executeAndTrackCcmSwap(
-  logger: Logger,
+  parentLogger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   messageMetadata: CcmDepositMetadata,
@@ -99,20 +99,20 @@ async function executeAndTrackCcmSwap(
   }
 
   const { destAddress, tag } = await prepareSwap(
-    logger,
+    parentLogger,
     sourceAsset,
     destAsset,
     undefined,
     messageMetadata,
     `GasLimit${testTag || ''}`,
   );
+  const logger = parentLogger.child({ tag });
 
   const { depositAddress, channelId } = await requestNewSwap(
     logger,
     sourceAsset,
     destAsset,
     destAddress,
-    tag,
     messageMetadata,
   );
   const swapRequestedHandle = observeSwapRequested(

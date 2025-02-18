@@ -179,12 +179,13 @@ import { loggerChild } from '../shared/utils/logger';
 const logger1 = loggerChild(parentLogger, `myTestCase`);
 const logger2 = loggerChild(logger1, `setupFunction`);
 const logger3 = loggerChild(logger2, `myFunction`);
+logger3.info("This message will have the full module path attached")
 // {"module": `myTestCase::setupFunction::myFunction`}
 ```
 
 ### Logging outside of a test
 
-If you need use the logger in a command or any other non-test code, you can use the `globalLogger`.
+If you need to use the logger in a command or any other non-test code, you can use the `globalLogger`.
 It has no bindings attached to it.
 It will still output to both `stdout` and the `bouncer.log` file.
 

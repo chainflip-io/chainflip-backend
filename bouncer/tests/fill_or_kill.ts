@@ -20,11 +20,12 @@ import { Logger } from '../shared/utils/logger';
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund(
-  logger: Logger,
+  parentLogger: Logger,
   inputAsset: Asset,
   amount: number,
   swapViaVault = false,
 ) {
+  const logger = parentLogger.child({ tag: `FoK_${inputAsset}_${amount}` });
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const refundAddress = await newAddress(inputAsset, randomBytes(32).toString('hex'));
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
@@ -53,7 +54,6 @@ async function testMinPriceRefund(
       inputAsset,
       destAsset,
       destAddress,
-      'FoK_Test',
       undefined, // messageMetadata
       0, // brokerCommissionBps
       0, // boostFeeBps

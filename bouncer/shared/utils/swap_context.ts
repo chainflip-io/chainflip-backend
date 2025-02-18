@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { globalLogger, Logger } from './logger';
+import { globalLogger, Logger, loggerError, throwError } from './logger';
 
 export enum SwapStatus {
   Initiated,
@@ -18,43 +18,66 @@ export class SwapContext {
     this.allSwaps = new Map();
   }
 
-  updateStatus(tag: string, status: SwapStatus) {
+  updateStatus(logger: Logger, status: SwapStatus) {
+    // Get the tag from the logger
+    const tag = logger.bindings().tag;
+    if (!tag) {
+      throwError(
+        logger,
+        new Error(`No tag found on logger when trying to update swap status to ${status}`),
+      );
+    }
     const currentStatus = this.allSwaps.get(tag);
 
-    // Sanity checks:
+    // State transition checks:
     switch (status) {
       case SwapStatus.Initiated: {
         assert(
           currentStatus === undefined,
-          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+          loggerError(
+            logger,
+            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
+          ),
         );
         break;
       }
       case SwapStatus.Funded: {
         assert(
           currentStatus === SwapStatus.Initiated,
-          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+          loggerError(
+            logger,
+            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
+          ),
         );
         break;
       }
       case SwapStatus.VaultSwapInitiated: {
         assert(
           currentStatus === SwapStatus.Initiated,
-          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+          loggerError(
+            logger,
+            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
+          ),
         );
         break;
       }
       case SwapStatus.VaultSwapScheduled: {
         assert(
           currentStatus === SwapStatus.VaultSwapInitiated,
-          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+          loggerError(
+            logger,
+            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
+          ),
         );
         break;
       }
       case SwapStatus.SwapScheduled: {
         assert(
           currentStatus === SwapStatus.Funded,
-          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+          loggerError(
+            logger,
+            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
+          ),
         );
         break;
       }
@@ -62,7 +85,10 @@ export class SwapContext {
         assert(
           currentStatus === SwapStatus.SwapScheduled ||
             currentStatus === SwapStatus.VaultSwapScheduled,
-          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+          loggerError(
+            logger,
+            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
+          ),
         );
         break;
       }

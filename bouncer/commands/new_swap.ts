@@ -126,7 +126,6 @@ async function newSwapCommand() {
     parseAssetString(args.sourceAsset) as InternalAsset,
     parseAssetString(args.destAsset) as InternalAsset,
     args.destAddress,
-    undefined, // tag
     undefined, // messageMetadata
     undefined, // brokerCommissionBps
     args.maxBoostFeeBps,
