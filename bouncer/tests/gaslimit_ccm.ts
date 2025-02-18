@@ -231,10 +231,7 @@ async function testGasLimitSwapToEvm(
   const gasConsumption = getRandomGasConsumption(chainFromAsset(destAsset));
 
   const message = web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]);
-  const ccmMetadata = await newCcmMetadata(
-    destAsset,
-    message,
-  );
+  const ccmMetadata = await newCcmMetadata(destAsset, message);
 
   if (abortTest) {
     // Not using the default estimation in newCcmMetadata for the abort broadcast
@@ -242,7 +239,9 @@ async function testGasLimitSwapToEvm(
     // Extra buffer for Arbitrum because the localnet l1BaseFee is huge (100x mainnet
     // value) and it decreases over time making this test flaky otherwise.
     const estimatedGasAmount = await estimateCcmCfTesterGas(destChain, message);
-    ccmMetadata.gasBudget = Math.round(estimatedGasAmount * (destChain === 'Arbitrum' ? 0.7 : 0.8)).toString();
+    ccmMetadata.gasBudget = Math.round(
+      estimatedGasAmount * (destChain === 'Arbitrum' ? 0.7 : 0.8),
+    ).toString();
   }
   const testTag = abortTest ? `InsufficientGas` : '';
 
