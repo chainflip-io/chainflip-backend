@@ -4,7 +4,6 @@ import { newCcmMetadata, prepareSwap } from '../shared/swapping';
 import {
   ccmSupportedChains,
   chainFromAsset,
-  chainGasAsset,
   EgressId,
   getEvmEndpoint,
   getSolConnection,
@@ -239,7 +238,7 @@ async function testGasLimitSwapToEvm(
     // scenario as it has a default buffer. Instead underestimate the gas budget.
     // Extra buffer for Arbitrum because the localnet l1BaseFee is huge (100x mainnet
     // value) and it decreases over time making this test flaky otherwise.
-    let estimatedGasAmount = await estimateCcmCfTesterGas(destChain, message);
+    const estimatedGasAmount = await estimateCcmCfTesterGas(destChain, message);
     ccmMetadata.gasBudget = Math.round(
       estimatedGasAmount * (destChain === 'Arbitrum' ? 0.65 : 0.75),
     ).toString();
@@ -367,9 +366,9 @@ export async function main() {
   testGasLimitCcmSwaps.log('Spamming chains to increase fees...');
 
   // No need to spam Solana since we are hardcoding the priority fees on the SC
-  // and the chain "base fee" don't increase anyway..
+  // and the chain "base fee" don't increase anyway. No need to spam Arbitrum either
+  // because the base fee stays constant and the l1BaseFee depends only in Ethereum.
   const spammingEth = spamChain('Ethereum');
-  const spammingArb = spamChain('Arbitrum');
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
@@ -382,7 +381,6 @@ export async function main() {
     if (++i > LOOP_TIMEOUT) {
       spam = false;
       await spammingEth;
-      await spammingArb;
       throw new Error(`Chain fees did not increase enough for the CCM gas limit test to run`);
     }
     await sleep(500);
@@ -427,7 +425,6 @@ export async function main() {
 
   spam = false;
   await spammingEth;
-  await spammingArb;
 
   // Make sure all the spamming has stopped to avoid triggering connectivity issues when running the next test.
   await sleep(10000);
