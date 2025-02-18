@@ -27,7 +27,10 @@ frame-metadata-hash-extension = { workspace = true }
 subxt = { workspace = true, features = ["runtime-metadata-path"] }
 
 cf-chains = { workspace = true, default-features = true }
-cf-primitives = { workspace = true, default-features = true }
+cf-primitives = { workspace = true }
+pallet-cf-pools = { workspace = true, default-features = true }
+cf-amm = { workspace = true, default-features = true }
+
 
 
 [dev-dependencies]

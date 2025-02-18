@@ -8,17 +8,19 @@ use cf_chains::{
 	instances::ChainInstanceFor,
 	Chain,
 };
-use cf_node_clients::{WaitFor, WaitForResult};
+use cf_node_clients::{
+	cf_static_runtime,
+	events_decoder::{DynamicEventError, DynamicEvents},
+	extract_dynamic_event, WaitFor, WaitForDynamicResult,
+};
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
 	Asset, BasisPoints, BlockNumber, EgressId, ForeignChain,
 };
 use cf_rpc_types::{
-	extract_event,
 	lp::{
-		collect_limit_order_returns, collect_order_returns, collect_range_order_returns,
 		ApiWaitForResult, LimitOrRangeOrder, LimitOrder, OpenSwapChannels, OrderIdJson, RangeOrder,
-		RangeOrderSizeJson,
+		RangeOrderChange, RangeOrderSizeJson,
 	},
 	RedemptionAmount, SwapChannelInfo,
 };
@@ -207,7 +209,7 @@ where
 	async fn register_account(&self) -> RpcResult<state_chain_runtime::Hash> {
 		let (tx_hash, _, _, _) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
 				false,
 				true,
@@ -226,7 +228,7 @@ where
 		Ok(
 			match self
 				.signed_pool_client
-				.submit_wait_for_result(
+				.submit_wait_for_result_dynamic(
 					RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
 						asset,
 						boost_fee: boost_fee.unwrap_or_default(),
@@ -236,14 +238,13 @@ where
 				)
 				.await?
 			{
-				WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-				WaitForResult::Details(details) => {
-					let (tx_hash, events, ..) = details;
-					extract_event!(
-						events,
-						state_chain_runtime::RuntimeEvent::LiquidityProvider,
-						pallet_cf_lp::Event::LiquidityDepositAddressReady,
-						{ deposit_address, .. },
+				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+				WaitForDynamicResult::Data(data) => {
+					let (tx_hash, dynamic_events, ..) = data;
+					extract_dynamic_event!(
+						dynamic_events,
+						cf_static_runtime::liquidity_provider::events::LiquidityDepositAddressReady,
+						{ deposit_address },
 						ApiWaitForResult::TxDetails {
 							tx_hash,
 							response: deposit_address.to_string()
@@ -261,7 +262,7 @@ where
 	) -> RpcResult<Hash> {
 		let (tx_hash, _, _, _) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_lp::Call::register_liquidity_refund_address {
 					address: address
 						.try_parse_to_encoded_address(chain)
@@ -290,7 +291,7 @@ where
 		Ok(
 			match self
 				.signed_pool_client
-				.submit_wait_for_result(
+				.submit_wait_for_result_dynamic(
 					RuntimeCall::from(pallet_cf_lp::Call::withdraw_asset {
 						amount,
 						asset,
@@ -303,17 +304,16 @@ where
 				)
 				.await?
 			{
-				WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-				WaitForResult::Details(details) => {
-					let (tx_hash, events, ..) = details;
-					extract_event!(
-						events,
-						state_chain_runtime::RuntimeEvent::LiquidityProvider,
-						pallet_cf_lp::Event::WithdrawalEgressScheduled,
-						{ egress_id, .. },
+				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+				WaitForDynamicResult::Data(data) => {
+					let (tx_hash, dynamic_events, ..) = data;
+					extract_dynamic_event!(
+						dynamic_events,
+						cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled,
+						{ egress_id },
 						ApiWaitForResult::TxDetails {
 							tx_hash,
-							response: *egress_id
+							response: (egress_id.0 .0, egress_id.1)
 						}
 					)?
 				},
@@ -334,7 +334,7 @@ where
 
 		let (tx_hash, _, _, _) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_lp::Call::transfer_asset {
 					amount,
 					asset,
@@ -357,9 +357,9 @@ where
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
-		Ok(into_api_wait_for_result(
+		Ok(into_api_wait_for_dynamic_result(
 			self.signed_pool_client
-				.submit_wait_for_result(
+				.submit_wait_for_result_dynamic(
 					RuntimeCall::from(pallet_cf_pools::Call::update_range_order {
 						base_asset,
 						quote_asset,
@@ -371,8 +371,8 @@ where
 					false,
 				)
 				.await?,
-			collect_range_order_returns,
-		))
+			filter_range_orders,
+		)?)
 	}
 
 	async fn set_range_order(
@@ -384,9 +384,9 @@ where
 		size: RangeOrderSizeJson,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
-		Ok(into_api_wait_for_result(
+		Ok(into_api_wait_for_dynamic_result(
 			self.signed_pool_client
-				.submit_wait_for_result(
+				.submit_wait_for_result_dynamic(
 					RuntimeCall::from(pallet_cf_pools::Call::set_range_order {
 						base_asset,
 						quote_asset,
@@ -398,8 +398,8 @@ where
 					false,
 				)
 				.await?,
-			collect_range_order_returns,
-		))
+			filter_range_orders,
+		)?)
 	}
 
 	async fn update_limit_order(
@@ -570,16 +570,16 @@ where
 		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
-		Ok(into_api_wait_for_result(
+		Ok(into_api_wait_for_dynamic_result(
 			self.signed_pool_client
-				.submit_wait_for_result(
+				.submit_wait_for_result_dynamic(
 					RuntimeCall::from(pallet_cf_pools::Call::cancel_orders_batch { orders }),
 					wait_for.unwrap_or_default(),
 					false,
 				)
 				.await?,
-			collect_order_returns,
-		))
+			filter_orders,
+		)?)
 	}
 }
 
@@ -610,10 +610,10 @@ where
 		dispatch_at: Option<BlockNumber>,
 		wait_for: WaitFor,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
-		Ok(into_api_wait_for_result(
+		Ok(into_api_wait_for_dynamic_result(
 			if let Some(dispatch_at) = dispatch_at {
 				self.signed_pool_client
-					.submit_wait_for_result(
+					.submit_wait_for_result_dynamic(
 						RuntimeCall::from(pallet_cf_pools::Call::schedule_limit_order_update {
 							call: Box::new(call),
 							dispatch_at,
@@ -624,11 +624,11 @@ where
 					.await?
 			} else {
 				self.signed_pool_client
-					.submit_wait_for_result(RuntimeCall::from(call), wait_for, false)
+					.submit_wait_for_result_dynamic(RuntimeCall::from(call), wait_for, false)
 					.await?
 			},
-			collect_limit_order_returns,
-		))
+			filter_limit_orders,
+		)?)
 	}
 
 	pub async fn get_open_swap_channels_for_chain<CH: Chain>(
@@ -669,15 +669,82 @@ where
 	}
 }
 
-fn into_api_wait_for_result<T>(
-	from: WaitForResult,
-	map_events: impl FnOnce(Vec<state_chain_runtime::RuntimeEvent>) -> T,
-) -> ApiWaitForResult<T> {
+fn into_api_wait_for_dynamic_result<T>(
+	from: WaitForDynamicResult,
+	map_events: impl FnOnce(&DynamicEvents) -> Result<T, DynamicEventError>,
+) -> Result<ApiWaitForResult<T>, DynamicEventError> {
 	match from {
-		WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-		WaitForResult::Details(details) => {
-			let (tx_hash, events, ..) = details;
-			ApiWaitForResult::TxDetails { tx_hash, response: map_events(events) }
+		WaitForDynamicResult::TransactionHash(tx_hash) => Ok(ApiWaitForResult::TxHash(tx_hash)),
+		WaitForDynamicResult::Data(data) => {
+			let (tx_hash, dynamic_events, ..) = data;
+			Ok(ApiWaitForResult::TxDetails { tx_hash, response: map_events(&dynamic_events)? })
 		},
 	}
+}
+
+pub fn filter_orders(events: &DynamicEvents) -> Result<Vec<LimitOrRangeOrder>, DynamicEventError> {
+	Ok(filter_limit_orders(events)?
+		.into_iter()
+		.map(LimitOrRangeOrder::LimitOrder)
+		.chain(filter_range_orders(events)?.into_iter().map(LimitOrRangeOrder::RangeOrder))
+		.collect())
+}
+
+pub fn filter_range_orders(events: &DynamicEvents) -> Result<Vec<RangeOrder>, DynamicEventError> {
+	Ok(events
+		.find_all_static_events::<cf_static_runtime::liquidity_pools::events::RangeOrderUpdated>(
+			false,
+		)?
+		.into_iter()
+		.map(|event| -> RangeOrder {
+			// Convert from cf_static_runtime generated types
+			let size_change = event
+				.size_change
+				.map(Into::<IncreaseOrDecrease<pallet_cf_pools::RangeOrderChange>>::into);
+			let collected_fees =
+				Into::<pallet_cf_pools::pallet::AssetAmounts>::into(event.collected_fees);
+
+			RangeOrder {
+				base_asset: event.base_asset.0,
+				quote_asset: event.quote_asset.0,
+				id: event.id.into(),
+				size_change: size_change.map(|increase_or_decrease| {
+					increase_or_decrease.map(|range_order_change| RangeOrderChange {
+						liquidity: range_order_change.liquidity.into(),
+						amounts: range_order_change.amounts.map(|amount| amount.into()),
+					})
+				}),
+				liquidity_total: event.liquidity_total.into(),
+				tick_range: Range { start: event.tick_range.start, end: event.tick_range.end },
+				collected_fees: collected_fees.map(Into::into),
+			}
+		})
+		.collect::<Vec<_>>())
+}
+
+pub fn filter_limit_orders(events: &DynamicEvents) -> Result<Vec<LimitOrder>, DynamicEventError> {
+	Ok(events
+		.find_all_static_events::<cf_static_runtime::liquidity_pools::events::LimitOrderUpdated>(
+			false,
+		)?
+		.into_iter()
+		.map(|event| -> LimitOrder {
+			// Convert from cf_static_runtime generated types
+			let sell_amount_change =
+				event.sell_amount_change.map(Into::<IncreaseOrDecrease<_>>::into);
+
+			LimitOrder {
+				base_asset: event.base_asset.0,
+				quote_asset: event.quote_asset.0,
+				side: event.side.0,
+				id: event.id.into(),
+				tick: event.tick,
+				sell_amount_total: event.sell_amount_total.into(),
+				collected_fees: event.collected_fees.into(),
+				bought_amount: event.bought_amount.into(),
+				sell_amount_change: sell_amount_change
+					.map(|increase_or_decrease| increase_or_decrease.map(|amount| amount.into())),
+			}
+		})
+		.collect::<Vec<_>>())
 }

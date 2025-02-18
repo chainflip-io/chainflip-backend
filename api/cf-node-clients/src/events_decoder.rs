@@ -140,6 +140,23 @@ impl DynamicEvents {
 		Ok(None)
 	}
 
+	pub fn find_all_static_events<E: StaticEvent>(
+		&self,
+		is_strict: bool,
+	) -> Result<Vec<E>, DynamicEventError> {
+		self.events
+			.iter()
+			.filter(|event| (event.pallet_name(), event.variant_name()) == (E::PALLET, E::EVENT))
+			.filter_map(|event| {
+				if is_strict {
+					event.as_event_strict::<E>().transpose()
+				} else {
+					event.as_event::<E>().transpose()
+				}
+			})
+			.collect()
+	}
+
 	pub fn extrinsic_result(
 		&self,
 	) -> Result<Either<DispatchInfo, DispatchError>, DynamicEventError> {

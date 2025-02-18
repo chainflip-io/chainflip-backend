@@ -2011,6 +2011,7 @@ dependencies = [
 name = "cf-node-clients"
 version = "0.1.0"
 dependencies = [
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "frame-metadata 16.0.0",
@@ -2018,6 +2019,7 @@ dependencies = [
  "frame-support 37.0.0",
  "frame-system 37.1.0",
  "pallet-cf-funding",
+ "pallet-cf-pools",
  "parity-scale-codec",
  "scale-info",
  "serde",

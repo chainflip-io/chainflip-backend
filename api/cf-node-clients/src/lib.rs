@@ -1,5 +1,5 @@
 use crate::{
-	error_decoder::{DispatchError, ErrorDecoder},
+	error_decoder::ErrorDecoder,
 	events_decoder::{DynamicEventError, DynamicEvents, EventsDecoder},
 };
 use frame_support::dispatch::DispatchInfo;
@@ -8,6 +8,7 @@ use sp_core::{
 	serde::{Deserialize, Serialize},
 	H256,
 };
+use sp_runtime::DispatchError;
 use std::sync::OnceLock;
 
 pub mod error_decoder;
@@ -28,6 +29,8 @@ pub mod subxt_state_chain_config;
 /// * The `::subxt::utils::Static` is required to wrap the type and implement the necessary
 ///   `EncodeAsType` and `DecodeAsType` traits.
 /// * Any cf type that needs to be substituted must be defined in the `substitute_type` directive.
+/// * For any other complex types with multiple hieracrchies or generics, please add manual
+///   conversion functions below.
 #[subxt::subxt(
 	runtime_path = "../../target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm",
 	substitute_type(
@@ -35,8 +38,16 @@ pub mod subxt_state_chain_config;
 		with = "::subxt::utils::Static<cf_chains::address::EncodedAddress>"
 	),
 	substitute_type(
+		path = "cf_primitives::chains::assets::any::Asset",
+		with = "::subxt::utils::Static<cf_primitives::chains::assets::any::Asset>"
+	),
+	substitute_type(
 		path = "cf_primitives::chains::ForeignChain",
 		with = "::subxt::utils::Static<cf_primitives::chains::ForeignChain>"
+	),
+	substitute_type(
+		path = "cf_amm::common::Side",
+		with = "::subxt::utils::Static<cf_amm::common::Side>"
 	),
 	substitute_type(
 		path = "cf_chains::ChannelRefundParametersGeneric<A>",
@@ -44,6 +55,40 @@ pub mod subxt_state_chain_config;
 	)
 )]
 pub mod cf_static_runtime {}
+
+// substitute_type(
+// path = "frame_support::dispatch::DispatchInfo",
+// with = "::subxt::utils::Static<frame_support::dispatch::DispatchInfo>"
+// ),
+
+// substitute_type(
+// path = "sp_runtime::DispatchError",
+// with = "::subxt::utils::Static<sp_runtime::DispatchError>"
+// ),
+
+//
+// substitute_type(
+// path = "primitive_types::U256",
+// with = "::subxt::utils::Static<sp_core::U256>"
+// ),
+
+// substitute_type(
+// path = "pallet_cf_pools::pallet::IncreaseOrDecrease<A>",
+// with = "::subxt::utils::Static<pallet_cf_pools::pallet::IncreaseOrDecrease<A>>"
+// ),
+// substitute_type(
+// path = "cf_amm::common::PoolPairsMap<A>",
+// with = "::subxt::utils::Static<cf_amm::common::PoolPairsMap<sp_core::U256>>"
+// ),
+
+// substitute_type(
+// path = "cf_amm::limit_orders::Position",
+// with = "::subxt::utils::Static<cf_amm::limit_orders::Position>"
+// ),
+// substitute_type(
+// path = "cf_amm::common::PoolPairsMap<A>",
+// with = "::subxt::utils::Static<cf_amm::common::PoolPairsMap<A>>"
+// ),
 
 pub fn build_runtime_version() -> &'static sp_version::RuntimeVersion {
 	static BUILD_RUNTIME_VERSION: OnceLock<sp_version::RuntimeVersion> = OnceLock::new();
@@ -71,6 +116,13 @@ pub enum WaitForResult {
 	// The hash of the SC transaction that was submitted.
 	TransactionHash(H256),
 	Details(ExtrinsicDetails),
+}
+
+#[derive(Debug)]
+pub enum WaitForDynamicResult {
+	// The hash of the SC transaction that was submitted.
+	TransactionHash(H256),
+	Data(ExtrinsicData),
 }
 
 pub struct RuntimeDecoder {
@@ -105,8 +157,8 @@ impl RuntimeDecoder {
 
 	pub fn decode_dispatch_error(
 		&self,
-		dispatch_error: sp_runtime::DispatchError,
-	) -> DispatchError {
+		dispatch_error: DispatchError,
+	) -> error_decoder::DispatchError {
 		self.error_decoder.decode_dispatch_error(dispatch_error)
 	}
 }
@@ -124,3 +176,114 @@ macro_rules! extract_dynamic_event {
 		}
     };
 }
+
+// ---- Conversions
+
+impl<T> From<cf_static_runtime::runtime_types::cf_amm::common::PoolPairsMap<T>>
+	for cf_amm::common::PoolPairsMap<T>
+{
+	fn from(value: cf_static_runtime::runtime_types::cf_amm::common::PoolPairsMap<T>) -> Self {
+		Self { base: value.base, quote: value.quote }
+	}
+}
+
+impl<T> From<cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease<T>>
+	for pallet_cf_pools::pallet::IncreaseOrDecrease<T>
+{
+	fn from(
+		value: cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease<T>,
+	) -> Self {
+		match value {
+			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(t) => pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(t),
+			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(t) => pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(t),
+		}
+	}
+}
+
+impl
+	From<
+		cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease<
+			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::RangeOrderChange,
+		>,
+	> for pallet_cf_pools::pallet::IncreaseOrDecrease<pallet_cf_pools::RangeOrderChange>
+{
+	fn from(
+		value: cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease<
+			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::RangeOrderChange,
+		>,
+	) -> Self {
+		match value {
+			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(t) => pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(pallet_cf_pools::RangeOrderChange{
+				liquidity: t.liquidity,
+				amounts: t.amounts.into(),
+			}),
+			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(t) => pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(pallet_cf_pools::RangeOrderChange {
+				liquidity: t.liquidity,
+				amounts: t.amounts.into(),
+			}),
+		}
+	}
+}
+
+// impl<T> From<cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease<T>>
+// for pallet_cf_pools::pallet::IncreaseOrDecrease<T> { 	fn from(value:
+// cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease<T>) -> Self {
+// 		match value {
+// 			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(t) =>
+// pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(t),
+// 			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(t) =>
+// pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(t), 		}
+// 	}
+// }
+
+// impl From<cf_static_runtime::runtime_types::pallet_cf_pools::pallet::RangeOrderChange> for
+// pallet_cf_pools::pallet::RangeOrderChange { 	fn from(value:
+// cf_static_runtime::runtime_types::pallet_cf_pools::pallet::RangeOrderChange) -> Self { 		Self {
+// 			liquidity: value.liquidity,
+// 			amounts: value.amounts.into(),
+// 		}
+// 	}
+// }
+
+//
+// impl<T> cf_static_runtime::runtime_types::cf_amm::common::PoolPairsMap<T> {
+// 	pub fn from_array(array: [T; 2]) -> Self {
+// 		let [base, quote] = array;
+// 		Self { base, quote }
+// 	}
+//
+// 	pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) ->
+// cf_static_runtime::runtime_types::cf_amm::common::PoolPairsMap<R> {
+// 		cf_static_runtime::runtime_types::cf_amm::common::PoolPairsMap { base: f(self.base), quote:
+// f(self.quote) } 	}
+// }
+//
+// impl<T> cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease<T> {
+// 	pub fn abs(&self) -> &T {
+// 		match self {
+// 			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(t) =>
+// t, 			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(t)
+// => t, 		}
+// 	}
+//
+// 	pub fn map<R, F: FnOnce(T) -> R>(self, f: F) ->
+// cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease<R> { 		match self {
+// 			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(t) =>
+// cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(f(t)),
+// 			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(t) =>
+// cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(f(t)),
+// 		}
+// 	}
+//
+// 	pub fn try_map<R, E, F: FnOnce(T) -> Result<R, E>>(
+// 		self,
+// 		f: F,
+// 	) -> Result<cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease<R>, E>
+// { 		Ok(match self {
+// 			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(t) =>
+// cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Increase(f(t)?),
+// 			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(t) =>
+// cf_static_runtime::runtime_types::pallet_cf_pools::pallet::IncreaseOrDecrease::Decrease(f(t)?),
+// 		})
+// 	}
+// }

@@ -2,7 +2,7 @@ use crate::{internal_error, CfApiError, RpcResult, StorageQueryApi};
 use anyhow::anyhow;
 use cf_node_clients::{
 	build_runtime_version, signer::PairSigner, ExtrinsicData, ExtrinsicDetails, RuntimeDecoder,
-	WaitFor, WaitForResult,
+	WaitFor, WaitForDynamicResult, WaitForResult,
 };
 use codec::{Decode, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
@@ -394,6 +394,24 @@ where
 				Ok(WaitForResult::Details(self.submit_watch(call, false, dry_run).await?)),
 			WaitFor::Finalized =>
 				Ok(WaitForResult::Details(self.submit_watch(call, true, dry_run).await?)),
+		}
+	}
+
+	pub async fn submit_wait_for_result_dynamic(
+		&self,
+		call: RuntimeCall,
+		wait_for: WaitFor,
+		dry_run: bool,
+	) -> RpcResult<WaitForDynamicResult> {
+		match wait_for {
+			WaitFor::NoWait =>
+				Ok(WaitForDynamicResult::TransactionHash(self.submit_one(call, dry_run).await?)),
+			WaitFor::InBlock => Ok(WaitForDynamicResult::Data(
+				self.submit_watch_dynamic(call, false, dry_run).await?,
+			)),
+			WaitFor::Finalized => Ok(WaitForDynamicResult::Data(
+				self.submit_watch_dynamic(call, true, dry_run).await?,
+			)),
 		}
 	}
 
