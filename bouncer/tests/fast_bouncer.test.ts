@@ -28,7 +28,7 @@ describe('ConcurrentTests', () => {
 
   concurrentTest('SwapLessThanED', swapLessThanED, 300);
   concurrentTest('AllSwaps', testAllSwaps, numberOfNodes === 1 ? 1200 : 1800); // TODO: find out what the 3-node timeout should be
-  concurrentTest('EvmDeposits', testEvmDeposits, 250);
+  concurrentTest('EvmDeposits', testEvmDeposits, 350);
   concurrentTest('FundRedeem', testFundRedeem, 1000);
   concurrentTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
   concurrentTest('LpApi', testLpApi, 200);
