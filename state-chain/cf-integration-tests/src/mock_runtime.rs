@@ -10,7 +10,9 @@ use chainflip_node::{
 	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
 	test_account_from_seed,
 };
-use pallet_cf_elections::InitialState;
+use pallet_cf_elections::{
+	electoral_systems::blockchain::delta_based_ingress::BackoffSettings, InitialState,
+};
 use pallet_cf_validator::SetSizeParameters;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -311,10 +313,13 @@ impl ExtBuilder {
 					unsynchronised_settings: ((), (), (), (), (), ()),
 					settings: (
 						(),
-						SolanaIngressSettings {
-							vault_program: sol_test_values::VAULT_PROGRAM,
-							usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
-						},
+						(
+							SolanaIngressSettings {
+								vault_program: sol_test_values::VAULT_PROGRAM,
+								usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
+							},
+							BackoffSettings { backoff_after_blocks: 600, backoff_frequency: 100 },
+						),
 						(),
 						(),
 						BLOCKS_BETWEEN_LIVENESS_CHECKS,

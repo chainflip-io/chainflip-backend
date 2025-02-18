@@ -108,7 +108,7 @@ pub use frame_support::{
 	},
 	StorageValue,
 };
-use frame_system::offchain::SendTransactionTypes;
+use frame_system::{offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
 use pallet_cf_funding::MinimumFunding;
 use pallet_cf_pools::{PoolInfo, PoolOrders};
 use pallet_grandpa::AuthorityId as GrandpaId;
@@ -377,7 +377,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Ethereum>;
+	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Runtime>>;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
@@ -405,7 +405,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Polkadot>;
+	type IngressSource = DummyIngressSource<Polkadot, BlockNumberFor<Runtime>>;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
@@ -433,7 +433,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Bitcoin>;
+	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Runtime>>;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
@@ -461,7 +461,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Arbitrum>;
+	type IngressSource = DummyIngressSource<Arbitrum, BlockNumberFor<Runtime>>;
 	type TargetChain = Arbitrum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
@@ -1296,7 +1296,6 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-#[allow(unused)]
 macro_rules! instanced_migrations {
 	(
 		module: $module:ident,
@@ -1329,7 +1328,17 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_9 = ();
+use frame_support::migrations::VersionedMigration;
+type MigrationsForV1_9 = (
+	instanced_migrations!(
+		module: pallet_cf_elections,
+		migration: migrations::backoff_settings_migration::SolanaBackoffSettingsMigration,
+		from: 5,
+		to: 6,
+		include_instances: [SolanaInstance],
+		exclude_instances: [],
+	),
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]

@@ -5,6 +5,7 @@ use crate::{
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifier,
 };
+use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::IngressSink;
 use cf_utilities::success_threshold_from_share_count;
@@ -20,9 +21,12 @@ use scale_info::TypeInfo;
 use sp_core::ConstU32;
 use sp_std::{
 	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+	ops::{Add, Rem},
 	vec,
 	vec::Vec,
 };
+
+use serde::{Deserialize, Serialize};
 
 pub const MAXIMUM_CHANNELS_PER_ELECTION: u32 = 50;
 
@@ -42,19 +46,40 @@ pub struct OpenChannelDetails<Asset, BlockNumber> {
 
 pub type ChannelTotalIngressedFor<Sink> =
 	ChannelTotalIngressed<<Sink as IngressSink>::BlockNumber, <Sink as IngressSink>::Amount>;
+
 pub type OpenChannelDetailsFor<Sink> =
 	OpenChannelDetails<<Sink as IngressSink>::Asset, <Sink as IngressSink>::BlockNumber>;
 
-pub struct DeltaBasedIngress<Sink: IngressSink, Settings, ValidatorId> {
-	_phantom: core::marker::PhantomData<(Sink, Settings, ValidatorId)>,
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+)]
+pub struct BackoffSettings<StateChainBlockNumber> {
+	// After this number of state chain blocks, we will backoff request frequency. To
+	// request every 10 mintutes / 100 blocks.
+	pub backoff_after_blocks: StateChainBlockNumber,
+	// The frequency of requests after the backoff period.
+	pub backoff_frequency: StateChainBlockNumber,
 }
-impl<Sink, Settings, ValidatorId> DeltaBasedIngress<Sink, Settings, ValidatorId>
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for BackoffSettings<u32> {
+	fn benchmark_value() -> Self {
+		Self { backoff_after_blocks: 600, backoff_frequency: 100 }
+	}
+}
+
+pub struct DeltaBasedIngress<Sink: IngressSink, Settings, ValidatorId, StateChainBlockNumber> {
+	_phantom: core::marker::PhantomData<(Sink, Settings, ValidatorId, StateChainBlockNumber)>,
+}
+impl<Sink, Settings, ValidatorId, StateChainBlockNumber>
+	DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
 where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	pub fn open_channel<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<
@@ -63,6 +88,7 @@ where
 		channel: Sink::Account,
 		asset: Sink::Asset,
 		close_block: Sink::BlockNumber,
+		current_state_chain_block_number: StateChainBlockNumber,
 	) -> Result<(), CorruptStorageError> {
 		let channel_details = (
 			OpenChannelDetails { asset, close_block },
@@ -72,7 +98,7 @@ where
 		);
 		if let Some(election_identifier) = election_identifiers.last() {
 			let mut election_access = ElectoralAccess::election_mut(*election_identifier);
-			let mut channels = election_access.properties()?;
+			let (mut channels, _last_channel_opened_at) = election_access.properties()?;
 			if channels.len() < MAXIMUM_CHANNELS_PER_ELECTION as usize {
 				channels.insert(channel, channel_details);
 				election_access.refresh(
@@ -80,7 +106,7 @@ where
 						.extra()
 						.checked_add(1)
 						.ok_or_else(CorruptStorageError::new)?,
-					channels,
+					(channels, current_state_chain_block_number),
 				)?;
 				return Ok(())
 			}
@@ -89,24 +115,25 @@ where
 		ElectoralAccess::new_election(
 			Default::default(), /* We use the lowest value, so we can refresh the elections the
 			                     * maximum number of times */
-			[(channel, channel_details)].into_iter().collect(),
+			([(channel, channel_details)].into_iter().collect(), current_state_chain_block_number),
 			Default::default(),
 		)?;
 
 		Ok(())
 	}
 }
-impl<Sink, Settings, ValidatorId> ElectoralSystemTypes
-	for DeltaBasedIngress<Sink, Settings, ValidatorId>
+impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystemTypes
+	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
 where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	type ValidatorId = ValidatorId;
-
+	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = ();
 
 	// Stores the total ingressed amounts for all channels that have already been dispatched i.e. we
@@ -116,12 +143,16 @@ where
 	type ElectoralUnsynchronisedStateMapValue = ChannelTotalIngressedFor<Sink>;
 
 	type ElectoralUnsynchronisedSettings = ();
-	type ElectoralSettings = Settings;
+	type ElectoralSettings = (Settings, BackoffSettings<StateChainBlockNumber>);
 	type ElectionIdentifierExtra = u32;
 
 	// Stores the channels a given election is witnessing, and a recent total ingressed value.
-	type ElectionProperties =
-		BTreeMap<Sink::Account, (OpenChannelDetailsFor<Sink>, ChannelTotalIngressedFor<Sink>)>;
+	type ElectionProperties = (
+		BTreeMap<Sink::Account, (OpenChannelDetailsFor<Sink>, ChannelTotalIngressedFor<Sink>)>,
+		// Last Channel Opened At - We use this to determine when it is ok to backoff
+		// request frequency.
+		StateChainBlockNumber,
+	);
 
 	// Stores the any pending total ingressed values that are waiting for
 	// the safety margin to pass.
@@ -141,19 +172,39 @@ where
 	type OnFinalizeReturn = ();
 }
 
-impl<Sink, Settings, ValidatorId> ElectoralSystem for DeltaBasedIngress<Sink, Settings, ValidatorId>
+impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystem
+	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
 where
 	Sink: IngressSink<DepositDetails = ()> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	StateChainBlockNumber: Member
+		+ Parameter
+		+ Ord
+		+ MaybeSerializeDeserialize
+		+ Add<Output = StateChainBlockNumber>
+		+ Rem<Output = StateChainBlockNumber>
+		+ frame_support::sp_runtime::traits::Zero,
 {
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_access: &ElectionAccess,
+		election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		current_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
-		Ok(true)
+		let (_settings, backoff_settings) = election_access.settings()?;
+		let (_channel_properties, last_channel_opened_at) = election_access.properties()?;
+
+		// We want to vote if:
+		// 1. We are still in the first few blocks (before the backoff_after_blocks period has
+		//    elapsed)
+		// 2. The backoff_after_blocks period has elapsed, but we are on a block that is a multiple
+		//    of backoff_frequency
+		Ok((current_state_chain_block_number.clone() <=
+			last_channel_opened_at + backoff_settings.backoff_after_blocks) ||
+			(current_state_chain_block_number.clone() % backoff_settings.backoff_frequency ==
+				Zero::zero()))
 	}
 
 	fn is_vote_needed(
@@ -176,7 +227,11 @@ where
 		chain_tracking: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
-			let (properties, pending_ingress_totals, option_consensus) = {
+			let (
+				(old_channel_properties, last_channel_opened_at),
+				pending_ingress_totals,
+				option_consensus,
+			) = {
 				let election_access = ElectoralAccess::election_mut(election_identifier);
 				(
 					election_access.properties()?,
@@ -185,10 +240,10 @@ where
 				)
 			};
 
-			let mut new_properties = properties.clone();
+			let mut new_channel_properties = old_channel_properties.clone();
 			let mut new_pending_ingress_totals =
 				<Self as ElectoralSystemTypes>::ElectionState::default();
-			for (account, (details, _)) in &properties {
+			for (account, (details, _)) in &old_channel_properties {
 				// We currently split the ingressed amount into two parts:
 				// 1. The consensus amount with a block number *earlier* than chain tracking. i.e.
 				//    Chain tracking is *ahead*, deposit witnessing is lagging.
@@ -298,7 +353,7 @@ where
 								(account.clone(), details.asset),
 								Some(*ready_total),
 							);
-							new_properties.entry(account.clone()).and_modify(
+							new_channel_properties.entry(account.clone()).and_modify(
 								|(_details, total)| {
 									*total = *ready_total;
 								},
@@ -320,26 +375,28 @@ where
 					// confirmed deposits have been ingressed.
 					if ready_total.block_number >= details.close_block {
 						Sink::on_channel_closed(account.clone());
-						new_properties.remove(account);
+						new_channel_properties.remove(account);
 					}
 				}
 				if let Some(future_total) = future_total {
-					new_properties.entry(account.clone()).and_modify(|(_details, total)| {
-						*total = *future_total;
-					});
+					new_channel_properties.entry(account.clone()).and_modify(
+						|(_details, total)| {
+							*total = *future_total;
+						},
+					);
 					new_pending_ingress_totals.insert(account.clone(), *future_total);
 				}
 			}
 
 			let mut election_access = ElectoralAccess::election_mut(election_identifier);
 
-			if new_properties.is_empty() {
+			if new_channel_properties.is_empty() {
 				// Note: it's possible that there are still some remaining pending totals, but if
 				// the channel is expired, we need to close it, otherwise an attacker could keep it
 				// open indeifitely by streaming small deposits.
 				election_access.delete();
-			} else if new_properties != properties {
-				log::debug!("recreate delta based ingress election: recreate since properties changed from: {properties:?}, to: {new_properties:?}");
+			} else if new_channel_properties != old_channel_properties {
+				log::debug!("recreate delta based ingress election: recreate since properties changed from: {old_channel_properties:?}, to: {new_channel_properties:?}");
 
 				election_access.clear_votes();
 				election_access.set_state(new_pending_ingress_totals)?;
@@ -348,10 +405,10 @@ where
 						.extra()
 						.checked_add(1)
 						.ok_or_else(CorruptStorageError::new)?,
-					new_properties,
+					(new_channel_properties, last_channel_opened_at),
 				)?;
 			} else {
-				log::debug!("recreate delta based ingress election: keeping old because properties didn't change: {properties:?}");
+				log::debug!("recreate delta based ingress election: keeping old because properties didn't change: {old_channel_properties:?}");
 				election_access.set_state(new_pending_ingress_totals)?;
 			}
 		}
@@ -369,7 +426,7 @@ where
 		let active_votes = consensus_votes.active_votes();
 		let num_active_votes = active_votes.len() as u32;
 		if num_active_votes >= threshold {
-			let election_channels = election_access.properties()?;
+			let (election_channels, _last_channel_opened_at) = election_access.properties()?;
 
 			let mut votes_grouped_by_channel = BTreeMap::<_, Vec<_>>::new();
 			for (account, channel_vote) in active_votes.into_iter().flatten() {

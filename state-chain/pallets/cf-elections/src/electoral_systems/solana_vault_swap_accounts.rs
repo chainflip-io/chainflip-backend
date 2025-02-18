@@ -116,6 +116,7 @@ impl<
 	for SolanaVaultSwapAccounts<Account, SwapDetails, BlockNumber, Settings, Hook, ValidatorId, E>
 {
 	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = BlockNumber;
 	type ElectoralUnsynchronisedState = SolanaVaultSwapAccountsLastClosedAt<BlockNumber>;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -153,6 +154,7 @@ impl<
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(true)
 	}

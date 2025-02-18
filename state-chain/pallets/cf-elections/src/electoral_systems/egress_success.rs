@@ -15,8 +15,15 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// This electoral system detects if something occurred or not. Voters simply vote if something
 /// happened, and if they haven't seen it happen, they don't vote.
-pub struct EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId> {
-	_phantom: core::marker::PhantomData<(Identifier, Value, Settings, Hook, ValidatorId)>,
+pub struct EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber> {
+	_phantom: core::marker::PhantomData<(
+		Identifier,
+		Value,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+	)>,
 }
 
 pub trait OnEgressSuccess<Identifier, Value> {
@@ -29,7 +36,8 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	pub fn watch_for_egress<
 		ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
@@ -47,9 +55,12 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystemTypes for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystemTypes
+	for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -71,7 +82,9 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem
+	for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -84,6 +97,7 @@ impl<
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(true)
 	}

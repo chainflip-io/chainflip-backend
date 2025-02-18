@@ -118,6 +118,7 @@ impl MockElectoralSystemRunner {
 
 impl ElectoralSystemTypes for MockElectoralSystemRunner {
 	type ValidatorId = <Test as Chainflip>::ValidatorId;
+	type StateChainBlockNumber = u64;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -175,6 +176,7 @@ impl ElectoralSystemRunner for MockElectoralSystemRunner {
 	fn is_vote_desired(
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_current_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(Self::vote_desired())
 	}

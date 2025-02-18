@@ -26,6 +26,7 @@ pub trait ElectoralSystemRunner:
 	fn is_vote_desired(
 		_election_identifier_with_extra: ElectionIdentifierOf<Self>,
 		current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_current_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(current_vote.is_none())
 	}

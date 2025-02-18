@@ -32,7 +32,7 @@ use cf_traits::{
 	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
-use frame_system as system;
+use frame_system::{self as system, pallet_prelude::BlockNumberFor};
 use sp_core::{ConstBool, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
 
@@ -116,7 +116,7 @@ impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Ethereum>;
+	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Test>>;
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;

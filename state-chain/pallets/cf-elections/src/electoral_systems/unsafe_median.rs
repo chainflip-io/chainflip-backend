@@ -22,17 +22,27 @@ use sp_std::vec::Vec;
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId> {
-	_phantom: core::marker::PhantomData<(Value, UnsynchronisedSettings, Settings, ValidatorId)>,
+pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId, StateChainBlockNumber>
+{
+	_phantom: core::marker::PhantomData<(
+		Value,
+		UnsynchronisedSettings,
+		Settings,
+		ValidatorId,
+		StateChainBlockNumber,
+	)>,
 }
 impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystemTypes for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystemTypes
+	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = StateChainBlockNumber;
 
 	type ElectoralUnsynchronisedState = Value;
 	type ElectoralUnsynchronisedStateMapKey = ();
@@ -55,7 +65,9 @@ impl<
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem
+	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId, StateChainBlockNumber>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,

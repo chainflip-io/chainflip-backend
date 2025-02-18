@@ -28,7 +28,7 @@ impl MockHook {
 type Vote = MonotonicChangeVote<Value, Slot>;
 type Value = u64;
 type Slot = u32;
-type SimpleMonotonicChange = MonotonicChange<(), Value, Slot, (), MockHook, ()>;
+type SimpleMonotonicChange = MonotonicChange<(), Value, Slot, (), MockHook, (), u32>;
 
 register_checks! {
 	SimpleMonotonicChange {

@@ -1081,23 +1081,30 @@ pub trait IngressSink {
 
 pub trait IngressSource {
 	type Chain: Chain;
+	type StateChainBlockNumber;
 
 	fn open_channel(
 		channel: <Self::Chain as Chain>::ChainAccount,
 		asset: <Self::Chain as Chain>::ChainAsset,
 		close_block: <Self::Chain as Chain>::ChainBlockNumber,
+		current_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> DispatchResult;
 }
-pub struct DummyIngressSource<TargetChain: Chain> {
-	_phantom: core::marker::PhantomData<TargetChain>,
+pub struct DummyIngressSource<TargetChain: Chain, StateChainBlockNumber> {
+	_phantom: core::marker::PhantomData<(TargetChain, StateChainBlockNumber)>,
 }
-impl<TargetChain: Chain> IngressSource for DummyIngressSource<TargetChain> {
+
+impl<TargetChain: Chain, StateChainBlockNumber> IngressSource
+	for DummyIngressSource<TargetChain, StateChainBlockNumber>
+{
 	type Chain = TargetChain;
+	type StateChainBlockNumber = StateChainBlockNumber;
 
 	fn open_channel(
 		_channel: <Self::Chain as Chain>::ChainAccount,
 		_asset: <Self::Chain as Chain>::ChainAsset,
 		_close_block: <Self::Chain as Chain>::ChainBlockNumber,
+		_current_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> DispatchResult {
 		Ok(())
 	}

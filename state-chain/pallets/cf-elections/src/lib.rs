@@ -116,7 +116,9 @@ pub mod vote_storage;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+
 pub mod weights;
+
 pub use weights::WeightInfo;
 
 use frame_support::pallet_prelude::*;
@@ -124,7 +126,7 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 pub use pallet::UniqueMonotonicIdentifier;
 
@@ -360,6 +362,7 @@ pub mod pallet {
 
 		type ElectoralSystemRunner: ElectoralSystemRunner<
 			ValidatorId = <Self as Chainflip>::ValidatorId,
+			StateChainBlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// The weights for the pallet
@@ -1750,6 +1753,7 @@ pub mod pallet {
 													is_vote_desired: <T::ElectoralSystemRunner as ElectoralSystemRunner>::is_vote_desired(
 														election_identifier,
 														option_current_authority_vote.filter(|_| !contains_timed_out_shared_data_references),
+														block_number,
 													)?,
 												},
 											))
