@@ -3,7 +3,7 @@ use crate::{DepositWitness, PalletSafeMode};
 
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
-	eth::{Address as EthereumAddress, EthereumTrackedData},
+	eth::EthereumTrackedData,
 	evm::U256,
 	ChannelRefundParametersDecoded,
 };
