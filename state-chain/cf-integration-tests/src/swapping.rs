@@ -691,11 +691,11 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 
 		assert_eq!(
 			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_499_999)),
-			Some(U256::from(1_499_999) + U256::from(150_000))
+			Some(U256::from(1_499_999) + U256::from(145_000))
 		);
 		assert_eq!(
 			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_500_000)),
-			Some(U256::from(1_500_000) + U256::from(150_000))
+			Some(U256::from(1_500_000) + U256::from(145_000))
 		);
 	});
 }

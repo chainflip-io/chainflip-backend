@@ -4,6 +4,7 @@ import { newCcmMetadata, prepareSwap } from '../shared/swapping';
 import {
   ccmSupportedChains,
   chainFromAsset,
+  chainGasAsset,
   EgressId,
   getEvmEndpoint,
   getSolConnection,
@@ -238,9 +239,9 @@ async function testGasLimitSwapToEvm(
     // scenario as it has a default buffer. Instead underestimate the gas budget.
     // Extra buffer for Arbitrum because the localnet l1BaseFee is huge (100x mainnet
     // value) and it decreases over time making this test flaky otherwise.
-    const estimatedGasAmount = await estimateCcmCfTesterGas(destChain, message);
+    let estimatedGasAmount = await estimateCcmCfTesterGas(destChain, message);
     ccmMetadata.gasBudget = Math.round(
-      estimatedGasAmount * (destChain === 'Arbitrum' ? 0.7 : 0.8),
+      estimatedGasAmount * (destChain === 'Arbitrum' ? 0.65 : 0.75),
     ).toString();
   }
   const testTag = abortTest ? `InsufficientGas` : '';
