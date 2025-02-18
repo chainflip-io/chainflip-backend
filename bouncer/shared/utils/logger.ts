@@ -1,5 +1,3 @@
-import { existsSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
 import pino from 'pino';
 
 export type Logger = pino.Logger;
@@ -9,6 +7,7 @@ const logFile = process.env.BOUNCER_LOG_PATH ?? '/tmp/chainflip/bouncer.log';
 const logFileDestination = pino.destination({
   dest: logFile,
   sync: false,
+  mkdir: true,
 });
 const prettyConsoleTransport = pino.transport({
   target: 'pino-pretty',
@@ -19,20 +18,8 @@ const prettyConsoleTransport = pino.transport({
   },
 });
 
-// Create the logging folder if it doesn't exist
-const logFolder = dirname(logFile);
-if (!existsSync(logFolder)) {
-  mkdirSync(logFolder, { recursive: true });
-}
-
 // Log the given value without having to include %s in the message. Just like console.log
-function logMethod(
-  this: pino.Logger,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  args: any[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  method: (this: pino.Logger, ...args: any[]) => void,
-) {
+function logMethod(this: pino.Logger, args: Parameters<pino.LogFn>, method: pino.LogFn) {
   const newArgs = args;
   if (args.length === 2 && !args[0].includes('%s')) {
     newArgs[0] = `${args[0]} %s`;
