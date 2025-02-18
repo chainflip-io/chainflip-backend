@@ -19,19 +19,17 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 
-
-/// Type which can be used for implementing traits that 
+/// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
 /// the state machine based electoral systems.
 #[derive_where(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound())]
-#[serde(bound="")]
+#[serde(bound = "")]
 #[scale_info(skip_type_params(Tag1, Tag2))]
-pub struct HookTypeFor<Tag1,Tag2> {
-	_phantom: sp_std::marker::PhantomData<(Tag1, Tag2)>
+pub struct HookTypeFor<Tag1, Tag2> {
+	_phantom: sp_std::marker::PhantomData<(Tag1, Tag2)>,
 }
-
 
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {
 	// type ChainBlockNumber: Serde
@@ -47,7 +45,6 @@ pub trait BWTypes: 'static + Sized + BWProcessorTypes {
 	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>>;
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>>;
-
 }
 
 // hook types
@@ -71,7 +68,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
 
 pub struct ExecuteHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
-	type Input =(T::ChainBlockNumber, T::Event);
+	type Input = (T::ChainBlockNumber, T::Event);
 	type Output = ();
 }
 
@@ -87,11 +84,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, SafetyMarginHook> {
 	type Output = u32;
 }
 
-
-
-
-pub trait BWProcessorTypes : Sized {
-
+pub trait BWProcessorTypes: Sized {
 	type ChainBlockNumber: Serde
 		+ Copy
 		+ Eq
@@ -117,18 +110,8 @@ pub trait BWProcessorTypes : Sized {
 	// type BlockData: Serde + Clone;
 
 	type Event: Serde + Debug + Clone + Eq;
-	type Rules: Hook<HookTypeFor<Self, RulesHook>>
-			 + Default
-		+ Serde
-		+ Debug
-		+ Clone
-		+ Eq;
-	type Execute: Hook<HookTypeFor<Self, ExecuteHook>>
-		+ Default
-		+ Serde
-		+ Debug
-		+ Clone
-		+ Eq;
+	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
+	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + Serde + Debug + Clone + Eq;
 	type DedupEvents: Hook<HookTypeFor<Self, DedupEventsHook>>
 		+ Default
 		+ Serde
@@ -136,7 +119,12 @@ pub trait BWProcessorTypes : Sized {
 		+ Clone
 		+ Eq;
 
-	type SafetyMargin: Hook<HookTypeFor<Self, SafetyMarginHook>> + Default + Serde + Debug + Clone + Eq;
+	type SafetyMargin: Hook<HookTypeFor<Self, SafetyMarginHook>>
+		+ Default
+		+ Serde
+		+ Debug
+		+ Clone
+		+ Eq;
 }
 
 #[derive(
@@ -434,11 +422,11 @@ mod tests {
 	use hook_test_utils::*;
 
 	fn generate_state<
-		T: BWTypes<SafeModeEnabledHook = ConstantHook<HookTypeFor<T, SafeModeEnabledHook>>,
-			SafetyMargin = ConstantHook<HookTypeFor<T, SafetyMarginHook>>
+		T: BWTypes<
+			SafeModeEnabledHook = ConstantHook<HookTypeFor<T, SafeModeEnabledHook>>,
+			SafetyMargin = ConstantHook<HookTypeFor<T, SafetyMarginHook>>,
 		>,
 	>() -> impl Strategy<Value = BWState<T>>
-
 	where
 		T::ChainBlockNumber: Arbitrary,
 		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
@@ -512,7 +500,7 @@ mod tests {
 	}
 
 	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
-		BWProcessorTypes for N 
+		BWProcessorTypes for N
 	{
 		type ChainBlockNumber = N;
 		type BlockData = ();
@@ -521,9 +509,7 @@ mod tests {
 		type Execute = ConstantHook<HookTypeFor<Self, ExecuteHook>>;
 		type DedupEvents = ConstantHook<HookTypeFor<Self, DedupEventsHook>>;
 		type SafetyMargin = ConstantHook<HookTypeFor<Self, SafetyMarginHook>>;
-
 	}
-
 
 	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
 		BWTypes for N

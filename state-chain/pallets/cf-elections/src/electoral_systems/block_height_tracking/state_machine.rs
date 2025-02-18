@@ -86,9 +86,20 @@ impl<T: BlockHeightTrackingTypes> Validate for BHWState<T> {
 	}
 }
 
-#[derive( Debug, Clone, PartialEq, Eq, Encode)]
-#[derive( Decode, TypeInfo, Deserialize, Serialize)]
-#[derive( Ord, PartialOrd, Default,)]
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
+	Default,
+)]
 pub struct BHWStateWrapper<T: BlockHeightTrackingTypes> {
 	pub state: BHWState<T>,
 	pub block_height_update: T::BlockHeightChangeHook,
@@ -239,7 +250,13 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 #[cfg(test)]
 mod tests {
 
-	use crate::{electoral_systems::{block_height_tracking::BlockHeightChangeHook, block_witnesser::state_machine::HookTypeFor, state_machine::core::MultiIndexAndValue}, prop_do};
+	use crate::{
+		electoral_systems::{
+			block_height_tracking::BlockHeightChangeHook,
+			block_witnesser::state_machine::HookTypeFor, state_machine::core::MultiIndexAndValue,
+		},
+		prop_do,
+	};
 	use cf_chains::{
 		self,
 		witness_period::{BlockWitnessRange, BlockZero, SaturatingStep},

@@ -14,7 +14,6 @@
 // State partially processed, how do we test that the state still gets processed until all the state
 // is processed.
 
-
 use core::ops::RangeInclusive;
 
 use super::{
@@ -25,7 +24,11 @@ use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::ChainProgress,
-		block_witnesser::{block_processor::test::MockBlockProcessorDefinition, state_machine::{ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook}, *},
+		block_witnesser::{
+			block_processor::test::MockBlockProcessorDefinition,
+			state_machine::{ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook},
+			*,
+		},
 		state_machine::{
 			core::{ConstantIndex, Hook, TypesFor},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
@@ -34,11 +37,8 @@ use crate::{
 	vote_storage,
 };
 use cf_chains::{mocks::MockEthereum, Chain};
-use codec::{Decode, Encode, MaxEncodedLen};
 use consensus::BWConsensus;
 use primitives::SafeModeStatus;
-use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_set::BTreeSet;
 use state_machine::{BWSettings, BWState, BWStateMachine, BWTypes};
 
@@ -58,7 +58,6 @@ pub type ValidatorId = u16;
 
 pub type BlockData = Vec<u8>;
 
-
 fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
 	assert!(count > 0);
 	// TODO: Test with other witness ranges.
@@ -77,7 +76,6 @@ pub type Properties = BTreeSet<u16>;
 // 		BTreeSet::new()
 // 	}
 // }
-
 
 impl Hook<HookTypeFor<Types, ElectionPropertiesHook>> for Types {
 	fn run(&mut self, input: ChainBlockNumber) -> Properties {
@@ -145,18 +143,15 @@ impl ProcessBlockData<ChainBlockNumber, BlockData>
 }
  */
 
-
 type Types = TypesFor<MockBlockProcessorDefinition>;
 
 type ElectionProperties = Properties;
-
 
 impl Hook<HookTypeFor<Types, SafeModeEnabledHook>> for Types {
 	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		SafeModeStatus::Disabled
 	}
 }
-
 
 /// Associating BW types to the struct
 impl BWTypes for Types {

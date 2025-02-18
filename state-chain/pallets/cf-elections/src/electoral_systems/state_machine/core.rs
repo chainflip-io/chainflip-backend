@@ -1,24 +1,21 @@
 use codec::{Decode, Encode};
+use derive_where::derive_where;
 use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::vec::Vec;
-use derive_where::derive_where;
 
-
-/// Type which can be used for implementing traits that 
+/// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
 /// the state machine based electoral systems.
 #[derive_where(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound())]
-#[serde(bound="")]
+#[serde(bound = "")]
 #[scale_info(skip_type_params(Tag))]
 pub(crate) struct TypesFor<Tag> {
-	_phantom: sp_std::marker::PhantomData<Tag>
+	_phantom: sp_std::marker::PhantomData<Tag>,
 }
-
-
 
 pub trait HookType {
 	type Input;
@@ -28,7 +25,6 @@ pub trait HookType {
 pub trait Hook<T: HookType> {
 	fn run(&mut self, input: T::Input) -> T::Output;
 }
-
 
 pub mod hook_test_utils {
 	use super::*;
@@ -59,16 +55,18 @@ pub mod hook_test_utils {
 		}
 	}
 
-	impl<T: HookType> Default for ConstantHook<T> 
-	where T::Output: Default
+	impl<T: HookType> Default for ConstantHook<T>
+	where
+		T::Output: Default,
 	{
 		fn default() -> Self {
 			Self::new(Default::default())
 		}
 	}
 
-	impl<T: HookType> Hook<T> for ConstantHook<T> 
-	where T::Output: Clone
+	impl<T: HookType> Hook<T> for ConstantHook<T>
+	where
+		T::Output: Clone,
 	{
 		fn run(&mut self, _input: T::Input) -> T::Output {
 			self.state.clone()
@@ -101,16 +99,18 @@ pub mod hook_test_utils {
 		}
 	}
 
-	impl<T: HookType> Default for IncreasingHook<T> 
-	where T::Output: Default
+	impl<T: HookType> Default for IncreasingHook<T>
+	where
+		T::Output: Default,
 	{
 		fn default() -> Self {
 			Self::new(Default::default(), Default::default())
 		}
 	}
 
-	impl<T: HookType> Hook<T> for IncreasingHook<T> 
-	where T::Output: Clone
+	impl<T: HookType> Hook<T> for IncreasingHook<T>
+	where
+		T::Output: Clone,
 	{
 		fn run(&mut self, _input: T::Input) -> T::Output {
 			self.counter += 1;

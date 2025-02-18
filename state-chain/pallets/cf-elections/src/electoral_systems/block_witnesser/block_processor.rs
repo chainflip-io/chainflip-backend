@@ -256,16 +256,18 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	}
 }
 
-
-
 #[cfg(test)]
 pub(crate) mod test {
 
 	use crate::{
 		electoral_systems::{
 			block_witnesser::{
-				block_processor::BlockProcessor, primitives::ChainProgressInner,
-				state_machine::{BWProcessorTypes, HookTypeFor, RulesHook, SafetyMarginHook, DedupEventsHook, ExecuteHook},
+				block_processor::BlockProcessor,
+				primitives::ChainProgressInner,
+				state_machine::{
+					BWProcessorTypes, DedupEventsHook, ExecuteHook, HookTypeFor, RulesHook,
+					SafetyMarginHook,
+				},
 			},
 			state_machine::core::{hook_test_utils::IncreasingHook, Hook, TypesFor},
 		},
@@ -298,8 +300,7 @@ pub(crate) mod test {
 		}
 	}
 
-	impl Hook<HookTypeFor<Types, RulesHook>> for Types
-	{
+	impl Hook<HookTypeFor<Types, RulesHook>> for Types {
 		fn run(
 			&mut self,
 			(block, age, block_data): (BlockNumber, u32, MockBlockData),
@@ -322,8 +323,7 @@ pub(crate) mod test {
 		}
 	}
 
-	impl Hook<HookTypeFor<Types, DedupEventsHook>> for Types
-	{
+	impl Hook<HookTypeFor<Types, DedupEventsHook>> for Types {
 		fn run(
 			&mut self,
 			events: Vec<(BlockNumber, MockBtcEvent)>,
@@ -561,7 +561,6 @@ impl<T: BWProcessorTypes + 'static> StateMachine for SMBlockProcessor<T> {
 		}
 	}
 }
-
 
 // #[cfg(test)]
 // fn step_specification(

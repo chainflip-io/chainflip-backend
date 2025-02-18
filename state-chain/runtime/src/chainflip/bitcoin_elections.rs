@@ -1,8 +1,5 @@
 use crate::{
-	chainflip::{
-		bitcoin_block_processor::BlockWitnessingProcessorDefinition, ReportFailedLivenessCheck,
-	},
-	BitcoinChainTracking, BitcoinIngressEgress, Runtime,
+	chainflip::ReportFailedLivenessCheck, BitcoinChainTracking, BitcoinIngressEgress, Runtime,
 };
 use cf_chains::{
 	btc::{self, BitcoinFeeInfo, BitcoinTrackedData, BlockNumber, Hash},
@@ -15,12 +12,18 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::{
-			consensus::BlockHeightTrackingConsensus, state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders}, BlockHeightChangeHook, BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress
+			consensus::BlockHeightTrackingConsensus,
+			state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders},
+			BlockHeightChangeHook, BlockHeightTrackingProperties, BlockHeightTrackingTypes,
+			ChainProgress,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
-			state_machine::{BWProcessorTypes, BWSettings, BWState, BWStateMachine, BWTypes, ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook},
+			state_machine::{
+				BWProcessorTypes, BWSettings, BWState, BWStateMachine, BWTypes,
+				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
+			},
 		},
 		composite::{
 			tuple_3_impls::{DerivedElectoralAccess, Hooks},
@@ -44,7 +47,6 @@ use sp_std::vec::Vec;
 
 use super::{bitcoin_block_processor::BtcEvent, elections::TypesFor};
 
-
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(BitcoinBlockHeightTrackingES, BitcoinDepositChannelWitnessingES, BitcoinLiveness),
 	<Runtime as Chainflip>::ValidatorId,
@@ -58,13 +60,11 @@ pub struct OpenChannelDetails<ChainBlockNumber> {
 	pub close_block: ChainBlockNumber,
 }
 
-pub struct BitcoinBlockHeightTracking;
-
 // ------------------------ block height tracking ---------------------------
 /// The electoral system for block height tracking
-pub type BitcoinBlockHeightTrackingTypes = TypesFor<BitcoinBlockHeightTracking>;
+pub struct BitcoinBlockHeightTracking;
 
-impls!{
+impls! {
 	for TypesFor<BitcoinBlockHeightTracking>:
 
 	/// Associating the SM related types to the struct
@@ -78,7 +78,7 @@ impls!{
 	/// Associating the ES related types to the struct
 	ElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type ElectoralUnsynchronisedState = BHWStateWrapper<BitcoinBlockHeightTrackingTypes>;
+		type ElectoralUnsynchronisedState = BHWStateWrapper<Self>;
 		type ElectoralUnsynchronisedStateMapKey = ();
 		type ElectoralUnsynchronisedStateMapValue = ();
 		type ElectoralUnsynchronisedSettings = ();
@@ -86,8 +86,8 @@ impls!{
 		type ElectionIdentifierExtra = ();
 		type ElectionProperties = BlockHeightTrackingProperties<btc::BlockNumber>;
 		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<InputHeaders<BitcoinBlockHeightTrackingTypes>>;
-		type Consensus = InputHeaders<BitcoinBlockHeightTrackingTypes>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<InputHeaders<Self>>;
+		type Consensus = InputHeaders<Self>;
 		type OnFinalizeContext = Vec<()>;
 		type OnFinalizeReturn = Vec<ChainProgress<btc::BlockNumber>>;
 	}
@@ -99,13 +99,13 @@ impls!{
 		type OnFinalizeReturnItem = ChainProgress<btc::BlockNumber>;
 
 		// restating types since we have to prove that they have the correct bounds
-		type Consensus2 = InputHeaders<BitcoinBlockHeightTrackingTypes>;
-		type Vote2 = InputHeaders<BitcoinBlockHeightTrackingTypes>;
-		type VoteStorage2 = vote_storage::bitmap::Bitmap<InputHeaders<BitcoinBlockHeightTrackingTypes>>;
+		type Consensus2 = InputHeaders<Self>;
+		type Vote2 = InputHeaders<Self>;
+		type VoteStorage2 = vote_storage::bitmap::Bitmap<InputHeaders<Self>>;
 
 		// the actual state machine and consensus mechanisms of this ES
-		type ConsensusMechanism = BlockHeightTrackingConsensus<BitcoinBlockHeightTrackingTypes>;
-		type StateMachine = BlockHeightTrackingSM<BitcoinBlockHeightTrackingTypes>;
+		type ConsensusMechanism = BlockHeightTrackingConsensus<Self>;
+		type StateMachine = BlockHeightTrackingSM<Self>;
 	}
 
 	Hook<HookTypeFor<Self, BlockHeightChangeHook>> {
@@ -121,20 +121,18 @@ impls!{
 
 }
 
-
 /// Generating the state machine-based electoral system
-pub type BitcoinBlockHeightTrackingES = StateMachineESInstance<BitcoinBlockHeightTrackingTypes>;
+pub type BitcoinBlockHeightTrackingES =
+	StateMachineESInstance<TypesFor<BitcoinBlockHeightTracking>>;
 
 // ------------------------ deposit channel witnessing ---------------------------
 /// The electoral system for deposit channel witnessing
-
 pub struct BitcoinDepositChannelWitnessing;
 
 type ElectionProperties = Vec<DepositChannelDetails<Runtime, BitcoinInstance>>;
 pub(crate) type BlockData = Vec<DepositWitness<Bitcoin>>;
 
-
-impls!{
+impls! {
 	for TypesFor<BitcoinDepositChannelWitnessing>:
 
 	/// Associating BW processor types
@@ -221,11 +219,9 @@ impls!{
 
 }
 
-
 /// Generating the state machine-based electoral system
 pub type BitcoinDepositChannelWitnessingES =
 	StateMachineESInstance<TypesFor<BitcoinDepositChannelWitnessing>>;
-
 
 pub type BitcoinLiveness = Liveness<
 	BlockNumber,

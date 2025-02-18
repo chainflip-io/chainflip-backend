@@ -1,6 +1,9 @@
 use core::{iter::Step, ops::RangeInclusive};
 
-use super::{block_witnesser::state_machine::HookTypeFor, state_machine::core::{Hook, HookType, Validate}};
+use super::{
+	block_witnesser::state_machine::HookTypeFor,
+	state_machine::core::{Hook, HookType, Validate},
+};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::ensure;
@@ -43,7 +46,6 @@ impl<T: BlockHeightTrackingTypes> HookType for HookTypeFor<T, BlockHeightChangeH
 	type Input = T::ChainBlockNumber;
 	type Output = ();
 }
-
 
 #[cfg_attr(test, derive(Arbitrary))]
 #[derive(
