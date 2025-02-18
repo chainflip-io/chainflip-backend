@@ -107,7 +107,7 @@ async fn observe_elections<T: Tracer + Send>(
 				.map(|(k,v)| (k, v.bitmaps))
 				.collect();
 
-			const ELECTORAL_SYSTEM_NAMES : [&'static str; 6] = ["Blockheight", "Ingress", "Nonce", "Egress", "Liveness", "Vaultswap"];
+			const ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["Blockheight", "Ingress", "Nonce", "Egress", "Liveness", "Vaultswap"];
 
 			let elections = all_properties.iter()
 				.map(|(key, val)| {

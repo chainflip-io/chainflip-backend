@@ -158,9 +158,11 @@ where
 	let key0 = RootBlockHeight(root_height);
 	trace.insert(vec![key0.clone()], end.with_attribute("height".into(), format!("{root_height}")));
 
-
 	for name in data.electoral_system_names {
-		trace.insert(vec![key0.clone(), ElectoralSystem(name.clone())], end.with_attribute("height".into(), format!("{root_height}")));
+		trace.insert(
+			vec![key0.clone(), ElectoralSystem(name.clone())],
+			end.with_attribute("height".into(), format!("{root_height}")),
+		);
 	}
 
 	for (identifier, (name, properties)) in &data.elections {
