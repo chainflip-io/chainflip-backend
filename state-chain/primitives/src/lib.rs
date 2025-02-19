@@ -190,7 +190,20 @@ pub const DEFAULT_MAX_AUTHORITY_SET_CONTRACTION: Percent = Percent::from_percent
 
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
 // https://wiki.polkadot.network/docs/build-protocol-info
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+#[derive(
+	Clone,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Debug,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+	Ord,
+	PartialOrd,
+)]
 pub struct TxId {
 	pub block_number: PolkadotBlockNumber,
 	pub extrinsic_index: u32,

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use cf_primitives::EpochIndex;
+use cf_primitives::{AccountId, ChannelId, EpochIndex};
 use futures_core::Future;
 use itertools::Itertools;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness, VaultDepositWitness};
 use state_chain_runtime::BitcoinInstance;
 
 use super::{
@@ -15,9 +15,12 @@ use super::{
 };
 use crate::{
 	btc::rpc::VerboseTransaction,
-	witness::common::{
-		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
-		RuntimeHasChain,
+	witness::{
+		btc::vault_swaps::try_extract_vault_swap_witness,
+		common::{
+			chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
+			RuntimeCallHasChain, RuntimeHasChain,
+		},
 	},
 };
 use bitcoin::{hashes::Hash, BlockHash};
@@ -126,6 +129,22 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			}
 		})
 	}
+}
+
+pub fn vault_deposits(
+	txs: &[VerboseTransaction],
+	vaults: &Vec<(DepositAddress, AccountId, ChannelId)>,
+) -> Vec<VaultDepositWitness<state_chain_runtime::Runtime, BitcoinInstance>> {
+	txs.iter()
+		.filter_map(|tx| {
+			for (vault, broker, id) in vaults {
+				if let Some(vault_swap) = try_extract_vault_swap_witness(tx, vault, *id, broker) {
+					return Some(vault_swap);
+				}
+			}
+			None
+		})
+		.collect()
 }
 
 pub fn deposit_witnesses(

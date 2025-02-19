@@ -23,7 +23,20 @@ use sp_std::{convert::TryFrom, str, vec};
 
 use crate::DepositDetailsToTransactionInId;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Default,
+	Serialize,
+	Deserialize,
+	Ord,
+	PartialOrd,
+)]
 pub struct DepositDetails {
 	// In the case of EVM Native Deposits (ETH or arbETH), because we need to detect ingresses by
 	// checking balances rather than using events, there can be more than one hash associated with

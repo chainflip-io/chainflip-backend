@@ -426,7 +426,9 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ Into<cf_primitives::ForeignChain>
 		+ TryFrom<cf_primitives::Asset, Error: Debug>
 		+ IntoEnumIterator
-		+ Unpin;
+		+ Unpin
+		+ Ord
+		+ PartialOrd;
 
 	type ChainAssetMap<
 		T: Member
@@ -456,7 +458,9 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ TryFrom<ForeignChainAddress>
 		+ IntoForeignChainAddress<Self>
 		+ Unpin
-		+ ToHumanreadableAddress;
+		+ ToHumanreadableAddress
+		+ Serialize
+		+ for<'a> Deserialize<'a>;
 
 	type DepositFetchId: Member
 		+ Parameter
@@ -471,7 +475,11 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	type DepositDetails: Member
 		+ Parameter
 		+ BenchmarkValue
-		+ DepositDetailsToTransactionInId<Self::ChainCrypto>;
+		+ DepositDetailsToTransactionInId<Self::ChainCrypto>
+		+ Serialize
+		+ for<'a> Deserialize<'a>
+		+ Ord
+		+ PartialOrd;
 
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
 
@@ -510,7 +518,11 @@ pub trait ChainCrypto: ChainCryptoInstanceAlias + Sized {
 		+ Parameter
 		+ Unpin
 		+ IntoTransactionInIdForAnyChain<Self>
-		+ BenchmarkValue;
+		+ BenchmarkValue
+		+ Serialize
+		+ for<'a> Deserialize<'a>
+		+ Ord
+		+ PartialOrd;
 
 	/// Uniquely identifies a transaction on the outgoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;

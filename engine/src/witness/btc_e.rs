@@ -42,9 +42,10 @@ use crate::{
 use anyhow::Result;
 
 use sp_core::H256;
+use state_chain_runtime::chainflip::bitcoin_elections::BitcoinVaultDepositWitnessingES;
 use std::sync::Arc;
 
-use crate::btc::retry_rpc::BtcRetryRpcClient;
+use crate::{btc::retry_rpc::BtcRetryRpcClient, witness::btc::deposits::vault_deposits};
 
 #[derive(Clone)]
 pub struct BitcoinDepositChannelWitnessingVoter {
@@ -59,7 +60,8 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 		deposit_addresses: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessingES>>, anyhow::Error> {
 		let (witness_range, deposit_addresses, _extra) = deposit_addresses;
-		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
+		let witness_range = BlockWitnessRange::try_new(witness_range)
+			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
 		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
 
 		let mut txs = vec![];
@@ -80,13 +82,43 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 
 		let witnesses = deposit_witnesses(&txs, &deposit_addresses);
 
-		if witnesses.is_empty() {
-			tracing::info!("No witnesses found for BTCE");
-		} else {
-			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
+		Ok(Some(ConstantIndex::new(witnesses)))
+	}
+}
+
+#[derive(Clone)]
+pub struct BitcoinVaultDepositWitnessingVoter {
+	client: BtcRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessingVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinVaultDepositWitnessingES>>, anyhow::Error> {
+		let (witness_range, vaults, _extra) = properties;
+		let witness_range = BlockWitnessRange::try_new(witness_range)
+			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
+
+		let mut txs = vec![];
+		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+		tracing::info!("Witness range: {:?}", witness_range);
+		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
+			tracing::info!("Checking block {:?}", block);
+
+			// TODO: these queries should not be infinite
+			let block_hash = self.client.block_hash(block).await;
+
+			let block = self.client.block(block_hash).await?;
+
+			txs.extend(block.txdata);
 		}
 
-		Ok(Some(ConstantIndex { data: witnesses, _phantom: Default::default() }))
+		let witnesses = vault_deposits(&txs, &vaults);
+
+		Ok(Some(ConstantIndex::new(witnesses)))
 	}
 }
 
@@ -216,6 +248,7 @@ where
 					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
 						BitcoinBlockHeightTrackingVoter { client: client.clone() },
 						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
+						BitcoinVaultDepositWitnessingVoter { client: client.clone() },
 						BitcoinLivenessVoter { client },
 					)),
 				)

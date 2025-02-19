@@ -7,6 +7,7 @@ use cf_chains::{
 };
 use cf_primitives::ChannelId;
 use cf_traits::KeyProvider;
+use sp_std::vec::Vec;
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	fn generate_address(
@@ -42,6 +43,22 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 
 		Ok((channel_state.script_pubkey(), channel_state))
 	}
+}
+pub fn derive_current_and_previous_epoch_private_btc_vaults(
+	channel_id: ChannelId,
+) -> Result<Vec<<Bitcoin as Chain>::DepositChannelState>, AddressDerivationError> {
+	let channel_id: u32 = channel_id
+		.try_into()
+		.map_err(|_| AddressDerivationError::BitcoinChannelIdTooLarge)?;
+
+	let active_epoch_key = BitcoinThresholdSigner::active_epoch_key()
+		.ok_or(AddressDerivationError::MissingBitcoinVault)?
+		.key;
+
+	Ok([Some(active_epoch_key.current), active_epoch_key.previous]
+		.into_iter()
+		.filter_map(|key| key.map(|k| DepositAddress::new(k, channel_id)))
+		.collect())
 }
 
 /// ONLY FOR USE IN RPC CALLS.
