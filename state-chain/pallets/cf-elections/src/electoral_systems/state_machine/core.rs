@@ -3,7 +3,7 @@ use derive_where::derive_where;
 use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::vec::Vec;
+use sp_std::{fmt::Debug, vec::Vec};
 
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
@@ -114,6 +114,56 @@ pub mod hook_test_utils {
 	{
 		fn run(&mut self, _input: T::Input) -> T::Output {
 			self.counter += 1;
+			self.state.clone()
+		}
+	}
+
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+	)]
+	#[serde(bound = "T::Input: Serde, T::Output: Serde")]
+	pub struct MockHook<const NAME: &'static str, T: HookType> {
+		pub state: T::Output,
+		pub call_history: Vec<T::Input>,
+		// pub name: &'static str,
+		pub _phantom: sp_std::marker::PhantomData<T>,
+	}
+
+	impl<const NAME: &'static str, T: HookType> MockHook<NAME, T> {
+		pub fn new(b: T::Output) -> Self {
+			Self { state: b, call_history: Vec::new(), _phantom: Default::default() }
+		}
+	}
+
+	impl<const NAME: &'static str, T: HookType> Default for MockHook<NAME, T>
+	where
+		T::Output: Default,
+	{
+		fn default() -> Self {
+			Self::new(Default::default())
+		}
+	}
+
+	impl<const NAME: &'static str, T: HookType> Hook<T> for MockHook<NAME, T>
+	where
+		T::Input: Debug,
+		T::Output: Clone,
+	{
+		fn run(&mut self, input: T::Input) -> T::Output {
+			#[cfg(test)]
+			println!("{} called for {input:?}", NAME);
+			self.call_history.push(input);
 			self.state.clone()
 		}
 	}

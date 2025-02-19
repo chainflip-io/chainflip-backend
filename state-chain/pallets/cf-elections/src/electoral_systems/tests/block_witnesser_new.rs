@@ -31,7 +31,7 @@ use crate::{
 			*,
 		},
 		state_machine::{
-			core::{ConstantIndex, Hook, TypesFor},
+			core::{hook_test_utils::MockHook, ConstantIndex, Hook, TypesFor},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
@@ -79,15 +79,15 @@ pub type ElectionCount = u16;
 // 	}
 // }
 
-impl Hook<HookTypeFor<Types, ElectionPropertiesHook>> for Types {
-	fn run(&mut self, input: ChainBlockNumber) -> Properties {
-		println!("generate_election_hook called for {input}");
-		GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
-		// The properties are not important to the logic of the electoral system itself, so we can
-		// return empty.
-		BTreeSet::new()
-	}
-}
+// impl Hook<HookTypeFor<Types, ElectionPropertiesHook>> for Types {
+// 	fn run(&mut self, input: ChainBlockNumber) -> Properties {
+// 		println!("generate_election_hook called for {input}");
+// 		GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
+// 		// The properties are not important to the logic of the electoral system itself, so we can
+// 		// return empty.
+// 		BTreeSet::new()
+// 	}
+// }
 
 // struct MockBlockProcessor<ChainBlockNumber, BlockData> {
 // 	_phantom: core::marker::PhantomData<(ChainBlockNumber, BlockData)>,
@@ -158,7 +158,8 @@ impl Hook<HookTypeFor<Types, SafeModeEnabledHook>> for Types {
 /// Associating BW types to the struct
 impl BWTypes for Types {
 	type ElectionProperties = ElectionProperties;
-	type ElectionPropertiesHook = Self;
+	type ElectionPropertiesHook =
+		MockHook<"generate_election_properties", HookTypeFor<Self, ElectionPropertiesHook>>;
 	type SafeModeEnabledHook = Self;
 }
 
@@ -200,20 +201,11 @@ impl StateMachineES for Types {
 /// Generating the state machine-based electoral system
 pub type SimpleBlockWitnesser = StateMachineESInstance<Types>;
 
-// We need to provide a mock chain here... MockEthereum might be what we're after
-// type SimpleBlockWitnesser = BlockWitnesser<
-// 	MockEthereum,
-// 	BlockData,
-// 	Properties,
-// 	ValidatorId,
-// 	MockBlockProcessor<ChainBlockNumber, BlockData>,
-// 	MockGenerateElectionHook<ChainBlockNumber, Properties>,
-// >;
-
 register_checks! {
 	SimpleBlockWitnesser {
-		generate_election_properties_called_n_times(_pre, _post, n: u8) {
-			assert_eq!(GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "generate_election_properties should have been called {} times so far!", n);
+		generate_election_properties_called_n_times(_pre, post, n: u8) {
+			let calls = post.unsynchronised_state.generate_election_properties_hook.call_history.len();
+			assert_eq!(calls as u8, n, "generate_election_properties should have been called {} times so far!", n);
 		},
 		number_of_open_elections_is(_pre, post, n: ElectionCount) {
 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
