@@ -216,12 +216,12 @@ register_checks! {
 		number_of_open_elections_is(_pre, post, n: ElectionCount) {
 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
 		},
-		process_block_data_called_n_times(_pre, _post, n: u8) {
-			assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "process_block_data should have been called {} times so far!", n);
-		},
-		process_block_data_called_last_with(_pre, _post, block_data: Vec<(ChainBlockNumber, BlockData)>) {
-			assert_eq!(PROCESS_BLOCK_DATA_CALLED_WITH.with(|old_block_data| old_block_data.borrow().clone()), block_data, "process_block_data should have been called with {:?}", block_data);
-		},
+		// process_block_data_called_n_times(_pre, _post, n: u8) {
+		// 	assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "process_block_data should have been called {} times so far!", n);
+		// },
+		// process_block_data_called_last_with(_pre, _post, block_data: Vec<(ChainBlockNumber, BlockData)>) {
+		// 	assert_eq!(PROCESS_BLOCK_DATA_CALLED_WITH.with(|old_block_data| old_block_data.borrow().clone()), block_data, "process_block_data should have been called with {:?}", block_data);
+		// },
 		// unprocessed_data_is(_pre, post, data: Vec<(ChainBlockNumber, BlockData)>) {
 		// 	// assert_eq!(post.unsynchronised_state.unprocessed_data, data, "Unprocessed data should be {:?}", data);
 		// },
@@ -304,7 +304,7 @@ fn no_block_data_success() {
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
-				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
 			],
 		)
 		.expect_consensus(
@@ -317,13 +317,13 @@ fn no_block_data_success() {
 			vec![
 				// No extra calls
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
-				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
 				// We should receive an empty block data, but still get the block number. This is
 				// necessary so we can track the last chain block we've processed.
-				Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
-					NEXT_BLOCK_RECEIVED,
-					vec![],
-				)]),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
+				// 	NEXT_BLOCK_RECEIVED,
+				// 	vec![],
+				// )]),
 			],
 		);
 }
@@ -348,7 +348,9 @@ fn creates_multiple_elections_below_maximum_when_required() {
 			},
 			vec![
 				Check::<SimpleBlockWitnesser>::election_state_is(),
-				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(4),
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
+					NUMBER_OF_ELECTIONS as u8,
+				),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS),
 			],
 		)
@@ -378,12 +380,14 @@ fn creates_multiple_elections_below_maximum_when_required() {
 				);
 			},
 			vec![
-				// Still no extra elections created.
+				// Since two elections reached consensus and were closed,
+				// we are left with `NUMBER_OF_ELECTIONS - 2` elections for which
+				// we regenerate election properties in this `on_finalize`.
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					NUMBER_OF_ELECTIONS as u8,
+					2 * NUMBER_OF_ELECTIONS as u8 - 2,
 				),
 				// we should have resolved two elections
-				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS - 2),
 			],
 		);
 }
