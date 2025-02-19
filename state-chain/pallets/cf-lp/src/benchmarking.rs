@@ -98,5 +98,32 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn internal_swap() {
+		let lp_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::LiquidityProvider)
+				.unwrap();
+
+		let caller = RawOrigin::Signed(lp_id.clone());
+
+		assert_ok!(Pallet::<T>::register_liquidity_refund_address(
+			caller.clone().into(),
+			EncodedAddress::Eth(Default::default()),
+		));
+
+		T::BalanceApi::credit_account(&lp_id, Asset::Eth, 1000);
+
+		#[extrinsic_call]
+		Pallet::<T>::internal_swap(
+			caller,
+			1000,
+			Asset::Eth,
+			Asset::Flip,
+			0,
+			Default::default(),
+			None,
+		);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

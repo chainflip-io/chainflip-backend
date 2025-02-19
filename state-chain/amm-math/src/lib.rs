@@ -2,21 +2,8 @@
 
 pub mod test_utilities;
 
+pub use cf_primitives::Price;
 use sp_core::{U256, U512};
-
-// TODO: Consider alternative representation for Price:
-//
-// increasing Price to U512 or switch to a f64 (f64 would only be for the external
-// price representation), as at low ticks the precision in the price is VERY LOW, but this does not
-// cause any problems for the AMM code in terms of correctness
-
-/// This is the ratio of equivalently valued amounts of asset One and asset Zero.
-///
-/// The price is always measured in amount of asset One per unit of asset Zero. Therefore as asset
-/// zero becomes more valuable relative to asset one the price's literal value goes up, and vice
-/// versa. This ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional
-/// bits.
-pub type Price = U256;
 
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
 /// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.

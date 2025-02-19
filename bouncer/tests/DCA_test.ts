@@ -11,17 +11,16 @@ import {
 import { send } from '../shared/send';
 import { observeEvent, observeEvents } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
-import { ExecutableTest } from '../shared/executable_test';
 import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
-
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testDCASwaps = new ExecutableTest('DCA-Swaps', main, 150);
+import { TestContext } from '../shared/utils/test_context';
+import { Logger } from '../shared/utils/logger';
 
 // Requested number of blocks between each chunk
 const CHUNK_INTERVAL = 2;
 
 async function testDCASwap(
+  logger: Logger,
   inputAsset: Asset,
   amount: number,
   numberOfChunks: number,
@@ -44,7 +43,7 @@ async function testDCASwap(
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
 
   const destBalanceBefore = await getBalance(destAsset, destAddress);
-  testDCASwaps.debugLog(`DCA destination address: ${destAddress}`);
+  logger.debug(`DCA destination address: ${destAddress}`);
 
   let swapRequestedHandle;
 
@@ -72,7 +71,7 @@ async function testDCASwap(
 
     // Deposit the asset
     await send(inputAsset, swapRequest.depositAddress, amount.toString());
-    testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
+    logger.debug(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
     const { transactionId } = await executeVaultSwap(
       inputAsset,
@@ -85,7 +84,7 @@ async function testDCASwap(
       dcaParams,
     );
 
-    testDCASwaps.log(`Vault swap executed, tx id: ${transactionId}`);
+    logger.debug(`Vault swap executed, tx id: ${transactionId}`);
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
     swapRequestedHandle = observeSwapRequested(
@@ -97,7 +96,7 @@ async function testDCASwap(
   }
 
   const swapRequestId = Number((await swapRequestedHandle).data.swapRequestId.replaceAll(',', ''));
-  testDCASwaps.debugLog(
+  logger.debug(
     `${inputAsset} swap ${swapViaVault ? 'via vault' : ''}, swapRequestId: ${swapRequestId}`,
   );
 
@@ -129,16 +128,16 @@ async function testDCASwap(
     );
   }
 
-  testDCASwaps.log(`Chunk interval of ${CHUNK_INTERVAL} verified for all ${numberOfChunks} chunks`);
+  logger.debug(`Chunk interval of ${CHUNK_INTERVAL} verified for all ${numberOfChunks} chunks`);
 
   await observeBalanceIncrease(destAsset, destAddress, destBalanceBefore);
 }
 
-export async function main() {
+export async function testDCASwaps(testContext: TestContext) {
   await Promise.all([
-    testDCASwap(Assets.Eth, 1, 2),
-    testDCASwap(Assets.ArbEth, 1, 2),
-    testDCASwap(Assets.Sol, 1, 2, true),
-    testDCASwap(Assets.SolUsdc, 1, 2, true),
+    testDCASwap(testContext.logger, Assets.Eth, 1, 2),
+    testDCASwap(testContext.logger, Assets.ArbEth, 1, 2),
+    testDCASwap(testContext.logger, Assets.Sol, 1, 2, true),
+    testDCASwap(testContext.logger, Assets.SolUsdc, 1, 2, true),
   ]);
 }

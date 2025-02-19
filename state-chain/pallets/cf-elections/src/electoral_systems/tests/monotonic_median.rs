@@ -8,7 +8,7 @@ use crate::{
 };
 use cf_primitives::AuthorityCount;
 
-type MonotonicMedianTest = MonotonicMedian<u64, (), MockHook, ()>;
+type MonotonicMedianTest = MonotonicMedian<u64, (), MockHook, (), u32>;
 
 fn with_default_setup() -> TestSetup<MonotonicMedianTest> {
 	TestSetup::<_>::default()

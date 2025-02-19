@@ -224,6 +224,21 @@ where
 		self
 	}
 
+	#[track_caller]
+	pub fn expect_is_voted_desired(
+		self,
+		expected_is_voted_desired: bool,
+		current_state_chain_block_number: ES::StateChainBlockNumber,
+	) -> Self {
+		// TODO: allow testing for more than one election.
+		let election = MockAccess::<ES>::election(self.only_election_id());
+		assert_eq!(
+			ES::is_vote_desired(&election, None, current_state_chain_block_number).unwrap(),
+			expected_is_voted_desired,
+		);
+		self
+	}
+
 	/// Test the finalization of the election.
 	///
 	/// `pre_finalize_checks` is a closure that is called with a read-only access to the electoral

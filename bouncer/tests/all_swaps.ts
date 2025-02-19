@@ -1,5 +1,4 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { ExecutableTest } from '../shared/executable_test';
 import { SwapParams } from '../shared/perform_swap';
 import {
   newCcmMetadata,
@@ -15,12 +14,11 @@ import {
   vaultSwapSupportedChains,
 } from '../shared/utils';
 import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
-
-// This timeout needs to be increased when running 3-nodes
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1200);
+import { SwapContext } from '../shared/utils/swap_context';
+import { TestContext } from '../shared/utils/test_context';
 
 export async function initiateSwap(
+  swapContext: SwapContext,
   sourceAsset: Asset,
   destAsset: Asset,
   functionCall: typeof testSwap | typeof testVaultSwap,
@@ -41,13 +39,13 @@ export async function initiateSwap(
       destAsset,
       btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
       ccmSwapMetadata,
-      testAllSwaps.swapContext,
+      swapContext,
     );
   }
-  return functionCall(sourceAsset, destAsset, undefined, ccmSwapMetadata, testAllSwaps.swapContext);
+  return functionCall(sourceAsset, destAsset, undefined, ccmSwapMetadata, swapContext);
 }
 
-async function main() {
+export async function testAllSwaps(textContext: TestContext) {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
 
   // Open a private BTC channel to be used for btc vault swaps
@@ -59,7 +57,9 @@ async function main() {
     functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
-    allSwaps.push(initiateSwap(sourceAsset, destAsset, functionCall, ccmSwap));
+    allSwaps.push(
+      initiateSwap(textContext.swapContext, sourceAsset, destAsset, functionCall, ccmSwap),
+    );
   }
 
   Object.values(Assets).forEach((sourceAsset) => {

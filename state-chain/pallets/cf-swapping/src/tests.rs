@@ -68,7 +68,7 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<ChannelRefundParametersDecoded>,
+	refund_params: Option<RefundParametersExtended<u64>>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
@@ -84,7 +84,7 @@ impl TestSwapParams {
 			input_asset: INPUT_ASSET,
 			output_asset: OUTPUT_ASSET,
 			input_amount: INPUT_AMOUNT,
-			refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
+			refund_params: refund_params.map(|params| params.into_extended_params(INPUT_AMOUNT)),
 			dca_params,
 			output_address: (*EVM_OUTPUT_ADDRESS).clone(),
 			is_ccm,
@@ -101,12 +101,14 @@ struct TestRefundParams {
 }
 
 impl TestRefundParams {
-	fn into_channel_params(self, input_amount: AssetAmount) -> ChannelRefundParametersDecoded {
+	fn into_extended_params(self, input_amount: AssetAmount) -> RefundParametersExtended<u64> {
 		use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 
-		ChannelRefundParametersDecoded {
+		RefundParametersExtended {
 			retry_duration: self.retry_duration,
-			refund_address: ForeignChainAddress::Eth([10; 20].into()),
+			refund_destination: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
+				[10; 20].into(),
+			)),
 			min_price: sqrt_price_to_price(bounded_sqrt_price(
 				self.min_output.into(),
 				input_amount.into(),
@@ -129,11 +131,13 @@ fn create_test_swap(
 			id: id.into(),
 			input_asset,
 			output_asset,
-			refund_params: None,
 			state: SwapRequestState::UserSwap {
-				output_address: ForeignChainAddress::Eth(H160::zero()),
+				refund_params: None,
+				output_action: SwapOutputAction::Egress {
+					ccm_deposit_metadata: None,
+					output_address: ForeignChainAddress::Eth(H160::zero()),
+				},
 				dca_state: DcaState::create_with_first_chunk(amount, dca_params).0,
-				ccm_deposit_metadata: None,
 				broker_fees: Default::default(),
 			},
 		},
@@ -201,8 +205,10 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 		let ccm_deposit_metadata = if swap.is_ccm { Some(generate_ccm_deposit()) } else { None };
 
 		let request_type = SwapRequestType::Regular {
-			output_address: swap.output_address.clone(),
-			ccm_deposit_metadata,
+			output_action: SwapOutputAction::Egress {
+				ccm_deposit_metadata,
+				output_address: swap.output_address.clone(),
+			},
 		};
 
 		Swapping::init_swap_request(
@@ -257,8 +263,10 @@ fn swap_with_custom_broker_fee(
 		amount,
 		to,
 		SwapRequestType::Regular {
-			output_address: ForeignChainAddress::Eth(Default::default()),
-			ccm_deposit_metadata: None,
+			output_action: SwapOutputAction::Egress {
+				output_address: ForeignChainAddress::Eth(Default::default()),
+				ccm_deposit_metadata: None,
+			},
 		},
 		broker_fees,
 		None,
@@ -342,8 +350,10 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			10,
 			Asset::Dot,
 			SwapRequestType::Regular {
-				output_address: ForeignChainAddress::Eth([2; 20].into()),
-				ccm_deposit_metadata: None,
+				output_action: SwapOutputAction::Egress {
+					output_address: ForeignChainAddress::Eth([2; 20].into()),
+					ccm_deposit_metadata: None,
+				},
 			},
 			Default::default(),
 			None,
@@ -519,8 +529,10 @@ fn process_all_into_stable_swaps_first() {
 					AMOUNT,
 					Asset::Eth,
 					SwapRequestType::Regular {
-						output_address: ForeignChainAddress::Eth([1; 20].into()),
-						ccm_deposit_metadata: None,
+						output_action: SwapOutputAction::Egress {
+							output_address: ForeignChainAddress::Eth([1; 20].into()),
+							ccm_deposit_metadata: None,
+						},
 					},
 					Default::default(),
 					None,
@@ -657,8 +669,10 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				PRINCIPAL_AMOUNT,
 				OUTPUT_ASSET,
 				SwapRequestType::Regular {
-					ccm_deposit_metadata: Some(ccm.clone()),
-					output_address: eth_address,
+					output_action: SwapOutputAction::Egress {
+						ccm_deposit_metadata: Some(ccm.clone()),
+						output_address: eth_address,
+					},
 				},
 				Default::default(),
 				None,
@@ -1316,8 +1330,10 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					INPUT_AMOUNT,
 					to,
 					SwapRequestType::Regular {
-						output_address: ForeignChainAddress::Eth(H160::zero()),
-						ccm_deposit_metadata: None,
+						output_action: SwapOutputAction::Egress {
+							output_address: ForeignChainAddress::Eth(H160::zero()),
+							ccm_deposit_metadata: None,
+						},
 					},
 					Default::default(),
 					None,
@@ -1631,6 +1647,182 @@ mod swap_batching {
 				);
 
 				assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+			});
+	}
+}
+
+#[cfg(test)]
+mod on_chain_swapping {
+
+	use cf_traits::{mocks::balance_api::MockBalance, SwapOutputActionEncoded};
+
+	use super::*;
+
+	const INPUT_ASSET: Asset = Asset::Eth;
+	const OUTPUT_ASSET: Asset = Asset::Flip;
+
+	const INPUT_AMOUNT: AssetAmount = 1000;
+
+	#[test]
+	fn swap_into_internal_balance() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
+			INPUT_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+
+		let min_price = U256::from(DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS;
+
+		new_test_ext()
+			.execute_with(|| {
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
+					},
+					Default::default(),
+					Some(RefundParametersExtended {
+						retry_duration: 0,
+						refund_destination: AccountOrAddress::InternalAccount(LP_ACCOUNT),
+						min_price,
+					}),
+					None,
+					SwapOrigin::OnChainAccount(LP_ACCOUNT),
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequested {
+						input_asset: INPUT_ASSET,
+						input_amount: INPUT_AMOUNT,
+						output_asset: OUTPUT_ASSET,
+						origin: SwapOrigin::OnChainAccount(LP_ACCOUNT),
+						request_type: SwapRequestTypeEncoded::Regular {
+							output_action: SwapOutputActionEncoded::CreditOnChain {
+								account_id: LP_ACCOUNT
+							}
+						},
+						..
+					})
+				);
+
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						swap_request_id: SWAP_REQUEST_ID,
+						..
+					}),
+					RuntimeEvent::Swapping(Event::CreditedOnChain {
+						swap_request_id: SWAP_REQUEST_ID,
+						account_id: LP_ACCOUNT,
+						asset: OUTPUT_ASSET,
+						amount: EXPECTED_OUTPUT_AMOUNT,
+					}),
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID
+					}),
+				);
+
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(
+					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
+					EXPECTED_OUTPUT_AMOUNT
+				);
+			});
+	}
+
+	#[test]
+	fn swap_on_chain_with_refund() {
+		const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+		const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
+
+		let min_price = U256::from(DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS;
+
+		new_test_ext()
+			.execute_with(|| {
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
+					},
+					Default::default(),
+					Some(RefundParametersExtended {
+						retry_duration: 0,
+						refund_destination: AccountOrAddress::InternalAccount(LP_ACCOUNT),
+						min_price,
+					}),
+					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
+					SwapOrigin::OnChainAccount(LP_ACCOUNT),
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequested {
+						input_asset: INPUT_ASSET,
+						input_amount: INPUT_AMOUNT,
+						output_asset: OUTPUT_ASSET,
+						origin: SwapOrigin::OnChainAccount(LP_ACCOUNT),
+						request_type: SwapRequestTypeEncoded::Regular {
+							output_action: SwapOutputActionEncoded::CreditOnChain {
+								account_id: LP_ACCOUNT
+							}
+						},
+						..
+					})
+				);
+
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
+			})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted { .. }),
+				);
+
+				// Now we adjust execution price so that the next chunk gets refunded:
+				SwapRate::set(DEFAULT_SWAP_RATE as f64 / 2.0);
+			})
+			.then_process_blocks_until_block(CHUNK_2_BLOCK)
+			.then_execute_with(|_| {
+				// Only one chunk is expected to be swapped:
+				const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
+					CHUNK_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::Swapping(Event::RefundedOnChain {
+						swap_request_id: SWAP_REQUEST_ID,
+						account_id: LP_ACCOUNT,
+						asset: INPUT_ASSET,
+						amount: CHUNK_AMOUNT,
+					}),
+					RuntimeEvent::Swapping(Event::CreditedOnChain {
+						swap_request_id: SWAP_REQUEST_ID,
+						account_id: LP_ACCOUNT,
+						asset: OUTPUT_ASSET,
+						amount: EXPECTED_OUTPUT_AMOUNT
+					}),
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID
+					}),
+				);
+
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), CHUNK_AMOUNT);
+				assert_eq!(
+					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
+					EXPECTED_OUTPUT_AMOUNT
+				);
 			});
 	}
 }

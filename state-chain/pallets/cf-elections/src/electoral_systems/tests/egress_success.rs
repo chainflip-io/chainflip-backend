@@ -24,7 +24,7 @@ impl MockHook {
 }
 
 type EgressData = u64;
-type SimpleEgressSuccess = EgressSuccess<(), EgressData, (), MockHook, ()>;
+type SimpleEgressSuccess = EgressSuccess<(), EgressData, (), MockHook, (), u32>;
 
 register_checks! {
 	SimpleEgressSuccess {

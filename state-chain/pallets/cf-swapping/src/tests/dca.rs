@@ -683,8 +683,10 @@ fn test_minimum_chunk_size() {
 			asset_amount,
 			Asset::Btc,
 			SwapRequestType::Regular {
-				output_address: ForeignChainAddress::Eth([1; 20].into()),
-				ccm_deposit_metadata: None,
+				output_action: SwapOutputAction::Egress {
+					output_address: ForeignChainAddress::Eth([1; 20].into()),
+					ccm_deposit_metadata: None,
+				},
 			},
 			vec![].try_into().unwrap(),
 			None,

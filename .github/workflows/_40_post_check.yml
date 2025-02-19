@@ -125,14 +125,12 @@ jobs:
         working-directory: bouncer
         run: |
           ./full_bouncer.sh
-          # TODO: Temporary to test the new pallet. Improve in PRO-1599
-          ./commands/run_test.ts ./tests/delta_based_ingress.ts ./../ ./../localnet/init
 
       - name: Run HeuteLeiderNicht.einfach.exe 🦺
         if: ${{ ! inputs.full-bouncer }}
         working-directory: bouncer
         run: |
-          ./run.sh
+          ./fast_bouncer.sh
 
       - name: Write chain explorer to file 📝
         if: failure()

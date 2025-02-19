@@ -305,7 +305,7 @@ bouncer() {
     echo "🔧 Setting up Bouncer"
     echo "💾 Installing packages ..."
     pnpm install >>$DEBUG_OUTPUT_DESTINATION 2>&1
-    ./run.sh $NODE_COUNT
+    ./fast_bouncer.sh $NODE_COUNT
   )
 }
 

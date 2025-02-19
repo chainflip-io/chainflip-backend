@@ -91,10 +91,9 @@ impl LpRegistration for MockLpRegistration {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_liquidity_refund_address(_: &Self::AccountId, _: cf_chains::ForeignChainAddress) {}
 
-	fn ensure_has_refund_address_for_pair(
+	fn ensure_has_refund_address_for_asset(
 		_who: &Self::AccountId,
-		_base_asset: Asset,
-		_quote_asset: Asset,
+		_asset: Asset,
 	) -> DispatchResult {
 		Ok(())
 	}

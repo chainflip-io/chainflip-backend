@@ -27,7 +27,7 @@ import {
   getContractAddress,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { SwapContext, SwapStatus } from './swap_context';
+import { SwapContext, SwapStatus } from './utils/swap_context';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { executeEvmVaultSwap } from './evm_vault_swap';
 import { executeSolVaultSwap } from './sol_vault_swap';

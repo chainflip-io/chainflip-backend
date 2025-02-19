@@ -11,7 +11,7 @@ import {
   startEngines,
 } from '../shared/utils';
 import { observeEvent } from '../shared/utils/substrate';
-import { ExecutableTest } from '../shared/executable_test';
+import { TestContext } from '../shared/utils/test_context';
 
 // Test the delta based ingress feature of Solana works as intended.
 // The test will initiate and witness a swap from Solana. It will then restart the engine and ensure
@@ -19,10 +19,8 @@ import { ExecutableTest } from '../shared/executable_test';
 // while the engine is down and ensure that the swap is started upon restart. It checks that the swap
 // is not an accumulated amount but rather just a delta ingress.
 
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testDeltaBasedIngress = new ExecutableTest('Delta-Based-Ingress', main, 800);
-
 async function deltaBasedIngressTest(
+  testContext: TestContext,
   sourceAsset: 'Sol' | 'SolUsdc',
   destAsset: Asset,
   // Directory where the node and CFE binaries of the new version are located
@@ -30,6 +28,7 @@ async function deltaBasedIngressTest(
   localnetInitPath: string,
   numberOfNodes: 1 | 3,
 ): Promise<void> {
+  const logger = testContext.logger;
   let swapsWitnessed: number = 0;
   const amountFirstDeposit = '5';
   const amountSecondDeposit = '1';
@@ -52,7 +51,7 @@ async function deltaBasedIngressTest(
     }
 
     swapsWitnessed++;
-    testDeltaBasedIngress.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
+    logger.debug('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
 
     if (swapsWitnessed > maxTotalSwapsExpected) {
       throw new Error('More than one swaps were initiated');
@@ -76,21 +75,19 @@ async function deltaBasedIngressTest(
     destAsset,
     undefined,
     undefined,
-    testDeltaBasedIngress.swapContext,
+    testContext.swapContext,
     'DeltaBasedIngress',
     amountFirstDeposit.toString(),
   );
 
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  testDeltaBasedIngress.log('Killing the engines');
+  logger.info('Killing the engines');
   await killEngines();
   await startEngines(localnetInitPath, binariesPath, numberOfNodes);
 
   // Wait to ensure no new swap is being triggered after restart.
-  testDeltaBasedIngress.log(
-    'Waiting for 40 seconds to ensure no swap is being triggered after restart',
-  );
+  logger.info('Waiting for 40 seconds to ensure no swap is being triggered after restart');
   await sleep(40000);
   swapScheduledHandle.stop();
 
@@ -98,7 +95,7 @@ async function deltaBasedIngressTest(
     throw new Error('No swap was initiated. Swaps witnessed: ' + swapsWitnessed);
   }
 
-  testDeltaBasedIngress.log('Killing the engines');
+  logger.info('Killing the engines');
   await killEngines();
 
   // Start another swap doing another deposit to the same address
@@ -118,11 +115,9 @@ async function deltaBasedIngressTest(
 
   // Wait to ensure no additional new swap is being triggered after restart
   // and check that swap completes.
-  testDeltaBasedIngress.log(
-    'Waiting for 40 seconds to ensure no extra swap is being triggered after restart',
-  );
+  logger.info('Waiting for 40 seconds to ensure no extra swap is being triggered after restart');
   await sleep(40000);
-  testDeltaBasedIngress.log(
+  logger.info(
     `Waiting for ${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit to complete`,
   );
   await swapHandle;
@@ -133,7 +128,9 @@ async function deltaBasedIngressTest(
   }
 }
 
-async function main(
+// TODO: PRO-1581 Delete this test. It is not being ran by the bouncer.
+export async function testDeltaBasedIngress(
+  testContext: TestContext,
   binariesPath = './../target/debug',
   localnetInitPath = './../localnet/init',
   numberOfNodes: 1 | 3 = 1,
@@ -145,8 +142,22 @@ async function main(
     throw new Error('Directory does not exist: ' + localnetInitPath);
   }
 
-  testDeltaBasedIngress.log('testing with args: ' + binariesPath + ' ' + localnetInitPath);
+  testContext.debug('testing with args: ' + binariesPath + ' ' + localnetInitPath);
 
-  await deltaBasedIngressTest('Sol', 'ArbEth', binariesPath, localnetInitPath, numberOfNodes);
-  await deltaBasedIngressTest('SolUsdc', 'ArbUsdc', binariesPath, localnetInitPath, numberOfNodes);
+  await deltaBasedIngressTest(
+    testContext,
+    'Sol',
+    'ArbEth',
+    binariesPath,
+    localnetInitPath,
+    numberOfNodes,
+  );
+  await deltaBasedIngressTest(
+    testContext,
+    'SolUsdc',
+    'ArbUsdc',
+    binariesPath,
+    localnetInitPath,
+    numberOfNodes,
+  );
 }

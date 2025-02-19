@@ -49,14 +49,14 @@ macro_rules! generate_voter_api_tuple_impls {
     ($module:ident: ($(($electoral_system:ident, $voter:ident)),*$(,)?)) => {
         #[allow(non_snake_case)]
         #[async_trait::async_trait]
-        impl<$($voter: VoterApi<$electoral_system> + Send + Sync),*, $($electoral_system : ElectoralSystem<ValidatorId = ValidatorId> + Send + Sync + 'static),*, ValidatorId: MaybeSerializeDeserialize + Member + Parameter, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks>> + Send + Sync + 'static, Hooks: Send + Sync + 'static + composite::$module::Hooks<$($electoral_system,)*>> CompositeVoterApi<CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks>> for CompositeVoter<CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks>, ($($voter,)*)> {
+        impl<$($voter: VoterApi<$electoral_system> + Send + Sync),*, $($electoral_system : ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber> + Send + Sync + 'static),*, ValidatorId: MaybeSerializeDeserialize + Member + Parameter, StateChainBlockNumber: MaybeSerializeDeserialize + Member + Parameter + Ord, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, Hooks>> + Send + Sync + 'static, Hooks: Send + Sync + 'static + composite::$module::Hooks<$($electoral_system,)*>> CompositeVoterApi<CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, Hooks>> for CompositeVoter<CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, Hooks>, ($($voter,)*)> {
             async fn vote(
                 &self,
-                settings: <CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::ElectoralSettings,
-                properties: <CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::ElectionProperties,
+                settings: <CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, Hooks> as ElectoralSystemTypes>::ElectoralSettings,
+                properties: <CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, Hooks> as ElectoralSystemTypes>::ElectionProperties,
             ) -> Result<
             Option<
-                <<CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, Hooks> as ElectoralSystemTypes>::VoteStorage as VoteStorage>::Vote
+                <<CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, Hooks> as ElectoralSystemTypes>::VoteStorage as VoteStorage>::Vote
                 >,
                 anyhow::Error,
             > {

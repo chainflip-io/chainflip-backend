@@ -2,12 +2,9 @@ import { Keyring } from '../polkadot/keyring';
 import { sleep, hexStringToBytesArray, newAddress, lpMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { sendEvmNative } from '../shared/send_evm';
-import { ExecutableTest } from '../shared/executable_test';
+import { TestContext } from '../shared/utils/test_context';
 
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testDoubleDeposit = new ExecutableTest('DoubleDeposit', main, 120);
-
-async function main(): Promise<void> {
+export async function testDoubleDeposit(testContext: TestContext): Promise<void> {
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = process.env.LP_URI ?? '//LP_1';
   const lp = keyring.createFromUri(lpUri);
@@ -33,7 +30,7 @@ async function main(): Promise<void> {
       test: (event) => event.data.depositAddress.Eth,
     }).event
   ).data.depositAddress.Eth as string;
-  testDoubleDeposit.log('Eth ingress address: ' + ethIngressKey);
+  testContext.debug('Eth ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
   await sendEvmNative('Ethereum', ethIngressKey, '10');
 

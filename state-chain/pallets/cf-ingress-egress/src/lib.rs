@@ -31,8 +31,8 @@ use cf_chains::{
 	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
 	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
-	TransferAssetParams,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall,
+	SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -47,7 +47,7 @@ use cf_traits::{
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
 	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapLimitsProvider,
-	SwapRequestHandler, SwapRequestType,
+	SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -549,7 +549,10 @@ pub mod pallet {
 		const MANAGE_CHANNEL_LIFETIME: bool;
 
 		/// A hook to tell witnesses to start witnessing an opened channel.
-		type IngressSource: IngressSource<Chain = Self::TargetChain>;
+		type IngressSource: IngressSource<
+			Chain = Self::TargetChain,
+			StateChainBlockNumber = BlockNumberFor<Self>,
+		>;
 
 		/// Marks which chain this pallet is interacting with.
 		type TargetChain: Chain + Get<ForeignChain>;
@@ -1608,32 +1611,52 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									deposit_address,
 									deposit_fetch_id,
 									..
-								} =>
-									Self::should_fetch_or_transfer(
-										&mut maybe_no_of_fetches_remaining,
-									) && DepositChannelLookup::<T, I>::mutate(
-										deposit_address,
-										|details| {
-											details
-												.as_mut()
-												.map(|details| {
-													let can_fetch =
-														details.deposit_channel.state.can_fetch();
-
-													if can_fetch {
-														deposit_fetch_id.replace(
-															details.deposit_channel.fetch_id(),
-														);
-														details
+								} => {
+									// Either:
+									// 1. We always want to fetch
+									// 2. We have a restriction on fetches, in which case we need to
+									//    have fetches remaining.
+									// And we must be able to fetch the channel (it must exist and
+									// can_fetch must be true)
+									if (maybe_no_of_fetches_remaining.is_none_or(|n| n > 0)) &&
+										DepositChannelLookup::<T, I>::mutate(
+											deposit_address,
+											|details| {
+												details
+													.as_mut()
+													.map(|details| {
+														let can_fetch = details
 															.deposit_channel
 															.state
-															.on_fetch_scheduled();
-													}
-													can_fetch
-												})
-												.unwrap_or(false)
-										},
-									),
+															.can_fetch();
+
+														if can_fetch {
+															deposit_fetch_id.replace(
+																details.deposit_channel.fetch_id(),
+															);
+															details
+																.deposit_channel
+																.state
+																.on_fetch_scheduled();
+														}
+														can_fetch
+													})
+													.unwrap_or(false)
+											},
+										) {
+										if let Some(n) = maybe_no_of_fetches_remaining.as_mut() {
+											*n = n.saturating_sub(1);
+										}
+										true
+									} else {
+										// If we have a restriction on fetches, but we have no fetch
+										// slots remaining then we don't want to fetch any
+										// more. OR:
+										// If the channel is expired / `can_fetch` returns
+										// false then we can't/shouldn't fetch.
+										false
+									}
+								},
 								FetchOrTransfer::Transfer { .. } => Self::should_fetch_or_transfer(
 									&mut maybe_no_of_transfers_remaining,
 								),
@@ -1919,11 +1942,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount_after_fees.into(),
 					destination_asset,
 					SwapRequestType::Regular {
-						ccm_deposit_metadata: deposit_metadata,
-						output_address: destination_address,
+						output_action: SwapOutputAction::Egress {
+							ccm_deposit_metadata: deposit_metadata,
+							output_address: destination_address,
+						},
 					},
 					broker_fees,
-					refund_params,
+					refund_params.map(|params| RefundParametersExtended {
+						retry_duration: params.retry_duration,
+						refund_destination: cf_chains::AccountOrAddress::ExternalAddress(
+							params.refund_address,
+						),
+						min_price: params.min_price,
+					}),
 					dca_params,
 					origin.into(),
 				);
@@ -2696,6 +2727,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_address.clone(),
 			source_asset,
 			expiry_height,
+			<frame_system::Pallet<T>>::block_number(),
 		)?;
 
 		Ok((channel_id, deposit_address, expiry_height, channel_opening_fee))

@@ -3,7 +3,8 @@
     "eslint:check": "eslint .",
     "eslint:fix": "eslint --fix .",
     "prettier:check": "prettier --check .",
-    "prettier:write": "prettier --write ."
+    "prettier:write": "prettier --write .",
+    "test": "vitest"
   },
   "dependencies": {
     "@chainflip/cli": "1.8.0-rc.8",
@@ -35,7 +36,10 @@
     "toml": "^3.0.0",
     "web3": "^1.9.0",
     "yargs": "^17.7.2",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "vitest": "3.0.3",
+    "pino": "9.6.0",
+    "pino-pretty": "13.0.0"
   },
   "devDependencies": {
     "@types/minimist": "^1.2.2",

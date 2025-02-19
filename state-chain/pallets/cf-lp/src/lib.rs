@@ -1,11 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
+use cf_chains::{
+	address::AddressConverter, AccountOrAddress, AnyChain, ForeignChainAddress,
+	RefundParametersExtended,
+};
+use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostApi, Chainflip, DepositApi,
-	EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails,
+	EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapOutputAction,
+	SwapRequestHandler, SwapRequestType,
 };
 
 use sp_std::vec;
@@ -33,20 +37,11 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::Chain;
-	use cf_primitives::{ChannelId, EgressId};
+	use cf_chains::{AccountOrAddress, Chain, SwapOrigin};
+	use cf_primitives::{BlockNumber, ChannelId, EgressId, Price};
 	use cf_traits::HistoricalFeeMigration;
 
 	use super::*;
-
-	/// AccountOrAddress is a enum that can represent an internal account or an external address.
-	/// This is used to represent the destination address for an egress during a withdrawal or an
-	/// internal account to move funds internally.
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
-	pub enum AccountOrAddress<AccountId> {
-		Internal(AccountId),
-		External(EncodedAddress),
-	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -83,6 +78,8 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>,
 		>;
+
+		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -234,7 +231,7 @@ pub mod pallet {
 				origin,
 				amount,
 				asset,
-				AccountOrAddress::External(destination_address),
+				AccountOrAddress::ExternalAddress(destination_address),
 			)
 		}
 
@@ -326,8 +323,50 @@ pub mod pallet {
 				origin,
 				amount,
 				asset,
-				AccountOrAddress::Internal(destination),
+				AccountOrAddress::InternalAccount(destination),
 			)
+		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::internal_swap())]
+		pub fn internal_swap(
+			origin: OriginFor<T>,
+			amount: AssetAmount,
+			input_asset: Asset,
+			output_asset: Asset,
+			retry_duration: BlockNumber,
+			min_price: Price,
+			dca_params: Option<DcaParameters>,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			Self::ensure_has_refund_address_for_asset(&account_id, output_asset)?;
+
+			T::PoolApi::sweep(&account_id)?;
+
+			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)
+				.map_err(|_| Error::<T>::InsufficientBalance)?;
+
+			T::SwapRequestHandler::init_swap_request(
+				input_asset,
+				amount,
+				output_asset,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::CreditOnChain {
+						account_id: account_id.clone(),
+					},
+				},
+				Default::default(), /* no broker fees */
+				Some(RefundParametersExtended {
+					retry_duration,
+					refund_destination: AccountOrAddress::InternalAccount(account_id.clone()),
+					min_price,
+				}),
+				dca_params,
+				SwapOrigin::OnChainAccount(account_id),
+			);
+
+			Ok(())
 		}
 	}
 }
@@ -337,14 +376,14 @@ impl<T: Config> Pallet<T> {
 		origin: OriginFor<T>,
 		amount: AssetAmount,
 		asset: Asset,
-		destination: AccountOrAddress<T::AccountId>,
+		destination: AccountOrAddress<EncodedAddress, T::AccountId>,
 	) -> DispatchResult {
 		ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
 		let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 		if amount > 0 {
 			match destination {
-				AccountOrAddress::Internal(destination_account) => {
+				AccountOrAddress::InternalAccount(destination_account) => {
 					ensure!(
 						account_id != destination_account,
 						Error::<T>::CannotTransferToOriginAccount
@@ -380,7 +419,7 @@ impl<T: Config> Pallet<T> {
 						amount,
 					});
 				},
-				AccountOrAddress::External(destination_address) => {
+				AccountOrAddress::ExternalAddress(destination_address) => {
 					let destination_address_internal =
 						T::AddressConverter::try_from_encoded_address(destination_address.clone())
 							.map_err(|_| Error::<T>::InvalidEgressAddress)?;
@@ -431,17 +470,12 @@ impl<T: Config> LpRegistration for Pallet<T> {
 		LiquidityRefundAddress::<T>::insert(account_id, address.chain(), address);
 	}
 
-	fn ensure_has_refund_address_for_pair(
+	fn ensure_has_refund_address_for_asset(
 		account_id: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset: Asset,
 	) -> DispatchResult {
 		ensure!(
-			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
-				LiquidityRefundAddress::<T>::contains_key(
-					account_id,
-					ForeignChain::from(quote_asset)
-				),
+			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(asset)),
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);
 		Ok(())

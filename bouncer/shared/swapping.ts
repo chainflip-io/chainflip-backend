@@ -12,7 +12,7 @@ import {
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { SwapContext, SwapStatus } from './swap_context';
+import { SwapContext, SwapStatus } from './utils/swap_context';
 import { estimateCcmCfTesterGas } from './send_evm';
 
 let swapCount = 1;
