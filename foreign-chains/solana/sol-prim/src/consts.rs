@@ -44,6 +44,8 @@ pub const BPF_LOADER_UPGRADEABLE_ID: Address =
 	const_address("BPFLoaderUpgradeab1e11111111111111111111111");
 pub const COMPUTE_BUDGET_PROGRAM: Address =
 	const_address("ComputeBudget111111111111111111111111111111");
+pub const ADDRESS_LOOKUP_TABLE_PROGRAM: Address =
+	const_address("AddressLookupTab1e1111111111111111111111111");
 
 pub const MAX_TRANSACTION_LENGTH: usize = 1_232usize;
 pub const MAX_COMPUTE_UNITS_PER_TRANSACTION: u32 = 1_400_000u32;
@@ -57,4 +59,4 @@ pub const SOL_USDC_DECIMAL: u8 = 6u8;
 pub const ACCOUNT_KEY_LENGTH_IN_TRANSACTION: usize = 32usize;
 pub const ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION: usize = 1usize;
 
-pub const MAX_CCM_USER_ALTS: u8 = 5u8; // TODO: Albert come up with a good number for this
+pub const MAX_CCM_USER_ALTS: u8 = 3u8;

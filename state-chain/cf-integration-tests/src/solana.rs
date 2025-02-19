@@ -11,8 +11,7 @@ use cf_chains::{
 		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
-		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
-		SolanaCrypto,
+		SolAddress, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
@@ -76,15 +75,7 @@ type SolanaElectionVote = BoundedBTreeMap<
 
 fn setup_sol_environments() {
 	// Environment::SolanaApiEnvironment
-	pallet_cf_environment::SolanaApiEnvironment::<Runtime>::set(SolApiEnvironment {
-		vault_program: sol_test_values::VAULT_PROGRAM,
-		vault_program_data_account: sol_test_values::VAULT_PROGRAM_DATA_ACCOUNT,
-		token_vault_pda_account: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT,
-		usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
-		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
-		swap_endpoint_program: sol_test_values::SWAP_ENDPOINT_PROGRAM,
-		swap_endpoint_program_data_account: sol_test_values::SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
-	});
+	pallet_cf_environment::SolanaApiEnvironment::<Runtime>::set(sol_test_values::api_env());
 
 	// Environment::AvailableDurableNonces
 	pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
@@ -536,7 +527,7 @@ fn solana_ccm_fails_with_invalid_input() {
 }
 
 #[test]
-fn failed_ccm_does_not_consume_durable_nonce() {
+fn failed_rotation_does_not_consume_durable_nonce() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
@@ -569,7 +560,7 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 
 			// Failed Rotate Key message does not consume DurableNonce
 			// Add extra Durable nonces to make RotateAggkey too long
-			let available_nonces = (0..20)
+			let available_nonces = (0..100)
 				.map(|x| (SolAddress([x as u8; 32]), SolHash::default()))
 				.collect::<Vec<_>>();
 			pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(

@@ -7,9 +7,9 @@ use cf_chains::{
 	eth,
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ChainflipAddressLookupTable, ComputePrice,
-			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
-			RecoverDurableNonce, SolanaAddressLookupTables, SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaAddressLookupTables,
+			SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,
 	},
@@ -150,6 +150,11 @@ impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment 
 			usdc_token_vault_ata: SolAddress([0x00; 32]),
 			swap_endpoint_program: SolAddress([0x00; 32]),
 			swap_endpoint_program_data_account: SolAddress([0x00; 32]),
+			alt_manager_program: SolAddress([0x00; 32]),
+			address_lookup_table_account: SolAddressLookupTableAccount {
+				key: SolAddress([0x00; 32]).into(),
+				addresses: vec![],
+			},
 		})
 	}
 }
@@ -188,13 +193,6 @@ impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccoun
 	for MockSolEnvironment
 {
 	fn lookup(_s: SolanaAddressLookupTables) -> Option<Vec<SolAddressLookupTableAccount>> {
-		None
-	}
-}
-impl ChainEnvironment<ChainflipAddressLookupTable, SolAddressLookupTableAccount>
-	for MockSolEnvironment
-{
-	fn lookup(_s: ChainflipAddressLookupTable) -> Option<SolAddressLookupTableAccount> {
 		None
 	}
 }

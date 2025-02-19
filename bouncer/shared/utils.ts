@@ -62,7 +62,9 @@ export type VaultSwapParams = {
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
-export const solanaNumberOfNonces = 10;
+// Nonces deployed in two stages
+export const solanaNumberOfNonces: number = 10;
+export const solanaNumberOfAdditionalNonces: number = 40;
 
 const solCcmAccountsCodec = Struct({
   cf_receiver: Struct({
@@ -150,6 +152,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9';
         case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
+        case 'USER_ADDRESS_LOOKUP_TABLE':
+          return '4eUGPyr3krnw8tD3rL3UBXXdy1cx8Sf9HKVESZUAatqv';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -1175,16 +1179,16 @@ export async function checkAvailabilityAllSolanaNonces(testContext: TestContext)
 
   // Check that all Solana nonces are available
   await using chainflip = await getChainflipApi();
-  const maxRetries = 7; // 42 seconds
+  const maxRetries = 10; // 60 seconds
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .toJSON() as any[];
-    if (availableNonces.length === solanaNumberOfNonces) {
+    if (availableNonces.length === solanaNumberOfNonces + solanaNumberOfAdditionalNonces) {
       break;
     } else if (attempt === maxRetries - 1) {
       throw new Error(
-        `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces}`,
+        `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces + solanaNumberOfAdditionalNonces}`,
       );
     } else {
       await sleep(6000);

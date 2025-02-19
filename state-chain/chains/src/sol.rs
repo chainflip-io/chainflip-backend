@@ -37,9 +37,10 @@ pub use sol_prim::{
 		VersionedTransaction as SolVersionedTransaction,
 	},
 	Address as SolAddress, AddressLookupTableAccount as SolAddressLookupTableAccount,
-	Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash, Hash as RawSolHash,
-	Instruction as SolInstruction, InstructionRpc as SolInstructionRpc, Pubkey as SolPubkey,
-	Signature as SolSignature, SlotNumber as SolBlockNumber,
+	AddressLookupTableAccount, Amount as SolAmount, ComputeLimit as SolComputeLimit,
+	Digest as SolHash, Hash as RawSolHash, Instruction as SolInstruction,
+	InstructionRpc as SolInstructionRpc, Pubkey as SolPubkey, Signature as SolSignature,
+	SlotNumber as SolBlockNumber,
 };
 pub use sol_tx_core::{
 	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
@@ -167,7 +168,8 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32;
 	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32;
-	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
+	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 5_000u32;
+	pub const COMPUTE_UNITS_PER_NONCE_ROTATION: SolComputeLimit = 4_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
 	pub const COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS: SolComputeLimit = 20_000u32;
@@ -451,7 +453,7 @@ pub mod signing_key {
 
 /// Solana Environment variables used when building the base API call.
 #[derive(
-	Encode, Decode, TypeInfo, Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize,
+	Encode, Decode, TypeInfo, Default, Clone, PartialEq, Eq, Debug, Serialize, Deserialize,
 )]
 pub struct SolApiEnvironment {
 	// For native Sol API calls.
@@ -468,6 +470,8 @@ pub struct SolApiEnvironment {
 	// For program swaps API calls.
 	pub swap_endpoint_program: SolAddress,
 	pub swap_endpoint_program_data_account: SolAddress,
+	pub alt_manager_program: SolAddress,
+	pub address_lookup_table_account: AddressLookupTableAccount,
 }
 
 impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}
