@@ -663,7 +663,9 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		Self::ccm_transfer(
 			transfer_param,
 			source_chain,
-			source_address,
+			// Hardcoding this to None to gain extra bytes in Solana. Consider
+			// reverting this when we implement versioned Transactions. PRO-2046.
+			None,
 			gas_budget,
 			message,
 			ccm_additional_data,
