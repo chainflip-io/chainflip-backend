@@ -54,7 +54,6 @@ pub trait StateMachine: 'static {
 	type Settings;
 	type Output: Validate;
 	type State: Validate;
-	// type DisplayState;
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
