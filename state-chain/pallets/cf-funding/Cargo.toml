@@ -38,6 +38,7 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 [dev-dependencies]
 pallet-cf-flip = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }

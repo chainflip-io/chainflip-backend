@@ -1,3 +1,4 @@
+use cf_utilities::assert_matches;
 use std::ops::{Deref, DerefMut};
 
 struct MutexStateAndPoisonFlag<T> {
@@ -93,10 +94,10 @@ pub struct Signaller<T> {
 }
 impl<T: Clone + Send + 'static> Signaller<T> {
 	pub fn signal(self, t: T) {
-		assert!(matches!(
+		assert_matches!(
 			self.sender.try_broadcast(t),
 			Ok(None) | Err(async_broadcast::TrySendError::Closed(_))
-		));
+		);
 	}
 }
 

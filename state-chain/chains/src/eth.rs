@@ -240,7 +240,7 @@ mod lifecycle_tests {
 
 	macro_rules! expect_deposit_state {
 		( $state:expr, $asset:expr, $pat:pat ) => {
-			assert!(matches!(
+			cf_utilities::assert_matches!(
 				DepositChannel::<Ethereum> {
 					channel_id: Default::default(),
 					address: Default::default(),
@@ -249,7 +249,7 @@ mod lifecycle_tests {
 				}
 				.fetch_id(),
 				$pat
-			));
+			);
 		};
 	}
 	#[test]

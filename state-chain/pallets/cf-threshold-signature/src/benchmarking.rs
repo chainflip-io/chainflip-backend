@@ -8,6 +8,7 @@ use cf_runtime_utilities::StorageDecodeVariant;
 use cf_traits::{
 	AccountRoleRegistry, Chainflip, CurrentEpochIndex, KeyRotationStatusOuter, ThresholdSigner,
 };
+use cf_utilities::assert_matches;
 use frame_benchmarking::{account, v2::*, whitelist_account, whitelisted_caller};
 use frame_support::{
 	assert_ok,
@@ -163,10 +164,10 @@ mod benchmarks {
 			Pallet::<T, I>::on_initialize(5u32.into());
 		}
 
-		assert!(matches!(
+		assert_matches!(
 			<Pallet::<T, I> as KeyRotator>::status(),
 			AsyncResult::Ready(KeyRotationStatusOuter::Failed(..))
-		));
+		);
 	}
 
 	#[benchmark]
@@ -288,11 +289,11 @@ mod benchmarks {
 			KeygenOutcomeFor::<T, I>::Ok(AggKeyFor::<T, I>::benchmark_value()),
 		);
 
-		assert!(matches!(
+		assert_matches!(
 			PendingKeyRotation::<T, I>::get().unwrap(),
 			KeyRotationStatus::AwaitingKeygen { response_status, .. }
 				if response_status.remaining_candidate_count() == 149
-		))
+		);
 	}
 
 	#[benchmark]
@@ -322,11 +323,11 @@ mod benchmarks {
 			assert_ok!(call.dispatch_bypass_filter(origin.into()));
 		}
 
-		assert!(matches!(
+		assert_matches!(
 			PendingKeyRotation::<T, I>::get().unwrap(),
 			KeyRotationStatus::KeygenVerificationComplete { new_public_key }
 				if new_public_key == agg_key
-		))
+		);
 	}
 
 	// NOTE: Test suite not included because of dependency mismatch between benchmarks and mocks.

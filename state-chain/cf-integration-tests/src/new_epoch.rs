@@ -8,6 +8,7 @@ use cf_chains::btc::{
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use cf_traits::{EpochInfo, KeyProvider};
+use cf_utilities::assert_matches;
 use frame_support::traits::UnfilteredDispatchable;
 use pallet_cf_environment::BitcoinAvailableUtxos;
 use pallet_cf_validator::RotationPhase;
@@ -165,14 +166,14 @@ fn epoch_rotates() {
 			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(1);
 
-			assert!(matches!(
+			assert_matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::KeygensInProgress(..)
-			));
+			);
 
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
-			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
+			assert_matches!(Validator::current_rotation_phase(), RotationPhase::Idle);
 
 			assert_eq!(
 				GENESIS_EPOCH + 1,

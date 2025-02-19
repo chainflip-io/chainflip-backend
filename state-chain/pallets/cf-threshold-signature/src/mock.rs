@@ -15,6 +15,7 @@ use cf_traits::{
 	AccountRoleRegistry, AsyncResult, KeyProvider, Slashing, StartKeyActivationResult,
 	ThresholdSigner, VaultActivator,
 };
+use cf_utilities::assert_matches;
 use codec::{Decode, Encode};
 use frame_support::dispatch::DispatchResultWithPostInfo;
 pub use frame_support::{
@@ -71,10 +72,10 @@ impl MockCallback<MockEthereumChainCrypto> {
 	pub fn call(self) {
 		match self {
 			Self::Regular(request_id, _) => {
-				assert!(matches!(
+				assert_matches!(
 					<EvmThresholdSigner as ThresholdSigner<_>>::signature_result(request_id).1,
 					AsyncResult::Ready(..)
-				));
+				);
 				CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(request_id));
 			},
 			Self::Keygen(call) => {
@@ -285,10 +286,10 @@ impl TestHelper for TestRunner<()> {
 				assert_eq!(current_ceremony_id(), initial_ceremony_id);
 			}
 
-			assert!(matches!(
+			assert_matches!(
 				EvmThresholdSigner::signer_and_signature(request_id).unwrap().signature_result,
 				AsyncResult::Pending
-			));
+			);
 		})
 	}
 
@@ -307,10 +308,10 @@ impl TestHelper for TestRunner<()> {
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
-			assert!(matches!(
+			assert_matches!(
 				EvmThresholdSigner::signer_and_signature(request_id).unwrap().signature_result,
 				AsyncResult::Pending
-			));
+			);
 			assert!(EvmThresholdSigner::request_callback(request_id).is_some());
 		})
 	}

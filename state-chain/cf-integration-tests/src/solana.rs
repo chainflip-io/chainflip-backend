@@ -20,7 +20,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
-use cf_utilities::bs58_array;
+use cf_utilities::{assert_matches, bs58_array};
 use codec::Encode;
 use frame_support::{
 	assert_err,
@@ -257,10 +257,10 @@ fn can_rotate_solana_vault() {
 			testnet.move_forward_blocks(10);
 
 			// Assert the RotateKey call is built, signed and broadcasted.
-			assert!(matches!(
+			assert_matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::ActivatingKeys(..)
-			));
+			);
 			System::assert_has_event(RuntimeEvent::SolanaThresholdSigner(
 				pallet_cf_threshold_signature::Event::<Runtime, SolanaInstance>::ThresholdSignatureSuccess {
 					request_id: 3,
@@ -763,14 +763,14 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			// on_finalize: reach consensus on the egress vote and trigger the fallback mechanism.
 			SolanaElections::on_finalize(System::block_number() + 1);
 			assert_eq!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::decode_len(), Some(1));
-			assert!(matches!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::get()[0],
+			assert_matches!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::get()[0],
 				FetchOrTransfer::Transfer {
 					egress_id: (ForeignChain::Solana, 2),
 					asset: SolAsset::SolUsdc,
 					destination_address: FALLBACK_ADDRESS,
 					..
 				}
-			));
+			);
 
 			// Ensure the previous broadcast data has been cleaned up.
 			assert!(!pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().contains(&ccm_broadcast_id));

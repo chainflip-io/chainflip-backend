@@ -23,7 +23,7 @@ use crate::{
 };
 use anyhow::Result;
 use cf_primitives::{AccountId, CeremonyId};
-use cf_utilities::{task_scope::task_scope, threshold_from_share_count};
+use cf_utilities::{assert_matches, task_scope::task_scope, threshold_from_share_count};
 use client::MultisigMessage;
 use futures::{Future, FutureExt};
 use rand::SeedableRng;
@@ -453,8 +453,8 @@ async fn should_route_p2p_message() {
 
 	// Check that a broadcast was sent out. Meaning that the ceremony received the message and moved
 	// to stage 2.
-	assert!(matches!(
+	assert_matches!(
 		outgoing_p2p_receiver.try_recv().unwrap(),
 		OutgoingMultisigStageMessages::Broadcast(..)
-	))
+	);
 }

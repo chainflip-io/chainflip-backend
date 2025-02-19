@@ -16,7 +16,7 @@ use mockall::predicate;
 
 use crate::client::key_store_api::MockKeyStoreAPI;
 use cf_primitives::GENESIS_EPOCH;
-use cf_utilities::{assert_err, assert_ok, testing::assert_future_can_complete};
+use cf_utilities::{assert_err, assert_matches, assert_ok, testing::assert_future_can_complete};
 use client::MultisigClient;
 
 #[tokio::test]
@@ -47,10 +47,10 @@ async fn should_ignore_rts_for_unknown_key() {
 	// Check that the signing request fails immediately with an "unknown key" error
 	let (_, failure_reason) = assert_err!(assert_future_can_complete(signing_request_fut));
 	assert_eq!(failure_reason, SigningFailureReason::UnknownKey);
-	assert!(matches!(
+	assert_matches!(
 		assert_ok!(assert_future_can_complete(ceremony_request_receiver.recv())),
 		CeremonyRequest { ceremony_id: DEFAULT_SIGNING_CEREMONY_ID, details: None }
-	));
+	);
 }
 
 #[tokio::test]

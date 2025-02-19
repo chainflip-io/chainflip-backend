@@ -1298,10 +1298,10 @@ mod test {
 		];
 
 		for (invalid_address, intended_btc_net) in invalid_addresses {
-			assert!(matches!(
+			cf_utilities::assert_matches!(
 				ScriptPubkey::try_from_address(invalid_address, &intended_btc_net,),
 				Err(Error::InvalidAddress)
-			));
+			);
 		}
 
 		// Test cases from: https://rosettacode.org/wiki/Bitcoin/address_validation

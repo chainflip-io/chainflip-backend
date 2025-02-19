@@ -430,13 +430,13 @@ mod test {
 			raw_error,
 			outcome(failed_1),
 		);
-		assert!(matches!(
+		crate::assert_matches!(
 			outcome(failed_2).unwrap_err(),
 			DispatchError::KnownModuleError {
 				pallet,
 				name,
-				error
+				error,
 			} if pallet == ERROR_PALLET && name == ERROR_NAME && error == ERROR
-		));
+		);
 	}
 }

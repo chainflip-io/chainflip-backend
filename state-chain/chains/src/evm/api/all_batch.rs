@@ -61,6 +61,7 @@ mod test_all_batch {
 		AllBatch, FetchAssetParams,
 	};
 	use cf_primitives::chains::assets;
+	use cf_utilities::assert_matches;
 
 	use eth::api::EthereumApi;
 
@@ -225,7 +226,7 @@ mod test_all_batch {
 		.unwrap();
 
 		assert_eq!(all_batch.len(), 1usize);
-		assert!(matches!(all_batch[0].0, EthereumApi::AllBatch(..)));
+		assert_matches!(all_batch[0].0, EthereumApi::AllBatch(..));
 		let tx_builder = match &all_batch[0].0 {
 			EthereumApi::AllBatch(tx_builder) => tx_builder.clone(),
 			_ => unreachable!(),

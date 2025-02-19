@@ -9,6 +9,7 @@ use cf_traits::{
 	mocks::block_height_provider::BlockHeightProvider, AsyncResult, EpochInfo,
 	EpochTransitionHandler, VaultActivator,
 };
+use cf_utilities::assert_matches;
 use frame_support::assert_noop;
 use std::collections::BTreeSet;
 
@@ -45,10 +46,10 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 
 		VaultsPallet::start_key_activation(NEW_AGG_PUBKEY, Some(Default::default()));
 
-		assert!(matches!(
+		assert_matches!(
 			PendingVaultActivation::<Test, _>::get().unwrap(),
 			VaultActivationStatus::Complete
-		))
+		);
 	});
 }
 
@@ -66,10 +67,10 @@ fn vault_start_block_number_is_set_correctly() {
 			.unwrap(),
 			1001
 		);
-		assert!(matches!(
+		assert_matches!(
 			PendingVaultActivation::<Test, _>::get().unwrap(),
 			VaultActivationStatus::Complete
-		));
+		);
 		assert_last_event!(Event::VaultActivationCompleted);
 	});
 }
@@ -83,10 +84,10 @@ fn vault_start_block_number_not_set_when_chain_not_initialized() {
 		VaultsPallet::start_key_activation(NEW_AGG_PUBKEY, Some(Default::default()));
 		VaultsPallet::activate_key();
 		assert!(VaultStartBlockNumbers::<Test, _>::iter_keys().next().is_none());
-		assert!(matches!(
+		assert_matches!(
 			PendingVaultActivation::<Test, _>::get().unwrap(),
 			VaultActivationStatus::Complete
-		));
+		);
 	});
 }
 
