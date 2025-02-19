@@ -27,7 +27,7 @@ use scale_info::TypeInfo;
 use sp_core::{sr25519, ConstBool, H256};
 
 #[cfg_attr(feature = "std", derive(Hash))]
-#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
+#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct PolkadotSignature(sr25519::Signature);
 impl PolkadotSignature {
 	fn verify(&self, payload: &EncodedPolkadotPayload, signer: &PolkadotPublicKey) -> bool {

@@ -42,10 +42,15 @@ use crate::{
 use anyhow::Result;
 
 use sp_core::H256;
-use state_chain_runtime::chainflip::bitcoin_elections::BitcoinVaultDepositWitnessingES;
+use state_chain_runtime::chainflip::bitcoin_elections::{
+	BitcoinEgressWitnessingES, BitcoinVaultDepositWitnessingES,
+};
 use std::sync::Arc;
 
-use crate::{btc::retry_rpc::BtcRetryRpcClient, witness::btc::deposits::vault_deposits};
+use crate::{
+	btc::retry_rpc::BtcRetryRpcClient,
+	witness::btc::deposits::{egress_witnessing, vault_deposits},
+};
 
 #[derive(Clone)]
 pub struct BitcoinDepositChannelWitnessingVoter {
@@ -209,6 +214,47 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 }
 
 #[derive(Clone)]
+pub struct BitcoinEgressWitnessingVoter {
+	client: BtcRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinEgressWitnessingES>>, anyhow::Error> {
+		let (witness_range, tx_hashes, _extra) = properties;
+		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
+
+		let mut txs = vec![];
+		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+		tracing::info!("Witness range: {:?}", witness_range);
+		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
+			tracing::info!("Checking block {:?}", block);
+
+			// TODO: these queries should not be infinite
+			let block_hash = self.client.block_hash(block).await;
+
+			let block = self.client.block(block_hash).await?;
+
+			txs.extend(block.txdata);
+		}
+
+		let witnesses = egress_witnessing(&txs, tx_hashes);
+
+		if witnesses.is_empty() {
+			tracing::info!("No witnesses found for BTCE");
+		} else {
+			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
+		}
+
+		Ok(Some(ConstantIndex::new(witnesses)))
+	}
+}
+
+#[derive(Clone)]
 pub struct BitcoinLivenessVoter {
 	client: BtcRetryRpcClient,
 }
@@ -249,6 +295,7 @@ where
 						BitcoinBlockHeightTrackingVoter { client: client.clone() },
 						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
 						BitcoinVaultDepositWitnessingVoter { client: client.clone() },
+						BitcoinEgressWitnessingVoter { client: client.clone() },
 						BitcoinLivenessVoter { client },
 					)),
 				)

@@ -10,12 +10,11 @@ mod tests;
 pub mod migrations;
 pub mod weights;
 
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
-
 use cf_chains::{
 	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
 	RequiresSignatureRefresh, RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
 	CfeBroadcastRequest, Chainflip, ElectionEgressWitnesser, EpochInfo, GetBlockHeight,
@@ -23,6 +22,7 @@ use cf_traits::{
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
+use derive_where::derive_where;
 use frame_support::{
 	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
 	sp_runtime::{
@@ -35,6 +35,7 @@ use frame_support::{
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
@@ -117,6 +118,33 @@ pub mod pallet {
 		pub threshold_signature_payload: PayloadFor<T, I>,
 		pub transaction_out_id: TransactionOutIdFor<T, I>,
 		pub nominee: Option<T::ValidatorId>,
+	}
+
+	#[derive(
+		RuntimeDebug,
+		PartialEqNoBound,
+		EqNoBound,
+		TypeInfo,
+		CloneNoBound,
+		Serialize,
+		Deserialize,
+		Encode,
+		Decode,
+	)]
+	#[derive_where(PartialOrd, Ord;
+		TransactionOutIdFor<T, I> : PartialOrd + Ord,
+	TransactionFeeFor<T, I> : PartialOrd + Ord,
+	TransactionMetadataFor<T, I>: PartialOrd + Ord,
+	TransactionRefFor<T, I>: PartialOrd + Ord
+	)]
+	#[scale_info(skip_type_params(T, I))]
+	#[serde(bound(serialize = "", deserialize = ""))]
+	pub struct TransactionConfirmation<T: Config<I>, I: 'static> {
+		pub tx_out_id: TransactionOutIdFor<T, I>,
+		pub signer_id: SignerIdFor<T, I>,
+		pub tx_fee: TransactionFeeFor<T, I>,
+		pub tx_metadata: TransactionMetadataFor<T, I>,
+		pub transaction_ref: TransactionRefFor<T, I>,
 	}
 
 	#[pallet::config]
@@ -1045,6 +1073,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		TransactionOutIdToBroadcastId::<T, I>::get(tx_out_id).and_then(|(broadcast_id, _)| {
 			PendingApiCalls::<T, I>::get(broadcast_id).map(|api_call| (broadcast_id, api_call))
 		})
+	}
+
+	pub fn broadcast_success(egress: TransactionConfirmation<T, I>) {
+		Self::egress_success(
+			OriginFor::<T>::none(),
+			egress.tx_out_id,
+			egress.signer_id,
+			egress.tx_fee,
+			egress.tx_metadata,
+			egress.transaction_ref,
+		)
+		.expect("REASON");
+		//todo! handle possible error, expect will cause panic! -> when can this error?
 	}
 }
 
