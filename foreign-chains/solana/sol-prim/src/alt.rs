@@ -27,7 +27,18 @@ pub struct MessageAddressTableLookup {
 ///
 /// As used by the `crate::message::v0` message format.
 #[derive(
-	Debug, PartialEq, Eq, Clone, Encode, Decode, Serialize, Deserialize, TypeInfo, Default,
+	Serialize,
+	Deserialize,
+	Default,
+	Debug,
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	TypeInfo,
+	Ord,
+	PartialOrd,
 )]
 pub struct AddressLookupTableAccount {
 	pub key: Pubkey,
