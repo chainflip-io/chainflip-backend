@@ -1,8 +1,8 @@
-use codec::{Decode, Encode};
-use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
-use sp_core::bounded::alloc::collections::BTreeSet;
-use sp_std::vec::Vec;
+// use codec::{Decode, Encode};
+// use scale_info::TypeInfo;
+// use serde::{Deserialize, Serialize};
+// use sp_core::bounded::alloc::collections::BTreeSet;
+// use sp_std::vec::Vec;
 // use crate::mock::pallet_cf_elections;
 
 pub mod block_processor;
@@ -32,17 +32,17 @@ pub mod state_machine;
 // NB: We only worry about safety margins in the on-consensus hook. Chain tracking pushes the latest
 // block number, potentially with gaps which we fill. The safety is determined by the dispatching
 // action, this is how we can achieve dynamic, amount based safety margins.
-pub struct BlockWitnesser<Chain, BlockData, Properties, ValidatorId, OnConsensus, ElectionGenerator>
-{
-	_phantom: core::marker::PhantomData<(
-		Chain,
-		BlockData,
-		Properties,
-		ValidatorId,
-		OnConsensus,
-		ElectionGenerator,
-	)>,
-}
+// pub struct BlockWitnesser<Chain, BlockData, Properties, ValidatorId, OnConsensus,
+// ElectionGenerator> {
+// 	_phantom: core::marker::PhantomData<(
+// 		Chain,
+// 		BlockData,
+// 		Properties,
+// 		ValidatorId,
+// 		OnConsensus,
+// 		ElectionGenerator,
+// 	)>,
+// }
 
 // pub trait ProcessBlockData<ChainBlockNumber, BlockData> {
 // 	/// Process the block data and return the unprocessed data. It's possible to have received data
@@ -54,45 +54,45 @@ pub struct BlockWitnesser<Chain, BlockData, Properties, ValidatorId, OnConsensus
 // 	);
 // }
 
-/// Allows external/runtime/implementation to return the properties that the election should use.
-/// This means each instantiation of the block witnesser can control how the properties are
-/// generated, and allows for easier testing of this hook externally vs. actually creating the new
-/// election inside this hook.
-pub trait BlockElectionPropertiesGenerator<ChainBlockNumber, Properties> {
-	fn generate_election_properties(root_block_to_witness: ChainBlockNumber) -> Properties;
-}
+// Allows external/runtime/implementation to return the properties that the election should use.
+// This means each instantiation of the block witnesser can control how the properties are
+// generated, and allows for easier testing of this hook externally vs. actually creating the new
+// election inside this hook.
+// pub trait BlockElectionPropertiesGenerator<ChainBlockNumber, Properties> {
+// 	fn generate_election_properties(root_block_to_witness: ChainBlockNumber) -> Properties;
+// }
 
-pub type ElectionCount = u16;
+// pub type ElectionCount = u16;
 
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
-)]
-pub struct BlockWitnesserSettings {
-	// We don't want to start too many elections at once, as this could overload the engines.
-	// e.g. If we entered safe mode for a long time and then missed 1000 blocks, without this, we
-	// would start 1000 elections at the same time. Instead, we throttle the recovery.
-	pub max_concurrent_elections: ElectionCount,
-}
+// #[derive(
+// 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+// )]
+// pub struct BlockWitnesserSettings {
+// 	// We don't want to start too many elections at once, as this could overload the engines.
+// 	// e.g. If we entered safe mode for a long time and then missed 1000 blocks, without this, we
+// 	// would start 1000 elections at the same time. Instead, we throttle the recovery.
+// 	pub max_concurrent_elections: ElectionCount,
+// }
 
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
-)]
-pub struct BlockWitnesserState<ChainBlockNumber: Ord + Default, BlockData> {
-	// The last block where we know that we have processed everything from....
-	// what about a reorg??????
-	pub last_block_election_emitted_for: ChainBlockNumber,
+// #[derive(
+// 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+// )]
+// pub struct BlockWitnesserState<ChainBlockNumber: Ord + Default, BlockData> {
+// 	// The last block where we know that we have processed everything from....
+// 	// what about a reorg??????
+// 	pub last_block_election_emitted_for: ChainBlockNumber,
 
-	// TODO: Ensure that even empty data is passed through here with a test.
-	// The block roots (of a block range) that we received non empty block data for, but still
-	// requires processing.
-	// NOTE: It is possible for block data to arrive and then be partially processed. In this case,
-	// the block will still be here until there is no more block data for this block root to
-	// process.
-	pub unprocessed_data: Vec<(ChainBlockNumber, BlockData)>,
+// 	// TODO: Ensure that even empty data is passed through here with a test.
+// 	// The block roots (of a block range) that we received non empty block data for, but still
+// 	// requires processing.
+// 	// NOTE: It is possible for block data to arrive and then be partially processed. In this case,
+// 	// the block will still be here until there is no more block data for this block root to
+// 	// process.
+// 	pub unprocessed_data: Vec<(ChainBlockNumber, BlockData)>,
 
-	// What block numbers do we have open elections for?
-	pub elections_open_for: BTreeSet<ChainBlockNumber>,
-}
+// 	// What block numbers do we have open elections for?
+// 	pub elections_open_for: BTreeSet<ChainBlockNumber>,
+// }
 
 /*
 impl<

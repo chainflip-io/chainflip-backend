@@ -101,10 +101,13 @@
 //! "BitmapComponent" are set via the VoteStorage trait, and how an "AuthorityVote" is split up into
 //! or reconstructed from the others is also configured via that trait.
 
+#![allow(incomplete_features)]
 #![feature(try_find)]
 #![feature(step_trait)]
 #![feature(trait_alias)]
 #![feature(associated_type_defaults)]
+#![feature(adt_const_params)]
+#![feature(unsized_const_params)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]

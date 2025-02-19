@@ -26,11 +26,12 @@ use crate::{
 		block_height_tracking::ChainProgress,
 		block_witnesser::{
 			block_processor::test::MockBlockProcessorDefinition,
+			primitives::ElectionTracker,
 			state_machine::{ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook},
 			*,
 		},
 		state_machine::{
-			core::{ConstantIndex, Hook, TypesFor},
+			core::{hook_test_utils::MockHook, ConstantIndex, Hook, TypesFor},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
@@ -40,7 +41,7 @@ use cf_chains::{mocks::MockEthereum, Chain};
 use consensus::BWConsensus;
 use primitives::SafeModeStatus;
 use sp_std::collections::btree_set::BTreeSet;
-use state_machine::{BWSettings, BWState, BWStateMachine, BWTypes};
+use state_machine::{BWStateMachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState};
 
 thread_local! {
 	pub static PROPERTIES_TO_RETURN: std::cell::RefCell<Properties> = const { std::cell::RefCell::new(BTreeSet::new()) };
@@ -65,6 +66,7 @@ fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
 }
 
 pub type Properties = BTreeSet<u16>;
+pub type ElectionCount = u16;
 
 // impl BlockElectionPropertiesGenerator<ChainBlockNumber, Properties>
 // 	for MockGenerateElectionHook<ChainBlockNumber, Properties>
@@ -77,15 +79,15 @@ pub type Properties = BTreeSet<u16>;
 // 	}
 // }
 
-impl Hook<HookTypeFor<Types, ElectionPropertiesHook>> for Types {
-	fn run(&mut self, input: ChainBlockNumber) -> Properties {
-		println!("generate_election_hook called for {input}");
-		GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
-		// The properties are not important to the logic of the electoral system itself, so we can
-		// return empty.
-		BTreeSet::new()
-	}
-}
+// impl Hook<HookTypeFor<Types, ElectionPropertiesHook>> for Types {
+// 	fn run(&mut self, input: ChainBlockNumber) -> Properties {
+// 		println!("generate_election_hook called for {input}");
+// 		GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
+// 		// The properties are not important to the logic of the electoral system itself, so we can
+// 		// return empty.
+// 		BTreeSet::new()
+// 	}
+// }
 
 // struct MockBlockProcessor<ChainBlockNumber, BlockData> {
 // 	_phantom: core::marker::PhantomData<(ChainBlockNumber, BlockData)>,
@@ -156,17 +158,18 @@ impl Hook<HookTypeFor<Types, SafeModeEnabledHook>> for Types {
 /// Associating BW types to the struct
 impl BWTypes for Types {
 	type ElectionProperties = ElectionProperties;
-	type ElectionPropertiesHook = Self;
+	type ElectionPropertiesHook =
+		MockHook<"generate_election_properties", HookTypeFor<Self, ElectionPropertiesHook>>;
 	type SafeModeEnabledHook = Self;
 }
 
 /// Associating the ES related types to the struct
 impl ElectoralSystemTypes for Types {
 	type ValidatorId = ValidatorId;
-	type ElectoralUnsynchronisedState = BWState<Self>;
+	type ElectoralUnsynchronisedState = BlockWitnesserState<Self>;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
-	type ElectoralUnsynchronisedSettings = BWSettings;
+	type ElectoralUnsynchronisedSettings = BlockWitnesserSettings;
 	type ElectoralSettings = ();
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = (u64, ElectionProperties, u8);
@@ -198,30 +201,22 @@ impl StateMachineES for Types {
 /// Generating the state machine-based electoral system
 pub type SimpleBlockWitnesser = StateMachineESInstance<Types>;
 
-// We need to provide a mock chain here... MockEthereum might be what we're after
-// type SimpleBlockWitnesser = BlockWitnesser<
-// 	MockEthereum,
-// 	BlockData,
-// 	Properties,
-// 	ValidatorId,
-// 	MockBlockProcessor<ChainBlockNumber, BlockData>,
-// 	MockGenerateElectionHook<ChainBlockNumber, Properties>,
-// >;
-
 register_checks! {
 	SimpleBlockWitnesser {
-		generate_election_properties_called_n_times(_pre, _post, n: u8) {
-			assert_eq!(GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "generate_election_properties should have been called {} times so far!", n);
+		generate_election_properties_called_n_times(pre, post, n: u8) {
+			let pre_calls = pre.unsynchronised_state.generate_election_properties_hook.call_history.len();
+			let post_calls = post.unsynchronised_state.generate_election_properties_hook.call_history.len();
+			assert_eq!((post_calls - pre_calls) as u8, n, "generate_election_properties should have been called {} times in this `on_finalize`!", n);
 		},
 		number_of_open_elections_is(_pre, post, n: ElectionCount) {
 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
 		},
-		process_block_data_called_n_times(_pre, _post, n: u8) {
-			assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "process_block_data should have been called {} times so far!", n);
-		},
-		process_block_data_called_last_with(_pre, _post, block_data: Vec<(ChainBlockNumber, BlockData)>) {
-			assert_eq!(PROCESS_BLOCK_DATA_CALLED_WITH.with(|old_block_data| old_block_data.borrow().clone()), block_data, "process_block_data should have been called with {:?}", block_data);
-		},
+		// process_block_data_called_n_times(_pre, _post, n: u8) {
+		// 	assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "process_block_data should have been called {} times so far!", n);
+		// },
+		// process_block_data_called_last_with(_pre, _post, block_data: Vec<(ChainBlockNumber, BlockData)>) {
+		// 	assert_eq!(PROCESS_BLOCK_DATA_CALLED_WITH.with(|old_block_data| old_block_data.borrow().clone()), block_data, "process_block_data should have been called with {:?}", block_data);
+		// },
 		// unprocessed_data_is(_pre, post, data: Vec<(ChainBlockNumber, BlockData)>) {
 		// 	// assert_eq!(post.unsynchronised_state.unprocessed_data, data, "Unprocessed data should be {:?}", data);
 		// },
@@ -270,22 +265,22 @@ fn generate_votes(
 }
 
 // Util to create a successful set of votes, along with the consensus expectation.
-// fn create_votes_expectation(
-// 	consensus: BlockData,
-// ) -> (
-// 	ConsensusVotes<SimpleBlockWitnesser>,
-// 	Option<<SimpleBlockWitnesser as ElectoralSystemTypes>::Consensus>,
-// ) {
-// 	(
-// 		generate_votes(
-// 			(0..20).collect(),
-// 			Default::default(),
-// 			Default::default(),
-// 			consensus.clone(),
-// 		),
-// 		Some(ConstantIndex::new(consensus)),
-// 	)
-// }
+fn create_votes_expectation(
+	consensus: BlockData,
+) -> (
+	ConsensusVotes<SimpleBlockWitnesser>,
+	Option<<SimpleBlockWitnesser as ElectoralSystemTypes>::Consensus>,
+) {
+	(
+		generate_votes(
+			(0..20).collect(),
+			Default::default(),
+			Default::default(),
+			consensus.clone(),
+		),
+		Some(ConstantIndex::new(consensus)),
+	)
+}
 
 const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 
@@ -294,7 +289,7 @@ const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 fn no_block_data_success() {
 	const NEXT_BLOCK_RECEIVED: ChainBlockNumber = 1;
 	TestSetup::<SimpleBlockWitnesser>::default()
-		.with_unsynchronised_settings(BWSettings {
+		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
 		})
 		.build()
@@ -304,7 +299,7 @@ fn no_block_data_success() {
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
-				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
 			],
 		)
 		.expect_consensus(
@@ -316,14 +311,14 @@ fn no_block_data_success() {
 			|_| {},
 			vec![
 				// No extra calls
-				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
-				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(0),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
 				// We should receive an empty block data, but still get the block number. This is
 				// necessary so we can track the last chain block we've processed.
-				Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
-					NEXT_BLOCK_RECEIVED,
-					vec![],
-				)]),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
+				// 	NEXT_BLOCK_RECEIVED,
+				// 	vec![],
+				// )]),
 			],
 		);
 }
@@ -333,7 +328,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
 	const NUMBER_OF_ELECTIONS: ElectionCount = MAX_CONCURRENT_ELECTIONS - 1;
 	TestSetup::<SimpleBlockWitnesser>::default()
-		.with_unsynchronised_settings(BWSettings {
+		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
 		})
 		.build()
@@ -348,7 +343,9 @@ fn creates_multiple_elections_below_maximum_when_required() {
 			},
 			vec![
 				Check::<SimpleBlockWitnesser>::election_state_is(),
-				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(4),
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
+					NUMBER_OF_ELECTIONS as u8,
+				),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS),
 			],
 		)
@@ -378,17 +375,17 @@ fn creates_multiple_elections_below_maximum_when_required() {
 				);
 			},
 			vec![
-				// Still no extra elections created.
+				// Since two elections reached consensus and were closed,
+				// we are left with `NUMBER_OF_ELECTIONS - 2` elections for which
+				// we regenerate election properties in this `on_finalize`.
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					NUMBER_OF_ELECTIONS as u8,
+					NUMBER_OF_ELECTIONS as u8 - 2,
 				),
 				// we should have resolved two elections
-				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS - 2),
 			],
 		);
 }
-
-/*
 
 #[test]
 fn creates_multiple_elections_limited_by_maximum() {
@@ -396,13 +393,13 @@ fn creates_multiple_elections_limited_by_maximum() {
 	const NUMBER_OF_ELECTIONS_REQUIRED: ElectionCount = MAX_CONCURRENT_ELECTIONS * 2;
 	let consensus_resolutions: Vec<(
 		ConsensusVotes<SimpleBlockWitnesser>,
-		Option<<SimpleBlockWitnesser as ElectoralSystem>::Consensus>,
+		Option<<Types as ElectoralSystemTypes>::Consensus>,
 	)> = vec![
 		create_votes_expectation(vec![]),
 		create_votes_expectation(vec![1, 3, 4]),
 		// no progress on external chain but on finalize called again
 	];
-	let number_of_resolved_elections = consensus_resolutions.len();
+	// let number_of_resolved_elections = consensus_resolutions.len();
 	TestSetup::<SimpleBlockWitnesser>::default()
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
@@ -410,11 +407,12 @@ fn creates_multiple_elections_limited_by_maximum() {
 		.build()
 		.test_on_finalize(
 			// Process multiple elections, but still elss than the maximum concurrent
-			&ChainProgress::Continuous(range_n(
-				INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS_REQUIRED as u64),
-			)),
+			&vec![ChainProgress::Range(range_n(
+				INIT_LAST_BLOCK_RECEIVED,
+				NUMBER_OF_ELECTIONS_REQUIRED as u64,
+			))],
 			|pre_state| {
-				assert_eq!(pre_state.unsynchronised_state.elections_open_for.len(), 0);
+				assert_eq!(pre_state.unsynchronised_state.elections.ongoing.len(), 0);
 			},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
@@ -429,16 +427,16 @@ fn creates_multiple_elections_limited_by_maximum() {
 		// we now have space to start new elections.
 		.expect_consensus_multi(consensus_resolutions)
 		.test_on_finalize(
-			&ChainProgress::None(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS_REQUIRED as u64)),
+			&vec![ChainProgress::None],
 			|pre_state| {
 				assert_eq!(
-					pre_state.unsynchronised_state.elections_open_for.len(),
+					pre_state.unsynchronised_state.elections.ongoing.len(),
 					MAX_CONCURRENT_ELECTIONS as usize
 				);
 			},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					MAX_CONCURRENT_ELECTIONS as u8 + number_of_resolved_elections as u8,
+					MAX_CONCURRENT_ELECTIONS as u8,
 				),
 				// we should have resolved two elections
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(
@@ -471,7 +469,12 @@ fn reorg_clears_on_going_elections_and_continues() {
 
 	TestSetup::<SimpleBlockWitnesser>::default()
 		.with_unsynchronised_state(BlockWitnesserState {
-			last_block_election_emitted_for: INIT_LAST_BLOCK_RECEIVED,
+			elections: ElectionTracker {
+				next_election: INIT_LAST_BLOCK_RECEIVED + 1,
+				next_witnessed: INIT_LAST_BLOCK_RECEIVED + 1,
+				..Default::default()
+			},
+			// last_block_election_emitted_for: INIT_LAST_BLOCK_RECEIVED,
 			..BlockWitnesserState::default()
 		})
 		.with_unsynchronised_settings(BlockWitnesserSettings {
@@ -479,7 +482,10 @@ fn reorg_clears_on_going_elections_and_continues() {
 		})
 		.build()
 		.test_on_finalize(
-			&ChainProgress::Continuous(range_n(NEXT_BLOCK_NUMBER)),
+			&vec![ChainProgress::Range(range_n(
+				INIT_LAST_BLOCK_RECEIVED + 1,
+				MAX_CONCURRENT_ELECTIONS as u64,
+			))],
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
@@ -490,276 +496,289 @@ fn reorg_clears_on_going_elections_and_continues() {
 				),
 				// No reorg, so we try processing any unprocessed state (there would be none at
 				// this point though, since no elections have resolved).
-				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
 			],
 		)
 		.then(|| println!("We about to come to consensus on some blocks."))
 		.expect_consensus_multi(all_votes)
 		// Process votes as normal, progressing by one block, storing the state
 		.test_on_finalize(
-			&ChainProgress::Continuous(range_n(NEXT_BLOCK_NUMBER + 1)),
+			&vec![ChainProgress::Range(range_n(NEXT_BLOCK_NUMBER + 1, 1))],
 			|_| {},
 			vec![
 				// We've already processed the other elections, so we only have to create a new
 				// election for the new block.
-				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					MAX_CONCURRENT_ELECTIONS as u8 + 1,
-				),
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
-				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
-				Check::<SimpleBlockWitnesser>::unprocessed_data_is(
-					expected_unprocessed_data.clone(),
-				),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
+				// Check::<SimpleBlockWitnesser>::unprocessed_data_is(
+				// 	expected_unprocessed_data.clone(),
+				// ),
 			],
 		)
 		.then(|| println!("We're about to come to consensus on a block that will trigger a reorg."))
 		// Reorg occurs
 		.test_on_finalize(
-			&ChainProgress::Reorg(
-				RangeOfBlockWitnessRanges::try_new(
-					// Range is inclusive, so for reorg length reorg, we need to -1 from reorg
-					// length.
-					(NEXT_BLOCK_NUMBER + 1) - (REORG_LENGTH - 1),
-					NEXT_BLOCK_NUMBER + 1,
-					1,
-				)
-				.unwrap(),
-			),
+			&vec![ChainProgress::Range(range_n(
+				// Range is inclusive, so for reorg length reorg, we need to -1 from reorg
+				// length.
+				(NEXT_BLOCK_NUMBER + 1) - (REORG_LENGTH - 1),
+				REORG_LENGTH,
+			))],
 			|_| {},
 			// We remove the actives ones and open one for the first block that we detected a
 			// reorg for.
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
 					// REORG_LENGTH more than the last time we checked.
-					MAX_CONCURRENT_ELECTIONS as u8 + 1 + REORG_LENGTH as u8,
+					REORG_LENGTH as u8,
 				),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(REORG_LENGTH as u16),
 				// We call it again, as even though there was a reorg, maybe some external state
 				// changed that process_block_data uses, and now can process some of the
 				// existing data.
-				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(3),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(3),
 				// We keep the data, since it may need to be used by process_block_data to
 				// deduplicate actions. We don't want to submit an action twice.
-				Check::<SimpleBlockWitnesser>::unprocessed_data_is(expected_unprocessed_data),
+				// Check::<SimpleBlockWitnesser>::unprocessed_data_is(expected_unprocessed_data),
 			],
 		);
 }
 
-*/
+/*
+#[test]
+fn partially_processed_block_data_processed_next_on_finalize() {
+	let first_block_consensus: BlockData = vec![5, 6, 7];
 
-// #[test]
-// fn partially_processed_block_data_processed_next_on_finalize() {
-// 	let first_block_consensus: BlockData = vec![5, 6, 7];
+	let first_block_data_after_processing: Vec<_> =
+		first_block_consensus.clone().into_iter().take(2).collect();
 
-// 	let first_block_data_after_processing: Vec<_> =
-// 		first_block_consensus.clone().into_iter().take(2).collect();
+	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
+	TestSetup::<SimpleBlockWitnesser>::default()
+		.with_unsynchronised_state(BlockWitnesserState {
+			last_block_received: INIT_LAST_BLOCK_RECEIVED,
+			..BlockWitnesserState::default()
+		})
+		.with_unsynchronised_settings(BlockWitnesserSettings {
+			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
+		})
+		.build()
+		.test_on_finalize(
+			&range_n(INIT_LAST_BLOCK_RECEIVED + 1, 1),
+			|_| {},
+			vec![
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
+				// We haven't come to consensus on any elections, so there's no unprocessed data.
+				// Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![]),
+			],
+		)
+		.expect_consensus_multi(vec![create_votes_expectation(first_block_consensus.clone())])
+		.then(|| {
+			// We process one of the items, so we return only 2 of 3.
+			MockBlockProcessor::set_block_data_to_return(vec![(
+				INIT_LAST_BLOCK_RECEIVED + 1,
+				first_block_data_after_processing.clone(),
+			)]);
+		})
+		.test_on_finalize(
+			&range_n(INIT_LAST_BLOCK_RECEIVED + 2),
+			|_| {},
+			vec![
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(2),
+				// One opened, one closed.
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
+				// We call it again.
+				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
+				// We have the election data for the election we emitted before now. We try to
+				// process it.
+				Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
+					INIT_LAST_BLOCK_RECEIVED + 1,
+					first_block_consensus,
+				)]),
+			],
+		)
+		// No progress on external chain, so state should be the same as above, except that we
+		// processed one of the items last time.
+		.test_on_finalize(
+			&range_n(INIT_LAST_BLOCK_RECEIVED + 2),
+			|_| {},
+			vec![
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(2),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
+				// We call it again.
+				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(3),
+				Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
+					INIT_LAST_BLOCK_RECEIVED + 1,
+					first_block_data_after_processing,
+				)]),
+			],
+		);
+}
+ */
 
-// 	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
-// 	TestSetup::<SimpleBlockWitnesser>::default()
-// 		.with_unsynchronised_state(BlockWitnesserState {
-// 			last_block_received: INIT_LAST_BLOCK_RECEIVED,
-// 			..BlockWitnesserState::default()
-// 		})
-// 		.with_unsynchronised_settings(BlockWitnesserSettings {
-// 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
-// 		})
-// 		.build()
-// 		.test_on_finalize(
-// 			&range_n(INIT_LAST_BLOCK_RECEIVED + 1),
-// 			|_| {},
-// 			vec![
-// 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
-// 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
-// 				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
-// 				// We haven't come to consensus on any elections, so there's no unprocessed data.
-// 				Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![]),
-// 			],
-// 		)
-// 		.expect_consensus_multi(vec![create_votes_expectation(first_block_consensus.clone())])
-// 		.then(|| {
-// 			// We process one of the items, so we return only 2 of 3.
-// 			MockBlockProcessor::set_block_data_to_return(vec![(
-// 				INIT_LAST_BLOCK_RECEIVED + 1,
-// 				first_block_data_after_processing.clone(),
-// 			)]);
-// 		})
-// 		.test_on_finalize(
-// 			&range_n(INIT_LAST_BLOCK_RECEIVED + 2),
-// 			|_| {},
-// 			vec![
-// 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(2),
-// 				// One opened, one closed.
-// 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
-// 				// We call it again.
-// 				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
-// 				// We have the election data for the election we emitted before now. We try to
-// 				// process it.
-// 				Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
-// 					INIT_LAST_BLOCK_RECEIVED + 1,
-// 					first_block_consensus,
-// 				)]),
-// 			],
-// 		)
-// 		// No progress on external chain, so state should be the same as above, except that we
-// 		// processed one of the items last time.
-// 		.test_on_finalize(
-// 			&range_n(INIT_LAST_BLOCK_RECEIVED + 2),
-// 			|_| {},
-// 			vec![
-// 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(2),
-// 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
-// 				// We call it again.
-// 				Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(3),
-// 				Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
-// 					INIT_LAST_BLOCK_RECEIVED + 1,
-// 					first_block_data_after_processing,
-// 				)]),
-// 			],
-// 		);
-// }
-
-// #[test]
-// fn elections_resolved_out_of_order_has_no_impact() {
-// 	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
-// 	const FIRST_ELECTION_BLOCK_CREATED: ChainBlockNumber = INIT_LAST_BLOCK_RECEIVED + 1;
-// 	const SECOND_ELECTION_BLOCK_CREATED: ChainBlockNumber = FIRST_ELECTION_BLOCK_CREATED + 1;
-// 	const NUMBER_OF_ELECTIONS: ElectionCount = 2;
-// 	TestSetup::<SimpleBlockWitnesser>::default()
-// 		.with_unsynchronised_state(BlockWitnesserState {
-// 			last_block_received: INIT_LAST_BLOCK_RECEIVED,
-// 			..BlockWitnesserState::default()
-// 		})
-// 		.with_unsynchronised_settings(BlockWitnesserSettings {
-// 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
-// 		})
-// 		.build()
-// 		.test_on_finalize(
-// 			// Process multiple elections, but still elss than the maximum concurrent
-// 			&range_n(INIT_LAST_BLOCK_RECEIVED + 2),
-// 			|pre_state| {
-// 				assert_eq!(pre_state.unsynchronised_state.open_elections, 0);
-// 			},
-// 			vec![
-// 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-// 					NUMBER_OF_ELECTIONS as u8,
-// 				),
-// 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS),
-// 			],
-// 		)
-// 		.expect_consensus_multi(vec![
-// 			(
-// 				// no consensus
-// 				generate_votes((0..20).collect(), (0..20).collect(), Default::default(), vec![]),
-// 				None,
-// 			),
-// 			(
-// 				// consensus
-// 				generate_votes(
-// 					(0..40).collect(),
-// 					Default::default(),
-// 					Default::default(),
-// 					vec![1, 3, 4],
-// 				),
-// 				Some(vec![1, 3, 4]),
-// 			),
-// 		])
-// 		// no progress on external chain but on finalize called again
-// 		// TODO: Check the new elections have kicked off correct
-// 		.test_on_finalize(
-// 			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 1),
-// 			|pre_state| {
-// 				assert_eq!(pre_state.unsynchronised_state.open_elections, NUMBER_OF_ELECTIONS);
-// 			},
-// 			vec![
-// 				// one extra election created
-// 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-// 					(NUMBER_OF_ELECTIONS + 1) as u8,
-// 				),
-// 				// we should have resolved one election, and started one election
-// 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
-// 				Check::<SimpleBlockWitnesser>::unprocessed_data_is(vec![(
-// 					SECOND_ELECTION_BLOCK_CREATED,
-// 					vec![1, 3, 4],
-// 				)]),
-// 			],
-// 		)
-// 		// gain consensus on the first emitted election now
-// 		.expect_consensus_multi(vec![(
-// 			generate_votes(
-// 				(0..40).collect(),
-// 				Default::default(),
-// 				Default::default(),
-// 				vec![9, 1, 2],
-// 			),
-// 			Some(vec![9, 1, 2]),
-// 		)])
-// 		.test_on_finalize(
-// 			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 2),
-// 			|pre_state| {
-// 				assert_eq!(
-// 					pre_state.unsynchronised_state.open_elections, 2,
-// 					"number of open elections should be 2"
-// 				);
-// 			},
-// 			vec![
-// 				// one extra election created
-// 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-// 					(NUMBER_OF_ELECTIONS + 2) as u8,
-// 				),
-// 				// we should have resolved one elections, and started one election
-// 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
-// 				// Now the first election we emitted is resolved, and its block data should be
-// 				// stored, and we should still have the second election block data.
-// 				Check::<SimpleBlockWitnesser>::unprocessed_data_is(vec![
-// 					(SECOND_ELECTION_BLOCK_CREATED, vec![1, 3, 4]),
-// 					(FIRST_ELECTION_BLOCK_CREATED, vec![9, 1, 2]),
-// 				]),
-// 			],
-// 		)
-// 		// Gain consensus on the final elections
-// 		.expect_consensus_multi(vec![
-// 			(
-// 				generate_votes(
-// 					(0..40).collect(),
-// 					Default::default(),
-// 					Default::default(),
-// 					vec![81, 1, 93],
-// 				),
-// 				Some(vec![81, 1, 93]),
-// 			),
-// 			(
-// 				generate_votes(
-// 					(0..40).collect(),
-// 					Default::default(),
-// 					Default::default(),
-// 					vec![69, 69, 69],
-// 				),
-// 				Some(vec![69, 69, 69]),
-// 			),
-// 		])
-// 		// external chain doesn't move forward
-// 		.test_on_finalize(
-// 			&range_n(INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 2),
-// 			|pre_state| {
-// 				assert_eq!(
-// 					pre_state.unsynchronised_state.open_elections, 2,
-// 					"number of open elections should be 2"
-// 				);
-// 			},
-// 			vec![
-// 				// one extra election created
-// 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-// 					(NUMBER_OF_ELECTIONS + 2) as u8,
-// 				),
-// 				// all elections have resolved now
-// 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(0),
-// 				// Now the last two elections are resolved in order
-// 				Check::<SimpleBlockWitnesser>::unprocessed_data_is(vec![
-// 					(SECOND_ELECTION_BLOCK_CREATED, vec![1, 3, 4]),
-// 					(FIRST_ELECTION_BLOCK_CREATED, vec![9, 1, 2]),
-// 					(SECOND_ELECTION_BLOCK_CREATED + 1, vec![81, 1, 93]),
-// 					(SECOND_ELECTION_BLOCK_CREATED + 2, vec![69, 69, 69]),
-// 				]),
-// 			],
-// 		);
-// }
+#[test]
+fn elections_resolved_out_of_order_has_no_impact() {
+	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
+	const NUMBER_OF_ELECTIONS: ElectionCount = 2;
+	TestSetup::<SimpleBlockWitnesser>::default()
+		.with_unsynchronised_state(BlockWitnesserState {
+			elections: ElectionTracker {
+				next_election: INIT_LAST_BLOCK_RECEIVED + 1,
+				next_witnessed: INIT_LAST_BLOCK_RECEIVED + 1,
+				..Default::default()
+			},
+			// last_block_election_emitted_for: INIT_LAST_BLOCK_RECEIVED,
+			..BlockWitnesserState::default()
+		})
+		.with_unsynchronised_settings(BlockWitnesserSettings {
+			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
+		})
+		.build()
+		.test_on_finalize(
+			// Process multiple elections, but still less than the maximum concurrent
+			&vec![ChainProgress::Range(range_n(
+				INIT_LAST_BLOCK_RECEIVED + 1,
+				NUMBER_OF_ELECTIONS as u64,
+			))],
+			|pre_state| {
+				assert_eq!(pre_state.unsynchronised_state.elections.ongoing.len(), 0);
+			},
+			vec![
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
+					NUMBER_OF_ELECTIONS as u8,
+				),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS),
+			],
+		)
+		.expect_consensus_multi(vec![
+			(
+				// no consensus
+				generate_votes((0..20).collect(), (0..20).collect(), Default::default(), vec![]),
+				None,
+			),
+			(
+				// consensus
+				generate_votes(
+					(0..40).collect(),
+					Default::default(),
+					Default::default(),
+					vec![1, 3, 4],
+				),
+				Some(ConstantIndex::new(vec![1, 3, 4])),
+			),
+		])
+		// no progress on external chain but on finalize called again
+		// TODO: Check the new elections have kicked off correct
+		.test_on_finalize(
+			&vec![ChainProgress::Range(range_n(
+				INIT_LAST_BLOCK_RECEIVED + 1 + (NUMBER_OF_ELECTIONS as u64),
+				1,
+			))],
+			|pre_state| {
+				assert_eq!(
+					pre_state.unsynchronised_state.elections.ongoing.len(),
+					NUMBER_OF_ELECTIONS as usize
+				);
+			},
+			vec![
+				// one extra election created
+				// TODO: this should check that we actually called properties for the newly created
+				// election. as things are we cannot see whether we closed an election and
+				// opened a new one or simply kept the previously ongoing ones
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
+					NUMBER_OF_ELECTIONS as u8,
+				),
+				// we should have resolved one election, and started one election
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
+				// Check::<SimpleBlockWitnesser>::unprocessed_data_is(vec![(
+				// 	SECOND_ELECTION_BLOCK_CREATED,
+				// 	vec![1, 3, 4],
+				// )]),
+			],
+		)
+		// gain consensus on the first emitted election now
+		.expect_consensus_multi(vec![(
+			generate_votes(
+				(0..40).collect(),
+				Default::default(),
+				Default::default(),
+				vec![9, 1, 2],
+			),
+			Some(ConstantIndex::new(vec![9, 1, 2])),
+		)])
+		.test_on_finalize(
+			&vec![ChainProgress::Range(range_n(
+				INIT_LAST_BLOCK_RECEIVED + (NUMBER_OF_ELECTIONS as u64) + 2,
+				1,
+			))],
+			|pre_state| {
+				assert_eq!(
+					pre_state.unsynchronised_state.elections.ongoing.len(),
+					2,
+					"number of open elections should be 2"
+				);
+			},
+			vec![
+				// one extra election created
+				// TODO, same as above TODO
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
+					NUMBER_OF_ELECTIONS as u8,
+				),
+				// we should have resolved one elections, and started one election
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
+				// Now the first election we emitted is resolved, and its block data should be
+				// stored, and we should still have the second election block data.
+				// Check::<SimpleBlockWitnesser>::unprocessed_data_is(vec![
+				// 	(SECOND_ELECTION_BLOCK_CREATED, vec![1, 3, 4]),
+				// 	(FIRST_ELECTION_BLOCK_CREATED, vec![9, 1, 2]),
+				// ]),
+			],
+		)
+		// Gain consensus on the final elections
+		.expect_consensus_multi(vec![
+			(
+				generate_votes(
+					(0..40).collect(),
+					Default::default(),
+					Default::default(),
+					vec![81, 1, 93],
+				),
+				Some(ConstantIndex::new(vec![81, 1, 93])),
+			),
+			(
+				generate_votes(
+					(0..40).collect(),
+					Default::default(),
+					Default::default(),
+					vec![69, 69, 69],
+				),
+				Some(ConstantIndex::new(vec![69, 69, 69])),
+			),
+		])
+		// external chain doesn't move forward
+		.test_on_finalize(
+			&vec![ChainProgress::None],
+			|pre_state| {
+				assert_eq!(
+					pre_state.unsynchronised_state.elections.ongoing.len(),
+					2,
+					"number of open elections should be 2"
+				);
+			},
+			vec![
+				// no new election created
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(0),
+				// all elections have resolved now
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(0),
+				// Now the last two elections are resolved in order
+				// Check::<SimpleBlockWitnesser>::unprocessed_data_is(vec![
+				// 	(SECOND_ELECTION_BLOCK_CREATED, vec![1, 3, 4]),
+				// 	(FIRST_ELECTION_BLOCK_CREATED, vec![9, 1, 2]),
+				// 	(SECOND_ELECTION_BLOCK_CREATED + 1, vec![81, 1, 93]),
+				// 	(SECOND_ELECTION_BLOCK_CREATED + 2, vec![69, 69, 69]),
+				// ]),
+			],
+		);
+}
