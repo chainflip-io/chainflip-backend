@@ -8,14 +8,16 @@ use cf_chains::{
 	assets::{any::Asset, sol::Asset as SolAsset},
 	ccm_checker::{CcmValidityError, VersionedSolanaCcmAdditionalData},
 	sol::{
-		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
+		api::{
+			SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError, SolanaTransactionType,
+		},
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
-	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
+	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -769,5 +771,98 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			assert!(!pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::contains_key(ccm_broadcast_id));
 			assert!(!pallet_cf_broadcast::TransactionOutIdToBroadcastId::<Runtime, SolanaInstance>::iter_values().any(|(broadcast_id, _)|broadcast_id == ccm_broadcast_id));
 			assert!(!pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::contains_key(ccm_broadcast_id));
+		});
+}
+
+#[test]
+fn solana_failed_ccm_can_trigger_refund_transfer() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			setup_sol_environments();
+
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_ok!(RuntimeCall::SolanaVault(
+				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
+			)
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+			testnet.move_to_the_next_epoch();
+
+			let destination_address = SolAddress([0xcf; 32]);
+			let asset = SolAsset::Sol;
+			let amount = 1_000_000_000_000u64;
+
+			// Construct a Ccm that when built will exceed the maximum length.
+			const NUM_ACCOUNTS: u8 = 40u8;
+			let ccm = CcmChannelMetadata {
+				message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
+				gas_budget: 1_000_000_000u128,
+				ccm_additional_data: VersionedSolanaCcmAdditionalData::V1{ccm_accounts: SolCcmAccounts {
+					cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x10; 32]), is_writable: true },
+					additional_accounts: (0..NUM_ACCOUNTS).map(|i|SolCcmAddress { pubkey: SolPubkey([i; 32]), is_writable: false }).collect::<Vec<_>>(),
+					fallback_address: FALLBACK_ADDRESS.into(),
+				}, alts: vec![]}
+				.encode()
+				.try_into()
+				.unwrap(),
+			};
+
+			// This Ccm will exceed maximum size when built, triggering the fallback refund mechanism.
+			assert_eq!(cf_chains::sol::api::SolanaApi::<SolEnvironment>::ccm_transfer(
+				TransferAssetParams {
+					asset,
+					amount,
+					to: destination_address,
+				},
+				ForeignChain::Ethereum,
+				None,
+				ccm.gas_budget,
+				ccm.message.clone().to_vec(),
+				ccm.ccm_additional_data.clone().to_vec(),
+				Default::default(),
+			), Err(SolanaTransactionBuildingError::InvalidCcm(CcmValidityError::CcmIsTooLong)));
+
+			// Directly insert a CCM to be ingressed. 
+			pallet_cf_ingress_egress::ScheduledEgressCcm::<Runtime, SolanaInstance>::append(pallet_cf_ingress_egress::CrossChainMessage {
+				egress_id: (ForeignChain::Solana, 1u64),
+				asset: SolAsset::Sol,
+				amount: 1_000_000_000_000u64,
+				destination_address,
+				message: ccm.message,
+				source_chain: ForeignChain::Ethereum,
+				source_address: None,
+				ccm_additional_data: ccm.ccm_additional_data,
+				gas_budget: ccm.gas_budget,
+				swap_request_id: SwapRequestId(1u64),
+			});
+
+			testnet.move_forward_blocks(1);
+
+			// When CCM transaction building failed, fallback to refund the asset via Transfer instead.
+			assert!(assert_events_match!(Runtime, RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::InvalidCcmRefunded { 
+				asset, 
+				destination_address,
+				..
+			}) if asset == SolAsset::Sol && destination_address == FALLBACK_ADDRESS => true));
+
+			// Give enough time to schedule, egress and threshold-sign the transfer transaction.
+			testnet.move_forward_blocks(4);
+			let broadcast_id = pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
+
+			// Transfer transaction should be created against the refund address.
+			assert!(pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().contains(&broadcast_id));
+			assert!(matches!(pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::get(broadcast_id), Some(SolanaApi {
+				call_type: SolanaTransactionType::Transfer,
+				..
+			})));
 		});
 }
