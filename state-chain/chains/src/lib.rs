@@ -25,7 +25,8 @@ use address::{
 };
 use cf_amm_math::Price;
 use cf_primitives::{
-	AssetAmount, BlockNumber, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId,
+	AssetAmount, BlockNumber, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount,
+	SwapRequestId, TxId,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -590,6 +591,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
+		swap_request_id: SwapRequestId,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 

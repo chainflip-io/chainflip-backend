@@ -35,6 +35,7 @@ unzip -u ${ZIP_FILE} \
     'cf_tester.ts' \
     'swap_endpoint.json' \
     'swap_endpoint.ts' \
+    'alt_manager.json' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}

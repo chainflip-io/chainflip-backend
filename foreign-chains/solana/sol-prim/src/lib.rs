@@ -39,6 +39,7 @@ pub type Amount = u64;
 pub type SlotNumber = u64;
 pub type ComputeLimit = u32;
 pub type AccountBump = u8;
+pub type Slot = u64;
 
 use crate::consts::{HASH_BYTES, MAX_BASE58_LEN, SOLANA_SIGNATURE_LEN};
 

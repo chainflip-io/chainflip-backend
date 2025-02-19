@@ -164,6 +164,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 				source_address: ccm.source_address.clone(),
 				ccm_additional_data: ccm.channel_metadata.ccm_additional_data,
 				gas_budget,
+				swap_request_id: Default::default(),
 			}]
 		);
 
@@ -523,6 +524,7 @@ fn can_egress_ccm() {
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				gas_budget: GAS_BUDGET,
+				swap_request_id: Default::default(),
 			}
 		]);
 
@@ -541,6 +543,7 @@ fn can_egress_ccm() {
 			GAS_BUDGET,
 			ccm.channel_metadata.message.to_vec(),
 			vec![],
+			Default::default(),
 		).unwrap()]);
 
 		// Storage should be cleared

@@ -900,6 +900,29 @@ pub mod swap_endpoints {
 	pub type SwapTokenParams = types::SwapTokenParams;
 }
 
+pub mod alt_managers {
+	use super::*;
+
+	solana_program!(
+		idl_path: concat!(
+			env!("CF_SOL_PROGRAM_IDL_ROOT"), "/",
+			env!("CF_SOL_PROGRAM_IDL_TAG"), "/" ,
+			"alt_manager.json"
+		),
+		AltManagerProgram {
+			rotate_nonces => RotateNonces {
+				args: [],
+				account_metas: [
+					data_account: { signer: false, writable: false },
+					agg_key: { signer: true, writable: false },
+					new_agg_key: { signer: false, writable: false },
+					system_program: { signer: false, writable: false },
+				]
+			},
+		}
+	);
+}
+
 #[cfg(test)]
 mod idl {
 	use serde::{Deserialize, Serialize};

@@ -64,4 +64,3 @@ std = [
 	"sp-core/std",
 	"cf-primitives/std",
 ]
-runtime-integration-tests = ["std", "ed25519-dalek/rand_core"]

@@ -12,6 +12,7 @@ import {
   getSolWhaleKeyPair,
   encodeSolAddress,
   solanaNumberOfNonces,
+  solanaNumberOfAdditionalNonces,
 } from '../shared/utils';
 import { sendSol, signAndSendTxSol } from '../shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
@@ -156,31 +157,31 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       programId: solanaVaultProgramId,
     }),
   );
-  await signAndSendTxSol(tx);
+  await signAndSendTxSol(tx, false);
 
   // Set nonce authority to the new AggKey
-  tx = new Transaction();
-  for (let i = 0; i < solanaNumberOfNonces; i++) {
-    // Using the index stringified as the seed ('0', '1', '2' ...)
-    const seed = i.toString();
+  for (const [nonceNumber, prefix] of [
+    [solanaNumberOfNonces, ''],
+    [solanaNumberOfAdditionalNonces, '-add-nonce'],
+  ]) {
+    for (let i = 0; i < Number(nonceNumber); i++) {
+      const seed = prefix + i.toString();
+      const nonceAccountPubKey = await PublicKey.createWithSeed(
+        whaleKeypair.publicKey,
+        seed,
+        SystemProgram.programId,
+      );
 
-    // Deriving the nonceAccounts with index seeds to find the nonce accounts
-    const nonceAccountPubKey = await PublicKey.createWithSeed(
-      whaleKeypair.publicKey,
-      seed,
-      SystemProgram.programId,
-    );
-
-    // Set nonce authority to the new AggKey
-    tx.add(
-      SystemProgram.nonceAuthorize({
-        noncePubkey: new PublicKey(nonceAccountPubKey),
-        authorizedPubkey: whaleKeypair.publicKey,
-        newAuthorizedPubkey: newAggKey,
-      }),
-    );
+      tx = new Transaction().add(
+        SystemProgram.nonceAuthorize({
+          noncePubkey: new PublicKey(nonceAccountPubKey),
+          authorizedPubkey: whaleKeypair.publicKey,
+          newAuthorizedPubkey: newAggKey,
+        }),
+      );
+      await signAndSendTxSol(tx, false);
+    }
   }
-  await signAndSendTxSol(tx);
 
   // Set Vault's upgrade authority to upgradeSignerPda and enable token support
   tx = new Transaction().add(
@@ -219,7 +220,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       programId: solanaVaultProgramId,
     }),
   );
-  await signAndSendTxSol(tx);
+  await signAndSendTxSol(tx, false);
 
   // Set Governance authority to the new AggKey (State Chain)
   const setGovKeyWithGovKeyDiscriminatorString = vaultIdl.instructions.find(
@@ -241,5 +242,5 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       programId: solanaVaultProgramId,
     }),
   );
-  await signAndSendTxSol(tx);
+  await signAndSendTxSol(tx, false);
 }

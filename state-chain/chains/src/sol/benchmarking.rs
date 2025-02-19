@@ -2,8 +2,8 @@
 
 use super::{
 	api::{SolanaApi, VaultSwapAccountAndSender},
-	SolAddress, SolHash, SolLegacyMessage, SolLegacyTransaction, SolSignature, SolTrackedData,
-	SolanaTransactionData,
+	SolAddress, SolHash, SolSignature, SolTrackedData, SolVersionedMessage,
+	SolVersionedTransaction, SolanaTransactionData,
 };
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
@@ -26,22 +26,22 @@ impl BenchmarkValue for SolTrackedData {
 	}
 }
 
-impl BenchmarkValue for SolLegacyMessage {
+impl BenchmarkValue for SolVersionedMessage {
 	fn benchmark_value() -> Self {
-		Self::new_with_blockhash(&[], None, &SolHash::default().into())
+		Self::new(&[], None, None, &[])
 	}
 }
 
-impl BenchmarkValue for SolLegacyTransaction {
+impl BenchmarkValue for SolVersionedTransaction {
 	fn benchmark_value() -> Self {
-		SolLegacyTransaction::new_unsigned(SolLegacyMessage::benchmark_value())
+		SolVersionedTransaction::new_unsigned(SolVersionedMessage::benchmark_value())
 	}
 }
 
 impl BenchmarkValue for SolanaTransactionData {
 	fn benchmark_value() -> Self {
 		SolanaTransactionData {
-			serialized_transaction: SolLegacyTransaction::benchmark_value()
+			serialized_transaction: SolVersionedTransaction::benchmark_value()
 				.finalize_and_serialize()
 				.expect("Failed to serialize payload"),
 			skip_preflight: false,

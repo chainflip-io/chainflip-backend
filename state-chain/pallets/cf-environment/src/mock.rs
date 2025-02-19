@@ -8,10 +8,10 @@ use cf_chains::{
 	sol::{
 		api::{
 			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
-			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
-			SolanaEnvironment,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaAddressLookupTables,
+			SolanaApi, SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolHash,
+		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,
 	},
 	ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, ChainEnvironment, Polkadot, Solana,
 };
@@ -150,6 +150,11 @@ impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment 
 			usdc_token_vault_ata: SolAddress([0x00; 32]),
 			swap_endpoint_program: SolAddress([0x00; 32]),
 			swap_endpoint_program_data_account: SolAddress([0x00; 32]),
+			alt_manager_program: SolAddress([0x00; 32]),
+			address_lookup_table_account: SolAddressLookupTableAccount {
+				key: SolAddress([0x00; 32]).into(),
+				addresses: vec![],
+			},
 		})
 	}
 }
@@ -183,6 +188,15 @@ impl RecoverDurableNonce for MockSolEnvironment {
 		unimplemented!();
 	}
 }
+
+impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccount>>
+	for MockSolEnvironment
+{
+	fn lookup(_s: SolanaAddressLookupTables) -> Option<Vec<SolAddressLookupTableAccount>> {
+		None
+	}
+}
+
 impl SolanaEnvironment for MockSolEnvironment {}
 
 pub struct MockSolanaBroadcaster;

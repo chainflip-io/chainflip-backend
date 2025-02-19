@@ -39,7 +39,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(14);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -596,7 +596,7 @@ pub mod pallet {
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
-			SolanaApiEnvironment::<T>::set(self.sol_api_env);
+			SolanaApiEnvironment::<T>::set(self.sol_api_env.clone());
 			SolanaAvailableNonceAccounts::<T>::set(self.sol_durable_nonces_and_accounts.clone());
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);

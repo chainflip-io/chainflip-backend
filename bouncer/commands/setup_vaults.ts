@@ -71,7 +71,6 @@ async function main(): Promise<void> {
         }
         if (result.isInBlock) {
           console.log('Polkadot Vault created');
-          // TODO: figure out type inference so we don't have to coerce using `any`
           const pureCreated = result.findRecord('proxy', 'PureCreated')!;
           resolve({
             vaultAddress: pureCreated.event.data[0] as AddressOrPair,

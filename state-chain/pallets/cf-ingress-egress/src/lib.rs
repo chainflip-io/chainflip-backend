@@ -258,6 +258,7 @@ pub struct CrossChainMessage<C: Chain> {
 	// Where funds might be returned to if the message fails.
 	pub ccm_additional_data: CcmAdditionalData,
 	pub gas_budget: GasAmount,
+	pub swap_request_id: SwapRequestId,
 }
 
 impl<C: Chain> CrossChainMessage<C> {
@@ -922,6 +923,11 @@ pub mod pallet {
 		},
 		NetworkFeeDeductionFromBoostSet {
 			deduction_percent: Percent,
+		},
+		InvalidCcmRefunded {
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+			destination_address: TargetChainAccount<T, I>,
 		},
 	}
 
@@ -1747,6 +1753,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.gas_budget,
 				ccm.message.to_vec(),
 				ccm.ccm_additional_data.to_vec(),
+				ccm.swap_request_id,
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -1759,10 +1766,39 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						egress_id: ccm.egress_id,
 					});
 				},
-				Err(error) => Self::deposit_event(Event::<T, I>::CcmEgressInvalid {
-					egress_id: ccm.egress_id,
-					error,
-				}),
+				Err(error) => {
+					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. swap_request_id: {:?}, Error: {:?}", ccm.swap_request_id, error);
+
+					Self::deposit_event(Event::<T, I>::CcmEgressInvalid {
+						egress_id: ccm.egress_id,
+						error,
+					});
+
+					if let Ok(decoded_data) = T::CcmValidityChecker::decode_unchecked(
+						ccm.ccm_additional_data.clone(),
+						T::TargetChain::get(),
+					) {
+						if let Some(fallback_address) =
+							decoded_data.refund_address::<T::TargetChain>()
+						{
+							match Self::schedule_egress(
+								ccm.asset,
+								ccm.amount,
+								fallback_address.clone(),
+								None,
+							) {
+								Ok(egress_details) => Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
+									asset: ccm.asset,
+									amount: egress_details.egress_amount,
+									destination_address: fallback_address,
+								}),
+								Err(e) => log::warn!("Cannot refund failed Ccm: failed to Egress. swap_request_id: {:?}, Error: {:?}", ccm.swap_request_id, e),
+							};
+						}
+					} else {
+						log::warn!("Cannot refund failed Ccm: failed to decode `ccm_additional_data`. swap_request_id: {:?}", ccm.swap_request_id);
+					}
+				},
 			};
 		}
 	}
@@ -2866,6 +2902,8 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_chain,
 						source_address,
 						gas_budget,
+						swap_request_id: Default::default(), /* TODO Ramiz: Pass this in as a
+						                                      * parameter */
 					});
 
 					Ok(egress_details)
