@@ -42,7 +42,7 @@ use crate::{
 use anyhow::Result;
 
 use sp_core::H256;
-use state_chain_runtime::chainflip::bitcoin_elections::BitcoinVaultDepositWitnessing;
+use state_chain_runtime::chainflip::bitcoin_elections::BitcoinVaultDepositWitnessingES;
 use std::sync::Arc;
 
 use crate::{btc::retry_rpc::BtcRetryRpcClient, witness::btc::deposits::vault_deposits};
@@ -92,12 +92,12 @@ pub struct BitcoinVaultDepositWitnessingVoter {
 }
 
 #[async_trait::async_trait]
-impl VoterApi<BitcoinVaultDepositWitnessing> for BitcoinVaultDepositWitnessingVoter {
+impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessingVoter {
 	async fn vote(
 		&self,
-		_settings: <BitcoinVaultDepositWitnessing as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <BitcoinVaultDepositWitnessing as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<Option<VoteOf<BitcoinVaultDepositWitnessing>>, anyhow::Error> {
+		_settings: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinVaultDepositWitnessingES>>, anyhow::Error> {
 		let (witness_range, vaults, _extra) = properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range)
 			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;

@@ -1,12 +1,14 @@
 use sp_std::{collections::btree_map::BTreeMap, iter::Step, vec, vec::Vec};
 
-use crate::{chainflip::bitcoin_elections::BlockData, BitcoinIngressEgress, Runtime};
+use crate::{BitcoinIngressEgress, Runtime};
 use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
 use cf_primitives::chains::Bitcoin;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 
-use crate::chainflip::bitcoin_elections::BlockDataVaultDeposit;
+use crate::chainflip::bitcoin_elections::{
+	BitcoinVaultDepositWitnessing, BlockDataDepositChannel, BlockDataVaultDeposit,
+};
 use pallet_cf_elections::electoral_systems::{
 	block_witnesser::state_machine::{
 		DedupEventsHook, ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook,
@@ -17,7 +19,9 @@ use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 
 use super::{bitcoin_elections::BitcoinDepositChannelWitnessing, elections::TypesFor};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
 pub enum BtcEvent<T> {
 	PreWitness(T),
 	Witness(T),
@@ -31,10 +35,13 @@ impl<T> BtcEvent<T> {
 	}
 }
 
-type Types = TypesFor<BitcoinDepositChannelWitnessing>;
+type TypesDepositChannelWitnessing = TypesFor<BitcoinDepositChannelWitnessing>;
+type TypesVaultDepositWitnessing = TypesFor<BitcoinVaultDepositWitnessing>;
 
-impl Hook<HookTypeFor<Types, ExecuteHook>> for Types {
-	fn run(&mut self, (block, input): (BlockNumber, BtcEvent)) {
+impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
+	for TypesDepositChannelWitnessing
+{
+	fn run(&mut self, (block, input): (BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)) {
 		match input {
 			BtcEvent::PreWitness(deposit) => {
 				let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(deposit, block);
@@ -45,9 +52,7 @@ impl Hook<HookTypeFor<Types, ExecuteHook>> for Types {
 		}
 	}
 }
-impl Hook<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>), ()>
-	for ExecuteEventHook
-{
+impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
 	fn run(
 		&mut self,
 		(block, input): (BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>),
@@ -62,10 +67,10 @@ impl Hook<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)
 		}
 	}
 }
-impl Hook<HookTypeFor<Types, RulesHook>> for Types {
+impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, u32, BlockData),
+		(block, age, block_data): (BlockNumber, u32, BlockDataDepositChannel),
 	) -> Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> {
 		// Prewitness rule
 		if age == 0 {
@@ -88,12 +93,7 @@ impl Hook<HookTypeFor<Types, RulesHook>> for Types {
 	}
 }
 
-impl
-	Hook<
-		(BlockNumber, u32, BlockDataVaultDeposit),
-		Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)>,
-	> for ApplyRulesHook
-{
+impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDepositWitnessing {
 	fn run(
 		&mut self,
 		(block, age, block_data): (BlockNumber, u32, BlockDataVaultDeposit),
@@ -121,14 +121,22 @@ impl
 
 /// Returns one event per deposit witness. If multiple events share the same deposit witness:
 /// - keep only the `Witness` variant,
-impl Hook<HookTypeFor<Types, DedupEventsHook>> for Types {
-	fn run(&mut self, events: Vec<(BlockNumber, BtcEvent<T>)>) -> Vec<(BlockNumber, BtcEvent)> {
+impl Hook<HookTypeFor<TypesDepositChannelWitnessing, DedupEventsHook>>
+	for TypesDepositChannelWitnessing
+{
+	fn run(
+		&mut self,
+		events: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)>,
+	) -> Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> {
 		// Map: deposit_witness -> chosen BtcEvent
 		// todo! this is annoying, it require us to implement Ord down to the Chain type
-		let mut chosen: BTreeMap<T, (BlockNumber, BtcEvent<T>)> = BTreeMap::new();
+		let mut chosen: BTreeMap<
+			DepositWitness<Bitcoin>,
+			(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>),
+		> = BTreeMap::new();
 
 		for (block, event) in events {
-			let deposit: T = event.deposit_witness().clone();
+			let deposit: DepositWitness<Bitcoin> = event.deposit_witness().clone();
 
 			match chosen.get(&deposit) {
 				None => {
@@ -154,35 +162,61 @@ impl Hook<HookTypeFor<Types, DedupEventsHook>> for Types {
 	}
 }
 
-impl Hook<HookTypeFor<Types, SafetyMarginHook>> for Types {
+impl Hook<HookTypeFor<TypesVaultDepositWitnessing, DedupEventsHook>>
+	for TypesVaultDepositWitnessing
+{
+	fn run(
+		&mut self,
+		events: Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)>,
+	) -> Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)> {
+		// Map: deposit_witness -> chosen BtcEvent
+		// todo! this is annoying, it require us to implement Ord down to the Chain type
+		let mut chosen: BTreeMap<
+			VaultDepositWitness<Runtime, BitcoinInstance>,
+			(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>),
+		> = BTreeMap::new();
+
+		for (block, event) in events {
+			let deposit: VaultDepositWitness<Runtime, BitcoinInstance> =
+				event.deposit_witness().clone();
+
+			match chosen.get(&deposit) {
+				None => {
+					// No event yet for this deposit, store it
+					chosen.insert(deposit, (block, event));
+				},
+				Some((_, existing_event)) => {
+					// There's already an event for this deposit
+					match (existing_event, &event) {
+						// If we already have a Witness, do nothing
+						(BtcEvent::Witness(_), BtcEvent::PreWitness(_)) => (),
+						// If we have a PreWitness and the new event is a Witness, override it
+						(BtcEvent::PreWitness(_), BtcEvent::Witness(_)) => {
+							chosen.insert(deposit, (block, event));
+						},
+						// This should be impossible to reach!
+						(_, _) => (),
+					}
+				},
+			}
+		}
+		chosen.into_values().collect()
+	}
+}
+
+impl Hook<HookTypeFor<TypesDepositChannelWitnessing, SafetyMarginHook>>
+	for TypesDepositChannelWitnessing
+{
 	fn run(&mut self, _input: ()) -> u32 {
 		u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32
 	}
 }
-#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct BlockDepositWitnessingProcessorDefinition {}
-
-impl BWProcessorTypes for BlockDepositWitnessingProcessorDefinition {
-	type ChainBlockNumber = BlockNumber;
-	type BlockData = BlockData;
-	type Event = BtcEvent<DepositWitness<Bitcoin>>;
-	type Rules = ApplyRulesHook;
-	type Execute = ExecuteEventHook;
-	type DedupEvents = DedupEventsHook;
-	type SafetyMargin = SafetyMarginHook;
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct BlockVaultWitnessingProcessorDefinition {}
-
-impl BWProcessorTypes for BlockVaultWitnessingProcessorDefinition {
-	type ChainBlockNumber = BlockNumber;
-	type BlockData = BlockDataVaultDeposit;
-	type Event = BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>;
-	type Rules = ApplyRulesHook;
-	type Execute = ExecuteEventHook;
-	type DedupEvents = DedupEventsHook;
-	type SafetyMargin = SafetyMarginHook;
+impl Hook<HookTypeFor<TypesVaultDepositWitnessing, SafetyMarginHook>>
+	for TypesVaultDepositWitnessing
+{
+	fn run(&mut self, _input: ()) -> u32 {
+		u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32
+	}
 }
 
 #[cfg(test)]
