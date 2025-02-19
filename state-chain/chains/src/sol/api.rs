@@ -654,7 +654,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 	fn new_unsigned(
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
-		source_address: Option<ForeignChainAddress>,
+		_source_address: Option<ForeignChainAddress>,
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
