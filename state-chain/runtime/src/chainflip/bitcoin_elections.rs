@@ -464,12 +464,12 @@ impl
 		(block_height_tracking_identifiers, deposit_channel_witnessing_identifiers, vault_deposits_identifiers, egress_identifiers,  liveness_identifiers): (
 			Vec<
 				ElectionIdentifier<
-					<BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
 				ElectionIdentifier<
-					<BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
+					<BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
