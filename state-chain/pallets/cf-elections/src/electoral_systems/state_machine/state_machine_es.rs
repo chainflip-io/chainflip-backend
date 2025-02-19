@@ -15,21 +15,6 @@ use super::{
 	state_machine::StateMachine,
 };
 
-pub trait IntoResult {
-	type Ok;
-	type Err;
-
-	fn into_result(self) -> Result<Self::Ok, Self::Err>;
-}
-
-impl<A, B> IntoResult for Result<A, B> {
-	type Ok = A;
-	type Err = B;
-	fn into_result(self) -> Result<A, B> {
-		self
-	}
-}
-
 /// This is an Either type, unfortunately it's more ergonomic
 /// to recreate this instead of using `itertools::Either`, because
 /// we need a special implementation of Indexed: we want the vote to
