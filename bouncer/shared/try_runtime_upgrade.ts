@@ -5,7 +5,6 @@ import path from 'path';
 import fs from 'fs';
 import { compileBinaries } from './utils/compile_binaries';
 import { createTmpDirIfNotExists, execWithRustLog } from './utils/exec_with_log';
-import { getChainflipApi } from './utils/substrate';
 import { retryRpcCall } from './utils';
 import { setTimeout as sleep } from 'timers/promises';
 import { ApiPromise, HttpProvider } from '@polkadot/api';
@@ -76,7 +75,6 @@ export async function tryRuntimeUpgrade(
   runtimePath: string,
   lastN = 30,
 ) {
-  await using api = await getChainflipApi();
 
   const httpNetworkUrl = networkUrl.replace(/^wss?:/, (match) => match === 'wss:' ? 'https:' : 'http:');
   console.log(`Creating HTTP API for network URL: ${httpNetworkUrl}`);
