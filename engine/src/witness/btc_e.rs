@@ -20,9 +20,12 @@ use pallet_cf_elections::{
 };
 use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
-	chainflip::bitcoin_elections::{
-		BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingTypes,
-		BitcoinDepositChannelWitnessing, BitcoinElectoralSystemRunner, BitcoinLiveness,
+	chainflip::{
+		bitcoin_elections::{
+			BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingES,
+			BitcoinDepositChannelWitnessingES, BitcoinElectoralSystemRunner, BitcoinLiveness,
+		},
+		elections::TypesFor,
 	},
 	BitcoinInstance,
 };
@@ -49,12 +52,12 @@ pub struct BitcoinDepositChannelWitnessingVoter {
 }
 
 #[async_trait::async_trait]
-impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessingVoter {
+impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnessingVoter {
 	async fn vote(
 		&self,
-		_settings: <BitcoinDepositChannelWitnessing as ElectoralSystemTypes>::ElectoralSettings,
-		deposit_addresses: <BitcoinDepositChannelWitnessing as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessing>>, anyhow::Error> {
+		_settings: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		deposit_addresses: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessingES>>, anyhow::Error> {
 		let (witness_range, deposit_addresses, _extra) = deposit_addresses;
 		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
 		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
@@ -93,13 +96,13 @@ pub struct BitcoinBlockHeightTrackingVoter {
 }
 
 #[async_trait::async_trait]
-impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
+impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter {
 	async fn vote(
 		&self,
-		_settings: <BitcoinBlockHeightTracking as ElectoralSystemTypes>::ElectoralSettings,
+		_settings: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectoralSettings,
 		// We could use 0 as a special case (to avoid requiring an Option)
-		properties: <BitcoinBlockHeightTracking as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightTracking>>, anyhow::Error> {
+		properties: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightTrackingES>>, anyhow::Error> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
 		let BlockHeightTrackingProperties { witness_from_index: election_property } = properties;
 
@@ -138,9 +141,9 @@ impl VoterApi<BitcoinBlockHeightTracking> for BitcoinBlockHeightTrackingVoter {
 					"bht: election_property=0, best_block_height={}, submitting last 6 blocks.",
 					best_block_header.block_height
 				);
-				best_block_header
-					.block_height
-					.saturating_sub(BitcoinBlockHeightTrackingTypes::BLOCK_BUFFER_SIZE as u64)
+				best_block_header.block_height.saturating_sub(
+					TypesFor::<BitcoinBlockHeightTracking>::BLOCK_BUFFER_SIZE as u64,
+				)
 			} else {
 				election_property
 			};

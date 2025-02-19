@@ -250,7 +250,13 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 #[cfg(test)]
 mod tests {
 
-	use crate::{electoral_systems::state_machine::core::MultiIndexAndValue, prop_do};
+	use crate::{
+		electoral_systems::{
+			block_height_tracking::BlockHeightChangeHook,
+			block_witnesser::state_machine::HookTypeFor, state_machine::core::MultiIndexAndValue,
+		},
+		prop_do,
+	};
 	use cf_chains::{
 		self,
 		witness_period::{BlockWitnessRange, BlockZero, SaturatingStep},
@@ -330,7 +336,7 @@ mod tests {
 		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = u32;
 		type ChainBlockHash = bool;
-		type BlockHeightChangeHook = ConstantHook<u32, ()>;
+		type BlockHeightChangeHook = ConstantHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
 	#[test]
@@ -365,7 +371,7 @@ mod tests {
 		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
-		type BlockHeightChangeHook = ConstantHook<Self::ChainBlockNumber, ()>;
+		type BlockHeightChangeHook = ConstantHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
 	#[test]
