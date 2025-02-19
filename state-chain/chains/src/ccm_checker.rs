@@ -52,7 +52,7 @@ pub trait CcmValidityCheck {
 	}
 
 	fn decode_unchecked(
-		_ccm: &CcmChannelMetadata,
+		_ccm: CcmAdditionalData,
 		_chain: ForeignChain,
 	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
 		Ok(DecodedCcmAdditionalData::NotRequired)
