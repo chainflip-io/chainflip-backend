@@ -209,6 +209,7 @@ impl CcmValidityCheck for CcmValidityChecker {
 			let mut accounts_length =
 				ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
+			// TODO PRO-2046: we should not check the length here?
 			for ccm_address in &ccm_accounts.additional_accounts {
 				if seen_addresses.insert(ccm_address.pubkey.into()) {
 					accounts_length += bytes_per_new_account;
