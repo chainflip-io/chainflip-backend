@@ -184,7 +184,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./run.sh
+          ./setup_for_test.sh
 
       - name: Upgrade network 🚀
         if: inputs.run-job
@@ -313,6 +313,14 @@ jobs:
         with:
           name: chain-explorer-upgrade-test
           path: /tmp/chainflip/explorer.txt
+
+      - name: Are there snapshots?
+        if: failure()
+        run: |
+          echo "Checking for chainflip tmp folder"
+          ls -l /tmp/chainflip
+          echo "Checking for snapshots folder"
+          ls -l /tmp/chainflip/snapshots
 
       - name: Upload Snapshots 💾
         if: failure()
