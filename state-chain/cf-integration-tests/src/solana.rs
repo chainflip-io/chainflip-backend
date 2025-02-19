@@ -816,7 +816,7 @@ fn solana_failed_ccm_can_trigger_refund_transfer() {
 				.unwrap(),
 			};
 
-			//This Ccm will exceed maximum size when built, triggering the fallback refund mechanism.
+			// This Ccm will exceed maximum size when built, triggering the fallback refund mechanism.
 			assert_eq!(cf_chains::sol::api::SolanaApi::<SolEnvironment>::ccm_transfer(
 				TransferAssetParams {
 					asset,
