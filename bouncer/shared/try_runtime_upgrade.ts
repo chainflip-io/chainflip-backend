@@ -8,6 +8,7 @@ import { createTmpDirIfNotExists, execWithRustLog } from './utils/exec_with_log'
 import { retryRpcCall } from './utils';
 import { setTimeout as sleep } from 'timers/promises';
 import { ApiPromise, HttpProvider } from '@polkadot/api';
+import { CHAINFLIP_HTTP_ENDPOINT } from './utils/substrate';
 
 // Return the path to the snapshot file
 function createSnapshotFile(networkUrl: string, blockHash: string, failureObj: FailureObj | null) {
@@ -76,11 +77,8 @@ export async function tryRuntimeUpgrade(
   lastN = 30,
 ) {
 
-  const httpNetworkUrl = networkUrl.replace(/^wss?:/, (match) => match === 'wss:' ? 'https:' : 'http:');
-  console.log(`Creating HTTP API for network URL: ${httpNetworkUrl}`);
-
   const httpApi = await ApiPromise.create({
-    provider: new HttpProvider(httpNetworkUrl),
+    provider: new HttpProvider(CHAINFLIP_HTTP_ENDPOINT),
     noInitWarn: true,
   });
 
