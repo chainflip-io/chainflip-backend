@@ -5,8 +5,6 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 
-
-
 /// Syntax sugar for implementing multiple traits for a single type.
 ///
 /// Example use:
@@ -26,11 +24,11 @@ use sp_std::{fmt::Debug, vec::Vec};
 /// ```
 macro_rules! impls {
     (for $name:ty $(where ($($bounds:tt)*))? :
-	$(#[doc = $doc_text:tt])? impl $($trait:ty)?  $(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*} 
+	$(#[doc = $doc_text:tt])? impl $($trait:ty)?  $(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
 	$($rest:tt)*
 	) => {
         $(#[doc = $doc_text])?
-        impl$(<$($bounds)*>)? $($trait for)? $name 
+        impl$(<$($bounds)*>)? $($trait for)? $name
 		$(where $($trait_bounds)*)?
 		{
             $($trait_impl)*
@@ -39,9 +37,6 @@ macro_rules! impls {
     };
     (for $name:ty $(where ($($bounds:tt)*))? :) => {}
 }
-
-
-
 
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
@@ -156,9 +151,20 @@ pub mod hook_test_utils {
 		}
 	}
 
-	#[derive( Clone, PartialEq, Eq, PartialOrd, Ord)]
-	#[derive( Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-	#[derive( Serialize, Deserialize)]
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+	)]
 	#[serde(bound = "T::Input: Serde, T::Output: Serde")]
 	pub struct MockHook<const NAME: &'static str, T: HookType> {
 		pub state: T::Output,
@@ -166,7 +172,7 @@ pub mod hook_test_utils {
 		pub _phantom: sp_std::marker::PhantomData<T>,
 	}
 
-	impls!{
+	impls! {
 		for MockHook<NAME,T> where
 		(
 			const NAME: &'static str,
@@ -196,7 +202,6 @@ pub mod hook_test_utils {
 			}
 		}
 	}
-
 }
 
 /// A type which has an associated index type.
@@ -303,5 +308,3 @@ impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
 
 /// Encapsulating usual constraints on types meant to be serialized
 pub trait Serde = Serialize + for<'a> Deserialize<'a>;
-
-

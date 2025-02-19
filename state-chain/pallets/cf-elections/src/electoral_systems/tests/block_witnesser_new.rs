@@ -203,9 +203,10 @@ pub type SimpleBlockWitnesser = StateMachineESInstance<Types>;
 
 register_checks! {
 	SimpleBlockWitnesser {
-		generate_election_properties_called_n_times(_pre, post, n: u8) {
-			let calls = post.unsynchronised_state.generate_election_properties_hook.call_history.len();
-			assert_eq!(calls as u8, n, "generate_election_properties should have been called {} times so far!", n);
+		generate_election_properties_called_n_times(pre, post, n: u8) {
+			let pre_calls = pre.unsynchronised_state.generate_election_properties_hook.call_history.len();
+			let post_calls = post.unsynchronised_state.generate_election_properties_hook.call_history.len();
+			assert_eq!((post_calls - pre_calls) as u8, n, "generate_election_properties should have been called {} times in this `on_finalize`!", n);
 		},
 		number_of_open_elections_is(_pre, post, n: ElectionCount) {
 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
@@ -310,7 +311,7 @@ fn no_block_data_success() {
 			|_| {},
 			vec![
 				// No extra calls
-				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(0),
 				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
 				// We should receive an empty block data, but still get the block number. This is
 				// necessary so we can track the last chain block we've processed.
@@ -378,7 +379,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 				// we are left with `NUMBER_OF_ELECTIONS - 2` elections for which
 				// we regenerate election properties in this `on_finalize`.
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					2 * NUMBER_OF_ELECTIONS as u8 - 2,
+					NUMBER_OF_ELECTIONS as u8 - 2,
 				),
 				// we should have resolved two elections
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS - 2),
@@ -435,7 +436,7 @@ fn creates_multiple_elections_limited_by_maximum() {
 			},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					2 * MAX_CONCURRENT_ELECTIONS as u8,
+					MAX_CONCURRENT_ELECTIONS as u8,
 				),
 				// we should have resolved two elections
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(
@@ -507,9 +508,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 			vec![
 				// We've already processed the other elections, so we only have to create a new
 				// election for the new block.
-				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					MAX_CONCURRENT_ELECTIONS as u8 + 1,
-				),
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
 				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
 				// Check::<SimpleBlockWitnesser>::unprocessed_data_is(
@@ -532,7 +531,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
 					// REORG_LENGTH more than the last time we checked.
-					MAX_CONCURRENT_ELECTIONS as u8 + 1 + REORG_LENGTH as u8,
+					REORG_LENGTH as u8,
 				),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(REORG_LENGTH as u16),
 				// We call it again, as even though there was a reorg, maybe some external state
@@ -689,7 +688,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 				// election. as things are we cannot see whether we closed an election and
 				// opened a new one or simply kept the previously ongoing ones
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					(NUMBER_OF_ELECTIONS * 2) as u8,
+					NUMBER_OF_ELECTIONS as u8,
 				),
 				// we should have resolved one election, and started one election
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
@@ -725,7 +724,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 				// one extra election created
 				// TODO, same as above TODO
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					(NUMBER_OF_ELECTIONS * 3) as u8,
+					NUMBER_OF_ELECTIONS as u8,
 				),
 				// we should have resolved one elections, and started one election
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
@@ -770,9 +769,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 			},
 			vec![
 				// no new election created
-				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					(NUMBER_OF_ELECTIONS * 3) as u8,
-				),
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(0),
 				// all elections have resolved now
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(0),
 				// Now the last two elections are resolved in order
