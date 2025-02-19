@@ -1,0 +1,150 @@
+name: Create Try-Runtime Snapshots
+
+on:
+  push:
+    branches:
+      - feat/live-network-migration-checks
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-try-runtime-snapshots
+  cancel-in-progress: true
+
+  # schedule:
+  #   # Run at midnight UTC every day
+  #   - cron: '0 0 * * *'
+  # Optional: Allow manual triggering
+
+env:
+  SISYPHOS_URI: "archive.sisyphos.chainflip.io:443"
+  PERSEVERANCE_URI: "archive.perseverance.chainflip.io:443"
+  MAINNET_URI: "mainnet-rpc.chainflip.io:443"
+
+jobs:
+  create-snapshots:
+    name: Create Try-Runtime Snapshots
+    runs-on: digitalocean
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Download try-runtime binary 📥
+        uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4
+        with:
+          repo: paritytech/try-runtime-cli
+          extension-matching: disable
+          rename-to: try-runtime
+          chmod: 0755
+
+      - name: Configure NodeJS 🛠️
+        uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
+        with:
+          node-version-file: ./bouncer/.nvmrc
+          cache: "pnpm"
+          cache-dependency-path: "bouncer/pnpm-lock.yaml"
+
+      - name: Install node dependencies 📦
+        working-directory: bouncer
+        run: pnpm install
+
+      - name: Install system packages 💿
+        run: |
+          sudo apt update
+          sudo apt install -y bc xxd
+
+      - name: Download latest chainflip-backend binaries 📥
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ci-main.yml
+          name: chainflip-backend-bin-try-runtime
+          path: chainflip-backend-bin
+
+      # We should be able to use the latest version, even if the runtime is older.
+      # As long as we don't use RPCs that could change.
+      - name: Startup all the nodes for the networks
+        run: |
+
+      - name: Create directories
+        run: |
+          mkdir -p snapshots
+        #   for i in {1..10}; do
+        #     try-runtime create-snapshot --uri $PERSEVERANCE_URI "snapshots/perseverance_${PERSEVERANCE_VERSION}/snapshot_$i"
+        #   done
+        # ) &
+
+        # (
+        #   for i in {1..10}; do
+        #     try-runtime create-snapshot --uri $MAINNET_URI "snapshots/mainnet_${MAINNET_VERSION}/snapshot_$i"
+        #   done
+        # ) &
+      #           # (
+      - name: Create snapshots in parallel
+        run: |
+
+          # Sync sisyphos
+          ./chainflip-backend-bin/chainflip-node --chain ./state-chain/node/chainspecs/sisyphos.chainspec.raw.json --sync=warp --database=paritydb &
+
+          echo "Sisyphos is syncing"
+
+          # Wait for sisyphos to be ready
+          while true; do
+            response=$(curl -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "system_health", "params": []}' http://localhost:9944)
+            if [ $? -eq 0 ] && [ ! -z "$response" ]; then
+              is_syncing=$(echo $response | jq -r '.result.isSyncing')
+              if [ "$is_syncing" = "false" ]; then
+                break
+              fi
+            fi
+            sleep 5
+          done
+
+          echo "Sisyphos is ready"
+
+          # Sync perseverance
+          # ./chainflip-node --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json --sync=warp --database=paritydb &
+
+          # Sync mainnet
+          # ./chainflip-node --chain ./state-chain/node/chainspecs/berghain.chainspec.raw.json --sync=warp --database=paritydb &
+
+
+          # Add https:// prefix to URIs and ensure they're using wss:// for secure WebSocket
+          SISYPHOS_URI="https://${SISYPHOS_URI}"
+          PERSEVERANCE_URI="https://${PERSEVERANCE_URI}" 
+          MAINNET_URI="https://${MAINNET_URI}"
+
+          # Get versions using node to run the TypeScript script
+          SISYPHOS_VERSION=$(./bouncer/commands/network_spec_version.ts $SISYPHOS_URI)
+          PERSEVERANCE_VERSION=$(./bouncer/commands/network_spec_version.ts $PERSEVERANCE_URI)
+          MAINNET_VERSION=$(./bouncer/commands/network_spec_version.ts $MAINNET_URI)
+
+          # Log the versions
+          echo "Sisyphos Version: $SISYPHOS_VERSION"
+          echo "Perseverance Version: $PERSEVERANCE_VERSION"
+          echo "Mainnet Version: $MAINNET_VERSION"
+
+          # Create directories only if versions were retrieved successfully
+          if [ ! -z "$SISYPHOS_VERSION" ]; then
+            mkdir -p "snapshots/sisyphos_${SISYPHOS_VERSION}"
+            
+            # Run snapshots in sequence to avoid connection issues
+            for i in {1..10}; do
+              try-runtime create-snapshot --uri $SISYPHOS_URI "snapshots/sisyphos_${SISYPHOS_VERSION}/snapshot_$i" || exit 1
+            done
+          else
+            echo "Failed to get Sisyphos version"
+            exit 1
+          fi
+
+      - name: Upload snapshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: try-runtime-snapshots
+          path: snapshots/
+          retention-days: 7 # Keep snapshots for 7 days

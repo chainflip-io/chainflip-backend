@@ -1,0 +1,45 @@
+# Tests a try_runtime of a particular branch/commit against a live network
+
+name: Try Runtime Live
+
+# call it for each network
+on:
+  workflow_call:
+    inputs:
+      upgrade_from_network:
+        description: Network to upgrade from
+        required: true
+        type: string
+      timeout-minutes:
+        description: Timeout for the try_runtime
+        default: 30
+        type: number
+jobs:
+  try_runtime:
+    runs-on: digitalocean
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+        - name: Configure NodeJS 🛠️
+          uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
+          with:
+            node-version-file: ./bouncer/.nvmrc
+            cache: "pnpm"
+            cache-dependency-path: "bouncer/pnpm-lock.yaml"
+
+        - name: Install system packages 💿
+          run: |
+            sudo apt update
+            sudo apt install -y bc xxd
+
+        - name: Install wscat 🐈
+          run: |
+            npm install -g wscat
+
+        - name: Download try-runtime binary 📥
+          uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4
+          with:
+            repo: paritytech/try-runtime-cli
+            tag: v0.7.0
+            extension-matching: disable
+            rename-to: try-runtime
+            chmod: 0755
