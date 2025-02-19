@@ -130,6 +130,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		block_data: Option<(T::ChainBlockNumber, T::BlockData)>,
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
 		if let Some((block_number, block_data)) = block_data {
+			#[cfg(test)]
+			println!("received new block for height: {block_number:?}, chainprogress is: {chain_progress:?}");
 			self.blocks_data.insert(block_number, (block_data, Default::default()));
 		}
 		let last_block: T::ChainBlockNumber;
@@ -192,6 +194,10 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		let mut last_events: Vec<(T::ChainBlockNumber, T::Event)> = vec![];
 		for (block_height, (data, next_age)) in self.blocks_data.clone() {
 			let current_age = T::ChainBlockNumber::steps_between(&block_height, &last_height).0;
+			#[cfg(test)]
+			println!(
+				"computing events for height {block_height:?} for ages {next_age}..={current_age}"
+			);
 			for age in next_age..=current_age as u32 {
 				last_events = last_events
 					.into_iter()
@@ -200,6 +206,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			}
 			self.blocks_data.insert(block_height, (data.clone(), current_age as u32 + 1));
 		}
+		#[cfg(test)]
+		println!("collected events are: {last_events:?}");
 		last_events
 	}
 
@@ -269,7 +277,7 @@ pub(crate) mod test {
 					SafetyMarginHook,
 				},
 			},
-			state_machine::core::{hook_test_utils::IncreasingHook, Hook, TypesFor},
+			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor},
 		},
 		*,
 	};
@@ -370,7 +378,7 @@ pub(crate) mod test {
 		type BlockData = MockBlockData;
 		type Event = MockBtcEvent;
 		type Rules = Types;
-		type Execute = IncreasingHook<HookTypeFor<Types, ExecuteHook>>;
+		type Execute = MockHook<"execute_event", HookTypeFor<Types, ExecuteHook>>;
 		type DedupEvents = Types;
 		type SafetyMargin = Types;
 	}
@@ -495,7 +503,8 @@ pub(crate) mod test {
 		processor.process_block_data(ChainProgressInner::Progress(17), Some((16, vec![18])));
 
 		assert_eq!(
-			processor.execute.counter, 5,
+			processor.execute.call_history.len(),
+			5,
 			"Hook should have been called 5 times: 3 pre-witness deposit and 2 full deposit"
 		)
 	}

@@ -4,7 +4,7 @@ use super::{
 };
 use crate::electoral_systems::{
 	block_height_tracking::ChainProgress,
-	block_witnesser::block_processor::BlockProcessor,
+	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{
 		core::{IndexOf, MultiIndexAndValue, Validate},
 		state_machine::StateMachine,
@@ -221,18 +221,18 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
 				s.elections.next_election = *range.start();
 				s.elections.schedule_range(range.clone());
-				// s.block_processor
-				// 	.process_block_data(ChainProgressInner::Progress(*range.start()), None);
+				s.block_processor
+					.process_block_data(ChainProgressInner::Progress(*range.start()), None);
 			},
 
 			SMInput::Context(ChainProgress::Range(range)) => {
-				if *range.start() <= s.elections.next_witnessed {
+				if *range.start() < s.elections.next_witnessed {
 					//Reorg
-					// s.block_processor
-					// 	.process_block_data(ChainProgressInner::Reorg(range.clone()), None);
+					s.block_processor
+						.process_block_data(ChainProgressInner::Reorg(range.clone()), None);
 				} else {
-					// s.block_processor
-					// 	.process_block_data(ChainProgressInner::Progress(*range.end()), None);
+					s.block_processor
+						.process_block_data(ChainProgressInner::Progress(*range.end()), None);
 				}
 				s.elections.schedule_range(range);
 			},
@@ -242,10 +242,10 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 			SMInput::Vote(blockdata) => {
 				s.elections.mark_election_done(blockdata.0 .0);
 				log::info!("got block data: {:?}", blockdata.1);
-				// s.block_processor.process_block_data(
-				// 	ChainProgressInner::Progress(s.elections.next_witnessed),
-				// 	Some((blockdata.0 .0, blockdata.1.data)),
-				// );
+				s.block_processor.process_block_data(
+					ChainProgressInner::Progress(s.elections.next_witnessed.saturating_backward(1)),
+					Some((blockdata.0 .0, blockdata.1.data)),
+				);
 			},
 		};
 

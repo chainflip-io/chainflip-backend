@@ -25,13 +25,16 @@ use crate::{
 	electoral_systems::{
 		block_height_tracking::ChainProgress,
 		block_witnesser::{
-			block_processor::test::MockBlockProcessorDefinition,
 			primitives::ElectionTracker,
-			state_machine::{ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook},
+			state_machine::{
+				BWProcessorTypes, DedupEventsHook, ElectionPropertiesHook, ExecuteHook,
+				HookTypeFor, RulesHook, SafeModeEnabledHook, SafetyMarginHook,
+			},
 			*,
 		},
+		mocks::ElectoralSystemState,
 		state_machine::{
-			core::{hook_test_utils::MockHook, ConstantIndex, Hook, TypesFor},
+			core::{hook_test_utils::MockHook, ConstantIndex, Hook, HookType, TypesFor},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
@@ -43,115 +46,49 @@ use primitives::SafeModeStatus;
 use sp_std::collections::btree_set::BTreeSet;
 use state_machine::{BWStateMachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState};
 
-thread_local! {
-	pub static PROPERTIES_TO_RETURN: std::cell::RefCell<Properties> = const { std::cell::RefCell::new(BTreeSet::new()) };
-	pub static GENERATE_ELECTION_HOOK_CALLED: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
-	pub static PROCESS_BLOCK_DATA_HOOK_CALLED: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
-	// the actual block data that process_block_data was called with.
-	pub static PROCESS_BLOCK_DATA_CALLED_WITH: std::cell::RefCell<Vec<(ChainBlockNumber, BlockData)>> = const { std::cell::RefCell::new(vec![]) };
-	// Flag to pass through block data:
-	pub static PASS_THROUGH_BLOCK_DATA: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
-	pub static PROCESS_BLOCK_DATA_TO_RETURN: std::cell::RefCell<Vec<(ChainBlockNumber, BlockData)>> = const { std::cell::RefCell::new(vec![]) };
-}
-
-pub type ChainBlockNumber = <MockEthereum as Chain>::ChainBlockNumber;
-pub type ValidatorId = u16;
-
-pub type BlockData = Vec<u8>;
-
 fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
 	assert!(count > 0);
 	// TODO: Test with other witness ranges.
 	start..=start + count - 1
 }
 
-pub type Properties = BTreeSet<u16>;
-pub type ElectionCount = u16;
+type ChainBlockNumber = <MockEthereum as Chain>::ChainBlockNumber;
+type ValidatorId = u16;
+type BlockData = Vec<u8>;
+type ElectionProperties = BTreeSet<u16>;
+type ElectionCount = u16;
 
-// impl BlockElectionPropertiesGenerator<ChainBlockNumber, Properties>
-// 	for MockGenerateElectionHook<ChainBlockNumber, Properties>
-// {
-// 	fn generate_election_properties(_root_to_witness: ChainBlockNumber) -> Properties {
-// 		// GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
-// 		// The properties are not important to the logic of the electoral system itself, so we can
-// 		// return empty.
-// 		BTreeSet::new()
-// 	}
-// }
-
-// impl Hook<HookTypeFor<Types, ElectionPropertiesHook>> for Types {
-// 	fn run(&mut self, input: ChainBlockNumber) -> Properties {
-// 		println!("generate_election_hook called for {input}");
-// 		GENERATE_ELECTION_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
-// 		// The properties are not important to the logic of the electoral system itself, so we can
-// 		// return empty.
-// 		BTreeSet::new()
-// 	}
-// }
-
-// struct MockBlockProcessor<ChainBlockNumber, BlockData> {
-// 	_phantom: core::marker::PhantomData<(ChainBlockNumber, BlockData)>,
-// }
-//
-// impl MockBlockProcessor<ChainBlockNumber, BlockData> {
-// 	pub fn set_block_data_to_return(block_data: Vec<(ChainBlockNumber, BlockData)>) {
-// 		PASS_THROUGH_BLOCK_DATA.with(|pass_through| pass_through.set(false));
-// 		PROCESS_BLOCK_DATA_TO_RETURN
-// 			.with(|block_data_to_return| *block_data_to_return.borrow_mut() = block_data);
-// 	}
-// }
-
-// TODO: recreate this behavior with new `Hook<>` based testing method
-/*
-impl ProcessBlockData<ChainBlockNumber, BlockData>
-	for MockBlockProcessor<ChainBlockNumber, BlockData>
-{
-	// We need to do more here, like store some state and push back.
-	fn process_block_data(
-		// This isn't so important, in these tests, it's important for the implemenation of the
-		// hooks. e.g. to determine a safety margin.
-		_chain_block_number: ChainBlockNumber,
-		earliest_unprocessed_block: ChainBlockNumber,
-		block_data: Vec<(ChainBlockNumber, BlockData)>,
-	) -> Vec<(ChainBlockNumber, BlockData)> {
-		PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.set(hook_called.get() + 1));
-
-		PROCESS_BLOCK_DATA_CALLED_WITH
-			.with(|old_block_data| *old_block_data.borrow_mut() = block_data.clone());
-
-		if PASS_THROUGH_BLOCK_DATA.with(|pass_through| pass_through.get()) {
-			println!("passing through block data");
-			block_data
-		} else {
-			PROCESS_BLOCK_DATA_TO_RETURN
-				.with(|block_data_to_return| block_data_to_return.borrow().clone())
-		}
-
-		// TODO: Think about if we need this check. It's not currently enforced in the traits, so
-		// perhaps instead we should handle cases where the hook returns any set of properties. It
-		// would usually be wrong to do so, but this ES doens't have to break as a result.
-		// check that all blocks in block_data_to_retun are in block_data to ensure test consistency
-		// block_data_to_return
-		// 	.clone()
-		// 	.into_iter()
-		// 	.for_each(|(block_number, block_data_return)| {
-		// 		if let Some(data) = block_data_return {
-		// 			assert!(block_data_vec.contains(&(block_number, data)));
-		// 		} else {
-		// 			assert!(!block_data_vec.iter().any(|(number, _)| number == &block_number));
-		// 		}
-		// 	});
-	}
-}
- */
-
+struct MockBlockProcessorDefinition;
 type Types = TypesFor<MockBlockProcessorDefinition>;
-
-type ElectionProperties = Properties;
 
 impl Hook<HookTypeFor<Types, SafeModeEnabledHook>> for Types {
 	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		SafeModeStatus::Disabled
+	}
+}
+
+impl BWProcessorTypes for Types {
+	type ChainBlockNumber = u64;
+	type BlockData = Vec<u8>;
+	type Event = ();
+	type Rules = MockHook<"rules", HookTypeFor<Self, RulesHook>>;
+	type Execute = MockHook<"execute", HookTypeFor<Self, ExecuteHook>>;
+	type DedupEvents = Self;
+	type SafetyMargin = Self;
+}
+
+impl Hook<HookTypeFor<Types, DedupEventsHook>> for Types {
+	fn run(
+		&mut self,
+		input: <HookTypeFor<Types, DedupEventsHook> as HookType>::Input,
+	) -> <HookTypeFor<Types, DedupEventsHook> as HookType>::Output {
+		input
+	}
+}
+
+impl Hook<HookTypeFor<Types, SafetyMarginHook>> for Types {
+	fn run(&mut self, _input: ()) -> u32 {
+		3
 	}
 }
 
@@ -199,7 +136,7 @@ impl StateMachineES for Types {
 }
 
 /// Generating the state machine-based electoral system
-pub type SimpleBlockWitnesser = StateMachineESInstance<Types>;
+type SimpleBlockWitnesser = StateMachineESInstance<Types>;
 
 register_checks! {
 	SimpleBlockWitnesser {
@@ -210,6 +147,12 @@ register_checks! {
 		},
 		number_of_open_elections_is(_pre, post, n: ElectionCount) {
 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
+		},
+		rules_hook_called_n_times_for_age_zero(pre, post, n: usize) {
+			let count = |state: &ElectoralSystemState<StateMachineESInstance<TypesFor<MockBlockProcessorDefinition>>>| {
+				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(_, age, _event)| *age == 0).count()
+			};
+			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);
 		},
 		// process_block_data_called_n_times(_pre, _post, n: u8) {
 		// 	assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "process_block_data should have been called {} times so far!", n);
@@ -242,9 +185,9 @@ fn generate_votes(
 		votes: correct_voters
 			.clone()
 			.into_iter()
-			.map(|v| {
-				// ConsensusVote { vote: Some(((), correct_data.clone())), validator_id: v }
-				ConsensusVote { vote: Some(((), to_vote(correct_data.clone()))), validator_id: v }
+			.map(|v| ConsensusVote {
+				vote: Some(((), to_vote(correct_data.clone()))),
+				validator_id: v,
 			})
 			.chain(incorrect_voters.clone().into_iter().map(|v| ConsensusVote {
 				vote: Some(((), to_vote(incorrect_data.clone()))),
@@ -299,6 +242,7 @@ fn no_block_data_success() {
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(0),
 				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
 			],
 		)
@@ -310,8 +254,10 @@ fn no_block_data_success() {
 			&vec![ChainProgress::None],
 			|_| {},
 			vec![
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(0),
 				// No extra calls
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(0),
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(1),
 				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
 				// We should receive an empty block data, but still get the block number. This is
 				// necessary so we can track the last chain block we've processed.
@@ -497,6 +443,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 				// No reorg, so we try processing any unprocessed state (there would be none at
 				// this point though, since no elections have resolved).
 				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(0),
 			],
 		)
 		.then(|| println!("We about to come to consensus on some blocks."))
@@ -514,6 +461,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 				// Check::<SimpleBlockWitnesser>::unprocessed_data_is(
 				// 	expected_unprocessed_data.clone(),
 				// ),
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(5),
 			],
 		)
 		.then(|| println!("We're about to come to consensus on a block that will trigger a reorg."))
