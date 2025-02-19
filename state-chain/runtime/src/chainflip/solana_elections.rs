@@ -193,6 +193,7 @@ pub type SolanaAltWitnessing = electoral_systems::egress_success::EgressSuccess<
 	(),
 	SolanaAltWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub struct SolanaAltWitnessingHook;
