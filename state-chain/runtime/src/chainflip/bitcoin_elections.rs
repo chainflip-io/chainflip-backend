@@ -21,7 +21,7 @@ use pallet_cf_elections::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
 			state_machine::{
-				BWProcessorTypes, BWSettings, BWState, BWStateMachine, BWTypes,
+				BWProcessorTypes, BlockWitnesserSettings, BlockWitnesserState, BWStateMachine, BWTypes,
 				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
 			},
 		},
@@ -157,10 +157,10 @@ impls! {
 	/// Associating the ES related types to the struct
 	ElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type ElectoralUnsynchronisedState = BWState<Self>;
+		type ElectoralUnsynchronisedState = BlockWitnesserState<Self>;
 		type ElectoralUnsynchronisedStateMapKey = ();
 		type ElectoralUnsynchronisedStateMapValue = ();
-		type ElectoralUnsynchronisedSettings = BWSettings;
+		type ElectoralUnsynchronisedSettings = BlockWitnesserSettings;
 		type ElectoralSettings = ();
 		type ElectionIdentifierExtra = ();
 		type ElectionProperties = (btc::BlockNumber, ElectionProperties, u8);
@@ -305,7 +305,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 		unsynchronised_settings: (
 			Default::default(),
 			// TODO: Write a migration to set this too.
-			BWSettings { max_concurrent_elections: 15 },
+			BlockWitnesserSettings { max_concurrent_elections: 15 },
 			(),
 		),
 		settings: (Default::default(), Default::default(), LIVENESS_CHECK_DURATION),

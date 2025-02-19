@@ -141,7 +141,7 @@ pub trait BWProcessorTypes: Sized {
 	PartialOrd,
 	Default,
 )]
-pub struct BWSettings {
+pub struct BlockWitnesserSettings {
 	pub max_concurrent_elections: u16,
 }
 
@@ -158,15 +158,15 @@ pub struct BWSettings {
 
 	BlockProcessor<T>: Encode,
 ))]
-pub struct BWState<T: BWTypes> {
+pub struct BlockWitnesserState<T: BWTypes> {
 	pub elections: ElectionTracker<T::ChainBlockNumber>,
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
 	pub safemode_enabled: T::SafeModeEnabledHook,
 	pub block_processor: BlockProcessor<T>,
-	_phantom: sp_std::marker::PhantomData<T>,
+	pub _phantom: sp_std::marker::PhantomData<T>,
 }
 
-impl<T: BWTypes> Validate for BWState<T> {
+impl<T: BWTypes> Validate for BlockWitnesserState<T> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -174,7 +174,7 @@ impl<T: BWTypes> Validate for BWState<T> {
 	}
 }
 
-impl<T: BWTypes> Default for BWState<T>
+impl<T: BWTypes> Default for BlockWitnesserState<T>
 where
 	T::ElectionPropertiesHook: Default,
 	T::SafeModeEnabledHook: Default,
@@ -202,9 +202,9 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 		>,
 		ChainProgress<T::ChainBlockNumber>,
 	>;
-	type Settings = BWSettings;
+	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
-	type State = BWState<T>;
+	type State = BlockWitnesserState<T>;
 
 	fn input_index(s: &mut Self::State) -> IndexOf<Self::Input> {
 		s.elections
@@ -428,7 +428,7 @@ mod tests {
 			SafeModeEnabledHook = ConstantHook<HookTypeFor<T, SafeModeEnabledHook>>,
 			SafetyMargin = ConstantHook<HookTypeFor<T, SafetyMarginHook>>,
 		>,
-	>() -> impl Strategy<Value = BWState<T>>
+	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
 		T::ChainBlockNumber: Arbitrary,
 		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
@@ -446,7 +446,7 @@ mod tests {
 			);
 
 			let ongoing in proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<u8>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election));
-			LazyJust::new(move || BWState {
+			LazyJust::new(move || BlockWitnesserState {
 				elections: ElectionTracker {
 					next_election,
 					next_witnessed,
@@ -528,7 +528,7 @@ mod tests {
 			generate_state(),
 			prop_do! {
 				let max_concurrent_elections in 0..10u16;
-				return BWSettings { max_concurrent_elections }
+				return BlockWitnesserSettings { max_concurrent_elections }
 			},
 			generate_input::<u32>,
 		);
@@ -547,7 +547,7 @@ mod tests {
 			generate_state(),
 			prop_do! {
 				let max_concurrent_elections in 0..10u16;
-				return BWSettings { max_concurrent_elections }
+				return BlockWitnesserSettings { max_concurrent_elections }
 			},
 			generate_input::<BlockWitnessRange<TestChain>>,
 		);

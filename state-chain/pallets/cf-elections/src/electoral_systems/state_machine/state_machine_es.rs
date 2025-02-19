@@ -161,7 +161,7 @@ where
 		}
 
 		// step for each election that reached consensus
-		log::debug!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
+		log::info!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
 		for election_identifier in &election_identifiers {
 			let election_access = ElectoralAccess::election_mut(*election_identifier);
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
