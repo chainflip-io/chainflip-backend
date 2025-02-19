@@ -3,7 +3,40 @@ use derive_where::derive_where;
 use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::vec::Vec;
+use sp_std::{fmt::Debug, vec::Vec};
+
+/// Syntax sugar for implementing multiple traits for a single type.
+///
+/// Example use:
+/// ```
+/// impls! {
+///     for u8:
+///     Clone {
+///         ...
+///     }
+///     Copy {
+///         ...
+///     }
+///     Default {
+///         ...
+///     }
+/// }
+/// ```
+macro_rules! impls {
+    (for $name:ty $(where ($($bounds:tt)*))? :
+	$(#[doc = $doc_text:tt])? impl $($trait:ty)?  $(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
+	$($rest:tt)*
+	) => {
+        $(#[doc = $doc_text])?
+        impl$(<$($bounds)*>)? $($trait for)? $name
+		$(where $($trait_bounds)*)?
+		{
+            $($trait_impl)*
+        }
+        impls!{for $name $(where ($($bounds)*))? : $($rest)*}
+    };
+    (for $name:ty $(where ($($bounds:tt)*))? :) => {}
+}
 
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
@@ -115,6 +148,58 @@ pub mod hook_test_utils {
 		fn run(&mut self, _input: T::Input) -> T::Output {
 			self.counter += 1;
 			self.state.clone()
+		}
+	}
+
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+	)]
+	#[serde(bound = "T::Input: Serde, T::Output: Serde")]
+	pub struct MockHook<const NAME: &'static str, T: HookType> {
+		pub state: T::Output,
+		pub call_history: Vec<T::Input>,
+		pub _phantom: sp_std::marker::PhantomData<T>,
+	}
+
+	impls! {
+		for MockHook<NAME,T> where
+		(
+			const NAME: &'static str,
+			T: HookType
+		):
+
+		impl {
+			pub fn new(b: T::Output) -> Self {
+				Self { state: b, call_history: Vec::new(), _phantom: Default::default() }
+			}
+		}
+
+		impl Default where (T::Output: Default)
+		{
+			fn default() -> Self {
+				Self::new(Default::default())
+			}
+		}
+
+		impl Hook<T> where (T::Input: Debug, T::Output: Clone)
+		{
+			fn run(&mut self, input: T::Input) -> T::Output {
+				#[cfg(test)]
+				println!("{} called for {input:?}", NAME);
+				self.call_history.push(input);
+				self.state.clone()
+			}
 		}
 	}
 }
