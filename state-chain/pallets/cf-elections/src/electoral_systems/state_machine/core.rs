@@ -153,7 +153,7 @@ impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for (A, B) {
 )]
 pub struct ConstantIndex<Idx, A> {
 	pub data: A,
-	pub _phantom: sp_std::marker::PhantomData<Idx>,
+	_phantom: sp_std::marker::PhantomData<Idx>,
 }
 impl<Idx, A> ConstantIndex<Idx, A> {
 	pub fn new(data: A) -> Self {

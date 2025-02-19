@@ -20,7 +20,6 @@ mod boost_pool;
 
 pub use boost_pool::OwedAmount;
 use boost_pool::{BoostPool, DepositFinalisationOutcomeForPool};
-
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
@@ -49,6 +48,7 @@ use cf_traits::{
 	SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
+	OrdNoBound, PartialOrdNoBound,
 	__private::sp_tracing::warn,
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Permill, Saturating},
@@ -411,9 +411,20 @@ pub mod pallet {
 	}
 
 	#[derive(
-		CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo,
+		CloneNoBound,
+		RuntimeDebugNoBound,
+		PartialEqNoBound,
+		EqNoBound,
+		Encode,
+		Decode,
+		TypeInfo,
+		Serialize,
+		Deserialize,
+		OrdNoBound,
+		PartialOrdNoBound,
 	)]
 	#[scale_info(skip_type_params(T, I))]
+	#[serde(bound(serialize = "", deserialize = ""))]
 	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
 		pub deposit_address: Option<TargetChainAccount<T, I>>,
@@ -2199,7 +2210,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		None
 	}
 
-	fn process_vault_swap_request_prewitness(
+	pub fn process_vault_swap_request_prewitness(
 		block_height: TargetChainBlockNumber<T, I>,
 		VaultDepositWitness {
 			input_asset: asset,
