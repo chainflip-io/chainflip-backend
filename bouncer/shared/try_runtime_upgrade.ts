@@ -114,7 +114,9 @@ export async function tryRuntimeUpgrade(
     console.log('first nextHash: ', nextHash.toString());
 
     while (blocksProcessed < lastN) {
-      tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl, failureObj);
+      // tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl, failureObj);
+      console.log("Would have run try-runtime here");
+      await sleep(10000);
 
       // Give the node some breathing time after working hard doing the try-runtime
       await sleep(2000);
