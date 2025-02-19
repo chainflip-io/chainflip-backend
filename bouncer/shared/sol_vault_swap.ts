@@ -26,7 +26,7 @@ import {
 } from './utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.1-swap-endpoint/swap_endpoint';
+import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v0.1.1-alt-test/swap_endpoint';
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
 import { getBalance } from './get_balance';

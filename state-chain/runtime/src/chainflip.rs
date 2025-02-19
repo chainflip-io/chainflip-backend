@@ -67,9 +67,9 @@ use cf_chains::{
 	instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance, SolanaInstance},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ChainflipAddressLookupTable, ComputePrice,
-			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
-			RecoverDurableNonce, SolanaAddressLookupTables, SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaAddressLookupTables,
+			SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
@@ -620,15 +620,6 @@ impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccoun
 {
 	fn lookup(_s: SolanaAddressLookupTables) -> Option<Vec<SolAddressLookupTableAccount>> {
 		// TODO Ramiz: Lookup SolanaElection pallet for the ALTS using the given SwapRequestId
-		None
-	}
-}
-
-impl ChainEnvironment<ChainflipAddressLookupTable, SolAddressLookupTableAccount>
-	for SolEnvironment
-{
-	fn lookup(_s: ChainflipAddressLookupTable) -> Option<SolAddressLookupTableAccount> {
-		// TODO Roy: Read Chainflip's ALT from the Environment pallet.
 		None
 	}
 }

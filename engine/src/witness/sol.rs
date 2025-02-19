@@ -15,9 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod egress_witnessing;
+mod lookup_table_witnessing;
 mod nonce_witnessing;
-mod program_swaps_witnessing;
 mod sol_deposits;
+mod vault_swaps_witnessing;
 
 use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
@@ -196,7 +197,7 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 		settings: <SolanaVaultSwapTracking as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <SolanaVaultSwapTracking as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<SolanaVaultSwapTracking>>, anyhow::Error> {
-		program_swaps_witnessing::get_program_swaps(
+		vault_swaps_witnessing::get_vault_swaps(
 			&self.client,
 			settings.swap_endpoint_data_account_address,
 			properties
