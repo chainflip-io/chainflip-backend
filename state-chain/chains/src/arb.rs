@@ -141,8 +141,8 @@ pub mod fees {
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 	pub const MAX_GAS_LIMIT: u128 = 25_000_000;
-	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 90_000;
-	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 120_000;
+	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 100_000;
+	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 145_000;
 	// Arbitrum specific ccm gas limit calculation constants
 	pub const CCM_VAULT_BYTES_OVERHEAD: u128 = 356;
 	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 36; // ~10%
@@ -248,7 +248,7 @@ mod test {
 		};
 
 		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(gas_limit, 1858469u128);
+		assert_eq!(gas_limit, 1868469u128);
 
 		let gas_budget_extra = 1_000_000u128;
 		let gas_limit_extra = arb_tracked_data.calculate_ccm_gas_limit(

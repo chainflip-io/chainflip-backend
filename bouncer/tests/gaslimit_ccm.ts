@@ -24,8 +24,8 @@ import { Logger } from '../shared/utils/logger';
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
 const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> = {
-  Ethereum: { min: 150000, max: 1000000 },
-  Arbitrum: { min: 3000000, max: 5000000 },
+  Ethereum: { min: 200000, max: 1000000 },
+  Arbitrum: { min: 8000000, max: 15000000 },
 };
 
 const LOOP_TIMEOUT = 15;
@@ -234,26 +234,19 @@ async function testGasLimitSwapToEvm(
 
   const gasConsumption = getRandomGasConsumption(chainFromAsset(destAsset));
 
-  const ccmMetadata = await newCcmMetadata(
-    destAsset,
-    web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
-  );
+  const message = web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]);
+  const ccmMetadata = await newCcmMetadata(destAsset, message);
 
-  // Estimating gas separately. We can't rely on the default gas estimation in `newCcmMetadata()`
-  // because the CF tester gas consumption depends on the gas limit, making this a circular calculation.
-  // Instead, we get a base calculation with an empty message that doesn't run the gas consumption.
-  const baseCfTesterGas = await estimateCcmCfTesterGas(destChain, '0x');
-
-  // Adding buffers on both ends to avoid flakiness.
   if (abortTest) {
-    // Chainflip overestimates the overhead for safety so we use a 25% buffer to ensure that
-    // the gas budget is too low.We also apply a 50% on the baseCfTesterGas since it's highly unreliable.
-    ccmMetadata.gasBudget = Math.round(gasConsumption * 0.75 + baseCfTesterGas * 0.5).toString();
-  } else {
-    // A small buffer should work (10%) as CF should be overestimate, not underestimate
-    ccmMetadata.gasBudget = (baseCfTesterGas + Math.round(gasConsumption * 1.1)).toString();
+    // Not using the default estimation in newCcmMetadata for the abort broadcast
+    // scenario as it has a default buffer. Instead underestimate the gas budget.
+    // Extra buffer for Arbitrum because the localnet l1BaseFee is huge (100x mainnet
+    // value) and it decreases over time making this test flaky otherwise.
+    const estimatedGasAmount = await estimateCcmCfTesterGas(destChain, message);
+    ccmMetadata.gasBudget = Math.round(
+      estimatedGasAmount * (destChain === 'Arbitrum' ? 0.65 : 0.75),
+    ).toString();
   }
-
   const testTag = abortTest ? `InsufficientGas` : '';
 
   const { tag, destAddress, broadcastId, txPayload } = await executeAndTrackCcmSwap(
@@ -379,9 +372,9 @@ export async function testGasLimitCcmSwaps(testContext: TestContext) {
   testContext.debug('Spamming chains to increase fees...');
 
   // No need to spam Solana since we are hardcoding the priority fees on the SC
-  // and the chain "base fee" don't increase anyway..
+  // and the chain "base fee" don't increase anyway. No need to spam Arbitrum either
+  // because the base fee stays constant and the l1BaseFee depends only in Ethereum.
   const spammingEth = spamChain('Ethereum');
-  const spammingArb = spamChain('Arbitrum');
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
@@ -394,7 +387,6 @@ export async function testGasLimitCcmSwaps(testContext: TestContext) {
     if (++i > LOOP_TIMEOUT) {
       spam = false;
       await spammingEth;
-      await spammingArb;
       throw new Error(`Chain fees did not increase enough for the CCM gas limit test to run`);
     }
     await sleep(500);
@@ -439,7 +431,6 @@ export async function testGasLimitCcmSwaps(testContext: TestContext) {
 
   spam = false;
   await spammingEth;
-  await spammingArb;
 
   // Make sure all the spamming has stopped to avoid triggering connectivity issues when running the next test.
   await sleep(10000);
