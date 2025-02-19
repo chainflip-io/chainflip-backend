@@ -7,7 +7,7 @@ use crate::{
 		},
 		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC,
 	},
-	CcmChannelMetadata,
+	CcmAdditionalData, CcmChannelMetadata, Chain, ForeignChainAddress,
 };
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode};
@@ -52,17 +52,32 @@ pub trait CcmValidityCheck {
 	}
 
 	fn decode_unchecked(
-		_ccm: &CcmChannelMetadata,
+		_ccm: CcmAdditionalData,
 		_chain: ForeignChain,
 	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
 		Ok(DecodedCcmAdditionalData::NotRequired)
 	}
 }
 
-#[derive(Clone, Debug, Decode, PartialEq, Eq)]
+#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub enum DecodedCcmAdditionalData {
 	NotRequired,
 	Solana(VersionedSolanaCcmAdditionalData),
+}
+
+impl DecodedCcmAdditionalData {
+	/// Attempt to extract the fallback address from the decoded ccm additional data.
+	/// Will only return Some(addr) if fallback address exists and matches the target `Chain`.
+	pub fn refund_address<C: Chain>(&self) -> Option<C::ChainAccount> {
+		match self {
+			DecodedCcmAdditionalData::Solana(additional_data) => ForeignChainAddress::from(
+				SolAddress::from(additional_data.ccm_accounts().fallback_address),
+			)
+			.try_into()
+			.ok(),
+			_ => None,
+		}
+	}
 }
 
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
@@ -141,6 +156,7 @@ impl CcmValidityCheck for CcmValidityChecker {
 			let mut accounts_length =
 				ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
+			// TODO PRO-2046: we should not check the length here?
 			for ccm_address in &ccm_accounts.additional_accounts {
 				if seen_addresses.insert(ccm_address.pubkey.into()) {
 					accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
@@ -169,12 +185,14 @@ impl CcmValidityCheck for CcmValidityChecker {
 		}
 	}
 
+	/// Decodes the `ccm_additional_data` without any additional checks.
+	/// Only fail if given bytes cannot be decoded into `VersionedSolanaCcmAdditionalData`.
 	fn decode_unchecked(
-		ccm: &CcmChannelMetadata,
+		ccm_additional_data: CcmAdditionalData,
 		chain: ForeignChain,
 	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
 		if chain == ForeignChain::Solana {
-			VersionedSolanaCcmAdditionalData::decode(&mut &ccm.ccm_additional_data.clone()[..])
+			VersionedSolanaCcmAdditionalData::decode(&mut &ccm_additional_data[..])
 				.map(DecodedCcmAdditionalData::Solana)
 				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)
 		} else {
@@ -596,9 +614,15 @@ mod test {
 	#[test]
 	fn can_decode_unchecked() {
 		let ccm = sol_test_values::ccm_parameter().channel_metadata;
-		assert_ok!(CcmValidityChecker::decode_unchecked(&ccm, ForeignChain::Solana));
+		assert_ok!(CcmValidityChecker::decode_unchecked(
+			ccm.ccm_additional_data.clone(),
+			ForeignChain::Solana
+		));
 		assert_eq!(
-			CcmValidityChecker::decode_unchecked(&ccm, ForeignChain::Ethereum),
+			CcmValidityChecker::decode_unchecked(
+				ccm.ccm_additional_data.clone(),
+				ForeignChain::Ethereum
+			),
 			Ok(DecodedCcmAdditionalData::NotRequired)
 		);
 	}
@@ -606,9 +630,15 @@ mod test {
 	#[test]
 	fn can_decode_unchecked_ccm_v1() {
 		let ccm = sol_test_values::ccm_parameter_v1().channel_metadata;
-		assert_ok!(CcmValidityChecker::decode_unchecked(&ccm, ForeignChain::Solana));
+		assert_ok!(CcmValidityChecker::decode_unchecked(
+			ccm.ccm_additional_data.clone(),
+			ForeignChain::Solana
+		));
 		assert_eq!(
-			CcmValidityChecker::decode_unchecked(&ccm, ForeignChain::Ethereum),
+			CcmValidityChecker::decode_unchecked(
+				ccm.ccm_additional_data.clone(),
+				ForeignChain::Ethereum
+			),
 			Ok(DecodedCcmAdditionalData::NotRequired)
 		);
 	}
