@@ -22,7 +22,7 @@ export async function limitOrder(
 
   const lp = createStateChainKeypair(lpKey ?? (process.env.LP_URI || '//LP_1'));
 
-  logger.info('Setting up ' + ccy + ' limit order');
+  logger.debug('Setting up ' + ccy + ' limit order');
   const orderCreatedEvent = observeEvent(logger, 'liquidityPools:LimitOrderUpdated', {
     test: (event) =>
       event.data.lp === lp.address && event.data.baseAsset === ccy && event.data.id === String(0),

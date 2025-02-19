@@ -11,9 +11,9 @@ import { runWithTimeoutAndExit } from '../shared/utils';
 import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
-  globalLogger.info('=== Setup concurrent ===');
+  globalLogger.info('Setup concurrent');
   await Promise.all([setupSwaps(globalLogger), setupBoostPools(globalLogger)]);
-  globalLogger.info('=== Setup concurrent complete ===');
+  globalLogger.info('Setup concurrent complete');
 }
 
 await runWithTimeoutAndExit(main(), 240);
