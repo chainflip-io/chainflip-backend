@@ -31,10 +31,10 @@ use sp_std::fmt::Debug;
 /// `input_index`, an election with these election properties is going to be created automatically.
 ///
 /// ## Idle results
-/// When there is no consensus, the electoral system still has to return sth in its `on_finalize`
-/// function. This value is provided by the `get(&State) -> DisplayState` function. The associated
-/// `DisplayState` type is an arbitrary "summary" of the current state, meant for consumers of the
-/// `on_finalize` result.
+/// When there is no consensus, the electoral system still has to return something in its
+/// `on_finalize` function. This value is provided by the `get(&State) -> DisplayState` function.
+/// The associated `DisplayState` type is an arbitrary "summary" of the current state, meant for
+/// consumers of the `on_finalize` result.
 ///
 /// Note: it might be that this functionality is going to be modelled differently in the future.
 ///
