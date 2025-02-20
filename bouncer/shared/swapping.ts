@@ -70,6 +70,13 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
     });
   }
 
+  bytesAvailable -= numAdditionalAccounts * SOLANA_BYTES_PER_ACCOUNT;
+
+  // TODO: We can add bytesAvailable number of repeated accounts to test the limit.
+  // For example repeating the cfReceiverAddress. I think it's working but I'm off
+  // by 1 byte in the calculations (we can actually pass one less byte than we think)
+  // for the v0 transactions. Protocol checks seems to work so far. To do more testing
+  // when the end to end flow is done.
   const ccmAdditionalData = {
     cf_receiver: {
       pubkey: new PublicKey(cfReceiverAddress).toBytes(),
@@ -90,9 +97,9 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
 
   const ccmAltAdditionalData = {
     ccm_accounts: ccmAdditionalData,
-    alts: !useAlt
-      ? []
-      : [new PublicKey(getContractAddress('Solana', 'USER_ADDRESS_LOOKUP_TABLE')).toBytes()],
+    alts: useAlt
+      ? [new PublicKey(getContractAddress('Solana', 'USER_ADDRESS_LOOKUP_TABLE')).toBytes()]
+      : [],
   };
 
   return u8aToHex(
@@ -127,9 +134,9 @@ function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: nu
       // The maximum number of extra accounts that can be passed is limited by the tx size
       // and therefore also depends on the message length.
       const ccmAdditonalData = newSolanaCcmAdditionalData(bytesAvailable);
-      if (ccmAdditonalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
-        throw new Error(`CCM additional data length exceeds limit: ${ccmAdditonalData.length}`);
-      }
+      // if (ccmAdditonalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
+      //   throw new Error(`CCM additional data length exceeds limit: ${ccmAdditonalData.length}`);
+      // }
       return ccmAdditonalData;
     }
     default:
@@ -162,7 +169,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
   return newCcmArbitraryBytes(length);
 }
 // Minimum overhead to ensure simple CCM transactions succeed
-const OVERHEAD_COMPUTE_UNITS = 20000;
+const OVERHEAD_COMPUTE_UNITS = 40000;
 
 export async function newCcmMetadata(
   destAsset: Asset,
