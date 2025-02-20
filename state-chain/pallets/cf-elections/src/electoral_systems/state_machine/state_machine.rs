@@ -8,7 +8,7 @@ use proptest::test_runner::TestRunner;
 use sp_std::fmt::Debug;
 
 /// A trait for implementing state machines, in particular used for electoral systems.
-/// 
+///
 /// See also the documentation for `StatemachineElectoralSystem`.
 ///
 /// An electoral system is essentialy a state machine: it keeps track of an internal state,
@@ -18,26 +18,27 @@ use sp_std::fmt::Debug;
 ///  - `State`
 ///  - `Input`
 ///  - `Output` and a function `step(&mut State, Input) -> Output`.
-/// 
+///
 /// NOTE: Due to ergonomic reasons, we have another associated type `Settings` which has the same
 /// purpose as `Input`, but which is passed by reference to the `step` function, instead of by
-/// value. It would be possible to merge these into a new struct `{input: Input, settings: &'a Settings}`,
-/// and thus do away with the `Settings` associated type, but it seems to be more ergonomic to 
-/// keep it, as long as we only use the state machine abstraction for electoral system which
-/// always have a settings component.
+/// value. It would be possible to merge these into a new struct `{input: Input, settings: &'a
+/// Settings}`, and thus do away with the `Settings` associated type, but it seems to be more
+/// ergonomic to keep it, as long as we only use the state machine abstraction for electoral system
+/// which always have a settings component.
 ///
 /// ## Mapping to elections
-/// For an electoral system, the `Input` type is always of the form `SMInput<Context,Consensus>`, which is an `Either` type 
-/// carrying either the type of the `OnFinalizeContext` or the `Consensus` type of an election which
-/// reached consensus.
-/// 
+/// For an electoral system, the `Input` type is always of the form `SMInput<Context,Consensus>`,
+/// which is an `Either` type carrying either the type of the `OnFinalizeContext` or the `Consensus`
+/// type of an election which reached consensus.
+///
 /// ------- TODO rewrite:
-/// 
-/// The current concept of a state machine provides us with an `Indexed` implementation on the `Input` type.
-/// The associated type `Input::Index` is exactly `Vec<ElectionProperty>`, and the associated function `has_index`
-/// the type of votes. Election properties are given by the associated type
-/// `Input::Index`, where the function `has_index(vote: &Input, election_properties: &Input::Index)
-/// -> bool` is used to determine whether a given vote is valid for given election properties.
+///
+/// The current concept of a state machine provides us with an `Indexed` implementation on the
+/// `Input` type. The associated type `Input::Index` is exactly `Vec<ElectionProperty>`, and the
+/// associated function `has_index` the type of votes. Election properties are given by the
+/// associated type `Input::Index`, where the function `has_index(vote: &Input, election_properties:
+/// &Input::Index) -> bool` is used to determine whether a given vote is valid for given election
+/// properties.
 ///
 /// The definition of the state machine requires a function `input_index(&State) -> Input::Index`
 /// which describes for a given state, which index we expect the next input to have (in other words,

@@ -508,6 +508,103 @@ pub(crate) mod test {
 			"Hook should have been called 5 times: 3 pre-witness deposit and 2 full deposit"
 		)
 	}
+
+
+
+	//    use cf_chains::btc::BlockNumber;
+	//    use std::collections::BTreeMap;
+
+	   // use crate::chainflip::bitcoin_block_processor::{ApplyRulesHook, SafetyMarginHook};
+	//    use codec::{Decode, Encode};
+	//    use core::ops::RangeInclusive;
+	//    use frame_support::pallet_prelude::TypeInfo;
+	//    use pallet_cf_elections::electoral_systems::block_witnesser::primitives::ChainProgressInner;
+
+	//    use crate::chainflip::bitcoin_block_processor::DedupEventsHook;
+	//    use cf_chains::btc::BtcAmount;
+	//    use pallet_cf_elections::electoral_systems::{
+	// 	   block_witnesser::{
+	// 		   block_processor::{BlockProcessor},
+	// 		   state_machine::BWProcessorTypes,
+	// 	   },
+	// 	   state_machine::core::{hook_test_utils::IncreasingHook, Hook},
+	//    };
+	   use proptest::{
+		   prelude::{any, prop, BoxedStrategy, Strategy},
+		   prop_oneof,
+	   };
+
+	//    #[allow(dead_code)]
+	//    fn block_data() -> BoxedStrategy<MockDeposit> {
+	// 	   (any::<u64>(), any::<u32>())
+	// 		   .prop_map(|(amount, numb)| MockDeposit { amount, deposit_address: numb.to_string() })
+	// 		   .boxed()
+	//    }
+	   #[allow(dead_code)]
+	   fn blocks_data(
+		   number_of_blocks: u64,
+	   ) -> BoxedStrategy<BTreeMap<BlockNumber, (MockBlockData, u32)>> {
+		   prop::collection::btree_map(
+			   0..number_of_blocks,
+			   (vec![any::<u8>()], (0..=0u32)),
+			   RangeInclusive::new(0, number_of_blocks as usize),
+		   )
+		   .boxed()
+	   }
+
+	   #[allow(dead_code)]
+	   fn generate_state() -> BoxedStrategy<BlockProcessor<Types>> {
+		   blocks_data(10)
+			   .prop_map(|data| BlockProcessor {
+				   blocks_data: data,
+				   reorg_events: Default::default(),
+				   rules: Default::default(),
+				   execute: Default::default(),
+				   dedup_events: Default::default(),
+				   safety_margin: Default::default(),
+			   })
+			   .boxed()
+	   }
+
+		use crate::electoral_systems::block_witnesser::block_processor::SMBlockProcessorInput;
+
+
+	   #[allow(dead_code)]
+	   fn generate_input() -> BoxedStrategy<SMBlockProcessorInput<Types>> {
+		   prop_oneof![
+			   (0..100u64, any::<u8>()).prop_map(|(n, data)| SMBlockProcessorInput::NewBlockData(
+				   n,
+				   n,
+				   vec![data]
+			   )),
+			   prop_oneof![
+				   (0..=5u64).prop_map(ChainProgressInner::Progress),
+				   (0..=5u64).prop_map(|n| ChainProgressInner::Reorg(
+					   RangeInclusive::<BlockNumber>::new(n, n + 2)
+				   )),
+			   ]
+			   .prop_map(SMBlockProcessorInput::ChainProgress),
+		   ]
+		   .boxed()
+	   }
+
+
+	use crate::electoral_systems::block_witnesser::block_processor::SMBlockProcessor;
+	use crate::electoral_systems::state_machine::state_machine::Statemachine;
+	use proptest::prelude::Just;
+
+	#[test]
+	fn prop_test_blockprocessor() {
+
+		SMBlockProcessor::<Types>::test(
+			file!(),
+			generate_state(),
+			Just(()),
+			|ix| generate_input(),
+		);
+	}
+
+
 }
 
 // State-Machine Block Witness Processor
@@ -569,39 +666,50 @@ impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 				SMBlockProcessorOutput(s.process_block_data(inner, None)),
 		}
 	}
-}
 
-// #[cfg(test)]
-// fn step_specification(
-// 	before: &Self::State,
-// 	input: &Self::Input,
-// 	_settings: &Self::Settings,
-// 	after: &Self::State,
-// ) {
-// 	assert!(
-// 		after.blocks_data.len() <=
-// 			BitcoinIngressEgress::witness_safety_margin().unwrap() as usize,
-// 		"Too many blocks data, we should never have more than safety margin blocks"
-// 	);
-//
-// 	match input {
-// 		SMBlockProcessorInput::ChainProgress(chain_progress) => match chain_progress {
-// 			ChainProgressInner::Progress(_last_height) => {
-// 				assert!(after.reorg_events.len() <= before.reorg_events.len(), "If no reorg happened,
-// number of reorg events should stay the same or decrease"); 	// 			},
-// 	// 			ChainProgressInner::Reorg(range) =>
-// 	// 				for n in range.clone().into_iter() {
-// 	// 					assert!(after.reorg_events.contains_key(&n), "Should always contains key for blocks
-// being reorged, even if no events were produced! (Empty vec)"); 	// 					assert!(
-// 	// 						!after.blocks_data.contains_key(&n),
-// 	// 						"Should never contain blocks data for blocks being reorged"
-// 	// 					);
-// 	// 				},
-// 	// 		},
-// 	// 		SMBlockProcessorInput::NewBlockData(last_height, n, _deposits) => {
-// 	// 			if last_height - BitcoinIngressEgress::witness_safety_margin().unwrap() > *n {
-// 	// 				assert!(!after.blocks_data.contains_key(n));
-// 	// 			}
-// 	// 		},
-// 	// 	}
-// 	// }
+	/// what we want to test:
+	///  - all events are called for exactly once
+	///    - => we step through the whole lifecycle of each event 
+	///
+	#[cfg(test)]
+	fn step_specification(
+		before: &mut Self::State,
+		input: &Self::Input,
+		_settings: &Self::Settings,
+		after: &Self::State,
+	) {
+		// assert!(
+		// 	after.blocks_data.len() <= before.safety_margin.run(()) as usize,
+		// 	"Too many blocks data, we should never have more than safety margin blocks"
+		// );
+
+		match input {
+			SMBlockProcessorInput::ChainProgress(chain_progress) => match chain_progress {
+				ChainProgressInner::Progress(_last_height) => {
+					assert!(
+						after.reorg_events.len() <= before.reorg_events.len(),
+						"If no reorg happened, number of reorg events should stay the same or decrease"
+					);
+				},
+				ChainProgressInner::Reorg(range) =>
+					for n in range.clone().into_iter() {
+						// assert!(
+						// 	after.reorg_events.contains_key(&n),
+						// 	"Should always contains key for blocks being reorged, even if no events were produced! (Empty vec)"
+						// );
+						assert!(
+							!after.blocks_data.contains_key(&n),
+							"Should never contain blocks data for blocks being reorged"
+						);
+					},
+			},
+			SMBlockProcessorInput::NewBlockData(last_height, n, _deposits) => {
+				if last_height.saturating_backward(before.safety_margin.run(()) as usize) > *n {
+					assert!(!after.blocks_data.contains_key(n));
+				}
+			},
+		}
+	}
+
+
+}
