@@ -1013,6 +1013,7 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 
 #[cfg(test)]
 mod test_restricted_balances {
+	use cf_utilities::assert_matches;
 	use sp_core::H160;
 
 	use super::*;
@@ -1070,13 +1071,13 @@ mod test_restricted_balances {
 					));
 					let expected_redeemed_amount =
 						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
-					assert!(matches!(
+					assert_matches!(
 						cf_test_utilities::last_event::<Test>(),
 						RuntimeEvent::Funding(Event::RedemptionRequested {
 							account_id,
 							amount,
 							..
-						}) if account_id == ALICE && amount == expected_redeemed_amount));
+						}) if account_id == ALICE && amount == expected_redeemed_amount);
 				},
 				Some(e) => {
 					assert_noop!(

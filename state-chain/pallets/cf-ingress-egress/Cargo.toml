@@ -41,6 +41,7 @@ sp-core = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 pallet-cf-governance = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
 
 [features]
 default = ["std"]

@@ -15,6 +15,7 @@ use crate::{
 	Rng,
 };
 
+use cf_utilities::assert_matches;
 use rand::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::mpsc;
@@ -169,7 +170,7 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 	// Process a stage 1 message. This will cause the ceremony to progress to stage 2 and process
 	// the delayed message. The processing of the delayed message will cause the completion of stage
 	// 2 and therefore fail with BroadcastFailure because the data we used was invalid.
-	assert!(matches!(
+	assert_matches!(
 		ceremony_runner
 			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1(1))
 			.await,
@@ -180,7 +181,7 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 				SigningStageName::VerifyCommitmentsBroadcast2
 			)
 		)))
-	));
+	);
 }
 
 // Note: Clippy seems to throw a false positive without this.

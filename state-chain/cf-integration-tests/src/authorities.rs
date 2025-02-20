@@ -11,6 +11,8 @@ use std::collections::{BTreeSet, HashMap};
 
 use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
 use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
+use cf_utilities::assert_matches;
+
 use pallet_cf_environment::{PolkadotVaultAccountId, SafeModeUpdate};
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
@@ -74,7 +76,7 @@ fn authority_rotates_with_correct_sequence() {
 			testnet.move_to_the_next_epoch();
 			witness_ethereum_rotation_broadcast(1);
 
-			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
+			assert_matches!(Validator::current_rotation_phase(), RotationPhase::Idle);
 			assert_eq!(
 				AllVaults::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
@@ -86,10 +88,10 @@ fn authority_rotates_with_correct_sequence() {
 			// Start the Authority and Vault rotation
 			// idle -> Keygen
 			testnet.move_forward_blocks(4);
-			assert!(matches!(
+			assert_matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::KeygensInProgress(..)
-			));
+			);
 			// NOTE: This happens due to a bug in `move_forward_blocks`: keygen completes in the
 			// same block in which is was requested.
 			assert_eq!(
@@ -99,10 +101,10 @@ fn authority_rotates_with_correct_sequence() {
 
 			// Key Handover complete.
 			testnet.move_forward_blocks(4);
-			assert!(matches!(
+			assert_matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::KeyHandoversInProgress(..)
-			));
+			);
 			// NOTE: See above, we skip the pending state.
 			assert_eq!(
 				AllVaults::status(),
@@ -112,10 +114,7 @@ fn authority_rotates_with_correct_sequence() {
 			// Activate new key.
 			// The key is immediately activated in the next block
 			testnet.move_forward_blocks(1);
-			assert!(matches!(
-				Validator::current_rotation_phase(),
-				RotationPhase::ActivatingKeys(..)
-			));
+			assert_matches!(Validator::current_rotation_phase(), RotationPhase::ActivatingKeys(..));
 
 			// Wait for an extra block to allow TSS to complete, we switch to RotationComplete once
 			// that's done
@@ -129,10 +128,10 @@ fn authority_rotates_with_correct_sequence() {
 
 			// Rotating session
 			testnet.move_forward_blocks(1);
-			assert!(matches!(
+			assert_matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::SessionRotating(..)
-			));
+			);
 			assert_eq!(
 				AllVaults::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
@@ -140,7 +139,7 @@ fn authority_rotates_with_correct_sequence() {
 
 			// Rotation Completed.
 			testnet.move_forward_blocks(1);
-			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
+			assert_matches!(Validator::current_rotation_phase(), RotationPhase::Idle);
 			assert_eq!(
 				AllVaults::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
@@ -357,10 +356,10 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 
 			// Authority rotation is stalled while in Code Red because of disabling dispatching
 			// witness extrinsics and so witnessing vault rotation will be stalled.
-			assert!(matches!(
+			assert_matches!(
 				AllVaults::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
-			));
+			);
 			testnet.move_forward_blocks(3);
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 		});
@@ -383,10 +382,10 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 			testnet.move_to_the_end_of_epoch();
 
 			testnet.move_forward_blocks(1);
-			assert!(matches!(
+			assert_matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::KeygensInProgress(..)
-			));
+			);
 			assert_eq!(AllVaults::status(), AsyncResult::Pending);
 			backup_nodes.iter().for_each(|validator| {
 				assert_ok!(EvmThresholdSigner::report_keygen_outcome(
@@ -477,10 +476,10 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			});
 
 			testnet.move_forward_blocks(1);
-			assert!(matches!(
+			assert_matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::KeyHandoversInProgress(..)
-			));
+			);
 			assert_eq!(
 				AllVaults::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::Failed(BTreeSet::default()))
@@ -577,31 +576,31 @@ fn waits_for_governance_when_apicall_fails() {
 			// we are still in old epoch
 			assert_eq!(Validator::epoch_index(), epoch_index);
 			// rotation has not completed
-			assert!(matches!(
+			assert_matches!(
 				CurrentRotationPhase::<Runtime>::get(),
 				RotationPhase::ActivatingKeys(..)
-			));
+			);
 
-			assert!(matches!(
+			assert_matches!(
 				PendingVaultActivation::<Runtime, PolkadotInstance>::get().unwrap(),
 				VaultActivationStatus::ActivationFailedAwaitingGovernance { .. }
-			));
+			);
 
 			// move forward a few blocks
 			testnet.move_forward_blocks(10);
 
-			assert!(matches!(
+			assert_matches!(
 				PendingVaultActivation::<Runtime, PolkadotInstance>::get().unwrap(),
 				VaultActivationStatus::ActivationFailedAwaitingGovernance { .. }
-			));
+			);
 
 			// we are still in old epoch
 			assert_eq!(Validator::epoch_index(), epoch_index);
 			// rotation is still stalled
-			assert!(matches!(
+			assert_matches!(
 				CurrentRotationPhase::<Runtime>::get(),
 				RotationPhase::ActivatingKeys(..)
-			));
+			);
 
 			// manually setting the activation status to complete completes the rotation.
 			PendingVaultActivation::<Runtime, PolkadotInstance>::put(
@@ -611,6 +610,6 @@ fn waits_for_governance_when_apicall_fails() {
 
 			// we have moved to the new epoch
 			assert_eq!(Validator::epoch_index(), epoch_index + 1);
-			assert!(matches!(CurrentRotationPhase::<Runtime>::get(), RotationPhase::Idle));
+			assert_matches!(CurrentRotationPhase::<Runtime>::get(), RotationPhase::Idle);
 		});
 }

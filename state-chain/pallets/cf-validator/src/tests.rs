@@ -13,7 +13,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
-use cf_utilities::success_threshold_from_share_count;
+use cf_utilities::{assert_matches, success_threshold_from_share_count};
 use frame_support::{
 	assert_noop, assert_ok,
 	error::BadOrigin,
@@ -131,24 +131,24 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		})
 		// Now that we have bidders, we should succeed the auction, and complete the rotation
 		.then_advance_n_blocks_and_execute_with_checks(1, || {
-			assert!(matches!(
+			assert_matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeygensInProgress(..)
-			));
+			);
 			MockKeyRotatorA::keygen_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
-			assert!(matches!(
+			assert_matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeyHandoversInProgress(..)
-			));
+			);
 			MockKeyRotatorA::key_handover_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
-			assert!(matches!(
+			assert_matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::ActivatingKeys(..)
-			));
+			);
 			MockKeyRotatorA::keys_activated();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
@@ -721,10 +721,10 @@ fn auction_params_must_be_valid_when_set() {
 			}
 		));
 		// Confirm we have an event
-		assert!(matches!(
+		assert_matches!(
 			last_event::<Test>(),
 			mock::RuntimeEvent::ValidatorPallet(Event::PalletConfigUpdated { .. }),
-		));
+		);
 	});
 }
 

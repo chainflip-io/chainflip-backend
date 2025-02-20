@@ -8363,6 +8363,7 @@ dependencies = [
  "sp-io 38.0.0",
  "sp-runtime 39.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2)",
+ "utilities",
 ]
 
 [[package]]
@@ -8409,6 +8410,7 @@ dependencies = [
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2)",
  "strum 0.26.3",
  "strum_macros 0.26.4",
+ "utilities",
 ]
 
 [[package]]

@@ -43,6 +43,10 @@ use cf_traits::{
 	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
 	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapOutputAction, SwapRequestType,
 };
+
+#[cfg(test)]
+use cf_utilities::assert_matches;
+
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	traits::{Hooks, OriginTrait},
@@ -267,14 +271,14 @@ fn can_schedule_deposit_fetch() {
 		request_address_and_deposit(2u64, EthAsset::Eth);
 		request_address_and_deposit(3u64, EthAsset::Flip);
 
-		assert!(matches!(
+		assert_matches!(
 			&ScheduledEgressFetchOrTransfer::<Test, ()>::get()[..],
 			&[
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_FLIP, .. },
 			]
-		));
+		);
 
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(Event::DepositFetchesScheduled {
 			channel_id: 1,
@@ -283,7 +287,7 @@ fn can_schedule_deposit_fetch() {
 
 		request_address_and_deposit(4u64, EthAsset::Eth);
 
-		assert!(matches!(
+		assert_matches!(
 			&ScheduledEgressFetchOrTransfer::<Test, ()>::get()[..],
 			&[
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
@@ -291,7 +295,7 @@ fn can_schedule_deposit_fetch() {
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_FLIP, .. },
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
 			]
-		));
+		);
 	});
 }
 
@@ -771,10 +775,10 @@ fn multi_use_deposit_same_block() {
 				"Expected one AllBatch apicall to be scheduled for address deployment, got {:?}.",
 				pending_api_calls
 			);
-			assert!(matches!(
+			assert_matches!(
 				pending_callbacks.last().unwrap(),
 				RuntimeCall::IngressEgress(PalletCall::finalise_ingress { .. })
-			));
+			);
 		})
 		.then_execute_at_next_block(|ctx| {
 			MockEgressBroadcaster::dispatch_all_success_callbacks();

@@ -33,6 +33,13 @@ macro_rules! assert_err {
 	};
 }
 
+#[macro_export]
+macro_rules! assert_matches {
+	($left:expr, $pattern:pat $(if $guard:expr)?$(,)?) => {
+		assert!(matches!($left, $pattern $(if $guard)?))
+	};
+}
+
 /// Note that the resulting `threshold` is the maximum number of parties *not* enough to generate a
 /// signature,
 ///
@@ -294,5 +301,25 @@ mod test_asserts {
 	#[test]
 	fn test_assert_ok_err() {
 		assert_panics!(assert_ok!(Err::<u32, u32>(1)));
+	}
+
+	#[test]
+	fn test_assert_matches() {
+		#[allow(dead_code)]
+		struct Foo {
+			pub a: u8,
+			pub b: u8,
+		}
+		#[allow(dead_code)]
+		enum Bar {
+			A(u8),
+			B(String),
+		}
+		assert_panics!(assert_matches!(Some(Bar::A(6u8)), Some(Bar::B(..))));
+		assert_panics!(assert_matches!(Some(Bar::A(6u8)), Some(Bar::A(value)) if value == 5u8));
+
+		assert_matches!(Some(vec![0x01]), Some(..));
+
+		assert_matches!(Some(Foo { a: 1u8, b: 2u8 }), Some(Foo { a: 1u8, .. }));
 	}
 }

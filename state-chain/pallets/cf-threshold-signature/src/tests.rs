@@ -20,6 +20,7 @@ use cf_traits::{
 	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider,
 	KeyRotationStatusOuter, KeyRotator, SetSafeMode, VaultActivator,
 };
+use cf_utilities::assert_matches;
 pub use frame_support::traits::Get;
 
 use cfe_events::{KeyHandoverRequest, KeygenRequest, ThresholdSignatureRequest};
@@ -179,12 +180,12 @@ fn happy_path_no_callback() {
 			assert!(EvmThresholdSigner::pending_ceremonies(ceremony_id).is_none());
 
 			// Signature is available
-			assert!(matches!(
+			assert_matches!(
 				EvmThresholdSigner::signer_and_signature(request_context.request_id)
 					.unwrap()
 					.signature_result,
 				AsyncResult::Ready(..)
-			));
+			);
 
 			// No callback was provided.
 			assert!(!MockCallback::has_executed(request_context.request_id));
@@ -873,10 +874,10 @@ fn keygen_success_triggers_keygen_verification() {
 
 		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
-		assert!(matches!(
+		assert_matches!(
 			PendingKeyRotation::<Test, _>::get().unwrap(),
 			KeyRotationStatus::AwaitingKeygenVerification { .. }
-		));
+		);
 	});
 }
 
@@ -909,10 +910,10 @@ fn handover_success_triggers_handover_verification() {
 
 		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
-		assert!(matches!(
+		assert_matches!(
 			PendingKeyRotation::<Test, _>::get().unwrap(),
 			KeyRotationStatus::AwaitingKeyHandoverVerification { .. }
-		));
+		);
 	});
 }
 
@@ -1312,10 +1313,10 @@ fn do_full_key_rotation() {
 	}
 	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
-	assert!(matches!(
+	assert_matches!(
 		PendingKeyRotation::<Test, _>::get().unwrap(),
 		KeyRotationStatus::AwaitingKeygenVerification { .. }
-	));
+	);
 
 	let cfes = [ALICE]
 		.iter()
@@ -1328,10 +1329,10 @@ fn do_full_key_rotation() {
 		AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete)
 	);
 
-	assert!(matches!(
+	assert_matches!(
 		PendingKeyRotation::<Test, _>::get().unwrap(),
 		KeyRotationStatus::KeygenVerificationComplete { .. }
-	));
+	);
 
 	const SHARING_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
 	EvmThresholdSigner::key_handover(
@@ -1355,10 +1356,10 @@ fn do_full_key_rotation() {
 
 	assert_last_events!(Event::ThresholdSignatureRequest { .. }, Event::KeyHandoverSuccess { .. });
 
-	assert!(matches!(
+	assert_matches!(
 		PendingKeyRotation::<Test, _>::get().unwrap(),
 		KeyRotationStatus::AwaitingKeyHandoverVerification { .. }
-	));
+	);
 
 	run_cfes_on_sc_events(&cfes);
 
@@ -1372,10 +1373,10 @@ fn do_full_key_rotation() {
 		Event::KeyHandoverVerificationSuccess { .. }
 	);
 
-	assert!(matches!(
+	assert_matches!(
 		PendingKeyRotation::<Test, _>::get().unwrap(),
 		KeyRotationStatus::KeyHandoverComplete { .. }
-	));
+	);
 
 	// Called by validator pallet
 	EvmThresholdSigner::activate_keys();
@@ -1628,10 +1629,10 @@ mod key_rotation {
 			EvmThresholdSigner::activate_keys();
 			EvmThresholdSigner::status();
 
-			assert!(matches!(
+			assert_matches!(
 				PendingKeyRotation::<Test, _>::get().unwrap(),
 				KeyRotationStatus::Complete,
-			));
+			);
 		});
 		final_checks(ext);
 	}
@@ -1639,10 +1640,10 @@ mod key_rotation {
 	#[test]
 	fn can_recover_after_handover_failure() {
 		let ext = setup(Err(Default::default())).execute_with(|| {
-			assert!(matches!(
+			assert_matches!(
 				PendingKeyRotation::<Test, _>::get().unwrap(),
 				KeyRotationStatus::KeyHandoverFailed { .. }
-			));
+			);
 
 			// Start handover again, but successful this time.
 			let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
@@ -1678,10 +1679,10 @@ mod key_rotation {
 	#[test]
 	fn key_handover_success_triggers_key_handover_verification() {
 		setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
-			assert!(matches!(
+			assert_matches!(
 				PendingKeyRotation::<Test, _>::get(),
 				Some(KeyRotationStatus::AwaitingKeyHandoverVerification { .. })
-			));
+			);
 		});
 	}
 
@@ -1689,10 +1690,10 @@ mod key_rotation {
 	fn key_handover_fails_on_key_mismatch() {
 		setup(Ok(BAD_AGG_KEY_POST_HANDOVER)).execute_with(|| {
 			assert_last_events!(Event::KeyHandoverFailure { .. });
-			assert!(matches!(
+			assert_matches!(
 				PendingKeyRotation::<Test, _>::get(),
 				Some(KeyRotationStatus::KeyHandoverFailed { .. })
-			));
+			);
 		});
 	}
 
@@ -1819,10 +1820,10 @@ fn can_recover_from_abort_key_rotation_after_failed_key_gen() {
 			Err(Default::default())
 		));
 		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(2);
-		assert!(matches!(
+		assert_matches!(
 			PendingKeyRotation::<Test, _>::get(),
 			Some(KeyRotationStatus::Failed { .. })
-		));
+		);
 
 		// Abort by resetting key rotation state
 		EvmThresholdSigner::reset_key_rotation();
@@ -1862,10 +1863,10 @@ fn can_recover_from_abort_key_rotation_after_key_verification() {
 			.collect::<Vec<_>>();
 		run_cfes_on_sc_events(&cfes);
 
-		assert!(matches!(
+		assert_matches!(
 			PendingKeyRotation::<Test, _>::get(),
 			Some(KeyRotationStatus::KeygenVerificationComplete { .. })
-		));
+		);
 
 		// Abort the key rotation now
 		EvmThresholdSigner::reset_key_rotation();
@@ -1923,10 +1924,10 @@ fn can_recover_from_abort_key_rotation_after_key_handover_failed() {
 		}
 
 		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(2);
-		assert!(matches!(
+		assert_matches!(
 			PendingKeyRotation::<Test, _>::get(),
 			Some(KeyRotationStatus::KeyHandoverFailed { .. })
-		));
+		);
 
 		// Abort by resetting key rotation state
 		EvmThresholdSigner::reset_key_rotation();

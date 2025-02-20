@@ -147,6 +147,7 @@ mod tests {
 		AggKeyFor, KeygenOutcomeFor,
 	};
 	use cf_chains::mocks::MockAggKey;
+	use cf_utilities::assert_matches;
 	use frame_support::assert_ok;
 	use sp_std::collections::btree_set::BTreeSet;
 
@@ -368,16 +369,16 @@ mod tests {
 
 			// A keygen where more than `threshold` nodes have reported failure, but there is no
 			// final agreement on the guilty parties. Only unresponsive nodes will be reported.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(
 					&n_times([(17, ReportedOutcome::Failure), (7, ReportedOutcome::Timeout)]),
 					|id| if id < 16 { [17] } else { [16] }
 				),
 				Err(blamed) if blamed == BTreeSet::from_iter(18..=24)
-			));
+			);
 
 			// As above, but some nodes have reported the wrong outcome.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(
 					&n_times([
 						(17, ReportedOutcome::Failure),
@@ -388,10 +389,10 @@ mod tests {
 					|id| if id < 16 { [17] } else { [16] }
 				),
 				Err(blamed) if blamed == BTreeSet::from_iter(18..=24)
-			));
+			);
 
 			// As above, but some nodes have additionally been voted on.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(
 					&n_times([
 						(18, ReportedOutcome::Failure),
@@ -402,7 +403,7 @@ mod tests {
 					|id| if id > 16 { [1, 2] } else { [17, 18] }
 				),
 				Err(blamed) if blamed == BTreeSet::from_iter(17..=24)
-			));
+			);
 		});
 	}
 
@@ -420,30 +421,30 @@ mod tests {
 			);
 
 			// First five candidates all report candidate 6, candidate 6 reports 1.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&reported_outcomes(b"ffffft"), |id| if id == 6 { [1] } else { [6] }),
 				Err(blamed) if blamed == BTreeSet::from_iter([6])
-			));
+			);
 
 			// First five candidates all report nobody, candidate 6 unresponsive.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&reported_outcomes(b"ffffft"), |_| []),
 				Err(blamed) if blamed == BTreeSet::from_iter([6])
-			));
+			);
 
 			// Candidates 3 and 6 unresponsive.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&reported_outcomes(b"fftfft"), |_| []),
 				Err(blamed) if blamed == BTreeSet::from_iter([3, 6])
-			));
+			);
 			// One candidate unresponsive, one blamed by majority.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&reported_outcomes(b"ffffftf"), |id| if id != 3 { [3] } else { [4] }),
 				Err(blamed) if blamed == BTreeSet::from_iter([3, 6])
-			));
+			);
 
 			// One candidate unresponsive, one rogue blames everyone else.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&reported_outcomes(b"ffffftf"), |id| {
 					if id != 3 {
 						vec![3, 6]
@@ -452,37 +453,37 @@ mod tests {
 					}
 				}),
 				Err(blamed) if blamed == BTreeSet::from_iter([3, 6])
-			));
+			);
 
 			let failures = |n| n_times([(n, ReportedOutcome::Failure)]);
 
 			// Candidates don't agree.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&failures(6), |id| [(id + 1) % 6]),
 				Err(blamed) if blamed.is_empty()
-			));
+			);
 
 			// Candidate agreement is below reporting threshold.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&failures(6), |id| if id < 4 { [6] } else { [2] }),
 				Err(blamed) if blamed.is_empty()
-			));
+			);
 
 			// Candidates agreement just above threshold.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&failures(6), |id| if id == 6 { [1] } else { [6] }),
 				Err(blamed) if blamed == BTreeSet::from_iter([6])
-			));
+			);
 
 			// Candidates agree on multiple offenders.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&failures(12), |id| if id < 9 { [11, 12] } else { [1, 2] }),
 				Err(blamed) if blamed == BTreeSet::from_iter([11, 12])
-			));
+			);
 
 			// Overlapping agreement - no agreement on the entire set but in aggregate we can
 			// determine offenders.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&failures(12), |id| {
 					if id < 5 {
 						[11, 12]
@@ -493,13 +494,13 @@ mod tests {
 					}
 				}),
 				Err(blamed) if blamed == BTreeSet::from_iter([1, 11])
-			));
+			);
 
 			// Unresponsive and dissenting nodes are reported.
-			assert!(matches!(
+			assert_matches!(
 				get_outcome(&reported_outcomes(b"tfffsfffbffft"), |_| []),
 				Err(blamed) if blamed == BTreeSet::from_iter([1, 5, 9, 13])
-			));
+			);
 		});
 	}
 }

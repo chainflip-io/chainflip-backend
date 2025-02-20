@@ -136,10 +136,10 @@ mod tests {
 		let dispatch_error = sp_runtime::DispatchError::decode(&mut &encoded_error[..]).unwrap();
 
 		// Message should be erased.
-		assert!(matches!(
+		cf_utilities::assert_matches!(
 			dispatch_error,
 			sp_runtime::DispatchError::Module(ModuleError { message: None, .. })
-		));
+		);
 
 		match ErrorDecoder::default().decode_dispatch_error(dispatch_error) {
 			super::DispatchError::KnownModuleError { pallet, name, error } => {
