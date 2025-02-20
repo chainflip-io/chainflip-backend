@@ -127,42 +127,62 @@ impl CcmValidityCheck for CcmValidityChecker {
 					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 
 			let ccm_accounts = decoded_data.ccm_accounts();
+			let address_lookup_tables = decoded_data.address_lookup_tables();
+			let num_address_lookup_tables = address_lookup_tables.len();
 
-			// It's hard at this stage to compute exactly the length of the finally build
-			// transaction from the message and the additional accounts. Duplicated
-			// accounts only take one reference byte while new accounts take 32 bytes.
-			// Technically it shouldn't be necessary to pass duplicated accounts as
-			// it will all be executed in the same instruction. However when integrating
-			// with other protocols, many of the account's values are part of a returned
-			// payload from an API and it makes it cumbersome to then deduplicate on the
-			// fly and then make it match with the receiver contract. It can be done
-			// but it then requires extra configuration bytes in the payload, which
-			// then defeats the purpose.
-			// Therefore we want to allow for duplicated accounts, both duplicated
-			// within the additional accounts and with our accounts. Then we can
-			// calculate the length accordingly.
-			// The Chainflip accounts are irrelevant to the user except for a
-			// few that are accounted for here.
-			let mut seen_addresses = BTreeSet::from_iter([
-				SYSTEM_PROGRAM_ID,
-				SYS_VAR_INSTRUCTIONS,
-				destination_address.into(),
-				ccm_accounts.cf_receiver.pubkey.into(),
-			]);
-
-			if asset == SolAsset::SolUsdc {
-				seen_addresses.insert(TOKEN_PROGRAM_ID);
+			if num_address_lookup_tables > MAX_CCM_USER_ALTS as usize {
+				return Err(CcmValidityError::TooManyAddressLookupTables)
 			}
-			let mut accounts_length =
-				ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
-			// TODO PRO-2046: we should not check the length here?
-			for ccm_address in &ccm_accounts.additional_accounts {
-				if seen_addresses.insert(ccm_address.pubkey.into()) {
-					accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
+			// If there are any user lookup tables we can't tell how many of the ccm_accounts
+			// are there. Therefore we must count optimistically by counting that each address
+			// is present in a lookup table.
+			// But actually if the address is repeated it take sonly 1 bytes, otherwise it will take two, never 33
+			let accounts_length = if num_address_lookup_tables > 0 {
+				// Each empty lookup table is 34 bytes -> 32 bytes for address plus 2 for vector lengths.
+				// Then 1 byte per account reference.
+				let mut lookup_tables_length = num_address_lookup_tables * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION + 2);
+				let accounts_length =
+					ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
+				lookup_tables_length += accounts_length;
+				// The user could have passed the CfTester and CfReceiver with the lookup table so we must allow extra bytes
+				lookup_tables_length.saturating_sub(ACCOUNT_KEY_LENGTH_IN_TRANSACTION * 2)
+			} else {
+				// It's hard at this stage to compute exactly the length of the finally build
+				// transaction from the message and the additional accounts. Duplicated
+				// accounts only take one reference byte while new accounts take 32 bytes.
+				// Technically it shouldn't be necessary to pass duplicated accounts as
+				// it will all be executed in the same instruction. However when integrating
+				// with other protocols, many of the account's values are part of a returned
+				// payload from an API and it makes it cumbersome to then deduplicate on the
+				// fly and then make it match with the receiver contract. It can be done
+				// but it then requires extra configuration bytes in the payload, which
+				// then defeats the purpose.
+				// Therefore we want to allow for duplicated accounts, both duplicated
+				// within the additional accounts and with our accounts. Then we can
+				// calculate the length accordingly.
+				// The Chainflip accounts are irrelevant to the user except for a
+				// few that are accounted for here.
+				let mut seen_addresses = BTreeSet::from_iter([
+					SYSTEM_PROGRAM_ID,
+					SYS_VAR_INSTRUCTIONS,
+					destination_address.into(),
+					ccm_accounts.cf_receiver.pubkey.into(),
+				]);
+
+				if asset == SolAsset::SolUsdc {
+					seen_addresses.insert(TOKEN_PROGRAM_ID);
 				}
-			}
+				let mut accounts_length =
+					ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
+				for ccm_address in &ccm_accounts.additional_accounts {
+					if seen_addresses.insert(ccm_address.pubkey.into()) {
+						accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
+					}
+				}
+				accounts_length
+			};
 			let ccm_length = ccm.message.len() + accounts_length;
 
 			if ccm_length >
@@ -171,10 +191,6 @@ impl CcmValidityCheck for CcmValidityChecker {
 					SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
 				} {
 				return Err(CcmValidityError::CcmIsTooLong)
-			}
-
-			if decoded_data.address_lookup_tables().len() > MAX_CCM_USER_ALTS as usize {
-				return Err(CcmValidityError::TooManyAddressLookupTables)
 			}
 
 			Ok(DecodedCcmAdditionalData::Solana(decoded_data))
