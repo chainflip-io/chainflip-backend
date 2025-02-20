@@ -314,14 +314,6 @@ jobs:
           name: chain-explorer-upgrade-test
           path: /tmp/chainflip/explorer.txt
 
-      - name: Are there snapshots?
-        if: failure()
-        run: |
-          echo "Checking for chainflip tmp folder"
-          ls -l /tmp/chainflip
-          echo "Checking for snapshots folder"
-          ls -l /tmp/chainflip/snapshots
-
       - name: Upload Snapshots 💾
         if: failure()
         continue-on-error: true

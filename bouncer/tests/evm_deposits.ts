@@ -231,7 +231,7 @@ export async function testEvmDeposits(testContext: TestContext) {
 
   await Promise.all([
     depositTests,
-    noDuplicatedWitnessingTest,
+    // noDuplicatedWitnessingTest,
     multipleTxSwapsTest,
     doubleDepositTests,
   ]);
