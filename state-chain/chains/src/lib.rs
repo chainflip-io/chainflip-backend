@@ -407,9 +407,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	type TransactionFee: Member
 		+ Parameter
 		+ MaxEncodedLen
-		+ BenchmarkValue
-		+ Serialize
-		+ for<'de> Deserialize<'de>;
+		+ BenchmarkValue;
 
 	type TrackedData: Default
 		+ MaybeSerializeDeserialize
@@ -492,12 +490,10 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ Parameter
 		+ TransactionMetadata<Self>
 		+ BenchmarkValue
-		+ Default
-		+ Serialize
-		+ for<'de> Deserialize<'de>;
+		+ Default;
 
 	/// The type representing the transaction hash for this particular chain
-	type TransactionRef: Member + Parameter + BenchmarkValue + Serialize + for<'de> Deserialize<'de>;
+	type TransactionRef: Member + Parameter + BenchmarkValue;
 
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
@@ -535,9 +531,7 @@ pub trait ChainCrypto: ChainCryptoInstanceAlias + Sized {
 	type TransactionOutId: Member
 		+ Parameter
 		+ Unpin
-		+ BenchmarkValue
-		+ Serialize
-		+ for<'de> Deserialize<'de>;
+		+ BenchmarkValue;
 
 	type KeyHandoverIsRequired: Get<bool>;
 

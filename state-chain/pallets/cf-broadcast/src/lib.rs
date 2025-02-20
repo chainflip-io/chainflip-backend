@@ -138,7 +138,22 @@ pub mod pallet {
 	TransactionRefFor<T, I>: PartialOrd + Ord
 	)]
 	#[scale_info(skip_type_params(T, I))]
-	#[serde(bound(serialize = "", deserialize = ""))]
+	#[serde(bound(
+		serialize = "
+			TransactionOutIdFor<T, I> : Serialize,
+			TransactionFeeFor<T, I> : Serialize,
+			SignerIdFor<T, I> : Serialize,
+			TransactionMetadataFor<T, I>: Serialize,
+			TransactionRefFor<T, I>: Serialize
+		", 
+		deserialize = "
+			TransactionOutIdFor<T, I> : Deserialize<'de>,
+			TransactionFeeFor<T, I> : Deserialize<'de>,
+			SignerIdFor<T, I> : Deserialize<'de>,
+			TransactionMetadataFor<T, I>: Deserialize<'de>,
+			TransactionRefFor<T, I>: Deserialize<'de>
+		"
+	))]
 	pub struct TransactionConfirmation<T: Config<I>, I: 'static> {
 		pub tx_out_id: TransactionOutIdFor<T, I>,
 		pub signer_id: SignerIdFor<T, I>,
