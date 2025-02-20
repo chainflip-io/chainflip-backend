@@ -104,6 +104,12 @@ pub struct BoostOutput<C: Chain> {
 	total_fee: C::ChainAmount,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum VaultSwapStage {
+	Prewitnessed,
+	Deposit,
+}
+
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
 pub enum FetchOrTransfer<C: Chain> {
@@ -925,6 +931,11 @@ pub mod pallet {
 		},
 		VaultSwapRefunded {
 			tx_id: TransactionInIdFor<T, I>,
+		},
+		VaultSwapIgnored {
+			tx_id: TransactionInIdFor<T, I>,
+			stage: VaultSwapStage,
+			broker_id: Option<T::AccountId>,
 		},
 	}
 
@@ -2207,6 +2218,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}: VaultDepositWitness<T, I>,
 	) {
 		if Self::should_reject_vault_swap(&broker_fee) {
+			Self::deposit_event(Event::VaultSwapIgnored {
+				tx_id,
+				stage: VaultSwapStage::Prewitnessed,
+				broker_id: broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
+			});
 			return;
 		}
 
@@ -2505,6 +2521,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					log_or_panic!("Failed to create refund api call for vault swap.");
 				}
 			};
+
+			Self::deposit_event(Event::VaultSwapIgnored {
+				tx_id,
+				stage: VaultSwapStage::Deposit,
+				broker_id: broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
+			});
 
 			return;
 		}
