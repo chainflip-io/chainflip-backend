@@ -290,7 +290,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
-          name: bouncer-logs
+          name: bouncer-logs-upgrade-test
           path: |
             /tmp/chainflip/bouncer.log
 
