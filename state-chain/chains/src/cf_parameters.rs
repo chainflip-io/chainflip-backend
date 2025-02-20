@@ -84,6 +84,8 @@ mod tests {
 		ChannelRefundParametersDecoded, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH,
 	};
 
+	use sp_core::{Pair, Public};
+
 	const MAX_VAULT_SWAP_PARAMETERS_LENGTH: u32 = 1_000;
 	const MAX_CF_PARAM_LENGTH: u32 =
 		MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_PARAMETERS_LENGTH;
@@ -108,15 +110,27 @@ mod tests {
 		);
 	}
 
+	pub fn test_account_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+		TPublic::Pair::from_string(&format!("//{seed}"), None)
+			.expect("static values are valid; qed")
+			.public()
+	}
+
 	#[test]
 	fn proper_address_conversion() {
 		use sp_core::crypto::Ss58Codec;
 		use sp_runtime::AccountId32;
 		use std::str::FromStr;
 
+		use sp_core::sr25519::Public as Signer;
+
+		use sp_runtime::MultiSignature;
+
+		const SEED: &str = "BROKER_1";
+
 		const BROKER_ID: &str = "5FKyTaAoazbwkQ7CHFNJfhWV5sVnRw23HWdPUeQ2tTp3gryJ";
 
-		let broker_id = AccountId32::from_ss58check(BROKER_ID).expect("Invalid account ID");
+		let broker_id = AccountId32::from(test_account_from_seed::<Signer>(SEED));
 
 		let broker_id_ss58 = broker_id.to_ss58check();
 
@@ -143,7 +157,7 @@ mod tests {
 
 		let encoded = VersionedCfParameters::V0(cf_parameters).encode();
 
-		println!("encoded parameters: {:?}", hex::encode(encoded));
+		println!("encoded parameters as hex: {:?}", hex::encode(encoded.clone()));
 	}
 
 	#[test]
