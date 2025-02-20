@@ -1076,16 +1076,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn broadcast_success(egress: TransactionConfirmation<T, I>) {
-		Self::egress_success(
+		if let Err(err) = Self::egress_success(
 			OriginFor::<T>::none(),
-			egress.tx_out_id,
+			egress.tx_out_id.clone(),
 			egress.signer_id,
 			egress.tx_fee,
 			egress.tx_metadata,
 			egress.transaction_ref,
-		)
-		.expect("REASON");
-		//todo! handle possible error, expect will cause panic! -> when can this error?
+		) {
+			log::error!(
+				"Failed to execute egress success: TxOutId: {:?}, Error: {:?}",
+				egress.tx_out_id,
+				err
+			)
+		}
 	}
 }
 
