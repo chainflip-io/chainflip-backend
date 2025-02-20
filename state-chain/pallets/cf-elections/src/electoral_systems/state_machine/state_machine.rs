@@ -49,7 +49,7 @@ use sp_std::fmt::Debug;
 /// state machine. Here `states` and `inputs` are strategies for generating states and inputs, and
 /// the function runs the `step` function on randomly generated input values, while ensuring that
 /// everything is valid.
-pub trait StateMachine: 'static {
+pub trait Statemachine: 'static {
 	type Input: Validate + Indexed;
 	type Settings;
 	type Output: Validate;

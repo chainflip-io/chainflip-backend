@@ -12,7 +12,7 @@ use crate::{
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
 	core::{Indexed, MultiIndexAndValue, Validate},
-	state_machine::StateMachine,
+	state_machine::Statemachine,
 };
 
 /// This is an Either type, unfortunately it's more ergonomic
@@ -47,7 +47,10 @@ impl<V: Validate, C: Validate> Validate for SMInput<V, C> {
 	}
 }
 
-pub trait StateMachineES:
+/// Main trait for deriving an electoral system from a state machine and consensus mechanism.
+/// It ensures that all the associated types match up as required. See the documentation for
+/// `StatemachineElectoralSystem` for more information on how to implement it.
+pub trait StatemachineElectoralSystemTypes:
 	'static
 	+ Sized
 	+ ElectoralSystemTypes<
@@ -69,11 +72,14 @@ pub trait StateMachineES:
 	type Vote2: Validate + Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
 	type VoteStorage2: VoteStorage<Vote = Self::Vote2>;
 
-	type StateMachine: StateMachineForES<Self> + 'static;
+	type Statemachine: StatemachineForES<Self> + 'static;
 	type ConsensusMechanism: ConsensusMechanismForES<Self> + 'static;
 }
 
-pub trait StateMachineForES<ES: StateMachineES> = StateMachine<
+/// Convenience wrapper of the `Statemachine` trait. Given an electoral system `ES`,
+/// this trait defines the conditions on the state machine's associated types for it
+/// to be possible to derive an electoral system.
+pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine<
 	Input = SMInput<
 		MultiIndexAndValue<ES::ElectionProperties, ES::Consensus>,
 		ES::OnFinalizeContextItem,
@@ -83,17 +89,52 @@ pub trait StateMachineForES<ES: StateMachineES> = StateMachine<
 	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
 >;
 
-pub trait ConsensusMechanismForES<ES: StateMachineES> = ConsensusMechanism<
+/// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
+/// this trait defines the conditions on the consensus mechanism's associated types for it
+/// to be possible to derive an electoral system.
+pub trait ConsensusMechanismForES<ES: StatemachineElectoralSystemTypes> = ConsensusMechanism<
 	Vote = VoteOf<ES>,
 	Result = ES::Consensus,
 	Settings = (Threshold, ES::ElectionProperties),
 >;
 
-pub struct StateMachineESInstance<Bounds: StateMachineES> {
+/// ### Electoral system derived from a state machine.
+///
+/// In order to derive such an electoral system (ES), the following steps have to be taken:
+///
+/// 1. Create a new "tag type" for the ES, whose purpose it is to carry the implementation of
+///    various traits and their associated types. This type is only relevant at compile time and
+///    should not contain any runtime data. You'll need to implement various common traits for it
+///    (`Debug`, `Clone`, `Serialize`, `TypeInfo`, `Encode`, etc.), which you can either do by hand,
+///    or use a convenience wrapper such as `TypesFor<_>`. Let's call this tag type `ES`.
+///
+/// 2. Implement the traits `ElectoralSystemTypes` and `StatemachineElectoralSystemTypes` for your
+///    tag type. As you can see in the definition, the latter trait depends on the former, but with
+///    various conditions on the associated types. This means that you are not totally free in
+///    choosing all the associated types, but have to follow these conditions. For instance, both
+///    `OnFinalizeContext` and `OnFinalizeReturn` have to be of type `Vec<_>`.
+///
+/// 3. You'll find that in the previous step you have to choose associated types `StateMachine` and
+///    `ConsensusMechanism`. If you want to implement a new state machine and/or a new consensus
+///    mechanism, you'll have to do either of the following (ES refers to the tag type you created
+///    in step 1):
+///     - Create a new tag type for the state machine, and implement the trait
+///       `StatemachineForES<ES>`.
+///     - Create a new tag type for the consensus mechanism, and implement the trait
+///       `ConsensusMechanismForES<ES>`.
+///    The conditions on associated types in the definitions of `StatemachineForES` and
+///    `ConsensusMechanismForES` ensure that all components fit together into a coherent electoral
+///    system.
+///
+/// 4. Enjoy your new electoral system! It is called `StatemachineElectoralSystem<ES>`, where `ES`
+///    is the tag type from step 1.
+pub struct StatemachineElectoralSystem<Bounds: StatemachineElectoralSystemTypes> {
 	_phantom: core::marker::PhantomData<Bounds>,
 }
 
-impl<Bounds: StateMachineES> ElectoralSystemTypes for StateMachineESInstance<Bounds> {
+impl<Bounds: StatemachineElectoralSystemTypes> ElectoralSystemTypes
+	for StatemachineElectoralSystem<Bounds>
+{
 	type ValidatorId = Bounds::ValidatorId;
 	type ElectoralUnsynchronisedState = Bounds::ElectoralUnsynchronisedState;
 	type ElectoralUnsynchronisedStateMapKey = Bounds::ElectoralUnsynchronisedStateMapKey;
@@ -109,7 +150,47 @@ impl<Bounds: StateMachineES> ElectoralSystemTypes for StateMachineESInstance<Bou
 	type OnFinalizeReturn = Bounds::OnFinalizeReturn;
 }
 
-impl<Bounds: StateMachineES> ElectoralSystem for StateMachineESInstance<Bounds>
+/// ### Implementation of the `ElectoralSystem` trait for a given state machine and consensus mechanism.
+///
+/// See the documentation of `StatemachineForElectoralSystem`
+/// for more information on how to assemble all components correctly.
+///
+/// This ES behaves as follows:
+///  - `check_consensus` is delegated to the given consensus mechanism. Votes which are invalid
+///    according to the `IsValid` implementation on the `ES::Vote` type are ignored.
+///  - The state machine's state is stored in `ElectoralUnsynchronizedState`.
+///  - During `on_finalize`, the state machine's step function is called once for each value in the
+///    `OnFinalizeContext` vector, and after that, once for each election that has come to
+///    consensus.
+///  - The outputs of each individual `step` call are collected into a vector, in order to be
+///    returned as the final `OnFinalizeReturn` result.
+///  - After completing all `step` calls, the `input_index` function of the SM is called. Its result
+///    is a vector of election properties. The intention is that elections for exactly these
+///    properties should be active after the `on_finalize` terminates. Thus, the ES deletes all
+///    elections whose corresponding election properties are not in the `input_index()` vector, and
+///    creates new elections for all properties in `input_index()`, which aren't currently
+///    associated with an election.
+///  - Finally the state machine's new state is written back into `ElectoralUnsynchronizedState`.
+///
+/// WARNING:
+/// Due to the fact that elections are created and deleted based solely on the `input_index()`
+/// vector of election properties, this means that it might be tricky to implement "refreshing" of
+/// elections in cases where the election properties don't change.
+///  - It is sensible to follow the `ElectionIdentifierExtra` approach of the ES trait, and add a
+///    separate counter to the election properties which can be incremented if a new election with
+///    the same properties is required.
+///  - Due to the fact that in a single `on_finalize` call, the `step` function might be run
+///    multiple times, extra care needs to be taken to ensure that this produces the appropriate
+///    behaviour of refreshing elections. For example, it might be the case that the `step` function
+///    is called twice, and in the first call removes property `A` from its list of input indices,
+///    and in the second call adds property `A` back again. The expected behaviour might be that the
+///    election for `A` is recreated, but the current observed behaviour will be that the election
+///    for `A` simply stays open - because the `input_index()` function is only called after both
+///    step transitions, and thus doesn't notice that `A` got removed and added back.
+///  - In the currently implemented ESs this is not a problem, but has to be checked when new state
+///    machines are designed.
+impl<Bounds: StatemachineElectoralSystemTypes> ElectoralSystem
+	for StatemachineElectoralSystem<Bounds>
 where
 	<Bounds::VoteStorage as VoteStorage>::Properties: Default,
 	Bounds::Consensus: Indexed,
@@ -142,7 +223,7 @@ where
 		// define step function which progresses the state machine
 		// by one input
 		let mut step = |input| {
-			Bounds::StateMachine::step(&mut state, input, &settings)
+			Bounds::Statemachine::step(&mut state, input, &settings)
 				.map(|output| {
 					result.push(output);
 				})
@@ -171,7 +252,7 @@ where
 		}
 
 		// gather the input indices after all state transitions
-		let input_indices: Vec<_> = Bounds::StateMachine::input_index(&mut state);
+		let input_indices: Vec<_> = Bounds::Statemachine::input_index(&mut state);
 		let mut open_elections = Vec::new();
 
 		// delete elections which are no longer in the input indices

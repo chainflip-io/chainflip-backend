@@ -4,7 +4,7 @@ use crate::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
 	state_machine::{
 		core::{Hook, IndexOf, Indexed, Validate},
-		state_machine::StateMachine,
+		state_machine::Statemachine,
 	},
 };
 use cf_chains::witness_period::SaturatingStep;
@@ -550,7 +550,7 @@ pub struct SMBlockProcessor<T: BWProcessorTypes> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: BWProcessorTypes + 'static> StateMachine for SMBlockProcessor<T> {
+impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 	type Input = SMBlockProcessorInput<T>;
 	type Settings = ();
 	type Output = SMBlockProcessorOutput<T>;

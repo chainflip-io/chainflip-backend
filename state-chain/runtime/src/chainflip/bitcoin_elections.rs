@@ -32,7 +32,7 @@ use pallet_cf_elections::{
 		liveness::Liveness,
 		state_machine::{
 			core::{ConstantIndex, Hook},
-			state_machine_es::{StateMachineES, StateMachineESInstance},
+			state_machine_es::{StatemachineElectoralSystemTypes, StatemachineElectoralSystem},
 		},
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
@@ -93,7 +93,7 @@ impls! {
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
-	StateMachineES {
+	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
 		type OnFinalizeContextItem = ();
 		type OnFinalizeReturnItem = ChainProgress<btc::BlockNumber>;
@@ -105,7 +105,7 @@ impls! {
 
 		// the actual state machine and consensus mechanisms of this ES
 		type ConsensusMechanism = BlockHeightTrackingConsensus<Self>;
-		type StateMachine = BlockHeightTrackingSM<Self>;
+		type Statemachine = BlockHeightTrackingSM<Self>;
 	}
 
 	Hook<HookTypeFor<Self, BlockHeightChangeHook>> {
@@ -123,7 +123,7 @@ impls! {
 
 /// Generating the state machine-based electoral system
 pub type BitcoinBlockHeightTrackingES =
-	StateMachineESInstance<TypesFor<BitcoinBlockHeightTracking>>;
+	StatemachineElectoralSystem<TypesFor<BitcoinBlockHeightTracking>>;
 
 // ------------------------ deposit channel witnessing ---------------------------
 /// The electoral system for deposit channel witnessing
@@ -174,7 +174,7 @@ impls! {
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
-	StateMachineES {
+	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
 		type OnFinalizeContextItem = ChainProgress<btc::BlockNumber>;
 		type OnFinalizeReturnItem = ();
@@ -187,7 +187,7 @@ impls! {
 		>;
 
 		// the actual state machine and consensus mechanisms of this ES
-		type StateMachine = BWStateMachine<Self>;
+		type Statemachine = BWStateMachine<Self>;
 		type ConsensusMechanism = BWConsensus<BlockData, btc::BlockNumber, ElectionProperties>;
 	}
 
@@ -221,7 +221,7 @@ impls! {
 
 /// Generating the state machine-based electoral system
 pub type BitcoinDepositChannelWitnessingES =
-	StateMachineESInstance<TypesFor<BitcoinDepositChannelWitnessing>>;
+	StatemachineElectoralSystem<TypesFor<BitcoinDepositChannelWitnessing>>;
 
 pub type BitcoinLiveness = Liveness<
 	BlockNumber,

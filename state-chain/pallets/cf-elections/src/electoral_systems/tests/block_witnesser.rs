@@ -35,7 +35,7 @@ use crate::{
 		mocks::ElectoralSystemState,
 		state_machine::{
 			core::{hook_test_utils::MockHook, ConstantIndex, Hook, HookType, TypesFor},
-			state_machine_es::{StateMachineES, StateMachineESInstance},
+			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
 	vote_storage,
@@ -119,7 +119,7 @@ impl ElectoralSystemTypes for Types {
 }
 
 /// Associating the state machine and consensus mechanism to the struct
-impl StateMachineES for Types {
+impl StatemachineElectoralSystemTypes for Types {
 	// both context and return have to be vectors, these are the item types
 	type OnFinalizeContextItem = ChainProgress<u64>;
 	type OnFinalizeReturnItem = ();
@@ -131,12 +131,12 @@ impl StateMachineES for Types {
 		vote_storage::bitmap::Bitmap<ConstantIndex<(u64, ElectionProperties, u8), BlockData>>;
 
 	// the actual state machine and consensus mechanisms of this ES
-	type StateMachine = BWStateMachine<Self>;
+	type Statemachine = BWStateMachine<Self>;
 	type ConsensusMechanism = BWConsensus<BlockData, u64, ElectionProperties>;
 }
 
 /// Generating the state machine-based electoral system
-type SimpleBlockWitnesser = StateMachineESInstance<Types>;
+type SimpleBlockWitnesser = StatemachineElectoralSystem<Types>;
 
 register_checks! {
 	SimpleBlockWitnesser {
@@ -149,7 +149,7 @@ register_checks! {
 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
 		},
 		rules_hook_called_n_times_for_age_zero(pre, post, n: usize) {
-			let count = |state: &ElectoralSystemState<StateMachineESInstance<TypesFor<MockBlockProcessorDefinition>>>| {
+			let count = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
 				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(_, age, _event)| *age == 0).count()
 			};
 			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);

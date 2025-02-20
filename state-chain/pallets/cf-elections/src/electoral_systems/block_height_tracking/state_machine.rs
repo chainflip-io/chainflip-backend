@@ -1,7 +1,7 @@
 use super::{
 	super::state_machine::{
 		core::{Indexed, Validate},
-		state_machine::StateMachine,
+		state_machine::Statemachine,
 		state_machine_es::SMInput,
 	},
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
@@ -119,7 +119,7 @@ pub struct BlockHeightTrackingSM<T: BlockHeightTrackingTypes> {
 	_phantom: core::marker::PhantomData<T>,
 }
 
-impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
+impl<T: BlockHeightTrackingTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type State = BHWStateWrapper<T>;
 	type Input = SMInput<
 		MultiIndexAndValue<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>,
@@ -275,7 +275,7 @@ mod tests {
 
 	use super::{
 		super::{
-			super::state_machine::{state_machine::StateMachine, state_machine_es::SMInput},
+			super::state_machine::{state_machine::Statemachine, state_machine_es::SMInput},
 			primitives::Header,
 			BlockHeightTrackingProperties, BlockHeightTrackingTypes,
 		},

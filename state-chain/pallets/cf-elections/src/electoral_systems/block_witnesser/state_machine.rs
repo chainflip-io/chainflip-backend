@@ -7,7 +7,7 @@ use crate::electoral_systems::{
 	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{
 		core::{IndexOf, MultiIndexAndValue, Validate},
-		state_machine::StateMachine,
+		state_machine::Statemachine,
 		state_machine_es::SMInput,
 	},
 };
@@ -194,7 +194,7 @@ pub struct BWStateMachine<Types: BWTypes> {
 	_phantom: sp_std::marker::PhantomData<Types>,
 }
 
-impl<T: BWTypes> StateMachine for BWStateMachine<T> {
+impl<T: BWTypes> Statemachine for BWStateMachine<T> {
 	type Input = SMInput<
 		MultiIndexAndValue<
 			(T::ChainBlockNumber, T::ElectionProperties, u8),
@@ -470,8 +470,8 @@ mod tests {
 	}
 
 	fn generate_input<T: BWTypes<BlockData = ()>>(
-		indices: IndexOf<<BWStateMachine<T> as StateMachine>::Input>,
-	) -> BoxedStrategy<<BWStateMachine<T> as StateMachine>::Input>
+		indices: IndexOf<<BWStateMachine<T> as Statemachine>::Input>,
+	) -> BoxedStrategy<<BWStateMachine<T> as Statemachine>::Input>
 	where
 		T::ChainBlockNumber: Arbitrary,
 	{
