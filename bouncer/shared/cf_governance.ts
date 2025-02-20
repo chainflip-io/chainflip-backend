@@ -4,7 +4,6 @@ import Keyring from '../polkadot/keyring';
 import { handleSubstrateError, snowWhiteMutex } from './utils';
 import { CHAINFLIP_HTTP_ENDPOINT } from './utils/substrate';
 
-
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
   'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
@@ -19,8 +18,6 @@ export async function submitGovernanceExtrinsic(
   ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
   preAuthorise = 0,
 ) {
-  // await using chainflip = await getChainflipApi();
-
   const httpApi = await ApiPromise.create({
     provider: new HttpProvider(CHAINFLIP_HTTP_ENDPOINT),
     noInitWarn: true,
