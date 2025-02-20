@@ -101,7 +101,7 @@ impl DefaultRpcClient {
 
 #[derive(Error, Debug)]
 pub enum CreateStateChainClientError {
-	#[error("Compatibilty error")]
+	#[error("Compatibility error")]
 	CompatibilityError(BlockCompatibility),
 }
 
