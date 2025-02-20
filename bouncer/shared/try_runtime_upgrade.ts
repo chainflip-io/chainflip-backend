@@ -9,6 +9,7 @@ import { retryRpcCall } from './utils';
 import { setTimeout as sleep } from 'timers/promises';
 import { ApiPromise, HttpProvider } from '@polkadot/api';
 import { CHAINFLIP_HTTP_ENDPOINT } from './utils/substrate';
+import { globalLogger as logger } from './utils/logger';
 
 // Return the path to the snapshot file
 function createSnapshotFile(networkUrl: string, blockHash: string, failureObj: FailureObj | null) {
