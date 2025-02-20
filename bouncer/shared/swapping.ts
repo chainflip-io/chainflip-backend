@@ -17,12 +17,50 @@ import { estimateCcmCfTesterGas } from './send_evm';
 
 let swapCount = 1;
 
-export function newSolanaCcmAdditionalData(maxAccounts: number) {
-  const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
+// Protocol limits
+const MAX_CCM_MSG_LENGTH = 15_000;
+const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
 
-  const fallbackAddress = Keypair.generate().publicKey.toBytes();
+// In Arbitrum's localnet large messages (~ >4k) end up with large gas estimations
+// of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
+// gas limit (32M). We cap it to a lower value than Ethereum to work around that.
+const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
+
+// Solana transactions have a length of 1232. Capping it to some reasonable values
+// that when construction the call the Solana length is not exceeded. Technically the
+// check should be tx lenght (dstAsset, srcAsset, ccmData, cf_parameters...) < 1232
+const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 300;
+const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 150;
+
+// Solana CCM-related parameters. These are limits in the protocol.
+const MAX_CCM_BYTES_SOL = 814; // Before Versioned transactions 694 + 32
+const MAX_CCM_BYTES_USDC = 725; // Before Versioned transactions 481 + 32
+const SOLANA_BYTES_PER_ACCOUNT = 33;
+const BYTES_PER_ALT = 34; // 32 + 1 + 1 (for vector lengths)
+
+function newSolanaCcmAdditionalData(maxBytes: number) {
+  // Test all combinations
+  const useLegacy = maxBytes < BYTES_PER_ALT || Math.random() < 0.5;
+  const useAlt = !useLegacy && Math.random() < 0.5;
+  let bytesAvailable = maxBytes;
 
   const additionalAccounts = [];
+  const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
+  const fallbackAddress = Keypair.generate().publicKey.toBytes();
+
+  if (useAlt) {
+    bytesAvailable -= BYTES_PER_ALT;
+    // We are passing cfReceiver and cfTester in the ALT so we have extra bytes available
+    bytesAvailable += 32 * 2;
+    // Repeat cfReceiverAddress as a proxy for testing that we can include additional accounts from the ALT
+    additionalAccounts.push({
+      pubkey: new PublicKey(cfReceiverAddress).toBytes(),
+      is_writable: Math.random() < 0.5,
+    });
+    bytesAvailable -= 1;
+  }
+
+  const maxAccounts = Math.floor(bytesAvailable / SOLANA_BYTES_PER_ACCOUNT);
   const numAdditionalAccounts = Math.floor(Math.random() * maxAccounts);
 
   for (let i = 0; i < numAdditionalAccounts; i++) {
@@ -41,10 +79,26 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
     fallback_address: fallbackAddress,
   };
 
+  if (!useAlt) {
+    return u8aToHex(
+      solVersionedCcmAdditionalDataCodec.enc({
+        tag: 'V0',
+        value: ccmAdditionalData,
+      }),
+    );
+  }
+
+  const ccmAltAdditionalData = {
+    ccm_accounts: ccmAdditionalData,
+    alts: !useAlt
+      ? []
+      : [new PublicKey(getContractAddress('Solana', 'USER_ADDRESS_LOOKUP_TABLE')).toBytes()],
+  };
+
   return u8aToHex(
     solVersionedCcmAdditionalDataCodec.enc({
-      tag: 'V0',
-      value: ccmAdditionalData,
+      tag: 'V1',
+      value: ccmAltAdditionalData,
     }),
   );
 }
@@ -55,29 +109,8 @@ function newCcmArbitraryBytes(maxLength: number): string {
   return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
 }
 
-// Protocol limits
-const MAX_CCM_MSG_LENGTH = 15_000;
-const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
-
-// In Arbitrum's localnet large messages (~ >4k) end up with large gas estimations
-// of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
-// gas limit (32M). We cap it to a lower value than Ethereum to work around that.
-const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
-
-// Solana transactions have a length of 1232. Capping it to some reasonable values
-// that when construction the call the Solana length is not exceeded. Technically the
-// check should be tx lenght (dstAsset, srcAsset, ccmData, cf_parameters...) < 1232
-const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 300;
-const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 150;
-
-// Solana CCM-related parameters. These are limits in the protocol.
-const MAX_CCM_BYTES_SOL = 814;
-const MAX_CCM_BYTES_USDC = 725;
-const SOLANA_BYTES_PER_ACCOUNT = 33;
-
 function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: number): string {
   const destChain = chainFromAsset(destAsset);
-  let length: number;
 
   switch (destChain) {
     case 'Ethereum':
@@ -85,15 +118,15 @@ function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: nu
       return '0x';
     case 'Solana': {
       const messageLength = (message!.length - 2) / 2;
-      length = (destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC) - messageLength;
+      let bytesAvailable =
+        (destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC) - messageLength;
       if (maxLength !== undefined) {
-        length = Math.min(length, maxLength);
+        bytesAvailable = Math.min(bytesAvailable, maxLength);
       }
-      const maxAccounts = Math.floor(length / SOLANA_BYTES_PER_ACCOUNT);
 
       // The maximum number of extra accounts that can be passed is limited by the tx size
       // and therefore also depends on the message length.
-      const ccmAdditonalData = newSolanaCcmAdditionalData(maxAccounts);
+      const ccmAdditonalData = newSolanaCcmAdditionalData(bytesAvailable);
       if (ccmAdditonalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
         throw new Error(`CCM additional data length exceeds limit: ${ccmAdditonalData.length}`);
       }
