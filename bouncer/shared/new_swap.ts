@@ -1,5 +1,10 @@
 import { InternalAsset as Asset, Chain, Asset as SCAsset, broker } from '@chainflip/cli';
-import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset, newAddress } from './utils';
+import {
+  decodeDotAddressForContract,
+  chainFromAsset,
+  stateChainAssetFromAsset,
+  newAddress,
+} from './utils';
 import { Logger } from './utils/logger';
 
 const defaultCommissionBps = 100; // 1%
