@@ -16,35 +16,32 @@ targets = ["x86_64-unknown-linux-gnu"]
 workspace = true
 
 [dependencies]
-rand = { workspace = true, features = ["std_rng"] }
+rand = { workspace = true, features = ["std_rng"], optional = true }
 
-pallet-session = { workspace = true, features = ["historical"] }
+pallet-session = { workspace = true, features = [
+  "historical",
+], optional = true }
 
-codec = { workspace = true, features = ["derive"] }
+codec = { workspace = true, features = ["derive"], optional = true }
 
-frame-system = { workspace = true }
-frame-support = { workspace = true }
-frame-benchmarking = { workspace = true }
+frame-system = { workspace = true, optional = true }
+frame-support = { workspace = true, optional = true }
+frame-benchmarking = { workspace = true, optional = true }
 
-sp-runtime = { workspace = true }
-sp-std = { workspace = true }
+sp-runtime = { workspace = true, optional = true }
+sp-std = { workspace = true, optional = true }
 
 [features]
 default = ["std"]
-std = [
-  "codec/std",
-  "frame-benchmarking/std",
-  "frame-support/std",
-  "frame-system/std",
-  "pallet-session/std",
-  "sp-runtime/std",
-  "rand/std",
-  "sp-std/std",
-]
+std = []
 
 runtime-benchmarks = [
   "frame-benchmarking/runtime-benchmarks",
   "frame-support/runtime-benchmarks",
   "frame-system/runtime-benchmarks",
   "sp-runtime/runtime-benchmarks",
+  "rand",
+  "sp-std",
+  "codec",
+  "pallet-session",
 ]

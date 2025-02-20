@@ -30,7 +30,7 @@ scale-info = { workspace = true, features = ["derive"] }
 
 frame-support = { workspace = true }
 frame-system = { workspace = true }
-frame-benchmarking = { workspace = true }
+frame-benchmarking = { workspace = true, optional = true }
 sp-std = { workspace = true }
 
 [dev-dependencies]
@@ -48,7 +48,6 @@ std = [
   "cf-traits/std",
   "cf-runtime-utilities/std",
   "codec/std",
-  "frame-benchmarking/std",
   "frame-support/std",
   "frame-system/std",
   "scale-info/std",

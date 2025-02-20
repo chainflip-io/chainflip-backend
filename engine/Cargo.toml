@@ -64,7 +64,6 @@ tracing = { workspace = true }
 x25519-dalek = { workspace = true, features = ["serde"] }
 warp = { workspace = true }
 regex = { workspace = true }
-lazy_format = { workspace = true }
 zmq = { workspace = true, features = ["vendored"] }
 
 # Local deps
@@ -126,7 +125,6 @@ rocksdb = { workspace = true, features = ["lz4"] }
 mockall = { workspace = true, features = ["nightly"], optional = true }
 
 [dev-dependencies]
-csv = { workspace = true }
 ethereum = { workspace = true, default-features = true }
 mockall = { workspace = true, features = ["nightly"] }
 multisig = { workspace = true, features = ["test"] }

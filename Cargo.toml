@@ -119,7 +119,6 @@ pin-project = { version = "1.1.3" }
 predicates = { version = "3.0" }
 proc-macro2 = { version = "1.0.79" }
 prometheus = { version = "0.13.0", default-features = false }
-public-ip = { version = "0.2.2" }
 quickcheck = { version = "1.0.3" }
 quickcheck_macros = { version = "1" }
 quote = { version = "1.0.35" }
@@ -132,7 +131,6 @@ rlp = { version = "0.5.2", default-features = false }
 rocksdb = { version = "0.21.0" }
 serde_bytes = { version = "0.11.14", default-features = false }
 serde_path_to_error = "*"
-serde_with = { version = "3.11.0", default-features = false }
 scale-decode = { version = "0.13" }
 scale-info = { version = "2.11.1", default-features = false }
 scale-type-resolver = { version = "0.2" }

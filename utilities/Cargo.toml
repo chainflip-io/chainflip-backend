@@ -12,9 +12,6 @@ version = "0.1.0"
 workspace = true
 
 [dependencies]
-jsonrpsee = { workspace = true, features = [
-  "jsonrpsee-types",
-], optional = true }
 anyhow = { workspace = true, optional = true }
 async-broadcast = { workspace = true, optional = true }
 async-channel = { workspace = true, optional = true }
@@ -37,7 +34,6 @@ scale-info = { workspace = true, optional = true }
 scopeguard = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive", "alloc"] }
 sp-core = { workspace = true, optional = true }
-sp-rpc = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
@@ -81,9 +77,7 @@ std = [
   "dep:tracing-subscriber",
   "dep:warp",
   "dep:sp-core",
-  "dep:sp-rpc",
   "dep:num-traits",
-  "dep:jsonrpsee",
   "dep:regex",
   "dep:url",
   "dep:clap",
