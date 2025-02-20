@@ -143,7 +143,7 @@ pub trait Rpc {
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
 	async fn get_affiliates(
 		&self,
-		affilate: Option<AccountId32>,
+		affiliate: Option<AccountId32>,
 	) -> RpcResult<Vec<(AccountId32, AffiliateDetails)>>;
 
 	#[method(name = "affiliate_withdrawal_request", aliases = ["broker_affiliateWithdrawalRequest"])]

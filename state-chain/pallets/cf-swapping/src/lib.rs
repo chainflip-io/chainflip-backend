@@ -28,7 +28,7 @@ use frame_support::{
 		DispatchError, Permill, TransactionOutcome,
 	},
 	storage::with_transaction_unchecked,
-	traits::Defensive,
+	traits::{Defensive, HandleLifetime},
 	transactional, CloneNoBound, Hashable,
 };
 use frame_system::pallet_prelude::*;
@@ -650,6 +650,7 @@ pub mod pallet {
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
+			account_id: T::AccountId,
 			egress_id: EgressId,
 			egress_asset: Asset,
 			egress_amount: AssetAmount,
@@ -713,6 +714,7 @@ pub mod pallet {
 		AffiliateRegistration {
 			broker_id: T::AccountId,
 			short_id: AffiliateShortId,
+			withdrawal_address: EthereumAddress,
 			affiliate_id: T::AccountId,
 		},
 		BrokerBondSet {
@@ -1060,6 +1062,15 @@ pub mod pallet {
 					T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc).is_zero(),
 					Error::<T>::AffiliateEarnedFeesNotWithdrawn
 				);
+				frame_system::Provider::<T>::killed(&affiliate_account_id).unwrap_or_else(|e| {
+					// This shouldn't happen, and not much we can do if it does except fix it on a
+					// subsequent release. Consequences are minor.
+					log::error!(
+						"Unexpected reference count error while reaping the affiliate {:?}: {:?}.",
+						affiliate_account_id,
+						e
+					);
+				})
 			}
 
 			// Clear the affiliate account details and affiliate id mapping.
@@ -1272,6 +1283,10 @@ pub mod pallet {
 			.map_err(|_| Error::<T>::AffiliateAccountIdDerivationFailed)?;
 
 			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
+			if !frame_system::Pallet::<T>::account_exists(&affiliate_id) {
+				// Creates an account
+				let _ = frame_system::Provider::<T>::created(&affiliate_id);
+			}
 
 			AffiliateAccountDetails::<T>::insert(
 				&broker_id,
@@ -1282,6 +1297,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::AffiliateRegistration {
 				broker_id,
 				short_id,
+				withdrawal_address,
 				affiliate_id,
 			});
 
@@ -1415,6 +1431,7 @@ pub mod pallet {
 				.map_err(Into::into)?;
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
+				account_id: account_id.clone(),
 				egress_amount,
 				egress_asset: asset,
 				egress_fee: fee_withheld,
