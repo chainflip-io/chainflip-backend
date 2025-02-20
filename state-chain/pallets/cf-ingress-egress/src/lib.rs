@@ -2218,10 +2218,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}: VaultDepositWitness<T, I>,
 	) {
 		if Self::should_reject_vault_swap(&broker_fee) {
+			let broker_id = broker_fee.unwrap().account.clone();
 			Self::deposit_event(Event::VaultSwapIgnored {
 				tx_id,
 				stage: VaultSwapStage::Prewitnessed,
-				broker_id: broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
+				broker_id: Some(broker_id),
 			});
 			return;
 		}
@@ -2522,10 +2523,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			};
 
+			let broker_id = broker_fee.unwrap().account.clone();
+
 			Self::deposit_event(Event::VaultSwapIgnored {
 				tx_id,
 				stage: VaultSwapStage::Deposit,
-				broker_id: broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
+				broker_id: Some(broker_id),
 			});
 
 			return;
