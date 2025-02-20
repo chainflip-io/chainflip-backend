@@ -144,7 +144,6 @@ sha2-const = { version = "0.1.2", default-features = false }
 ss58-registry = { version = "1.41" }
 strum = { version = "0.26.3", default-features = false }
 strum_macros = { version = "0.26.4", default-features = false }
-subxt = { version = "0.39.0" }
 syn = { version = "2.0.53" }
 tempfile = { version = "3.8.1" }
 thiserror = { version = "1.0.50", default-features = false }
@@ -161,6 +160,9 @@ web3 = { version = "0.19" }
 x25519-dalek = { version = "2.0" }
 zeroize = { version = "1.7.0" }
 zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1" }
+
+# subxt dependency using the same Chainflip polkadot-sdk version
+subxt = { git = "https://github.com/chainflip-io/substrate-subxt.git", branch = "v039.0-chainflip-substrate-1.15.2+2" }
 
 # PolkadotSdk Pallets
 pallet-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
