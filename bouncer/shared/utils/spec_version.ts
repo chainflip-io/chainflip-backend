@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { jsonRpc } from '../json_rpc';
+import { Logger } from './logger';
 
 type RuntimeVersion = {
   specName: string;
@@ -12,11 +13,20 @@ type RuntimeVersion = {
   stateVersion: number;
 };
 
-export async function getNetworkRuntimeVersion(endpoint?: string): Promise<RuntimeVersion> {
-  return (await jsonRpc('state_getRuntimeVersion', [], endpoint)) as unknown as RuntimeVersion;
+export async function getNetworkRuntimeVersion(
+  logger: Logger,
+  endpoint?: string,
+): Promise<RuntimeVersion> {
+  return (await jsonRpc(
+    logger,
+    'state_getRuntimeVersion',
+    [],
+    endpoint,
+  )) as unknown as RuntimeVersion;
 }
 
 export function specVersion(
+  logger: Logger,
   filePath: string,
   readOrWrite: 'read' | 'write',
   // Will only write this version if the current version is less than this.
@@ -49,7 +59,7 @@ export function specVersion(
 
           if (writeSpecVersion) {
             if (currentSpecVersion >= writeSpecVersion) {
-              console.log(
+              logger.info(
                 "Current spec version is greater than the one you're trying to write. Returning currentSpecVersion.",
               );
               return currentSpecVersion;
@@ -79,7 +89,7 @@ export function specVersion(
     const updatedContent = lines.join('\n');
     fs.writeFileSync(filePath, updatedContent);
 
-    console.log(`Successfully updated spec_version to ${incrementedVersion}.`);
+    logger.info(`Successfully updated spec_version to ${incrementedVersion}.`);
     return incrementedVersion;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
@@ -90,13 +100,14 @@ export function specVersion(
 
 // Bump the spec version in the runtime file, using the spec version of the network.
 export async function bumpSpecVersionAgainstNetwork(
+  logger: Logger,
   runtimeLibPath: string,
   endpoint?: string,
 ): Promise<number> {
-  const networkSpecVersion = (await getNetworkRuntimeVersion(endpoint)).specVersion;
-  console.log('Current spec_version: ' + networkSpecVersion);
+  const networkSpecVersion = (await getNetworkRuntimeVersion(logger, endpoint)).specVersion;
+  logger.debug('Current spec_version: ' + networkSpecVersion);
   const nextSpecVersion = networkSpecVersion + 1;
-  console.log('Bumping the spec version to: ' + nextSpecVersion);
-  specVersion(runtimeLibPath, 'write', nextSpecVersion);
+  logger.info('Bumping the spec version to: ' + nextSpecVersion);
+  specVersion(logger, runtimeLibPath, 'write', nextSpecVersion);
   return nextSpecVersion;
 }

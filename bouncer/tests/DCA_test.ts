@@ -49,13 +49,12 @@ async function testDCASwap(
 
   if (!swapViaVault) {
     const swapRequest = await requestNewSwap(
+      logger.child({ tag: `DCA_test_${inputAsset}` }),
       inputAsset,
       destAsset,
       destAddress,
-      'DCA_Test',
       undefined, // messageMetadata
       0, // brokerCommissionBps
-      false, // log
       0, // boostFeeBps
       fillOrKillParams,
       dcaParams,
@@ -63,6 +62,7 @@ async function testDCASwap(
 
     const depositChannelId = swapRequest.channelId;
     swapRequestedHandle = observeSwapRequested(
+      logger,
       inputAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: depositChannelId },
@@ -70,10 +70,11 @@ async function testDCASwap(
     );
 
     // Deposit the asset
-    await send(inputAsset, swapRequest.depositAddress, amount.toString());
+    await send(logger, inputAsset, swapRequest.depositAddress, amount.toString());
     logger.debug(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
     const { transactionId } = await executeVaultSwap(
+      logger,
       inputAsset,
       destAsset,
       destAddress,
@@ -88,6 +89,7 @@ async function testDCASwap(
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
     swapRequestedHandle = observeSwapRequested(
+      logger,
       inputAsset,
       destAsset,
       transactionId,
@@ -101,12 +103,12 @@ async function testDCASwap(
   );
 
   // Wait for the swap to complete
-  await observeEvent(`swapping:SwapRequestCompleted`, {
+  await observeEvent(logger, `swapping:SwapRequestCompleted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
   }).event;
 
   // Find the `SwapExecuted` events for this swap.
-  const observeSwapExecutedEvents = await observeEvents(`swapping:SwapExecuted`, {
+  const observeSwapExecutedEvents = await observeEvents(logger, `swapping:SwapExecuted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
     historicalCheckBlocks: numberOfChunks * CHUNK_INTERVAL + 10,
   }).events;
@@ -130,7 +132,7 @@ async function testDCASwap(
 
   logger.debug(`Chunk interval of ${CHUNK_INTERVAL} verified for all ${numberOfChunks} chunks`);
 
-  await observeBalanceIncrease(destAsset, destAddress, destBalanceBefore);
+  await observeBalanceIncrease(logger, destAsset, destAddress, destBalanceBefore);
 }
 
 export async function testDCASwaps(testContext: TestContext) {

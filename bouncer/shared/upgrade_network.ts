@@ -10,6 +10,7 @@ import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
 import { submitGovernanceExtrinsic } from './cf_governance';
+import { globalLogger as logger } from './utils/logger';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -39,30 +40,30 @@ function createGitWorkspaceAt(nextVersionWorkspacePath: string, toGitRef: string
     // Navigate to the new workspace and checkout the specific commit
     execSync(`cd ${nextVersionWorkspacePath} && git checkout ${toGitRef}`);
 
-    console.log('Commit checked out successfully in new workspace.');
+    logger.info('Commit checked out successfully in new workspace.');
   } catch (error) {
     console.error(`Error: ${error}`);
   }
 }
 
 function killOldNodes() {
-  console.log('Killing the old node.');
+  logger.info('Killing the old node.');
 
   try {
     const execOutput = execSync(
       `kill $(ps -o pid -o comm | grep chainflip-node | awk '{print $1}')`,
     );
-    console.log('Kill node exec output:', execOutput.toString());
+    logger.info('Kill node exec output:', execOutput.toString());
   } catch (e) {
-    console.log('Error killing node: ' + e);
+    logger.info('Error killing node: ' + e);
     throw e;
   }
 
-  console.log('Killed old node');
+  logger.info('Killed old node');
 }
 
 async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string, keysDir: string) {
-  console.log('Starting new broker and lp-api.');
+  logger.info('Starting new broker and lp-api.');
 
   execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
     KEYS_DIR: keysDir,
@@ -80,7 +81,7 @@ async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string,
   ]) {
     try {
       const pid = execSync(`lsof -t -i:${port}`);
-      console.log(`New ${process} PID: ${pid.toString()}`);
+      logger.info(`New ${process} PID: ${pid.toString()}`);
     } catch (e) {
       console.error(`Error starting ${process}: ${e}`);
       throw e;
@@ -89,7 +90,7 @@ async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string,
 }
 
 async function startDepositMonitor(localnetInitPath: string) {
-  console.log('Starting up deposit-monitor.');
+  logger.info('Starting up deposit-monitor.');
 
   let done = false;
   execWithLog(
@@ -123,7 +124,7 @@ async function compatibleUpgrade(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
+  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
 
   killOldNodes();
 
@@ -170,13 +171,13 @@ async function incompatibleUpgradeNoBuild(
 ) {
   // We need to kill the engine process before starting the new engine (engine-runner)
   // Since the new engine contains the old one.
-  console.log('Killing the old engines');
+  logger.info('Killing the old engines');
   await killEngines();
   await startEngines(localnetInitPath, binaryPath, numberOfNodes);
 
-  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
+  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
 
-  console.log(
+  logger.info(
     'Check that the old engine has now shut down, and that the new engine is now running.',
   );
 
@@ -195,7 +196,7 @@ async function incompatibleUpgradeNoBuild(
     }),
   );
 
-  console.log('Submitted extrinsic to set suspension for MissedAuthorship slot to 0');
+  logger.info('Submitted extrinsic to set suspension for MissedAuthorship slot to 0');
   // Ensure extrinsic gets in.
   await sleep(12000);
 
@@ -204,9 +205,9 @@ async function incompatibleUpgradeNoBuild(
   // let them shutdown
   await sleep(4000);
 
-  console.log('Old broker and LP-API have crashed since we killed the node.');
+  logger.info('Old broker and LP-API have crashed since we killed the node.');
 
-  console.log('Starting the new node');
+  logger.info('Starting the new node');
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
@@ -231,7 +232,7 @@ async function incompatibleUpgradeNoBuild(
   );
 
   const output = execSync("ps -o pid -o comm | grep chainflip-node | awk '{print $1}'");
-  console.log('New node PID: ' + output.toString());
+  logger.info('New node PID: ' + output.toString());
 
   // Restart the engines
   execWithLog(
@@ -250,10 +251,10 @@ async function incompatibleUpgradeNoBuild(
   await sleep(4000);
 
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
-  console.log('Started new broker and lp-api.');
+  logger.info('Started new broker and lp-api.');
 
   await startDepositMonitor(localnetInitPath);
-  console.log('Started new deposit monitor.');
+  logger.info('Started new deposit monitor.');
 }
 
 async function incompatibleUpgrade(
@@ -262,7 +263,10 @@ async function incompatibleUpgrade(
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  await bumpSpecVersionAgainstNetwork(`${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`);
+  await bumpSpecVersionAgainstNetwork(
+    logger,
+    `${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`,
+  );
 
   await compileBinaries('all', nextVersionWorkspacePath);
 
@@ -282,21 +286,21 @@ export async function upgradeNetworkGit(
   bumpByIfEqual: SemVerLevel = 'patch',
   numberOfNodes: 1 | 3 = 1,
 ) {
-  console.log('Upgrading network to git ref: ' + toGitRef);
+  logger.info('Upgrading network to git ref: ' + toGitRef);
 
   const currentVersionWorkspacePath = path.dirname(process.cwd());
 
   const fromTomlVersion = await readPackageTomlVersion(currentVersionWorkspacePath);
-  console.log("Version we're upgrading from: " + fromTomlVersion);
+  logger.info("Version we're upgrading from: " + fromTomlVersion);
 
   // tmp/ is ignored in the bouncer .gitignore file.
   const nextVersionWorkspacePath = path.join(process.cwd(), 'tmp/upgrade-network');
 
-  console.log('Creating a new git workspace at: ' + nextVersionWorkspacePath);
+  logger.info('Creating a new git workspace at: ' + nextVersionWorkspacePath);
   createGitWorkspaceAt(nextVersionWorkspacePath, toGitRef);
 
   const toTomlVersion = await readPackageTomlVersion(`${nextVersionWorkspacePath}`);
-  console.log("Version of commit we're upgrading to: " + toTomlVersion);
+  logger.info("Version of commit we're upgrading to: " + toTomlVersion);
 
   if (compareSemVer(fromTomlVersion, toTomlVersion) === 'greater') {
     throw new Error(
@@ -306,34 +310,34 @@ export async function upgradeNetworkGit(
 
   // Now we need to bump the TOML versions if required, to ensure the `CurrentReleaseVersion` in the environment pallet is correct.
   if (fromTomlVersion === toTomlVersion) {
-    console.log('Versions are equal, bumping by: ' + bumpByIfEqual);
+    logger.info('Versions are equal, bumping by: ' + bumpByIfEqual);
     await bumpReleaseVersion(bumpByIfEqual, nextVersionWorkspacePath);
   } else {
-    console.log('Versions are not equal, no need to bump.');
+    logger.info('Versions are not equal, no need to bump.');
   }
 
   const newToTomlVersion = await readPackageTomlVersion(path.join(nextVersionWorkspacePath));
-  console.log("Version we're upgrading to: " + newToTomlVersion);
+  logger.info("Version we're upgrading to: " + newToTomlVersion);
 
   const isCompatible = isCompatibleWith(fromTomlVersion, newToTomlVersion);
-  console.log('Is compatible: ' + isCompatible);
+  logger.info('Is compatible: ' + isCompatible);
 
   const localnetInitPath = `${currentVersionWorkspacePath}/localnet/init`;
   if (isCompatible) {
-    console.log('The versions are compatible.');
-    await simpleRuntimeUpgrade(nextVersionWorkspacePath, true);
+    logger.info('The versions are compatible.');
+    await simpleRuntimeUpgrade(logger, nextVersionWorkspacePath, true);
 
     // TODO: Add restart nodes support, as in the prebuilt case.
 
-    console.log('Upgrade complete.');
+    logger.info('Upgrade complete.');
   } else if (!isCompatible) {
-    console.log('The versions are incompatible.');
+    logger.info('The versions are incompatible.');
     await incompatibleUpgrade(localnetInitPath, nextVersionWorkspacePath, numberOfNodes);
   }
 
-  console.log('Cleaning up...');
+  logger.info('Cleaning up...');
   execSync(`cd ${nextVersionWorkspacePath} && git worktree remove . --force`);
-  console.log('Done.');
+  logger.info('Done.');
 }
 
 export async function upgradeNetworkPrebuilt(
@@ -350,18 +354,18 @@ export async function upgradeNetworkPrebuilt(
 ) {
   const versionRegex = /\d+\.\d+\.\d+/;
 
-  console.log("Raw version we're upgrading from: " + oldVersion);
+  logger.info("Raw version we're upgrading from: " + oldVersion);
 
   let cleanOldVersion = oldVersion;
   if (versionRegex.test(cleanOldVersion)) {
     cleanOldVersion = oldVersion.match(versionRegex)?.[0] ?? '';
   }
 
-  console.log("Version we're upgrading from: " + cleanOldVersion);
+  logger.info("Version we're upgrading from: " + cleanOldVersion);
 
   const nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
   const nodeVersion = nodeBinaryVersion.match(versionRegex)?.[0] ?? '';
-  console.log("Node version we're upgrading to: " + nodeVersion);
+  logger.info("Node version we're upgrading to: " + nodeVersion);
 
   // We use nodeVersion as a proxy for the cfe version since they are updated together.
   // And getting the cfe version involves ensuring the dylib is available.
@@ -376,12 +380,12 @@ export async function upgradeNetworkPrebuilt(
       'The versions are the same. No need to upgrade. Please provide a different version.',
     );
   } else if (isCompatibleWith(cleanOldVersion, nodeVersion)) {
-    console.log('The versions are compatible.');
+    logger.info('The versions are compatible.');
     await compatibleUpgrade(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   } else {
-    console.log('The versions are incompatible.');
+    logger.info('The versions are incompatible.');
     await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   }
 
-  console.log('Upgrade complete.');
+  logger.info('Upgrade complete.');
 }

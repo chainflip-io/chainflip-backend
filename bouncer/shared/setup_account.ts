@@ -2,16 +2,17 @@ import assert from 'assert';
 import { lpMutex, handleSubstrateError, createStateChainKeypair } from './utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { fundFlip } from './fund_flip';
+import { Logger } from './utils/logger';
 
-export async function setupLpAccount(uri: string) {
+export async function setupLpAccount(logger: Logger, uri: string) {
   const lp = createStateChainKeypair(uri);
 
-  await fundFlip(lp.address, '1000');
-  console.log(`Registering ${lp.address} as an LP...`);
+  await fundFlip(logger, lp.address, '1000');
+  logger.debug(`Registering ${lp.address} as an LP...`);
 
   await using chainflip = await getChainflipApi();
 
-  const eventHandle = observeEvent('accountRoles:AccountRoleRegistered', {
+  const eventHandle = observeEvent(logger, 'accountRoles:AccountRoleRegistered', {
     test: (event) => event.data.accountId === lp.address,
   }).event;
 
@@ -22,11 +23,11 @@ export async function setupLpAccount(uri: string) {
   });
   await eventHandle;
 
-  console.log(`${lp.address} successfully registered as an LP`);
+  logger.debug(`${lp.address} successfully registered as an LP`);
 }
 
 /// Sets up a broker account by registering it as a broker if it is not already registered and funding it with 1000 Flip.
-export async function setupBrokerAccount(uri: string) {
+export async function setupBrokerAccount(logger: Logger, uri: string) {
   await using chainflip = await getChainflipApi();
 
   const broker = createStateChainKeypair(uri);
@@ -36,10 +37,10 @@ export async function setupBrokerAccount(uri: string) {
   ).replace(/"/g, '');
 
   if (role === 'null' || role === 'Unregistered') {
-    await fundFlip(broker.address, '1000');
-    console.log(`Registering ${broker.address} as a Broker...`);
+    await fundFlip(logger, broker.address, '1000');
+    logger.debug(`Registering ${broker.address} as a Broker...`);
 
-    const eventHandle = observeEvent('accountRoles:AccountRoleRegistered', {
+    const eventHandle = observeEvent(logger, 'accountRoles:AccountRoleRegistered', {
       test: (event) => event.data.accountId === broker.address,
     }).event;
 
@@ -50,7 +51,7 @@ export async function setupBrokerAccount(uri: string) {
     });
     await eventHandle;
 
-    console.log(`${broker.address} successfully registered as a Broker`);
+    logger.debug(`${broker.address} successfully registered as a Broker`);
   } else {
     assert.strictEqual(
       role,

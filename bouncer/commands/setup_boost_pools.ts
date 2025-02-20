@@ -6,5 +6,6 @@
 
 import { setupBoostPools } from '../shared/setup_boost_pools';
 import { runWithTimeoutAndExit } from '../shared/utils';
+import { globalLogger } from '../shared/utils/logger';
 
-await runWithTimeoutAndExit(setupBoostPools(), 120);
+await runWithTimeoutAndExit(setupBoostPools(globalLogger), 120);

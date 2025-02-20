@@ -14,7 +14,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
 import { TestContext } from '../shared/utils/test_context';
-import { logger } from '../shared/utils/logger';
+import { globalLogger } from '../shared/utils/logger';
 import { runWithTimeoutAndExit } from '../shared/utils';
 
 // Test Solana's delta based ingress
@@ -24,7 +24,7 @@ async function main(): Promise<void> {
       'prebuilt',
       'specify paths to the prebuilt binaries and runtime you wish to upgrade to',
       (args) => {
-        logger.info('prebuilt selected');
+        globalLogger.info('prebuilt selected');
         return args
           .option('bins', {
             describe: 'paths to the binaries and runtime you wish to upgrade to',

@@ -14,12 +14,14 @@ function createTestFunction(name: string, testFunction: (context: TestContext) =
   return async (context: { testContext: TestContext }) => {
     // Attach the test name to the logger
     context.testContext.logger = context.testContext.logger.child({ test: name });
+    context.testContext.logger.info(`🧪 Starting test ${name}`);
     // Run the test with the test context
     await testFunction(context.testContext).catch((error) => {
       // We must catch the error here to be able to log it
       context.testContext.error(error);
       throw error;
     });
+    context.testContext.logger.info(`✅ Finished test ${name}`);
   };
 }
 export function concurrentTest(

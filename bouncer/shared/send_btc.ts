@@ -1,5 +1,6 @@
 import Client from 'bitcoin-core';
 import { sleep, btcClientMutex } from './utils';
+import { Logger, throwError } from './utils/logger';
 
 export const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
 
@@ -54,7 +55,10 @@ export async function sendVaultTransaction(
   );
 }
 
-export async function waitForBtcTransaction(txid: string, confirmations = 1) {
+export async function waitForBtcTransaction(logger: Logger, txid: string, confirmations = 1) {
+  logger.debug(
+    `Waiting for Btc transaction to be confirmed, txid: ${txid}, required confirmations: ${confirmations}`,
+  );
   for (let i = 0; i < 50; i++) {
     const transactionDetails = await btcClient.getTransaction(txid);
 
@@ -64,10 +68,14 @@ export async function waitForBtcTransaction(txid: string, confirmations = 1) {
       return;
     }
   }
-  throw new Error(`Timeout waiting for Btc transaction to be confirmed, txid: ${txid}`);
+  throwError(
+    logger,
+    new Error(`Timeout waiting for Btc transaction to be confirmed, txid: ${txid}`),
+  );
 }
 
 export async function sendBtc(
+  logger: Logger,
   address: string,
   amount: number | string,
   confirmations = 1,
@@ -78,7 +86,7 @@ export async function sendBtc(
   )) as string;
 
   if (confirmations > 0) {
-    await waitForBtcTransaction(txid, confirmations);
+    await waitForBtcTransaction(logger, txid, confirmations);
   }
 
   return txid;

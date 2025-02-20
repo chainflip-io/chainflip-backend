@@ -26,15 +26,15 @@ export async function testDoubleDeposit(testContext: TestContext): Promise<void>
       .signAndSend(lp);
   });
   const ethIngressKey = (
-    await observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
+    await observeEvent(testContext.logger, 'liquidityProvider:LiquidityDepositAddressReady', {
       test: (event) => event.data.depositAddress.Eth,
     }).event
   ).data.depositAddress.Eth as string;
   testContext.debug('Eth ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
-  await sendEvmNative('Ethereum', ethIngressKey, '10');
+  await sendEvmNative(testContext.logger, 'Ethereum', ethIngressKey, '10');
 
-  await observeEvent('assetBalances:AccountCredited').event;
-  await sendEvmNative('Ethereum', ethIngressKey, '10');
-  await observeEvent('assetBalances:AccountCredited').event;
+  await observeEvent(testContext.logger, 'assetBalances:AccountCredited').event;
+  await sendEvmNative(testContext.logger, 'Ethereum', ethIngressKey, '10');
+  await observeEvent(testContext.logger, 'assetBalances:AccountCredited').event;
 }

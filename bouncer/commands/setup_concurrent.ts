@@ -8,11 +8,12 @@
 import { setupBoostPools } from '../shared/setup_boost_pools';
 import { setupSwaps } from '../shared/setup_swaps';
 import { runWithTimeoutAndExit } from '../shared/utils';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
-  console.log('=== Setup concurrent ===');
-  await Promise.all([setupSwaps(), setupBoostPools()]);
-  console.log('=== Setup concurrent complete ===');
+  globalLogger.info('Setup concurrent');
+  await Promise.all([setupSwaps(globalLogger), setupBoostPools(globalLogger)]);
+  globalLogger.info('Setup concurrent complete');
 }
 
 await runWithTimeoutAndExit(main(), 240);

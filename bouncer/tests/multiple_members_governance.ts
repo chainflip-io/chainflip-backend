@@ -31,7 +31,7 @@ async function addAliceToGovernance(logger: Logger) {
 
   await setGovernanceMembers(newMembers);
 
-  await observeEvent('governance:Executed').event;
+  await observeEvent(logger, 'governance:Executed').event;
 
   await tryUntilSuccess(async () => (await getGovernanceMembers()).length === 2, 3000, 10);
 
@@ -47,12 +47,12 @@ async function submitWithMultipleGovernanceMembers(logger: Logger) {
 
   await using chainflip = await getChainflipApi();
 
-  const proposalId = Number((await observeEvent('governance:Proposed').event).data);
+  const proposalId = Number((await observeEvent(logger, 'governance:Proposed').event).data);
 
   // Note that with two members, we need to approve with the other account:
   await chainflip.tx.governance.approve(proposalId).signAndSend(alice, { nonce: -1 });
 
-  const executedProposalId = Number((await observeEvent('governance:Executed').event).data);
+  const executedProposalId = Number((await observeEvent(logger, 'governance:Executed').event).data);
   assert(proposalId === executedProposalId, 'Proposal Ids should match');
 
   assert(

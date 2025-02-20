@@ -32,6 +32,7 @@ import { getChainflipApi, observeEvent } from './utils/substrate';
 import { executeEvmVaultSwap } from './evm_vault_swap';
 import { executeSolVaultSwap } from './sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from './btc_vault_swap';
+import { Logger, throwError } from './utils/logger';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
@@ -54,18 +55,17 @@ export type SwapParams = {
 };
 
 export async function requestNewSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  tag = '',
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps?: number,
-  log = true,
   boostFeeBps = 0,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
 ): Promise<SwapParams> {
-  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', {
+  const addressPromise = observeEvent(logger, 'swapping:SwapDepositAddressReady', {
     test: (event) => {
       // Find deposit address for the right swap by looking at destination address:
       const destAddressEvent = encodeDestinationAddress(
@@ -94,6 +94,7 @@ export async function requestNewSwap(
   }).event;
 
   await newSwap(
+    logger,
     sourceAsset,
     destAsset,
     destAddress,
@@ -110,10 +111,8 @@ export async function requestNewSwap(
   const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
   const channelId = Number(res.channelId.replaceAll(',', ''));
 
-  if (log) {
-    console.log(`${tag} Deposit address: ${depositAddress}`);
-    console.log(`${tag} Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
-  }
+  logger.debug(`$Deposit address: ${depositAddress}`);
+  logger.debug(`Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
 
   return {
     sourceAsset,
@@ -129,20 +128,21 @@ export enum SenderType {
   Vault,
 }
 
+// Note: if using the swap context, the logger must contain the tag
 export async function doPerformSwap(
+  logger: Logger,
   { sourceAsset, destAsset, destAddress, depositAddress, channelId }: SwapParams,
-  tag = '',
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
   amount?: string,
-  log = true,
   swapContext?: SwapContext,
 ) {
   const oldBalance = await getBalance(destAsset, destAddress);
 
-  if (log) console.log(`${tag} Old balance: ${oldBalance}`);
+  logger.trace(`Old balance: ${oldBalance}`);
 
   const swapRequestedHandle = observeSwapRequested(
+    logger,
     sourceAsset,
     destAsset,
     { type: TransactionOrigin.DepositChannel, channelId },
@@ -154,103 +154,103 @@ export async function doPerformSwap(
     : Promise.resolve();
 
   await (senderType === SenderType.Address
-    ? send(sourceAsset, depositAddress, amount, log)
-    : sendViaCfTester(sourceAsset, depositAddress));
+    ? send(logger, sourceAsset, depositAddress, amount)
+    : sendViaCfTester(logger, sourceAsset, depositAddress));
 
-  if (log) console.log(`${tag} Funded the address`);
+  logger.trace(`Funded the address`);
 
-  swapContext?.updateStatus(tag, SwapStatus.Funded);
+  swapContext?.updateStatus(logger, SwapStatus.Funded);
 
   await swapRequestedHandle;
 
-  swapContext?.updateStatus(tag, SwapStatus.SwapScheduled);
+  swapContext?.updateStatus(logger, SwapStatus.SwapScheduled);
 
-  if (log) console.log(`${tag} Waiting for balance to update`);
+  logger.trace(`Waiting for balance to update`);
 
   try {
     const [newBalance] = await Promise.all([
-      observeBalanceIncrease(destAsset, destAddress, oldBalance),
+      observeBalanceIncrease(logger, destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
 
     const chain = chainFromAsset(sourceAsset);
     if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
-      if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
+      logger.trace(`Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }
 
-    if (log) console.log(`${tag} Swap success! New balance: ${newBalance}!`);
-    swapContext?.updateStatus(tag, SwapStatus.Success);
+    logger.trace(`Swap success! New balance: ${newBalance}!`);
+    swapContext?.updateStatus(logger, SwapStatus.Success);
   } catch (err) {
-    swapContext?.updateStatus(tag, SwapStatus.Failure);
-    throw new Error(`${tag} ${err}`);
+    swapContext?.updateStatus(logger, SwapStatus.Failure);
+    throwError(logger, new Error(`$${err}`));
   }
 }
 
+// Note: if using the swap context, the logger must contain the tag
 export async function performSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
   amount?: string,
   brokerCommissionBps?: number,
-  log = true,
   swapContext?: SwapContext,
 ) {
-  const tag = swapTag ?? '';
-
-  if (log)
-    console.log(
-      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
-        messageMetadata
-          ? messageMetadata.message.substring(0, 6) +
-            '...' +
-            messageMetadata.message.substring(messageMetadata.message.length - 4)
-          : ''
-      }`,
-    );
+  logger.trace(
+    `The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
+      messageMetadata
+        ? messageMetadata.message.substring(0, 6) +
+          '...' +
+          messageMetadata.message.substring(messageMetadata.message.length - 4)
+        : ''
+    }`,
+  );
 
   const swapParams = await requestNewSwap(
+    logger,
     sourceAsset,
     destAsset,
     destAddress,
-    tag,
     messageMetadata,
     brokerCommissionBps,
-    log,
   );
 
-  await doPerformSwap(swapParams, tag, messageMetadata, senderType, amount, log, swapContext);
+  await doPerformSwap(logger, swapParams, messageMetadata, senderType, amount, swapContext);
 
   return swapParams;
 }
 
 // function to create a swap and track it until we detect the corresponding broadcast success
 export async function performAndTrackSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
   amount?: string,
-  tag?: string,
 ) {
   await using chainflipApi = await getChainflipApi();
 
-  const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
+  const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress);
 
-  await send(sourceAsset, swapParams.depositAddress, amount);
-  console.log(`${tag} fund sent, waiting for the deposit to be witnessed..`);
+  await send(logger, sourceAsset, swapParams.depositAddress, amount);
+  logger.debug(`Funds sent, waiting for the deposit to be witnessed..`);
 
   // SwapScheduled, SwapExecuted, SwapEgressScheduled, BatchBroadcastRequested
-  const broadcastId = await observeSwapEvents(swapParams, chainflipApi, tag);
+  const broadcastId = await observeSwapEvents(logger, swapParams, chainflipApi);
 
-  if (broadcastId) await observeBroadcastSuccess(broadcastId, tag);
-  else throw new Error('Failed to retrieve broadcastId!');
-  console.log(`${tag} broadcast executed successfully, swap is complete!`);
+  if (broadcastId) {
+    await observeBroadcastSuccess(logger, broadcastId);
+  } else {
+    throwError(logger, new Error(`Failed to retrieve broadcastId!`));
+  }
+  logger.debug(`Broadcast executed successfully, swap is complete!`);
 }
 
 export async function executeVaultSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -279,15 +279,17 @@ export async function executeVaultSwap(
   };
 
   if (evmChains.includes(srcChain)) {
+    logger.trace('Executing EVM vault swap');
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
-    const wallet = await createEvmWalletAndFund(sourceAsset);
+    const wallet = await createEvmWalletAndFund(logger, sourceAsset);
     sourceAddress = wallet.address.toLowerCase();
 
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
     const txHash = await executeEvmVaultSwap(
+      logger,
       brokerFeesValue.account,
       sourceAsset,
       destAsset,
@@ -304,7 +306,9 @@ export async function executeVaultSwap(
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
   } else if (srcChain === 'Bitcoin') {
+    logger.trace('Executing BTC vault swap');
     const txId = await buildAndSendBtcVaultSwap(
+      logger,
       Number(amount ?? defaultAssetAmounts(sourceAsset)),
       destAsset,
       destAddress,
@@ -318,7 +322,9 @@ export async function executeVaultSwap(
     // Unused for now
     sourceAddress = '';
   } else {
+    logger.trace('Executing Solana vault swap');
     const { slot, accountAddress } = await executeSolVaultSwap(
+      logger,
       sourceAsset,
       destAsset,
       destAddress,
@@ -341,13 +347,12 @@ export async function executeVaultSwap(
 }
 
 export async function performVaultSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  swapTag = '',
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
-  log = true,
   amount?: string,
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
@@ -361,18 +366,16 @@ export async function performVaultSwap(
     commissionBps: number;
   }[] = [],
 ): Promise<VaultSwapParams> {
-  const tag = swapTag ?? '';
-
   const oldBalance = await getBalance(destAsset, destAddress);
-  if (log) {
-    console.log(`${tag} Old balance: ${oldBalance}`);
-    console.log(
-      `${tag} Executing (${sourceAsset}) vault swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
-    );
-  }
+
+  logger.trace(`Old balance: ${oldBalance}`);
+  logger.trace(
+    `Executing (${sourceAsset}) vault swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
+  );
 
   try {
     const { transactionId, sourceAddress } = await executeVaultSwap(
+      logger,
       sourceAsset,
       destAsset,
       destAddress,
@@ -384,36 +387,40 @@ export async function performVaultSwap(
       brokerFees,
       affiliateFees,
     );
-    swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapInitiated);
+    swapContext?.updateStatus(logger, SwapStatus.VaultSwapInitiated);
 
-    await observeSwapRequested(sourceAsset, destAsset, transactionId, SwapRequestType.Regular);
+    await observeSwapRequested(
+      logger,
+      sourceAsset,
+      destAsset,
+      transactionId,
+      SwapRequestType.Regular,
+    );
 
-    swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapScheduled);
+    swapContext?.updateStatus(logger, SwapStatus.VaultSwapScheduled);
 
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
       : Promise.resolve();
 
     const [newBalance] = await Promise.all([
-      observeBalanceIncrease(destAsset, destAddress, oldBalance),
+      observeBalanceIncrease(logger, destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
-    if (log) {
-      console.log(`${tag} Swap success! New balance: ${newBalance}!`);
-    }
+    logger.trace(`Swap success! New balance: ${newBalance}!`);
+
     if (sourceAsset === 'Sol') {
       // Native Vault swaps are fetched proactively. SPL-tokens don't need a fetch.
       const swapEndpointNativeVaultAddress = getContractAddress(
         'Solana',
         'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT',
       );
-      if (log)
-        console.log(
-          `${tag} Waiting for Swap Endpoint Native Vault Swap Fetch ${swapEndpointNativeVaultAddress}`,
-        );
+      logger.trace(
+        `$Waiting for Swap Endpoint Native Vault Swap Fetch ${swapEndpointNativeVaultAddress}`,
+      );
       await observeFetch(sourceAsset, swapEndpointNativeVaultAddress);
     }
-    swapContext?.updateStatus(swapTag, SwapStatus.Success);
+    swapContext?.updateStatus(logger, SwapStatus.Success);
     return {
       sourceAsset,
       destAsset,
@@ -421,11 +428,10 @@ export async function performVaultSwap(
       transactionId,
     };
   } catch (err) {
-    console.error('err:', err);
-    swapContext?.updateStatus(swapTag, SwapStatus.Failure);
+    swapContext?.updateStatus(logger, SwapStatus.Failure);
     if (err instanceof Error) {
-      console.log(err.stack);
+      logger.trace(err.stack);
     }
-    throw new Error(`${tag} ${err}`);
+    return throwError(logger, new Error(`${err}`));
   }
 }

@@ -18,22 +18,24 @@ import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfac
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { submitGovernanceExtrinsic } from './cf_governance';
 import { observeEvent } from './utils/substrate';
+import { Logger } from './utils/logger';
 
-export async function initializeArbitrumChain() {
-  console.log('Initializing Arbitrum');
-  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized').event;
+export async function initializeArbitrumChain(logger: Logger) {
+  logger.info('Initializing Arbitrum');
+  const arbInitializationRequest = observeEvent(logger, 'arbitrumVault:ChainInitialized').event;
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.arbitrumVault.initializeChain());
   await arbInitializationRequest;
 }
 
-export async function initializeSolanaChain() {
-  console.log('Initializing Solana');
-  const solInitializationRequest = observeEvent('solanaVault:ChainInitialized').event;
+export async function initializeSolanaChain(logger: Logger) {
+  logger.info('Initializing Solana');
+  const solInitializationRequest = observeEvent(logger, 'solanaVault:ChainInitialized').event;
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.solanaVault.initializeChain());
   await solInitializationRequest;
 }
 
 export async function initializeArbitrumContracts(
+  logger: Logger,
   arbClient: Web3,
   arbKey: { pubKeyX: string; pubKeyYParity: string },
 ) {
@@ -50,7 +52,7 @@ export async function initializeArbitrumContracts(
       pubKeyYParity: arbKey.pubKeyYParity === 'Odd' ? 1 : 0,
     })
     .encodeABI();
-  await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData);
+  await signAndSendTxEvm(logger, 'Arbitrum', keyManagerAddress, '0', txData);
 }
 
 function numberToBuffer(bytes: number, number: number): Buffer {
@@ -71,7 +73,11 @@ function bigNumberToU64Buffer(number: bigint): Buffer {
   return buf;
 }
 
-export async function initializeSolanaPrograms(solClient: Connection, solKey: string) {
+export async function initializeSolanaPrograms(
+  logger: Logger,
+  solClient: Connection,
+  solKey: string,
+) {
   function createUpgradeAuthorityInstruction(
     programId: PublicKey,
     upgradeAuthority: PublicKey,
@@ -125,8 +131,8 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const upgradeSignerPda = new PublicKey('H7G2avdmRSQyVxPcgZJPGXVCPhC61TMAKdvYBRF42zJ9');
 
   // Fund new Solana Agg key
-  console.log('Funding Solana new aggregate key:', newAggKey.toString());
-  await sendSol(solKey, '100');
+  logger.info('Funding Solana new aggregate key:', newAggKey.toString());
+  await sendSol(logger, solKey, '100');
 
   // Initialize Vault program
   let tx = new Transaction().add(
@@ -156,7 +162,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       programId: solanaVaultProgramId,
     }),
   );
-  await signAndSendTxSol(tx);
+  await signAndSendTxSol(logger, tx);
 
   // Set nonce authority to the new AggKey
   tx = new Transaction();
@@ -180,7 +186,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       }),
     );
   }
-  await signAndSendTxSol(tx);
+  await signAndSendTxSol(logger, tx);
 
   // Set Vault's upgrade authority to upgradeSignerPda and enable token support
   tx = new Transaction().add(
@@ -219,7 +225,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       programId: solanaVaultProgramId,
     }),
   );
-  await signAndSendTxSol(tx);
+  await signAndSendTxSol(logger, tx);
 
   // Set Governance authority to the new AggKey (State Chain)
   const setGovKeyWithGovKeyDiscriminatorString = vaultIdl.instructions.find(
@@ -241,5 +247,5 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       programId: solanaVaultProgramId,
     }),
   );
-  await signAndSendTxSol(tx);
+  await signAndSendTxSol(logger, tx);
 }

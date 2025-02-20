@@ -1,5 +1,6 @@
 import { InternalAsset as Asset, Chain, Asset as SCAsset, broker } from '@chainflip/cli';
 import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset } from './utils';
+import { Logger } from './utils/logger';
 
 const defaultCommissionBps = 100; // 1%
 
@@ -10,6 +11,7 @@ export type FillOrKillParamsX128 = NonNullable<RequestDepositChannelParams['fill
 export type DcaParams = NonNullable<RequestDepositChannelParams['dcaParams']>;
 
 export async function newSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -53,7 +55,7 @@ export async function newSwap(
       break; // Exit the loop on success
     } catch (error) {
       retryCount++;
-      console.error(
+      logger.error(
         `Request swap deposit address for ${sourceAsset} attempt: ${retryCount} failed: ${error}`,
       );
     }

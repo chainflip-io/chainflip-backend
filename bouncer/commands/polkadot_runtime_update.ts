@@ -11,17 +11,20 @@ import {
 } from '../tests/polkadot_runtime_update';
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { getNetworkRuntimeVersion } from '../shared/utils/spec_version';
-import { logger } from '../shared/utils/logger';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
   // Bump the spec version
-  const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime(logger);
+  const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime(globalLogger);
 
   // Submit the runtime update
-  await pushPolkadotRuntimeUpdate(wasmPath, logger);
+  await pushPolkadotRuntimeUpdate(globalLogger, wasmPath);
 
   // Check the polkadot spec version has changed
-  const postUpgradeSpecVersion = await getNetworkRuntimeVersion('http://127.0.0.1:9947');
+  const postUpgradeSpecVersion = await getNetworkRuntimeVersion(
+    globalLogger,
+    'http://127.0.0.1:9947',
+  );
   if (postUpgradeSpecVersion.specVersion !== expectedSpecVersion) {
     throw new Error(
       `Polkadot runtime update failed. Currently at version ${postUpgradeSpecVersion.specVersion}, expected to be at ${expectedSpecVersion}`,

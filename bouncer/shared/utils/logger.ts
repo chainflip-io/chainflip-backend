@@ -2,26 +2,24 @@ import pino from 'pino';
 
 export type Logger = pino.Logger;
 
+const logFile = process.env.BOUNCER_LOG_PATH ?? '/tmp/chainflip/bouncer.log';
+
 const logFileDestination = pino.destination({
-  dest: process.env.BOUNCER_LOG_PATH ?? '/tmp/chainflip/bouncer.log',
+  dest: logFile,
   sync: false,
+  mkdir: true,
 });
 const prettyConsoleTransport = pino.transport({
   target: 'pino-pretty',
   options: {
     colorize: true,
-    ignore: 'time,pid,hostname',
+    // Note: we are ignoring the common bindings to keep the cli log clean.
+    ignore: 'test,module,tag',
   },
 });
 
 // Log the given value without having to include %s in the message. Just like console.log
-function logMethod(
-  this: pino.Logger,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  args: any[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  method: (this: pino.Logger, ...args: any[]) => void,
-) {
+function logMethod(this: pino.Logger, args: Parameters<pino.LogFn>, method: pino.LogFn) {
   const newArgs = args;
   if (args.length === 2 && !args[0].includes('%s')) {
     newArgs[0] = `${args[0]} %s`;
@@ -29,10 +27,12 @@ function logMethod(
   method.apply(this, newArgs);
 }
 
-export const logger: Logger = pino(
+export const globalLogger: Logger = pino(
   {
     hooks: { logMethod },
     level: 'trace',
+    // We don't want to log the hostname or pid
+    base: undefined,
     timestamp: pino.stdTimeFunctions.isoTime,
     // Log the level as a string ("info") instead of a number (30)
     formatters: {
@@ -40,21 +40,36 @@ export const logger: Logger = pino(
     },
   },
   pino.multistream([
-    { stream: prettyConsoleTransport, level: 'info' },
+    { stream: prettyConsoleTransport, level: process.env.BOUNCER_LOG_LEVEL ?? 'info' },
     { stream: logFileDestination, level: 'trace' },
   ]),
 );
 
 process.on('uncaughtException', (err) => {
-  logger.error(err);
+  globalLogger.error(err);
 });
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error({ reason, promise });
+  globalLogger.error({ reason, promise });
 });
 
-// Creates a child logger and appends the module name to any existing module names
+// Creates a child logger and appends the module name to any existing module names on the logger
 export function loggerChild(parentLogger: Logger, name: string): Logger {
   const existingModule = parentLogger.bindings().module as string | undefined;
   const newModule = existingModule !== undefined ? `${existingModule}::${name}` : name;
   return parentLogger.child({ module: newModule });
+}
+
+// Takes all of the contextual information attached to the logger and appends it to the error message
+export function loggerError(parentLogger: Logger, error: Error): Error {
+  const bindings = parentLogger.bindings();
+  const newError = error;
+  for (const [key, value] of Object.entries(bindings)) {
+    newError.message += `\n   ${key}: ${value}`;
+  }
+  return newError;
+}
+
+// Takes all of the contextual information attached to the logger and appends it to the error message before throwing it
+export function throwError(parentLogger: Logger, error: Error): never {
+  throw loggerError(parentLogger, error);
 }

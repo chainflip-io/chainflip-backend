@@ -48,7 +48,7 @@ async function getTokenSupportedAccount() {
   return cfVaultProgram.account.supportedToken.fetch(vaultUsdcTokenSupportedAccount);
 }
 
-async function submitNativeVaultSettingsGovernance(settings: VaultSwapSettings, logger: Logger) {
+async function submitNativeVaultSettingsGovernance(logger: Logger, settings: VaultSwapSettings) {
   const {
     minNativeSwapAmount,
     maxDstAddressLen,
@@ -71,7 +71,7 @@ async function submitNativeVaultSettingsGovernance(settings: VaultSwapSettings, 
   );
 }
 
-async function submitTokenVaultSettingsGovernance(settings: VaultSwapSettings, logger: Logger) {
+async function submitTokenVaultSettingsGovernance(logger: Logger, settings: VaultSwapSettings) {
   const { minTokenSwapAmount, tokenMintPubkey } = settings;
 
   logger.info('Submitting token vault settings via governance');
@@ -154,7 +154,7 @@ export async function testSolanaVaultSettingsGovernance(testContext: TestContext
     minTokenSwapAmount: settings.minTokenSwapAmount + 1,
     tokenMintPubkey: settings.tokenMintPubkey,
   };
-  await submitNativeVaultSettingsGovernance(newSettings, testContext.logger);
+  await submitNativeVaultSettingsGovernance(testContext.logger, newSettings);
 
   // Only the native settings should have changed
   settings = {
@@ -177,7 +177,7 @@ export async function testSolanaVaultSettingsGovernance(testContext: TestContext
     minTokenSwapAmount: settings.minTokenSwapAmount + 10,
     tokenMintPubkey: settings.tokenMintPubkey,
   } as VaultSwapSettings;
-  await submitTokenVaultSettingsGovernance(newSettings, testContext.logger);
+  await submitTokenVaultSettingsGovernance(testContext.logger, newSettings);
 
   // Only the token settings should have changed
   settings = {

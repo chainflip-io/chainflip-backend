@@ -10,13 +10,14 @@
 
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { sendEvmNative } from '../shared/send_evm';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main() {
   const arbitrumAddress = process.argv[2];
   const arbAmount = process.argv[3].trim();
 
-  console.log('Transferring ' + arbAmount + ' ArbEth to ' + arbitrumAddress);
-  await sendEvmNative('Arbitrum', arbitrumAddress, arbAmount);
+  globalLogger.info(`Transferring ${arbAmount} ArbEth to ${arbitrumAddress}`);
+  await sendEvmNative(globalLogger, 'Arbitrum', arbitrumAddress, arbAmount);
 }
 
 await runWithTimeoutAndExit(main(), 20);

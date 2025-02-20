@@ -11,6 +11,7 @@
 
 import { submitRuntimeUpgradeWithRestrictions } from '../shared/submit_runtime_upgrade';
 import { runWithTimeoutAndExit } from '../shared/utils';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main() {
   const wasmPath = process.argv[2];
@@ -21,7 +22,12 @@ async function main() {
   const arg4 = process.argv[4].trim();
   const percentNodesUpgraded = arg4 ? Number(arg4) : undefined;
 
-  await submitRuntimeUpgradeWithRestrictions(wasmPath, semverRestriction, percentNodesUpgraded);
+  await submitRuntimeUpgradeWithRestrictions(
+    globalLogger,
+    wasmPath,
+    semverRestriction,
+    percentNodesUpgraded,
+  );
 }
 
 await runWithTimeoutAndExit(main(), 20);

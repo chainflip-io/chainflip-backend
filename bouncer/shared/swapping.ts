@@ -14,6 +14,7 @@ import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './utils/swap_context';
 import { estimateCcmCfTesterGas } from './send_evm';
+import { Logger } from './utils/logger';
 
 let swapCount = 1;
 
@@ -204,12 +205,12 @@ export async function newVaultSwapCcmMetadata(
 }
 
 export async function prepareSwap(
+  parentLogger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
   tagSuffix?: string,
-  log = true,
   swapContext?: SwapContext,
 ) {
   // Seed needs to be unique per swap:
@@ -220,6 +221,7 @@ export async function prepareSwap(
   let tag = `[${(swapCount++).toString().concat(':').padEnd(4, ' ')} ${sourceAsset}->${destAsset}`;
   tag += messageMetadata ? ' CCM' : '';
   tag += tagSuffix ? ` ${tagSuffix}]` : ']';
+  const logger = parentLogger.child({ tag });
 
   // For swaps with a message force the address to be the CF Tester address.
   if (
@@ -229,18 +231,19 @@ export async function prepareSwap(
     chainFromAsset(destAsset) !== 'Solana'
   ) {
     destAddress = getContractAddress(chainFromAsset(destAsset), 'CFTESTER');
-    if (log) console.log(`${tag} Using CF Tester address: ${destAddress}`);
+    logger.trace(`Using CF Tester address: ${destAddress}`);
   } else {
     destAddress = await newAddress(destAsset, seed, addressType);
-    if (log) console.log(`${tag} Created new ${destAsset} address: ${destAddress}`);
+    logger.trace(`Created new ${destAsset} address: ${destAddress}`);
   }
 
-  swapContext?.updateStatus(tag, SwapStatus.Initiated);
+  swapContext?.updateStatus(logger, SwapStatus.Initiated);
 
   return { destAddress, tag };
 }
 
 export async function testSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
@@ -248,57 +251,54 @@ export async function testSwap(
   swapContext?: SwapContext,
   tagSuffix?: string,
   amount?: string,
-  log = true,
 ) {
   const { destAddress, tag } = await prepareSwap(
+    logger,
     sourceAsset,
     destAsset,
     addressType,
     messageMetadata,
     tagSuffix,
-    log,
     swapContext,
   );
 
   return performSwap(
+    logger.child({ tag }),
     sourceAsset,
     destAsset,
     destAddress,
-    tag,
     messageMetadata,
     undefined,
     amount,
     undefined,
-    log,
     swapContext,
   );
 }
 export async function testVaultSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
   tagSuffix?: string,
-  log = true,
 ) {
   const { destAddress, tag } = await prepareSwap(
+    logger,
     sourceAsset,
     destAsset,
     addressType,
     messageMetadata,
     (tagSuffix ?? '') + 'Vault',
-    log,
     swapContext,
   );
 
   return performVaultSwap(
+    logger.child({ tag }),
     sourceAsset,
     destAsset,
     destAddress,
-    tag,
     messageMetadata,
     swapContext,
-    log,
   );
 }

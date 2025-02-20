@@ -48,8 +48,8 @@ export async function testBtcUtxoConsolidation(testContext: TestContext) {
   const consolidationThreshold = initialUtxos.count + 2;
 
   // Add 2 utxo which should later trigger consolidation as per the parameters above:
-  await depositLiquidity('Btc', 2);
-  await depositLiquidity('Btc', 3);
+  await depositLiquidity(logger, 'Btc', 2);
+  await depositLiquidity(logger, 'Btc', 3);
 
   const amountBeforeConsolidation = (await queryUtxos()).amount;
   logger.debug(`Total amount in BTC vault is: ${amountBeforeConsolidation}`);
@@ -58,7 +58,10 @@ export async function testBtcUtxoConsolidation(testContext: TestContext) {
     `Setting consolidation threshold to: ${consolidationThreshold} and size to: ${consolidationSize}`,
   );
 
-  const consolidationEventPromise = observeEvent('bitcoinIngressEgress:UtxoConsolidation').event;
+  const consolidationEventPromise = observeEvent(
+    logger,
+    'bitcoinIngressEgress:UtxoConsolidation',
+  ).event;
 
   // We should have exactly consolidationThreshold utxos,
   // so this should trigger consolidation:
@@ -73,11 +76,14 @@ export async function testBtcUtxoConsolidation(testContext: TestContext) {
   const consolidationBroadcastId = (await consolidationEventPromise).data.broadcastId;
   logger.debug(`Consolidation event is observed! Broadcast id: ${consolidationBroadcastId}`);
 
-  const broadcastSuccessPromise = observeEvent('bitcoinBroadcaster:BroadcastSuccess', {
+  const broadcastSuccessPromise = observeEvent(logger, 'bitcoinBroadcaster:BroadcastSuccess', {
     test: (event) => consolidationBroadcastId === event.data.broadcastId,
   }).event;
 
-  const feeDeficitPromise = observeEvent('bitcoinBroadcaster:TransactionFeeDeficitRecorded').event;
+  const feeDeficitPromise = observeEvent(
+    logger,
+    'bitcoinBroadcaster:TransactionFeeDeficitRecorded',
+  ).event;
 
   logger.debug(`Waiting for broadcast ${consolidationBroadcastId} to succeed`);
   await broadcastSuccessPromise;

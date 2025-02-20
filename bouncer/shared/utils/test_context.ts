@@ -1,4 +1,4 @@
-import { logger as globalLogger, Logger } from './logger';
+import { globalLogger, Logger } from './logger';
 import { SwapContext } from './swap_context';
 
 export class TestContext {

@@ -23,10 +23,10 @@ import { Logger } from '../shared/utils/logger';
 const commissionBps = 100;
 
 async function testWithdrawCollectedAffiliateFees(
+  logger: Logger,
   broker: KeyringPair,
   affiliateAccountId: string,
   withdrawAddress: string,
-  logger: Logger,
 ) {
   const chainflip = await getChainflipApi();
 
@@ -34,15 +34,15 @@ async function testWithdrawCollectedAffiliateFees(
   let success = false;
 
   logger.info('Starting withdraw collected affiliate fees test...');
-  logger.info('Affiliate account ID:', affiliateAccountId);
-  logger.info('Withdraw address:', withdrawAddress);
+  logger.debug('Affiliate account ID:', affiliateAccountId);
+  logger.debug('Withdraw address:', withdrawAddress);
 
   await chainflip.tx.swapping
     .affiliateWithdrawalRequest(affiliateAccountId)
     .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
 
   logger.info('Withdrawal request sent!');
-  logger.info('Waiting for balance change... Observing address:', withdrawAddress);
+  logger.debug('Waiting for balance change... Observing address:', withdrawAddress);
 
   // Wait for balance change
   for (let i = 0; i < balanceObserveTimeout; i++) {
@@ -61,19 +61,18 @@ async function testFeeCollection(
   inputAsset: Asset,
   testContext: TestContext,
 ): Promise<[KeyringPair, string, string]> {
-  const logger = testContext.logger.child({ asset: inputAsset });
-
+  let logger = testContext.logger;
   // Setup broker accounts. Different for each asset and specific to this test.
   const brokerUri = `//BROKER_VAULT_FEE_COLLECTION_${inputAsset}`;
   const broker = createStateChainKeypair(brokerUri);
   const refundAddress = await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
-  await Promise.all([setupBrokerAccount(brokerUri)]);
+  await Promise.all([setupBrokerAccount(logger, brokerUri)]);
   if (inputAsset === Assets.Btc) {
-    await openPrivateBtcChannel(brokerUri);
+    await openPrivateBtcChannel(logger, brokerUri);
   }
 
   logger.debug('Registering affiliate');
-  const event = await registerAffiliate(brokerUri, refundAddress);
+  const event = await registerAffiliate(logger, brokerUri, refundAddress);
 
   const affiliateId = event.data.affiliateId as string;
 
@@ -85,14 +84,15 @@ async function testFeeCollection(
   const destAsset = inputAsset === feeAsset ? Assets.Flip : feeAsset;
   const depositAmount = defaultAssetAmounts(inputAsset);
   const { destAddress, tag } = await prepareSwap(
+    logger,
     inputAsset,
     feeAsset,
     undefined, // addressType
     undefined, // messageMetadata
     'VaultSwapFeeTest',
-    true, // log
     testContext.swapContext,
   );
+  logger = logger.child({ tag });
 
   // Amounts before swap
   const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker.address);
@@ -102,13 +102,12 @@ async function testFeeCollection(
 
   // Do the vault swap
   await performVaultSwap(
+    logger,
     inputAsset,
     destAsset,
     destAddress,
-    tag,
     undefined, // messageMetadata
     testContext.swapContext,
-    true, // log
     depositAmount,
     0, // boostFeeBps
     undefined, // fillOrKillParams
@@ -143,5 +142,5 @@ export async function testVaultSwapFeeCollection(testContext: TestContext) {
 
   // Test the affiliate withdrawal functionality
   const [broker, affiliateId, refundAddress] = await testFeeCollection(Assets.Btc, testContext);
-  await testWithdrawCollectedAffiliateFees(broker, affiliateId, refundAddress, testContext.logger);
+  await testWithdrawCollectedAffiliateFees(testContext.logger, broker, affiliateId, refundAddress);
 }
