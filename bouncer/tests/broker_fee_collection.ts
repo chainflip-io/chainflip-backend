@@ -95,9 +95,26 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
     Eth: hexStringToBytesArray(destinationAddress),
   });
+
+  const refundParams = {
+    refundAddress: chainflip.createType('EncodedAddress', {
+      Eth: hexStringToBytesArray(await newAddress(inputAsset, 'DEFAULT_REFUND')),
+    }),
+    minPrice: '0',
+    retryDuration: 0,
+  };
+
   await brokerMutex.runExclusive(async () => {
     await chainflip.tx.swapping
-      .requestSwapDepositAddress(inputAsset, destAsset, encodedEthAddr, commissionBps, null, 0)
+      .requestSwapDepositAddress(
+        inputAsset,
+        destAsset,
+        encodedEthAddr,
+        commissionBps,
+        null,
+        0,
+        refundParams,
+      )
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 
