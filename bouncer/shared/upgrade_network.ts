@@ -223,7 +223,7 @@ async function incompatibleUpgradeNoBuild(
 
   await sleep(20000);
 
-  console.log("Setting missed authorship suspension back to 100/150 after nodes back up.");
+  logger.info("Setting missed authorship suspension back to 100/150 after nodes back up.");
 
   // Set missed authorship suspension back to 100/150 after nodes back up.
   await submitGovernanceExtrinsic((api) =>
@@ -233,7 +233,7 @@ async function incompatibleUpgradeNoBuild(
     }),
   );
 
-  console.log("Submitted extrinsic to set suspension for MissedAuthorship slot to 100/150");
+  logger.info("Submitted extrinsic to set suspension for MissedAuthorship slot to 100/150");
 
   const output = execSync("ps -o pid -o comm | grep chainflip-node | awk '{print $1}'");
   logger.info('New node PID: ' + output.toString());

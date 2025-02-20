@@ -16,7 +16,7 @@ function createSnapshotFile(networkUrl: string, blockHash: string, failureObj: F
   const snapshotFolder = createTmpDirIfNotExists('chainflip/snapshots/');
   const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
 
-  console.log('Writing snapshot to: ', snapshotOutputPath);
+  logger.info('Writing snapshot to: ', snapshotOutputPath);
 
   execWithRustLog(
     `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`,
@@ -24,7 +24,7 @@ function createSnapshotFile(networkUrl: string, blockHash: string, failureObj: F
     'runtime::executive=debug',
     (success) => {
       if (!success) {
-        console.error('Failed to create snapshot.');
+        logger.error('Failed to create snapshot.');
         process.exitCode = 1;
       } else {
         if (failureObj) {
@@ -52,7 +52,7 @@ async function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | stri
       (success, logFile) => {
         if (!success) {
           const logContents = fs.readFileSync(logFile, 'utf8');
-          console.error(logContents);
+          logger.error(logContents);
           exitCode = 1;
           failureObj.hash = blockHash;
         }
@@ -92,7 +92,7 @@ export async function tryRuntimeUpgrade(
   if (block === 'all') {
     const latestBlock = await httpApi.rpc.chain.getBlockHash();
 
-    console.log('Running migrations until we reach block with hash: ' + latestBlock);
+    logger.info('Running migrations until we reach block with hash: ' + latestBlock);
 
     let blockNumber = 1;
     let blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
@@ -101,15 +101,15 @@ export async function tryRuntimeUpgrade(
       tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl, failureObj);
       blockNumber++;
     }
-    console.log(`Block ${latestBlock} has been reached, exiting.`);
+    logger.info(`Block ${latestBlock} has been reached, exiting.`);
   } else if (block === 'last-n') {
-    console.log(`Running migrations for the last ${lastN} blocks.`);
+    logger.info(`Running migrations for the last ${lastN} blocks.`);
     let blocksProcessed = 0;
 
 
     let nextHash = await httpApi.rpc.chain.getBlockHash();
 
-    console.log('first nextHash: ', nextHash.toString());
+    logger.info('first nextHash: ', nextHash.toString());
 
     while (blocksProcessed < lastN) {
       tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl, failureObj);
@@ -123,16 +123,16 @@ export async function tryRuntimeUpgrade(
         operation: `get block header at ${nextHash}`,
       });
       nextHash = currentBlockHeader.parentHash.toString();
-      console.log('nextHash: ', nextHash);
+      logger.info('nextHash: ', nextHash);
 
       if (failureObj.hash) {
-        console.log("Creating snapshot in finally");
+        logger.info("Creating snapshot in finally");
         createSnapshotFile(networkUrl, failureObj.hash, failureObj);
         if (failureObj.snapshotPath) {
-          console.log('Snapshot created at: ', failureObj.snapshotPath);
+          logger.info('Snapshot created at: ', failureObj.snapshotPath);
           throw new Error('Snapshot created. Exiting.');
         } else {
-          console.log('Snapshot not created yet...');
+          logger.info('Snapshot not created yet...');
         }
       }
 
@@ -145,7 +145,7 @@ export async function tryRuntimeUpgrade(
     tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl, failureObj);
   }
 
-  console.log('try-runtime upgrade successful.');
+  logger.info('try-runtime upgrade successful.');
 }
 
 export async function tryRuntimeUpgradeWithCompileRuntime(
