@@ -239,7 +239,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 
 			SMInput::Context(ChainProgress::None) => {},
 
-			SMInput::Vote(blockdata) => {
+			SMInput::Consensus(blockdata) => {
 				s.elections.mark_election_done(blockdata.0 .0);
 				log::info!("got block data: {:?}", blockdata.1);
 				s.block_processor.process_block_data(
@@ -329,7 +329,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 		// TODO: make sure that the number of outstanding elections does not grow
 
 		match input {
-			Vote(MultiIndexAndValue((height, _, _), _)) => {
+			Consensus(MultiIndexAndValue((height, _, _), _)) => {
 				let next_election = if safemode_enabled {
 					before.elections.next_priority_election
 				} else {
@@ -477,7 +477,7 @@ mod tests {
 	{
 		let generate_input = |index| {
 			prop_oneof![
-				Just(SMInput::Vote(MultiIndexAndValue(index, ConstantIndex::new(())))),
+				Just(SMInput::Consensus(MultiIndexAndValue(index, ConstantIndex::new(())))),
 				prop_oneof![
 					Just(ChainProgress::None),
 					(any::<T::ChainBlockNumber>(), 0..20usize)

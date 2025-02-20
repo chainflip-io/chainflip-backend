@@ -21,8 +21,7 @@ use super::{
 /// be indexed but not the context.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SMInput<Vote, Context> {
-	//Todo! Rename to consensus
-	Vote(Vote),
+	Consensus(Vote),
 	Context(Context),
 }
 
@@ -31,7 +30,7 @@ impl<V: Indexed, C> Indexed for SMInput<V, C> {
 
 	fn has_index(&self, index: &Self::Index) -> bool {
 		match self {
-			SMInput::Vote(vote) => vote.has_index(index),
+			SMInput::Consensus(vote) => vote.has_index(index),
 			SMInput::Context(_) => true,
 		}
 	}
@@ -42,7 +41,7 @@ impl<V: Validate, C: Validate> Validate for SMInput<V, C> {
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		match self {
-			SMInput::Vote(vote) => vote.is_valid().map_err(Either::Left),
+			SMInput::Consensus(vote) => vote.is_valid().map_err(Either::Left),
 			SMInput::Context(context) => context.is_valid().map_err(Either::Right),
 		}
 	}
@@ -167,7 +166,7 @@ where
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
 			if let Some(input) = election_access.check_consensus()?.has_consensus() {
 				log::debug!("ESSM: stepping with input {input:?}");
-				step(SMInput::Vote(MultiIndexAndValue(election_access.properties()?, input)))?;
+				step(SMInput::Consensus(MultiIndexAndValue(election_access.properties()?, input)))?;
 			}
 		}
 

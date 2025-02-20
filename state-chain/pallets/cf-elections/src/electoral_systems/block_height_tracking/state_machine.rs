@@ -189,7 +189,7 @@ impl<T: BlockHeightTrackingTypes> StateMachine for BlockHeightTrackingSM<T> {
 
 	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {
 		let new_headers = match input {
-			SMInput::Vote(MultiIndexAndValue(_properties, consensus)) => consensus,
+			SMInput::Consensus(MultiIndexAndValue(_properties, consensus)) => consensus,
 			SMInput::Context(_) => return Ok(ChainProgress::None),
 		};
 
@@ -351,7 +351,7 @@ mod tests {
 					prop_do! {
 						let index in select(indices);
 						let input in generate_input(index);
-						return SMInput::Vote(MultiIndexAndValue(index, input))
+						return SMInput::Consensus(MultiIndexAndValue(index, input))
 					}
 				]
 				.boxed()
@@ -384,7 +384,7 @@ mod tests {
 				prop_do! {
 					let index in select(indices);
 					let input in generate_input(index);
-					return SMInput::Vote(MultiIndexAndValue(index, input))
+					return SMInput::Consensus(MultiIndexAndValue(index, input))
 				}
 				.boxed()
 			},
