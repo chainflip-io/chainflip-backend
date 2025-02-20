@@ -1,5 +1,5 @@
 import { InternalAsset as Asset, Chain, Asset as SCAsset, broker } from '@chainflip/cli';
-import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset } from './utils';
+import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset, newAddress } from './utils';
 import { Logger } from './utils/logger';
 
 const defaultCommissionBps = 100; // 1%
@@ -25,6 +25,14 @@ export async function newSwap(
     destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress;
   const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
 
+  const defaultRefundAddress = await newAddress(sourceAsset, 'DEFAULT_REFUND');
+
+  const defaultFillOrKillParams: FillOrKillParamsX128 = {
+    retryDurationBlocks: 0,
+    refundAddress: defaultRefundAddress,
+    minPriceX128: '0',
+  };
+
   // If the dry_run of the extrinsic fails on the broker-api then it won't retry. So we retry here to
   // avoid flakiness on CI.
   let retryCount = 0;
@@ -44,7 +52,7 @@ export async function newSwap(
           },
           commissionBps: brokerCommissionBps,
           maxBoostFeeBps: boostFeeBps,
-          fillOrKillParams,
+          fillOrKillParams: fillOrKillParams || defaultFillOrKillParams,
           dcaParams,
         },
         {
