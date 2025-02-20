@@ -80,8 +80,14 @@ const solCcmAccountsCodec = Struct({
   fallback_address: TsBytes(32),
 });
 
+const solCcmAltAccountsCodec = Struct({
+  ccm_accounts: solCcmAccountsCodec,
+  alts: Vector(TsBytes(32)),
+});
+
 export const solVersionedCcmAdditionalDataCodec = Enum({
   V0: solCcmAccountsCodec,
+  V1: solCcmAltAccountsCodec,
 });
 
 export function getContractAddress(chain: Chain, contract: string): string {
