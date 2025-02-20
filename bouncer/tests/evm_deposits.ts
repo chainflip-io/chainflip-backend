@@ -106,6 +106,10 @@ async function testTxMultipleVaultSwaps(
   const amount = BigInt(
     amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset)),
   );
+
+  let ccm_meta_1 = "0x00010000000002020202020202020202020202020202020202020000000000000000000000000000000000000000000000000000000000000000000063464d386b52764c425861676a365a587672743777434d346a476d4876623538040000";
+  let ccm_meta_2 = "0x00010000000002020202020202020202020202020202020202020000000000000000000000000000000000000000000000000000000000000000000063464d386b52764c425861676a365a587672743777434d346a476d4876623538040000";
+
   const numSwaps = 2;
   const txData = cfTesterContract.methods
     .multipleContractSwap(
@@ -115,7 +119,7 @@ async function testTxMultipleVaultSwaps(
       getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,
       // Dummy encoded data containing a refund address and a broker accountId.
-      '0x000001000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000',
+      ccm_meta_2,
       numSwaps,
     )
     .encodeABI();
@@ -200,22 +204,22 @@ export async function testEvmDeposits(testContext: TestContext) {
 
 
   const depositTests = Promise.all([
-    testSuccessiveDepositEvm('Eth', 'Dot', testContext),
-    testSuccessiveDepositEvm('Flip', 'Btc', testContext),
-    testSuccessiveDepositEvm('ArbEth', 'Dot', testContext),
-    testSuccessiveDepositEvm('ArbUsdc', 'Btc', testContext),
-  ]);
+     testSuccessiveDepositEvm('Eth', 'Dot', testContext),
+     testSuccessiveDepositEvm('Flip', 'Btc', testContext),
+     testSuccessiveDepositEvm('ArbEth', 'Dot', testContext),
+     testSuccessiveDepositEvm('ArbUsdc', 'Btc', testContext),
+   ]);
 
   const noDuplicatedWitnessingTest = Promise.all([
     testNoDuplicateWitnessing('Eth', 'Dot', testContext),
-    testNoDuplicateWitnessing('Eth', 'Btc', testContext),
-    testNoDuplicateWitnessing('Eth', 'Flip', testContext),
-    testNoDuplicateWitnessing('Eth', 'Usdc', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Dot', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Btc', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Flip', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Usdc', testContext),
-  ]);
+     testNoDuplicateWitnessing('Eth', 'Btc', testContext),
+     testNoDuplicateWitnessing('Eth', 'Flip', testContext),
+     testNoDuplicateWitnessing('Eth', 'Usdc', testContext),
+     testNoDuplicateWitnessing('ArbEth', 'Dot', testContext),
+     testNoDuplicateWitnessing('ArbEth', 'Btc', testContext),
+     testNoDuplicateWitnessing('ArbEth', 'Flip', testContext),
+     testNoDuplicateWitnessing('ArbEth', 'Usdc', testContext),
+   ]);
 
   const multipleTxSwapsTest = Promise.all([
     testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Dot'),
