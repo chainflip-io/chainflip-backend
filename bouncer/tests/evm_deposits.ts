@@ -106,6 +106,7 @@ async function testTxMultipleVaultSwaps(
   const amount = BigInt(
     amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset)),
   );
+
   const numSwaps = 2;
   const txData = cfTesterContract.methods
     .multipleContractSwap(
@@ -114,8 +115,8 @@ async function testTxMultipleVaultSwaps(
       assetContractId(destAsset),
       getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,
-      // Dummy encoded data containing a refund address and a broker accountId.
-      '0x000001000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000',
+      // Dummy encoded data containing a refund address and th broker accountId `5FKyTaAoazbwkQ7CHFNJfhWV5sVnRw23HWdPUeQ2tTp3gryJ`.
+      '0x00010000000002020202020202020202020202020202020202020000000000000000000000000000000000000000000000000000000000000000009059e6d854b769a505d01148af212bf8cb7f8469a7153edce8dcaedd9d299125010000',
       numSwaps,
     )
     .encodeABI();

@@ -18,7 +18,7 @@ use cf_chains::{
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
 	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
-use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
+use cf_primitives::{AccountRole, AuthorityCount, Beneficiary, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_utilities::{assert_matches, bs58_array};
 use codec::Encode;
@@ -378,7 +378,7 @@ fn vault_swap_deposit_witness(
 		deposit_metadata,
 		tx_id: Default::default(),
 		deposit_details: (),
-		broker_fee: None,
+		broker_fee: Some(Beneficiary { account: BROKER.into(), bps: 0 }),
 		affiliate_fees: Default::default(),
 		refund_params: Some(REFUND_PARAMS),
 		dca_params: None,

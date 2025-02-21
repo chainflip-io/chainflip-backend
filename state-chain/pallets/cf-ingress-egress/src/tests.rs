@@ -52,7 +52,7 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::{bounded_vec, H160};
+use sp_core::{bounded_vec, H160, U256};
 use sp_runtime::{DispatchError, DispatchResult, Percent};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -2049,30 +2049,17 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 			0
 		));
 
-		// The request is recorded as not having any broker fees:
-		assert_eq!(
-			MockSwapRequestHandler::<Test>::get_swap_requests(),
-			vec![MockSwapRequest {
-				input_asset: INPUT_ASSET,
-				output_asset: OUTPUT_ASSET,
-				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular {
-					output_action: SwapOutputAction::Egress {
-						output_address,
-						ccm_deposit_metadata: None
-					}
-				},
-				broker_fees: Default::default(),
-				origin: SwapOrigin::Vault {
-					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(NOT_A_BROKER),
-				},
-			},]
-		);
-
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::UnknownBroker {
-			broker_id: NOT_A_BROKER,
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::VaultSwapRefunded {
+			tx_id: H256::default(),
+			broker_id: Some(NOT_A_BROKER),
+			asset: INPUT_ASSET.try_into().unwrap(),
+			amount: INPUT_AMOUNT,
+			refund_address: MockAddressConverter::to_encoded_address(ForeignChainAddress::Eth(
+				ETH_REFUND_PARAMS.refund_address,
+			)),
 		}));
+
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
 }
 
@@ -2212,7 +2199,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			Some(ccm_deposit_metadata.clone()),
 			Default::default(),
 			DepositDetails { tx_hashes: None },
-			Beneficiary { account: 0, bps: 0 },
+			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
 			ETH_REFUND_PARAMS,
 			None,
@@ -2360,5 +2347,65 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 			DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
 		)
 		.is_ok());
+	});
+}
+
+#[test]
+fn gets_refunded_if_vault_transaction_was_aborted() {
+	new_test_ext().execute_with(|| {
+		let tx_id = H256::default();
+
+		let vault_swap = VaultDepositWitness {
+			input_asset: Asset::Eth.try_into().unwrap(),
+			deposit_address: Default::default(),
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details: Default::default(),
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			deposit_metadata: Default::default(),
+			tx_id,
+			broker_fee: None,
+			affiliate_fees: Default::default(),
+			refund_params: Some(ChannelRefundParameters {
+				retry_duration: 0,
+				min_price: U256::from(0),
+				refund_address: H160::default(),
+			}),
+			dca_params: None,
+			boost_fee: 0,
+		};
+
+		IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
+
+		IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(Event::VaultSwapRefunded { tx_id: _, .. })
+		);
+
+		assert!(
+			MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
+			"No swaps should have been triggered!"
+		);
+
+		assert!(
+			MockEgressBroadcaster::get_pending_api_calls().len() == 1,
+			"Refund broadcast should have been scheduled!"
+		);
+	});
+}
+
+#[test]
+fn reject_requirements_test() {
+	new_test_ext().execute_with(|| {
+		let should_fail = Some(Beneficiary { account: ALICE, bps: 0 });
+		let should_succeed = Some(Beneficiary { account: BROKER, bps: 0 });
+
+		assert!(IngressEgress::should_reject_vault_swap(&should_fail));
+		assert!(IngressEgress::should_reject_vault_swap(&None));
+
+		assert!(!IngressEgress::should_reject_vault_swap(&should_succeed));
 	});
 }
