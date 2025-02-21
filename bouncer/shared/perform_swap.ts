@@ -374,6 +374,20 @@ export async function performVaultSwap(
   );
 
   try {
+
+    
+
+    const balanceIncreased = observeBalanceIncrease(logger, destAsset, destAddress, oldBalance);
+
+    // Native SOL Vault swaps are fetched proactively. SPL-tokens don't need a fetch.
+    const swapEndpointNativeVaultAddress = getContractAddress(
+      'Solana',
+      'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT',
+    );
+    const observeFetchPromise = sourceAsset === 'Sol'
+      ? observeFetch(sourceAsset, swapEndpointNativeVaultAddress)
+      : null;
+    
     const { transactionId, sourceAddress } = await executeVaultSwap(
       logger,
       sourceAsset,
@@ -387,9 +401,10 @@ export async function performVaultSwap(
       brokerFees,
       affiliateFees,
     );
+
     swapContext?.updateStatus(logger, SwapStatus.VaultSwapInitiated);
 
-    await observeSwapRequested(
+    const swapRequestedHandle = observeSwapRequested(
       logger,
       sourceAsset,
       destAsset,
@@ -397,28 +412,26 @@ export async function performVaultSwap(
       SwapRequestType.Regular,
     );
 
-    swapContext?.updateStatus(logger, SwapStatus.VaultSwapScheduled);
-
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
       : Promise.resolve();
 
+    await swapRequestedHandle;
+
+    swapContext?.updateStatus(logger, SwapStatus.VaultSwapScheduled);
+
     const [newBalance] = await Promise.all([
-      observeBalanceIncrease(logger, destAsset, destAddress, oldBalance),
+      balanceIncreased,
       ccmEventEmitted,
     ]);
+
     logger.trace(`Swap success! New balance: ${newBalance}!`);
 
-    if (sourceAsset === 'Sol') {
-      // Native Vault swaps are fetched proactively. SPL-tokens don't need a fetch.
-      const swapEndpointNativeVaultAddress = getContractAddress(
-        'Solana',
-        'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT',
-      );
+    if (observeFetchPromise) {
       logger.trace(
         `$Waiting for Swap Endpoint Native Vault Swap Fetch ${swapEndpointNativeVaultAddress}`,
       );
-      await observeFetch(sourceAsset, swapEndpointNativeVaultAddress);
+      await observeFetchPromise;
     }
     swapContext?.updateStatus(logger, SwapStatus.Success);
     return {

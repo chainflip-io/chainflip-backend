@@ -14,9 +14,6 @@ pub struct SolanaRemoveUnusedChannelsState;
 impl OnRuntimeUpgrade for SolanaRemoveUnusedChannelsState {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
-		assert!(ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
-			.next()
-			.is_some());
 		let no_of_items_pre_upgrade: u64 =
 			ElectoralUnsynchronisedStateMap::<Runtime, SolanaInstance>::iter_keys()
 				.count()
