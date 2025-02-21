@@ -198,24 +198,23 @@ async function testDoubleDeposit(parentLogger: Logger, sourceAsset: Asset, destA
 }
 
 export async function testEvmDeposits(testContext: TestContext) {
-
   const depositTests = Promise.all([
-     testSuccessiveDepositEvm('Eth', 'Dot', testContext),
-     testSuccessiveDepositEvm('Flip', 'Btc', testContext),
-     testSuccessiveDepositEvm('ArbEth', 'Dot', testContext),
-     testSuccessiveDepositEvm('ArbUsdc', 'Btc', testContext),
-   ]);
+    testSuccessiveDepositEvm('Eth', 'Dot', testContext),
+    testSuccessiveDepositEvm('Flip', 'Btc', testContext),
+    testSuccessiveDepositEvm('ArbEth', 'Dot', testContext),
+    testSuccessiveDepositEvm('ArbUsdc', 'Btc', testContext),
+  ]);
 
   const noDuplicatedWitnessingTest = Promise.all([
     testNoDuplicateWitnessing('Eth', 'Dot', testContext),
-     testNoDuplicateWitnessing('Eth', 'Btc', testContext),
-     testNoDuplicateWitnessing('Eth', 'Flip', testContext),
-     testNoDuplicateWitnessing('Eth', 'Usdc', testContext),
-     testNoDuplicateWitnessing('ArbEth', 'Dot', testContext),
-     testNoDuplicateWitnessing('ArbEth', 'Btc', testContext),
-     testNoDuplicateWitnessing('ArbEth', 'Flip', testContext),
-     testNoDuplicateWitnessing('ArbEth', 'Usdc', testContext),
-   ]);
+    testNoDuplicateWitnessing('Eth', 'Btc', testContext),
+    testNoDuplicateWitnessing('Eth', 'Flip', testContext),
+    testNoDuplicateWitnessing('Eth', 'Usdc', testContext),
+    testNoDuplicateWitnessing('ArbEth', 'Dot', testContext),
+    testNoDuplicateWitnessing('ArbEth', 'Btc', testContext),
+    testNoDuplicateWitnessing('ArbEth', 'Flip', testContext),
+    testNoDuplicateWitnessing('ArbEth', 'Usdc', testContext),
+  ]);
 
   const multipleTxSwapsTest = Promise.all([
     testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Dot'),
