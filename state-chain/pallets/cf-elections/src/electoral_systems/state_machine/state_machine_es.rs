@@ -1,7 +1,7 @@
+use crate::electoral_systems::state_machine::core::Indexing;
 use cf_utilities::success_threshold_from_share_count;
-use frame_support::{pallet_prelude::Member, Parameter};
 use itertools::Either;
-use sp_std::{fmt::Debug, vec, vec::Vec};
+use sp_std::{fmt::Debug, vec::Vec};
 
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
-	core::{Indexed, Validate, ValidateFor},
+	core::{Indexed, Validate},
 	state_machine::Statemachine,
 };
 
@@ -63,14 +63,13 @@ pub trait StatemachineElectoralSystemTypes:
 		OnFinalizeReturn = Vec<Self::OnFinalizeReturnItem>,
 		// Consensus = Self::Consensus2,
 		// VoteStorage = Self::VoteStorage2,
-		ElectionProperties = Self::ElectionProperties2,
+		// ElectionProperties = Self::ElectionProperties2,
 	>
 {
 	type OnFinalizeContextItem: Clone + Debug;
 	type OnFinalizeReturnItem;
 
-	type ElectionProperties2: ValidateFor<VoteOf<Self>> + Parameter + Member;
-
+	// type ElectionProperties2: ValidateFor<VoteOf<Self>> + Parameter + Member;
 	// type Consensus2: Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
 	// type Vote2: Validate + Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
 	// type VoteStorage2: VoteStorage<Vote = Self::Vote2>;
@@ -83,11 +82,12 @@ pub trait StatemachineElectoralSystemTypes:
 /// this trait defines the conditions on the state machine's associated types for it
 /// to be possible to derive an electoral system.
 pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine<
-	Input = SMInput<(ES::ElectionProperties, ES::Consensus), ES::OnFinalizeContextItem>,
-	State = ES::ElectoralUnsynchronisedState,
-	Settings = ES::ElectoralUnsynchronisedSettings,
-	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
->;
+		Input = SMInput<(ES::ElectionProperties, ES::Consensus), ES::OnFinalizeContextItem>,
+		InputIndex = Vec<ES::ElectionProperties>,
+		State = ES::ElectoralUnsynchronisedState,
+		Settings = ES::ElectoralUnsynchronisedSettings,
+		Output = Result<ES::OnFinalizeReturnItem, &'static str>,
+	> + Indexing<ES::ElectionProperties, VoteOf<ES>>;
 
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the consensus mechanism's associated types for it
@@ -301,7 +301,7 @@ where
 
 		for vote in consensus_votes.active_votes() {
 			// insert vote if it is valid for the given properties
-			if properties.validate(&vote).is_ok() {
+			if Bounds::Statemachine::validate(&properties, &vote).is_ok() {
 				log::info!("inserting vote {vote:?}");
 				consensus.insert_vote(vote);
 			} else {

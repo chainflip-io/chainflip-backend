@@ -2,10 +2,7 @@ use core::iter::Step;
 
 use crate::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	state_machine::{
-		core::{Hook, IndexOf, Indexed, Validate},
-		state_machine::Statemachine,
-	},
+	state_machine::core::{Hook, Indexed, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -550,6 +547,7 @@ pub struct SMBlockProcessor<T: BWProcessorTypes> {
 	_phantom: PhantomData<T>,
 }
 
+/*
 impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 	type Input = SMBlockProcessorInput<T>;
 	type Settings = ();
@@ -570,6 +568,7 @@ impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 		}
 	}
 }
+	*/
 
 // #[cfg(test)]
 // fn step_specification(

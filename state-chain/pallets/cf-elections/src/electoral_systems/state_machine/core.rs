@@ -204,9 +204,8 @@ pub mod hook_test_utils {
 	}
 }
 
-
-pub trait Validator<Index,Value> {
-	type Error;
+pub trait Indexing<Index, Value> {
+	type Error: Debug;
 	fn validate(index: &Index, value: &Value) -> Result<(), Self::Error>;
 }
 

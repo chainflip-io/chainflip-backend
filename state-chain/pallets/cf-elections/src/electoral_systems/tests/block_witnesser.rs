@@ -133,13 +133,6 @@ impl StatemachineElectoralSystemTypes for Types {
 	type OnFinalizeContextItem = ChainProgress<u64>;
 	type OnFinalizeReturnItem = ();
 
-	// restating types since we have to prove that they have the correct bounds
-	// type Consensus2 = BlockData;
-	// type Vote2 = BlockData;
-	// type VoteStorage2 =
-	// 	vote_storage::bitmap::Bitmap<ConstantIndex<(u64, ElectionProperties, u8), BlockData>>;
-	type ElectionProperties2 = Self::ElectionProperties;
-
 	// the actual state machine and consensus mechanisms of this ES
 	type Statemachine = BWStateMachine<Self>;
 	type ConsensusMechanism = BWConsensus<Self>;
@@ -193,10 +186,7 @@ fn generate_votes(
 		votes: correct_voters
 			.clone()
 			.into_iter()
-			.map(|v| ConsensusVote {
-				vote: Some(((), correct_data.clone())),
-				validator_id: v,
-			})
+			.map(|v| ConsensusVote { vote: Some(((), correct_data.clone())), validator_id: v })
 			.chain(incorrect_voters.clone().into_iter().map(|v| ConsensusVote {
 				vote: Some(((), incorrect_data.clone())),
 				validator_id: v,

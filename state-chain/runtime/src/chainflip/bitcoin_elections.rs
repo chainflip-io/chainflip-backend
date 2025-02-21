@@ -21,7 +21,9 @@ use pallet_cf_elections::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
 			state_machine::{
-				BWElectionProperties, BWProcessorTypes, BWStateMachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState, ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook
+				BWElectionProperties, BWProcessorTypes, BWStateMachine, BWTypes,
+				BlockWitnesserSettings, BlockWitnesserState, ElectionPropertiesHook, HookTypeFor,
+				SafeModeEnabledHook,
 			},
 		},
 		composite::{
@@ -30,7 +32,7 @@ use pallet_cf_elections::{
 		},
 		liveness::Liveness,
 		state_machine::{
-			core::{ConstantIndex, Hook},
+			core::Hook,
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
@@ -96,9 +98,6 @@ impls! {
 		// both context and return have to be vectors, these are the item types
 		type OnFinalizeContextItem = ();
 		type OnFinalizeReturnItem = ChainProgress<btc::BlockNumber>;
-
-		// restating types since we have to prove that they have the correct bounds
-		type ElectionProperties2 = Self::ElectionProperties;
 
 		// the actual state machine and consensus mechanisms of this ES
 		type ConsensusMechanism = BlockHeightTrackingConsensus<Self>;
@@ -173,9 +172,6 @@ impls! {
 		// both context and return have to be vectors, these are the item types
 		type OnFinalizeContextItem = ChainProgress<btc::BlockNumber>;
 		type OnFinalizeReturnItem = ();
-
-		// restating types since we have to prove that they have the correct bounds
-		type ElectionProperties2 = Self::ElectionProperties;
 
 		// the actual state machine and consensus mechanisms of this ES
 		type Statemachine = BWStateMachine<Self>;

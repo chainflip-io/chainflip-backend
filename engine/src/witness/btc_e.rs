@@ -14,7 +14,7 @@ use pallet_cf_elections::{
 			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties,
 			BlockHeightTrackingTypes,
 		},
-		state_machine::core::ConstantIndex,
+		block_witnesser::state_machine::BWElectionProperties,
 	},
 	VoteOf,
 };
@@ -58,7 +58,11 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 		_settings: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		deposit_addresses: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessingES>>, anyhow::Error> {
-		let (witness_range, deposit_addresses, _extra) = deposit_addresses;
+		let BWElectionProperties {
+			block_height: witness_range,
+			properties: deposit_addresses,
+			reorg_id: _,
+		} = deposit_addresses;
 		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
 		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
 
@@ -86,7 +90,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
 		}
 
-		Ok(Some(ConstantIndex { data: witnesses, _phantom: Default::default() }))
+		Ok(Some(witnesses))
 	}
 }
 

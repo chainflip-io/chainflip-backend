@@ -6,7 +6,7 @@ use crate::electoral_systems::{
 	block_height_tracking::ChainProgress,
 	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{
-		core::{IndexOf, MultiIndexAndValue, Validate},
+		core::{IndexOf, Validate},
 		state_machine::Statemachine,
 		state_machine_es::SMInput,
 	},
@@ -217,18 +217,13 @@ pub struct BWElectionProperties<T: BWTypes> {
 // 	}
 // }
 
-impl<T: BWTypes> ValidateFor<SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>> for BWElectionProperties<T> {
+impl<T: BWTypes> Indexing<BWElectionProperties<T>, T::BlockData> for BWStateMachine<T> {
 	type Error = ();
-	
-	fn validate(&self, value: &SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>) -> Result<(), Self::Error> {
-			todo!()
-		}
 
-	// fn validate(&self, _data: &T::BlockData) -> Result<(), Self::Error> {
-	// 	Ok(())
-	// }
+	fn validate(index: &BWElectionProperties<T>, value: &T::BlockData) -> Result<(), Self::Error> {
+		todo!()
+	}
 }
-
 
 pub struct BWStateMachine<Types: BWTypes> {
 	_phantom: sp_std::marker::PhantomData<Types>,
@@ -237,6 +232,7 @@ pub struct BWStateMachine<Types: BWTypes> {
 impl<T: BWTypes> Statemachine for BWStateMachine<T> {
 	type Input =
 		SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>;
+	type InputIndex = Vec<BWElectionProperties<T>>;
 	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
 	type State = BlockWitnesserState<T>;

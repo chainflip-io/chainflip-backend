@@ -1,9 +1,6 @@
-use core::hash::Hash;
-
 use crate::{
-	electoral_systems::state_machine::{
-		consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold},
-		core::ConstantIndex,
+	electoral_systems::state_machine::consensus::{
+		ConsensusMechanism, SupermajorityConsensus, Threshold,
 	},
 	SharedDataHash,
 };

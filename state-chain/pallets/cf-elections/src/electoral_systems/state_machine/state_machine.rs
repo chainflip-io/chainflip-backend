@@ -1,4 +1,4 @@
-use super::core::{IndexOf, Indexed, Validate, Validator};
+use super::core::{Indexing, Validate};
 
 #[cfg(test)]
 use proptest::prelude::{BoxedStrategy, Just, Strategy};
@@ -65,15 +65,16 @@ use sp_std::fmt::Debug;
 /// state machine. Here `states` and `inputs` are strategies for generating states and inputs, and
 /// the function runs the `step` function on randomly generated input values, while ensuring that
 /// everything is valid.
-pub trait Statemachine: 'static + Validator<IndexOf<Self::Input>, Self::Input> {
-	type Input: Validate + Indexed;
+pub trait Statemachine: 'static + Indexing<Self::InputIndex, Self::Input> {
+	type Input;
+	type InputIndex;
 	type Settings;
 	type Output: Validate;
 	type State: Validate;
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
-	fn input_index(s: &mut Self::State) -> IndexOf<Self::Input>;
+	fn input_index(s: &mut Self::State) -> Self::InputIndex;
 
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore
@@ -100,7 +101,7 @@ pub trait Statemachine: 'static + Validator<IndexOf<Self::Input>, Self::Input> {
 		path: &'static str,
 		states: impl Strategy<Value = Self::State>,
 		settings: impl Strategy<Value = Self::Settings>,
-		inputs: impl Fn(IndexOf<Self::Input>) -> BoxedStrategy<Self::Input>,
+		inputs: impl Fn(Self::InputIndex) -> BoxedStrategy<Self::Input>,
 	) where
 		Self::State: sp_std::fmt::Debug + Clone + Send,
 		Self::Input: sp_std::fmt::Debug + Clone + Send,
@@ -132,11 +133,13 @@ pub trait Statemachine: 'static + Validator<IndexOf<Self::Input>, Self::Input> {
 							"input state not valid {:?}",
 							state.is_valid()
 						);
-						assert!(input.is_valid().is_ok(), "input not valid {:?}", input.is_valid());
-						assert!(
-							input.has_index(&Self::input_index(&mut state)),
-							"input has wrong index"
-						);
+						// assert!(input.is_valid().is_ok(), "input not valid {:?}",
+						// input.is_valid());
+
+						// ensure input has correct index
+						Self::validate(&Self::input_index(&mut state), &input)
+							.map_err(|err| format!("input has wrong index: {err:?}"))
+							.unwrap();
 
 						// backup state
 						let mut prev_state = state.clone();

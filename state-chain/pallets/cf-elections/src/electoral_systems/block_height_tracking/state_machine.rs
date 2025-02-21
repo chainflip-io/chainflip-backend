@@ -7,7 +7,7 @@ use super::{
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
 	BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
 };
-use crate::electoral_systems::state_machine::core::{Hook, MultiIndexAndValue, ValidateFor, Validator};
+use crate::electoral_systems::state_machine::core::{Hook, Indexing, ValidateFor};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::MaxEncodedLen;
@@ -43,13 +43,12 @@ impl<T: BlockHeightTrackingTypes> Validate
 	}
 }
 
-
-impl<T: BlockHeightTrackingTypes> ValidateFor<InputHeaders<T>> for BlockHeightTrackingProperties<T::ChainBlockNumber>
+impl<T: BlockHeightTrackingTypes> ValidateFor<InputHeaders<T>>
+	for BlockHeightTrackingProperties<T::ChainBlockNumber>
 {
 	type Error = VoteValidationError;
 
 	fn validate(&self, this: &InputHeaders<T>) -> Result<(), Self::Error> {
-
 		this.is_valid()?;
 
 		if self.witness_from_index.is_zero() {
@@ -146,26 +145,32 @@ pub struct BlockHeightTrackingSM<T: BlockHeightTrackingTypes> {
 	_phantom: core::marker::PhantomData<T>,
 }
 
-impl<T: BlockHeightTrackingTypes> Validator<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>> for BlockHeightTrackingSM<T> {
+impl<T: BlockHeightTrackingTypes>
+	Indexing<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>
+	for BlockHeightTrackingSM<T>
+{
 	type Error = ();
 
-	fn validate(index: &BlockHeightTrackingProperties<T::ChainBlockNumber>, value: &InputHeaders<T>) -> Result<(), Self::Error> {
+	fn validate(
+		_index: &BlockHeightTrackingProperties<T::ChainBlockNumber>,
+		_value: &InputHeaders<T>,
+	) -> Result<(), Self::Error> {
 		todo!()
 	}
 }
 
-impl<A, B, X, T: Validator<A,B>> Validator<Vec<A>, SMInput<(A,B),X>> for T {
+impl<A, B, X, T: Indexing<A, B>> Indexing<Vec<A>, SMInput<(A, B), X>> for T {
 	type Error = ();
 
-	fn validate(index: &Vec<A>, value: &SMInput<(A,B),X>) -> Result<(), Self::Error> {
+	fn validate(_index: &Vec<A>, _value: &SMInput<(A, B), X>) -> Result<(), Self::Error> {
 		todo!()
 	}
-} 
-
+}
 
 impl<T: BlockHeightTrackingTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type State = BHWStateWrapper<T>;
 	type Input = SMInput<(BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>), ()>;
+	type InputIndex = Vec<BlockHeightTrackingProperties<T::ChainBlockNumber>>;
 	type Settings = ();
 	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
 
