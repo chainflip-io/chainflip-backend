@@ -26,7 +26,7 @@ cf-runtime-utilities = { workspace = true }
 # Parity deps
 codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive"] }
-frame-benchmarking = { workspace = true }
+frame-benchmarking = { workspace = true, optional = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 sp-std = { workspace = true }

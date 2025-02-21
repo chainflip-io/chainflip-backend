@@ -11,14 +11,14 @@ curve25519-dalek = { version = "^2.1", optional = true, default-features = false
 	"u64_backend",
 ] }
 borsh = { workspace = true, features = [
-  "derive",
-  "unstable__schema",
-  "hashbrown",
+	"derive",
+	"unstable__schema",
+	"hashbrown",
 ] }
 # Special case for Solana: We use bincode 2 for its no-std support.
 bincode = { version = "2.0.0-rc.3", default-features = false, features = [
-  "alloc",
-  "serde",
+	"alloc",
+	"serde",
 ] }
 generic-array = { workspace = true, features = ["serde"] }
 cf-utilities = { package = "utilities", path = "../../../utilities", default-features = false }
@@ -30,15 +30,16 @@ sha2-const = { workspace = true }
 thiserror = { workspace = true, optional = true }
 codec = { workspace = true, optional = true, features = ["derive"] }
 scale-info = { workspace = true, optional = true, features = ["derive"] }
-heck = { workspace = true }
+
 
 sp-std = { workspace = true }
 sp-core = { workspace = true }
-cf-primitives = { workspace = true } 
+cf-primitives = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
+heck = { workspace = true }
 
 [features]
 default = ["str", "serde", "pda", "scale", "std"]

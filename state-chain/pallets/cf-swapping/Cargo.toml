@@ -29,7 +29,7 @@ log = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive"] }
 
-frame-benchmarking = { workspace = true }
+frame-benchmarking = { workspace = true, optional = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 
@@ -54,7 +54,6 @@ std = [
   "cf-amm/std",
   "cf-traits/std",
   "codec/std",
-  "frame-benchmarking/std",
   "frame-support/std",
   "frame-system/std",
   "log/std",

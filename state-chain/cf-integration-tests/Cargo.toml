@@ -14,12 +14,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 [lints]
 workspace = true
 
-[dependencies]
-state-chain-runtime = { workspace = true }
-log = { workspace = true }
-
 [dev-dependencies]
-libsecp256k1 = { workspace = true, default-features = true, features = ["static-context"] }
+log = { workspace = true }
+state-chain-runtime = { workspace = true }
+libsecp256k1 = { workspace = true, default-features = true, features = [
+    "static-context",
+] }
 rand = { workspace = true, default-features = true }
 hex-literal = { workspace = true, default-features = true }
 secp256k1 = { workspace = true, features = ["rand-std"] }
@@ -27,8 +27,10 @@ arrayref = { workspace = true }
 
 # Chainflip local dependencies
 # Additional FRAME pallets
-cf-amm = { workspace = true, default-features = true}
-cf-chains = { workspace = true, default-features = true, features = ["runtime-integration-tests"] }
+cf-amm = { workspace = true, default-features = true }
+cf-chains = { workspace = true, default-features = true, features = [
+    "runtime-integration-tests",
+] }
 cf-primitives = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
@@ -55,11 +57,15 @@ pallet-cf-threshold-signature = { workspace = true, default-features = true }
 pallet-cf-validator = { workspace = true, default-features = true }
 pallet-cf-vaults = { workspace = true, default-features = true }
 pallet-cf-witnesser = { workspace = true, default-features = true }
-pallet-session = { workspace = true, default-features = true, features = ["historical"] }
+pallet-session = { workspace = true, default-features = true, features = [
+    "historical",
+] }
 
 # Substrate dependencies
 codec = { workspace = true, default-features = true, features = ["derive"] }
-scale-info = { workspace = true, default-features = true, features = ["derive"] }
+scale-info = { workspace = true, default-features = true, features = [
+    "derive",
+] }
 
 frame-executive = { workspace = true, default-features = true }
 frame-support = { workspace = true, default-features = true }

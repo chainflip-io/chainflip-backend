@@ -24,7 +24,6 @@ cf-utilities = { workspace = true }
 # Used for benchmarking
 pallet-cf-funding = { workspace = true, optional = true }
 pallet-cf-reputation = { workspace = true, optional = true }
-pallet-cf-vaults = { workspace = true, optional = true }
 
 log = { workspace = true }
 nanorand = { workspace = true, features = ["wyrand"] }
@@ -62,9 +61,6 @@ std = [
   "frame-system/std",
   "log/std",
   "nanorand/std",
-  "pallet-cf-vaults/std",
-  "pallet-cf-funding/std",
-  "pallet-cf-reputation/std",
   "pallet-session/std",
   "scale-info/std",
   "serde/std",
@@ -80,7 +76,6 @@ runtime-benchmarks = [
   "frame-system/runtime-benchmarks",
   "pallet-cf-funding/runtime-benchmarks",
   "pallet-cf-reputation/runtime-benchmarks",
-  "pallet-cf-vaults/runtime-benchmarks",
   "dep:sp-application-crypto",
 ]
 try-runtime = [
@@ -89,6 +84,5 @@ try-runtime = [
   "cf-runtime-utilities/try-runtime",
   "pallet-cf-funding/try-runtime",
   "pallet-cf-reputation/try-runtime",
-  "pallet-cf-vaults/try-runtime",
   "pallet-session/try-runtime",
 ]

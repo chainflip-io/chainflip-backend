@@ -36,13 +36,11 @@ serde = { workspace = true, default-features = true, features = [
 sha2 = { workspace = true, default-features = true }
 thiserror = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
-tokio-stream = { workspace = true, features = ["sync"] }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
 num-derive = { workspace = true }
 zeroize = { workspace = true }
 generic-array = { workspace = true }
-public-ip = { workspace = true }
 curve25519-dalek = { workspace = true, default-features = true, features = [
 	"serde",
 ] }
