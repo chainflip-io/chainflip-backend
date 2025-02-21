@@ -618,3 +618,21 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 			);
 		});
 }
+
+#[test]
+fn test_refund_fee_calculation() {
+	new_test_ext().execute_with(|| {
+		MinimumNetworkFeePerChunk::<Test>::set(10);
+
+		// Usdc, no conversion needed, so the refund fee is just 10
+		assert_eq!(Swapping::take_refund_fee(1000, Asset::Usdc), Ok(990));
+		assert_eq!(Swapping::take_refund_fee(0, Asset::Usdc), Ok(0));
+		assert_eq!(Swapping::take_refund_fee(5, Asset::Usdc), Ok(0));
+		assert_eq!(Swapping::take_refund_fee(u128::MAX, Asset::Usdc), Ok(u128::MAX - 10));
+
+		// Conversion needed, so the refund fee is 10 * DEFAULT_SWAP_RATE = 20
+		assert_eq!(Swapping::take_refund_fee(1000, Asset::Eth), Ok(980));
+		assert_eq!(Swapping::take_refund_fee(0, Asset::Eth), Ok(0));
+		assert_eq!(Swapping::take_refund_fee(15, Asset::Eth), Ok(0));
+	});
+}

@@ -1740,13 +1740,21 @@ mod on_chain_swapping {
 	fn swap_on_chain_with_refund() {
 		const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
+		const MIN_NETWORK_FEE: u128 = 10;
+		const NEW_SWAP_RATE: f64 = DEFAULT_SWAP_RATE as f64 / 2.0;
 		const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
 
-		let min_price = U256::from(DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS;
+		// We require the minimum network fee to be non-zero for the refund fee to work, so this
+		// must be taken into account in the min_price calculation.
+		let min_price = U256::from(
+			(DEFAULT_SWAP_RATE as f64 *
+				DEFAULT_SWAP_RATE as f64 *
+				(((CHUNK_AMOUNT - MIN_NETWORK_FEE) as f64) / CHUNK_AMOUNT as f64)) as u128,
+		) << PRICE_FRACTIONAL_BITS;
 
 		new_test_ext()
 			.execute_with(|| {
+				MinimumNetworkFeePerChunk::<Test>::set(MIN_NETWORK_FEE);
 				Swapping::init_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
@@ -1791,21 +1799,34 @@ mod on_chain_swapping {
 				);
 
 				// Now we adjust execution price so that the next chunk gets refunded:
-				SwapRate::set(DEFAULT_SWAP_RATE as f64 / 2.0);
+				SwapRate::set(NEW_SWAP_RATE);
 			})
 			.then_process_blocks_until_block(CHUNK_2_BLOCK)
 			.then_execute_with(|_| {
+				const REFUND_FEE: AssetAmount = MIN_NETWORK_FEE * NEW_SWAP_RATE as u128;
 				// Only one chunk is expected to be swapped:
 				const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
-					CHUNK_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+					CHUNK_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE -
+						MIN_NETWORK_FEE * DEFAULT_SWAP_RATE;
+				const EXPECTED_REFUND_AMOUNT: AssetAmount = CHUNK_AMOUNT - REFUND_FEE;
 
 				assert_event_sequence!(
 					Test,
+					RuntimeEvent::Swapping(Event::SwapRequested {
+						request_type: SwapRequestTypeEncoded::NetworkFee,
+						input_amount: REFUND_FEE,
+						..
+					}),
+					RuntimeEvent::Swapping(Event::SwapScheduled {
+						swap_type: SwapType::NetworkFee,
+						input_amount: REFUND_FEE,
+						..
+					}),
 					RuntimeEvent::Swapping(Event::RefundedOnChain {
 						swap_request_id: SWAP_REQUEST_ID,
 						account_id: LP_ACCOUNT,
 						asset: INPUT_ASSET,
-						amount: CHUNK_AMOUNT,
+						amount: EXPECTED_REFUND_AMOUNT,
 					}),
 					RuntimeEvent::Swapping(Event::CreditedOnChain {
 						swap_request_id: SWAP_REQUEST_ID,
@@ -1818,7 +1839,10 @@ mod on_chain_swapping {
 					}),
 				);
 
-				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), CHUNK_AMOUNT);
+				assert_eq!(
+					MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET),
+					EXPECTED_REFUND_AMOUNT
+				);
 				assert_eq!(
 					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
 					EXPECTED_OUTPUT_AMOUNT

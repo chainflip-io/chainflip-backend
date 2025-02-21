@@ -566,9 +566,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
 
-	/// Minimum network fee charged per chunk (only applies to regular swaps, i.e. it excludes
-	/// internal swaps like ingress/egress fees). In practice this should also effectively be the
-	/// minimum fee charged per swap request due to us also enforcing minimum chunk size.
+	/// Minimum network fee in USDC, charged per chunk (only applies to regular swaps, i.e. it
+	/// excludes internal swaps like ingress/egress fees). In practice this should also effectively
+	/// be the minimum fee charged per swap request due to us also enforcing minimum chunk size.
 	#[pallet::storage]
 	pub type MinimumNetworkFeePerChunk<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
@@ -1619,33 +1619,45 @@ pub mod pallet {
 						return;
 					};
 
-					let amount_to_refund = swap.input_amount + *remaining_input_amount;
-
-					match &refund_params.refund_destination {
-						AccountOrAddress::ExternalAddress(address) => {
-							Self::egress_for_swap(
-								request.id,
-								amount_to_refund,
-								request.input_asset,
-								address.clone(),
-								None, /* refunds don't use ccm parameters */
-								true, /* refund */
+					let total_input_remaining = swap.input_amount + *remaining_input_amount;
+					let amount_to_refund =
+						match Self::take_refund_fee(total_input_remaining, request.input_asset) {
+							Ok(remaining) => remaining,
+							Err(e) => {
+								log_or_panic!(
+								"Failed to calculate refund fee for swap request {swap_request_id}: {e:?}"
 							);
-						},
-						AccountOrAddress::InternalAccount(account_id) => {
-							Self::deposit_event(Event::<T>::RefundedOnChain {
-								swap_request_id,
-								account_id: account_id.clone(),
-								asset: request.input_asset,
-								amount: amount_to_refund,
-							});
+								total_input_remaining
+							},
+						};
 
-							T::BalanceApi::credit_account(
-								account_id,
-								request.input_asset,
-								amount_to_refund,
-							);
-						},
+					if amount_to_refund > 0 {
+						match &refund_params.refund_destination {
+							AccountOrAddress::ExternalAddress(address) => {
+								Self::egress_for_swap(
+									request.id,
+									amount_to_refund,
+									request.input_asset,
+									address.clone(),
+									None, /* refunds don't use ccm parameters */
+									true, /* refund */
+								);
+							},
+							AccountOrAddress::InternalAccount(account_id) => {
+								Self::deposit_event(Event::<T>::RefundedOnChain {
+									swap_request_id,
+									account_id: account_id.clone(),
+									asset: request.input_asset,
+									amount: amount_to_refund,
+								});
+
+								T::BalanceApi::credit_account(
+									account_id,
+									request.input_asset,
+									amount_to_refund,
+								);
+							},
+						}
 					}
 
 					// In case of DCA we may have partially swapped and now have some output
@@ -2092,6 +2104,50 @@ pub mod pallet {
 					}
 				},
 			};
+		}
+
+		pub(super) fn take_refund_fee(
+			total_input_amount: AssetAmount,
+			input_asset: Asset,
+		) -> Result<AssetAmount, DispatchError> {
+			let refund_fee_usdc = MinimumNetworkFeePerChunk::<T>::get();
+
+			let required_refund_fee_as_input_asset = if input_asset == STABLE_ASSET {
+				refund_fee_usdc
+			} else {
+				with_transaction_unchecked(|| {
+					TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
+						STABLE_ASSET,
+						input_asset,
+						refund_fee_usdc,
+					))
+				})?
+			};
+
+			let (remaining_amount_to_refund, refund_fee) =
+				if required_refund_fee_as_input_asset < total_input_amount {
+					(
+						total_input_amount - required_refund_fee_as_input_asset,
+						required_refund_fee_as_input_asset,
+					)
+				} else {
+					(0, total_input_amount)
+				};
+
+			if refund_fee > 0 {
+				Self::init_swap_request(
+					input_asset,
+					refund_fee,
+					Asset::Flip,
+					SwapRequestType::NetworkFee,
+					Default::default(), /* broker fees */
+					None,
+					None,
+					SwapOrigin::Internal,
+				);
+			}
+
+			Ok(remaining_amount_to_refund)
 		}
 	}
 
