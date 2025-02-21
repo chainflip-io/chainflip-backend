@@ -1,4 +1,4 @@
-use super::core::{IndexedValidateFor, Validate};
+use super::core::{IndexedValidate, Validate};
 
 #[cfg(test)]
 use proptest::prelude::{BoxedStrategy, Just, Strategy};
@@ -42,7 +42,7 @@ use sp_std::fmt::Debug;
 /// next state, as well as a result. The input is either the consensus gained in some election which
 /// was open, or alternatively the `OnFinalizeContext` which is being passed to this ES from another
 /// ES upstream.   
-/// 
+///
 /// ## Multiple elections
 /// The `step` function is designed as the smallest logical state transition of the ES. Thus it
 /// takes as input only a single consensus *or* a single context. Thus, during a typical
@@ -74,7 +74,7 @@ use sp_std::fmt::Debug;
 ///
 /// Additionally the `step_specification` function can be implemented, in order to provide custom
 /// pre-/postconditions to be checked during `test()`.
-pub trait Statemachine: 'static + IndexedValidateFor<Self::InputIndex, Self::Input> {
+pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input> {
 	type Input;
 	type InputIndex;
 	type Settings;

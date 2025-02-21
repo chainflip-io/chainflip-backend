@@ -203,7 +203,7 @@ pub mod hook_test_utils {
 	}
 }
 
-pub trait IndexedValidateFor<Index, Value> {
+pub trait IndexedValidate<Index, Value> {
 	type Error;
 	fn validate(index: &Index, value: &Value) -> Result<(), Self::Error>;
 }

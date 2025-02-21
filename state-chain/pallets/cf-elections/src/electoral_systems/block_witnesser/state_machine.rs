@@ -182,7 +182,7 @@ pub struct BWElectionProperties<T: BWTypes> {
 	pub reorg_id: u8,
 }
 
-impl<T: BWTypes> IndexedValidateFor<BWElectionProperties<T>, T::BlockData> for BWStateMachine<T> {
+impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, T::BlockData> for BWStateMachine<T> {
 	type Error = ();
 
 	fn validate(

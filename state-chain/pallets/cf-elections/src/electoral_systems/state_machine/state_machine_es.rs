@@ -1,4 +1,4 @@
-use crate::electoral_systems::state_machine::core::IndexedValidateFor;
+use crate::electoral_systems::state_machine::core::IndexedValidate;
 use cf_utilities::success_threshold_from_share_count;
 use derive_where::derive_where;
 use sp_std::{fmt::Debug, vec::Vec};
@@ -15,22 +15,41 @@ use super::{
 	state_machine::Statemachine,
 };
 
-/// This is an Either type, unfortunately it's more ergonomic
-/// to recreate this instead of using `itertools::Either`, because
-/// we need a special implementation of Indexed: we want the vote to
-/// be indexed but not the context.
+/// The input type of electoral state machines.
+///
+/// Since the state machine's step function has to be called in two different cases,
+///  - when an election reached consensus
+///  - when the upstream electoral system produces a new `OnFinalizeContext`,
+/// the input type of the state machine should be an enum with these two variants.
+///
+/// To be more precise, in case an election reaches consensus, the SM is called
+/// with a tuple `(ElectionProperties, Consensus)`; but this isn't visible
+/// here in this definition.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SMInput<Consensus, Context> {
 	Consensus(Consensus),
 	Context(Context),
 }
 
-impl<A: PartialEq, B, X: Validate, T: IndexedValidateFor<A, B>>
-	IndexedValidateFor<Vec<A>, SMInput<(A, B), X>> for T
+/// Derivation of an instance of `IndexedValidate` for the input of an electoral state machine,
+/// The index is `Vec<ElectionProperties>`.
+///
+/// This validation trait is automatically derived if there is an instance of
+/// `IndexedValidate<Properties, Consensus>`, which is more straight-forward to implement when
+/// implementing an electoral state machine.
+impl<
+		T: IndexedValidate<Properties, Consensus>,
+		Properties: PartialEq,
+		Consensus,
+		Context: Validate,
+	> IndexedValidate<Vec<Properties>, SMInput<(Properties, Consensus), Context>> for T
 {
-	type Error = SMInputValidateError<A, B, X, T>;
+	type Error = SMInputValidateError<Properties, Consensus, Context, T>;
 
-	fn validate(index: &Vec<A>, value: &SMInput<(A, B), X>) -> Result<(), Self::Error> {
+	fn validate(
+		index: &Vec<Properties>,
+		value: &SMInput<(Properties, Consensus), Context>,
+	) -> Result<(), Self::Error> {
 		match value {
 			SMInput::Consensus((property, consensus)) =>
 				if index.contains(property) {
@@ -45,10 +64,11 @@ impl<A: PartialEq, B, X: Validate, T: IndexedValidateFor<A, B>>
 	}
 }
 
+/// Custom error type for validation of `SMInput`.
 #[derive_where(Debug; T::Error: Debug, Context::Error: Debug)]
 pub enum SMInputValidateError<Properties, Consensus, Context: Validate, T>
 where
-	T: IndexedValidateFor<Properties, Consensus>,
+	T: IndexedValidate<Properties, Consensus>,
 {
 	WrongIndex,
 	InvalidConsensus(T::Error),
@@ -87,7 +107,7 @@ pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine
 		State = ES::ElectoralUnsynchronisedState,
 		Settings = ES::ElectoralUnsynchronisedSettings,
 		Output = Result<ES::OnFinalizeReturnItem, &'static str>,
-	> + IndexedValidateFor<ES::ElectionProperties, VoteOf<ES>>;
+	> + IndexedValidate<ES::ElectionProperties, VoteOf<ES>>;
 
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the consensus mechanism's associated types for it

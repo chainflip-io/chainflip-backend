@@ -5,7 +5,7 @@ use super::{
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
 	BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
 };
-use crate::electoral_systems::state_machine::core::{Hook, IndexedValidateFor};
+use crate::electoral_systems::state_machine::core::{Hook, IndexedValidate};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::MaxEncodedLen;
@@ -62,7 +62,7 @@ pub struct InputHeaders<Types: BlockHeightTrackingTypes>(
 // }
 
 impl<T: BlockHeightTrackingTypes>
-	IndexedValidateFor<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>
+	IndexedValidate<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>
 	for BlockHeightTrackingSM<T>
 {
 	type Error = VoteValidationError;
