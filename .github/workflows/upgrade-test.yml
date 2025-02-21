@@ -212,63 +212,63 @@ jobs:
           pnpm vitest run -t "ConcurrentTests"
 
       - name: Print chainflip-engine logs 🚗
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
 
       - name: Print solana logs ☀️
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/solana/*.log
           cat /tmp/solana/test-ledger/validator.log
 
       - name: Print new pre-upgrade chainflip-engine logs 🚗
-        if: always()
+        if: inputs.run-job
         # In the case of a compatible upgrade, we don't expect any logs here
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine-pre-upgrade.*log
 
       - name: Print new post-upgrade chainflip-engine logs 🚗
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine-post-upgrade.*log
 
       - name: Print chainflip-node logs 📡
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-node.*log
 
       - name: Print chainflip-broker-api logs 💼
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-broker-api.*log
 
       - name: Print chainflip-lp-api logs 🤑
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-lp-api.*log
 
       - name: Print chainflip-deposit-monitor logs 🔬
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-deposit-monitor.*log
 
       - name: Print localnet init debug logs 🕵️‍♂️
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/debug.log
 
       - name: Upload Localnet Logs 💾
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -277,7 +277,7 @@ jobs:
             /tmp/chainflip/*/chainflip-*.*log
 
       - name: Upload Chainflip Logs 💾
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -286,7 +286,7 @@ jobs:
             /tmp/chainflip/logs/*.log
 
       - name: Upload Bouncer Logs 💾
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -324,7 +324,7 @@ jobs:
             /tmp/chainflip/snapshots/*.snap
 
       - name: Clean Up docker containers 🧹
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           ls -alR /tmp/chainflip
