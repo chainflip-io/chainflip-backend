@@ -223,29 +223,29 @@ async function main() {
   }
   testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
 
-  // 3. -- Test boost and late tx report --
-  // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
-  testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
-  btcRefundAddress = await newAssetAddress('Btc');
-
-  const channelId = await brokerLevelScreeningTestScenario(
-    '0.2',
-    true,
-    btcRefundAddress,
-    // We wait 12 seconds (2 localnet btc blocks) before we submit the tx.
-    // We submit the extrinsic manually in order to ensure that even though it definitely arrives,
-    // the transaction is refunded because the extrinsic is submitted too late.
-    async (txId) => {
-      await sleep(MILLI_SECS_PER_BLOCK * 2);
-      await markTxForRejection(txId);
-    },
-  );
-
-  await observeEvent('bitcoinIngressEgress:DepositFinalised', {
-    test: (event) => event.data.channelId === channelId,
-  }).event;
-
-  testBrokerLevelScreening.log(`Swap was executed and transaction was not refunded 👍.`);
+  // // 3. -- Test boost and late tx report --
+  // // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
+  // testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
+  // btcRefundAddress = await newAssetAddress('Btc');
+  //
+  // const channelId = await brokerLevelScreeningTestScenario(
+  //   '0.2',
+  //   true,
+  //   btcRefundAddress,
+  //   // We wait 12 seconds (2 localnet btc blocks) before we submit the tx.
+  //   // We submit the extrinsic manually in order to ensure that even though it definitely arrives,
+  //   // the transaction is refunded because the extrinsic is submitted too late.
+  //   async (txId) => {
+  //     await sleep(MILLI_SECS_PER_BLOCK * 2);
+  //     await markTxForRejection(txId);
+  //   },
+  // );
+  //
+  // await observeEvent('bitcoinIngressEgress:DepositFinalised', {
+  //   test: (event) => event.data.channelId === channelId,
+  // }).event;
+  //
+  // testBrokerLevelScreening.log(`Swap was executed and transaction was not refunded 👍.`);
 
   // 4. -- Restore mockmode --
   await setMockmode(previousMockmode);

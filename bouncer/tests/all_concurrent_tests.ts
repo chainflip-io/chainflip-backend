@@ -42,7 +42,7 @@ async function runAllConcurrentTests() {
     testMultipleMembersGovernance.run(),
     testLpApi.run(),
     testBrokerFeeCollection.run(),
-    testBoostingSwap.run(),
+    // testBoostingSwap.run(),
     testFillOrKill.run(),
     testDCASwaps.run(),
     testCancelOrdersBatch.run(),

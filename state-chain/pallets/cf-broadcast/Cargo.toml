@@ -23,6 +23,8 @@ cf-traits = { workspace = true }
 cfe-events = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 
+derive-where = "1.2.7"
+
 log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 # Parity deps

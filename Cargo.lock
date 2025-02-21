@@ -7955,6 +7955,7 @@ dependencies = [
  "cf-test-utilities",
  "cf-traits",
  "cfe-events",
+ "derive-where",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

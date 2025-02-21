@@ -1,14 +1,17 @@
 use sp_std::{collections::btree_map::BTreeMap, iter::Step, vec, vec::Vec};
 
-use crate::{BitcoinIngressEgress, Runtime};
+use crate::{
+	chainflip::bitcoin_elections::{
+		BitcoinEgressWitnessing, BitcoinVaultDepositWitnessing, BlockDataDepositChannel,
+		BlockDataVaultDeposit, EgressBlockData,
+	},
+	BitcoinBroadcaster, BitcoinIngressEgress, Runtime,
+};
 use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
 use cf_primitives::chains::Bitcoin;
 use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-
-use crate::chainflip::bitcoin_elections::{
-	BitcoinVaultDepositWitnessing, BlockDataDepositChannel, BlockDataVaultDeposit,
-};
+use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::{
 	block_witnesser::state_machine::{
 		DedupEventsHook, ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook,
@@ -37,6 +40,8 @@ impl<T> BtcEvent<T> {
 
 type TypesDepositChannelWitnessing = TypesFor<BitcoinDepositChannelWitnessing>;
 type TypesVaultDepositWitnessing = TypesFor<BitcoinVaultDepositWitnessing>;
+
+type TypesEgressWitnessing = TypesFor<BitcoinEgressWitnessing>;
 
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 	for TypesDepositChannelWitnessing
@@ -67,6 +72,20 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 		}
 	}
 }
+impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnessing {
+	fn run(
+		&mut self,
+		(_block, input): (BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>),
+	) {
+		match input {
+			BtcEvent::PreWitness(_) => { /* We don't care about pre-witnessing an egress*/ },
+			BtcEvent::Witness(egress) => {
+				BitcoinBroadcaster::broadcast_success(egress);
+			},
+		}
+	}
+}
+
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
 	fn run(
 		&mut self,
@@ -113,6 +132,25 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDep
 			return block_data
 				.iter()
 				.map(|vault_deposit| (block, BtcEvent::Witness(vault_deposit.clone())))
+				.collect::<Vec<_>>();
+		}
+		vec![]
+	}
+}
+
+impl Hook<HookTypeFor<TypesEgressWitnessing, RulesHook>> for TypesEgressWitnessing {
+	fn run(
+		&mut self,
+		(block, age, block_data): (BlockNumber, u32, EgressBlockData),
+	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
+		//Full witness rule
+		if age ==
+			u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
+				as u32
+		{
+			return block_data
+				.iter()
+				.map(|egress_witness| (block, BtcEvent::Witness(egress_witness.clone())))
 				.collect::<Vec<_>>();
 		}
 		vec![]
@@ -204,6 +242,46 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, DedupEventsHook>>
 	}
 }
 
+impl Hook<HookTypeFor<TypesEgressWitnessing, DedupEventsHook>> for TypesEgressWitnessing {
+	fn run(
+		&mut self,
+		events: Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)>,
+	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
+		// Map: deposit_witness -> chosen BtcEvent
+		// todo! this is annoying, it require us to implement Ord down to the Chain type
+		let mut chosen: BTreeMap<
+			TransactionConfirmation<Runtime, BitcoinInstance>,
+			(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>),
+		> = BTreeMap::new();
+
+		for (block, event) in events {
+			let deposit: TransactionConfirmation<Runtime, BitcoinInstance> =
+				event.deposit_witness().clone();
+
+			match chosen.get(&deposit) {
+				None => {
+					// No event yet for this deposit, store it
+					chosen.insert(deposit, (block, event));
+				},
+				Some((_, existing_event)) => {
+					// There's already an event for this deposit
+					match (existing_event, &event) {
+						// If we already have a Witness, do nothing
+						(BtcEvent::Witness(_), BtcEvent::PreWitness(_)) => (),
+						// If we have a PreWitness and the new event is a Witness, override it
+						(BtcEvent::PreWitness(_), BtcEvent::Witness(_)) => {
+							chosen.insert(deposit, (block, event));
+						},
+						// This should be impossible to reach!
+						(_, _) => (),
+					}
+				},
+			}
+		}
+		chosen.into_values().collect()
+	}
+}
+
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, SafetyMarginHook>>
 	for TypesDepositChannelWitnessing
 {
@@ -214,6 +292,12 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, SafetyMarginHook>>
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, SafetyMarginHook>>
 	for TypesVaultDepositWitnessing
 {
+	fn run(&mut self, _input: ()) -> u32 {
+		u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32
+	}
+}
+
+impl Hook<HookTypeFor<TypesEgressWitnessing, SafetyMarginHook>> for TypesEgressWitnessing {
 	fn run(&mut self, _input: ()) -> u32 {
 		u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32
 	}

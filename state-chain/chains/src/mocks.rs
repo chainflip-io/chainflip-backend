@@ -56,7 +56,9 @@ impl Get<ChainChoice> for MockBroadcastBarriers {
 	}
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct MockEthereumTransactionMetadata;
 
 impl TransactionMetadata<MockEthereum> for MockEthereumTransactionMetadata {
