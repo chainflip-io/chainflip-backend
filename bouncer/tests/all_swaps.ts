@@ -78,7 +78,7 @@ export async function testAllSwaps(textContext: TestContext) {
         const destChain = chainFromAsset(destAsset);
         if (vaultSwapSupportedChains.includes(sourceChain)) {
           // Vault Swaps
-          // appendSwap(sourceAsset, destAsset, testVaultSwap);
+          appendSwap(sourceAsset, destAsset, testVaultSwap);
 
           // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
           if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
