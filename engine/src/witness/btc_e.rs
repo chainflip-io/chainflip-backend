@@ -11,8 +11,7 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
 		block_height_tracking::{
-			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties,
-			BlockHeightTrackingTypes,
+			primitives::Header, state_machine::InputHeaders, HWTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::state_machine::BWElectionProperties,
 	},
@@ -108,7 +107,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 		properties: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightTrackingES>>, anyhow::Error> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
-		let BlockHeightTrackingProperties { witness_from_index: election_property } = properties;
+		let HeightWitnesserProperties { witness_from_index: election_property } = properties;
 
 		let mut headers = VecDeque::new();
 

@@ -14,8 +14,7 @@ use pallet_cf_elections::{
 		block_height_tracking::{
 			consensus::BlockHeightTrackingConsensus,
 			state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders},
-			BlockHeightChangeHook, BlockHeightTrackingProperties, BlockHeightTrackingTypes,
-			ChainProgress,
+			BlockHeightChangeHook, ChainProgress, HWTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -69,7 +68,7 @@ impls! {
 	for TypesFor<BitcoinBlockHeightTracking>:
 
 	/// Associating the SM related types to the struct
-	BlockHeightTrackingTypes {
+	HWTypes {
 		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = btc::BlockNumber;
 		type ChainBlockHash = btc::Hash;
@@ -85,7 +84,7 @@ impls! {
 		type ElectoralUnsynchronisedSettings = ();
 		type ElectoralSettings = ();
 		type ElectionIdentifierExtra = ();
-		type ElectionProperties = BlockHeightTrackingProperties<btc::BlockNumber>;
+		type ElectionProperties = HeightWitnesserProperties<Self>;
 		type ElectionState = ();
 		type VoteStorage = vote_storage::bitmap::Bitmap<InputHeaders<Self>>;
 		type Consensus = InputHeaders<Self>;

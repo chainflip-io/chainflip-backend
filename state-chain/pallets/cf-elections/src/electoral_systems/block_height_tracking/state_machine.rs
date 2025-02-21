@@ -3,7 +3,7 @@ use super::{
 		core::Validate, state_machine::Statemachine, state_machine_es::SMInput,
 	},
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
-	BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
+	ChainProgress, HWTypes, HeightWitnesserProperties,
 };
 use crate::electoral_systems::state_machine::core::{Hook, IndexedValidate};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
@@ -15,60 +15,17 @@ use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 //------------------------ inputs ---------------------------
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct InputHeaders<Types: BlockHeightTrackingTypes>(
+pub struct InputHeaders<Types: HWTypes>(
 	pub VecDeque<Header<Types::ChainBlockHash, Types::ChainBlockNumber>>,
 );
 
-// impl<T: BlockHeightTrackingTypes> Validate
-// 	for (BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>)
-// {
-// 	type Error = VoteValidationError;
-
-// 	fn is_valid(&self) -> Result<(), Self::Error> {
-// 		let (base, this) = self;
-
-// 		this.is_valid()?;
-
-// 		if base.witness_from_index.is_zero() {
-// 			Ok(())
-// 		} else {
-// 			match this.0.front() {
-// 				Some(first) if first.block_height == base.witness_from_index => Ok(()),
-// 				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
-// 				None => Err(VoteValidationError::EmptyVote),
-// 			}
-// 		}
-// 	}
-// }
-
-// impl<T: BlockHeightTrackingTypes> ValidateFor<InputHeaders<T>>
-// 	for BlockHeightTrackingProperties<T::ChainBlockNumber>
-// {
-// 	type Error = VoteValidationError;
-
-// 	fn validate(&self, this: &InputHeaders<T>) -> Result<(), Self::Error> {
-// 		this.is_valid()?;
-
-// 		if self.witness_from_index.is_zero() {
-// 			Ok(())
-// 		} else {
-// 			match this.0.front() {
-// 				Some(first) if first.block_height == self.witness_from_index => Ok(()),
-// 				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
-// 				None => Err(VoteValidationError::EmptyVote),
-// 			}
-// 		}
-// 	}
-// }
-
-impl<T: BlockHeightTrackingTypes>
-	IndexedValidate<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>
+impl<T: HWTypes> IndexedValidate<HeightWitnesserProperties<T>, InputHeaders<T>>
 	for BlockHeightTrackingSM<T>
 {
 	type Error = VoteValidationError;
 
 	fn validate(
-		base: &BlockHeightTrackingProperties<T::ChainBlockNumber>,
+		base: &HeightWitnesserProperties<T>,
 		this: &InputHeaders<T>,
 	) -> Result<(), Self::Error> {
 		this.is_valid()?;
@@ -85,7 +42,7 @@ impl<T: BlockHeightTrackingTypes>
 	}
 }
 
-impl<T: BlockHeightTrackingTypes> Validate for InputHeaders<T> {
+impl<T: HWTypes> Validate for InputHeaders<T> {
 	type Error = VoteValidationError;
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		if self.0.is_empty() {
@@ -101,7 +58,7 @@ impl<T: BlockHeightTrackingTypes> Validate for InputHeaders<T> {
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
-pub enum BHWState<T: BlockHeightTrackingTypes> {
+pub enum BHWState<T: HWTypes> {
 	Starting,
 	Running {
 		headers: VecDeque<Header<T::ChainBlockHash, T::ChainBlockNumber>>,
@@ -109,13 +66,13 @@ pub enum BHWState<T: BlockHeightTrackingTypes> {
 	},
 }
 
-impl<T: BlockHeightTrackingTypes> Default for BHWState<T> {
+impl<T: HWTypes> Default for BHWState<T> {
 	fn default() -> Self {
 		Self::Starting
 	}
 }
 
-impl<T: BlockHeightTrackingTypes> Validate for BHWState<T> {
+impl<T: HWTypes> Validate for BHWState<T> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -148,12 +105,12 @@ impl<T: BlockHeightTrackingTypes> Validate for BHWState<T> {
 	PartialOrd,
 	Default,
 )]
-pub struct BHWStateWrapper<T: BlockHeightTrackingTypes> {
+pub struct BHWStateWrapper<T: HWTypes> {
 	pub state: BHWState<T>,
 	pub block_height_update: T::BlockHeightChangeHook,
 }
 
-impl<T: BlockHeightTrackingTypes> Validate for BHWStateWrapper<T> {
+impl<T: HWTypes> Validate for BHWStateWrapper<T> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -163,14 +120,14 @@ impl<T: BlockHeightTrackingTypes> Validate for BHWStateWrapper<T> {
 
 //------------------------ state machine ---------------------------
 
-pub struct BlockHeightTrackingSM<T: BlockHeightTrackingTypes> {
+pub struct BlockHeightTrackingSM<T: HWTypes> {
 	_phantom: core::marker::PhantomData<T>,
 }
 
-impl<T: BlockHeightTrackingTypes> Statemachine for BlockHeightTrackingSM<T> {
+impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type State = BHWStateWrapper<T>;
-	type Input = SMInput<(BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>), ()>;
-	type InputIndex = Vec<BlockHeightTrackingProperties<T::ChainBlockNumber>>;
+	type Input = SMInput<(HeightWitnesserProperties<T>, InputHeaders<T>), ()>;
+	type InputIndex = Vec<HeightWitnesserProperties<T>>;
 	type Settings = ();
 	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
 
@@ -179,7 +136,7 @@ impl<T: BlockHeightTrackingTypes> Statemachine for BlockHeightTrackingSM<T> {
 			BHWState::Starting => T::ChainBlockNumber::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from,
 		};
-		Vec::from([BlockHeightTrackingProperties { witness_from_index }])
+		Vec::from([HeightWitnesserProperties { witness_from_index }])
 	}
 
 	// specification for step function
@@ -321,13 +278,13 @@ mod tests {
 		super::{
 			super::state_machine::{state_machine::Statemachine, state_machine_es::SMInput},
 			primitives::Header,
-			BlockHeightTrackingProperties, BlockHeightTrackingTypes,
+			HWTypes, HeightWitnesserProperties,
 		},
 		BHWState, BlockHeightTrackingSM, InputHeaders,
 	};
 
-	pub fn generate_input<T: BlockHeightTrackingTypes>(
-		properties: BlockHeightTrackingProperties<T::ChainBlockNumber>,
+	pub fn generate_input<T: HWTypes>(
+		properties: HeightWitnesserProperties<T>,
 	) -> impl Strategy<Value = InputHeaders<T>>
 	where
 		T::ChainBlockHash: Arbitrary,
@@ -349,7 +306,7 @@ mod tests {
 		}
 	}
 
-	pub fn generate_state<T: BlockHeightTrackingTypes>() -> impl Strategy<Value = BHWStateWrapper<T>>
+	pub fn generate_state<T: HWTypes>() -> impl Strategy<Value = BHWStateWrapper<T>>
 	where
 		T::ChainBlockHash: Arbitrary,
 		T::ChainBlockNumber: Arbitrary + BlockZero,
@@ -359,7 +316,7 @@ mod tests {
 			Just(BHWState::Starting),
 			prop_do! {
 				let is_reorg_without_known_root in any::<bool>();
-				let n in any::<BlockHeightTrackingProperties<T::ChainBlockNumber>>();
+				let n in any::<HeightWitnesserProperties<T>>();
 				let headers in generate_input::<T>(n);
 				return {
 					let witness_from = if is_reorg_without_known_root {
@@ -376,7 +333,7 @@ mod tests {
 
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 	struct TestTypes1 {}
-	impl BlockHeightTrackingTypes for TestTypes1 {
+	impl HWTypes for TestTypes1 {
 		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = u32;
 		type ChainBlockHash = bool;
@@ -411,7 +368,7 @@ mod tests {
 
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 	struct TestTypes2 {}
-	impl BlockHeightTrackingTypes for TestTypes2 {
+	impl HWTypes for TestTypes2 {
 		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
