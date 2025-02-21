@@ -1,6 +1,24 @@
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::pallet_prelude::RuntimeDebug;
+use scale_info::TypeInfo;
+
 pub trait SafeMode {
+	const VERSION_ID: VersionId;
 	const CODE_RED: Self;
 	const CODE_GREEN: Self;
+}
+
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct VersionId(pub u64);
+
+impl VersionId {
+	pub const fn as_bytes(&self) -> [u8; 8] {
+		self.0.to_be_bytes()
+	}
+
+	pub const fn from_input(input: &[u8]) -> Self {
+		Self(xxhash_rust::const_xxh3::xxh3_64(input))
+	}
 }
 
 /// Trait for setting the value of current runtime Safe Mode.
@@ -43,7 +61,7 @@ macro_rules! impl_runtime_safe_mode {
 		/// Hides imports.
 		mod __inner {
 			use super::*;
-			use $crate::{SafeMode, SetSafeMode};
+			use $crate::{SafeMode, SetSafeMode, VersionId};
 			use codec::{Encode, Decode, MaxEncodedLen};
 			use frame_support::{
 				storage::StorageValue,
@@ -52,9 +70,23 @@ macro_rules! impl_runtime_safe_mode {
 			};
 			use scale_info::TypeInfo;
 
-			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
+			#[derive(Encode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
 			pub struct $runtime_safe_mode {
+				pub __version_id: VersionId,
 				$( pub $name: $pallet_safe_mode ),*
+			}
+
+			impl Decode for $runtime_safe_mode {
+				fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+					let version = VersionId::decode(input)?;
+					if version != Self::VERSION_ID {
+						return Err(codec::Error::from("Invalid version id for runtime safemode."));
+					}
+					Ok(Self {
+						__version_id: version,
+						$( $name: <$pallet_safe_mode as Decode>::decode(input)? ),*
+					})
+				}
 			}
 
 			impl Get<Self> for $runtime_safe_mode {
@@ -70,10 +102,15 @@ macro_rules! impl_runtime_safe_mode {
 			}
 
 			impl SafeMode for $runtime_safe_mode {
+				const VERSION_ID: VersionId = VersionId::from_input([
+					$( <$pallet_safe_mode as SafeMode>::VERSION_ID.as_bytes() ),*
+				].flatten());// doesn't work - try using const_concat crate.
 				const CODE_RED: Self = Self {
+					__version_id: Self::VERSION_ID,
 					$( $name: <$pallet_safe_mode as SafeMode>::CODE_RED ),*
 				};
 				const CODE_GREEN: Self = Self {
+					__version_id: Self::VERSION_ID,
 					$( $name: <$pallet_safe_mode as SafeMode>::CODE_GREEN ),*
 				};
 			}
@@ -145,6 +182,9 @@ macro_rules! impl_pallet_safe_mode {
         }
 
         impl $crate::SafeMode for $pallet_safe_mode {
+            const VERSION_ID: $crate::VersionId = $crate::VersionId::from_input(
+                stringify!($pallet_safe_mode:$( $flag ),+).as_bytes()
+            );
             const CODE_RED: Self = Self {
                 $(
                     $flag: false,
@@ -242,11 +282,13 @@ pub(crate) mod test {
 	}
 
 	impl SafeMode for ExampleSafeModeA {
+		const VERSION_ID: VersionId = VersionId::from_input(b"ExampleSafeModeA");
 		const CODE_RED: Self = Self { safe: false };
 		const CODE_GREEN: Self = Self { safe: true };
 	}
 
 	impl SafeMode for ExampleSafeModeB {
+		const VERSION_ID: VersionId = VersionId::from_input(b"ExampleSafeModeB");
 		const CODE_RED: Self = Self::NotSafe;
 		const CODE_GREEN: Self = Self::Safe;
 	}
@@ -271,15 +313,16 @@ pub(crate) mod test {
 		use frame_support::traits::Get;
 		sp_io::TestExternalities::default().execute_with(|| {
 			// Default to code green
-			assert!(
-				<TestRuntimeSafeMode as Get<TestRuntimeSafeMode>>::get() ==
-					TestRuntimeSafeMode {
-						example_a: ExampleSafeModeA::CODE_GREEN,
-						example_b: ExampleSafeModeB::CODE_GREEN,
-						pallet: SafeMode::CODE_GREEN,
-						pallet_2: SafeMode::CODE_GREEN,
-					}
-			);
+			assert!(matches!(
+				<TestRuntimeSafeMode as Get<TestRuntimeSafeMode>>::get(),
+				TestRuntimeSafeMode {
+					example_a: ExampleSafeModeA::CODE_GREEN,
+					example_b: ExampleSafeModeB::CODE_GREEN,
+					pallet: SafeMode::CODE_GREEN,
+					pallet_2: SafeMode::CODE_GREEN,
+					..
+				}
+			));
 			assert!(
 				<TestRuntimeSafeMode as Get<ExampleSafeModeA>>::get() ==
 					ExampleSafeModeA::CODE_GREEN
@@ -296,15 +339,16 @@ pub(crate) mod test {
 			// Activate Code Red for all
 			<TestRuntimeSafeMode as SetSafeMode<TestRuntimeSafeMode>>::set_code_red();
 
-			assert!(
-				<TestRuntimeSafeMode as Get<TestRuntimeSafeMode>>::get() ==
-					TestRuntimeSafeMode {
-						example_a: ExampleSafeModeA::CODE_RED,
-						example_b: ExampleSafeModeB::CODE_RED,
-						pallet: SafeMode::CODE_RED,
-						pallet_2: SafeMode::CODE_RED,
-					}
-			);
+			assert!(matches!(
+				<TestRuntimeSafeMode as Get<TestRuntimeSafeMode>>::get(),
+				TestRuntimeSafeMode {
+					example_a: ExampleSafeModeA::CODE_RED,
+					example_b: ExampleSafeModeB::CODE_RED,
+					pallet: SafeMode::CODE_RED,
+					pallet_2: SafeMode::CODE_RED,
+					..
+				}
+			));
 			assert_eq!(
 				<TestRuntimeSafeMode as Get<ExampleSafeModeA>>::get(),
 				ExampleSafeModeA::CODE_RED
@@ -324,6 +368,7 @@ pub(crate) mod test {
 				example_b: ExampleSafeModeB::CODE_RED,
 				pallet: TestPalletSafeMode { flag_1: true, flag_2: false },
 				pallet_2: TestPalletSafeMode2 { flag_1: false, flag_2: true },
+				..Default::default()
 			});
 			assert!(
 				<TestRuntimeSafeMode as Get<TestPalletSafeMode>>::get() ==
@@ -339,6 +384,37 @@ pub(crate) mod test {
 				<TestRuntimeSafeMode as Get<ExampleSafeModeA>>::get() ==
 					ExampleSafeModeA::CODE_GREEN,
 			);
+		});
+	}
+
+	// Imagine we make an update to a pallet that changes the semantics of safe mode but has
+	// compatible encoding with the old safe mode.
+	// Note here we use example_c with the same type as
+	// previous example_b. This would normally decode fine, but the version check should prevent
+	// this.
+	#[storage_alias]
+	pub type SafeModeStorageV2 = StorageValue<Mock, TestRuntimeSafeModeV2, ValueQuery>;
+
+	impl_runtime_safe_mode! {
+		TestRuntimeSafeModeV2,
+		SafeModeStorageV2,
+		example_a: ExampleSafeModeA,
+		example_c: ExampleSafeModeB,
+		pallet: TestPalletSafeMode,
+		pallet_2: TestPalletSafeMode2,
+	}
+
+	#[test]
+	fn safe_mode_incompatible_update() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			assert!(
+				TestRuntimeSafeMode::CODE_RED.__version_id !=
+					TestRuntimeSafeModeV2::CODE_RED.__version_id
+			);
+			assert!(TestRuntimeSafeModeV2::decode(
+				&mut &TestRuntimeSafeMode::CODE_GREEN.encode()[..]
+			)
+			.is_err());
 		});
 	}
 }

@@ -10,6 +10,10 @@ workspace = true
 
 [dependencies]
 log = { workspace = true }
+xxhash-rust = { version = '0.8.5', default-features = false, features = [
+  'xxh3',
+  'const_xxh3',
+] }
 
 # Internal
 cf-chains = { workspace = true }
