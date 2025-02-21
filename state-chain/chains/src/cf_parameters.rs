@@ -84,8 +84,6 @@ mod tests {
 		ChannelRefundParametersDecoded, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH,
 	};
 
-	use sp_core::{Pair, Public};
-
 	const MAX_VAULT_SWAP_PARAMETERS_LENGTH: u32 = 1_000;
 	const MAX_CF_PARAM_LENGTH: u32 =
 		MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_PARAMETERS_LENGTH;
@@ -110,77 +108,8 @@ mod tests {
 		);
 	}
 
-	pub fn test_account_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-		TPublic::Pair::from_string(&format!("//{seed}"), None)
-			.expect("static values are valid; qed")
-			.public()
-	}
-
-	#[test]
-	fn proper_address_conversion() {
-		use sp_core::crypto::Ss58Codec;
-		use sp_runtime::AccountId32;
-		use std::str::FromStr;
-
-		use sp_core::sr25519::Public as Signer;
-
-		use sp_runtime::MultiSignature;
-
-		const SEED: &str = "BROKER_1";
-
-		const BROKER_ID: &str = "5FKyTaAoazbwkQ7CHFNJfhWV5sVnRw23HWdPUeQ2tTp3gryJ";
-
-		let broker_id = AccountId32::from(test_account_from_seed::<Signer>(SEED));
-
-		let broker_id_ss58 = broker_id.to_ss58check();
-
-		println!("broker_id_ss58: {:?}", broker_id_ss58);
-
-		assert_eq!(broker_id_ss58, BROKER_ID);
-
-		let vault_swap_parameters = VaultSwapParameters {
-			refund_params: ChannelRefundParametersDecoded {
-				retry_duration: 1,
-				refund_address: ForeignChainAddress::Eth(sp_core::H160::from([2; 20])),
-				min_price: Default::default(),
-			},
-			dca_params: None,
-			boost_fee: 0,
-			broker_fee: Beneficiary { account: broker_id, bps: 4 },
-			affiliate_fees: sp_core::bounded_vec![],
-		};
-
-		let cf_parameters = CfParameters {
-			ccm_additional_data: (),
-			vault_swap_parameters: vault_swap_parameters.clone(),
-		};
-
-		let encoded = VersionedCfParameters::V0(cf_parameters).encode();
-
-		println!("encoded parameters as hex: {:?}", hex::encode(encoded.clone()));
-	}
-
 	#[test]
 	fn test_versioned_cf_parameters() {
-		use sp_core::crypto::Ss58Codec;
-
-		// let broker_id =
-		// 	AccountId::from_ss58check("5FKyTaAoazbwkQ7CHFNJfhWV5sVnRw23HWdPUeQ2tTp3gryJ")
-		// 		.expect("Invalid account ID");
-
-		use sp_runtime::AccountId32;
-		use std::str::FromStr;
-
-		let broker_id = AccountId32::from_str("5FKyTaAoazbwkQ7CHFNJfhWV5sVnRw23HWdPUeQ2tTp3gryJ")
-			.expect("Invalid account ID");
-
-		println!("broker_id: {:?}", broker_id);
-
-		let broker_id_ss58 = broker_id.to_ss58check();
-
-		println!("broker_id_ss58: {:?}", broker_id_ss58);
-
-		// let broker_id = AccountId::from(raw_account_id);
 		let vault_swap_parameters = VaultSwapParameters {
 			refund_params: ChannelRefundParametersDecoded {
 				retry_duration: 1,
@@ -189,7 +118,7 @@ mod tests {
 			},
 			dca_params: None,
 			boost_fee: 0,
-			broker_fee: Beneficiary { account: broker_id, bps: 4 },
+			broker_fee: Beneficiary { account: AccountId::new([3; 32]), bps: 4 },
 			affiliate_fees: sp_core::bounded_vec![],
 		};
 
@@ -199,14 +128,9 @@ mod tests {
 		};
 
 		let mut encoded = VersionedCfParameters::V0(cf_parameters).encode();
-
-		println!("encoded parameters: {:?}", hex::encode(encoded));
 		let expected_encoded: Vec<u8> =
 			hex::decode(REFERENCE_EXPECTED_ENCODED_HEX).expect("Decoding hex string failed");
-
-		// assert_eq!(encoded.len(), expected_encoded.len(), "Encoded parameters length mismatch");
-
-		// assert_eq!(encoded, expected_encoded);
+		assert_eq!(encoded, expected_encoded);
 
 		let ccm_cf_parameters = CfParameters {
 			ccm_additional_data: CcmAdditionalData::default(),
@@ -214,8 +138,6 @@ mod tests {
 		};
 
 		encoded = VersionedCcmCfParameters::V0(ccm_cf_parameters).encode();
-
-		println!("encoded parameters: {:?}", encoded);
 
 		// Extra byte for the empty ccm metadata
 		let expected_encoded_with_metadata = [vec![0], expected_encoded.clone()].concat();
