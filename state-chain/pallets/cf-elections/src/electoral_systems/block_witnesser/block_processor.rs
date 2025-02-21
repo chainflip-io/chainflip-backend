@@ -375,7 +375,7 @@ pub(crate) mod test {
 		type BlockData = MockBlockData;
 		type Event = MockBtcEvent;
 		type Rules = Types;
-		type Execute = MockHook<"execute_event", HookTypeFor<Types, ExecuteHook>>;
+		type Execute = MockHook<HookTypeFor<Types, ExecuteHook>, "execute_event">;
 		type DedupEvents = Types;
 		type SafetyMargin = Types;
 	}

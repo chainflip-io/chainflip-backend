@@ -107,7 +107,9 @@ pub mod hook_test_utils {
 		{
 			fn run(&mut self, input: T::Input) -> T::Output {
 				#[cfg(test)]
-				println!("{} called for {input:?}", NAME);
+				if NAME != "" {
+					println!("{} called for {input:?}", NAME);
+				}
 				self.call_history.push(input);
 				self.state.clone()
 			}

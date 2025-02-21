@@ -71,8 +71,8 @@ impl BWProcessorTypes for Types {
 	type ChainBlockNumber = u64;
 	type BlockData = Vec<u8>;
 	type Event = ();
-	type Rules = MockHook<"rules", HookTypeFor<Self, RulesHook>>;
-	type Execute = MockHook<"execute", HookTypeFor<Self, ExecuteHook>>;
+	type Rules = MockHook<HookTypeFor<Self, RulesHook>, "rules">;
+	type Execute = MockHook<HookTypeFor<Self, ExecuteHook>, "execute">;
 	type DedupEvents = Self;
 	type SafetyMargin = Self;
 }
@@ -96,7 +96,7 @@ impl Hook<HookTypeFor<Types, SafetyMarginHook>> for Types {
 impl BWTypes for Types {
 	type ElectionProperties = ElectionProperties;
 	type ElectionPropertiesHook =
-		MockHook<"generate_election_properties", HookTypeFor<Self, ElectionPropertiesHook>>;
+		MockHook<HookTypeFor<Self, ElectionPropertiesHook>, "generate_election_properties">;
 	type SafeModeEnabledHook = Self;
 }
 
