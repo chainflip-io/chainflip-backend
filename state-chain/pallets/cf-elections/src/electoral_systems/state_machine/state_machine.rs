@@ -1,4 +1,4 @@
-use super::core::{Indexing, Validate};
+use super::core::{IndexedValidateFor, Validate};
 
 #[cfg(test)]
 use proptest::prelude::{BoxedStrategy, Just, Strategy};
@@ -27,45 +27,54 @@ use sp_std::fmt::Debug;
 /// which always have a settings component.
 ///
 /// ## Mapping to elections
-/// For an electoral system, the `Input` type is always of the form `SMInput<Context,Consensus>`,
-/// which is an `Either` type carrying either the type of the `OnFinalizeContext` or the `Consensus`
-/// type of an election which reached consensus.
+/// For an electoral system, the `Input` type is always of the form `SMInput<(Properties,
+/// Consensus),Context>`, which is an `Either` type carrying either a tuple consisting of election
+/// properties and consensus or alternatively the type of the `OnFinalizeContext`.
 ///
-/// ------- TODO rewrite:
+/// The `InputIndex` type is a vector of election properties, the function `input_index()` computes
+/// to each state the properties of all elections that should be open for this state. This means
+/// that creation of elections is handled indirectly: The state machine merely has to transition
+/// into a state with the correct `input_index`, all elections with these election properties is
+/// going to be created automatically, and potentially ongoing elections which are not in the
+/// `input_index` are going to be deleted.
 ///
-/// The current concept of a state machine provides us with an `Indexed` implementation on the
-/// `Input` type. The associated type `Input::Index` is exactly `Vec<ElectionProperty>`, and the
-/// associated function `has_index` the type of votes. Election properties are given by the
-/// associated type `Input::Index`, where the function `has_index(vote: &Input, election_properties:
-/// &Input::Index) -> bool` is used to determine whether a given vote is valid for given election
-/// properties.
-///
-/// The definition of the state machine requires a function `input_index(&State) -> Input::Index`
-/// which describes for a given state, which index we expect the next input to have (in other words,
-/// for which election properties we want to get a vote next). This means that creation of elections
-/// is handled indirectly: The state machine merely has to transition into a state with the correct
-/// `input_index`, an election with these election properties is going to be created automatically.
-///
-/// ## Idle results
-/// When there is no consensus, the electoral system still has to return something in its
-/// `on_finalize` function. This value is provided by the `get(&State) -> DisplayState` function.
-/// The associated `DisplayState` type is an arbitrary "summary" of the current state, meant for
-/// consumers of the `on_finalize` result.
-///
-/// Note: it might be that this functionality is going to be modelled differently in the future.
+/// The `step` function takes as input the current state, settings, and an input, and computes the
+/// next state, as well as a result. The input is either the consensus gained in some election which
+/// was open, or alternatively the `OnFinalizeContext` which is being passed to this ES from another
+/// ES upstream.   
+/// 
+/// ## Multiple elections
+/// The `step` function is designed as the smallest logical state transition of the ES. Thus it
+/// takes as input only a single consensus *or* a single context. Thus, during a typical
+/// `on_finalize` call, the `step` function is called multiple times, once for each available input.
+/// The outputs of each `step` call are collected into a vector and passed to the next ES.
 ///
 /// ## Validation
-/// In the case of the BHW, both the `Input`, as well as the `State` contain sequences of headers
-/// which need to have sequential block heights and matching hashes. In order to provide a coherent
-/// interface for checking these, we require theses associated types to implement the trait
-/// `Validate`. We also require `Validate` on the `Output` type.
+/// It is common to have certain validity requirements which one assumes to hold for either
+/// the input, state, or output. These are encoded by `Validate` bounds
+/// on the `Output` and `State` type, as well as an `IndexedValidateFor<InputIndex,Input>` bound on
+/// `Self`. The latter allows a tuple of (InputIndex, Input) to be checked for validity: i.e., given
+/// an input index, and an input, we not only check that the input is well formed, but we also
+/// ensure that the input is valid *for a given input index*.
+///
+/// For example, in the BHW, elections are created to witness block headers starting from a given
+/// height, in that case we can ensure that the received vector of block headers actually starts
+/// with the correct height.
+///
+/// Note: The `IndexedValidateFor` bound is somewhat strangely on `Self`, and not directly on either
+/// `Input` or `InputIndex` because this makes it possible to automatically derive an implementation
+/// for inputs of the form `SMInput<_,_>` from a simpler implementation of
+/// `IndexedValidateFor<ElectionProperties, Consensus>` for any ES.
 ///
 /// ## Testing
-/// The state machine trait provides a convenience method `test(states, inputs)` for testing a given
-/// state machine. Here `states` and `inputs` are strategies for generating states and inputs, and
-/// the function runs the `step` function on randomly generated input values, while ensuring that
-/// everything is valid.
-pub trait Statemachine: 'static + Indexing<Self::InputIndex, Self::Input> {
+/// The state machine trait provides a convenience method `test(states, settings, inputs)` for
+/// testing a given state machine. Here `states`, `settings` and `inputs` are strategies for
+/// generating states, settings and inputs, and the function runs the `step` function on randomly
+/// generated input values, while ensuring that all inputs and outputs are valid as per .
+///
+/// Additionally the `step_specification` function can be implemented, in order to provide custom
+/// pre-/postconditions to be checked during `test()`.
+pub trait Statemachine: 'static + IndexedValidateFor<Self::InputIndex, Self::Input> {
 	type Input;
 	type InputIndex;
 	type Settings;
@@ -106,6 +115,7 @@ pub trait Statemachine: 'static + Indexing<Self::InputIndex, Self::Input> {
 		Self::State: sp_std::fmt::Debug + Clone + Send,
 		Self::Input: sp_std::fmt::Debug + Clone + Send,
 		Self::Settings: sp_std::fmt::Debug + Clone + Send,
+		Self::Error: sp_std::fmt::Debug,
 	{
 		use proptest::test_runner::{Config, FileFailurePersistence};
 
@@ -133,8 +143,6 @@ pub trait Statemachine: 'static + Indexing<Self::InputIndex, Self::Input> {
 							"input state not valid {:?}",
 							state.is_valid()
 						);
-						// assert!(input.is_valid().is_ok(), "input not valid {:?}",
-						// input.is_valid());
 
 						// ensure input has correct index
 						Self::validate(&Self::input_index(&mut state), &input)
@@ -183,7 +191,6 @@ pub fn run_with_timeout<
 		let a1 = a.clone();
 		tokio::runtime::Builder::new_current_thread()
 			.enable_all()
-			// .unhandled_panic(UnhandledPanic::ShutdownRuntime)
 			.build()
 			.unwrap()
 			.block_on(async move {

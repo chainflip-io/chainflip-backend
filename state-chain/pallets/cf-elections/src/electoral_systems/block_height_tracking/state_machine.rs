@@ -1,13 +1,11 @@
 use super::{
 	super::state_machine::{
-		core::{Indexed, Validate},
-		state_machine::Statemachine,
-		state_machine_es::SMInput,
+		core::Validate, state_machine::Statemachine, state_machine_es::SMInput,
 	},
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
 	BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
 };
-use crate::electoral_systems::state_machine::core::{Hook, Indexing, ValidateFor};
+use crate::electoral_systems::state_machine::core::{Hook, IndexedValidateFor};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::MaxEncodedLen;
@@ -21,14 +19,58 @@ pub struct InputHeaders<Types: BlockHeightTrackingTypes>(
 	pub VecDeque<Header<Types::ChainBlockHash, Types::ChainBlockNumber>>,
 );
 
-impl<T: BlockHeightTrackingTypes> Validate
-	for (BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>)
+// impl<T: BlockHeightTrackingTypes> Validate
+// 	for (BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>)
+// {
+// 	type Error = VoteValidationError;
+
+// 	fn is_valid(&self) -> Result<(), Self::Error> {
+// 		let (base, this) = self;
+
+// 		this.is_valid()?;
+
+// 		if base.witness_from_index.is_zero() {
+// 			Ok(())
+// 		} else {
+// 			match this.0.front() {
+// 				Some(first) if first.block_height == base.witness_from_index => Ok(()),
+// 				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
+// 				None => Err(VoteValidationError::EmptyVote),
+// 			}
+// 		}
+// 	}
+// }
+
+// impl<T: BlockHeightTrackingTypes> ValidateFor<InputHeaders<T>>
+// 	for BlockHeightTrackingProperties<T::ChainBlockNumber>
+// {
+// 	type Error = VoteValidationError;
+
+// 	fn validate(&self, this: &InputHeaders<T>) -> Result<(), Self::Error> {
+// 		this.is_valid()?;
+
+// 		if self.witness_from_index.is_zero() {
+// 			Ok(())
+// 		} else {
+// 			match this.0.front() {
+// 				Some(first) if first.block_height == self.witness_from_index => Ok(()),
+// 				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
+// 				None => Err(VoteValidationError::EmptyVote),
+// 			}
+// 		}
+// 	}
+// }
+
+impl<T: BlockHeightTrackingTypes>
+	IndexedValidateFor<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>
+	for BlockHeightTrackingSM<T>
 {
 	type Error = VoteValidationError;
 
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		let (base, this) = self;
-
+	fn validate(
+		base: &BlockHeightTrackingProperties<T::ChainBlockNumber>,
+		this: &InputHeaders<T>,
+	) -> Result<(), Self::Error> {
 		this.is_valid()?;
 
 		if base.witness_from_index.is_zero() {
@@ -36,26 +78,6 @@ impl<T: BlockHeightTrackingTypes> Validate
 		} else {
 			match this.0.front() {
 				Some(first) if first.block_height == base.witness_from_index => Ok(()),
-				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
-				None => Err(VoteValidationError::EmptyVote),
-			}
-		}
-	}
-}
-
-impl<T: BlockHeightTrackingTypes> ValidateFor<InputHeaders<T>>
-	for BlockHeightTrackingProperties<T::ChainBlockNumber>
-{
-	type Error = VoteValidationError;
-
-	fn validate(&self, this: &InputHeaders<T>) -> Result<(), Self::Error> {
-		this.is_valid()?;
-
-		if self.witness_from_index.is_zero() {
-			Ok(())
-		} else {
-			match this.0.front() {
-				Some(first) if first.block_height == self.witness_from_index => Ok(()),
 				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
 				None => Err(VoteValidationError::EmptyVote),
 			}
@@ -145,28 +167,6 @@ pub struct BlockHeightTrackingSM<T: BlockHeightTrackingTypes> {
 	_phantom: core::marker::PhantomData<T>,
 }
 
-impl<T: BlockHeightTrackingTypes>
-	Indexing<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>
-	for BlockHeightTrackingSM<T>
-{
-	type Error = ();
-
-	fn validate(
-		_index: &BlockHeightTrackingProperties<T::ChainBlockNumber>,
-		_value: &InputHeaders<T>,
-	) -> Result<(), Self::Error> {
-		todo!()
-	}
-}
-
-impl<A, B, X, T: Indexing<A, B>> Indexing<Vec<A>, SMInput<(A, B), X>> for T {
-	type Error = ();
-
-	fn validate(_index: &Vec<A>, _value: &SMInput<(A, B), X>) -> Result<(), Self::Error> {
-		todo!()
-	}
-}
-
 impl<T: BlockHeightTrackingTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type State = BHWStateWrapper<T>;
 	type Input = SMInput<(BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>), ()>;
@@ -174,7 +174,7 @@ impl<T: BlockHeightTrackingTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type Settings = ();
 	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
 
-	fn input_index(s: &mut Self::State) -> <Self::Input as Indexed>::Index {
+	fn input_index(s: &mut Self::State) -> Self::InputIndex {
 		let witness_from_index = match s.state {
 			BHWState::Starting => T::ChainBlockNumber::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from,
@@ -299,7 +299,7 @@ mod tests {
 	use crate::{
 		electoral_systems::{
 			block_height_tracking::BlockHeightChangeHook,
-			block_witnesser::state_machine::HookTypeFor, state_machine::core::MultiIndexAndValue,
+			block_witnesser::state_machine::HookTypeFor,
 		},
 		prop_do,
 	};

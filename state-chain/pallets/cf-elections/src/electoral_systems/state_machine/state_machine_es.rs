@@ -1,6 +1,6 @@
-use crate::electoral_systems::state_machine::core::Indexing;
+use crate::electoral_systems::state_machine::core::IndexedValidateFor;
 use cf_utilities::success_threshold_from_share_count;
-use itertools::Either;
+use derive_where::derive_where;
 use sp_std::{fmt::Debug, vec::Vec};
 
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
-	core::{Indexed, Validate},
+	core::Validate,
 	state_machine::Statemachine,
 };
 
@@ -25,26 +25,34 @@ pub enum SMInput<Consensus, Context> {
 	Context(Context),
 }
 
-impl<Prop: PartialEq, Cons, Ctx> Indexed for SMInput<(Prop, Cons), Ctx> {
-	type Index = Vec<Prop>;
+impl<A: PartialEq, B, X: Validate, T: IndexedValidateFor<A, B>>
+	IndexedValidateFor<Vec<A>, SMInput<(A, B), X>> for T
+{
+	type Error = SMInputValidateError<A, B, X, T>;
 
-	fn has_index(&self, index: &Self::Index) -> bool {
-		match self {
-			SMInput::Consensus((prop, _cons)) => index.contains(prop),
-			SMInput::Context(_) => true,
+	fn validate(index: &Vec<A>, value: &SMInput<(A, B), X>) -> Result<(), Self::Error> {
+		match value {
+			SMInput::Consensus((property, consensus)) =>
+				if index.contains(property) {
+					T::validate(property, consensus).map_err(SMInputValidateError::InvalidConsensus)
+				} else {
+					Err(SMInputValidateError::WrongIndex)
+				},
+
+			SMInput::Context(context) =>
+				context.is_valid().map_err(SMInputValidateError::InvalidContext),
 		}
 	}
 }
 
-impl<V: Validate, C: Validate> Validate for SMInput<V, C> {
-	type Error = Either<V::Error, C::Error>;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		match self {
-			SMInput::Consensus(vote) => vote.is_valid().map_err(Either::Left),
-			SMInput::Context(context) => context.is_valid().map_err(Either::Right),
-		}
-	}
+#[derive_where(Debug; T::Error: Debug, Context::Error: Debug)]
+pub enum SMInputValidateError<Properties, Consensus, Context: Validate, T>
+where
+	T: IndexedValidateFor<Properties, Consensus>,
+{
+	WrongIndex,
+	InvalidConsensus(T::Error),
+	InvalidContext(Context::Error),
 }
 
 /// Main trait for deriving an electoral system from a state machine and consensus mechanism.
@@ -61,18 +69,10 @@ pub trait StatemachineElectoralSystemTypes:
 		ElectionState = (),
 		OnFinalizeContext = Vec<Self::OnFinalizeContextItem>,
 		OnFinalizeReturn = Vec<Self::OnFinalizeReturnItem>,
-		// Consensus = Self::Consensus2,
-		// VoteStorage = Self::VoteStorage2,
-		// ElectionProperties = Self::ElectionProperties2,
 	>
 {
 	type OnFinalizeContextItem: Clone + Debug;
 	type OnFinalizeReturnItem;
-
-	// type ElectionProperties2: ValidateFor<VoteOf<Self>> + Parameter + Member;
-	// type Consensus2: Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
-	// type Vote2: Validate + Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
-	// type VoteStorage2: VoteStorage<Vote = Self::Vote2>;
 
 	type Statemachine: StatemachineForES<Self> + 'static;
 	type ConsensusMechanism: ConsensusMechanismForES<Self> + 'static;
@@ -87,7 +87,7 @@ pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine
 		State = ES::ElectoralUnsynchronisedState,
 		Settings = ES::ElectoralUnsynchronisedSettings,
 		Output = Result<ES::OnFinalizeReturnItem, &'static str>,
-	> + Indexing<ES::ElectionProperties, VoteOf<ES>>;
+	> + IndexedValidateFor<ES::ElectionProperties, VoteOf<ES>>;
 
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the consensus mechanism's associated types for it

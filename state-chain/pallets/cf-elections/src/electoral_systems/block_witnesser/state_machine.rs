@@ -5,11 +5,7 @@ use super::{
 use crate::electoral_systems::{
 	block_height_tracking::ChainProgress,
 	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
-	state_machine::{
-		core::{IndexOf, Validate},
-		state_machine::Statemachine,
-		state_machine_es::SMInput,
-	},
+	state_machine::{core::Validate, state_machine::Statemachine, state_machine_es::SMInput},
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
@@ -32,16 +28,6 @@ pub struct HookTypeFor<Tag1, Tag2> {
 }
 
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {
-	// type ChainBlockNumber: Serde
-	// 	+ Copy
-	// 	+ Eq
-	// 	+ Ord
-	// 	+ SaturatingStep
-	// 	+ Step
-	// 	+ BlockZero
-	// 	+ Debug
-	// 	+ 'static;
-	// type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
 	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>>;
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>>;
@@ -95,19 +81,6 @@ pub trait BWProcessorTypes: Sized {
 		+ Debug
 		+ 'static;
 	type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
-
-	// type ChainBlockNumber: Serde
-	// 	+ Copy
-	// 	+ Eq
-	// 	+ Ord
-	// 	+ SaturatingStep
-	// 	+ Step
-	// 	+ BlockZero
-	// 	+ Debug
-	// 	+ Default
-	// 	+ 'static;
-
-	// type BlockData: Serde + Clone;
 
 	type Event: Serde + Debug + Clone + Eq;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
@@ -209,22 +182,18 @@ pub struct BWElectionProperties<T: BWTypes> {
 	pub reorg_id: u8,
 }
 
-// impl<T: BWTypes> ValidateFor<T::BlockData> for BWElectionProperties<T> {
-// 	type Error = ();
-
-// 	fn validate(&self, _data: &T::BlockData) -> Result<(), Self::Error> {
-// 		Ok(())
-// 	}
-// }
-
-impl<T: BWTypes> Indexing<BWElectionProperties<T>, T::BlockData> for BWStateMachine<T> {
+impl<T: BWTypes> IndexedValidateFor<BWElectionProperties<T>, T::BlockData> for BWStateMachine<T> {
 	type Error = ();
 
-	fn validate(index: &BWElectionProperties<T>, value: &T::BlockData) -> Result<(), Self::Error> {
-		todo!()
+	fn validate(
+		_index: &BWElectionProperties<T>,
+		_value: &T::BlockData,
+	) -> Result<(), Self::Error> {
+		Ok(())
 	}
 }
 
+#[derive(Debug)]
 pub struct BWStateMachine<Types: BWTypes> {
 	_phantom: sp_std::marker::PhantomData<Types>,
 }
@@ -237,7 +206,7 @@ impl<T: BWTypes> Statemachine for BWStateMachine<T> {
 	type Output = Result<(), &'static str>;
 	type State = BlockWitnesserState<T>;
 
-	fn input_index(s: &mut Self::State) -> IndexOf<Self::Input> {
+	fn input_index(s: &mut Self::State) -> Self::InputIndex {
 		s.elections
 			.ongoing
 			.clone()
@@ -505,7 +474,7 @@ mod tests {
 	}
 
 	fn generate_input<T: BWTypes<BlockData = ()>>(
-		indices: IndexOf<<BWStateMachine<T> as Statemachine>::Input>,
+		indices: <BWStateMachine<T> as Statemachine>::InputIndex,
 	) -> BoxedStrategy<<BWStateMachine<T> as Statemachine>::Input>
 	where
 		T::ChainBlockNumber: Arbitrary,

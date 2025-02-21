@@ -34,9 +34,7 @@ use crate::{
 		},
 		mocks::ElectoralSystemState,
 		state_machine::{
-			core::{
-				hook_test_utils::MockHook, ConstantIndex, Hook, HookType, TypesFor, ValidateFor,
-			},
+			core::{hook_test_utils::MockHook, Hook, HookType, TypesFor},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
@@ -62,14 +60,6 @@ type ElectionCount = u16;
 
 struct MockBlockProcessorDefinition;
 type Types = TypesFor<MockBlockProcessorDefinition>;
-
-impl ValidateFor<BlockData> for BWElectionProperties<Types> {
-	type Error = ();
-
-	fn validate(&self, _value: &BlockData) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
 
 impl Hook<HookTypeFor<Types, SafeModeEnabledHook>> for Types {
 	fn run(&mut self, _input: ()) -> SafeModeStatus {

@@ -2,7 +2,7 @@ use core::iter::Step;
 
 use crate::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	state_machine::core::{Hook, Indexed, Validate},
+	state_machine::core::{Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -515,19 +515,19 @@ pub enum SMBlockProcessorInput<T: BWProcessorTypes> {
 	ChainProgress(ChainProgressInner<T::ChainBlockNumber>),
 }
 
-impl<T: BWProcessorTypes> Indexed for SMBlockProcessorInput<T> {
-	type Index = ();
-	fn has_index(&self, _idx: &Self::Index) -> bool {
-		true
-	}
-}
-impl<T: BWProcessorTypes> Validate for SMBlockProcessorInput<T> {
-	type Error = ();
+// impl<T: BWProcessorTypes> Indexed for SMBlockProcessorInput<T> {
+// 	type Index = ();
+// 	fn has_index(&self, _idx: &Self::Index) -> bool {
+// 		true
+// 	}
+// }
+// impl<T: BWProcessorTypes> Validate for SMBlockProcessorInput<T> {
+// 	type Error = ();
 
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
+// 	fn is_valid(&self) -> Result<(), Self::Error> {
+// 		Ok(())
+// 	}
+// }
 
 impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
 	type Error = ();
