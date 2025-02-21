@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
-	core::{Indexed, MultiIndexAndValue, Validate},
+	core::{Indexed, Validate, ValidateFor},
 	state_machine::Statemachine,
 };
 
@@ -20,17 +20,17 @@ use super::{
 /// we need a special implementation of Indexed: we want the vote to
 /// be indexed but not the context.
 #[derive(Debug, Clone, PartialEq)]
-pub enum SMInput<Vote, Context> {
-	Consensus(Vote),
+pub enum SMInput<Consensus, Context> {
+	Consensus(Consensus),
 	Context(Context),
 }
 
-impl<V: Indexed, C> Indexed for SMInput<V, C> {
-	type Index = V::Index;
+impl<Prop: PartialEq, Cons, Ctx> Indexed for SMInput<(Prop, Cons), Ctx> {
+	type Index = Vec<Prop>;
 
 	fn has_index(&self, index: &Self::Index) -> bool {
 		match self {
-			SMInput::Consensus(vote) => vote.has_index(index),
+			SMInput::Consensus((prop, _cons)) => index.contains(prop),
 			SMInput::Context(_) => true,
 		}
 	}
@@ -61,16 +61,19 @@ pub trait StatemachineElectoralSystemTypes:
 		ElectionState = (),
 		OnFinalizeContext = Vec<Self::OnFinalizeContextItem>,
 		OnFinalizeReturn = Vec<Self::OnFinalizeReturnItem>,
-		Consensus = Self::Consensus2,
-		VoteStorage = Self::VoteStorage2,
+		// Consensus = Self::Consensus2,
+		// VoteStorage = Self::VoteStorage2,
+		ElectionProperties = Self::ElectionProperties2,
 	>
 {
 	type OnFinalizeContextItem: Clone + Debug;
 	type OnFinalizeReturnItem;
 
-	type Consensus2: Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
-	type Vote2: Validate + Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
-	type VoteStorage2: VoteStorage<Vote = Self::Vote2>;
+	type ElectionProperties2: ValidateFor<VoteOf<Self>> + Parameter + Member;
+
+	// type Consensus2: Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
+	// type Vote2: Validate + Indexed<Index = Vec<Self::ElectionProperties>> + Parameter + Member + Eq;
+	// type VoteStorage2: VoteStorage<Vote = Self::Vote2>;
 
 	type Statemachine: StatemachineForES<Self> + 'static;
 	type ConsensusMechanism: ConsensusMechanismForES<Self> + 'static;
@@ -80,10 +83,7 @@ pub trait StatemachineElectoralSystemTypes:
 /// this trait defines the conditions on the state machine's associated types for it
 /// to be possible to derive an electoral system.
 pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine<
-	Input = SMInput<
-		MultiIndexAndValue<ES::ElectionProperties, ES::Consensus>,
-		ES::OnFinalizeContextItem,
-	>,
+	Input = SMInput<(ES::ElectionProperties, ES::Consensus), ES::OnFinalizeContextItem>,
 	State = ES::ElectoralUnsynchronisedState,
 	Settings = ES::ElectoralUnsynchronisedSettings,
 	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
@@ -193,7 +193,6 @@ impl<Bounds: StatemachineElectoralSystemTypes> ElectoralSystem
 	for StatemachineElectoralSystem<Bounds>
 where
 	<Bounds::VoteStorage as VoteStorage>::Properties: Default,
-	Bounds::Consensus: Indexed,
 {
 	fn generate_vote_properties(
 		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
@@ -247,7 +246,7 @@ where
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
 			if let Some(input) = election_access.check_consensus()?.has_consensus() {
 				log::debug!("ESSM: stepping with input {input:?}");
-				step(SMInput::Consensus(MultiIndexAndValue(election_access.properties()?, input)))?;
+				step(SMInput::Consensus((election_access.properties()?, input)))?;
 			}
 		}
 
@@ -300,11 +299,9 @@ where
 		let mut consensus = Bounds::ConsensusMechanism::default();
 		let num_authorities = consensus_votes.num_authorities();
 
-		let properties_vec = vec![properties.clone()];
-
 		for vote in consensus_votes.active_votes() {
 			// insert vote if it is valid for the given properties
-			if vote.is_valid().is_ok() && vote.has_index(&properties_vec) {
+			if properties.validate(&vote).is_ok() {
 				log::info!("inserting vote {vote:?}");
 				consensus.insert_vote(vote);
 			} else {

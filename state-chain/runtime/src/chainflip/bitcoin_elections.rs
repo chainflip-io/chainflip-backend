@@ -21,8 +21,7 @@ use pallet_cf_elections::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
 			state_machine::{
-				BWProcessorTypes, BlockWitnesserSettings, BlockWitnesserState, BWStateMachine, BWTypes,
-				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
+				BWElectionProperties, BWProcessorTypes, BWStateMachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState, ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook
 			},
 		},
 		composite::{
@@ -32,7 +31,7 @@ use pallet_cf_elections::{
 		liveness::Liveness,
 		state_machine::{
 			core::{ConstantIndex, Hook},
-			state_machine_es::{StatemachineElectoralSystemTypes, StatemachineElectoralSystem},
+			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
@@ -99,9 +98,7 @@ impls! {
 		type OnFinalizeReturnItem = ChainProgress<btc::BlockNumber>;
 
 		// restating types since we have to prove that they have the correct bounds
-		type Consensus2 = InputHeaders<Self>;
-		type Vote2 = InputHeaders<Self>;
-		type VoteStorage2 = vote_storage::bitmap::Bitmap<InputHeaders<Self>>;
+		type ElectionProperties2 = Self::ElectionProperties;
 
 		// the actual state machine and consensus mechanisms of this ES
 		type ConsensusMechanism = BlockHeightTrackingConsensus<Self>;
@@ -163,12 +160,10 @@ impls! {
 		type ElectoralUnsynchronisedSettings = BlockWitnesserSettings;
 		type ElectoralSettings = ();
 		type ElectionIdentifierExtra = ();
-		type ElectionProperties = (btc::BlockNumber, ElectionProperties, u8);
+		type ElectionProperties = BWElectionProperties<Self>;
 		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<
-			ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>,
-		>;
-		type Consensus = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<BlockData>;
+		type Consensus = BlockData;
 		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
 		type OnFinalizeReturn = Vec<()>;
 	}
@@ -180,15 +175,11 @@ impls! {
 		type OnFinalizeReturnItem = ();
 
 		// restating types since we have to prove that they have the correct bounds
-		type Consensus2 = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
-		type Vote2 = ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>;
-		type VoteStorage2 = vote_storage::bitmap::Bitmap<
-			ConstantIndex<(btc::BlockNumber, ElectionProperties, u8), BlockData>,
-		>;
+		type ElectionProperties2 = Self::ElectionProperties;
 
 		// the actual state machine and consensus mechanisms of this ES
 		type Statemachine = BWStateMachine<Self>;
-		type ConsensusMechanism = BWConsensus<BlockData, btc::BlockNumber, ElectionProperties>;
+		type ConsensusMechanism = BWConsensus<Self>;
 	}
 
 	/// implementation of safe mode reading hook

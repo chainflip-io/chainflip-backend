@@ -190,18 +190,53 @@ where
 	}
 }
 
+#[derive_where(Debug, Clone, PartialEq, Eq;
+	T::ChainBlockNumber: Debug + Clone + Eq,
+	T::ElectionProperties: Debug + Clone + Eq,
+)]
+#[derive_where(Default;
+	T::ChainBlockNumber: Default,
+	T::ElectionProperties: Default,
+)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[codec(encode_bound(
+	T::ChainBlockNumber: Encode,
+	T::ElectionProperties: Encode,
+))]
+pub struct BWElectionProperties<T: BWTypes> {
+	pub block_height: T::ChainBlockNumber,
+	pub properties: T::ElectionProperties,
+	pub reorg_id: u8,
+}
+
+// impl<T: BWTypes> ValidateFor<T::BlockData> for BWElectionProperties<T> {
+// 	type Error = ();
+
+// 	fn validate(&self, _data: &T::BlockData) -> Result<(), Self::Error> {
+// 		Ok(())
+// 	}
+// }
+
+impl<T: BWTypes> ValidateFor<SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>> for BWElectionProperties<T> {
+	type Error = ();
+	
+	fn validate(&self, value: &SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>) -> Result<(), Self::Error> {
+			todo!()
+		}
+
+	// fn validate(&self, _data: &T::BlockData) -> Result<(), Self::Error> {
+	// 	Ok(())
+	// }
+}
+
+
 pub struct BWStateMachine<Types: BWTypes> {
 	_phantom: sp_std::marker::PhantomData<Types>,
 }
 
 impl<T: BWTypes> Statemachine for BWStateMachine<T> {
-	type Input = SMInput<
-		MultiIndexAndValue<
-			(T::ChainBlockNumber, T::ElectionProperties, u8),
-			ConstantIndex<(T::ChainBlockNumber, T::ElectionProperties, u8), T::BlockData>,
-		>,
-		ChainProgress<T::ChainBlockNumber>,
-	>;
+	type Input =
+		SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>;
 	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
 	type State = BlockWitnesserState<T>;
@@ -211,7 +246,11 @@ impl<T: BWTypes> Statemachine for BWStateMachine<T> {
 			.ongoing
 			.clone()
 			.into_iter()
-			.map(|(height, extra)| (height, s.generate_election_properties_hook.run(height), extra))
+			.map(|(block_height, reorg_id)| BWElectionProperties {
+				properties: s.generate_election_properties_hook.run(block_height.clone()),
+				block_height,
+				reorg_id,
+			})
 			.collect()
 	}
 
@@ -239,12 +278,12 @@ impl<T: BWTypes> Statemachine for BWStateMachine<T> {
 
 			SMInput::Context(ChainProgress::None) => {},
 
-			SMInput::Consensus(blockdata) => {
-				s.elections.mark_election_done(blockdata.0 .0);
-				log::info!("got block data: {:?}", blockdata.1);
+			SMInput::Consensus((properties, blockdata)) => {
+				s.elections.mark_election_done(properties.block_height);
+				log::info!("got block data: {:?}", blockdata);
 				s.block_processor.process_block_data(
 					ChainProgressInner::Progress(s.elections.next_witnessed.saturating_backward(1)),
-					Some((blockdata.0 .0, blockdata.1.data)),
+					Some((properties.block_height, blockdata)),
 				);
 			},
 		};
@@ -329,7 +368,7 @@ impl<T: BWTypes> Statemachine for BWStateMachine<T> {
 		// TODO: make sure that the number of outstanding elections does not grow
 
 		match input {
-			Consensus(MultiIndexAndValue((height, _, _), _)) => {
+			Consensus((BWElectionProperties { block_height: height, .. }, _)) => {
 				let next_election = if safemode_enabled {
 					before.elections.next_priority_election
 				} else {
@@ -477,7 +516,7 @@ mod tests {
 	{
 		let generate_input = |index| {
 			prop_oneof![
-				Just(SMInput::Consensus(MultiIndexAndValue(index, ConstantIndex::new(())))),
+				Just(SMInput::Consensus((index, ()))),
 				prop_oneof![
 					Just(ChainProgress::None),
 					(any::<T::ChainBlockNumber>(), 0..20usize)

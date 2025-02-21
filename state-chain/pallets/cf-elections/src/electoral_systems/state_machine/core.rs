@@ -204,6 +204,17 @@ pub mod hook_test_utils {
 	}
 }
 
+
+pub trait Validator<Index,Value> {
+	type Error;
+	fn validate(index: &Index, value: &Value) -> Result<(), Self::Error>;
+}
+
+pub trait ValidateFor<X> {
+	type Error;
+	fn validate(&self, value: &X) -> Result<(), Self::Error>;
+}
+
 /// A type which has an associated index type.
 /// This effectively models types families.
 pub trait Indexed {

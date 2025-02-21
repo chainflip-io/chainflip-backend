@@ -7,7 +7,7 @@ use super::{
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
 	BlockHeightTrackingProperties, BlockHeightTrackingTypes, ChainProgress,
 };
-use crate::electoral_systems::state_machine::core::{Hook, MultiIndexAndValue};
+use crate::electoral_systems::state_machine::core::{Hook, MultiIndexAndValue, ValidateFor, Validator};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::MaxEncodedLen;
@@ -21,17 +21,44 @@ pub struct InputHeaders<Types: BlockHeightTrackingTypes>(
 	pub VecDeque<Header<Types::ChainBlockHash, Types::ChainBlockNumber>>,
 );
 
-impl<T: BlockHeightTrackingTypes> Indexed for InputHeaders<T> {
-	type Index = Vec<BlockHeightTrackingProperties<T::ChainBlockNumber>>;
+impl<T: BlockHeightTrackingTypes> Validate
+	for (BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>)
+{
+	type Error = VoteValidationError;
 
-	fn has_index(&self, base: &Self::Index) -> bool {
-		if base.iter().any(|base| base.witness_from_index.is_zero()) {
-			true
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		let (base, this) = self;
+
+		this.is_valid()?;
+
+		if base.witness_from_index.is_zero() {
+			Ok(())
 		} else {
-			match self.0.front() {
-				Some(first) =>
-					base.iter().any(|base| first.block_height == base.witness_from_index),
-				None => false,
+			match this.0.front() {
+				Some(first) if first.block_height == base.witness_from_index => Ok(()),
+				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
+				None => Err(VoteValidationError::EmptyVote),
+			}
+		}
+	}
+}
+
+
+impl<T: BlockHeightTrackingTypes> ValidateFor<InputHeaders<T>> for BlockHeightTrackingProperties<T::ChainBlockNumber>
+{
+	type Error = VoteValidationError;
+
+	fn validate(&self, this: &InputHeaders<T>) -> Result<(), Self::Error> {
+
+		this.is_valid()?;
+
+		if self.witness_from_index.is_zero() {
+			Ok(())
+		} else {
+			match this.0.front() {
+				Some(first) if first.block_height == self.witness_from_index => Ok(()),
+				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
+				None => Err(VoteValidationError::EmptyVote),
 			}
 		}
 	}
@@ -119,12 +146,26 @@ pub struct BlockHeightTrackingSM<T: BlockHeightTrackingTypes> {
 	_phantom: core::marker::PhantomData<T>,
 }
 
+impl<T: BlockHeightTrackingTypes> Validator<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>> for BlockHeightTrackingSM<T> {
+	type Error = ();
+
+	fn validate(index: &BlockHeightTrackingProperties<T::ChainBlockNumber>, value: &InputHeaders<T>) -> Result<(), Self::Error> {
+		todo!()
+	}
+}
+
+impl<A, B, X, T: Validator<A,B>> Validator<Vec<A>, SMInput<(A,B),X>> for T {
+	type Error = ();
+
+	fn validate(index: &Vec<A>, value: &SMInput<(A,B),X>) -> Result<(), Self::Error> {
+		todo!()
+	}
+} 
+
+
 impl<T: BlockHeightTrackingTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type State = BHWStateWrapper<T>;
-	type Input = SMInput<
-		MultiIndexAndValue<BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>>,
-		(),
-	>;
+	type Input = SMInput<(BlockHeightTrackingProperties<T::ChainBlockNumber>, InputHeaders<T>), ()>;
 	type Settings = ();
 	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
 
@@ -189,7 +230,7 @@ impl<T: BlockHeightTrackingTypes> Statemachine for BlockHeightTrackingSM<T> {
 
 	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {
 		let new_headers = match input {
-			SMInput::Consensus(MultiIndexAndValue(_properties, consensus)) => consensus,
+			SMInput::Consensus((_properties, consensus)) => consensus,
 			SMInput::Context(_) => return Ok(ChainProgress::None),
 		};
 
@@ -351,7 +392,7 @@ mod tests {
 					prop_do! {
 						let index in select(indices);
 						let input in generate_input(index);
-						return SMInput::Consensus(MultiIndexAndValue(index, input))
+						return SMInput::Consensus((index, input))
 					}
 				]
 				.boxed()
@@ -384,7 +425,7 @@ mod tests {
 				prop_do! {
 					let index in select(indices);
 					let input in generate_input(index);
-					return SMInput::Consensus(MultiIndexAndValue(index, input))
+					return SMInput::Consensus((index, input))
 				}
 				.boxed()
 			},
