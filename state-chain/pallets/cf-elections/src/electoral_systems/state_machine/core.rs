@@ -203,92 +203,14 @@ pub mod hook_test_utils {
 	}
 }
 
+/// Dedicated `Validate` trait for cases where a value
+/// has to be validate with respect to an index, as is
+/// the case for the input type of state machines.
 pub trait IndexedValidate<Index, Value> {
 	type Error;
 	fn validate(index: &Index, value: &Value) -> Result<(), Self::Error>;
 }
 
-// pub trait ValidateFor<X> {
-// 	type Error;
-// 	fn validate(&self, value: &X) -> Result<(), Self::Error>;
-// }
-
-/// A type which has an associated index type.
-/// This effectively models types families.
-// pub trait Indexed {
-// 	type Index;
-// 	fn has_index(&self, index: &Self::Index) -> bool;
-// }
-
-// pub type IndexOf<Ixd> = <Ixd as Indexed>::Index;
-
-//--- instances ---
-// impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for Either<A, B> {
-// 	type Index = A::Index;
-
-// 	fn has_index(&self, index: &Self::Index) -> bool {
-// 		match self {
-// 			Either::Left(a) => a.has_index(index),
-// 			Either::Right(b) => b.has_index(index),
-// 		}
-// 	}
-// }
-
-// impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for (A, B) {
-// 	type Index = A::Index;
-
-// 	fn has_index(&self, index: &Self::Index) -> bool {
-// 		self.0.has_index(index) && self.1.has_index(index)
-// 	}
-// }
-
-// #[derive(
-// 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-// )]
-// pub struct ConstantIndex<Idx, A> {
-// 	pub data: A,
-// 	pub _phantom: sp_std::marker::PhantomData<Idx>,
-// }
-// impl<Idx, A> ConstantIndex<Idx, A> {
-// 	pub fn new(data: A) -> Self {
-// 		ConstantIndex { data, _phantom: Default::default() }
-// 	}
-// }
-// impl<Idx, A> Indexed for ConstantIndex<Idx, A> {
-// 	type Index = Vec<Idx>;
-
-// 	fn has_index(&self, _index: &Self::Index) -> bool {
-// 		true
-// 	}
-// }
-// impl<Idx, A> Validate for ConstantIndex<Idx, A> {
-// 	type Error = ();
-
-// 	fn is_valid(&self) -> Result<(), Self::Error> {
-// 		Ok(())
-// 	}
-// }
-
-// #[derive(
-// 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-// )]
-// pub struct MultiIndexAndValue<Idx, A>(pub Idx, pub A);
-
-// impl<Idx: PartialEq, A> Indexed for MultiIndexAndValue<Idx, A> {
-// 	type Index = Vec<Idx>;
-
-// 	fn has_index(&self, indices: &Self::Index) -> bool {
-// 		indices.contains(&self.0)
-// 	}
-// }
-
-// impl<Idx, A> Validate for MultiIndexAndValue<Idx, A> {
-// 	type Error = &'static str;
-
-// 	fn is_valid(&self) -> Result<(), Self::Error> {
-// 		Ok(())
-// 	}
-// }
 
 /// A type which can be validated.
 pub trait Validate {
