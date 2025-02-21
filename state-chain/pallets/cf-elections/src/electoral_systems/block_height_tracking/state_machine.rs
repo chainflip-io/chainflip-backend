@@ -300,6 +300,7 @@ mod tests {
 		electoral_systems::{
 			block_height_tracking::BlockHeightChangeHook,
 			block_witnesser::state_machine::HookTypeFor,
+			state_machine::core::hook_test_utils::MockHook,
 		},
 		prop_do,
 	};
@@ -314,10 +315,7 @@ mod tests {
 		sample::select,
 	};
 
-	use crate::electoral_systems::{
-		block_height_tracking::state_machine::BHWStateWrapper,
-		state_machine::core::hook_test_utils::ConstantHook,
-	};
+	use crate::electoral_systems::block_height_tracking::state_machine::BHWStateWrapper;
 
 	use super::{
 		super::{
@@ -382,7 +380,7 @@ mod tests {
 		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = u32;
 		type ChainBlockHash = bool;
-		type BlockHeightChangeHook = ConstantHook<HookTypeFor<Self, BlockHeightChangeHook>>;
+		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
 	#[test]
@@ -417,7 +415,7 @@ mod tests {
 		const BLOCK_BUFFER_SIZE: usize = 6;
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
-		type BlockHeightChangeHook = ConstantHook<HookTypeFor<Self, BlockHeightChangeHook>>;
+		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
 	#[test]

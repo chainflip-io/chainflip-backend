@@ -429,8 +429,8 @@ mod tests {
 
 	fn generate_state<
 		T: BWTypes<
-			SafeModeEnabledHook = ConstantHook<HookTypeFor<T, SafeModeEnabledHook>>,
-			SafetyMargin = ConstantHook<HookTypeFor<T, SafetyMarginHook>>,
+			SafeModeEnabledHook = MockHook<HookTypeFor<T, SafeModeEnabledHook>>,
+			SafetyMargin = MockHook<HookTypeFor<T, SafetyMarginHook>>,
 		>,
 	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
@@ -459,14 +459,14 @@ mod tests {
 					reorg_id
 				},
 				generate_election_properties_hook: Default::default(),
-				safemode_enabled: ConstantHook::new(safemode_enabled),
+				safemode_enabled: MockHook::new(safemode_enabled),
 				block_processor: BlockProcessor {
 					blocks_data: Default::default(),
 					reorg_events: Default::default(),
 					rules: Default::default(),
 					execute: Default::default(),
 					dedup_events: Default::default(),
-					safety_margin: ConstantHook::new(1),
+					safety_margin: MockHook::new(1),
 				},
 				_phantom: core::marker::PhantomData,
 			})
@@ -511,18 +511,18 @@ mod tests {
 		type ChainBlockNumber = N;
 		type BlockData = ();
 		type Event = ();
-		type Rules = ConstantHook<HookTypeFor<Self, RulesHook>>;
-		type Execute = ConstantHook<HookTypeFor<Self, ExecuteHook>>;
-		type DedupEvents = ConstantHook<HookTypeFor<Self, DedupEventsHook>>;
-		type SafetyMargin = ConstantHook<HookTypeFor<Self, SafetyMarginHook>>;
+		type Rules = MockHook<HookTypeFor<Self, RulesHook>>;
+		type Execute = MockHook<HookTypeFor<Self, ExecuteHook>>;
+		type DedupEvents = MockHook<HookTypeFor<Self, DedupEventsHook>>;
+		type SafetyMargin = MockHook<HookTypeFor<Self, SafetyMarginHook>>;
 	}
 
 	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
 		BWTypes for N
 	{
 		type ElectionProperties = ();
-		type ElectionPropertiesHook = ConstantHook<HookTypeFor<Self, ElectionPropertiesHook>>;
-		type SafeModeEnabledHook = ConstantHook<HookTypeFor<Self, SafeModeEnabledHook>>;
+		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;
+		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 	}
 
 	#[test]

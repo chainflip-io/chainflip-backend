@@ -76,106 +76,18 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
-	pub struct ConstantHook<T: HookType> {
-		pub state: T::Output,
-		pub _phantom: sp_std::marker::PhantomData<T>,
-	}
-
-	impl<T: HookType> ConstantHook<T> {
-		pub fn new(b: T::Output) -> Self {
-			Self { state: b, _phantom: Default::default() }
-		}
-	}
-
-	impl<T: HookType> Default for ConstantHook<T>
-	where
-		T::Output: Default,
-	{
-		fn default() -> Self {
-			Self::new(Default::default())
-		}
-	}
-
-	impl<T: HookType> Hook<T> for ConstantHook<T>
-	where
-		T::Output: Clone,
-	{
-		fn run(&mut self, _input: T::Input) -> T::Output {
-			self.state.clone()
-		}
-	}
-
-	#[derive(
-		Clone,
-		PartialEq,
-		Eq,
-		PartialOrd,
-		Ord,
-		Debug,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Serialize,
-		Deserialize,
-	)]
-	pub struct IncreasingHook<T: HookType> {
-		pub counter: u32,
-		pub state: T::Output,
-		pub _phantom: sp_std::marker::PhantomData<T>,
-	}
-
-	impl<T: HookType> IncreasingHook<T> {
-		pub fn new(counter_value: u32, state: T::Output) -> Self {
-			Self { counter: counter_value, state, _phantom: Default::default() }
-		}
-	}
-
-	impl<T: HookType> Default for IncreasingHook<T>
-	where
-		T::Output: Default,
-	{
-		fn default() -> Self {
-			Self::new(Default::default(), Default::default())
-		}
-	}
-
-	impl<T: HookType> Hook<T> for IncreasingHook<T>
-	where
-		T::Output: Clone,
-	{
-		fn run(&mut self, _input: T::Input) -> T::Output {
-			self.counter += 1;
-			self.state.clone()
-		}
-	}
-
-	#[derive(
-		Clone,
-		PartialEq,
-		Eq,
-		PartialOrd,
-		Ord,
-		Debug,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Serialize,
-		Deserialize,
-	)]
 	#[serde(bound = "T::Input: Serde, T::Output: Serde")]
-	pub struct MockHook<const NAME: &'static str, T: HookType> {
+	pub struct MockHook<T: HookType, const NAME: &'static str = ""> {
 		pub state: T::Output,
 		pub call_history: Vec<T::Input>,
 		pub _phantom: sp_std::marker::PhantomData<T>,
 	}
 
 	impls! {
-		for MockHook<NAME,T> where
+		for MockHook<T, NAME> where
 		(
+			T: HookType,
 			const NAME: &'static str,
-			T: HookType
 		):
 
 		impl {
@@ -210,7 +122,6 @@ pub trait IndexedValidate<Index, Value> {
 	type Error;
 	fn validate(index: &Index, value: &Value) -> Result<(), Self::Error>;
 }
-
 
 /// A type which can be validated.
 pub trait Validate {
