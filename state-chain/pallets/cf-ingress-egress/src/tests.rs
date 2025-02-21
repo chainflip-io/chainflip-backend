@@ -2051,6 +2051,12 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::VaultSwapRefunded {
 			tx_id: H256::default(),
+			broker_id: Some(NOT_A_BROKER),
+			asset: INPUT_ASSET.try_into().unwrap(),
+			amount: INPUT_AMOUNT,
+			refund_address: MockAddressConverter::to_encoded_address(ForeignChainAddress::Eth(
+				ETH_REFUND_PARAMS.refund_address,
+			)),
 		}));
 
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
@@ -2376,7 +2382,7 @@ fn gets_refunded_if_vault_transaction_was_aborted() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(Event::VaultSwapRefunded { tx_id: _ })
+			RuntimeEvent::IngressEgress(Event::VaultSwapRefunded { tx_id: _, .. })
 		);
 
 		assert!(

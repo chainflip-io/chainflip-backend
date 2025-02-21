@@ -931,11 +931,10 @@ pub mod pallet {
 		},
 		VaultSwapRefunded {
 			tx_id: TransactionInIdFor<T, I>,
-		},
-		VaultSwapIgnored {
-			tx_id: TransactionInIdFor<T, I>,
-			stage: VaultSwapStage,
 			broker_id: Option<T::AccountId>,
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+			refund_address: EncodedAddress,
 		},
 	}
 
@@ -2218,12 +2217,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}: VaultDepositWitness<T, I>,
 	) {
 		if Self::should_reject_vault_swap(&broker_fee) {
-			let broker_id = broker_fee.unwrap().account.clone();
-			Self::deposit_event(Event::VaultSwapIgnored {
-				tx_id,
-				stage: VaultSwapStage::Prewitnessed,
-				broker_id: Some(broker_id),
-			});
 			return;
 		}
 
@@ -2513,23 +2506,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						TransferAssetParams {
 							asset: source_asset,
 							amount: deposit_amount,
-							to: refund_params.refund_address,
+							to: refund_params.clone().refund_address,
 						},
 					) {
 					T::Broadcaster::threshold_sign_and_broadcast(api_call);
-					Self::deposit_event(Event::VaultSwapRefunded { tx_id: tx_id.clone() });
+					Self::deposit_event(Event::VaultSwapRefunded {
+						tx_id: tx_id.clone(),
+						broker_id: broker_fee
+							.as_ref()
+							.map(|Beneficiary { account, .. }| account.clone()),
+						asset: source_asset,
+						amount: deposit_amount,
+						refund_address: T::AddressConverter::to_encoded_address(
+							refund_params.refund_address.into_foreign_chain_address(),
+						),
+					});
 				} else {
 					log_or_panic!("Failed to create refund api call for vault swap.");
 				}
 			};
-
-			let broker_id = broker_fee.unwrap().account.clone();
-
-			Self::deposit_event(Event::VaultSwapIgnored {
-				tx_id,
-				stage: VaultSwapStage::Deposit,
-				broker_id: Some(broker_id),
-			});
 
 			return;
 		}
