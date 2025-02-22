@@ -2061,10 +2061,12 @@ fn failed_ccm_deposit_can_deposit_event() {
 }
 
 #[cfg(test)]
-mod ethereum_screener {
+mod evm_transaction_rejection {
 	use super::*;
 	use cf_chains::evm::H256;
 	use std::str::FromStr;
+
+	use crate::ScheduledTxForReject;
 
 	use crate::TransactionsMarkedForRejection;
 	use cf_traits::{
@@ -2072,7 +2074,76 @@ mod ethereum_screener {
 	};
 
 	#[test]
-	fn process_marked_transaction_and_expect_refund_with_single_tx() {
+	fn deposit_with_multiple_txs() {
+		new_test_ext().execute_with(|| {
+			let tx_ids = vec![
+				H256::from_str(
+					"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+				)
+				.unwrap(),
+				H256::from_str(
+					"0x3214567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+				)
+				.unwrap(),
+			];
+
+			assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+				&BROKER,
+			));
+
+			let (_, deposit_address, block, _) = IngressEgress::request_liquidity_deposit_address(
+				BROKER,
+				eth::Asset::Eth,
+				0,
+				ForeignChainAddress::Eth(Default::default()),
+			)
+			.unwrap();
+
+			assert_ok!(IngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_ids[0],
+			));
+
+			assert!(TransactionsMarkedForRejection::<Test, ()>::get(BROKER, tx_ids[0]).is_some());
+
+			let deposit_details = DepositDetails { tx_hashes: Some(tx_ids.clone()) };
+
+			let deposit_address: <Ethereum as Chain>::ChainAccount =
+				deposit_address.try_into().unwrap();
+
+			assert_ok!(IngressEgress::process_single_deposit(
+				deposit_address,
+				eth::Asset::Eth,
+				DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details,
+				block,
+			));
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
+					deposit_address: _,
+					asset: eth::Asset::Eth,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details: _,
+					reason: DepositIgnoredReason::TransactionRejectedByBroker,
+				})
+			);
+
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+			let scheduled_tx_for_reject = ScheduledTxForReject::<Test, ()>::get();
+			assert_eq!(scheduled_tx_for_reject.len(), 1);
+
+			IngressEgress::on_finalize(2);
+
+			let scheduled_tx_for_reject = ScheduledTxForReject::<Test, ()>::get();
+			assert_eq!(scheduled_tx_for_reject.len(), 0);
+		});
+	}
+
+	#[test]
+	fn deposit_with_single_tx() {
 		new_test_ext().execute_with(|| {
 			let tx_id = H256::from_str(
 				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
@@ -2119,6 +2190,14 @@ mod ethereum_screener {
 			);
 
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+			let scheduled_tx_for_reject = ScheduledTxForReject::<Test, ()>::get();
+			assert_eq!(scheduled_tx_for_reject.len(), 1);
+
+			IngressEgress::on_finalize(2);
+
+			let scheduled_tx_for_reject = ScheduledTxForReject::<Test, ()>::get();
+			assert_eq!(scheduled_tx_for_reject.len(), 0);
 		});
 	}
 }
