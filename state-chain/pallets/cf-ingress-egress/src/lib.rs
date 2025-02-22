@@ -747,6 +747,9 @@ pub mod pallet {
 		TransactionRejectionFailed {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
+		DebugEvent {
+			reported_tx_id: Option<Vec<TransactionInIdFor<T, I>>>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -2042,9 +2045,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(tx_ids) = deposit_details.deposit_ids() {
 			let tainted_tx_id = Self::check_if_deposit_is_tainted(
-				tx_ids,
+				tx_ids.clone(),
 				TransactionsMarkedForRejection::<T, I>::iter_key_prefix(&channel_owner).collect(),
 			);
+			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids) });
 			if tainted_tx_id.is_some() &&
 				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
 			{
@@ -2079,6 +2083,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				});
 				return Ok(())
 			}
+		} else {
+			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: None });
 		}
 
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
