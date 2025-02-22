@@ -12,6 +12,9 @@ use frame_support::{
 	weights::Weight,
 };
 
+use cf_chains::ChannelRefundParametersDecoded;
+use sp_core::U256;
+
 use cf_chains::{
 	btc::{deposit_address::DepositAddress, Hash, ScriptPubkey, UtxoId},
 	ForeignChainAddress,
@@ -91,7 +94,11 @@ mod helpers {
 			BROKER,
 			None,
 			10,
-			None,
+			ChannelRefundParametersDecoded {
+				retry_duration: 100,
+				refund_address: ForeignChainAddress::Eth([1; 20].into()),
+				min_price: U256::from(0),
+			},
 			None,
 		)
 		.unwrap();
@@ -386,7 +393,7 @@ fn send_funds_back_after_they_have_been_rejected() {
 		let deposit_details = helpers::generate_btc_deposit(Hash::random());
 
 		ScheduledTransactionsForRejection::<Test, ()>::append(TransactionRejectionDetails {
-			refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS))),
+			refund_address: ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS)),
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			asset: btc::Asset::Btc,
 			deposit_details,

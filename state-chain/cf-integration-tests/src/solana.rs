@@ -15,8 +15,9 @@ use cf_chains::{
 		SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
-	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
-	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
+	ChannelRefundParametersEncoded, ExecutexSwapAndCallError, ForeignChainAddress,
+	RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin,
+	TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -110,7 +111,11 @@ fn schedule_deposit_to_swap(
 		ccm,
 		0u16,
 		Default::default(),
-		None,
+		ChannelRefundParametersEncoded {
+			retry_duration: 0,
+			refund_address: EncodedAddress::Sol([1u8; 32]),
+			min_price: sp_core::U256::zero(),
+		},
 		None,
 	));
 
@@ -380,7 +385,7 @@ fn vault_swap_deposit_witness(
 		deposit_details: (),
 		broker_fee: None,
 		affiliate_fees: Default::default(),
-		refund_params: Some(REFUND_PARAMS),
+		refund_params: REFUND_PARAMS,
 		dca_params: None,
 		boost_fee: 0,
 		deposit_address: Some(SolAddress([2u8; 32])),
@@ -437,7 +442,11 @@ fn solana_ccm_fails_with_invalid_input() {
 					Some(invalid_ccm.channel_metadata.clone()),
 					0u16,
 					Default::default(),
-					None,
+					ChannelRefundParametersEncoded {
+						retry_duration: 0,
+						refund_address: EncodedAddress::Sol([1u8; 32]),
+						min_price: sp_core::U256::zero(),
+					},
 					None,
 				),
 				pallet_cf_swapping::Error::<Runtime>::InvalidCcm,
@@ -451,6 +460,11 @@ fn solana_ccm_fails_with_invalid_input() {
 					0,
 					Some(invalid_ccm.channel_metadata.clone()),
 					0u16,
+					ChannelRefundParametersEncoded {
+						retry_duration: 0,
+						refund_address: EncodedAddress::Sol([1u8; 32]),
+						min_price: sp_core::U256::zero(),
+					},
 				),
 				pallet_cf_swapping::Error::<Runtime>::InvalidCcm,
 			);

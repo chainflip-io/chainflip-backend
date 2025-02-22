@@ -1017,7 +1017,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 		let (_, address, _, _) = IngressEgress::open_channel(
 			&ALICE,
 			EthAsset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()) },
 			TIER_5_BPS,
 		)
 		.unwrap();
@@ -1203,11 +1203,11 @@ mod vault_swaps {
 				tx_id,
 				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
 				affiliate_fees: Default::default(),
-				refund_params: Some(ChannelRefundParameters {
+				refund_params: ChannelRefundParameters {
 					retry_duration: 2,
 					refund_address: [2; 20].into(),
 					min_price: Default::default(),
-				}),
+				},
 				dca_params: None,
 				boost_fee: 5,
 			};
