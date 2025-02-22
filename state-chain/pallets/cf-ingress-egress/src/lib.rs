@@ -1787,7 +1787,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} = DepositChannelLookup::<T, I>::get(&deposit_address)
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-			if let Some(tx_id) = deposit_details.deposit_id() {
+			if let Some(tx_ids) = deposit_details.deposit_ids() {
+				// log_or_panic!(
+				// 	"number of tx_ids isnt 1 for a prewitnessed deposit",
+				// 	tx_ids.len() == 1
+				// );
+
+				// TODO: Handle this without a potential panic.
+				let tx_id = tx_ids
+					.first()
+					.expect("there must be exactly one tx_id for a prewitnessed deposit.");
+
 				if TransactionsMarkedForRejection::<T, I>::mutate(&owner, &tx_id, |opt| {
 					match opt.as_mut() {
 						// Transaction has been reported, mark it as pre-witnessed.
@@ -1795,11 +1805,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							*status = TransactionPrewitnessedStatus::Prewitnessed;
 							true
 						},
-						// Pre-witnessing twice is unlikely but possible. Either way we don't want
-						// to change the status and we don't want to allow boosting.
+						// Pre-witnessing twice is unlikely but possible. Either way we don't
+						// want to change the status and we don't want to allow boosting.
 						Some(TransactionPrewitnessedStatus::Prewitnessed) => true,
-						// Transaction has not been reported, mark it as boosted to prevent further
-						// reports.
+						// Transaction has not been reported, mark it as boosted to prevent
+						// further reports.
 						None => false,
 					}
 				}) {
@@ -1981,6 +1991,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(action)
 	}
 
+	fn check_if_deposit_is_tainted(
+		tx_ids: Vec<TransactionInIdFor<T, I>>,
+		tx_marked_for_rejection: Vec<TransactionInIdFor<T, I>>,
+	) -> Option<TransactionInIdFor<T, I>> {
+		tx_ids.into_iter().find(|tx_id| tx_marked_for_rejection.contains(tx_id))
+	}
+
 	/// Completes a single deposit request.
 	#[transactional]
 	fn process_single_deposit(
@@ -2028,8 +2045,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let channel_owner = deposit_channel_details.owner.clone();
 
-		if let Some(tx_id) = deposit_details.deposit_id() {
-			if TransactionsMarkedForRejection::<T, I>::take(&channel_owner, &tx_id).is_some() &&
+		if let Some(tx_ids) = deposit_details.deposit_ids() {
+			let tainted_tx_id = Self::check_if_deposit_is_tainted(
+				tx_ids,
+				TransactionsMarkedForRejection::<T, I>::iter_key_prefix(&channel_owner).collect(),
+			);
+			if tainted_tx_id.is_some() &&
 				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
 			{
 				let refund_address = match deposit_channel_details.action.clone() {
@@ -2041,6 +2062,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						.map(|refund_params| refund_params.refund_address.clone()),
 					ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
 				};
+
+				TransactionsMarkedForRejection::<T, I>::remove(
+					channel_owner,
+					tainted_tx_id.expect("checked that tainted_tx_id is some above."),
+				);
 
 				ScheduledTxForReject::<T, I>::append(TransactionRejectionDetails {
 					refund_address,

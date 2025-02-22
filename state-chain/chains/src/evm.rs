@@ -653,11 +653,8 @@ pub struct TransactionFee {
 }
 
 impl DepositDetailsToTransactionInId<EvmCrypto> for DepositDetails {
-	fn deposit_id(&self) -> Option<H256> {
-		// TODO: How to handle multiple txs? I think normaly there should be only one but it's
-		// possible to have multiple.
-		let tx_id = self.tx_hashes.as_ref()?.first()?;
-		Some(*tx_id)
+	fn deposit_ids(&self) -> Option<Vec<H256>> {
+		self.tx_hashes.clone()
 	}
 }
 

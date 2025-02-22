@@ -156,7 +156,7 @@ where
 		deposit_details: <Bitcoin as Chain>::DepositDetails,
 		refund_address: <Bitcoin as Chain>::ChainAccount,
 		refund_amount: <Bitcoin as Chain>::ChainAmount,
-		asset: <Bitcoin as Chain>::ChainAsset,
+		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> Result<Self, RejectError> {
 		let agg_key = <E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(RejectError::Other)?;
 		Ok(Self::NoChangeTransfer(BitcoinTransaction::create_new_unsigned(

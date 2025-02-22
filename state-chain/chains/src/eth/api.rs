@@ -244,7 +244,7 @@ where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
-		deposit_details: <Ethereum as Chain>::DepositDetails,
+		_deposit_details: <Ethereum as Chain>::DepositDetails,
 		refund_address: <Ethereum as Chain>::ChainAccount,
 		refund_amount: <Ethereum as Chain>::ChainAmount,
 		asset: <Ethereum as Chain>::ChainAsset,
@@ -259,10 +259,6 @@ where
 			E::replay_protection(E::vault_address()),
 			transfer_fallback::TransferFallback::new(transfer_param),
 		)))
-		// Ok(Self::RejectCall(EvmTransactionBuilder::new_unsigned(
-		// 	E::replay_protection(E::vault_address()),
-		// 	RejectCall::new(deposit_details, refund_address, refund_amount),
-		// )))
 	}
 }
 

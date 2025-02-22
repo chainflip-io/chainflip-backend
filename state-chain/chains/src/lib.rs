@@ -839,7 +839,7 @@ pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 }
 
 pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
-	fn deposit_id(&self) -> Option<C::TransactionInId> {
+	fn deposit_ids(&self) -> Option<Vec<C::TransactionInId>> {
 		None
 	}
 }
