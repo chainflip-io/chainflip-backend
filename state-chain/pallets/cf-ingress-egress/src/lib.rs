@@ -951,6 +951,7 @@ pub mod pallet {
 							refund_address,
 							tx.amount
 								.saturating_sub(T::ChainTracking::estimate_egress_fee(tx.asset)),
+							tx.asset,
 						) {
 						let (broadcast_id, _) =
 							T::Broadcaster::threshold_sign_and_broadcast(api_call);

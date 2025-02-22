@@ -19,6 +19,7 @@ use sp_std::marker::PhantomData;
 
 use evm::tokenizable::Tokenizable;
 
+use crate::RejectCall;
 #[cfg(feature = "std")]
 pub mod abi {
 	#[macro_export]
@@ -70,6 +71,7 @@ pub enum EthereumApi<Environment: 'static> {
 	AllBatch(EvmTransactionBuilder<all_batch::AllBatch>),
 	ExecutexSwapAndCall(EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>),
 	TransferFallback(EvmTransactionBuilder<transfer_fallback::TransferFallback>),
+	RejectCall(EvmTransactionBuilder<transfer_fallback::TransferFallback>),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -237,9 +239,31 @@ where
 	}
 }
 
-impl<E> RejectCall<Ethereum> for EthereumApi<E> where
-	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>
+impl<E> RejectCall<Ethereum> for EthereumApi<E>
+where
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
+	fn new_unsigned(
+		deposit_details: <Ethereum as Chain>::DepositDetails,
+		refund_address: <Ethereum as Chain>::ChainAccount,
+		refund_amount: <Ethereum as Chain>::ChainAmount,
+		asset: <Ethereum as Chain>::ChainAsset,
+	) -> Result<Self, RejectError> {
+		let transfer_param = EncodableTransferAssetParams {
+			asset: E::token_address(asset).ok_or(RejectError::CannotLookupTokenAddress)?,
+			to: refund_address,
+			amount: refund_amount,
+		};
+
+		Ok(Self::TransferFallback(EvmTransactionBuilder::new_unsigned(
+			E::replay_protection(E::vault_address()),
+			transfer_fallback::TransferFallback::new(transfer_param),
+		)))
+		// Ok(Self::RejectCall(EvmTransactionBuilder::new_unsigned(
+		// 	E::replay_protection(E::vault_address()),
+		// 	RejectCall::new(deposit_details, refund_address, refund_amount),
+		// )))
+	}
 }
 
 impl<E> From<EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>>
@@ -309,6 +333,7 @@ macro_rules! map_over_api_variants {
 			EthereumApi::AllBatch($var) => $var_method,
 			EthereumApi::ExecutexSwapAndCall($var) => $var_method,
 			EthereumApi::TransferFallback($var) => $var_method,
+			EthereumApi::RejectCall($var) => $var_method,
 			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	};

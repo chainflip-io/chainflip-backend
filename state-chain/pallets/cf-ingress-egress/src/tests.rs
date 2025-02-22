@@ -2059,3 +2059,8 @@ fn failed_ccm_deposit_can_deposit_event() {
 		);
 	});
 }
+
+#[test]
+fn ethereum_tx_reject_call_is_broadcasted() {
+	new_test_ext().execute_with(|| {});
+}

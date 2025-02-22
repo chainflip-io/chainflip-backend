@@ -528,6 +528,7 @@ pub enum ConsolidationError {
 #[derive(Debug)]
 pub enum RejectError {
 	NotSupportedForAsset,
+	CannotLookupTokenAddress,
 	Other,
 }
 
@@ -540,6 +541,7 @@ pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		_deposit_details: C::DepositDetails,
 		_refund_address: C::ChainAccount,
 		_refund_amount: C::ChainAmount,
+		_asset: C::ChainAsset,
 	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
