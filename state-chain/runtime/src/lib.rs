@@ -390,7 +390,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
-	type AllowTransactionReports = ConstBool<false>;
+	type AllowTransactionReports = ConstBool<true>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
