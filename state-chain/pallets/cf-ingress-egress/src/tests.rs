@@ -2059,3 +2059,66 @@ fn failed_ccm_deposit_can_deposit_event() {
 		);
 	});
 }
+
+#[cfg(test)]
+mod ethereum_screener {
+	use super::*;
+	use cf_chains::evm::H256;
+	use std::str::FromStr;
+
+	use crate::TransactionsMarkedForRejection;
+	use cf_traits::{
+		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
+	};
+
+	#[test]
+	fn process_marked_transaction_and_expect_refund_with_single_tx() {
+		new_test_ext().execute_with(|| {
+			let tx_id = H256::from_str(
+				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			)
+			.unwrap();
+			assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+				&BROKER,
+			));
+			let (_, deposit_address, block, _) = IngressEgress::request_liquidity_deposit_address(
+				BROKER,
+				eth::Asset::Eth,
+				0,
+				ForeignChainAddress::Eth(Default::default()),
+			)
+			.unwrap();
+			let deposit_address: <Ethereum as Chain>::ChainAccount =
+				deposit_address.try_into().unwrap();
+			let deposit_details = DepositDetails { tx_hashes: Some(vec![tx_id]) };
+			// Report the tx as marked for rejection
+			assert_ok!(IngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+
+			assert!(TransactionsMarkedForRejection::<Test, ()>::get(BROKER, tx_id).is_some());
+			// Process the deposit
+			assert_ok!(IngressEgress::process_single_deposit(
+				deposit_address,
+				eth::Asset::Eth,
+				DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details,
+				block,
+			));
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
+					deposit_address: _,
+					asset: eth::Asset::Eth,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details: _,
+					reason: DepositIgnoredReason::TransactionRejectedByBroker,
+				})
+			);
+
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+		});
+	}
+}

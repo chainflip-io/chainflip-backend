@@ -1788,17 +1788,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
 			if let Some(tx_ids) = deposit_details.deposit_ids() {
-				// log_or_panic!(
-				// 	"number of tx_ids isnt 1 for a prewitnessed deposit",
-				// 	tx_ids.len() == 1
-				// );
-
 				// TODO: Handle this without a potential panic.
 				let tx_id = tx_ids
 					.first()
 					.expect("there must be exactly one tx_id for a prewitnessed deposit.");
 
-				if TransactionsMarkedForRejection::<T, I>::mutate(&owner, &tx_id, |opt| {
+				if TransactionsMarkedForRejection::<T, I>::mutate(&owner, tx_id, |opt| {
 					match opt.as_mut() {
 						// Transaction has been reported, mark it as pre-witnessed.
 						Some(status @ TransactionPrewitnessedStatus::Unseen) => {
