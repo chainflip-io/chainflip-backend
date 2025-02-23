@@ -991,7 +991,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::cancel_orders_batch())]
+		#[pallet::weight(T::WeightInfo::cancel_orders_batch(orders.len() as u32))]
 		pub fn cancel_orders_batch(
 			origin: OriginFor<T>,
 			orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
