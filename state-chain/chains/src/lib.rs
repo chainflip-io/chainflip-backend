@@ -528,8 +528,16 @@ pub enum ConsolidationError {
 #[derive(Debug)]
 pub enum RejectError {
 	NotSupportedForAsset,
-	CannotLookupTokenAddress,
 	Other,
+}
+
+impl From<AllBatchError> for RejectError {
+	fn from(e: AllBatchError) -> Self {
+		match e {
+			AllBatchError::UnsupportedToken => RejectError::NotSupportedForAsset,
+			_ => RejectError::Other,
+		}
+	}
 }
 
 pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -542,6 +550,7 @@ pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		_refund_address: C::ChainAccount,
 		_refund_amount: C::ChainAmount,
 		_asset: C::ChainAsset,
+		_deposit_fetch_id: C::DepositFetchId,
 	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}

@@ -138,6 +138,7 @@ pub enum DepositIgnoredReason {
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
 #[scale_info(skip_type_params(T, I))]
 pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
+	pub deposit_address: TargetChainAccount<T, I>,
 	pub refund_address: Option<ForeignChainAddress>,
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
@@ -948,25 +949,42 @@ pub mod pallet {
 
 			for tx in ScheduledTxForReject::<T, I>::take() {
 				if let Some(Ok(refund_address)) = tx.refund_address.clone().map(TryInto::try_into) {
-					if let Ok(api_call) =
-						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
-							tx.deposit_details.clone(),
-							refund_address,
-							tx.amount
-								.saturating_sub(T::ChainTracking::estimate_egress_fee(tx.asset)),
-							tx.asset,
-						) {
-						let (broadcast_id, _) =
-							T::Broadcaster::threshold_sign_and_broadcast(api_call);
-						Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
-							broadcast_id,
-							tx_id: tx.deposit_details,
+					let deposit_fetch_id =
+						DepositChannelLookup::<T, I>::mutate(&tx.deposit_address, |details| {
+							details.as_mut().and_then(|details| {
+								let can_fetch = details.deposit_channel.state.can_fetch();
+
+								if can_fetch {
+									details.deposit_channel.state.on_fetch_scheduled();
+									Some(details.deposit_channel.fetch_id())
+								} else {
+									None
+								}
+							})
 						});
-					} else {
-						FailedRejections::<T, I>::append(tx.clone());
-						Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-							tx_id: tx.deposit_details,
-						});
+					if let Some(deposit_fetch_id) = deposit_fetch_id {
+						if let Ok(api_call) =
+							<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+								tx.deposit_details.clone(),
+								refund_address,
+								tx.amount.saturating_sub(T::ChainTracking::estimate_egress_fee(
+									tx.asset,
+								)),
+								tx.asset,
+								deposit_fetch_id,
+							) {
+							let (broadcast_id, _) =
+								T::Broadcaster::threshold_sign_and_broadcast(api_call);
+							Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
+								broadcast_id,
+								tx_id: tx.deposit_details,
+							});
+						} else {
+							FailedRejections::<T, I>::append(tx.clone());
+							Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+								tx_id: tx.deposit_details,
+							});
+						}
 					}
 				} else {
 					FailedRejections::<T, I>::append(tx.clone());
@@ -1989,13 +2007,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(action)
 	}
 
-	fn check_if_deposit_is_tainted(
-		tx_ids: Vec<TransactionInIdFor<T, I>>,
-		tx_marked_for_rejection: Vec<TransactionInIdFor<T, I>>,
-	) -> Option<TransactionInIdFor<T, I>> {
-		tx_ids.into_iter().find(|tx_id| tx_marked_for_rejection.contains(tx_id))
-	}
-
 	/// Completes a single deposit request.
 	#[transactional]
 	fn process_single_deposit(
@@ -2044,14 +2055,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let channel_owner = deposit_channel_details.owner.clone();
 
 		if let Some(tx_ids) = deposit_details.deposit_ids() {
-			let tainted_tx_id = Self::check_if_deposit_is_tainted(
-				tx_ids.clone(),
-				TransactionsMarkedForRejection::<T, I>::iter_key_prefix(&channel_owner).collect(),
-			);
-			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids) });
-			if tainted_tx_id.is_some() &&
-				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
-			{
+			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids.clone()) });
+			if tx_ids
+				.iter()
+				.filter_map(|tx_id| {
+					TransactionsMarkedForRejection::<T, I>::take(&channel_owner, tx_id)
+				})
+				.next()
+				.is_some() && !matches!(
+				deposit_channel_details.boost_status,
+				BoostStatus::Boosted { .. }
+			) {
 				let refund_address = match deposit_channel_details.action.clone() {
 					ChannelAction::Swap { refund_params, .. } => refund_params
 						.as_ref()
@@ -2062,12 +2076,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
 				};
 
-				TransactionsMarkedForRejection::<T, I>::remove(
-					channel_owner,
-					tainted_tx_id.expect("checked that tainted_tx_id is some above."),
-				);
-
 				ScheduledTxForReject::<T, I>::append(TransactionRejectionDetails {
+					deposit_address: deposit_address.clone(),
 					refund_address,
 					amount: deposit_amount,
 					asset,

@@ -8,7 +8,7 @@ use crate::{
 		},
 		EvmCrypto,
 	},
-	*,
+	RejectCall, *,
 };
 use ethabi::{Address, Uint};
 use evm::api::common::*;
@@ -19,7 +19,6 @@ use sp_std::marker::PhantomData;
 
 use evm::tokenizable::Tokenizable;
 
-use crate::RejectCall;
 #[cfg(feature = "std")]
 pub mod abi {
 	#[macro_export]
@@ -71,7 +70,7 @@ pub enum EthereumApi<Environment: 'static> {
 	AllBatch(EvmTransactionBuilder<all_batch::AllBatch>),
 	ExecutexSwapAndCall(EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>),
 	TransferFallback(EvmTransactionBuilder<transfer_fallback::TransferFallback>),
-	RejectCall(EvmTransactionBuilder<transfer_fallback::TransferFallback>),
+	RejectCall(EvmTransactionBuilder<all_batch::AllBatch>),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -248,17 +247,14 @@ where
 		refund_address: <Ethereum as Chain>::ChainAccount,
 		refund_amount: <Ethereum as Chain>::ChainAmount,
 		asset: <Ethereum as Chain>::ChainAsset,
+		deposit_fetch_id: <Ethereum as Chain>::DepositFetchId,
 	) -> Result<Self, RejectError> {
-		let transfer_param = EncodableTransferAssetParams {
-			asset: E::token_address(asset).ok_or(RejectError::CannotLookupTokenAddress)?,
-			to: refund_address,
-			amount: refund_amount,
-		};
-
-		Ok(Self::TransferFallback(EvmTransactionBuilder::new_unsigned(
+		Ok(Self::RejectCall(evm_all_batch_builder::<Ethereum, _>(
+			vec![FetchAssetParams { deposit_fetch_id, asset }],
+			vec![TransferAssetParams { asset, amount: refund_amount, to: refund_address }],
+			E::token_address,
 			E::replay_protection(E::vault_address()),
-			transfer_fallback::TransferFallback::new(transfer_param),
-		)))
+		)?))
 	}
 }
 
