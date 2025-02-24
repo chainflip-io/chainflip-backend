@@ -1,25 +1,23 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use cf_chains::dot::{PolkadotHash, RuntimeVersion};
+use cf_chains::dot::RuntimeVersion;
 use cf_primitives::PolkadotBlockNumber;
 use cf_utilities::redact_endpoint_secret::SecretUrl;
 use futures::{Stream, StreamExt, TryStreamExt};
-use sp_core::H256;
 use std::sync::Arc;
 use subxt::{
 	backend::legacy::rpc_methods::{BlockDetails, Bytes},
 	events::Events,
-	Config, OnlineClient, PolkadotConfig,
+	ext::subxt_rpcs,
+	OnlineClient, PolkadotConfig,
 };
 use tokio::sync::RwLock;
 use tracing::warn;
 
-use anyhow::{anyhow, bail, Result};
-
 use super::http_rpc::DotHttpRpcClient;
-
-pub type PolkadotHeader = <PolkadotConfig as Config>::Header;
+use crate::dot::{PolkadotHash, PolkadotHeader};
+use anyhow::{anyhow, bail, Result};
 
 #[derive(Clone)]
 pub struct DotRpcClient {
@@ -53,7 +51,7 @@ macro_rules! refresh_connection_on_error {
 
 impl DotRpcClient {
 	pub async fn new(polkadot_network_ws_url: &str, http_client: DotHttpRpcClient) -> Result<Self> {
-		if subxt::utils::validate_url_is_secure(polkadot_network_ws_url).is_err() {
+		if subxt_rpcs::utils::validate_url_is_secure(polkadot_network_ws_url).is_err() {
 			warn!("Using insecure Polkadot websocket endpoint: {polkadot_network_ws_url}");
 		}
 
@@ -96,7 +94,7 @@ pub trait DotRpcApi: Send + Sync {
 		parent_hash: PolkadotHash,
 	) -> Result<Option<Events<PolkadotConfig>>>;
 
-	async fn runtime_version(&self, at: Option<H256>) -> Result<RuntimeVersion>;
+	async fn runtime_version(&self, at: Option<PolkadotHash>) -> Result<RuntimeVersion>;
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
 }
@@ -115,7 +113,7 @@ impl DotRpcApi for DotRpcClient {
 		self.http_client.block(block_hash).await
 	}
 
-	async fn runtime_version(&self, at: Option<H256>) -> Result<RuntimeVersion> {
+	async fn runtime_version(&self, at: Option<PolkadotHash>) -> Result<RuntimeVersion> {
 		self.http_client.runtime_version(at).await
 	}
 
@@ -190,7 +188,7 @@ async fn create_online_client(
 	ws_endpoint: &SecretUrl,
 	expected_genesis_hash: Option<PolkadotHash>,
 ) -> Result<OnlineClient<PolkadotConfig>> {
-	if subxt::utils::validate_url_is_secure(ws_endpoint.as_ref()).is_err() {
+	if subxt_rpcs::utils::validate_url_is_secure(ws_endpoint.as_ref()).is_err() {
 		warn!("Using insecure Polkadot websocket endpoint: {ws_endpoint}");
 	}
 

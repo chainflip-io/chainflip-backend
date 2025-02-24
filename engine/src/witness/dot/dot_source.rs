@@ -1,7 +1,6 @@
 use std::{pin::Pin, time::Duration};
 
 use crate::retrier::NoRetryLimit;
-use cf_chains::dot::PolkadotHash;
 use cf_primitives::PolkadotBlockNumber;
 use futures_util::stream;
 use subxt::{events::Events, PolkadotConfig};
@@ -9,7 +8,7 @@ use subxt::{events::Events, PolkadotConfig};
 use crate::{
 	dot::{
 		retry_rpc::{DotRetryRpcApi, DotRetrySubscribeApi},
-		rpc::PolkadotHeader,
+		PolkadotHash, PolkadotHeader,
 	},
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},

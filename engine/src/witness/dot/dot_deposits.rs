@@ -6,18 +6,17 @@ use state_chain_runtime::PolkadotInstance;
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
-use crate::witness::{
-	common::{
-		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
-		RuntimeHasChain,
+use crate::{
+	dot::PolkadotHash,
+	witness::{
+		common::{
+			chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
+			RuntimeCallHasChain, RuntimeHasChain,
+		},
+		dot::EventWrapper,
 	},
-	dot::EventWrapper,
 };
-use cf_chains::{
-	assets::dot::Asset,
-	dot::{PolkadotAccountId, PolkadotHash},
-	Polkadot,
-};
+use cf_chains::{assets::dot::Asset, dot::PolkadotAccountId, Polkadot};
 use subxt::events::Phase;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {

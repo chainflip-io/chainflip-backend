@@ -5,7 +5,6 @@ pub mod state_chain;
 
 use self::state_chain::handle_call;
 use crate::{settings::DepositTrackerSettings, store::RedisStore};
-use cf_chains::dot::PolkadotHash;
 use cf_utilities::task_scope;
 use chainflip_api::primitives::{
 	chains::assets::eth::Asset as EthAsset, Asset, NetworkEnvironment,
@@ -21,6 +20,7 @@ use chainflip_engine::{
 };
 
 use anyhow::anyhow;
+use chainflip_engine::dot::PolkadotHash;
 use sp_core::H160;
 use std::collections::HashMap;
 
@@ -82,12 +82,15 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let dot_genesis_hash = state_chain_client
-		.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
-		)
-		.await
-		.expect(STATE_CHAIN_CONNECTION);
+	let dot_genesis_hash = PolkadotHash::from_slice(
+		state_chain_client
+			.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
+				state_chain_client.latest_finalized_block().hash,
+			)
+			.await
+			.expect(STATE_CHAIN_CONNECTION)
+			.as_bytes(),
+	);
 
 	let chainflip_network = state_chain_client
 		.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(

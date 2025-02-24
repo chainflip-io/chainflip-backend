@@ -1,10 +1,12 @@
-use cf_chains::dot::{PolkadotHash, PolkadotTrackedData};
+use cf_chains::dot::PolkadotTrackedData;
 use subxt::events::Phase;
-
-use crate::{dot::retry_rpc::DotRetryRpcApi, witness::dot::EventWrapper};
 
 use super::super::common::{
 	chain_source::Header, chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData,
+};
+use crate::{
+	dot::{retry_rpc::DotRetryRpcApi, PolkadotHash},
+	witness::dot::EventWrapper,
 };
 
 #[async_trait::async_trait]
