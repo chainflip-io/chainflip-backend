@@ -2075,18 +2075,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		if let Some(tx_ids) = deposit_details.deposit_ids() {
-			let channel_owner = deposit_channel_details.owner.clone();
-			let white_listed_broker_id = Self::account_id_from_byte_array(&SHARED_BROKER_ID);
-
 			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids.clone()) });
+			let is_marked_by_broker_or_screening_id = !tx_ids
+				.iter()
+				.filter_map(|tx_id| {
+					match (
+						TransactionsMarkedForRejection::<T, I>::take(
+							&deposit_channel_details.owner,
+							tx_id,
+						),
+						TransactionsMarkedForRejection::<T, I>::take(
+							T::ScreeningBrokerId::get(),
+							tx_id,
+						),
+					) {
+						(None, None) => None,
+						_ => Some(()),
+					}
+				})
+				// Collect to ensure that the iterator is fully consumed.
+				.collect::<Vec<_>>()
+				.is_empty();
 
-			let was_rejected = tx_ids.iter().any(|tx_id| {
-				TransactionsMarkedForRejection::<T, I>::take(&channel_owner, tx_id).is_some() ||
-					TransactionsMarkedForRejection::<T, I>::take(&white_listed_broker_id, tx_id)
-						.is_some()
-			});
-
-			if was_rejected &&
+			if is_marked_by_broker_or_screening_id &&
 				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
 			{
 				let refund_address = match deposit_channel_details.action.clone() {
