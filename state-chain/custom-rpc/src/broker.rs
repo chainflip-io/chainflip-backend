@@ -3,7 +3,7 @@ use cf_chains::{
 	address::AddressString, CcmChannelMetadata, ChannelRefundParametersEncoded,
 	ChannelRefundParametersGeneric,
 };
-use cf_node_clients::{cf_static_runtime, extract_dynamic_event};
+use cf_node_clients::{extract_dynamic_event, subxt_state_chain_config::cf_static_runtime};
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters,
 };

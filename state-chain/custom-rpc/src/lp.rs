@@ -9,9 +9,10 @@ use cf_chains::{
 	Chain,
 };
 use cf_node_clients::{
-	cf_static_runtime,
 	events_decoder::{DynamicEventError, DynamicEvents},
-	extract_dynamic_event, WaitFor, WaitForDynamicResult,
+	extract_dynamic_event,
+	subxt_state_chain_config::cf_static_runtime,
+	WaitFor, WaitForDynamicResult,
 };
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
