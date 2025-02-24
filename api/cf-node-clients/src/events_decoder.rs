@@ -122,12 +122,19 @@ impl Iterator for DynamicEvents {
 }
 
 impl DynamicEvents {
+	/// Find an event by pallet and event name
 	pub fn find_event(&self, pallet_name: &str, event_name: &str) -> Option<&DynamicEvent> {
 		self.events
 			.iter()
 			.find(|event| event.pallet_name() == pallet_name && event.variant_name() == event_name)
 	}
 
+	/// Finds the first event of type E, parameter `is_strict` determines if the event should be
+	/// decoded strictly.
+	///   * True: Performs checks that the event fields match the static metadata fields and that no
+	///     extra bytes remain.
+	///   * False: leniently tries to decode the event, it doesn't fail if extra fields are added to
+	///     the event.
 	pub fn find_static_event<E: StaticEvent>(
 		&self,
 		is_strict: bool,
@@ -140,6 +147,8 @@ impl DynamicEvents {
 		Ok(None)
 	}
 
+	/// Finds all events of type E, parameter `is_strict` determines if the events should be decoded
+	/// strictly.
 	pub fn find_all_static_events<E: StaticEvent>(
 		&self,
 		is_strict: bool,
@@ -157,6 +166,7 @@ impl DynamicEvents {
 			.collect()
 	}
 
+	/// Extracts the extrinsic Success or Failed events
 	pub fn extrinsic_result(
 		&self,
 	) -> Result<Either<DispatchInfo, DispatchError>, DynamicEventError> {
