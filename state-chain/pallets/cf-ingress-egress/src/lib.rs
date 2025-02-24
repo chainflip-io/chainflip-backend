@@ -31,10 +31,10 @@ use cf_chains::{
 	FetchAssetParams, ForeignChainAddress, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
-	SWAP_DELAY_BLOCKS,
+	AccountId, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId,
+	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
+	SECONDS_PER_BLOCK, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -65,6 +65,9 @@ use sp_std::{
 pub use weights::WeightInfo;
 
 const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
+
+const SHARED_BROKER_ID: [u8; 32] = [0; 32];
+const WHITE_LISTED_BROKER_IDS: [[u8; 32]; 2] = [[0; 32], [1; 32]];
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
@@ -1440,10 +1443,26 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn is_whitelisted_broker_or(broker_id: T::AccountId) -> T::AccountId {
+		let derive_account_id_from_bytes = |byte_array: &[u8; 32]| {
+			T::AccountId::decode(&mut &byte_array[..]).expect("32 bytes is a valid AccountId")
+		};
+		let white_listed_broker_ids = WHITE_LISTED_BROKER_IDS
+			.iter()
+			.map(derive_account_id_from_bytes)
+			.collect::<Vec<_>>();
+		if white_listed_broker_ids.contains(&broker_id) {
+			derive_account_id_from_bytes(&SHARED_BROKER_ID)
+		} else {
+			broker_id
+		}
+	}
+
 	fn mark_transaction_for_rejection_inner(
 		account_id: T::AccountId,
 		tx_id: TransactionInIdFor<T, I>,
 	) -> DispatchResult {
+		let account_id = Self::is_whitelisted_broker_or(account_id);
 		TransactionsMarkedForRejection::<T, I>::try_mutate(&account_id, &tx_id, |opt| {
 			const UNSEEN: TransactionPrewitnessedStatus = TransactionPrewitnessedStatus::Unseen;
 			ensure!(
@@ -1814,6 +1833,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.first()
 					.expect("there must be exactly one tx_id for a prewitnessed deposit.");
 
+				let owner = Self::is_whitelisted_broker_or(owner);
+
 				if TransactionsMarkedForRejection::<T, I>::mutate(&owner, tx_id, |opt| {
 					match opt.as_mut() {
 						// Transaction has been reported, mark it as pre-witnessed.
@@ -2055,6 +2076,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let channel_owner = deposit_channel_details.owner.clone();
 
 		if let Some(tx_ids) = deposit_details.deposit_ids() {
+            let channel_owner = Self::is_whitelisted_broker_or(channel_owner);
 			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids.clone()) });
 			if tx_ids
 				.iter()
