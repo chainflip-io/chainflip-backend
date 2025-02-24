@@ -155,7 +155,7 @@ async function brokerLevelScreeningTestScenario(
 
 async function testBrokerLevelScreeningEthereum() {
   testBrokerLevelScreening.log('Testing broker level screening with ethereum...');
-  const MAX_RETRIES = 30;
+  const MAX_RETRIES = 120;
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
   const ethereumRefundAddress = await newAssetAddress('Eth');
@@ -180,6 +180,20 @@ async function testBrokerLevelScreeningEthereum() {
 
   const weiAmount = amountToFineAmount('0.002', assetDecimals('Eth'));
 
+  await signAndSendTxEvm(
+    'Ethereum',
+    swapParams.depositAddress,
+    weiAmount,
+    undefined,
+    undefined,
+    true,
+  );
+  testBrokerLevelScreening.log('Sent initial tx...');
+  await observeEvent('ethereumIngressEgress:DepositFinalised').event;
+  testBrokerLevelScreening.log('Initial deposit received...');
+  // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit contracts.
+  // We will check for a second transaction instead.
+  testBrokerLevelScreening.log('Sent next tx...');
   const receipt = await signAndSendTxEvm(
     'Ethereum',
     swapParams.depositAddress,
@@ -192,6 +206,7 @@ async function testBrokerLevelScreeningEthereum() {
   const txId = hexStringToBytesArray(receipt.transactionHash);
 
   await markTxForRejection(txId, 'Ethereum');
+  testBrokerLevelScreening.log(`Marked ${receipt.transactionHash} for rejection. Awaiting refund.`);
 
   await observeEvent('ethereumIngressEgress:TransactionRejectedByBroker').event;
 
