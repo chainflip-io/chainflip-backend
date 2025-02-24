@@ -161,8 +161,8 @@ x25519-dalek = { version = "2.0" }
 zeroize = { version = "1.7.0" }
 zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1" }
 
-# subxt dependency (at the moment points to the commit hash of the PR removing polkadot-sdk as dependency.
-# TODO: remove the commit hash when subxt is released > 0.39.0)
+# subxt dependency (at the moment points to the commit hash of the PR removing polkadot-sdk as dependency).
+# TODO: remove the commit hash when subxt is released > 0.39.0
 subxt = { git = "https://github.com/paritytech/subxt", rev = "69ce6d7" }
 
 # PolkadotSdk Pallets
