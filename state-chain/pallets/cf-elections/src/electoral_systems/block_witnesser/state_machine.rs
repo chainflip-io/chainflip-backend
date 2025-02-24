@@ -13,7 +13,7 @@ use crate::electoral_systems::{
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
-use core::iter::Step;
+use core::{iter::Step, ops::RangeInclusive};
 use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -62,7 +62,7 @@ impl<T: BWTypes> HookType for HookTypeFor<T, ElectionPropertiesHook> {
 
 pub struct RulesHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
-	type Input = (T::ChainBlockNumber, u32, T::BlockData);
+	type Input = (T::ChainBlockNumber, RangeInclusive<u32>, T::BlockData);
 	type Output = Vec<(T::ChainBlockNumber, T::Event)>;
 }
 

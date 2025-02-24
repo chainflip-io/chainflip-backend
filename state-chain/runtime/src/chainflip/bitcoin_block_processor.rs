@@ -1,5 +1,3 @@
-use sp_std::{collections::btree_map::BTreeMap, iter::Step, vec, vec::Vec};
-
 use crate::{
 	chainflip::bitcoin_elections::{
 		BitcoinEgressWitnessing, BitcoinVaultDepositWitnessing, BlockDataDepositChannel,
@@ -10,6 +8,7 @@ use crate::{
 use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
 use cf_primitives::chains::Bitcoin;
 use codec::{Decode, Encode};
+use core::ops::RangeInclusive;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::{
@@ -19,6 +18,7 @@ use pallet_cf_elections::electoral_systems::{
 	state_machine::core::Hook,
 };
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
+use sp_std::{collections::btree_map::BTreeMap, iter::Step, vec, vec::Vec};
 
 use super::{bitcoin_elections::BitcoinDepositChannelWitnessing, elections::TypesFor};
 
@@ -89,65 +89,73 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnes
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, u32, BlockDataDepositChannel),
+		(block, age, block_data): (BlockNumber, RangeInclusive<u32>, BlockDataDepositChannel),
 	) -> Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> {
-		// Prewitness rule
-		if age == 0 {
-			return block_data
-				.iter()
-				.map(|deposit_witness| (block, BtcEvent::PreWitness(deposit_witness.clone())))
-				.collect::<Vec<_>>();
+		let mut results: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> = vec![];
+		if age.contains(&0u32) {
+			results.extend(
+				block_data
+					.iter()
+					.map(|deposit_witness| (block, BtcEvent::PreWitness(deposit_witness.clone())))
+					.collect::<Vec<_>>(),
+			)
 		}
-		//Full witness rule
-		if age ==
-			u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
-				as u32
-		{
-			return block_data
-				.iter()
-				.map(|deposit_witness| (block, BtcEvent::Witness(deposit_witness.clone())))
-				.collect::<Vec<_>>();
+		if age.contains(
+			&(u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
+				as u32),
+		) {
+			results.extend(
+				block_data
+					.iter()
+					.map(|deposit_witness| (block, BtcEvent::Witness(deposit_witness.clone())))
+					.collect::<Vec<_>>(),
+			)
 		}
-		vec![]
+		results
 	}
 }
 
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDepositWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, u32, BlockDataVaultDeposit),
+		(block, age, block_data): (BlockNumber, RangeInclusive<u32>, BlockDataVaultDeposit),
 	) -> Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)> {
-		// Prewitness rule
-		if age == 0 {
-			return block_data
-				.iter()
-				.map(|vault_deposit| (block, BtcEvent::PreWitness(vault_deposit.clone())))
-				.collect::<Vec<_>>();
+		let mut results: Vec<(
+			BlockNumber,
+			BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>,
+		)> = vec![];
+		if age.contains(&0u32) {
+			results.extend(
+				block_data
+					.iter()
+					.map(|vault_deposit| (block, BtcEvent::PreWitness(vault_deposit.clone())))
+					.collect::<Vec<_>>(),
+			)
 		}
-		//Full witness rule
-		if age ==
-			u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
-				as u32
-		{
-			return block_data
-				.iter()
-				.map(|vault_deposit| (block, BtcEvent::Witness(vault_deposit.clone())))
-				.collect::<Vec<_>>();
+		if age.contains(
+			&(u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
+				as u32),
+		) {
+			results.extend(
+				block_data
+					.iter()
+					.map(|vault_deposit| (block, BtcEvent::Witness(vault_deposit.clone())))
+					.collect::<Vec<_>>(),
+			)
 		}
-		vec![]
+		results
 	}
 }
 
 impl Hook<HookTypeFor<TypesEgressWitnessing, RulesHook>> for TypesEgressWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, u32, EgressBlockData),
+		(block, age, block_data): (BlockNumber, RangeInclusive<u32>, EgressBlockData),
 	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
-		//Full witness rule
-		if age ==
-			u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
-				as u32
-		{
+		if age.contains(
+			&(u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
+				as u32),
+		) {
 			return block_data
 				.iter()
 				.map(|egress_witness| (block, BtcEvent::Witness(egress_witness.clone())))
