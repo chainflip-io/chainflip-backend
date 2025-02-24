@@ -66,8 +66,7 @@ pub use weights::WeightInfo;
 
 const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
-const SHARED_BROKER_ID: [u8; 32] = [0; 32];
-const WHITE_LISTED_BROKER_IDS: [[u8; 32]; 2] = [[0; 32], [1; 32]];
+const SHARED_BROKER_ID: [u8; 32] = [1; 32];
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
@@ -594,6 +593,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
+
+	/// Stores the white listed brokers.
+	#[pallet::storage]
+	pub(crate) type WhiteListedBrokers<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, T::AccountId, (), ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -1443,16 +1447,13 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn account_id_from_byte_array(byte_array: &[u8; 32]) -> T::AccountId {
+		T::AccountId::decode(&mut &byte_array[..]).expect("32 bytes is a valid AccountId")
+	}
+
 	fn is_whitelisted_broker_or(broker_id: T::AccountId) -> T::AccountId {
-		let derive_account_id_from_bytes = |byte_array: &[u8; 32]| {
-			T::AccountId::decode(&mut &byte_array[..]).expect("32 bytes is a valid AccountId")
-		};
-		let white_listed_broker_ids = WHITE_LISTED_BROKER_IDS
-			.iter()
-			.map(derive_account_id_from_bytes)
-			.collect::<Vec<_>>();
-		if white_listed_broker_ids.contains(&broker_id) {
-			derive_account_id_from_bytes(&SHARED_BROKER_ID)
+		if WhiteListedBrokers::<T, I>::contains_key(&broker_id) {
+			Self::account_id_from_byte_array(&SHARED_BROKER_ID)
 		} else {
 			broker_id
 		}
@@ -2074,13 +2075,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		if let Some(tx_ids) = deposit_details.deposit_ids() {
-			let channel_owner =
-				Self::is_whitelisted_broker_or(deposit_channel_details.owner.clone());
+			let channel_owner = deposit_channel_details.owner.clone();
+			let white_listed_broker_id = Self::account_id_from_byte_array(&SHARED_BROKER_ID);
+
 			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids.clone()) });
 			if tx_ids
 				.iter()
 				.filter_map(|tx_id| {
-					TransactionsMarkedForRejection::<T, I>::take(&channel_owner, tx_id)
+					match (
+						TransactionsMarkedForRejection::<T, I>::take(&channel_owner, tx_id),
+						TransactionsMarkedForRejection::<T, I>::take(
+							&white_listed_broker_id,
+							tx_id,
+						),
+					) {
+						(None, None) => Some(false),
+						_ => Some(true),
+					}
 				})
 				.next()
 				.is_some() && !matches!(
