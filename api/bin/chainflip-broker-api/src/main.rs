@@ -107,6 +107,9 @@ pub trait Rpc {
 		query: GetOpenDepositChannelsQuery,
 	) -> RpcResult<ChainAccounts>;
 
+	#[method(name = "all_open_deposit_channels", aliases = ["broker_allOpenDepositChannels"])]
+	async fn all_open_deposit_channels(&self) -> RpcResult<Vec<(AccountId32, ChainAccounts)>>;
+
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn subscribe_transaction_screening_events(&self) -> SubscriptionResult;
 }
@@ -198,6 +201,16 @@ impl RpcServer for RpcServerImpl {
 			.base_rpc_client
 			.raw_rpc_client
 			.cf_get_open_deposit_channels(account_id, None)
+			.await
+			.map_err(BrokerApiError::ClientError)
+	}
+
+	async fn all_open_deposit_channels(&self) -> RpcResult<Vec<(AccountId32, ChainAccounts)>> {
+		self.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_all_open_deposit_channels(None)
 			.await
 			.map_err(BrokerApiError::ClientError)
 	}

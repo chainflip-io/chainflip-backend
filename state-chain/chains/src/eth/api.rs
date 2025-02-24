@@ -8,7 +8,7 @@ use crate::{
 		},
 		EvmCrypto,
 	},
-	*,
+	RejectCall, *,
 };
 use ethabi::{Address, Uint};
 use evm::api::common::*;
@@ -70,6 +70,7 @@ pub enum EthereumApi<Environment: 'static> {
 	AllBatch(EvmTransactionBuilder<all_batch::AllBatch>),
 	ExecutexSwapAndCall(EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>),
 	TransferFallback(EvmTransactionBuilder<transfer_fallback::TransferFallback>),
+	RejectCall(EvmTransactionBuilder<all_batch::AllBatch>),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -237,9 +238,24 @@ where
 	}
 }
 
-impl<E> RejectCall<Ethereum> for EthereumApi<E> where
-	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>
+impl<E> RejectCall<Ethereum> for EthereumApi<E>
+where
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
+	fn new_unsigned(
+		_deposit_details: <Ethereum as Chain>::DepositDetails,
+		refund_address: <Ethereum as Chain>::ChainAccount,
+		refund_amount: <Ethereum as Chain>::ChainAmount,
+		asset: <Ethereum as Chain>::ChainAsset,
+		deposit_fetch_id: <Ethereum as Chain>::DepositFetchId,
+	) -> Result<Self, RejectError> {
+		Ok(Self::RejectCall(evm_all_batch_builder::<Ethereum, _>(
+			vec![FetchAssetParams { deposit_fetch_id, asset }],
+			vec![TransferAssetParams { asset, amount: refund_amount, to: refund_address }],
+			E::token_address,
+			E::replay_protection(E::vault_address()),
+		)?))
+	}
 }
 
 impl<E> From<EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>>
@@ -309,6 +325,7 @@ macro_rules! map_over_api_variants {
 			EthereumApi::AllBatch($var) => $var_method,
 			EthereumApi::ExecutexSwapAndCall($var) => $var_method,
 			EthereumApi::TransferFallback($var) => $var_method,
+			EthereumApi::RejectCall($var) => $var_method,
 			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	};

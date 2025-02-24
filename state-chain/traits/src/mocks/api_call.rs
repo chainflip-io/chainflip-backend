@@ -343,6 +343,8 @@ impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		_deposit_details: <Bitcoin as Chain>::DepositDetails,
 		_refund_address: <Bitcoin as Chain>::ChainAccount,
 		_refund_amount: <Bitcoin as Chain>::ChainAmount,
+		_asset: <Bitcoin as Chain>::ChainAsset,
+		_deposit_fetch_id: <Bitcoin as Chain>::DepositFetchId,
 	) -> Result<Self, RejectError> {
 		Ok(Self::RejectCall)
 	}
@@ -353,6 +355,8 @@ impl RejectCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		_deposit_details: <Ethereum as Chain>::DepositDetails,
 		_refund_address: <Ethereum as Chain>::ChainAccount,
 		_refund_amount: <Ethereum as Chain>::ChainAmount,
+		_asset: <Ethereum as Chain>::ChainAsset,
+		_deposit_fetch_id: <Ethereum as Chain>::DepositFetchId,
 	) -> Result<Self, RejectError> {
 		Ok(Self::RejectCall)
 	}

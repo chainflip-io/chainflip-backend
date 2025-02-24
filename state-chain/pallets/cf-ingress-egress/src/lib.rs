@@ -66,6 +66,8 @@ pub use weights::WeightInfo;
 
 const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
+const SHARED_BROKER_ID: [u8; 32] = [1; 32];
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
 	// If a (pre-witnessed) deposit on a channel has been boosted, we record
@@ -138,6 +140,7 @@ pub enum DepositIgnoredReason {
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
 #[scale_info(skip_type_params(T, I))]
 pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
+	pub deposit_address: TargetChainAccount<T, I>,
 	pub refund_address: Option<ForeignChainAddress>,
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
@@ -166,7 +169,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(17);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(18);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -591,6 +594,11 @@ pub mod pallet {
 	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 
+	/// Stores the white listed brokers.
+	#[pallet::storage]
+	pub(crate) type WhiteListedBrokers<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, T::AccountId, (), ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -746,6 +754,9 @@ pub mod pallet {
 		},
 		TransactionRejectionFailed {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
+		},
+		DebugEvent {
+			reported_tx_id: Option<Vec<TransactionInIdFor<T, I>>>,
 		},
 	}
 
@@ -945,24 +956,42 @@ pub mod pallet {
 
 			for tx in ScheduledTxForReject::<T, I>::take() {
 				if let Some(Ok(refund_address)) = tx.refund_address.clone().map(TryInto::try_into) {
-					if let Ok(api_call) =
-						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
-							tx.deposit_details.clone(),
-							refund_address,
-							tx.amount
-								.saturating_sub(T::ChainTracking::estimate_egress_fee(tx.asset)),
-						) {
-						let (broadcast_id, _) =
-							T::Broadcaster::threshold_sign_and_broadcast(api_call);
-						Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
-							broadcast_id,
-							tx_id: tx.deposit_details,
+					let deposit_fetch_id =
+						DepositChannelLookup::<T, I>::mutate(&tx.deposit_address, |details| {
+							details.as_mut().and_then(|details| {
+								let can_fetch = details.deposit_channel.state.can_fetch();
+
+								if can_fetch {
+									details.deposit_channel.state.on_fetch_scheduled();
+									Some(details.deposit_channel.fetch_id())
+								} else {
+									None
+								}
+							})
 						});
-					} else {
-						FailedRejections::<T, I>::append(tx.clone());
-						Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-							tx_id: tx.deposit_details,
-						});
+					if let Some(deposit_fetch_id) = deposit_fetch_id {
+						if let Ok(api_call) =
+							<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+								tx.deposit_details.clone(),
+								refund_address,
+								tx.amount.saturating_sub(T::ChainTracking::estimate_egress_fee(
+									tx.asset,
+								)),
+								tx.asset,
+								deposit_fetch_id,
+							) {
+							let (broadcast_id, _) =
+								T::Broadcaster::threshold_sign_and_broadcast(api_call);
+							Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
+								broadcast_id,
+								tx_id: tx.deposit_details,
+							});
+						} else {
+							FailedRejections::<T, I>::append(tx.clone());
+							Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+								tx_id: tx.deposit_details,
+							});
+						}
 					}
 				} else {
 					FailedRejections::<T, I>::append(tx.clone());
@@ -1418,10 +1447,23 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn account_id_from_byte_array(byte_array: &[u8; 32]) -> T::AccountId {
+		T::AccountId::decode(&mut &byte_array[..]).expect("32 bytes is a valid AccountId")
+	}
+
+	fn is_whitelisted_broker_or(broker_id: T::AccountId) -> T::AccountId {
+		if WhiteListedBrokers::<T, I>::contains_key(&broker_id) {
+			Self::account_id_from_byte_array(&SHARED_BROKER_ID)
+		} else {
+			broker_id
+		}
+	}
+
 	fn mark_transaction_for_rejection_inner(
 		account_id: T::AccountId,
 		tx_id: TransactionInIdFor<T, I>,
 	) -> DispatchResult {
+		let account_id = Self::is_whitelisted_broker_or(account_id);
 		TransactionsMarkedForRejection::<T, I>::try_mutate(&account_id, &tx_id, |opt| {
 			const UNSEEN: TransactionPrewitnessedStatus = TransactionPrewitnessedStatus::Unseen;
 			ensure!(
@@ -1786,19 +1828,26 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} = DepositChannelLookup::<T, I>::get(&deposit_address)
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-			if let Some(tx_id) = deposit_details.deposit_id() {
-				if TransactionsMarkedForRejection::<T, I>::mutate(&owner, &tx_id, |opt| {
+			if let Some(tx_ids) = deposit_details.deposit_ids() {
+				// TODO: Handle this without a potential panic.
+				let tx_id = tx_ids
+					.first()
+					.expect("there must be exactly one tx_id for a prewitnessed deposit.");
+
+				let owner = Self::is_whitelisted_broker_or(owner);
+
+				if TransactionsMarkedForRejection::<T, I>::mutate(&owner, tx_id, |opt| {
 					match opt.as_mut() {
 						// Transaction has been reported, mark it as pre-witnessed.
 						Some(status @ TransactionPrewitnessedStatus::Unseen) => {
 							*status = TransactionPrewitnessedStatus::Prewitnessed;
 							true
 						},
-						// Pre-witnessing twice is unlikely but possible. Either way we don't want
-						// to change the status and we don't want to allow boosting.
+						// Pre-witnessing twice is unlikely but possible. Either way we don't
+						// want to change the status and we don't want to allow boosting.
 						Some(TransactionPrewitnessedStatus::Prewitnessed) => true,
-						// Transaction has not been reported, mark it as boosted to prevent further
-						// reports.
+						// Transaction has not been reported, mark it as boosted to prevent
+						// further reports.
 						None => false,
 					}
 				}) {
@@ -2025,10 +2074,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Ok(())
 		}
 
-		let channel_owner = deposit_channel_details.owner.clone();
+		if let Some(tx_ids) = deposit_details.deposit_ids() {
+			let channel_owner = deposit_channel_details.owner.clone();
+			let white_listed_broker_id = Self::account_id_from_byte_array(&SHARED_BROKER_ID);
 
-		if let Some(tx_id) = deposit_details.deposit_id() {
-			if TransactionsMarkedForRejection::<T, I>::take(&channel_owner, &tx_id).is_some() &&
+			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids.clone()) });
+
+			let was_rejected = tx_ids.iter().any(|tx_id| {
+				TransactionsMarkedForRejection::<T, I>::take(&channel_owner, tx_id).is_some() ||
+					TransactionsMarkedForRejection::<T, I>::take(&white_listed_broker_id, tx_id)
+						.is_some()
+			});
+
+			if was_rejected &&
 				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
 			{
 				let refund_address = match deposit_channel_details.action.clone() {
@@ -2042,6 +2100,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				};
 
 				ScheduledTxForReject::<T, I>::append(TransactionRejectionDetails {
+					deposit_address: deposit_address.clone(),
 					refund_address,
 					amount: deposit_amount,
 					asset,
@@ -2057,6 +2116,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				});
 				return Ok(())
 			}
+		} else {
+			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: None });
 		}
 
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
