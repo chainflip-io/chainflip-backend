@@ -987,6 +987,12 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TransactionScreeningEvents>;
+
+	#[method(name = "all_open_deposit_channels")]
+	fn cf_all_open_deposit_channels(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(state_chain_runtime::AccountId, ChainAccounts)>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1241,6 +1247,7 @@ where
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
+		cf_all_open_deposit_channels() -> Vec<(state_chain_runtime::AccountId, ChainAccounts)>,
 	}
 
 	pass_through_and_flatten! {

@@ -216,6 +216,7 @@ type ChainAccountFor<C> = <C as Chain>::ChainAccount;
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct ChainAccounts {
 	pub btc_chain_accounts: Vec<ChainAccountFor<cf_chains::Bitcoin>>,
+	pub eth_chain_accounts: Vec<ChainAccountFor<cf_chains::Ethereum>>,
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
@@ -389,6 +390,7 @@ decl_runtime_apis!(
 		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
+		fn cf_all_open_deposit_channels() -> Vec<(AccountId32, ChainAccounts)>;
 	}
 );
 

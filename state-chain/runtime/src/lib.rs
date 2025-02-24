@@ -2229,15 +2229,48 @@ impl_runtime_apis! {
 			LiquidityPools::pools()
 		}
 
-		fn cf_get_open_deposit_channels(account_id: Option<AccountId>) -> ChainAccounts {
-			let btc_chain_accounts = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter_values()
-				.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id.as_ref())
-				.map(|channel_details| channel_details.deposit_channel.address)
-				.collect::<Vec<_>>();
+		fn cf_get_open_deposit_channels(account_id: Option<<Runtime as frame_system::Config>::AccountId>) -> ChainAccounts {
+			fn open_deposit_channels_for_account<T: pallet_cf_ingress_egress::Config<I>, I: 'static>(
+				account_id: Option<&<T as frame_system::Config>::AccountId>
+			) -> Vec<<T::TargetChain as cf_chains::Chain>::ChainAccount>
+			{
+				pallet_cf_ingress_egress::DepositChannelLookup::<T, I>::iter_values()
+					.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id)
+					.map(|channel_details| channel_details.deposit_channel.address)
+					.collect::<Vec<_>>()
+			}
 
 			ChainAccounts {
-				btc_chain_accounts
+				btc_chain_accounts: open_deposit_channels_for_account::<Runtime, BitcoinInstance>(account_id.as_ref()),
+				eth_chain_accounts: open_deposit_channels_for_account::<Runtime, EthereumInstance>(account_id.as_ref()),
 			}
+		}
+
+		fn cf_all_open_deposit_channels() -> Vec<(AccountId, ChainAccounts)> {
+			use sp_std::collections::btree_set::BTreeSet;
+
+			fn open_deposit_channels_for_chain_instance<T: pallet_cf_ingress_egress::Config<I>, I: 'static>()
+				-> BTreeMap<<T as frame_system::Config>::AccountId, Vec<<T::TargetChain as cf_chains::Chain>::ChainAccount>>
+			{
+				pallet_cf_ingress_egress::DepositChannelLookup::<T, I>::iter_values()
+					.fold(BTreeMap::new(), |mut acc, channel_details| {
+						acc.entry(channel_details.owner.clone())
+							.or_default()
+							.push(channel_details.deposit_channel.address);
+						acc
+					})
+			}
+
+			let btc_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, BitcoinInstance>();
+			let eth_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, EthereumInstance>();
+			let accounts = btc_chain_accounts.keys().chain(eth_chain_accounts.keys()).cloned().collect::<BTreeSet<_>>();
+
+			accounts.into_iter().map(|account_id| {
+				(account_id.clone(), ChainAccounts {
+					btc_chain_accounts: btc_chain_accounts.get(&account_id).cloned().unwrap_or_default(),
+					eth_chain_accounts: eth_chain_accounts.get(&account_id).cloned().unwrap_or_default(),
+				})
+			}).collect()
 		}
 
 		fn cf_transaction_screening_events() -> crate::runtime_apis::TransactionScreeningEvents {
