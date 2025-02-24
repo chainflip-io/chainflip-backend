@@ -2241,24 +2241,44 @@ impl_runtime_apis! {
 		}
 
 		fn cf_transaction_screening_events() -> crate::runtime_apis::TransactionScreeningEvents {
-			let btc_events = System::read_events_no_consensus().filter_map(|event_record| {
-				if let RuntimeEvent::BitcoinIngressEgress(btc_ie_event) = event_record.event {
-					match btc_ie_event {
-						pallet_cf_ingress_egress::Event::TransactionRejectionRequestExpired{ account_id, tx_id } =>
-							Some(TransactionScreeningEvent::TransactionRejectionRequestExpired{ account_id, tx_id }),
-						pallet_cf_ingress_egress::Event::TransactionRejectionRequestReceived{ account_id, tx_id, expires_at: _ } =>
-							Some(TransactionScreeningEvent::TransactionRejectionRequestReceived{account_id, tx_id }),
-						pallet_cf_ingress_egress::Event::TransactionRejectedByBroker{ broadcast_id, tx_id } =>
-							Some(TransactionScreeningEvent::TransactionRejectedByBroker{ refund_broadcast_id: broadcast_id, tx_id: tx_id.id.tx_id }),
-						_ => None,
-					}
-				} else {
-					None
+			use crate::runtime_apis::BrokerRejectionEventFor;
+			fn extract_screening_events<
+				T: pallet_cf_ingress_egress::Config<I, AccountId = <Runtime as frame_system::Config>::AccountId>,
+				I: 'static
+			>(
+				event: pallet_cf_ingress_egress::Event::<T, I>,
+			) -> Vec<BrokerRejectionEventFor<T::TargetChain>> {
+				use cf_chains::DepositDetailsToTransactionInId;
+				match event {
+					pallet_cf_ingress_egress::Event::TransactionRejectionRequestExpired { account_id, tx_id } =>
+						vec![TransactionScreeningEvent::TransactionRejectionRequestExpired { account_id, tx_id }],
+					pallet_cf_ingress_egress::Event::TransactionRejectionRequestReceived { account_id, tx_id, expires_at: _ } =>
+						vec![TransactionScreeningEvent::TransactionRejectionRequestReceived { account_id, tx_id }],
+					pallet_cf_ingress_egress::Event::TransactionRejectedByBroker { broadcast_id, tx_id } => tx_id
+						.deposit_ids()
+						.into_iter()
+						.flat_map(IntoIterator::into_iter)
+						.map(|tx_id|
+							TransactionScreeningEvent::TransactionRejectedByBroker { refund_broadcast_id: broadcast_id, tx_id }
+						)
+						.collect(),
+					_ => Default::default(),
 				}
-			}).collect();
+			}
+
+			let mut btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>> = Default::default();
+			let mut eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>> = Default::default();
+			for event_record in System::read_events_no_consensus() {
+				match event_record.event {
+					RuntimeEvent::BitcoinIngressEgress(event) => btc_events.extend(extract_screening_events::<Runtime, BitcoinInstance>(event)),
+					RuntimeEvent::EthereumIngressEgress(event) => eth_events.extend(extract_screening_events::<Runtime, EthereumInstance>(event)),
+					_ => {},
+				}
+			}
 
 			TransactionScreeningEvents {
-				btc_events
+				btc_events,
+				eth_events,
 			}
 		}
 	}

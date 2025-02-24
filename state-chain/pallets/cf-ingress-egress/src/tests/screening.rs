@@ -365,7 +365,8 @@ fn send_funds_back_after_they_have_been_rejected() {
 			refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS))),
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			asset: btc::Asset::Btc,
-			deposit_details,
+			deposit_details: deposit_details.clone(),
+			deposit_address: deposit_details.deposit_address.script_pubkey(),
 		});
 
 		IngressEgress::on_finalize(1);

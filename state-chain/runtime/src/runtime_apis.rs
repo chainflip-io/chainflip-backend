@@ -236,12 +236,13 @@ pub enum TransactionScreeningEvent<TxId> {
 	},
 }
 
-type BrokerRejectionEventFor<C> =
+pub type BrokerRejectionEventFor<C> =
 	TransactionScreeningEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
+	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
 }
 
 // READ THIS BEFORE UPDATING THIS TRAIT:
