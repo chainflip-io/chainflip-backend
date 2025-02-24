@@ -2079,25 +2079,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let white_listed_broker_id = Self::account_id_from_byte_array(&SHARED_BROKER_ID);
 
 			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids.clone()) });
-			if tx_ids
-				.iter()
-				.filter_map(|tx_id| {
-					match (
-						TransactionsMarkedForRejection::<T, I>::take(&channel_owner, tx_id),
-						TransactionsMarkedForRejection::<T, I>::take(
-							&white_listed_broker_id,
-							tx_id,
-						),
-					) {
-						(None, None) => Some(false),
-						_ => Some(true),
-					}
-				})
-				.next()
-				.is_some() && !matches!(
-				deposit_channel_details.boost_status,
-				BoostStatus::Boosted { .. }
-			) {
+
+			let was_rejected = tx_ids.iter().any(|tx_id| {
+				TransactionsMarkedForRejection::<T, I>::take(&channel_owner, tx_id).is_some() ||
+					TransactionsMarkedForRejection::<T, I>::take(&white_listed_broker_id, tx_id)
+						.is_some()
+			});
+
+			if was_rejected &&
+				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
+			{
 				let refund_address = match deposit_channel_details.action.clone() {
 					ChannelAction::Swap { refund_params, .. } => refund_params
 						.as_ref()
