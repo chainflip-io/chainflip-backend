@@ -31,10 +31,10 @@ use cf_chains::{
 	FetchAssetParams, ForeignChainAddress, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	AccountId, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId,
-	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
-	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
-	SECONDS_PER_BLOCK, SWAP_DELAY_BLOCKS,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
+	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
+	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -2073,10 +2073,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Ok(())
 		}
 
-		let channel_owner = deposit_channel_details.owner.clone();
-
 		if let Some(tx_ids) = deposit_details.deposit_ids() {
-            let channel_owner = Self::is_whitelisted_broker_or(channel_owner);
+			let channel_owner =
+				Self::is_whitelisted_broker_or(deposit_channel_details.owner.clone());
 			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids.clone()) });
 			if tx_ids
 				.iter()
