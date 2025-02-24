@@ -15,14 +15,16 @@ use subxt::{
 		},
 		rpc::{RawRpcFuture, RawRpcSubscription, RpcClient, RpcClientT},
 	},
-	error::{BlockError, RpcError},
+	error::BlockError,
 	events::{Events, EventsClient},
+	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
 };
 use url::Url;
 
 use anyhow::{anyhow, Result};
 use cf_utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
+use codec::Decode;
 use tracing::{error, warn};
 
 use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
@@ -58,7 +60,7 @@ impl RpcClientT for PolkadotHttpClient {
 				.0
 				.request(method, Params(params))
 				.await
-				.map_err(|e| RpcError::ClientError(Box::new(e)))?;
+				.map_err(|e| subxt_rpcs::Error::Client(Box::new(e)))?;
 			Ok(res)
 		})
 	}
@@ -166,7 +168,9 @@ impl DotHttpRpcClient {
 	}
 
 	pub async fn metadata(&self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
-		Ok(self.rpc_methods.state_get_metadata(Some(block_hash)).await?)
+		let resp = self.rpc_methods.state_get_metadata(Some(block_hash)).await?;
+		let metadata = subxt::Metadata::decode(&mut &resp.into_raw()[..])?;
+		Ok(metadata)
 	}
 }
 

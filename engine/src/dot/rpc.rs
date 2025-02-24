@@ -9,6 +9,7 @@ use std::sync::Arc;
 use subxt::{
 	backend::legacy::rpc_methods::{BlockDetails, Bytes},
 	events::Events,
+	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
 };
 use tokio::sync::RwLock;
@@ -50,7 +51,7 @@ macro_rules! refresh_connection_on_error {
 
 impl DotRpcClient {
 	pub async fn new(polkadot_network_ws_url: &str, http_client: DotHttpRpcClient) -> Result<Self> {
-		if subxt::utils::validate_url_is_secure(polkadot_network_ws_url).is_err() {
+		if subxt_rpcs::utils::validate_url_is_secure(polkadot_network_ws_url).is_err() {
 			warn!("Using insecure Polkadot websocket endpoint: {polkadot_network_ws_url}");
 		}
 
@@ -187,7 +188,7 @@ async fn create_online_client(
 	ws_endpoint: &SecretUrl,
 	expected_genesis_hash: Option<PolkadotHash>,
 ) -> Result<OnlineClient<PolkadotConfig>> {
-	if subxt::utils::validate_url_is_secure(ws_endpoint.as_ref()).is_err() {
+	if subxt_rpcs::utils::validate_url_is_secure(ws_endpoint.as_ref()).is_err() {
 		warn!("Using insecure Polkadot websocket endpoint: {ws_endpoint}");
 	}
 

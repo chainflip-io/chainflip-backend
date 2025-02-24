@@ -20,7 +20,9 @@ use jsonrpsee::core::ClientError;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
-use subxt::{backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder, OnlineClient};
+use subxt::{
+	backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder, ext::subxt_rpcs, OnlineClient,
+};
 use subxt_state_chain_config::StateChainConfig;
 use thiserror::Error;
 use tokio::sync::watch;
@@ -826,7 +828,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 						let current_nonce = rpc_client
 							.request::<u32>(
 								"system_accountNextIndex",
-								subxt::rpc_params![&subxt_signer.account_id()],
+								subxt_rpcs::rpc_params![&subxt_signer.account_id()],
 							)
 							.await?;
 
