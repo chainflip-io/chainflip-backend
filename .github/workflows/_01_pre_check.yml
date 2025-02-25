@@ -41,6 +41,11 @@ jobs:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
+      - name: Set up Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
+
       - name: Check Linting 📝
         run: cargo cf-clippy-ci
 
