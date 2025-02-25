@@ -239,7 +239,7 @@ fn generate_votes(
 ) -> ConsensusVotes<SimpleBlockWitnesser> {
 	println!("Generate votes called");
 
-	let to_vote = |data| ConstantIndex { data, _phantom: Default::default() };
+	let to_vote = |data| ConstantIndex::new(data);
 
 	let incorrect_data = vec![1u8, 2, 3];
 	assert_ne!(incorrect_data, correct_data);
