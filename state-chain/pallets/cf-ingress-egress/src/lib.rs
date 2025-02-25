@@ -1460,8 +1460,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		account_id: T::AccountId,
 		tx_id: TransactionInIdFor<T, I>,
 	) -> DispatchResult {
-		let account_id = Self::is_whitelisted_broker_or(account_id);
-		TransactionsMarkedForRejection::<T, I>::try_mutate(&account_id, &tx_id, |opt| {
+		let lookup_id = Self::is_whitelisted_broker_or(account_id.clone());
+		TransactionsMarkedForRejection::<T, I>::try_mutate(&lookup_id, &tx_id, |opt| {
 			const UNSEEN: TransactionPrewitnessedStatus = TransactionPrewitnessedStatus::Unseen;
 			ensure!(
 				opt.replace(UNSEEN).unwrap_or_default() == UNSEEN,
@@ -1471,7 +1471,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 		let expires_at = <frame_system::Pallet<T>>::block_number()
 			.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS));
-		ReportExpiresAt::<T, I>::append(expires_at, (&account_id, &tx_id));
+		ReportExpiresAt::<T, I>::append(expires_at, (&lookup_id, &tx_id));
 		Self::deposit_event(Event::<T, I>::TransactionRejectionRequestReceived {
 			account_id,
 			tx_id,
