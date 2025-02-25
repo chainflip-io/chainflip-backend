@@ -179,11 +179,6 @@ async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
     refundParameters,
   );
 
-  const web3 = new Web3(getEvmEndpoint('Ethereum'));
-  const bytecode = await web3.eth.getCode(swapParams.depositAddress);
-  const isContract = bytecode !== '0x';
-  console.log('Deposit address has contract deployed:', isContract);
-
   if (sourceAsset === chainGasAsset('Ethereum')) {
     await send(sourceAsset, swapParams.depositAddress);
     testBrokerLevelScreening.log('Sent initial tx...');
@@ -212,7 +207,6 @@ async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
   for (let i = 0; i < MAX_RETRIES; i++) {
     const refundBalance = await getBalance(sourceAsset, ethereumRefundAddress);
     const depositAddressBalance = await getBalance(sourceAsset, swapParams.depositAddress);
-    console.log('refundBalance', refundBalance, 'depositAddressBalance', depositAddressBalance);
     if (refundBalance !== '0' && depositAddressBalance === '0') {
       receivedRefund = true;
       break;
@@ -301,7 +295,6 @@ async function main() {
   await Promise.all([
     testBrokerLevelScreeningBitcoin(),
     testBrokerLevelScreeningEthereum('Eth'),
-    // TODO: For a nondeployed contract it fails as the fetch is not a FetchDeploy but a Fetch
     testBrokerLevelScreeningEthereum('Usdc'),
   ]);
 }
