@@ -75,7 +75,7 @@ impl AddressDerivationApi<Bitcoin> for MockAddressDerivation {
 
 pub struct MockNetworkEnvironmentProvider {}
 
-impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
+impl NetworkEnvironmentProvider<BlockNumberFor<Test>> for MockNetworkEnvironmentProvider {
 	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
 		cf_primitives::NetworkEnvironment::Development
 	}

@@ -500,7 +500,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = SolanaChainTrackingProvider;
-	type NetworkEnvironment = Environment;
+	type NetworkEnvironment = SolEnvironment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;

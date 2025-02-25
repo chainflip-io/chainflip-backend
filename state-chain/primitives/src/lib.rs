@@ -457,3 +457,9 @@ pub struct DcaParameters {
 }
 
 pub type ShortId = u8;
+
+#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, Clone)]
+pub enum CcmAuxDataLookupKey<BlockNumber: Clone> {
+	NotRequired,
+	Alt(SwapRequestId, BlockNumber),
+}

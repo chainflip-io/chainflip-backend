@@ -361,7 +361,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: SwapRequestId,
+		swap_request_id: Option<SwapRequestId>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// For extra safety, re-verify the validity of the CCM message here
 		// and extract the decoded `ccm_accounts` from `ccm_additional_data`.
@@ -398,9 +398,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::current_agg_key()?;
 
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
-		// TODO roy: Coordinate with Ramiz on the interface for getting ALTS
 		let mut address_lookup_tables = vec![sol_api_environment.address_lookup_table_account];
-		address_lookup_tables.extend(Environment::get_address_lookup_tables(swap_request_id));
+		address_lookup_tables.extend(
+			swap_request_id
+				.map(|id| Environment::get_address_lookup_tables(id))
+				.unwrap_or_default(),
+		);
 
 		// Ensure the CCM parameters do not contain blacklisted accounts.
 		check_ccm_for_blacklisted_accounts(
@@ -658,7 +661,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: SwapRequestId,
+		swap_request_id: Option<SwapRequestId>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		Self::ccm_transfer(
 			transfer_param,

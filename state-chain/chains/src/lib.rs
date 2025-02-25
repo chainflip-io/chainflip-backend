@@ -591,7 +591,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: SwapRequestId,
+		swap_request_id: Option<SwapRequestId>,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 

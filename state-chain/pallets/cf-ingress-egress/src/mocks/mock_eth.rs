@@ -10,7 +10,7 @@ pub use cf_chains::{
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset,
+	Asset, SwapRequestId,
 };
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
@@ -31,7 +31,7 @@ use cf_traits::{
 	},
 	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
-use frame_support::derive_impl;
+use frame_support::{derive_impl, parameter_types};
 use frame_system::{self as system, pallet_prelude::BlockNumberFor};
 use sp_core::{ConstBool, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
@@ -102,11 +102,25 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	}
 }
 
+parameter_types! {
+	pub static CcmAuxDataReady: bool = true;
+}
+
+pub(crate) const MOCK_MAX_WAIT_TIME_FOR_CCM_AUX_DATA: BlockNumberFor<Test> = 100u64;
+
 pub struct MockNetworkEnvironmentProvider {}
 
-impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
+impl NetworkEnvironmentProvider<BlockNumberFor<Test>> for MockNetworkEnvironmentProvider {
 	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
 		cf_primitives::NetworkEnvironment::Development
+	}
+
+	fn ccm_auxiliary_data_ready(_id: SwapRequestId) -> bool {
+		CcmAuxDataReady::get()
+	}
+
+	fn max_wait_time_for_ccm_aux_data() -> u64 {
+		MOCK_MAX_WAIT_TIME_FOR_CCM_AUX_DATA
 	}
 }
 
