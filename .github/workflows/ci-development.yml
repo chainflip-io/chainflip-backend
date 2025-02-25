@@ -31,7 +31,6 @@ jobs:
     secrets: inherit
     with:
       profile: "release"
-      ci-runner: "rust-builder-no-cache"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     uses: ./.github/workflows/_20_build.yml
