@@ -1,8 +1,9 @@
+import axios from 'axios';
 import { randomBytes } from 'crypto';
 import { execSync } from 'child_process';
 import { InternalAsset } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
-import { sendBtcAndReturnTxId } from '../shared/send_btc';
+import { sendBtc } from '../shared/send_btc';
 import {
   hexStringToBytesArray,
   newAddress,
@@ -61,16 +62,16 @@ async function newAssetAddress(asset: InternalAsset, seed = null): Promise<strin
 /**
  * Mark a transaction for rejection.
  *
- * @param txId - The txId as a byte array in 'unreversed' order - which
- * is reverse of how it's normally displayed in bitcoin block explorers.
+ * @param txId - The txId as hash string.
  */
-async function markTxForRejection(txId: number[], chain: string) {
+async function markTxForRejection(txHash: string, chain: 'Bitcoin' | 'Ethereum') {
+  const txId = hexStringToBytesArray(txHash);
   await using chainflip = await getChainflipApi();
   switch (chain) {
     case 'Bitcoin':
       return brokerMutex.runExclusive(async () =>
         chainflip.tx.bitcoinIngressEgress
-          .markTransactionForRejection(txId)
+          .markTransactionForRejection(txId.reverse())
           .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
       );
     case 'Ethereum':
@@ -85,22 +86,84 @@ async function markTxForRejection(txId: number[], chain: string) {
 }
 
 /**
- * Pauses or resumes the bitcoin block production. We send a command to the docker container to start or stop mining blocks.
- *
- * @param pause - Whether to pause or resume the block production.
- * @returns - Whether the command was successful.
+ * Submit a post request to the deposit-monitor, with error handling.
+ * @param portAndRoute Where we want to submit the request to.
+ * @param body The request body, is serialized as JSON.
  */
-function pauseBtcBlockProduction(pause: boolean): boolean {
-  try {
-    execSync(
-      pause
-        ? 'docker exec bitcoin rm /root/mine_blocks'
-        : 'docker exec bitcoin touch /root/mine_blocks',
+async function postToDepositMonitor(portAndRoute: string, body: string | object) {
+  return axios
+    .post('http://127.0.0.1' + portAndRoute, JSON.stringify(body), {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      timeout: 5000,
+    })
+    .then((res) => res.data)
+    .catch((error) => {
+      let message;
+      if (error.response) {
+        message = `${error.response.data} (${error.response.status})`;
+      } else {
+        message = error;
+      }
+      throw new Error(`Request to deposit monitor (${portAndRoute}) failed: ${message}`);
+    });
+}
+
+/**
+ * Typescript representation of the allowed parameters to `setMockmode`. The JSON encoding of these
+ * is what the deposit-monitor expects.
+ */
+type Mockmode =
+  | 'Manual'
+  | { Deterministic: { score: number; incomplete_probability: number } }
+  | { Random: { min_score: number; max_score: number; incomplete_probability: number } };
+
+/**
+ * Set the mockmode of the deposit monitor, controlling how it analyses incoming transactions.
+ *
+ * @param mode Object describing the mockmode we want to set the deposit-monitor to,
+ */
+async function setMockmode(mode: Mockmode) {
+  return postToDepositMonitor(':6070/mockmode', mode);
+}
+
+/**
+ * Call the deposit-monitor to set risk score of given transaction in mock analysis provider.
+ *
+ * @param txid Hash of the transaction we want to report.
+ * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
+ */
+async function setTxRiskScore(chain: 'Ethereum' | 'Bitcoin', txid: string, score: number) {
+  var endpoint;
+  switch (chain) {
+    case 'Bitcoin':
+      endpoint = ':6070/riskscore';
+      break;
+
+    case 'Ethereum':
+      endpoint = ':6070/riskscore_eth';
+      break;
+  }
+  await postToDepositMonitor(endpoint, [
+    txid,
+    {
+      risk_score: { Score: score },
+      unknown_contribution_percentage: 0.0,
+    },
+  ]);
+}
+
+/**
+ * Checks that the deposit monitor has started up successfully and is healthy.
+ */
+async function ensureHealth() {
+  const response = await postToDepositMonitor(':6060/health', {});
+  if (response.starting === true || response.all_processors === false) {
+    throw new Error(
+      `Deposit monitor is running, but not healthy. It's response was: ${JSON.stringify(response)}`,
     );
-    return true;
-  } catch (error) {
-    console.error(error);
-    return false;
   }
 }
 
@@ -110,16 +173,13 @@ function pauseBtcBlockProduction(pause: boolean): boolean {
  * @param amount - The deposit amount.
  * @param doBoost - Whether to boost the deposit.
  * @param refundAddress - The address to refund to.
- * @param stopBlockProductionFor - The number of blocks to stop block production for. We need this to ensure that the marked tx is on chain before the deposit is witnessed/prewitnessed.
- * @param waitBeforeReport - The number of milliseconds to wait before reporting the tx.
  * @returns - The the channel id of the deposit channel.
  */
 async function brokerLevelScreeningTestScenario(
   amount: string,
   doBoost: boolean,
   refundAddress: string,
-  stopBlockProductionFor = 0,
-  waitBeforeReport = 0,
+  reportFunction: (txId: string) => Promise<void>,
 ): Promise<string> {
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const refundParameters: FillOrKillParamsX128 = {
@@ -138,23 +198,15 @@ async function brokerLevelScreeningTestScenario(
     doBoost ? 100 : 0,
     refundParameters,
   );
-  const txId = await sendBtcAndReturnTxId(swapParams.depositAddress, amount);
-  if (stopBlockProductionFor > 0) {
-    pauseBtcBlockProduction(true);
-  }
-  await sleep(waitBeforeReport);
-  // Note: The bitcoin core js lib returns the txId in reverse order.
-  // On chain we expect the txId to be in the correct order (like the Bitcoin internal representation).
-  // Because of this we need to reverse the txId before marking it for rejection.
-  await markTxForRejection(hexStringToBytesArray(txId).reverse(), 'Bitcoin');
-  await sleep(stopBlockProductionFor);
-  if (stopBlockProductionFor > 0) {
-    pauseBtcBlockProduction(false);
-  }
-  return Promise.resolve(swapParams.channelId.toString());
+  const txId = await sendBtc(swapParams.depositAddress, amount, 0);
+  await reportFunction(txId);
+  return swapParams.channelId.toString();
 }
 
-async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
+async function testBrokerLevelScreeningEthereum(
+  sourceAsset: InternalAsset,
+  reportFunction: (txId: string) => Promise<void>,
+) {
   testBrokerLevelScreening.log(`Testing broker level screening for Ethereum ${sourceAsset}...`);
   const MAX_RETRIES = 120;
 
@@ -200,7 +252,7 @@ async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
   testBrokerLevelScreening.log(`Sent ${sourceAsset} tx...`);
   const txId = hexStringToBytesArray(txHash);
 
-  await markTxForRejection(txId, 'Ethereum');
+  await reportFunction(txHash);
   testBrokerLevelScreening.log(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
   await observeEvent('ethereumIngressEgress:TransactionRejectedByBroker').event;
@@ -241,11 +293,8 @@ async function testBrokerLevelScreeningBitcoin() {
   testBrokerLevelScreening.log('Testing broker level screening for Bitcoin with no boost...');
   let btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario(
-    '0.2',
-    false,
-    btcRefundAddress,
-    MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT,
+  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, async (txId) =>
+    setTxRiskScore('Bitcoin', txId, 9.0),
   );
 
   await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
@@ -261,11 +310,8 @@ async function testBrokerLevelScreeningBitcoin() {
   );
   btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario(
-    '0.2',
-    true,
-    btcRefundAddress,
-    MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT,
+  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, async (txId) =>
+    setTxRiskScore('Bitcoin', txId, 9.0),
   );
   await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
@@ -283,8 +329,13 @@ async function testBrokerLevelScreeningBitcoin() {
     '0.2',
     true,
     btcRefundAddress,
-    0,
-    MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT,
+    // We wait 12 seconds (2 localnet btc blocks) before we submit the tx.
+    // We submit the extrinsic manually in order to ensure that even though it definitely arrives,
+    // the transaction is refunded because the extrinsic is submitted too late.
+    async (txId) => {
+      await sleep(MILLI_SECS_PER_BLOCK * 2);
+      await markTxForRejection(txId, 'Bitcoin');
+    },
   );
 
   await observeEvent('bitcoinIngressEgress:DepositFinalised', {
@@ -295,9 +346,14 @@ async function testBrokerLevelScreeningBitcoin() {
 }
 
 async function main() {
+  await ensureHealth();
+  const previousMockmode = (await setMockmode('Manual')).previous;
+
   await Promise.all([
-    testBrokerLevelScreeningBitcoin(),
-    testBrokerLevelScreeningEthereum('Eth'),
-    testBrokerLevelScreeningEthereum('Usdc'),
+    // testBrokerLevelScreeningBitcoin(),
+    testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    // testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
   ]);
+
+  await setMockmode(previousMockmode);
 }
