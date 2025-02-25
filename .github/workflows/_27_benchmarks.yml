@@ -1,21 +1,20 @@
 name: Build chainflip-node with benchmarks
 on:
-  push:
-    branches:
-      - main
-      - release/*
+  workflow_call:
+    inputs:
+      ci-runner:
+        default: rust-builder
+        description: The CI runner to use
+        type: string
 
 jobs:
   build:
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-${{ inputs.ci-runner }}
     strategy:
       matrix:
         profile: [release, production]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2025-01-10"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
       env:
         NSC_CACHE_PATH: "/cache"
       volumes:
@@ -25,6 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
+      - name: Set up Rust cache 🦀💰
+        if: contains(inputs.ci-runner, 'no-cache') != true
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
       - name: Build with benchmarks
         run: |
           cargo build --profile=${{ matrix.profile }} --locked --features runtime-benchmarks -p chainflip-node
@@ -37,7 +41,7 @@ jobs:
             ./target/${{ matrix.profile }}/chainflip-node
 
   benchmarks:
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-default
     needs: [build]
     timeout-minutes: 120
     strategy:

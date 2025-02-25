@@ -21,17 +21,20 @@ jobs:
       profile: "production"
       binary-subdir: "production"
       is-mainnet: true
+      ci-runner: "rust-builder-no-cache"
   build-m2:
     uses: ./.github/workflows/_21_build_m2.yml
     secrets: inherit
     with:
       profile: "production"
       binary-subdir: "production"
+      ci-runner: "rust-builder-m2-no-cache"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "berghain"
+      ci-runner: "rust-builder-no-cache"
     secrets: inherit
   docker:
     needs: [build]

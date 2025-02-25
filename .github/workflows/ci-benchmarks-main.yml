@@ -1,0 +1,12 @@
+name: Build chainflip-node with benchmarks for main
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  run-benchmarks-main:
+    uses: ./.github/workflows/_27_benchmarks.yml
+    secrets: inherit
+    with:
+      ci-runner: "rust-builder"
