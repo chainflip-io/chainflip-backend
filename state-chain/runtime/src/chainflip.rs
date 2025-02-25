@@ -598,8 +598,6 @@ impl RecoverDurableNonce for SolEnvironment {
 }
 
 impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
-	for SolEnvironment
-{
 	fn lookup(
 		swap_request_id: SwapRequestId,
 	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {

@@ -63,8 +63,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
-	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit, SwapLimits,
-	SwapLimitsProvider,
+	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoAltWitnessing, NoLimit,
+	SwapLimits, SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
