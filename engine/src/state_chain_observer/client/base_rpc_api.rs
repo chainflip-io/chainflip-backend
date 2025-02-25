@@ -17,12 +17,11 @@ use sc_rpc_api::{
 	system::{Health, SystemApiClient},
 };
 
+use super::RpcResult;
 use futures::{future::BoxFuture, Stream};
 use serde_json::value::RawValue;
 use std::{pin::Pin, sync::Arc};
-use subxt::backend::rpc::RawRpcSubscription;
-
-use super::RpcResult;
+use subxt::{backend::rpc::RawRpcSubscription, ext::subxt_rpcs};
 
 use super::SUBSTRATE_BEHAVIOUR;
 
@@ -320,12 +319,12 @@ impl<T: BaseRpcApi + Send + Sync + 'static> subxt::backend::rpc::RpcClientT
 		&'a self,
 		method: &'a str,
 		params: Option<Box<RawValue>>,
-	) -> BoxFuture<'a, Result<Box<RawValue>, subxt::error::RpcError>> {
+	) -> BoxFuture<'a, Result<Box<RawValue>, subxt_rpcs::Error>> {
 		Box::pin(async move {
 			self.0
 				.request_raw(method, params)
 				.await
-				.map_err(|e| subxt::error::RpcError::ClientError(Box::new(e)))
+				.map_err(|e| subxt_rpcs::Error::Client(Box::new(e)))
 		})
 	}
 
@@ -334,13 +333,13 @@ impl<T: BaseRpcApi + Send + Sync + 'static> subxt::backend::rpc::RpcClientT
 		sub: &'a str,
 		params: Option<Box<RawValue>>,
 		unsub: &'a str,
-	) -> BoxFuture<'a, Result<RawRpcSubscription, subxt::error::RpcError>> {
+	) -> BoxFuture<'a, Result<RawRpcSubscription, subxt_rpcs::Error>> {
 		Box::pin(async move {
 			let stream = self
 				.0
 				.subscribe_raw(sub, params, unsub)
 				.await
-				.map_err(|e| subxt::error::RpcError::ClientError(Box::new(e)))?;
+				.map_err(|e| subxt_rpcs::Error::Client(Box::new(e)))?;
 
 			let id = match stream.kind() {
 				jsonrpsee::core::client::SubscriptionKind::Subscription(
@@ -351,8 +350,7 @@ impl<T: BaseRpcApi + Send + Sync + 'static> subxt::backend::rpc::RpcClientT
 
 			use futures::{StreamExt, TryStreamExt};
 
-			let stream =
-				stream.map_err(|e| subxt::error::RpcError::ClientError(Box::new(e))).boxed();
+			let stream = stream.map_err(|e| subxt_rpcs::Error::Client(Box::new(e))).boxed();
 			Ok(RawRpcSubscription { stream, id })
 		})
 	}

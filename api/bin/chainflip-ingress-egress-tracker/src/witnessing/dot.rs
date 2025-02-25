@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use super::EnvironmentParameters;
+use crate::DepositTrackerSettings;
 use cf_utilities::task_scope::Scope;
 use chainflip_api::primitives::EpochIndex;
 use chainflip_engine::{
@@ -16,10 +18,6 @@ use chainflip_engine::{
 	},
 };
 use futures::Future;
-
-use crate::DepositTrackerSettings;
-
-use super::EnvironmentParameters;
 
 pub(super) async fn start<ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,

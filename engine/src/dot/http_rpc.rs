@@ -1,4 +1,4 @@
-use cf_chains::dot::{PolkadotHash, RuntimeVersion};
+use cf_chains::dot::RuntimeVersion;
 use cf_primitives::PolkadotBlockNumber;
 use futures_core::Future;
 use http::uri::Uri;
@@ -7,7 +7,6 @@ use jsonrpsee::{
 	http_client::{HttpClient, HttpClientBuilder},
 };
 use serde_json::value::RawValue;
-use sp_core::H256;
 use subxt::{
 	backend::{
 		legacy::{
@@ -16,19 +15,23 @@ use subxt::{
 		},
 		rpc::{RawRpcFuture, RawRpcSubscription, RpcClient, RpcClientT},
 	},
-	error::{BlockError, RpcError},
+	error::BlockError,
 	events::{Events, EventsClient},
+	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
 };
 use url::Url;
 
 use anyhow::{anyhow, Result};
 use cf_utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
+use codec::Decode;
 use tracing::{error, warn};
 
 use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
 
 use super::rpc::DotRpcApi;
+
+use crate::dot::PolkadotHash;
 
 pub struct PolkadotHttpClient(HttpClient);
 
@@ -57,7 +60,7 @@ impl RpcClientT for PolkadotHttpClient {
 				.0
 				.request(method, Params(params))
 				.await
-				.map_err(|e| RpcError::ClientError(Box::new(e)))?;
+				.map_err(|e| subxt_rpcs::Error::Client(Box::new(e)))?;
 			Ok(res)
 		})
 	}
@@ -164,8 +167,10 @@ impl DotHttpRpcClient {
 		})
 	}
 
-	pub async fn metadata(&self, block_hash: H256) -> Result<subxt::Metadata> {
-		Ok(self.rpc_methods.state_get_metadata(Some(block_hash)).await?)
+	pub async fn metadata(&self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
+		let resp = self.rpc_methods.state_get_metadata(Some(block_hash)).await?;
+		let metadata = subxt::Metadata::decode(&mut &resp.into_raw()[..])?;
+		Ok(metadata)
 	}
 }
 
@@ -235,7 +240,7 @@ impl DotRpcApi for DotHttpRpcClient {
 		}
 	}
 
-	async fn runtime_version(&self, block_hash: Option<H256>) -> Result<RuntimeVersion> {
+	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> Result<RuntimeVersion> {
 		Ok(self.rpc_methods.state_get_runtime_version(block_hash).await.map(|v| {
 			RuntimeVersion {
 				spec_version: v.spec_version,
@@ -271,19 +276,29 @@ mod tests {
 		// Block hash of the block that a runtime update occurred in. Using 2 different blocks with
 		// runtime updates to test.
 		let block_hash_of_runtime_updates = vec![
-			H256::from_str("0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610")
-				.unwrap(),
-			H256::from_str("0xa0138c9d6686f9d80c3fa8a7e175951842ca400f43e479ba694d6d4da69969ea")
-				.unwrap(),
+			PolkadotHash::from_str(
+				"0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610",
+			)
+			.unwrap(),
+			PolkadotHash::from_str(
+				"0xa0138c9d6686f9d80c3fa8a7e175951842ca400f43e479ba694d6d4da69969ea",
+			)
+			.unwrap(),
 			// runtime upgrade block
-			H256::from_str("0xb2c53eb7137113a73bdc02c7bd90a55a70b7b257d451453024d8b04122c30924")
-				.unwrap(),
+			PolkadotHash::from_str(
+				"0xb2c53eb7137113a73bdc02c7bd90a55a70b7b257d451453024d8b04122c30924",
+			)
+			.unwrap(),
 			// next block was failing here
-			H256::from_str("0x2c10ed1032a734cbcc93d7ba033a8ec9fa1b54e8ef1f121fe63a77bc1288e00b")
-				.unwrap(),
+			PolkadotHash::from_str(
+				"0x2c10ed1032a734cbcc93d7ba033a8ec9fa1b54e8ef1f121fe63a77bc1288e00b",
+			)
+			.unwrap(),
 			// block with 4 dot transfer :( that was missed
-			H256::from_str("0x0901b861c6db91f7f417a2fa20f3c82f005631f7d441a2a9e8fa5e2e55c6624c")
-				.unwrap(),
+			PolkadotHash::from_str(
+				"0x0901b861c6db91f7f417a2fa20f3c82f005631f7d441a2a9e8fa5e2e55c6624c",
+			)
+			.unwrap(),
 		];
 
 		let dot_http_rpc =
