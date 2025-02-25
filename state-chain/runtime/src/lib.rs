@@ -26,10 +26,10 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformationV2, TransactionScreeningEvents,
-		ValidatorInfo,
+		BoostPoolDetails, BrokerInfo, ChannelActionType, DispatchErrorWithMessage,
+		FailingWitnessValidators, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformationV2,
+		TransactionScreeningEvents, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -2256,15 +2256,16 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_all_open_deposit_channels() -> Vec<(AccountId, ChainAccounts)> {
+		fn cf_all_open_deposit_channels() -> Vec<(AccountId, ChannelActionType, ChainAccounts)> {
 			use sp_std::collections::btree_set::BTreeSet;
 
+			#[allow(clippy::type_complexity)]
 			fn open_deposit_channels_for_chain_instance<T: pallet_cf_ingress_egress::Config<I>, I: 'static>()
-				-> BTreeMap<<T as frame_system::Config>::AccountId, Vec<<T::TargetChain as cf_chains::Chain>::ChainAccount>>
+				-> BTreeMap<(<T as frame_system::Config>::AccountId, ChannelActionType), Vec<<T::TargetChain as cf_chains::Chain>::ChainAccount>>
 			{
 				pallet_cf_ingress_egress::DepositChannelLookup::<T, I>::iter_values()
 					.fold(BTreeMap::new(), |mut acc, channel_details| {
-						acc.entry(channel_details.owner.clone())
+						acc.entry((channel_details.owner.clone(), channel_details.action.into()))
 							.or_default()
 							.push(channel_details.deposit_channel.address);
 						acc
@@ -2275,10 +2276,11 @@ impl_runtime_apis! {
 			let eth_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, EthereumInstance>();
 			let accounts = btc_chain_accounts.keys().chain(eth_chain_accounts.keys()).cloned().collect::<BTreeSet<_>>();
 
-			accounts.into_iter().map(|account_id| {
-				(account_id.clone(), ChainAccounts {
-					btc_chain_accounts: btc_chain_accounts.get(&account_id).cloned().unwrap_or_default(),
-					eth_chain_accounts: eth_chain_accounts.get(&account_id).cloned().unwrap_or_default(),
+			accounts.into_iter().map(|key| {
+				let (account_id, channel_action_type) = key.clone();
+				(account_id, channel_action_type, ChainAccounts {
+					btc_chain_accounts: btc_chain_accounts.get(&key).cloned().unwrap_or_default(),
+					eth_chain_accounts: eth_chain_accounts.get(&key).cloned().unwrap_or_default(),
 				})
 			}).collect()
 		}

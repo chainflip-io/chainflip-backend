@@ -16,7 +16,7 @@ use codec::{Decode, Encode};
 use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-pub use pallet_cf_ingress_egress::OwedAmount;
+pub use pallet_cf_ingress_egress::{ChannelAction, OwedAmount};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -219,6 +219,36 @@ pub struct ChainAccounts {
 	pub eth_chain_accounts: Vec<ChainAccountFor<cf_chains::Ethereum>>,
 }
 
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	Eq,
+	PartialEq,
+	TypeInfo,
+	Debug,
+	Clone,
+	Copy,
+	PartialOrd,
+	Ord,
+)]
+pub enum ChannelActionType {
+	Swap,
+	LiquidityProvision,
+	CcmTransfer,
+}
+
+impl<AccountId> From<ChannelAction<AccountId>> for ChannelActionType {
+	fn from(action: ChannelAction<AccountId>) -> Self {
+		match action {
+			ChannelAction::Swap { .. } => ChannelActionType::Swap,
+			ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
+			ChannelAction::CcmTransfer { .. } => ChannelActionType::CcmTransfer,
+		}
+	}
+}
+
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub enum TransactionScreeningEvent<TxId> {
 	TransactionRejectionRequestReceived {
@@ -390,7 +420,7 @@ decl_runtime_apis!(
 		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
-		fn cf_all_open_deposit_channels() -> Vec<(AccountId32, ChainAccounts)>;
+		fn cf_all_open_deposit_channels() -> Vec<(AccountId32, ChannelActionType, ChainAccounts)>;
 	}
 );
 
