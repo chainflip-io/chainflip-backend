@@ -1,15 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{
-	address::AddressConverter, AccountOrAddress, AnyChain, ForeignChainAddress,
-	RefundParametersExtended,
-};
+use cf_chains::{address::AddressConverter, AccountOrAddress, AnyChain, ForeignChainAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostApi, Chainflip, DepositApi,
-	EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapOutputAction,
-	SwapRequestHandler, SwapRequestType,
+	EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
 };
 
 use sp_std::vec;
@@ -37,7 +33,7 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::{AccountOrAddress, Chain, SwapOrigin};
+	use cf_chains::{AccountOrAddress, Chain};
 	use cf_primitives::{BlockNumber, ChannelId, EgressId, Price};
 	use cf_traits::HistoricalFeeMigration;
 
@@ -347,23 +343,14 @@ pub mod pallet {
 			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)
 				.map_err(|_| Error::<T>::InsufficientBalance)?;
 
-			T::SwapRequestHandler::init_swap_request(
+			T::SwapRequestHandler::init_internal_swap_request(
 				input_asset,
 				amount,
 				output_asset,
-				SwapRequestType::Regular {
-					output_action: SwapOutputAction::CreditOnChain {
-						account_id: account_id.clone(),
-					},
-				},
-				Default::default(), /* no broker fees */
-				Some(RefundParametersExtended {
-					retry_duration,
-					refund_destination: AccountOrAddress::InternalAccount(account_id.clone()),
-					min_price,
-				}),
+				retry_duration,
+				min_price,
 				dca_params,
-				SwapOrigin::OnChainAccount(account_id),
+				account_id,
 			);
 
 			Ok(())

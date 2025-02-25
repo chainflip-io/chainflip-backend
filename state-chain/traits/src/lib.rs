@@ -988,6 +988,17 @@ pub trait AssetConverter {
 		input_asset: C::ChainAsset,
 		required_gas: C::ChainAmount,
 	) -> Option<C::ChainAmount>;
+
+	/// Calculate the amount that is required to receive the given amount of a different asset after
+	/// a swap.
+	///
+	/// Use this for transaction fees only.
+	fn calculate_input_for_desired_output(
+		input_asset: Asset,
+		output_asset: Asset,
+		desired_output_amount: AssetAmount,
+		with_network_fee: bool,
+	) -> Option<AssetAmount>;
 }
 
 pub trait IngressEgressFeeApi<C: Chain> {
