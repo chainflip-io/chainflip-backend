@@ -19,17 +19,17 @@ export async function sendBtcAndReturnTxId(
     client.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
   )) as string;
 
-  for (let i = 0; i < 50; i++) {
-    const transactionDetails = await client.getTransaction(txId);
+  // for (let i = 0; i < 50; i++) {
+  //   const transactionDetails = await client.getTransaction(txId);
 
-    const confirmations = transactionDetails.confirmations;
+  //   const confirmations = transactionDetails.confirmations;
 
-    if (confirmations < 1) {
-      await sleep(1000);
-    } else {
-      break;
-    }
-  }
+  //   if (confirmations < 1) {
+  //     await sleep(1000);
+  //   } else {
+  //     break;
+  //   }
+  // }
   return Promise.resolve(txId);
 }
 
