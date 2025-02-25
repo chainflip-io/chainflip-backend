@@ -361,17 +361,20 @@ fn send_funds_back_after_they_have_been_rejected() {
 	new_test_ext().execute_with(|| {
 		let deposit_details = helpers::generate_btc_deposit(Hash::random());
 
+		let (_, address) =
+			helpers::request_address_and_deposit(BROKER, btc::Asset::Btc, deposit_details.clone());
+
 		ScheduledTxForReject::<Test, ()>::append(TransactionRejectionDetails {
 			refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS))),
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			asset: btc::Asset::Btc,
 			deposit_details: deposit_details.clone(),
-			deposit_address: deposit_details.deposit_address.script_pubkey(),
+			deposit_address: address,
 		});
 
+		assert_eq!(ScheduledTxForReject::<Test, ()>::get().len(), 1);
 		IngressEgress::on_finalize(1);
-
-		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), None);
+		assert_eq!(ScheduledTxForReject::<Test, ()>::get().len(), 0);
 
 		assert_has_matching_event!(
 			Test,
