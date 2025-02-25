@@ -8,6 +8,7 @@ import {
   sleep,
   handleSubstrateError,
   brokerMutex,
+  chainGasAsset,
   hexStringToBytesArray,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
@@ -15,6 +16,8 @@ import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { getBtcBalance } from '../shared/get_btc_balance';
+import { getBalance } from '../shared/get_balance';
+import { send } from '../shared/send';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
@@ -59,15 +62,26 @@ async function newAssetAddress(asset: InternalAsset, seed = null): Promise<strin
  * @param txId - The txId to submit, in its typical representation in bitcoin explorers,
  * i.e., reverse of its memory representation.
  */
-async function markTxForRejection(txId: string) {
+async function markTxForRejection(txId: string, chain: string) {
   // The engine uses the memory representation everywhere, so we convert the txId here.
   const memoryRepresentationTxId = hexStringToBytesArray(txId).reverse();
   await using chainflip = await getChainflipApi();
-  return brokerMutex.runExclusive(async () =>
-    chainflip.tx.bitcoinIngressEgress
-      .markTransactionForRejection(memoryRepresentationTxId)
-      .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
-  );
+  switch (chain) {
+    case 'Bitcoin':
+      return brokerMutex.runExclusive(async () =>
+        chainflip.tx.bitcoinIngressEgress
+          .markTransactionForRejection(memoryRepresentationTxId)
+          .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
+      );
+    case 'Ethereum':
+      return brokerMutex.runExclusive(async () =>
+        chainflip.tx.ethereumIngressEgress
+          .markTransactionForRejection(txId)
+          .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
+      );
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
 }
 
 /**
@@ -173,9 +187,90 @@ async function brokerLevelScreeningTestScenario(
     doBoost ? 100 : 0,
     refundParameters,
   );
-  const txId = await sendBtc(swapParams.depositAddress, amount, 0);
+  const txId = await sendBtcAndReturnTxId(swapParams.depositAddress, amount);
+  if (stopBlockProductionFor > 0) {
+    pauseBtcBlockProduction(true);
+  }
+  await sleep(waitBeforeReport);
+  // Note: The bitcoin core js lib returns the txId in reverse order.
+  // On chain we expect the txId to be in the correct order (like the Bitcoin internal representation).
+  // Because of this we need to reverse the txId before marking it for rejection.
+  await markTxForRejection(hexStringToBytesArray(txId).reverse(), 'Bitcoin');
+  await sleep(stopBlockProductionFor);
+  if (stopBlockProductionFor > 0) {
+    pauseBtcBlockProduction(false);
+  }
   await reportFunction(txId);
-  return swapParams.channelId.toString();
+  return Promise.resolve(swapParams.channelId.toString());
+}
+
+async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
+  testBrokerLevelScreening.log('Testing broker level screening with Ethereum...');
+  const MAX_RETRIES = 120;
+
+  const destinationAddressForBtc = await newAssetAddress('Btc');
+  const ethereumRefundAddress = await newAssetAddress('Eth');
+
+  const refundParameters: FillOrKillParamsX128 = {
+    retryDurationBlocks: 0,
+    refundAddress: ethereumRefundAddress,
+    minPriceX128: '0',
+  };
+
+  const swapParams = await requestNewSwap(
+    sourceAsset,
+    'Btc',
+    destinationAddressForBtc,
+    'brokerLevelScreeningTestEth',
+    undefined,
+    0,
+    true,
+    0,
+    refundParameters,
+  );
+
+  if (sourceAsset === chainGasAsset('Ethereum')) {
+    await send(sourceAsset, swapParams.depositAddress);
+    testBrokerLevelScreening.log('Sent initial tx...');
+    await observeEvent('ethereumIngressEgress:DepositFinalised').event;
+    testBrokerLevelScreening.log('Initial deposit received...');
+    // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit contracts.
+    // We will check for a second transaction instead.
+    // Sleep until the fetch is broadcasted so the contract is deployed. This is just a
+    // temporary patch, we should instead monitor the right broadcast.
+    console.log('Sleeping for 60 seconds to wait for the fetch to be broadcasted...');
+    await sleep(60000);
+  }
+
+  testBrokerLevelScreening.log('Sending tx to reject...');
+  const txHash = (await send(sourceAsset, swapParams.depositAddress)).transactionHash as string;
+  testBrokerLevelScreening.log('Sent tx...');
+  const txId = hexStringToBytesArray(txHash);
+
+  await markTxForRejection(txId, 'Ethereum');
+  testBrokerLevelScreening.log(`Marked ${txHash} for rejection. Awaiting refund.`);
+
+  await observeEvent('ethereumIngressEgress:TransactionRejectedByBroker').event;
+
+  let receivedRefund = false;
+
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    const refundBalance = await getBalance(sourceAsset, ethereumRefundAddress);
+    const depositAddressBalance = await getBalance(sourceAsset, swapParams.depositAddress);
+    if (refundBalance !== '0' && depositAddressBalance === '0') {
+      receivedRefund = true;
+      break;
+    }
+    await sleep(6000);
+  }
+
+  if (!receivedRefund) {
+    throw new Error(
+      `Didn't receive funds refund to address ${ethereumRefundAddress} within timeout!`,
+    );
+  }
+
+  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
 }
 
 // -- Test suite for broker level screening --
@@ -185,7 +280,7 @@ async function brokerLevelScreeningTestScenario(
 // 1. No boost and early tx report -> tx is reported early and the swap is refunded.
 // 2. Boost and early tx report -> tx is reported early and the swap is refunded.
 // 3. Boost and late tx report -> tx is reported late and the swap is not refunded.
-async function main(testBoostedDeposits: boolean = false) {
+async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = false) {
   const MILLI_SECS_PER_BLOCK = 6000;
 
   // 0. -- Ensure that deposit monitor is running with manual mocking mode --
@@ -253,4 +348,20 @@ async function main(testBoostedDeposits: boolean = false) {
 
   // 4. -- Restore mockmode --
   await setMockmode(previousMockmode);
+}
+
+async function main() {
+  await Promise.all([
+    testBrokerLevelScreeningBitcoin(),
+    testBrokerLevelScreeningEthereum('Eth'),
+    testBrokerLevelScreeningEthereum('Usdc'),
+  ]);
+}
+
+async function main() {
+  await Promise.all([
+    testBrokerLevelScreeningBitcoin(),
+    testBrokerLevelScreeningEthereum('Eth'),
+    testBrokerLevelScreeningEthereum('Usdc'),
+  ]);
 }

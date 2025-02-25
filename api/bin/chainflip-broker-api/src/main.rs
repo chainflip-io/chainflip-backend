@@ -7,7 +7,7 @@ use chainflip_api::{
 	self,
 	primitives::{
 		state_chain_runtime::runtime_apis::{
-			ChainAccounts, TransactionScreeningEvents, VaultSwapDetails,
+			ChainAccounts, ChannelActionType, TransactionScreeningEvents, VaultSwapDetails,
 		},
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
 		DcaParameters,
@@ -124,6 +124,11 @@ pub trait Rpc {
 		&self,
 		query: GetOpenDepositChannelsQuery,
 	) -> RpcResult<ChainAccounts>;
+
+	#[method(name = "all_open_deposit_channels", aliases = ["broker_allOpenDepositChannels"])]
+	async fn all_open_deposit_channels(
+		&self,
+	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>>;
 
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn subscribe_transaction_screening_events(&self);
@@ -269,6 +274,16 @@ impl RpcServer for RpcServerImpl {
 		self.api
 			.raw_client()
 			.cf_get_open_deposit_channels(account_id, None)
+			.await
+			.map_err(BrokerApiError::ClientError)
+	}
+
+	async fn all_open_deposit_channels(
+		&self,
+	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>> {
+		self.api
+			.raw_client()
+			.cf_all_open_deposit_channels(None)
 			.await
 			.map_err(BrokerApiError::ClientError)
 	}
