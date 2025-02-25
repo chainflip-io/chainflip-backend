@@ -32,7 +32,7 @@ use cf_traits::{
 };
 use frame_support::derive_impl;
 use frame_system as system;
-use sp_core::{ConstBool, H256};
+use sp_core::{ConstBool, ConstU64, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
 
 type AccountId = u64;
@@ -137,10 +137,12 @@ impl crate::Config for Test {
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
+	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
+pub const SCREENING_ID: <Test as frame_system::Config>::AccountId = 0xcf;
 
 impl_test_helpers! {
 	Test,

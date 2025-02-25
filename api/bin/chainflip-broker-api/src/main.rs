@@ -5,7 +5,9 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::{ChainAccounts, TransactionScreeningEvents},
+		state_chain_runtime::runtime_apis::{
+			ChainAccounts, ChannelActionType, TransactionScreeningEvents,
+		},
 		AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters,
 	},
 	settings::StateChain,
@@ -107,6 +109,11 @@ pub trait Rpc {
 		query: GetOpenDepositChannelsQuery,
 	) -> RpcResult<ChainAccounts>;
 
+	#[method(name = "all_open_deposit_channels", aliases = ["broker_allOpenDepositChannels"])]
+	async fn all_open_deposit_channels(
+		&self,
+	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>>;
+
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn subscribe_transaction_screening_events(&self) -> SubscriptionResult;
 }
@@ -202,6 +209,18 @@ impl RpcServer for RpcServerImpl {
 			.map_err(BrokerApiError::ClientError)
 	}
 
+	async fn all_open_deposit_channels(
+		&self,
+	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>> {
+		self.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_all_open_deposit_channels(None)
+			.await
+			.map_err(BrokerApiError::ClientError)
+	}
+
 	async fn subscribe_transaction_screening_events(
 		&self,
 		pending_sink: PendingSubscriptionSink,
@@ -221,13 +240,6 @@ impl RpcServer for RpcServerImpl {
 					.await
 				{
 					Ok(events) => {
-						// We only want to send a notification if there have been events.
-						// If other chains are added, they have to be considered here as
-						// well.
-						if events.btc_events.is_empty() {
-							continue;
-						}
-
 						let block_update = BlockUpdate {
 							block_hash: block.hash,
 							block_number: block.number,
