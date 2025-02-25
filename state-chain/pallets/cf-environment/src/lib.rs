@@ -245,7 +245,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn solana_ccm_swap_alts)]
 	pub type SolanaCcmSwapAlts<T> =
-		StorageMap<_, Blake2_128Concat, SwapRequestId, SolAddressLookupTableAccount>;
+		StorageMap<_, Blake2_128Concat, SwapRequestId, Vec<SolAddressLookupTableAccount>>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -808,13 +808,16 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn add_sol_ccm_swap_alt(swap_request_id: SwapRequestId, alt: SolAddressLookupTableAccount) {
-		SolanaCcmSwapAlts::<T>::insert(swap_request_id, alt);
+	pub fn add_sol_ccm_swap_alts(
+		swap_request_id: SwapRequestId,
+		alts: Vec<SolAddressLookupTableAccount>,
+	) {
+		SolanaCcmSwapAlts::<T>::insert(swap_request_id, alts);
 	}
 
-	pub fn take_sol_ccm_swap_alt(
+	pub fn take_sol_ccm_swap_alts(
 		swap_request_id: SwapRequestId,
-	) -> Option<SolAddressLookupTableAccount> {
+	) -> Option<Vec<SolAddressLookupTableAccount>> {
 		SolanaCcmSwapAlts::<T>::take(swap_request_id)
 	}
 }

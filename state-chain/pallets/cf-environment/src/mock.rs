@@ -8,14 +8,14 @@ use cf_chains::{
 	sol::{
 		api::{
 			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
-			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaAddressLookupTables,
-			SolanaApi, SolanaEnvironment,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
+			SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,
 	},
 	ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, ChainEnvironment, Polkadot, Solana,
 };
-use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, SemVer, SwapRequestId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
 	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
@@ -189,10 +189,8 @@ impl RecoverDurableNonce for MockSolEnvironment {
 	}
 }
 
-impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccount>>
-	for MockSolEnvironment
-{
-	fn lookup(_s: SolanaAddressLookupTables) -> Option<Vec<SolAddressLookupTableAccount>> {
+impl ChainEnvironment<SwapRequestId, Vec<SolAddressLookupTableAccount>> for MockSolEnvironment {
+	fn lookup(_s: SwapRequestId) -> Option<Vec<SolAddressLookupTableAccount>> {
 		None
 	}
 }

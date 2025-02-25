@@ -5,6 +5,7 @@ use crate::{
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, sol::Asset as SolAsset},
+	ccm_checker::{CcmValidityCheck, CcmValidityChecker},
 	instances::{ChainInstanceAlias, SolanaInstance},
 	sol::{
 		api::{
@@ -16,14 +17,15 @@ use cf_chains::{
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
 		SolanaCrypto,
 	},
-	CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
 	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
 };
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, SwapRequestId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
-	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
+	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, AltWitnessingHandler,
+	Broadcaster, Chainflip, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
+	SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -184,12 +186,12 @@ pub type SolanaVaultSwapTracking =
 )]
 pub struct SolanaAltWitnessingIdentifier {
 	pub swap_request_id: SwapRequestId,
-	pub alt_address: SolAddress,
+	pub alt_addresses: Vec<SolAddress>,
 }
 
 pub type SolanaAltWitnessing = electoral_systems::egress_success::EgressSuccess<
 	SolanaAltWitnessingIdentifier,
-	SolAddressLookupTableAccount,
+	Vec<SolAddressLookupTableAccount>,
 	(),
 	SolanaAltWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
@@ -198,14 +200,14 @@ pub type SolanaAltWitnessing = electoral_systems::egress_success::EgressSuccess<
 
 pub struct SolanaAltWitnessingHook;
 
-impl OnEgressSuccess<SolanaAltWitnessingIdentifier, SolAddressLookupTableAccount>
+impl OnEgressSuccess<SolanaAltWitnessingIdentifier, Vec<SolAddressLookupTableAccount>>
 	for SolanaAltWitnessingHook
 {
 	fn on_egress_success(
 		alt_identifier: SolanaAltWitnessingIdentifier,
-		alt: SolAddressLookupTableAccount,
+		alts: Vec<SolAddressLookupTableAccount>,
 	) {
-		Environment::add_sol_ccm_swap_alt(alt_identifier.swap_request_id, alt);
+		Environment::add_sol_ccm_swap_alts(alt_identifier.swap_request_id, alts);
 	}
 }
 
@@ -667,5 +669,51 @@ impl BenchmarkValue for SolanaVaultSwapsSettings {
 impl FromSolOrNot for SolanaVaultSwapDetails {
 	fn sol_or_not(s: &SolanaVaultSwapDetails) -> bool {
 		s.from == SolAsset::Sol
+	}
+}
+
+pub struct SolanaAltWitnessingHandler;
+impl AltWitnessingHandler for SolanaAltWitnessingHandler {
+	fn initiate_alt_witnessing(
+		ccm_channel_metadata: CcmChannelMetadata,
+		swap_request_id: SwapRequestId,
+	) {
+		// The unwrap should succeed because it has been checked before calling this
+		// function. See perform_channel_function in ingress egress pallet
+		match CcmValidityChecker::decode_unchecked(
+			ccm_channel_metadata.ccm_additional_data,
+			ForeignChain::Solana,
+		)
+		.unwrap()
+		{
+			crate::DecodedCcmAdditionalData::Solana(versioned_ccm_data) => {
+				let alts = versioned_ccm_data.address_lookup_tables();
+				if !alts.is_empty() {
+					pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(
+						|| {
+							SolanaAltWitnessing::watch_for_egress::<
+								DerivedElectoralAccess<
+									_,
+									SolanaAltWitnessing,
+									RunnerStorageAccess<Runtime, SolanaInstance>,
+								>,
+							>(SolanaAltWitnessingIdentifier {
+								alt_addresses: alts,
+								swap_request_id,
+							})
+						},
+					)
+					.unwrap() //is this safe?
+				}
+			},
+			_ => {},
+		}
+	}
+	fn alt_address_valid(ccm_channel_metadata: CcmChannelMetadata) -> bool {
+		CcmValidityChecker::decode_unchecked(
+			ccm_channel_metadata.ccm_additional_data,
+			ForeignChain::Solana,
+		)
+		.map_or(false, |_| true)
 	}
 }
