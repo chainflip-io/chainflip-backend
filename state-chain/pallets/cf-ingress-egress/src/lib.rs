@@ -1863,8 +1863,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 											// we don't want to allow boosting.
 											Some(TransactionPrewitnessedStatus::Prewitnessed) =>
 												true,
-											// Transaction has not been reported, mark it as boosted
-											// to prevent further reports.
+											// Transaction has not been reported.
 											None => false,
 										}
 									},
