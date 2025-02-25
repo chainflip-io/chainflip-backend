@@ -19,7 +19,9 @@ use cf_chains::{
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
 	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
-use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
+use cf_primitives::{
+	AccountRole, AuthorityCount, CcmAuxDataLookupKey, ForeignChain, SwapRequestId,
+};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_utilities::bs58_array;
 use codec::Encode;
@@ -842,7 +844,7 @@ fn solana_failed_ccm_can_trigger_refund_transfer() {
 				source_address: None,
 				ccm_additional_data: ccm.ccm_additional_data,
 				gas_budget: ccm.gas_budget,
-				swap_request_id: SwapRequestId(1u64),
+				aux_data_lookup_key: CcmAuxDataLookupKey::NotRequired,
 			});
 
 			testnet.move_forward_blocks(1);
