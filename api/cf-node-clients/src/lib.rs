@@ -6,6 +6,7 @@ use sp_core::{
 
 pub mod error_decoder;
 pub mod signer;
+pub mod subxt_state_chain_config;
 
 pub type ExtrinsicDetails =
 	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);

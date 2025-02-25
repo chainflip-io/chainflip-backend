@@ -4,7 +4,6 @@ pub mod electoral_api;
 pub mod extrinsic_api;
 pub mod storage_api;
 pub mod stream_api;
-pub mod subxt_state_chain_config;
 
 use async_trait::async_trait;
 
@@ -12,7 +11,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use cf_primitives::{AccountRole, SemVer};
 use futures::{StreamExt, TryStreamExt};
 
-use cf_node_clients::{signer, WaitFor, WaitForResult};
+use cf_node_clients::{signer, subxt_state_chain_config::StateChainConfig, WaitFor, WaitForResult};
 use cf_primitives::CfeCompatibility;
 use futures_core::future::BoxFuture;
 use futures_util::FutureExt;
@@ -23,7 +22,6 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 use subxt::{
 	backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder, ext::subxt_rpcs, OnlineClient,
 };
-use subxt_state_chain_config::StateChainConfig;
 use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{info, warn};
