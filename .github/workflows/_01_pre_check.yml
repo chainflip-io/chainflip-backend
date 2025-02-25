@@ -14,12 +14,6 @@ jobs:
     runs-on: namespace-profile-default
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
-      volumes:
-        - /cache:/cache
-      options: --cap-add=SYS_ADMIN
-      env:
-        NSC_CACHE_PATH: "/cache"
-
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
