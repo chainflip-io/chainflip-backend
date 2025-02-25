@@ -151,7 +151,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
-		_swap_request_id: SwapRequestId,
+		_swap_request_id: Option<SwapRequestId>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
@@ -289,7 +289,7 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
-		_swap_request_id: SwapRequestId,
+		_swap_request_id: Option<SwapRequestId>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockBtcEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))

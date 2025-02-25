@@ -31,7 +31,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, SemVer,
-	ThresholdSignatureRequestId,
+	SwapRequestId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -929,8 +929,18 @@ pub trait OnDeposit<C: Chain> {
 	fn on_deposit_made(_deposit_details: C::DepositDetails) {}
 }
 
-pub trait NetworkEnvironmentProvider {
+pub trait NetworkEnvironmentProvider<BlockNumber: Default> {
+	/// The type of Network the current chain is running on.
 	fn get_network_environment() -> NetworkEnvironment;
+
+	/// If the a CCM's Auxiliary data is ready to be looked up.
+	fn ccm_auxiliary_data_ready(_id: SwapRequestId) -> bool {
+		true
+	}
+
+	fn max_wait_time_for_ccm_aux_data() -> BlockNumber {
+		Default::default()
+	}
 }
 
 pub trait OnBroadcastReady<C: Chain> {

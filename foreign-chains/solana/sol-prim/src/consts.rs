@@ -60,3 +60,7 @@ pub const ACCOUNT_KEY_LENGTH_IN_TRANSACTION: usize = 32usize;
 pub const ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION: usize = 1usize;
 
 pub const MAX_CCM_USER_ALTS: u8 = 3u8;
+
+/// The maximum number of blocks we wait for external Aux data to come in before we force egress CCM
+/// message. TODO Albert: come up with a reasonable number.
+pub const MAX_WAIT_TIME_FOR_CCM_AUX_DATA: cf_primitives::BlockNumber = 100u32;

@@ -64,13 +64,14 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
+	NetworkEnvironment, SwapRequestId,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
-	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails,
+	KeyProvider, NetworkEnvironmentProvider, OnBroadcastReady, OnDeposit, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
@@ -606,6 +607,20 @@ impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccoun
 }
 
 impl SolanaEnvironment for SolEnvironment {}
+
+impl NetworkEnvironmentProvider<BlockNumber> for SolEnvironment {
+	fn get_network_environment() -> NetworkEnvironment {
+		Environment::network_environment()
+	}
+
+	fn ccm_auxiliary_data_ready(id: SwapRequestId) -> bool {
+		pallet_cf_environment::SolanaCcmSwapAlts::<Runtime>::contains_key(id)
+	}
+
+	fn max_wait_time_for_ccm_aux_data() -> BlockNumber {
+		cf_chains::sol::sol_tx_core::consts::MAX_WAIT_TIME_FOR_CCM_AUX_DATA
+	}
+}
 
 pub struct TokenholderGovernanceBroadcaster;
 

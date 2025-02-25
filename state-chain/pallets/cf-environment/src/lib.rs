@@ -825,7 +825,7 @@ impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 	}
 }
 
-impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
+impl<T: Config> NetworkEnvironmentProvider<BlockNumberFor<T>> for Pallet<T> {
 	fn get_network_environment() -> NetworkEnvironment {
 		Self::network_environment()
 	}
