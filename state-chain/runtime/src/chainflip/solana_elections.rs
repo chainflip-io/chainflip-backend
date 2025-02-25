@@ -13,7 +13,7 @@ use cf_chains::{
 			VaultSwapAccountAndSender,
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
-		sol_tx_core::SlotNumber,
+		sol_tx_core::{consts::EXPIRY_TIME_FOR_ALT_ELECTIONS, SlotNumber},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
 		SolanaCrypto,
 	},
@@ -187,6 +187,7 @@ pub type SolanaVaultSwapTracking =
 pub struct SolanaAltWitnessingIdentifier {
 	pub swap_request_id: SwapRequestId,
 	pub alt_addresses: Vec<SolAddress>,
+	pub election_start_sc_block_number: BlockNumberFor<Runtime>,
 }
 
 pub type SolanaAltWitnessing = electoral_systems::egress_success::EgressSuccess<
@@ -208,6 +209,11 @@ impl OnEgressSuccess<SolanaAltWitnessingIdentifier, Vec<SolAddressLookupTableAcc
 		alts: Vec<SolAddressLookupTableAccount>,
 	) {
 		Environment::add_sol_ccm_swap_alts(alt_identifier.swap_request_id, alts);
+	}
+
+	fn expire_election(alt_identifier: SolanaAltWitnessingIdentifier) -> bool {
+		(crate::System::block_number() - alt_identifier.election_start_sc_block_number) >
+			EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
 }
 
@@ -256,6 +262,10 @@ impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWi
 				err
 			)
 		}
+	}
+
+	fn expire_election(_: SolSignature) -> bool {
+		false
 	}
 }
 
@@ -700,10 +710,12 @@ impl AltWitnessingHandler for SolanaAltWitnessingHandler {
 							>(SolanaAltWitnessingIdentifier {
 								alt_addresses: alts,
 								swap_request_id,
+								election_start_sc_block_number: crate::System::block_number(),
 							})
 						},
 					)
-					.unwrap() //is this safe?
+					.unwrap() //this should be fine as long as the election identifiers dont overflow and
+					 // the electoral system is initialized
 				}
 			},
 			_ => {},
