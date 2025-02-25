@@ -291,6 +291,9 @@ impl pallet_cf_environment::Config for Runtime {
 
 parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_perthousand(1);
+	pub const ScreeningBrokerId: AccountId = AccountId::new(
+		hex_literal::hex!("ae7946e0f5663373ec015b6859361a9c450c91045f8fb220cad9f14d4e400f15")
+	);
 }
 
 impl pallet_cf_swapping::Config for Runtime {
@@ -391,6 +394,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
+	type ScreeningBrokerId = ScreeningBrokerId;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -418,6 +422,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<false>;
+	type ScreeningBrokerId = ScreeningBrokerId;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -445,6 +450,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
+	type ScreeningBrokerId = ScreeningBrokerId;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -472,6 +478,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<false>;
+	type ScreeningBrokerId = ScreeningBrokerId;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -499,6 +506,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<false>;
+	type ScreeningBrokerId = ScreeningBrokerId;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -1245,6 +1253,7 @@ type AllMigrations = (
 	MigrationsForV1_7,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
+	migrations::whitelist_brokers::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not

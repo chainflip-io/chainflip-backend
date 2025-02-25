@@ -66,8 +66,6 @@ pub use weights::WeightInfo;
 
 const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
-const SHARED_BROKER_ID: [u8; 32] = [1; 32];
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
 	// If a (pre-witnessed) deposit on a channel has been boosted, we record
@@ -457,6 +455,9 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type AllowTransactionReports: Get<bool>;
+
+		#[pallet::constant]
+		type ScreeningBrokerId: Get<Self::AccountId>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -594,9 +595,9 @@ pub mod pallet {
 	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 
-	/// Stores the white listed brokers.
+	/// Stores the whitelisted brokers.
 	#[pallet::storage]
-	pub(crate) type WhiteListedBrokers<T: Config<I>, I: 'static = ()> =
+	pub type WhitelistedBrokers<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::AccountId, (), ValueQuery>;
 
 	#[pallet::event]
@@ -1447,13 +1448,9 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn account_id_from_byte_array(byte_array: &[u8; 32]) -> T::AccountId {
-		T::AccountId::decode(&mut &byte_array[..]).expect("32 bytes is a valid AccountId")
-	}
-
 	fn is_whitelisted_broker_or(broker_id: T::AccountId) -> T::AccountId {
-		if WhiteListedBrokers::<T, I>::contains_key(&broker_id) {
-			Self::account_id_from_byte_array(&SHARED_BROKER_ID)
+		if WhitelistedBrokers::<T, I>::contains_key(&broker_id) {
+			T::ScreeningBrokerId::get()
 		} else {
 			broker_id
 		}
