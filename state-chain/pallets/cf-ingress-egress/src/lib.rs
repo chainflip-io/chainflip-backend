@@ -23,8 +23,7 @@ use boost_pool::{BoostPool, DepositFinalisationOutcomeForPool};
 
 use cf_chains::{
 	address::{
-		AddressConverter, AddressDerivationApi, AddressDerivationError, AddressError,
-		IntoForeignChainAddress,
+		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
