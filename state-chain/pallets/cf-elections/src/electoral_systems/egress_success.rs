@@ -28,6 +28,7 @@ pub struct EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateCh
 
 pub trait OnEgressSuccess<Identifier, Value> {
 	fn on_egress_success(id: Identifier, value: Value);
+	fn expire_election(id: Identifier) -> bool;
 }
 
 impl<
@@ -112,6 +113,7 @@ impl<
 				let identifier = election_access.properties()?;
 				election_access.delete();
 				Hook::on_egress_success(identifier, egress_data);
+			} else {
 			}
 		}
 

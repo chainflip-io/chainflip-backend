@@ -79,6 +79,7 @@ where
 							)
 						}),
 						ccm_deposit_metadata,
+						Some((id as u64).into()),
 					);
 				},
 				SwapOutputAction::CreditOnChain { .. } => {

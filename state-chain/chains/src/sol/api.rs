@@ -42,8 +42,6 @@ pub struct ApiEnvironment;
 pub struct CurrentAggKey;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct CurrentOnChainKey;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
-pub struct SolanaAddressLookupTables(pub SwapRequestId);
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
 
@@ -75,7 +73,7 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
-	+ ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccount>>
+	+ ChainEnvironment<SwapRequestId, Vec<SolAddressLookupTableAccount>>
 	+ RecoverDurableNonce
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
@@ -109,7 +107,7 @@ pub trait SolanaEnvironment:
 
 	/// Get any user-defined Address lookup tables from the Environment.
 	fn get_address_lookup_tables(id: SwapRequestId) -> Vec<SolAddressLookupTableAccount> {
-		Self::lookup(SolanaAddressLookupTables(id)).unwrap_or_default()
+		Self::lookup(id).unwrap_or_default()
 	}
 }
 

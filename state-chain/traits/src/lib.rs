@@ -31,7 +31,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, SemVer,
-	ThresholdSignatureRequestId,
+	SwapRequestId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -896,6 +896,7 @@ pub trait EgressApi<C: Chain> {
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+		swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
@@ -1174,3 +1175,17 @@ pub trait AffiliateRegistry {
 	/// Return the reverse mapping from account id to affiliate short id.
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
 }
+
+pub trait AltWitnessingHandler {
+	fn initiate_alt_witnessing(
+		_ccm_channel_metadata: CcmChannelMetadata,
+		_swap_request_id: SwapRequestId,
+	) {
+	}
+	fn alt_address_valid(_ccm_channel_metadata: CcmChannelMetadata) -> bool {
+		true
+	}
+}
+
+pub struct NoAltWitnessing;
+impl AltWitnessingHandler for NoAltWitnessing {}
