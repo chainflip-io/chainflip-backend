@@ -32,7 +32,7 @@ use cf_chains::{
 	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
 	ForeignChainAddress, IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall,
-	SwapOrigin, TransferAssetParams,
+	SwapOrigin, TransferAssetParams, TransferFallback,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -102,6 +102,12 @@ pub struct BoostPoolId<C: Chain> {
 pub struct BoostOutput<C: Chain> {
 	used_pools: BTreeMap<BoostPoolTier, C::ChainAmount>,
 	total_fee: C::ChainAmount,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum VaultSwapStage {
+	Prewitnessed,
+	Deposit,
 }
 
 /// Enum wrapper for fetch and egress requests.
@@ -922,6 +928,13 @@ pub mod pallet {
 		},
 		NetworkFeeDeductionFromBoostSet {
 			deduction_percent: Percent,
+		},
+		VaultSwapRefunded {
+			tx_id: TransactionInIdFor<T, I>,
+			broker_id: Option<T::AccountId>,
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+			refund_address: EncodedAddress,
 		},
 	}
 
@@ -2018,6 +2031,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Returns true if the vault swap should be rejected.
+	///
+	/// A vault swap should be rejected if the broker fee is not set or the account is not a broker.
+	fn should_reject_vault_swap(broker_fee: &Option<Beneficiary<T::AccountId>>) -> bool {
+		match broker_fee {
+			Some(Beneficiary { account, .. }) =>
+				!T::AccountRoleRegistry::has_account_role(account, AccountRole::Broker),
+			_ => true,
+		}
+	}
+
 	fn assemble_broker_fees(
 		broker_fee: Option<Beneficiary<T::AccountId>>,
 		affiliate_fees: Affiliates<AffiliateShortId>,
@@ -2192,6 +2216,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		}: VaultDepositWitness<T, I>,
 	) {
+		if Self::should_reject_vault_swap(&broker_fee) {
+			return;
+		}
+
 		let destination_address_internal =
 			match T::AddressConverter::decode_and_validate_address_for_asset(
 				destination_address.clone(),
@@ -2468,6 +2496,38 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			dca_params,
 			boost_fee,
 		} = vault_deposit_witness.clone();
+
+		if Self::should_reject_vault_swap(&broker_fee) {
+			// TODO: We are going to make refund_params mandatory so we can remove this if let check
+			// as soon the other PR is merged.
+			if let Some(refund_params) = refund_params {
+				if let Ok(api_call) =
+					<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
+						TransferAssetParams {
+							asset: source_asset,
+							amount: deposit_amount,
+							to: refund_params.clone().refund_address,
+						},
+					) {
+					T::Broadcaster::threshold_sign_and_broadcast(api_call);
+					Self::deposit_event(Event::VaultSwapRefunded {
+						tx_id: tx_id.clone(),
+						broker_id: broker_fee
+							.as_ref()
+							.map(|Beneficiary { account, .. }| account.clone()),
+						asset: source_asset,
+						amount: deposit_amount,
+						refund_address: T::AddressConverter::to_encoded_address(
+							refund_params.refund_address.into_foreign_chain_address(),
+						),
+					});
+				} else {
+					log_or_panic!("Failed to create refund api call for vault swap.");
+				}
+			};
+
+			return;
+		}
 
 		let boost_status =
 			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
