@@ -2,16 +2,22 @@
 // https://github.com/paritytech/try-runtime-cli
 
 import path from 'path';
+import fs from 'fs';
 import { compileBinaries } from './utils/compile_binaries';
 import { createTmpDirIfNotExists, execWithRustLog } from './utils/exec_with_log';
-import { getChainflipApi } from './utils/substrate';
+import { retryRpcCall } from './utils';
+import { setTimeout as sleep } from 'timers/promises';
+import { ApiPromise, HttpProvider } from '@polkadot/api';
+import { CHAINFLIP_HTTP_ENDPOINT } from './utils/substrate';
+import { globalLogger as logger } from './utils/logger';
 
-function createSnapshotFile(networkUrl: string, blockHash: string) {
+// Return the path to the snapshot file
+function createSnapshotFile(networkUrl: string, blockHash: string, failureObj: FailureObj | null) {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
   const snapshotFolder = createTmpDirIfNotExists('chainflip/snapshots/');
   const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
 
-  console.log('Writing snapshot to: ', snapshotOutputPath);
+  logger.info('Writing snapshot to: ', snapshotOutputPath);
 
   execWithRustLog(
     `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`,
@@ -19,35 +25,45 @@ function createSnapshotFile(networkUrl: string, blockHash: string) {
     'runtime::executive=debug',
     (success) => {
       if (!success) {
-        console.error('Failed to create snapshot.');
+        logger.error('Failed to create snapshot.');
+        process.exitCode = 1;
+      } else {
+        if (failureObj) {
+          failureObj.snapshotPath = snapshotOutputPath;
+        }
       }
-      process.exitCode = 1;
     },
   );
 }
 
-function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
+async function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string, failureObj: FailureObj) {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
 
-  if (process.exitCode === 1) {
-    console.error('TryRuntime error detected. Exiting... CHECK THE NODE LOGS FOR MORE INFO');
-    throw new Error('TryRuntime error detected.');
-  }
+    let exitCode = 0;
+  
+    execWithRustLog(
+      `try-runtime \
+          --runtime ${runtimePath} on-runtime-upgrade \
+          --blocktime 6000 \
+          --disable-spec-version-check \
+          --checks all ${blockParam} \
+          --uri ${networkUrl}`,
+      `try-runtime-${blockHash}`,
+      'runtime::executive=debug',
+      (success, logFile) => {
+        if (!success) {
+          const logContents = fs.readFileSync(logFile, 'utf8');
+          logger.error(logContents);
+          exitCode = 1;
+          failureObj.hash = blockHash;
+        }
+      },
+    );
+}
 
-  execWithRustLog(
-    `try-runtime \
-        --runtime ${runtimePath} on-runtime-upgrade \
-        --disable-spec-version-check \
-        --checks all ${blockParam} \
-        --uri ${networkUrl}`,
-    `try-runtime-${blockHash}`,
-    'runtime::executive=debug',
-    (success) => {
-      if (!success) {
-        createSnapshotFile(networkUrl, blockHash);
-      }
-    },
-  );
+type FailureObj = {
+  hash: string | null,
+  snapshotPath: string | null,
 }
 
 // 4 options:
@@ -59,44 +75,78 @@ export async function tryRuntimeUpgrade(
   block: number | 'latest' | 'all' | 'last-n',
   networkUrl: string,
   runtimePath: string,
-  lastN = 50,
+  lastN = 30,
 ) {
-  await using api = await getChainflipApi();
+
+  const httpApi = await ApiPromise.create({
+    provider: new HttpProvider(CHAINFLIP_HTTP_ENDPOINT),
+    noInitWarn: true,
+  });
+
+  // This is a placeholder object that will be used to store the failure object.
+  // We use an object in order to pass by reference to the function.
+  let failureObj: FailureObj = {
+    hash: null,
+    snapshotPath: null,
+  }
 
   if (block === 'all') {
-    const latestBlock = await api.rpc.chain.getBlockHash();
+    const latestBlock = await httpApi.rpc.chain.getBlockHash();
 
-    console.log('Running migrations until we reach block with hash: ' + latestBlock);
+    logger.info('Running migrations until we reach block with hash: ' + latestBlock);
 
     let blockNumber = 1;
-    let blockHash = await api.rpc.chain.getBlockHash(blockNumber);
+    let blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
     while (!blockHash.eq(latestBlock)) {
-      blockHash = await api.rpc.chain.getBlockHash(blockNumber);
-      tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+      blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
+      tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl, failureObj);
       blockNumber++;
     }
-    console.log(`Block ${latestBlock} has been reached, exiting.`);
+    logger.info(`Block ${latestBlock} has been reached, exiting.`);
   } else if (block === 'last-n') {
-    console.log(`Running migrations for the last ${lastN} blocks.`);
+    logger.info(`Running migrations for the last ${lastN} blocks.`);
     let blocksProcessed = 0;
 
-    let nextHash = await api.rpc.chain.getBlockHash();
+
+    let nextHash = await httpApi.rpc.chain.getBlockHash();
+
+    logger.info('first nextHash: ', nextHash.toString());
 
     while (blocksProcessed < lastN) {
-      tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
+      tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl, failureObj);
 
-      const currentBlockHeader = await api.rpc.chain.getHeader(nextHash);
-      nextHash = currentBlockHeader.parentHash;
+      // Give the node some breathing time after working hard doing the try-runtime
+      await sleep(2000);
+
+      const currentBlockHeader = await retryRpcCall(() => httpApi.rpc.chain.getHeader(nextHash), {
+        maxAttempts: 10,
+        timeoutMs: 20000,
+        operation: `get block header at ${nextHash}`,
+      });
+      nextHash = currentBlockHeader.parentHash.toString();
+      logger.info('nextHash: ', nextHash);
+
+      if (failureObj.hash) {
+        logger.info("Creating snapshot in finally");
+        createSnapshotFile(networkUrl, failureObj.hash, failureObj);
+        if (failureObj.snapshotPath) {
+          logger.info('Snapshot created at: ', failureObj.snapshotPath);
+          throw new Error('Snapshot created. Exiting.');
+        } else {
+          logger.info('Snapshot not created yet...');
+        }
+      }
+
       blocksProcessed++;
     }
   } else if (block === 'latest') {
-    tryRuntimeCommand(runtimePath, 'latest', networkUrl);
+    tryRuntimeCommand(runtimePath, 'latest', networkUrl, failureObj);
   } else {
-    const blockHash = await api.rpc.chain.getBlockHash(block);
-    tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+    const blockHash = await httpApi.rpc.chain.getBlockHash(block);
+    tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl, failureObj);
   }
 
-  console.log('try-runtime upgrade successful.');
+  logger.info('try-runtime upgrade successful.');
 }
 
 export async function tryRuntimeUpgradeWithCompileRuntime(
