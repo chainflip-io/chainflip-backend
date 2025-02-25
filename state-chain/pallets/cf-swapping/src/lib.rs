@@ -17,9 +17,10 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
-	FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
+	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, SwapLimitsProvider,
+	SwapOutputAction, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1998,7 +1999,7 @@ pub mod pallet {
 		}
 
 		#[transactional]
-		pub fn swap_with_network_fee_for_gas(
+		pub fn swap_with_network_fee(
 			from: Asset,
 			to: Asset,
 			input_amount: AssetAmount,
@@ -2111,28 +2112,21 @@ pub mod pallet {
 			input_asset: Asset,
 		) -> Result<AssetAmount, DispatchError> {
 			let refund_fee_usdc = MinimumNetworkFeePerChunk::<T>::get();
+			if (refund_fee_usdc == 0) || (total_input_amount == 0) {
+				return Ok(total_input_amount)
+			}
 
-			let required_refund_fee_as_input_asset = if input_asset == STABLE_ASSET {
-				refund_fee_usdc
-			} else {
-				with_transaction_unchecked(|| {
-					TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
-						STABLE_ASSET,
-						input_asset,
-						refund_fee_usdc,
-					))
-				})?
-			};
+			let required_refund_fee_as_input_asset = Self::calculate_input_for_desired_output(
+				input_asset,
+				STABLE_ASSET,
+				refund_fee_usdc,
+				false, /* Without network fee */
+			)
+			.ok_or(DispatchError::Other("Invalid fee estimation"))?;
 
-			let (remaining_amount_to_refund, refund_fee) =
-				if required_refund_fee_as_input_asset < total_input_amount {
-					(
-						total_input_amount - required_refund_fee_as_input_asset,
-						required_refund_fee_as_input_asset,
-					)
-				} else {
-					(0, total_input_amount)
-				};
+			let refund_fee =
+				sp_std::cmp::min(required_refund_fee_as_input_asset, total_input_amount);
+			let remaining_amount_to_refund = total_input_amount.saturating_sub(refund_fee);
 
 			if refund_fee > 0 {
 				Self::init_swap_request(
@@ -2305,44 +2299,53 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
+	impl<T: Config> AssetConverter for Pallet<T> {
 		fn calculate_input_for_gas_output<C: Chain>(
 			input_asset: C::ChainAsset,
 			required_gas: C::ChainAmount,
 		) -> Option<C::ChainAmount> {
+			Self::calculate_input_for_desired_output(
+				input_asset.into(),
+				C::GAS_ASSET.into(),
+				required_gas.into(),
+				true,
+			)
+			.map(|amount| C::ChainAmount::try_from(amount).expect("Asset amount is for this chain"))
+		}
+
+		fn calculate_input_for_desired_output(
+			input_asset: Asset,
+			output_asset: Asset,
+			desired_output_amount: AssetAmount,
+			with_network_fee: bool,
+		) -> Option<AssetAmount> {
 			use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 
-			if required_gas.is_zero() {
+			if desired_output_amount.is_zero() {
 				return Some(Zero::zero())
 			}
 
-			let output_asset = C::GAS_ASSET.into();
-			let input_asset = input_asset.into();
 			if input_asset == output_asset {
-				return Some(required_gas)
+				return Some(desired_output_amount)
 			}
 
-			let estimation_input = utilities::fee_estimation_basis(input_asset).defensive_proof(
-				"Fee estimation cap not available. Please report this to Chainflip Labs.",
-			)?;
+			let estimation_input = utilities::fee_estimation_basis(input_asset);
 
 			let estimation_output = with_transaction_unchecked(|| {
-				TransactionOutcome::Rollback(
-					Self::swap_with_network_fee_for_gas(
-						input_asset,
-						output_asset,
-						estimation_input,
-					)
-					.ok(),
-				)
-			})?
-			.output;
+				TransactionOutcome::Rollback(if with_network_fee {
+					Self::swap_with_network_fee(input_asset, output_asset, estimation_input)
+						.map(|swap| swap.output)
+				} else {
+					T::SwappingApi::swap_single_leg(input_asset, output_asset, estimation_input)
+				})
+			})
+			.ok()?;
 
 			if estimation_output == 0 {
 				None
 			} else {
 				let input_amount_to_convert = multiply_by_rational_with_rounding(
-					required_gas.into(),
+					desired_output_amount,
 					estimation_input,
 					estimation_output,
 					sp_arithmetic::Rounding::Down,
@@ -2464,18 +2467,33 @@ pub(crate) mod utilities {
 	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.
-	pub(crate) fn fee_estimation_basis(asset: Asset) -> Option<u128> {
+	pub(crate) fn fee_estimation_basis(asset: Asset) -> u128 {
 		use cf_primitives::FLIPPERINOS_PER_FLIP;
-		/// 20 Dollars.
+
+		const ETH_DECIMALS: u32 = 18;
+		const DOT_DECIMALS: u32 = 10;
+		const BTC_DECIMALS: u32 = 8;
+		const SOL_DECIMALS: u32 = 9;
+
+		/// ~20 Dollars.
+		const FLIP_ESTIMATION_CAP: u128 = 10 * FLIPPERINOS_PER_FLIP;
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
+		const ETH_ESTIMATION_CAP: u128 = 8 * 10u128.pow(ETH_DECIMALS - 3);
+		const DOT_ESTIMATION_CAP: u128 = 4 * 10u128.pow(DOT_DECIMALS);
+		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
+		const SOL_ESTIMATION_CAP: u128 = 14 * 10u128.pow(SOL_DECIMALS - 2);
 
 		match asset {
-			Asset::Flip => Some(10 * FLIPPERINOS_PER_FLIP),
-			Asset::Usdc => Some(USD_ESTIMATION_CAP),
-			Asset::Usdt => Some(USD_ESTIMATION_CAP),
-			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
-			Asset::SolUsdc => Some(USD_ESTIMATION_CAP),
-			_ => None,
+			Asset::Flip => FLIP_ESTIMATION_CAP,
+			Asset::Usdc => USD_ESTIMATION_CAP,
+			Asset::Usdt => USD_ESTIMATION_CAP,
+			Asset::ArbUsdc => USD_ESTIMATION_CAP,
+			Asset::SolUsdc => USD_ESTIMATION_CAP,
+			Asset::Eth => ETH_ESTIMATION_CAP,
+			Asset::Dot => DOT_ESTIMATION_CAP,
+			Asset::ArbEth => ETH_ESTIMATION_CAP,
+			Asset::Btc => BTC_ESTIMATION_CAP,
+			Asset::Sol => SOL_ESTIMATION_CAP,
 		}
 	}
 
