@@ -1,7 +1,6 @@
 import { randomBytes } from 'crypto';
 import { execSync } from 'child_process';
 import { InternalAsset } from '@chainflip/cli';
-import Web3 from 'web3';
 import { ExecutableTest } from '../shared/executable_test';
 import { sendBtcAndReturnTxId } from '../shared/send_btc';
 import {
@@ -11,7 +10,6 @@ import {
   handleSubstrateError,
   brokerMutex,
   chainGasAsset,
-  getEvmEndpoint,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
