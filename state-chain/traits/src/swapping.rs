@@ -71,4 +71,20 @@ pub trait SwapRequestHandler {
 		dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId;
+
+	fn init_network_fee_swap_request(
+		input_asset: Asset,
+		input_amount: AssetAmount,
+	) -> SwapRequestId {
+		Self::init_swap_request(
+			input_asset,
+			input_amount,
+			Asset::Flip,
+			SwapRequestType::NetworkFee,
+			Default::default(), /* broker fees */
+			None,               /* refund params */
+			None,               /* dca params */
+			SwapOrigin::Internal,
+		)
+	}
 }

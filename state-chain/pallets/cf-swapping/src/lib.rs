@@ -841,16 +841,7 @@ pub mod pallet {
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					CollectedNetworkFee::<T>::mutate(|collected_fee| {
-						Self::init_swap_request(
-							Asset::Usdc,
-							*collected_fee,
-							Asset::Flip,
-							SwapRequestType::NetworkFee,
-							Default::default(),
-							None, /* no refund */
-							None, /* no DCA */
-							SwapOrigin::Internal,
-						);
+						Self::init_network_fee_swap_request(Asset::Usdc, *collected_fee);
 
 						collected_fee.set_zero();
 					});
@@ -2129,16 +2120,7 @@ pub mod pallet {
 			let remaining_amount_to_refund = total_input_amount.saturating_sub(refund_fee);
 
 			if refund_fee > 0 {
-				Self::init_swap_request(
-					input_asset,
-					refund_fee,
-					Asset::Flip,
-					SwapRequestType::NetworkFee,
-					Default::default(), /* broker fees */
-					None,
-					None,
-					SwapOrigin::Internal,
-				);
+				Self::init_network_fee_swap_request(input_asset, refund_fee);
 			}
 
 			Ok(remaining_amount_to_refund)

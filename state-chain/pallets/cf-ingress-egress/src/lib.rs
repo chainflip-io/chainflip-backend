@@ -2378,15 +2378,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work, and
 				// it seems easiest to not write a special case (esp if we only support boost for
 				// BTC)
-				Some(T::SwapRequestHandler::init_swap_request(
+				Some(T::SwapRequestHandler::init_network_fee_swap_request(
 					asset.into(),
 					network_fee_from_boost.into(),
-					Asset::Flip,
-					SwapRequestType::NetworkFee,
-					Default::default(),
-					None,
-					None,
-					SwapOrigin::Internal,
 				))
 			} else {
 				None

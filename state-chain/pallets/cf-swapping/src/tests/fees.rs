@@ -222,16 +222,7 @@ fn network_fee_swap_gets_burnt() {
 
 	new_test_ext()
 		.execute_with(|| {
-			Swapping::init_swap_request(
-				INPUT_ASSET,
-				AMOUNT,
-				OUTPUT_ASSET,
-				SwapRequestType::NetworkFee,
-				Default::default(),
-				None,
-				None,
-				SwapOrigin::Internal,
-			);
+			Swapping::init_network_fee_swap_request(INPUT_ASSET, AMOUNT);
 
 			assert_eq!(FlipToBurn::<Test>::get(), 0);
 
