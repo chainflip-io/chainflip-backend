@@ -1006,8 +1006,7 @@ pub mod pallet {
 								tx_id: tx.deposit_details,
 							});
 						}
-					} // TODO: We should probably reinsert the item back in the ScheduledTxForReject
-				 // because the fetchAndDeploy is pending
+					}
 				} else {
 					deferred_rejections.push(tx);
 				}
