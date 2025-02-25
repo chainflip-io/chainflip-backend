@@ -2106,12 +2106,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let screening_id = T::ScreeningBrokerId::get();
 					match (
 						TransactionsMarkedForRejection::<T, I>::take(&screening_id, tx_id),
-						(screening_id != deposit_channel_details.owner).then(|| {
-							TransactionsMarkedForRejection::<T, I>::take(
-								&deposit_channel_details.owner,
-								tx_id,
-							)
-						}),
+						(screening_id != deposit_channel_details.owner)
+							.then(|| {
+								TransactionsMarkedForRejection::<T, I>::take(
+									&deposit_channel_details.owner,
+									tx_id,
+								)
+							})
+							.flatten(),
 					) {
 						(None, None) => None,
 						_ => Some(()),
