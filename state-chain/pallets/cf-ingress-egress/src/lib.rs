@@ -37,9 +37,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
-	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
-	EpochIndex, ForeignChain, GasAmount, PrewitnessedDepositId, SwapRequestId,
-	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
+	Beneficiary, BoostPoolTier, BroadcastId, CcmAuxDataLookupKey, ChannelId, DcaParameters,
+	EgressCounter, EgressId, EpochIndex, ForeignChain, GasAmount, PrewitnessedDepositId,
+	SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -247,7 +247,7 @@ pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 
 /// Cross-chain messaging requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct CrossChainMessage<C: Chain> {
+pub struct CrossChainMessage<C: Chain, BlockNumber: Clone> {
 	pub egress_id: EgressId,
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
@@ -259,10 +259,10 @@ pub struct CrossChainMessage<C: Chain> {
 	// Where funds might be returned to if the message fails.
 	pub ccm_additional_data: CcmAdditionalData,
 	pub gas_budget: GasAmount,
-	pub swap_request_id: SwapRequestId,
+	pub aux_data_lookup_key: CcmAuxDataLookupKey<BlockNumber>,
 }
 
-impl<C: Chain> CrossChainMessage<C> {
+impl<C: Chain, BlockNumber: Clone> CrossChainMessage<C, BlockNumber> {
 	fn asset(&self) -> C::ChainAsset {
 		self.asset
 	}
@@ -371,7 +371,6 @@ pub mod pallet {
 	use cf_chains::{address::EncodedAddress, ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
 	use cf_traits::{OnDeposit, SwapLimitsProvider};
-	use core::marker::PhantomData;
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::{Percent, SaturatedConversion};
@@ -590,7 +589,7 @@ pub mod pallet {
 		/// Provides callbacks for deposit lifecycle events.
 		type DepositHandler: OnDeposit<Self::TargetChain>;
 
-		type NetworkEnvironment: NetworkEnvironmentProvider;
+		type NetworkEnvironment: NetworkEnvironmentProvider<BlockNumberFor<Self>>;
 
 		/// Allows assets to be converted through the AMM.
 		type AssetConverter: AssetConverter;
@@ -662,7 +661,7 @@ pub mod pallet {
 	/// Scheduled cross chain messages for the Ethereum chain.
 	#[pallet::storage]
 	pub type ScheduledEgressCcm<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<CrossChainMessage<T::TargetChain>>, ValueQuery>;
+		StorageValue<_, Vec<CrossChainMessage<T::TargetChain, BlockNumberFor<T>>>, ValueQuery>;
 
 	/// Stores the list of assets that are not allowed to be egressed.
 	#[pallet::storage]
@@ -1735,12 +1734,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut maybe_no_of_transfers_remaining =
 			T::FetchesTransfersLimitProvider::maybe_ccm_limit();
 
-		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
+		let ccm_max_wait_time = T::NetworkEnvironment::max_wait_time_for_ccm_aux_data();
+		let current_block = <frame_system::Pallet<T>>::block_number();
+
+		// A CCM is ready to be egressed when:
+		// A. No aux data lookup is required. OR
+		// B. Lookup is required:
+		// 		i. Its Auxiliary data is ready to be looked up, or
+		// 		ii. the max wait time has passed
+		let ccm_ready_for_egress = |aux_lookup: &CcmAuxDataLookupKey<BlockNumberFor<T>>| -> bool {
+			match aux_lookup {
+				CcmAuxDataLookupKey::Alt(swap_id, block_started) =>
+					T::NetworkEnvironment::ccm_auxiliary_data_ready(*swap_id) ||
+						(current_block.saturating_sub(*block_started)) >= ccm_max_wait_time,
+				CcmAuxDataLookupKey::NotRequired => true,
+			}
+		};
+
+		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain, BlockNumberFor<T>>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
 				ccms.extract_if(.., |ccm| {
 					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) &&
-						Self::should_fetch_or_transfer(&mut maybe_no_of_transfers_remaining)
+						Self::should_fetch_or_transfer(&mut maybe_no_of_transfers_remaining) &&
+						ccm_ready_for_egress(&ccm.aux_data_lookup_key)
 				})
 				.collect()
 			});
@@ -1752,11 +1769,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					to: ccm.destination_address.clone(),
 				},
 				ccm.source_chain,
-				ccm.source_address.clone(),
+				ccm.source_address,
 				ccm.gas_budget,
-				ccm.message.clone().to_vec(),
-				ccm.ccm_additional_data.clone().to_vec(),
-				ccm.swap_request_id,
+				ccm.message.to_vec(),
+				ccm.ccm_additional_data.to_vec(),
+				match ccm.aux_data_lookup_key {
+					CcmAuxDataLookupKey::Alt(request_id, ..) => Some(request_id),
+					CcmAuxDataLookupKey::NotRequired => None,
+				},
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -1772,7 +1792,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(ExecutexSwapAndCallError::TryAgainLater) =>
 					ScheduledEgressCcm::<T, I>::append(ccm),
 				Err(error) => {
-					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. swap_request_id: {:?}, Error: {:?}", ccm.swap_request_id, error);
+					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. egress_id: {:?}, aux_data_lookup_key: {:?}, Error: {:?}", ccm.egress_id, ccm.aux_data_lookup_key, error);
 
 					Self::deposit_event(Event::<T, I>::CcmEgressInvalid {
 						egress_id: ccm.egress_id,
@@ -1799,11 +1819,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									amount: egress_details.egress_amount,
 									destination_address: fallback_address,
 								}),
-								Err(e) => log::warn!("Cannot refund failed Ccm: failed to Egress. swap_request_id: {:?}, Error: {:?}", ccm.swap_request_id, e),
+								Err(e) => log::warn!("Cannot refund failed Ccm: failed to Egress. aux_data_lookup_key: {:?}, Error: {:?}", ccm.aux_data_lookup_key, e),
 							};
 						}
 					} else {
-						log::warn!("Cannot refund failed Ccm: failed to decode `ccm_additional_data`. swap_request_id: {:?}", ccm.swap_request_id);
+						log::warn!("Cannot refund failed Ccm: failed to decode `ccm_additional_data`. aux_data_lookup_key: {:?}", ccm.aux_data_lookup_key);
 					}
 				},
 			};
@@ -2881,7 +2901,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
-		swap_request_id: Option<SwapRequestId>,
+		_swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
@@ -2918,7 +2938,9 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_chain,
 						source_address,
 						gas_budget,
-						swap_request_id: swap_request_id.unwrap_or_default(),
+						aux_data_lookup_key: CcmAuxDataLookupKey::NotRequired, /* TODO Ramiz:
+						                                                        * Pass this in as
+						                                                        * a parameter */
 					});
 
 					Ok(egress_details)
