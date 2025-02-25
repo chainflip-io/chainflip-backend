@@ -240,13 +240,6 @@ impl RpcServer for RpcServerImpl {
 					.await
 				{
 					Ok(events) => {
-						// We only want to send a notification if there have been events.
-						// If other chains are added, they have to be considered here as
-						// well.
-						if events.btc_events.is_empty() {
-							continue;
-						}
-
 						let block_update = BlockUpdate {
 							block_hash: block.hash,
 							block_number: block.number,
