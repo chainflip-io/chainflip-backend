@@ -350,9 +350,11 @@ async function main() {
   const previousMockmode = (await setMockmode('Manual')).previous;
 
   await Promise.all([
-    // testBrokerLevelScreeningBitcoin(),
+    testBrokerLevelScreeningBitcoin(),
     testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    // testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
   ]);
 
   await setMockmode(previousMockmode);
