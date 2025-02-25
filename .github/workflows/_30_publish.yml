@@ -19,25 +19,13 @@ env:
 
 jobs:
   build-deb:
-    runs-on: namespace-profile-rust-builder
-    container:
-      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
-      volumes:
-        - /cache:/cache # Where the Cache Volume is mounted.
-      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
-      env:
-        NSC_CACHE_PATH: "/cache"
+    runs-on:  namespace-profile-default
     permissions:
       id-token: write
       contents: read
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-
-      - name: Set up Rust cache 🦀💰
-        uses: namespacelabs/nscloud-cache-action@v1
-        with:
-          cache: rust
 
       - name: Download packages 📥
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
