@@ -27,12 +27,14 @@ jobs:
       test_features: runtime-benchmarks
     secrets: inherit
   build:
+    needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
       profile: "release"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
+    needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
@@ -40,6 +42,7 @@ jobs:
       upload-name: "chainflip-backend-bin-try-runtime"
       binary-subdir: release
   build-benchmarks:
+    needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
