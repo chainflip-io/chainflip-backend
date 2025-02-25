@@ -952,6 +952,7 @@ pub mod pallet {
 				}
 			}
 
+			let mut deferred_rejections = Vec::new();
 			for tx in ScheduledTxForReject::<T, I>::take() {
 				if let Some(Ok(refund_address)) = tx.refund_address.clone().map(TryInto::try_into) {
 					let deposit_fetch_id =
@@ -993,12 +994,10 @@ pub mod pallet {
 						}
 					}
 				} else {
-					FailedRejections::<T, I>::append(tx.clone());
-					Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-						tx_id: tx.deposit_details,
-					});
+					deferred_rejections.push(tx);
 				}
 			}
+			ScheduledTxForReject::<T, I>::put(deferred_rejections);
 		}
 	}
 
