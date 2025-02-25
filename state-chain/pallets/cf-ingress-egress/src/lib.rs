@@ -1873,7 +1873,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						})
 						// Collect to ensure all are processed before continuing.
 						.collect::<Vec<_>>();
-				if any_reported.iter().any(|reported| *reported) {
+				if any_reported.contains(&true) {
 					continue;
 				}
 			}
