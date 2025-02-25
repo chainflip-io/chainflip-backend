@@ -159,7 +159,6 @@ impls! {
 		type Event = BtcEvent<DepositWitness<Bitcoin>>;
 		type Rules = Self;
 		type Execute = Self;
-		type DedupEvents = Self;
 		type SafetyMargin = Self;
 	}
 
@@ -240,7 +239,6 @@ pub type BitcoinDepositChannelWitnessingES =
 
 // ------------------------ vault deposit witnessing ---------------------------
 /// The electoral system for vault deposit witnessing
-
 pub struct BitcoinVaultDepositWitnessing;
 
 type ElectionPropertiesVaultDeposit = Vec<(DepositAddress, AccountId, ChannelId)>;
@@ -257,7 +255,6 @@ impls! {
 		type Event = BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
-		type DedupEvents = Self;
 		type SafetyMargin = Self;
 	}
 
@@ -364,7 +361,6 @@ impls! {
 		type Event = BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
-		type DedupEvents = Self;
 		type SafetyMargin = Self;
 	}
 
