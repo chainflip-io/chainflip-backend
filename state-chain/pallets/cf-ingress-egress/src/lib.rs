@@ -1826,28 +1826,43 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
 			if let Some(tx_ids) = deposit_details.deposit_ids() {
-				// TODO: Handle this without a potential panic.
-				let tx_id = tx_ids
-					.first()
-					.expect("there must be exactly one tx_id for a prewitnessed deposit.");
+				let lookup_id = Self::is_whitelisted_broker_or(owner.clone());
 
-				let owner = Self::is_whitelisted_broker_or(owner);
-
-				if TransactionsMarkedForRejection::<T, I>::mutate(&owner, tx_id, |opt| {
-					match opt.as_mut() {
-						// Transaction has been reported, mark it as pre-witnessed.
-						Some(status @ TransactionPrewitnessedStatus::Unseen) => {
-							*status = TransactionPrewitnessedStatus::Prewitnessed;
-							true
-						},
-						// Pre-witnessing twice is unlikely but possible. Either way we don't
-						// want to change the status and we don't want to allow boosting.
-						Some(TransactionPrewitnessedStatus::Prewitnessed) => true,
-						// Transaction has not been reported, mark it as boosted to prevent
-						// further reports.
-						None => false,
-					}
-				}) {
+				let any_reported =
+					if lookup_id == owner { vec![owner] } else { vec![owner, lookup_id] }
+						.iter()
+						.flat_map(|account_id| {
+							tx_ids.clone().into_iter().map(move |tx_id| {
+								TransactionsMarkedForRejection::<T, I>::mutate(
+									account_id,
+									tx_id,
+									|opt| {
+										match opt.as_mut() {
+											// Transaction has been reported, mark it as
+											// pre-witnessed.
+											Some(
+												status @ TransactionPrewitnessedStatus::Unseen,
+											) => {
+												*status =
+													TransactionPrewitnessedStatus::Prewitnessed;
+												true
+											},
+											// Pre-witnessing twice is unlikely but possible. Either
+											// way we don't want to change the status and
+											// we don't want to allow boosting.
+											Some(TransactionPrewitnessedStatus::Prewitnessed) =>
+												true,
+											// Transaction has not been reported, mark it as boosted
+											// to prevent further reports.
+											None => false,
+										}
+									},
+								)
+							})
+						})
+						// Collect to ensure all are processed before continuing.
+						.collect::<Vec<_>>();
+				if any_reported.iter().any(|reported| *reported) {
 					continue;
 				}
 			}
@@ -2076,15 +2091,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let is_marked_by_broker_or_screening_id = !tx_ids
 				.iter()
 				.filter_map(|tx_id| {
+					// The transaction may have been marked by a whitelisted broker (screening_id)
+					// or, by the channel owner if the owner is not whitelisted.
+					let screening_id = T::ScreeningBrokerId::get();
 					match (
-						TransactionsMarkedForRejection::<T, I>::take(
-							&deposit_channel_details.owner,
-							tx_id,
-						),
-						TransactionsMarkedForRejection::<T, I>::take(
-							T::ScreeningBrokerId::get(),
-							tx_id,
-						),
+						TransactionsMarkedForRejection::<T, I>::take(&screening_id, tx_id),
+						(screening_id != deposit_channel_details.owner).then(|| {
+							TransactionsMarkedForRejection::<T, I>::take(
+								&deposit_channel_details.owner,
+								tx_id,
+							)
+						}),
 					) {
 						(None, None) => None,
 						_ => Some(()),
