@@ -960,8 +960,9 @@ pub mod pallet {
 								let can_fetch = details.deposit_channel.state.can_fetch();
 
 								if can_fetch {
+									let fetch_id = details.deposit_channel.fetch_id();
 									details.deposit_channel.state.on_fetch_scheduled();
-									Some(details.deposit_channel.fetch_id())
+									Some(fetch_id)
 								} else {
 									None
 								}
