@@ -1513,21 +1513,14 @@ mod on_chain_swapping {
 
 		new_test_ext()
 			.execute_with(|| {
-				Swapping::init_swap_request(
+				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
-					SwapRequestType::Regular {
-						output_action: SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
-					},
-					Default::default(),
-					Some(RefundParametersExtended {
-						retry_duration: 0,
-						refund_destination: AccountOrAddress::InternalAccount(LP_ACCOUNT),
-						min_price,
-					}),
+					0,
+					min_price,
 					None,
-					SwapOrigin::OnChainAccount(LP_ACCOUNT),
+					LP_ACCOUNT,
 				);
 
 				assert_has_matching_event!(
@@ -1597,21 +1590,14 @@ mod on_chain_swapping {
 		new_test_ext()
 			.execute_with(|| {
 				MinimumNetworkFeePerChunk::<Test>::set(MIN_NETWORK_FEE);
-				Swapping::init_swap_request(
+				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
-					SwapRequestType::Regular {
-						output_action: SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT },
-					},
-					Default::default(),
-					Some(RefundParametersExtended {
-						retry_duration: 0,
-						refund_destination: AccountOrAddress::InternalAccount(LP_ACCOUNT),
-						min_price,
-					}),
+					0,
+					min_price,
 					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
-					SwapOrigin::OnChainAccount(LP_ACCOUNT),
+					LP_ACCOUNT,
 				);
 
 				assert_has_matching_event!(

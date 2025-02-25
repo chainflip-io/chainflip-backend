@@ -2757,15 +2757,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}), available_amount);
 
 			if !transaction_fee.is_zero() {
-				T::SwapRequestHandler::init_swap_request(
-					asset.into(),
-					transaction_fee.into(),
-					<T::TargetChain as Chain>::GAS_ASSET.into(),
-					SwapRequestType::IngressEgressFee,
-					Default::default(),
-					None, /* no refund params */
-					None, /* no DCA */
-					SwapOrigin::Internal,
+				T::SwapRequestHandler::init_ingress_egress_fee_swap_request::<T::TargetChain>(
+					asset,
+					transaction_fee,
 				);
 			}
 
