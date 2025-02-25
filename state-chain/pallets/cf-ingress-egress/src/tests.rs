@@ -2258,6 +2258,8 @@ mod evm_transaction_rejection {
 				})
 			);
 
+			assert!(TransactionsMarkedForRejection::<Test, ()>::get(SCREENING_ID, tx_id).is_none());
+
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 		});
 	}
