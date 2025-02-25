@@ -1,17 +1,22 @@
 on:
   workflow_call:
+    inputs:
+      ci-runner:
+        default: rust-builder
+        description: The CI runner to use
+        type: string
 
 env:
   FORCE_COLOR: 1
 
 jobs:
   cargo-fmt:
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-default
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
       volumes:
-        - /cache:/cache # Where the Cache Volume is mounted.
-      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
+        - /cache:/cache
+      options: --cap-add=SYS_ADMIN
       env:
         NSC_CACHE_PATH: "/cache"
 
@@ -25,10 +30,7 @@ jobs:
   audit:
     runs-on: namespace-profile-default
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2025-01-10"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
 
     steps:
       - name: Checkout 🛒
@@ -38,12 +40,12 @@ jobs:
         run: cargo cf-audit
 
   cargo-clippy:
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-${{ inputs.ci-runner }}
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
       volumes:
-        - /cache:/cache # Where the Cache Volume is mounted.
-      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
+        - /cache:/cache
+      options: --cap-add=SYS_ADMIN
       env:
         NSC_CACHE_PATH: "/cache"
 
@@ -52,6 +54,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Set up Rust cache 🦀💰
+        if: contains(inputs.ci-runner, 'no-cache') != true
         uses: namespacelabs/nscloud-cache-action@v1
         with:
           cache: rust

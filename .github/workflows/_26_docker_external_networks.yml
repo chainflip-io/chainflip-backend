@@ -5,6 +5,10 @@ on:
         description: The network image to build
         type: string
         required: true
+      ci-runner:
+        default: rust-builder
+        description: The CI runner to use
+        type: string
 
 permissions:
   contents: read
@@ -28,7 +32,7 @@ jobs:
 
   private-images:
     needs: [get-date-time]
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-${{ inputs.ci-runner }}
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
