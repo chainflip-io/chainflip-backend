@@ -43,7 +43,7 @@ use anyhow::Result;
 
 use sp_core::H256;
 use state_chain_runtime::chainflip::bitcoin_elections::{
-	BitcoinEgressWitnessingES, BitcoinVaultDepositWitnessingES,
+	BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinVaultDepositWitnessingES,
 };
 use std::sync::Arc;
 
@@ -255,6 +255,26 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 }
 
 #[derive(Clone)]
+pub struct BitcoinFeeVoter {
+	client: BtcRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinFeeTracking> for crate::witness::btc_e::BitcoinFeeVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
+		_properties: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinFeeTracking>>, anyhow::Error> {
+		if let Some(fee) = self.client.next_block_fee_rate().await {
+			Ok(Some(fee))
+		} else {
+			Ok(None)
+		}
+	}
+}
+
+#[derive(Clone)]
 pub struct BitcoinLivenessVoter {
 	client: BtcRetryRpcClient,
 }
@@ -296,6 +316,7 @@ where
 						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
 						BitcoinVaultDepositWitnessingVoter { client: client.clone() },
 						BitcoinEgressWitnessingVoter { client: client.clone() },
+						BitcoinFeeVoter { client: client.clone() },
 						BitcoinLivenessVoter { client },
 					)),
 				)

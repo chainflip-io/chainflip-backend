@@ -22,15 +22,22 @@ use sp_std::vec::Vec;
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId> {
-	_phantom: core::marker::PhantomData<(Value, UnsynchronisedSettings, Settings, ValidatorId)>,
+
+pub trait UpdateFeeHook<Value> {
+	fn update_fee(fee: Value);
+}
+pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId> {
+	_phantom:
+		core::marker::PhantomData<(Value, UnsynchronisedSettings, Settings, Hook, ValidatorId)>,
 }
 impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
+		Hook: UpdateFeeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystemTypes for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId>
+	> ElectoralSystemTypes
+	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId>
 {
 	type ValidatorId = ValidatorId;
 
@@ -54,8 +61,9 @@ impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
+		Hook: UpdateFeeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId>
+	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
@@ -77,7 +85,8 @@ impl<
 			let election_access = ElectoralAccess::election_mut(election_identifier);
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
-				ElectoralAccess::set_unsynchronised_state(consensus)?;
+				ElectoralAccess::set_unsynchronised_state(consensus.clone())?;
+				Hook::update_fee(consensus);
 				// TEMP: This is temporarily commented out.
 				// Currently we only use this for SolanaFeeTracking. We will be removing
 				// SolanaFeeTracking entirely, so for now, we just don't need to create elections,
@@ -88,6 +97,7 @@ impl<
 		} else {
 			// See comment above.
 			// elections ElectoralAccess::new_election((), (), ())?;
+			ElectoralAccess::new_election((), (), ())?;
 		}
 
 		Ok(())
