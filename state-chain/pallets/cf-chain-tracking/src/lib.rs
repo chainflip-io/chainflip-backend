@@ -178,11 +178,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn inner_update_fee(new_fee: <T::TargetChain as Chain>::TrackedData) -> DispatchResult {
-		CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
+		CurrentChainState::<T, I>::mutate(|previous_chain_state| {
 			previous_chain_state.as_mut().expect(NO_CHAIN_STATE).tracked_data = new_fee;
-
-			Ok(())
-		})?;
+		});
 
 		Ok(())
 	}
