@@ -87,16 +87,8 @@ impl<
 				election_access.delete();
 				ElectoralAccess::set_unsynchronised_state(consensus.clone())?;
 				Hook::update_fee(consensus);
-				// TEMP: This is temporarily commented out.
-				// Currently we only use this for SolanaFeeTracking. We will be removing
-				// SolanaFeeTracking entirely, so for now, we just don't need to create elections,
-				// and the fee is provided as a hardcoded value. See
-				// SolanaChainTrackingProvider::priority_fee().
-				// ElectoralAccess::new_election((), (), ())?;
 			}
 		} else {
-			// See comment above.
-			// elections ElectoralAccess::new_election((), (), ())?;
 			ElectoralAccess::new_election((), (), ())?;
 		}
 
