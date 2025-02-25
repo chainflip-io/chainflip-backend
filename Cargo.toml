@@ -7,6 +7,8 @@ members = [
   "api/bin/chainflip-ingress-egress-tracker",
   "api/bin/chainflip-lp-api",
   "api/bin/chainflip-elections-tracker",
+  "api/cf-rpc-types",
+  "api/cf-node-clients",
   "api/lib",
   "engine",
   "engine-proc-macros",
@@ -275,6 +277,8 @@ cf-engine-dylib = { path = "engine-dylib" }
 chainflip-api = { path = "api/lib" }
 chainflip-engine = { path = "engine" }
 engine-proc-macros = { path = "engine-proc-macros" }
+cf-node-clients = { path = "api/cf-node-clients" }
+cf-rpc-types = { path = "api/cf-rpc-types" }
 
 # Chainflip utilities and others
 cf-runtime-macros = { path = "state-chain/runtime-utilities/macros", default-features = false }

@@ -15,11 +15,11 @@ use chainflip_api::{
 	},
 	primitives::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
-		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
+		AccountRole, Asset, ForeignChain, Hash,
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
-	SignedExtrinsicApi, StateChainApi, WaitFor,
+	RedemptionAmount, SignedExtrinsicApi, StateChainApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::{order_fills::OrderFills, CustomApiClient};

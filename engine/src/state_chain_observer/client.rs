@@ -1,7 +1,6 @@
 pub mod base_rpc_api;
 pub mod chain_api;
 pub mod electoral_api;
-pub mod error_decoder;
 pub mod extrinsic_api;
 pub mod storage_api;
 pub mod stream_api;
@@ -13,6 +12,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use cf_primitives::{AccountRole, SemVer};
 use futures::{StreamExt, TryStreamExt};
 
+use cf_node_clients::{signer, WaitFor, WaitForResult};
 use cf_primitives::CfeCompatibility;
 use futures_core::future::BoxFuture;
 use futures_util::FutureExt;
@@ -45,10 +45,7 @@ use crate::{
 use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
-	extrinsic_api::{
-		signed::{signer, SignedExtrinsicApi, WaitFor, WaitForResult},
-		unsigned,
-	},
+	extrinsic_api::{signed::SignedExtrinsicApi, unsigned},
 	storage_api::{BlockCompatibility, StorageApi},
 	stream_api::{StateChainStream, StreamApi, FINALIZED, UNFINALIZED},
 };
@@ -769,7 +766,6 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		};
 
 		if self.submit_cfe_version {
-			use crate::state_chain_observer::client::subxt_state_chain_config::StateChainConfig;
 			use subxt::tx::Signer;
 
 			let rpc_client = RpcClient::new(SubxtInterface(base_rpc_client.clone()));
@@ -1067,14 +1063,10 @@ pub mod mocks {
 	use state_chain_runtime::AccountId;
 
 	use super::{
-		extrinsic_api::{
-			self,
-			signed::{WaitFor, WaitForResult},
-			unsigned,
-		},
+		extrinsic_api::{self, unsigned},
 		storage_api,
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
-		BlockInfo,
+		BlockInfo, WaitFor, WaitForResult,
 	};
 
 	mock! {
