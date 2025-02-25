@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import { execSync } from 'child_process';
 import { InternalAsset } from '@chainflip/cli';
+import Web3 from 'web3';
 import { ExecutableTest } from '../shared/executable_test';
 import { sendBtcAndReturnTxId } from '../shared/send_btc';
 import {
@@ -9,16 +10,16 @@ import {
   sleep,
   handleSubstrateError,
   brokerMutex,
-  amountToFineAmount,
-  assetDecimals,
+  chainGasAsset,
+  getEvmEndpoint,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { getBtcBalance } from '../shared/get_btc_balance';
-import { signAndSendTxEvm } from '../shared/send_evm';
 import { getBalance } from '../shared/get_balance';
+import { send } from '../shared/send';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
@@ -153,8 +154,8 @@ async function brokerLevelScreeningTestScenario(
   return Promise.resolve(swapParams.channelId.toString());
 }
 
-async function testBrokerLevelScreeningEthereum() {
-  testBrokerLevelScreening.log('Testing broker level screening with ethereum...');
+async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
+  testBrokerLevelScreening.log('Testing broker level screening with Ethereum...');
   const MAX_RETRIES = 120;
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
@@ -167,7 +168,7 @@ async function testBrokerLevelScreeningEthereum() {
   };
 
   const swapParams = await requestNewSwap(
-    'Eth',
+    sourceAsset,
     'Btc',
     destinationAddressForBtc,
     'brokerLevelScreeningTestEth',
@@ -178,47 +179,39 @@ async function testBrokerLevelScreeningEthereum() {
     refundParameters,
   );
 
-  const weiAmount = amountToFineAmount('0.002', assetDecimals('Eth'));
+  if (sourceAsset === chainGasAsset('Ethereum')) {
+    await send(sourceAsset, swapParams.depositAddress);
+    testBrokerLevelScreening.log('Sent initial tx...');
+    await observeEvent('ethereumIngressEgress:DepositFinalised').event;
+    testBrokerLevelScreening.log('Initial deposit received...');
+    // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit contracts.
+    // We will check for a second transaction instead.
+    // Sleep until the fetch is broadcasted so the contract is deployed. This is just a
+    // temporary patch, we should instead monitor the right broadcast.
+    console.log('Sleeping for 60 seconds to wait for the fetch to be broadcasted...');
+    await sleep(60000);
+  }
 
-  await signAndSendTxEvm(
-    'Ethereum',
-    swapParams.depositAddress,
-    weiAmount,
-    undefined,
-    undefined,
-    true,
-  );
-  testBrokerLevelScreening.log('Sent initial tx...');
-  await observeEvent('ethereumIngressEgress:DepositFinalised').event;
-  testBrokerLevelScreening.log('Initial deposit received...');
-  // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit contracts.
-  // We will check for a second transaction instead.
-  testBrokerLevelScreening.log('Sent next tx...');
-  const receipt = await signAndSendTxEvm(
-    'Ethereum',
-    swapParams.depositAddress,
-    weiAmount,
-    undefined,
-    undefined,
-    true,
-  );
-
-  const txId = hexStringToBytesArray(receipt.transactionHash);
+  testBrokerLevelScreening.log('Sending tx to reject...');
+  const txHash = (await send(sourceAsset, swapParams.depositAddress)).transactionHash as string;
+  testBrokerLevelScreening.log('Sent tx...');
+  const txId = hexStringToBytesArray(txHash);
 
   await markTxForRejection(txId, 'Ethereum');
-  testBrokerLevelScreening.log(`Marked ${receipt.transactionHash} for rejection. Awaiting refund.`);
+  testBrokerLevelScreening.log(`Marked ${txHash} for rejection. Awaiting refund.`);
 
   await observeEvent('ethereumIngressEgress:TransactionRejectedByBroker').event;
 
   let receivedRefund = false;
 
   for (let i = 0; i < MAX_RETRIES; i++) {
-    const refundBalance = await getBalance('Eth', ethereumRefundAddress);
-    if (refundBalance !== '0') {
+    const refundBalance = await getBalance(sourceAsset, ethereumRefundAddress);
+    const depositAddressBalance = await getBalance(sourceAsset, swapParams.depositAddress);
+    if (refundBalance !== '0' && depositAddressBalance === '0') {
       receivedRefund = true;
       break;
     }
-    await sleep(1000);
+    await sleep(6000);
   }
 
   if (!receivedRefund) {
@@ -299,6 +292,9 @@ async function testBrokerLevelScreeningBitcoin() {
 }
 
 async function main() {
-  await testBrokerLevelScreeningBitcoin();
-  await testBrokerLevelScreeningEthereum();
+  await Promise.all([
+    testBrokerLevelScreeningBitcoin(),
+    testBrokerLevelScreeningEthereum('Eth'),
+    testBrokerLevelScreeningEthereum('Usdc'),
+  ]);
 }

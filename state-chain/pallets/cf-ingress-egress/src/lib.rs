@@ -970,13 +970,27 @@ pub mod pallet {
 							})
 						});
 					if let Some(deposit_fetch_id) = deposit_fetch_id {
+						let AmountAndFeesWithheld {
+							amount_after_fees: amount_after_ingress_fees,
+							fees_withheld: _,
+						} = Self::withhold_ingress_or_egress_fee(
+							IngressOrEgress::Ingress,
+							tx.asset,
+							tx.amount,
+						);
+						let AmountAndFeesWithheld {
+							amount_after_fees: amount_to_refund,
+							fees_withheld: _,
+						} = Self::withhold_ingress_or_egress_fee(
+							IngressOrEgress::Egress,
+							tx.asset,
+							amount_after_ingress_fees,
+						);
 						if let Ok(api_call) =
 							<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
 								tx.deposit_details.clone(),
 								refund_address,
-								tx.amount.saturating_sub(T::ChainTracking::estimate_egress_fee(
-									tx.asset,
-								)),
+								amount_to_refund,
 								tx.asset,
 								deposit_fetch_id,
 							) {
