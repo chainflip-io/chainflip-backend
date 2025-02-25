@@ -8,10 +8,10 @@ use crate::{
 use cf_chains::{
 	btc::{
 		self, deposit_address::DepositAddress, BitcoinFeeInfo, BitcoinTrackedData, BlockNumber,
-		Hash,
+		BtcAmount, Hash,
 	},
 	instances::BitcoinInstance,
-	Bitcoin,
+	Bitcoin, Chain,
 };
 use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
@@ -36,7 +36,7 @@ use pallet_cf_elections::{
 			},
 		},
 		composite::{
-			tuple_5_impls::{DerivedElectoralAccess, Hooks},
+			tuple_6_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
 		liveness::Liveness,
@@ -44,6 +44,7 @@ use pallet_cf_elections::{
 			core::{ConstantIndex, Hook},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
+		unsafe_median::{UnsafeMedian, UpdateFeeHook},
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
@@ -63,6 +64,7 @@ pub type BitcoinElectoralSystemRunner = CompositeRunner<
 		BitcoinDepositChannelWitnessingES,
 		BitcoinVaultDepositWitnessingES,
 		BitcoinEgressWitnessingES,
+		BitcoinFeeTracking,
 		BitcoinLiveness,
 	),
 	<Runtime as Chainflip>::ValidatorId,
@@ -449,6 +451,24 @@ pub type BitcoinLiveness = Liveness<
 	<Runtime as Chainflip>::ValidatorId,
 >;
 
+pub struct BitcoinFeeUpdateHook;
+impl UpdateFeeHook<BtcAmount> for BitcoinFeeUpdateHook {
+	fn update_fee(fee: BtcAmount) {
+		if let Err(err) = BitcoinChainTracking::inner_update_fee(BitcoinTrackedData {
+			btc_fee_info: BitcoinFeeInfo::new(fee),
+		}) {
+			log::error!("Failed to update BTC fees: {:?}", err);
+		}
+	}
+}
+pub type BitcoinFeeTracking = UnsafeMedian<
+	<Bitcoin as Chain>::ChainAmount,
+	BtcAmount,
+	(),
+	BitcoinFeeUpdateHook,
+	<Runtime as Chainflip>::ValidatorId,
+>;
+
 pub struct BitcoinElectionHooks;
 
 impl
@@ -457,11 +477,12 @@ impl
 		BitcoinDepositChannelWitnessingES,
 		BitcoinVaultDepositWitnessingES,
 		BitcoinEgressWitnessingES,
+		BitcoinFeeTracking,
 		BitcoinLiveness,
 	> for BitcoinElectionHooks
 {
 	fn on_finalize(
-		(block_height_tracking_identifiers, deposit_channel_witnessing_identifiers, vault_deposits_identifiers, egress_identifiers,  liveness_identifiers): (
+		(block_height_tracking_identifiers, deposit_channel_witnessing_identifiers, vault_deposits_identifiers, egress_identifiers, fee_identifiers, liveness_identifiers): (
 			Vec<
 				ElectionIdentifier<
 					<BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
@@ -480,6 +501,11 @@ impl
 			Vec<
 				ElectionIdentifier<
 					<BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
+				>,
+			>,
+			Vec<
+				ElectionIdentifier<
+					<BitcoinFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
@@ -528,6 +554,14 @@ impl
 			>,
 		>(egress_identifiers, &chain_progress)?;
 
+		BitcoinFeeTracking::on_finalize::<
+			DerivedElectoralAccess<
+				_,
+				BitcoinFeeTracking,
+				RunnerStorageAccess<Runtime, BitcoinInstance>,
+			>,
+		>(fee_identifiers, &())?;
+
 		BitcoinLiveness::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -555,6 +589,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 			Default::default(),
 			Default::default(),
 			Default::default(),
+			Default::default(),
 		),
 		unsynchronised_settings: (
 			Default::default(),
@@ -562,9 +597,11 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 			BWSettings { max_concurrent_elections: 15 },
 			BWSettings { max_concurrent_elections: 15 },
 			BWSettings { max_concurrent_elections: 15 },
+			Default::default(),
 			(),
 		),
 		settings: (
+			Default::default(),
 			Default::default(),
 			Default::default(),
 			Default::default(),

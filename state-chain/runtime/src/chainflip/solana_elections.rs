@@ -116,10 +116,16 @@ pub type SolanaBlockHeightTracking = electoral_systems::monotonic_median::Monoto
 	SolanaBlockHeightTrackingHook,
 	<Runtime as Chainflip>::ValidatorId,
 >;
+
+pub struct SolanaFeeHook;
+impl UpdateFeeHook<<Solana as Chain>::ChainAmount> for SolanaFeeHook {
+	fn update_fee(_fee: <Solana as Chain>::ChainAmount) {}
+}
 pub type SolanaFeeTracking = electoral_systems::unsafe_median::UnsafeMedian<
 	<Solana as Chain>::ChainAmount,
 	SolanaFeeUnsynchronisedSettings,
 	(),
+	SolanaFeeHook,
 	<Runtime as Chainflip>::ValidatorId,
 >;
 pub type SolanaIngressTracking =
@@ -374,7 +380,9 @@ impl BenchmarkValue for SolanaIngressSettings {
 	}
 }
 
-use pallet_cf_elections::electoral_systems::composite::tuple_7_impls::DerivedElectoralAccess;
+use pallet_cf_elections::electoral_systems::{
+	composite::tuple_7_impls::DerivedElectoralAccess, unsafe_median::UpdateFeeHook,
+};
 
 pub struct SolanaChainTrackingProvider;
 impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
