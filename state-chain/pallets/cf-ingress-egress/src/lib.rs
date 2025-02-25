@@ -756,9 +756,6 @@ pub mod pallet {
 		TransactionRejectionFailed {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
-		DebugEvent {
-			reported_tx_id: Option<Vec<TransactionInIdFor<T, I>>>,
-		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -2087,7 +2084,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		if let Some(tx_ids) = deposit_details.deposit_ids() {
-			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: Some(tx_ids.clone()) });
 			let is_marked_by_broker_or_screening_id = !tx_ids
 				.iter()
 				.filter_map(|tx_id| {
@@ -2141,8 +2137,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				});
 				return Ok(())
 			}
-		} else {
-			Self::deposit_event(Event::<T, I>::DebugEvent { reported_tx_id: None });
 		}
 
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {

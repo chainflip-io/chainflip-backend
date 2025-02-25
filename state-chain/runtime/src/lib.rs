@@ -292,7 +292,8 @@ impl pallet_cf_environment::Config for Runtime {
 parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_perthousand(1);
 	pub const ScreeningBrokerId: AccountId = AccountId::new(
-		hex_literal::hex!("ae7946e0f5663373ec015b6859361a9c450c91045f8fb220cad9f14d4e400f15")
+		// Screening Account: `cFHvfaLQ8prf25JCxY2tzGR8WuNiCLjkALzy5J3H8jbo3Brok`
+		hex_literal::hex!("026de9d675fae14536ce79a478f4d16215571984b8bad180463fa27ea78d9c4f")
 	);
 }
 
