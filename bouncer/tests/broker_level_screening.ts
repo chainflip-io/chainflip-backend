@@ -300,8 +300,8 @@ async function testBrokerLevelScreeningBitcoin() {
 async function main() {
   await Promise.all([
     testBrokerLevelScreeningBitcoin(),
+    testBrokerLevelScreeningEthereum('Eth'),
     // TODO: For a nondeployed contract it fails as the fetch is not a FetchDeploy but a Fetch
     testBrokerLevelScreeningEthereum('Usdc'),
-    testBrokerLevelScreeningEthereum('Eth'),
   ]);
 }
