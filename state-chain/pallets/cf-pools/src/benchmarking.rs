@@ -280,7 +280,7 @@ mod benchmarks {
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000_000);
 
-		let orders_to_delete = (1i32..n as i32)
+		let orders_to_delete = (1i32..=n as i32)
 			.map(|i| {
 				assert_ok!(Pallet::<T>::set_range_order(
 					RawOrigin::Signed(caller.clone()).into(),
