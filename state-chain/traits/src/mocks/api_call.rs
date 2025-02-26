@@ -36,7 +36,13 @@ pub enum MockEthereumApiCall<MockEvmEnvironment> {
 	AllBatch(MockEthAllBatch<MockEvmEnvironment>),
 	ExecutexSwapAndCall(MockEthExecutexSwapAndCall<MockEvmEnvironment>),
 	TransferFallback(MockEthTransferFallback<MockEvmEnvironment>),
-	RejectCall,
+	RejectCall {
+		deposit_details: <Ethereum as Chain>::DepositDetails,
+		refund_address: <Ethereum as Chain>::ChainAccount,
+		refund_amount: <Ethereum as Chain>::ChainAmount,
+		asset: <Ethereum as Chain>::ChainAsset,
+		deposit_fetch_id: <Ethereum as Chain>::DepositFetchId,
+	},
 }
 
 impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
@@ -343,6 +349,8 @@ impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		_deposit_details: <Bitcoin as Chain>::DepositDetails,
 		_refund_address: <Bitcoin as Chain>::ChainAccount,
 		_refund_amount: <Bitcoin as Chain>::ChainAmount,
+		_asset: <Bitcoin as Chain>::ChainAsset,
+		_deposit_fetch_id: <Bitcoin as Chain>::DepositFetchId,
 	) -> Result<Self, RejectError> {
 		Ok(Self::RejectCall)
 	}
@@ -350,10 +358,18 @@ impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 
 impl RejectCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(
-		_deposit_details: <Ethereum as Chain>::DepositDetails,
-		_refund_address: <Ethereum as Chain>::ChainAccount,
-		_refund_amount: <Ethereum as Chain>::ChainAmount,
+		deposit_details: <Ethereum as Chain>::DepositDetails,
+		refund_address: <Ethereum as Chain>::ChainAccount,
+		refund_amount: <Ethereum as Chain>::ChainAmount,
+		asset: <Ethereum as Chain>::ChainAsset,
+		deposit_fetch_id: <Ethereum as Chain>::DepositFetchId,
 	) -> Result<Self, RejectError> {
-		Ok(Self::RejectCall)
+		Ok(Self::RejectCall {
+			deposit_details,
+			refund_address,
+			refund_amount,
+			asset,
+			deposit_fetch_id,
+		})
 	}
 }

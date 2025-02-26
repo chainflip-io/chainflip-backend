@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.10] - 2025-02-26
+
+### Features
+
+- Broker Level Screening for Ethereum
+- Whitelisted Brokers
+
 ## [1.7.9] - 2025-02-04
 
 ### Fixes

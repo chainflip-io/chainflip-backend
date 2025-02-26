@@ -1,38 +1,42 @@
 import Client from 'bitcoin-core';
 import { sleep, btcClientMutex } from './utils';
 
-export async function sendBtcAndReturnTxId(
-  address: string,
-  amount: number | string,
-): Promise<string> {
-  const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
-  const client = new Client({
-    host: BTC_ENDPOINT.split(':')[1].slice(2),
-    port: Number(BTC_ENDPOINT.split(':')[2]),
-    username: 'flip',
-    password: 'flip',
-    wallet: 'whale',
-  });
+export const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
 
-  // Btc client has a limit on the number of concurrent requests
-  const txId = (await btcClientMutex.runExclusive(async () =>
-    client.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
-  )) as string;
+export const btcClient = new Client({
+  host: BTC_ENDPOINT.split(':')[1].slice(2),
+  port: Number(BTC_ENDPOINT.split(':')[2]),
+  username: 'flip',
+  password: 'flip',
+  wallet: 'whale',
+});
 
+export async function waitForBtcTransaction(txid: string, confirmations = 1) {
   for (let i = 0; i < 50; i++) {
-    const transactionDetails = await client.getTransaction(txId);
+    const transactionDetails = await btcClient.getTransaction(txid);
 
-    const confirmations = transactionDetails.confirmations;
-
-    if (confirmations < 1) {
+    if (transactionDetails.confirmations < confirmations) {
       await sleep(1000);
     } else {
-      break;
+      return;
     }
   }
-  return Promise.resolve(txId);
+  throw new Error(`Timeout waiting for Btc transaction to be confirmed, txid: ${txid}`);
 }
 
-export async function sendBtc(address: string, amount: number | string) {
-  await sendBtcAndReturnTxId(address, amount);
+export async function sendBtc(
+  address: string,
+  amount: number | string,
+  confirmations = 1,
+): Promise<string> {
+  // Btc client has a limit on the number of concurrent requests
+  const txid = (await btcClientMutex.runExclusive(async () =>
+    btcClient.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
+  )) as string;
+
+  if (confirmations > 0) {
+    await waitForBtcTransaction(txid, confirmations);
+  }
+
+  return txid;
 }
