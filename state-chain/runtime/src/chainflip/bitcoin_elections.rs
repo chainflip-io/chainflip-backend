@@ -457,7 +457,7 @@ impl UpdateFeeHook<BtcAmount> for BitcoinFeeUpdateHook {
 		if let Err(err) = BitcoinChainTracking::inner_update_fee(BitcoinTrackedData {
 			btc_fee_info: BitcoinFeeInfo::new(fee),
 		}) {
-			log::error!("Failed to update BTC fees: {:?}", err);
+			log::error!("Failed to update BTC fees to {fee:#?}: {err:?}");
 		}
 	}
 }
