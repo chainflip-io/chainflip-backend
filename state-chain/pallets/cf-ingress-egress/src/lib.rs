@@ -1762,8 +1762,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
 				ccms.extract_if(.., |ccm| {
 					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) &&
-						Self::should_fetch_or_transfer(&mut maybe_no_of_transfers_remaining) &&
-						ccm_ready_for_egress(&ccm.aux_data_lookup_key)
+						ccm_ready_for_egress(&ccm.aux_data_lookup_key) &&
+						Self::should_fetch_or_transfer(&mut maybe_no_of_transfers_remaining)
 				})
 				.collect()
 			});
