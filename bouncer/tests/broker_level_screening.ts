@@ -253,6 +253,7 @@ async function testBrokerLevelScreeningEthereum(
       throw new Error(`Failed to retrieve broadcastId for ${sourceAsset} swap!`);
     }
     await observeBroadcastSuccess(broadcastId, sourceAsset);
+    await sleep(60);
   }
 
   testBrokerLevelScreening.log(`Sending ${sourceAsset} tx to reject...`);
