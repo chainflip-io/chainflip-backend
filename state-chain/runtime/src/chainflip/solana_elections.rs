@@ -192,7 +192,7 @@ pub struct SolanaAltWitnessingIdentifier {
 
 pub type SolanaAltWitnessing = electoral_systems::egress_success::EgressSuccess<
 	SolanaAltWitnessingIdentifier,
-	Vec<SolAddressLookupTableAccount>,
+	Option<Vec<SolAddressLookupTableAccount>>,
 	(),
 	SolanaAltWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
@@ -201,12 +201,12 @@ pub type SolanaAltWitnessing = electoral_systems::egress_success::EgressSuccess<
 
 pub struct SolanaAltWitnessingHook;
 
-impl OnEgressSuccess<SolanaAltWitnessingIdentifier, Vec<SolAddressLookupTableAccount>>
+impl OnEgressSuccess<SolanaAltWitnessingIdentifier, Option<Vec<SolAddressLookupTableAccount>>>
 	for SolanaAltWitnessingHook
 {
 	fn on_egress_success(
 		alt_identifier: SolanaAltWitnessingIdentifier,
-		alts: Vec<SolAddressLookupTableAccount>,
+		alts: Option<Vec<SolAddressLookupTableAccount>>,
 	) {
 		Environment::add_sol_ccm_swap_alts(alt_identifier.swap_request_id, alts);
 	}

@@ -73,7 +73,7 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
-	+ ChainEnvironment<SwapRequestId, Vec<SolAddressLookupTableAccount>>
+	+ ChainEnvironment<SwapRequestId, Result<Vec<SolAddressLookupTableAccount>, ()>>
 	+ RecoverDurableNonce
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
@@ -106,8 +106,10 @@ pub trait SolanaEnvironment:
 	}
 
 	/// Get any user-defined Address lookup tables from the Environment.
-	fn get_address_lookup_tables(id: SwapRequestId) -> Vec<SolAddressLookupTableAccount> {
-		Self::lookup(id).unwrap_or_default()
+	fn get_address_lookup_tables(
+		id: SwapRequestId,
+	) -> Result<Result<Vec<SolAddressLookupTableAccount>, ()>, SolanaTransactionBuildingError> {
+		Self::lookup(id).ok_or(SolanaTransactionBuildingError::AltsNotYetWitnessed)
 	}
 }
 
@@ -132,6 +134,8 @@ pub enum SolanaTransactionBuildingError {
 	InvalidCcm(CcmValidityError),
 	FailedToSerializeFinalTransaction,
 	FinalTransactionExceededMaxLength(u32),
+	AltsNotYetWitnessed,
+	AltsInvalid,
 }
 
 impl sp_std::fmt::Display for SolanaTransactionBuildingError {
@@ -398,7 +402,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
 		// TODO roy: Coordinate with Ramiz on the interface for getting ALTS
 		let mut address_lookup_tables = vec![sol_api_environment.address_lookup_table_account];
-		address_lookup_tables.extend(Environment::get_address_lookup_tables(swap_request_id));
+		address_lookup_tables.extend(
+			Environment::get_address_lookup_tables(swap_request_id)?
+				.map_err(|_| SolanaTransactionBuildingError::AltsInvalid)?,
+		);
 
 		// Ensure the CCM parameters do not contain blacklisted accounts.
 		check_ccm_for_blacklisted_accounts(
@@ -671,7 +678,11 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		)
 		.map_err(|e| {
 			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);
-			ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e)
+			match e {
+				SolanaTransactionBuildingError::AltsNotYetWitnessed =>
+					ExecutexSwapAndCallError::TryAgainLater,
+				_ => ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e),
+			}
 		})
 	}
 }

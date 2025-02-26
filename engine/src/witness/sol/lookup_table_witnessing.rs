@@ -10,7 +10,7 @@ use crate::sol::{
 };
 use anyhow::{anyhow, Result};
 use serde_json::Value;
-use sol_prim::Slot;
+use sol_prim::{AddressLookupTableAccount, Slot};
 use std::str::FromStr;
 
 // We want to return None if the account is not found or there is any error. It should
@@ -20,14 +20,14 @@ use std::str::FromStr;
 #[allow(dead_code)]
 pub async fn get_lookup_table_state<SolRetryRpcClient>(
 	sol_rpc: &SolRetryRpcClient,
-	lookup_table_address: SolAddress,
-) -> Result<Option<Vec<SolAddress>>, anyhow::Error>
+	lookup_table_addresses: Vec<SolAddress>,
+) -> Result<Option<Vec<AddressLookupTableAccount>>, anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
-	let account_info = sol_rpc
+	sol_rpc
 		.get_multiple_accounts(
-			&[lookup_table_address],
+			&lookup_table_addresses[..],
 			RpcAccountInfoConfig {
 				encoding: Some(UiAccountEncoding::JsonParsed),
 				data_slice: None,
@@ -38,74 +38,79 @@ where
 		.await
 		.value
 		.into_iter()
-		.exactly_one()
-		.expect("We queried for exactly one account.");
+		.enumerate()
+		.map(|(i, account_info)| {
+			match account_info {
+				Some(UiAccount {
+					data: UiAccountData::Json(ParsedAccount { program, space: _, parsed }),
+					owner,
+					..
+				}) => {
+					if program != "address-lookup-table" {
+						tracing::info!("Program is not an address lookup table: {}", program);
+						return Ok(None);
+					}
 
-	match account_info {
-		Some(UiAccount {
-			data: UiAccountData::Json(ParsedAccount { program, space: _, parsed }),
-			owner,
-			..
-		}) => {
-			if program != "address-lookup-table" {
-				tracing::info!("Program is not an address lookup table: {}", program);
-				return Ok(None);
-			}
+					let owner_address = SolAddress::from_str(owner.as_str()).unwrap();
 
-			let owner_address = SolAddress::from_str(owner.as_str()).unwrap();
+					if owner_address != sol_prim::consts::ADDRESS_LOOKUP_TABLE_PROGRAM {
+						tracing::info!("Owner is not address lookup table program: {}", owner);
+						return Ok(None);
+					}
 
-			if owner_address != sol_prim::consts::ADDRESS_LOOKUP_TABLE_PROGRAM {
-				tracing::info!("Owner is not address lookup table program: {}", owner);
-				return Ok(None);
-			}
+					let info = match parsed.get("info").and_then(Value::as_object) {
+						Some(value) => value,
+						None => {
+							tracing::info!("Failed to parse the info: {}", parsed);
+							return Ok(None);
+						},
+					};
 
-			let info = match parsed.get("info").and_then(Value::as_object) {
-				Some(value) => value,
-				None => {
-					tracing::info!("Failed to parse the info: {}", parsed);
-					return Ok(None);
+					let deactivation_slot: Slot = Slot::from_str(
+						info.get("deactivationSlot").and_then(Value::as_str).ok_or(anyhow!(
+							"Deactivation slot not found in address lookup table account info: {:?}",
+							info
+						))?,
+					)?;
+
+					// Address lookup table is being deactivated
+					if deactivation_slot != Slot::MAX {
+						return Ok(None);
+					}
+					let addresses =
+						info.get("addresses").and_then(Value::as_array).ok_or(anyhow!(
+							"Addresses not found in address lookup table account info: {:?}",
+							info
+						))?;
+
+					let addresses_vector: Vec<cf_chains::sol::SolPubkey> = addresses
+						.iter()
+						.filter_map(|address| address.as_str())
+						.map(|address| SolAddress::from_str(address).unwrap().into())
+						.collect();
+
+					// We might want to return an AddressLookupTable Account type, it depends on how
+					// the elections are setup.
+					Ok(Some(AddressLookupTableAccount {
+						key: lookup_table_addresses[i].into(),
+						addresses: addresses_vector,
+					}))
 				},
-			};
-
-			let deactivation_slot: Slot = Slot::from_str(
-				info.get("deactivationSlot").and_then(Value::as_str).ok_or(anyhow!(
-					"Deactivation slot not found in address lookup table account info: {:?}",
-					info
-				))?,
-			)?;
-
-			// Address lookup table is being deactivated
-			if deactivation_slot != Slot::MAX {
-				return Ok(None);
+				// If the account is not JsonParsed as a Lookup Table we assume it's either empty or
+				// another account. We can also consider not returning an Option and instead
+				// return an empty vector if the ALT is not found.
+				Some(_) => {
+					tracing::info!(
+						"Address lookup table account encoding is not JsonParsed for account {:?}: {:?}",
+						lookup_table_addresses[i],
+						account_info
+					);
+					Ok(None)
+				},
+				None => Ok(None),
 			}
-			let addresses = info.get("addresses").and_then(Value::as_array).ok_or(anyhow!(
-				"Addresses not found in address lookup table account info: {:?}",
-				info
-			))?;
-
-			let addresses_vector: Vec<SolAddress> = addresses
-				.iter()
-				.filter_map(|address| address.as_str())
-				.map(|address| SolAddress::from_str(address).unwrap())
-				.collect();
-
-			// We might want to return an AddressLookupTable Account type, it depends on how the
-			// elections are setup.
-			Ok(Some(addresses_vector))
-		},
-		// If the account is not JsonParsed as a Lookup Table we assume it's either empty or another
-		// account. We can also consider not returning an Option and instead return an empty
-		// vector if the ALT is not found.
-		Some(_) => {
-			tracing::info!(
-				"Address lookup table account encoding is not JsonParsed for account {:?}: {:?}",
-				lookup_table_address,
-				account_info
-			);
-			Ok(None)
-		},
-		None => Ok(None),
-	}
+		})
+		.collect()
 }
 
 #[cfg(test)]

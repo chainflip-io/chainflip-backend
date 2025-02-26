@@ -113,7 +113,8 @@ impl<
 				let identifier = election_access.properties()?;
 				election_access.delete();
 				Hook::on_egress_success(identifier, egress_data);
-			} else {
+			} else if Hook::expire_election(election_access.properties()?) {
+				election_access.delete();
 			}
 		}
 

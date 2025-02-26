@@ -212,9 +212,14 @@ impl VoterApi<SolanaAltWitnessing> for SolanaAltWitnessingVoter {
 	async fn vote(
 		&self,
 		_settings: <SolanaAltWitnessing as ElectoralSystemTypes>::ElectoralSettings,
-		_properties: <SolanaAltWitnessing as ElectoralSystemTypes>::ElectionProperties,
+		alt_witnessing_identifier: <SolanaAltWitnessing as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<SolanaAltWitnessing>>, anyhow::Error> {
-		todo!()
+		lookup_table_witnessing::get_lookup_table_state(
+			&self.client,
+			alt_witnessing_identifier.alt_addresses,
+		)
+		.await
+		.map(|maybe_lookup_tables| Some(maybe_lookup_tables))
 	}
 }
 

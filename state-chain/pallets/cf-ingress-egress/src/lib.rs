@@ -30,9 +30,10 @@ use cf_chains::{
 	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
 	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
-	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall,
-	SwapOrigin, TransferAssetParams,
+	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
+	IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -799,7 +800,7 @@ pub mod pallet {
 		},
 		CcmEgressInvalid {
 			egress_id: EgressId,
-			error: cf_chains::ExecutexSwapAndCallError,
+			error: ExecutexSwapAndCallError,
 		},
 		DepositFetchesScheduled {
 			channel_id: ChannelId,
@@ -1746,16 +1747,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for ccm in ccms_to_send {
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 				TransferAssetParams {
-					asset: ccm.asset,
-					amount: ccm.amount,
-					to: ccm.destination_address,
+					asset: ccm.asset.clone(),
+					amount: ccm.amount.clone(),
+					to: ccm.destination_address.clone(),
 				},
-				ccm.source_chain,
-				ccm.source_address,
-				ccm.gas_budget,
-				ccm.message.to_vec(),
-				ccm.ccm_additional_data.to_vec(),
-				ccm.swap_request_id,
+				ccm.source_chain.clone(),
+				ccm.source_address.clone(),
+				ccm.gas_budget.clone(),
+				ccm.message.clone().to_vec(),
+				ccm.ccm_additional_data.clone().to_vec(),
+				ccm.swap_request_id.clone(),
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -1768,6 +1769,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						egress_id: ccm.egress_id,
 					});
 				},
+				Err(ExecutexSwapAndCallError::TryAgainLater) =>
+					ScheduledEgressCcm::<T, I>::append(ccm),
 				Err(error) => {
 					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. swap_request_id: {:?}, Error: {:?}", ccm.swap_request_id, error);
 
