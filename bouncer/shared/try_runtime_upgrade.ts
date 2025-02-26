@@ -3,12 +3,12 @@
 
 import path from 'path';
 import { compileBinaries } from './utils/compile_binaries';
-import { createTmpDirIfNotExists, execWithRustLog } from './utils/exec_with_log';
+import { mkTmpDir, execWithRustLog } from './utils/exec_with_log';
 import { getChainflipApi } from './utils/substrate';
 
 async function createSnapshotFile(networkUrl: string, blockHash: string): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
-  const snapshotFolder = createTmpDirIfNotExists('chainflip/snapshots/');
+  const snapshotFolder = await mkTmpDir('chainflip/snapshots/');
   const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
 
   console.log('Writing snapshot to: ', snapshotOutputPath);
