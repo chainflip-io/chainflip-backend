@@ -1994,19 +1994,20 @@ pub mod pallet {
 			from: Asset,
 			to: Asset,
 			input_amount: AssetAmount,
+			min_fee_enforced: bool,
 		) -> Result<SwapOutput, DispatchError> {
 			Ok(match (from, to) {
 				(_, STABLE_ASSET) => {
 					let FeeTaken { remaining_amount: output, fee } = Self::take_network_fee(
 						T::SwappingApi::swap_single_leg(from, to, input_amount)?,
-						false,
+						min_fee_enforced,
 					);
 
 					SwapOutput { intermediary: None, output, network_fee: fee }
 				},
 				(STABLE_ASSET, _) => {
 					let FeeTaken { remaining_amount: input_amount, fee } =
-						Self::take_network_fee(input_amount, false);
+						Self::take_network_fee(input_amount, min_fee_enforced);
 
 					SwapOutput {
 						intermediary: None,
@@ -2017,7 +2018,7 @@ pub mod pallet {
 				_ => {
 					let FeeTaken { remaining_amount: intermediary, fee } = Self::take_network_fee(
 						T::SwappingApi::swap_single_leg(from, STABLE_ASSET, input_amount)?,
-						false,
+						min_fee_enforced,
 					);
 
 					SwapOutput {
@@ -2315,7 +2316,7 @@ pub mod pallet {
 
 			let estimation_output = with_transaction_unchecked(|| {
 				TransactionOutcome::Rollback(if with_network_fee {
-					Self::swap_with_network_fee(input_asset, output_asset, estimation_input)
+					Self::swap_with_network_fee(input_asset, output_asset, estimation_input, false)
 						.map(|swap| swap.output)
 				} else {
 					T::SwappingApi::swap_single_leg(input_asset, output_asset, estimation_input)
