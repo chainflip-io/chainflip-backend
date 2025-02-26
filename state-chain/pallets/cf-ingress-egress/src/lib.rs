@@ -999,8 +999,17 @@ pub mod pallet {
 									tx.asset,
 									deposit_fetch_id,
 								) {
-								let (broadcast_id, _) =
-									T::Broadcaster::threshold_sign_and_broadcast(api_call);
+								let broadcast_id =
+									T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+										api_call,
+										Some(
+											Call::finalise_ingress {
+												addresses: vec![tx.deposit_address.clone()],
+											}
+											.into(),
+										),
+										|_| None,
+									);
 								Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
 									broadcast_id,
 									tx_id: tx.deposit_details,
