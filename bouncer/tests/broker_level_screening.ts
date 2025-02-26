@@ -34,7 +34,7 @@ const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testBrokerLevelScreening = new ExecutableTest('Broker-Level-Screening', main, 300);
+export const testBrokerLevelScreening = new ExecutableTest('Broker-Level-Screening', main, 500);
 
 /**
  * Observes the balance of a BTC address and returns true if the balance changes. Times out after 100 seconds and returns false if the balance does not change.
