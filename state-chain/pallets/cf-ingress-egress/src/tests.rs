@@ -2575,7 +2575,7 @@ mod evm_transaction_rejection {
 			.then_execute_at_next_block(|deposits| {
 				for (_, _, deposit_address) in &deposits {
 					assert_ok!(Pallet::<Test, _>::process_single_deposit(
-						deposit_address.clone(),
+						*deposit_address,
 						ETH_ETH,
 						DEFAULT_DEPOSIT_AMOUNT,
 						DepositDetails { tx_hashes: Some(vec![TAINTED_TX_ID_1]) },
@@ -2636,7 +2636,7 @@ mod evm_transaction_rejection {
 			.then_execute_at_next_block(|deposits| {
 				for (_, _, deposit_address) in &deposits {
 					assert_ok!(Pallet::<Test, _>::process_single_deposit(
-						deposit_address.clone(),
+						*deposit_address,
 						ETH_ETH,
 						DEFAULT_DEPOSIT_AMOUNT,
 						DepositDetails { tx_hashes: Some(vec![TAINTED_TX_ID_2]) },
@@ -2646,7 +2646,6 @@ mod evm_transaction_rejection {
 				deposits
 			})
 			.then_execute_at_next_block(|deposits| {
-				let (_, _, deposit_address) = &deposits[0];
 				assert!(ScheduledTxForReject::<Test>::get().iter().any(
 					|TransactionRejectionDetails { deposit_details, .. }| {
 						deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_2)
@@ -2656,7 +2655,6 @@ mod evm_transaction_rejection {
 			})
 			// Still pending at next block.
 			.then_execute_at_next_block(|deposits| {
-				let (_, _, deposit_address) = &deposits[0];
 				assert!(ScheduledTxForReject::<Test>::get().iter().any(
 					|TransactionRejectionDetails { deposit_details, .. }| {
 						deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_2)
