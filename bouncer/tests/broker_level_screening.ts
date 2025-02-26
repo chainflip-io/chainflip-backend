@@ -21,6 +21,8 @@ import { getBtcBalance } from '../shared/get_btc_balance';
 import { getBalance } from '../shared/get_balance';
 import { send } from '../shared/send';
 
+type SupportedChain = 'Bitcoin' | 'Ethereum';
+
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
 
@@ -61,18 +63,16 @@ async function newAssetAddress(asset: InternalAsset, seed = null): Promise<strin
 /**
  * Mark a transaction for rejection.
  *
- * @param txId - The txId to submit, in its typical representation in bitcoin explorers,
- * i.e., reverse of its memory representation.
+ * @param txId - The txId as hash string.
  */
-async function markTxForRejection(txId: string, chain: string) {
-  // The engine uses the memory representation everywhere, so we convert the txId here.
-  const memoryRepresentationTxId = hexStringToBytesArray(txId).reverse();
+async function markTxForRejection(txHash: string, chain: SupportedChain) {
+  const txId = hexStringToBytesArray(txHash);
   await using chainflip = await getChainflipApi();
   switch (chain) {
     case 'Bitcoin':
       return brokerMutex.runExclusive(async () =>
         chainflip.tx.bitcoinIngressEgress
-          .markTransactionForRejection(memoryRepresentationTxId)
+          .markTransactionForRejection(txId.reverse())
           .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
       );
     case 'Ethereum':
@@ -136,8 +136,21 @@ async function setMockmode(mode: Mockmode) {
  * @param txid Hash of the transaction we want to report.
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
-async function setTxRiskScore(txid: string, score: number) {
-  await postToDepositMonitor(':6070/riskscore', [
+async function setTxRiskScore(chain: SupportedChain, txid: string, score: number) {
+  let endpoint;
+  switch (chain) {
+    case 'Bitcoin':
+      endpoint = ':6070/riskscore';
+      break;
+
+    case 'Ethereum':
+      endpoint = ':6070/riskscore_eth';
+      break;
+
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+  await postToDepositMonitor(endpoint, [
     txid,
     {
       risk_score: { Score: score },
@@ -189,24 +202,15 @@ async function brokerLevelScreeningTestScenario(
     doBoost ? 100 : 0,
     refundParameters,
   );
-  const txId = await sendBtcAndReturnTxId(swapParams.depositAddress, amount);
-  if (stopBlockProductionFor > 0) {
-    pauseBtcBlockProduction(true);
-  }
-  await sleep(waitBeforeReport);
-  // Note: The bitcoin core js lib returns the txId in reverse order.
-  // On chain we expect the txId to be in the correct order (like the Bitcoin internal representation).
-  // Because of this we need to reverse the txId before marking it for rejection.
-  await markTxForRejection(hexStringToBytesArray(txId).reverse(), 'Bitcoin');
-  await sleep(stopBlockProductionFor);
-  if (stopBlockProductionFor > 0) {
-    pauseBtcBlockProduction(false);
-  }
+  const txId = await sendBtc(swapParams.depositAddress, amount, 0);
   await reportFunction(txId);
-  return Promise.resolve(swapParams.channelId.toString());
+  return swapParams.channelId.toString();
 }
 
-async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
+async function testBrokerLevelScreeningEthereum(
+  sourceAsset: InternalAsset,
+  reportFunction: (txId: string) => Promise<void>,
+) {
   testBrokerLevelScreening.log(`Testing broker level screening for Ethereum ${sourceAsset}...`);
   const MAX_RETRIES = 120;
 
@@ -250,9 +254,8 @@ async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
   testBrokerLevelScreening.log(`Sending ${sourceAsset} tx to reject...`);
   const txHash = (await send(sourceAsset, swapParams.depositAddress)).transactionHash as string;
   testBrokerLevelScreening.log(`Sent ${sourceAsset} tx...`);
-  const txId = hexStringToBytesArray(txHash);
 
-  await markTxForRejection(txId, 'Ethereum');
+  await reportFunction(txHash);
   testBrokerLevelScreening.log(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
   await observeEvent('ethereumIngressEgress:TransactionRejectedByBroker').event;
@@ -297,7 +300,7 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
   let btcRefundAddress = await newAssetAddress('Btc');
 
   await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, async (txId) =>
-    setTxRiskScore(txId, 9.0),
+    setTxRiskScore('Bitcoin', txId, 9.0),
   );
 
   await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
@@ -315,7 +318,7 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
     btcRefundAddress = await newAssetAddress('Btc');
 
     await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, async (txId) =>
-      setTxRiskScore(txId, 9.0),
+      setTxRiskScore('Bitcoin', txId, 9.0),
     );
     await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
@@ -340,7 +343,7 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
       // the transaction is refunded because the extrinsic is submitted too late.
       async (txId) => {
         await sleep(MILLI_SECS_PER_BLOCK * 2);
-        await markTxForRejection(txId);
+        await markTxForRejection(txId, 'Bitcoin');
       },
     );
 
@@ -356,17 +359,31 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
 }
 
 async function main() {
+  await ensureHealth();
+  const previousMockmode = (await setMockmode('Manual')).previous;
+
   await Promise.all([
     testBrokerLevelScreeningBitcoin(),
-    testBrokerLevelScreeningEthereum('Eth'),
-    testBrokerLevelScreeningEthereum('Usdc'),
+    testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
   ]);
+
+  await setMockmode(previousMockmode);
 }
 
 async function main() {
+  await ensureHealth();
+  const previousMockmode = (await setMockmode('Manual')).previous;
+
   await Promise.all([
     testBrokerLevelScreeningBitcoin(),
-    testBrokerLevelScreeningEthereum('Eth'),
-    testBrokerLevelScreeningEthereum('Usdc'),
+    testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
   ]);
+
+  await setMockmode(previousMockmode);
 }
