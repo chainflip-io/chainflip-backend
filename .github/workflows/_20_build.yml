@@ -17,6 +17,10 @@ on:
         default: release
         type: string
         description: Subdirectory of the target folder to upload
+      ci-runner:
+        default: rust-builder
+        description: The CI runner to use
+        type: string
 
 env:
   FORCE_COLOR: 1
@@ -25,13 +29,24 @@ env:
 
 jobs:
   compile:
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-${{ inputs.ci-runner }}
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
+      volumes:
+        - /cache:/cache
+      options: --cap-add=SYS_ADMIN
+      env:
+        NSC_CACHE_PATH: "/cache"
 
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Set up Rust cache 🦀💰
+        if: contains(inputs.ci-runner, 'no-cache') == false
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️

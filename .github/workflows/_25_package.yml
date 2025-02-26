@@ -5,6 +5,10 @@ on:
         description: Network being released
         required: true
         type: string
+      ci-runner:
+        default: rust-builder
+        description: The CI runner to use
+        type: string
 
 env:
   FORCE_COLOR: 1
@@ -12,19 +16,25 @@ env:
 
 jobs:
   packages:
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-${{ inputs.ci-runner }}
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
-      env:
-        NSC_CACHE_PATH: "/cache"
       volumes:
         - /cache:/cache
       options: --cap-add=SYS_ADMIN
+      env:
+        NSC_CACHE_PATH: "/cache"
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           fetch-depth: 0
+
+      - name: Set up Rust cache 🦀💰
+        if: contains(inputs.ci-runner, 'no-cache') == false
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: Download binaries from same run 📥
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16

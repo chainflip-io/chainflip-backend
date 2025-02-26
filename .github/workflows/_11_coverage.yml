@@ -5,18 +5,33 @@ on:
         description: Features to enable in tests
         type: string
         default: "runtime-benchmarks,slow-tests"
+      ci-runner:
+        default: rust-builder
+        description: The CI runner to use
+        type: string
 
 env:
   FORCE_COLOR: 1
 
 jobs:
   unit-tests:
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-${{ inputs.ci-runner }}
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
+      volumes:
+        - /cache:/cache
+      options: --cap-add=SYS_ADMIN
+      env:
+        NSC_CACHE_PATH: "/cache"
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Set up Rust cache 🦀💰
+        if: contains(inputs.ci-runner, 'no-cache') == false
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: cargo cf-test-ci --locked
         run: |
@@ -24,12 +39,23 @@ jobs:
         timeout-minutes: 23
 
   coverage:
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-${{ inputs.ci-runner }}
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
+      volumes:
+        - /cache:/cache
+      options: --cap-add=SYS_ADMIN
+      env:
+        NSC_CACHE_PATH: "/cache"
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Set up Rust cache 🦀💰
+        if: contains(inputs.ci-runner, 'no-cache') == false
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: Install cargo-llvm-cov 💿
         uses: taiki-e/install-action@c2648687d6fe1a5a70a4b65c84715cafab1f3451

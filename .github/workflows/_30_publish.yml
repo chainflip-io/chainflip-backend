@@ -19,7 +19,7 @@ env:
 
 jobs:
   build-deb:
-    runs-on: namespace-profile-default
+    runs-on:  namespace-profile-default
     permissions:
       id-token: write
       contents: read

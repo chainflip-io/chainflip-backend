@@ -13,6 +13,10 @@ on:
         default: release
         type: string
         description: Subdirectory of the target folder to upload
+      ci-runner:
+        default: rust-builder-m2
+        description: The CI runner to use
+        type: string
 
 env:
   FORCE_COLOR: 1
@@ -20,18 +24,17 @@ env:
 
 jobs:
   compile:
-    runs-on: namespace-profile-rust-builder-m2
+    runs-on: namespace-profile-${{ inputs.ci-runner }}
 
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      # TODO: Uncomment this when the cache is available for M2 builders
-      # - name: Setup Rust cache 🦀💰
-      #   if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
-      #   uses: namespacelabs/nscloud-cache-action@v1
-      #   with:
-      #     cache: rust
+      - name: Set up Rust cache 🦀💰
+        if: contains(inputs.ci-runner, 'no-cache') == false
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: Install Rust Requirements 💿
         run: |
