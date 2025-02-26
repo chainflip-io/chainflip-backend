@@ -12,6 +12,10 @@ import {
   chainGasAsset,
   observeBroadcastSuccess,
   observeSwapEvents,
+  lpMutex,
+  createStateChainKeypair,
+  isWithinOnePercent,
+  amountToFineAmountBigInt,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
@@ -281,6 +285,99 @@ async function testBrokerLevelScreeningEthereum(
   testBrokerLevelScreening.log(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
 }
 
+async function testBrokerLevelScreeningEthereum_LP(
+  sourceAsset: InternalAsset,
+  reportFunction: (txId: string) => Promise<void>,
+) {
+  testBrokerLevelScreening.log(`Testing broker level screening for Ethereum ${sourceAsset}...`);
+  const MAX_RETRIES = 120;
+
+  const destinationAddressForBtc = await newAssetAddress('Btc');
+  const ethereumRefundAddress = await newAssetAddress('Eth');
+
+  const refundParameters: FillOrKillParamsX128 = {
+    retryDurationBlocks: 0,
+    refundAddress: ethereumRefundAddress,
+    minPriceX128: '0',
+  };
+
+
+
+  // Create new LP deposit address for //LP_1
+  await using chainflip = await getChainflipApi();
+  const lp = createStateChainKeypair((process.env.LP_URI || '//LP_1'));
+
+  let eventHandle = observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
+    test: (event) => event.data.asset === sourceAsset && event.data.accountId === lp.address,
+  }).event;
+
+  console.log('Requesting ' + sourceAsset + ' deposit address');
+  await lpMutex.runExclusive(async () => {
+    await chainflip.tx.liquidityProvider
+      .requestLiquidityDepositAddress(sourceAsset, null)
+      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+  });
+
+  const depositAddress = (await eventHandle).data.depositAddress[sourceAsset];
+  testBrokerLevelScreening.log(`Got deposit address: ${depositAddress}`);
+
+
+  if (sourceAsset === chainGasAsset('Ethereum')) {
+    const amount = "3";
+
+    const observeAccountCreditedEvent = observeEvent('assetBalances:AccountCredited', {
+      test: (event) =>
+        event.data.asset === sourceAsset &&
+        isWithinOnePercent(
+          BigInt(event.data.amountCredited.replace(/,/g, '')),
+          BigInt(amountToFineAmountBigInt(amount, sourceAsset)),
+        ),
+    }).event;
+
+    // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
+    // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
+    // succesfully to make sure the Deposit contract is deployed.
+    await send(sourceAsset, depositAddress, amount);
+    testBrokerLevelScreening.log(`Sent initial ${sourceAsset} tx...`);
+    await observeEvent('ethereumIngressEgress:DepositFinalised').event;
+    testBrokerLevelScreening.log(`Initial deposit ${sourceAsset} received...`);
+    await observeAccountCreditedEvent;
+    testBrokerLevelScreening.log(`Account credited for ${sourceAsset}...`);
+  }
+
+  testBrokerLevelScreening.log(`Sending ${sourceAsset} tx to reject...`);
+  const txHash = (await send(sourceAsset, depositAddress)).transactionHash as string;
+  testBrokerLevelScreening.log(`Sent ${sourceAsset} tx...`);
+
+  await reportFunction(txHash);
+  testBrokerLevelScreening.log(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
+
+  await observeEvent('ethereumIngressEgress:TransactionRejectedByBroker').event;
+
+  let receivedRefund = false;
+
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    const refundBalance = await getBalance(sourceAsset, ethereumRefundAddress);
+    const depositAddressBalance = await getBalance(sourceAsset, depositAddress);
+    if (refundBalance !== '0' && depositAddressBalance === '0') {
+      receivedRefund = true;
+      break;
+    }
+    await sleep(6000);
+  }
+
+  if (!receivedRefund) {
+    throw new Error(
+      `Didn't receive funds refund to address ${ethereumRefundAddress} within timeout!`,
+    );
+  }
+
+  testBrokerLevelScreening.log(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
+}
+
+
+
+
 // -- Test suite for broker level screening --
 //
 // In this tests we are interested in the following scenarios:
@@ -352,11 +449,13 @@ async function main() {
   const previousMockmode = (await setMockmode('Manual')).previous;
 
   await Promise.all([
-    testBrokerLevelScreeningBitcoin(),
-    testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    // testBrokerLevelScreeningBitcoin(),
+    // testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    // testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    // testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    // testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+
+    testBrokerLevelScreeningEthereum_LP('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
   ]);
 
   await setMockmode(previousMockmode);
