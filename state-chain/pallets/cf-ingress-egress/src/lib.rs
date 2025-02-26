@@ -1757,7 +1757,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.gas_budget,
 				ccm.message.clone().to_vec(),
 				ccm.ccm_additional_data.clone().to_vec(),
-				ccm.swap_request_id,
+				ccm.swap_request_id.clone(),
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
