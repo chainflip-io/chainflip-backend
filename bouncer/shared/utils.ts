@@ -1109,14 +1109,18 @@ export async function startEngines(
   console.log('Starting all the engines');
 
   const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
-  await execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
-    INIT_RUN: 'false',
-    LOG_SUFFIX: '-pre-upgrade',
-    NODE_COUNT: nodeCount,
-    SELECTED_NODES,
-    LOCALNET_INIT_DIR: localnetInitPath,
-    BINARY_ROOT_PATH: binaryPath,
-  });
+  await execWithLog(
+    `${localnetInitPath}/scripts/start-all-engines.sh`,
+    'start-all-engines-pre-upgrade',
+    {
+      INIT_RUN: 'false',
+      LOG_SUFFIX: '-pre-upgrade',
+      NODE_COUNT: nodeCount,
+      SELECTED_NODES,
+      LOCALNET_INIT_DIR: localnetInitPath,
+      BINARY_ROOT_PATH: binaryPath,
+    },
+  );
 
   await sleep(7000);
 

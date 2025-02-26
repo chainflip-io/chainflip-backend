@@ -65,9 +65,13 @@ function killOldNodes() {
 async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string, keysDir: string) {
   logger.info('Starting new broker and lp-api.');
 
-  await execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
-    KEYS_DIR: keysDir,
-  });
+  await execWithLog(
+    `${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`,
+    'start-broker-api',
+    {
+      KEYS_DIR: keysDir,
+    },
+  );
 
   await execWithLog(`${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`, 'start-lp-api', {
     KEYS_DIR: keysDir,

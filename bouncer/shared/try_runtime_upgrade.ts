@@ -20,7 +20,11 @@ async function createSnapshotFile(networkUrl: string, blockHash: string): Promis
   );
 }
 
-async function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string): Promise<boolean> {
+async function tryRuntimeCommand(
+  runtimePath: string,
+  blockHash: 'latest' | string,
+  networkUrl: string,
+): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
 
   const success = await execWithRustLog(
