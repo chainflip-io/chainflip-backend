@@ -1182,9 +1182,6 @@ pub trait AltWitnessingHandler {
 		_swap_request_id: SwapRequestId,
 	) {
 	}
-	fn alt_address_valid(_ccm_channel_metadata: CcmChannelMetadata) -> bool {
-		true
-	}
 }
 
 pub struct NoAltWitnessing;

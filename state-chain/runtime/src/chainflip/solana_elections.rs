@@ -688,8 +688,7 @@ impl AltWitnessingHandler for SolanaAltWitnessingHandler {
 		ccm_channel_metadata: CcmChannelMetadata,
 		swap_request_id: SwapRequestId,
 	) {
-		// The unwrap should succeed because it has been checked before calling this
-		// function. See perform_channel_function in ingress egress pallet
+		// The unwrap should succeed because it has been checked while opening the channel
 		match CcmValidityChecker::decode_unchecked(
 			ccm_channel_metadata.ccm_additional_data,
 			ForeignChain::Solana,
@@ -720,12 +719,5 @@ impl AltWitnessingHandler for SolanaAltWitnessingHandler {
 			},
 			_ => {},
 		}
-	}
-	fn alt_address_valid(ccm_channel_metadata: CcmChannelMetadata) -> bool {
-		CcmValidityChecker::decode_unchecked(
-			ccm_channel_metadata.ccm_additional_data,
-			ForeignChain::Solana,
-		)
-		.map_or(false, |_| true)
 	}
 }
