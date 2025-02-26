@@ -787,7 +787,7 @@ pub mod pallet {
 			// a non-gas asset.
 			ingress_fee: TargetChainAmount<T, I>,
 			max_boost_fee_bps: BasisPoints,
-			action: Option<DepositAction<T, I>>,
+			action: DepositAction<T, I>,
 			channel_id: Option<ChannelId>,
 			origin_type: DepositOriginType,
 		},
@@ -870,7 +870,7 @@ pub mod pallet {
 			max_boost_fee_bps: BasisPoints,
 			// Total fee the user paid for their deposit to be boosted.
 			boost_fee: TargetChainAmount<T, I>,
-			action: Option<DepositAction<T, I>>,
+			action: DepositAction<T, I>,
 			origin_type: DepositOriginType,
 		},
 		BoostFundsAdded {
@@ -1925,11 +1925,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_address: Option<ForeignChainAddress>,
 		amount_after_fees: TargetChainAmount<T, I>,
 		origin: DepositOrigin<T, I>,
-	) -> Option<DepositAction<T, I>> {
+	) -> DepositAction<T, I> {
 		match action.clone() {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
 				T::Balance::credit_account(&lp_account, asset.into(), amount_after_fees.into());
-				Some(DepositAction::LiquidityProvision { lp_account })
+				DepositAction::LiquidityProvision { lp_account }
 			},
 			ChannelAction::Swap {
 				destination_asset,
@@ -1945,27 +1945,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						source_chain: asset.into(),
 						source_address,
 					});
-
-				if let Some(ccm_channel_metadata) = channel_metadata.clone() {
-					if !T::AltWitnessingHandler::alt_address_valid(ccm_channel_metadata) {
-						if let Some(ChannelRefundParameters { refund_address, .. }) = refund_params
-						{
-							let refund_address: Result<TargetChainAccount<T, I>, _> =
-								refund_address.try_into();
-							if let Ok(address) = refund_address {
-								Self::do_ccm_fallback(
-									Default::default(),
-									TransferAssetParams {
-										asset,
-										amount: amount_after_fees,
-										to: address,
-									},
-								);
-							}
-						}
-						return None;
-					}
-				}
 
 				let swap_request_id = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
@@ -1996,7 +1975,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						);
 					}
 				}
-				Some(DepositAction::Swap { swap_request_id })
+				DepositAction::Swap { swap_request_id }
 			},
 		}
 	}
@@ -2478,11 +2457,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// no ingress fee as it was already charged at the time of boosting
 				ingress_fee: 0u32.into(),
 				max_boost_fee_bps,
-				action: Some(DepositAction::BoostersCredited {
+				action: DepositAction::BoostersCredited {
 					prewitnessed_deposit_id,
 					network_fee_from_boost,
 					network_fee_swap_request_id,
-				}),
+				},
 				channel_id,
 				origin_type: origin.into(),
 			});
