@@ -10,6 +10,8 @@ import {
   brokerMutex,
   chainGasAsset,
   hexStringToBytesArray,
+  observeBroadcastSuccess,
+  observeSwapEvents,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
@@ -234,14 +236,15 @@ async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
     testBrokerLevelScreening.log(`Sent initial ${sourceAsset} tx...`);
     await observeEvent('ethereumIngressEgress:DepositFinalised').event;
     testBrokerLevelScreening.log(`Initial deposit ${sourceAsset} received...`);
-    // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit contracts.
-    // We will check for a second transaction instead.
-    // Sleep until the fetch is broadcasted so the contract is deployed. This is just a
-    // temporary patch, we should instead monitor the right broadcast.
-    console.log(
-      `Sleeping for 60 seconds to wait for the ${sourceAsset} fetch to be broadcasted...`,
-    );
-    await sleep(60000);
+    // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
+    // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
+    // succesfully to make sure the Deposit contract is deployed.
+    await using chainflipApi = await getChainflipApi();
+    const broadcastId = await observeSwapEvents(swapParams, chainflipApi);
+    if (broadcastId === undefined) {
+      throw new Error(`Failed to retrieve broadcastId for ${sourceAsset} swap!`);
+    }
+    await observeBroadcastSuccess(broadcastId, sourceAsset);
   }
 
   testBrokerLevelScreening.log(`Sending ${sourceAsset} tx to reject...`);
