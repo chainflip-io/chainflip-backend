@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { randomBytes } from 'crypto';
-import { execSync } from 'child_process';
 import { InternalAsset } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
 import { sendBtc } from '../shared/send_btc';
@@ -136,7 +135,7 @@ async function setMockmode(mode: Mockmode) {
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
 async function setTxRiskScore(chain: 'Ethereum' | 'Bitcoin', txid: string, score: number) {
-  var endpoint;
+  let endpoint;
   switch (chain) {
     case 'Bitcoin':
       endpoint = ':6070/riskscore';
@@ -145,6 +144,9 @@ async function setTxRiskScore(chain: 'Ethereum' | 'Bitcoin', txid: string, score
     case 'Ethereum':
       endpoint = ':6070/riskscore_eth';
       break;
+
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
   }
   await postToDepositMonitor(endpoint, [
     txid,
@@ -250,7 +252,6 @@ async function testBrokerLevelScreeningEthereum(
   testBrokerLevelScreening.log(`Sending ${sourceAsset} tx to reject...`);
   const txHash = (await send(sourceAsset, swapParams.depositAddress)).transactionHash as string;
   testBrokerLevelScreening.log(`Sent ${sourceAsset} tx...`);
-  const txId = hexStringToBytesArray(txHash);
 
   await reportFunction(txHash);
   testBrokerLevelScreening.log(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
@@ -287,7 +288,6 @@ async function testBrokerLevelScreeningEthereum(
 // 3. Boost and late tx report -> tx is reported late and the swap is not refunded.
 async function testBrokerLevelScreeningBitcoin() {
   const MILLI_SECS_PER_BLOCK = 6000;
-  const BLOCKS_TO_WAIT = 2;
 
   // 1. -- Test no boost and early tx report --
   testBrokerLevelScreening.log('Testing broker level screening for Bitcoin with no boost...');
