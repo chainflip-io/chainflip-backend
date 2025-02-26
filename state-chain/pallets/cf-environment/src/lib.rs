@@ -14,13 +14,14 @@ use cf_chains::{
 	eth::Address as EvmAddress,
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
-		SolAddress, SolApiEnvironment, SolHash, Solana, NONCE_NUMBER_CRITICAL_NONCES,
+		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolHash, Solana,
+		NONCE_NUMBER_CRITICAL_NONCES,
 	},
 	Chain,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	BroadcastId, NetworkEnvironment, SemVer,
+	BroadcastId, NetworkEnvironment, SemVer, SwapRequestId,
 };
 use cf_traits::{
 	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
@@ -240,6 +241,15 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn solana_api_environment)]
 	pub type SolanaApiEnvironment<T> = StorageValue<_, SolApiEnvironment, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn solana_ccm_swap_alts)]
+	pub type SolanaCcmSwapAlts<T> = StorageMap<
+		_,
+		Blake2_128Concat,
+		SwapRequestId,
+		Result<Vec<SolAddressLookupTableAccount>, ()>,
+	>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -800,6 +810,19 @@ impl<T: Config> Pallet<T> {
 		} else {
 			log::error!("Nonce account {nonce_account} not found in unavailable nonce accounts");
 		}
+	}
+
+	pub fn add_sol_ccm_swap_alts(
+		swap_request_id: SwapRequestId,
+		alts: Option<Vec<SolAddressLookupTableAccount>>,
+	) {
+		SolanaCcmSwapAlts::<T>::insert(swap_request_id, alts.ok_or(()));
+	}
+
+	pub fn take_sol_ccm_swap_alts(
+		swap_request_id: SwapRequestId,
+	) -> Option<Result<Vec<SolAddressLookupTableAccount>, ()>> {
+		SolanaCcmSwapAlts::<T>::take(swap_request_id)
 	}
 }
 
