@@ -5,6 +5,7 @@ use crate::Pallet;
 pub mod deposit_channel_details_migration;
 pub mod rename_scheduled_tx_for_reject;
 pub mod scheduled_egress_ccm_migration;
+mod update_rejection_params;
 
 pub type PalletMigration<T, I> = (
 	VersionedMigration<
@@ -28,5 +29,12 @@ pub type PalletMigration<T, I> = (
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<20, Pallet<T, I>>,
+	VersionedMigration<
+		20,
+		21,
+		update_rejection_params::Migration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<21, Pallet<T, I>>,
 );
