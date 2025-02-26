@@ -1011,9 +1011,14 @@ pub mod pallet {
 									tx_id: tx.deposit_details,
 								});
 							}
+						} else {
+							deferred_rejections.push(tx);
 						}
 					} else {
-						deferred_rejections.push(tx);
+						FailedRejections::<T, I>::append(tx.clone());
+						Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+							tx_id: tx.deposit_details,
+						});
 					}
 				}
 				ScheduledTxForReject::<T, I>::put(deferred_rejections);
