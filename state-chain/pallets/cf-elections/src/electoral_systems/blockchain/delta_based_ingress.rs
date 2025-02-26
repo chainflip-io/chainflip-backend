@@ -5,6 +5,7 @@ use crate::{
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifier,
 };
+#[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::IngressSink;

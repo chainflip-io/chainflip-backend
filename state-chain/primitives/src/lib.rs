@@ -463,3 +463,20 @@ pub enum CcmAuxDataLookupKey<BlockNumber: Clone> {
 	NotRequired,
 	Alt(SwapRequestId, BlockNumber),
 }
+
+impl<BlockNumber: Clone> CcmAuxDataLookupKey<BlockNumber> {
+	pub fn swap_request_id(&self) -> Option<SwapRequestId> {
+		match self {
+			CcmAuxDataLookupKey::NotRequired => None,
+			CcmAuxDataLookupKey::Alt(swap_request_id, ..) => Some(*swap_request_id),
+		}
+	}
+
+	pub fn block_created(&self) -> Option<BlockNumber> {
+		match self {
+			CcmAuxDataLookupKey::NotRequired => None,
+			CcmAuxDataLookupKey::Alt(_swap_request_id, block_created) =>
+				Some(block_created.clone()),
+		}
+	}
+}
