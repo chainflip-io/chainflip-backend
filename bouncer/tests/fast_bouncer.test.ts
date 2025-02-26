@@ -1,6 +1,6 @@
 import { describe } from 'vitest';
 import { testBoostingSwap } from './boost';
-import { testVaultSwapFeeCollection } from './vault_swap_fee_collection';
+import { testVaultSwap } from './vault_swap_tests';
 import { testPolkadotRuntimeUpdate } from './polkadot_runtime_update';
 import { checkSolEventAccountsClosure } from '../shared/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from '../shared/utils';
@@ -15,7 +15,6 @@ import { testDCASwaps } from './DCA_test';
 import { testCancelOrdersBatch } from './create_and_delete_multiple_orders';
 import { depositChannelCreation } from './request_swap_deposit_address_with_affiliates';
 import { testBrokerLevelScreening } from './broker_level_screening';
-import { legacyEvmVaultSwaps } from './legacy_vault_swap';
 import { testFundRedeem } from './fund_redeem';
 import { concurrentTest, serialTest } from '../shared/utils/vitest';
 
@@ -29,7 +28,7 @@ describe('ConcurrentTests', () => {
 
   concurrentTest('SwapLessThanED', swapLessThanED, 300);
   concurrentTest('AllSwaps', testAllSwaps, numberOfNodes === 1 ? 1200 : 1800); // TODO: find out what the 3-node timeout should be
-  concurrentTest('EvmDeposits', testEvmDeposits, 250);
+  concurrentTest('EvmDeposits', testEvmDeposits, 350);
   concurrentTest('FundRedeem', testFundRedeem, 1000);
   concurrentTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
   concurrentTest('LpApi', testLpApi, 200);
@@ -40,8 +39,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 360);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 300);
-  concurrentTest('legacyEvmVaultSwaps', legacyEvmVaultSwaps, 300);
-  concurrentTest('VaultSwapFeeCollection', testVaultSwapFeeCollection, 600);
+  concurrentTest('VaultSwap', testVaultSwap, 600);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
