@@ -49,11 +49,6 @@ async function tryRuntimeCommand(
   return success;
 }
 
-type FailureObj = {
-  hash: string | null,
-  snapshotPath: string | null,
-}
-
 // 4 options:
 // - Live chain,
 // - Specific block
@@ -71,13 +66,6 @@ export async function tryRuntimeUpgrade(
     noInitWarn: true,
   });
 
-  // This is a placeholder object that will be used to store the failure object.
-  // We use an object in order to pass by reference to the function.
-  let failureObj: FailureObj = {
-    hash: null,
-    snapshotPath: null,
-  }
-
   if (block === 'all') {
     const latestBlock = await httpApi.rpc.chain.getBlockHash();
 
@@ -86,7 +74,7 @@ export async function tryRuntimeUpgrade(
     let blockNumber = 1;
     let blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
     while (!blockHash.eq(latestBlock)) {
-      blockHash = await api.rpc.chain.getBlockHash(blockNumber);
+      blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
       await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
       blockNumber++;
     }
@@ -114,23 +102,12 @@ export async function tryRuntimeUpgrade(
       nextHash = currentBlockHeader.parentHash.toString();
       logger.info('nextHash: ', nextHash);
 
-      if (failureObj.hash) {
-        logger.info("Creating snapshot in finally");
-        createSnapshotFile(networkUrl, failureObj.hash, failureObj);
-        if (failureObj.snapshotPath) {
-          logger.info('Snapshot created at: ', failureObj.snapshotPath);
-          throw new Error('Snapshot created. Exiting.');
-        } else {
-          logger.info('Snapshot not created yet...');
-        }
-      }
-
       blocksProcessed++;
     }
   } else if (block === 'latest') {
     await tryRuntimeCommand(runtimePath, 'latest', networkUrl);
   } else {
-    const blockHash = await api.rpc.chain.getBlockHash(block);
+    const blockHash = await httpApi.rpc.chain.getBlockHash(block);
     await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
   }
 
