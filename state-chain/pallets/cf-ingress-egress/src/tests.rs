@@ -18,7 +18,8 @@ use cf_chains::{
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
 	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
-	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
+	ExecutexSwapAndCall, ExecutexSwapAndCallError, SwapOrigin, TransactionInIdForAnyChain,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
@@ -2439,7 +2440,7 @@ fn can_wait_egress_ccm_until_aux_data_ready() {
 }
 
 #[test]
-fn can_force_egress_ccm_after_max_wait_time() {
+fn can_fail_egress_ccm_after_max_wait_time() {
 	new_test_ext().execute_with(|| {
 		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = EthAsset::Eth;
@@ -2451,7 +2452,7 @@ fn can_force_egress_ccm_after_max_wait_time() {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: GAS_BUDGET,
 				ccm_additional_data: vec![].try_into().unwrap(),
-			}
+			},
 		};
 
 		System::set_block_number(100);
@@ -2459,20 +2460,18 @@ fn can_force_egress_ccm_after_max_wait_time() {
 		CcmAuxDataReady::set(false);
 
 		let amount = 5_000;
-		ScheduledEgressCcm::<Test, ()>::append(
-			CrossChainMessage {
-				egress_id: (ForeignChain::Ethereum, 1),
-				asset: destination_asset,
-				amount,
-				destination_address,
-				message: ccm.channel_metadata.message.clone(),
-				ccm_additional_data: vec![].try_into().unwrap(),
-				source_chain: ForeignChain::Ethereum,
-				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-				gas_budget: GAS_BUDGET,
-				aux_data_lookup_key: CcmAuxDataLookupKey::Alt(SwapRequestId(1), 1),
-			}
-		);
+		ScheduledEgressCcm::<Test, ()>::append(CrossChainMessage {
+			egress_id: (ForeignChain::Ethereum, 1),
+			asset: destination_asset,
+			amount,
+			destination_address,
+			message: ccm.channel_metadata.message.clone(),
+			ccm_additional_data: vec![].try_into().unwrap(),
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+			gas_budget: GAS_BUDGET,
+			aux_data_lookup_key: CcmAuxDataLookupKey::Alt(SwapRequestId(1), 1),
+		});
 
 		// CCM is not egressed since the data isn't ready.
 		IngressEgress::on_finalize(1);
@@ -2482,23 +2481,20 @@ fn can_force_egress_ccm_after_max_wait_time() {
 		// Set time to past the max wait time.
 		System::set_block_number(1 + crate::mock_eth::MOCK_MAX_WAIT_TIME_FOR_CCM_AUX_DATA);
 
-		// CCM is egressed even when the aux data is not ready, since max wait time has passed.
+		// CCM is removed and refunded since max wait time has passed.
+		// No refund is possible here since Eth ccm doesn't have refund address.
 		IngressEgress::on_finalize(1);
-		assert_eq!(MockEgressBroadcaster::get_pending_api_calls(), vec![<MockEthereumApiCall<MockEvmEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
-			TransferAssetParams {
-				asset: destination_asset,
-				amount,
-				to: destination_address
-			},
-			ccm.source_chain,
-			ccm.source_address,
-			GAS_BUDGET,
-			ccm.channel_metadata.message.to_vec(),
-			vec![],
-			Default::default(),
-		).unwrap()]);
 
 		// Storage should be cleared.
 		assert_eq!(ScheduledEgressCcm::<Test, ()>::decode_len(), Some(0));
+
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::CcmEgressInvalid {
+				egress_id: (ForeignChain::Ethereum, 1),
+				error: ExecutexSwapAndCallError::DispatchError(
+					crate::Error::<Test>::ExceededMaxCcmAuxData.into(),
+				),
+			},
+		));
 	});
 }
