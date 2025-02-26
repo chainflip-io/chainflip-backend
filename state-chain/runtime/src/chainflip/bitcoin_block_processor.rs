@@ -13,9 +13,7 @@ use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::{
-	block_witnesser::state_machine::{
-		DedupEventsHook, ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook,
-	},
+	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook},
 	state_machine::core::Hook,
 };
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
@@ -43,46 +41,106 @@ type TypesVaultDepositWitnessing = TypesFor<BitcoinVaultDepositWitnessing>;
 
 type TypesEgressWitnessing = TypesFor<BitcoinEgressWitnessing>;
 
+/// Returns one event per deposit witness. If multiple events share the same deposit witness:
+/// - keep only the `Witness` variant,
+fn dedup_events<T: Ord + Clone>(
+	events: Vec<(BlockNumber, BtcEvent<T>)>,
+) -> Vec<(BlockNumber, BtcEvent<T>)> {
+	let mut chosen: BTreeMap<T, (BlockNumber, BtcEvent<T>)> = BTreeMap::new();
+
+	for (block, event) in events {
+		let deposit: T = event.deposit_witness().clone();
+
+		match chosen.get(&deposit) {
+			None => {
+				// No event yet for this deposit, store it
+				chosen.insert(deposit, (block, event));
+			},
+			Some((_, existing_event)) => {
+				// There's already an event for this deposit
+				match (existing_event, &event) {
+					// If we already have a Witness, do nothing
+					(BtcEvent::Witness(_), BtcEvent::PreWitness(_)) => (),
+					// If we have a PreWitness and the new event is a Witness, override it
+					(BtcEvent::PreWitness(_), BtcEvent::Witness(_)) => {
+						chosen.insert(deposit, (block, event));
+					},
+					// This should be impossible to reach!
+					(_, _) => (),
+				}
+			},
+		}
+	}
+	chosen.into_values().collect()
+}
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 	for TypesDepositChannelWitnessing
 {
-	fn run(&mut self, (block, input): (BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)) {
-		match input {
-			BtcEvent::PreWitness(deposit) => {
-				let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(deposit, block);
-			},
-			BtcEvent::Witness(deposit) => {
-				BitcoinIngressEgress::process_channel_deposit_full_witness(deposit, block);
-			},
+	fn run(
+		&mut self,
+		events: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)>,
+	) -> Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> {
+		let deduped_events = dedup_events(events);
+		for (block, event) in &deduped_events {
+			match event {
+				BtcEvent::PreWitness(deposit) => {
+					let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(
+						deposit.clone(),
+						*block,
+					);
+				},
+				BtcEvent::Witness(deposit) => {
+					BitcoinIngressEgress::process_channel_deposit_full_witness(
+						deposit.clone(),
+						*block,
+					);
+				},
+			}
 		}
+		deduped_events
 	}
 }
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
 	fn run(
 		&mut self,
-		(block, input): (BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>),
-	) {
-		match input {
-			BtcEvent::PreWitness(deposit) => {
-				let _ = BitcoinIngressEgress::process_vault_swap_request_prewitness(block, deposit);
-			},
-			BtcEvent::Witness(deposit) => {
-				BitcoinIngressEgress::process_vault_swap_request_full_witness(block, deposit);
-			},
+		events: Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)>,
+	) -> Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)> {
+		let deduped_events = dedup_events(events);
+
+		for (block, event) in &deduped_events {
+			match event {
+				BtcEvent::PreWitness(deposit) => {
+					BitcoinIngressEgress::process_vault_swap_request_prewitness(
+						*block,
+						deposit.clone(),
+					);
+				},
+				BtcEvent::Witness(deposit) => {
+					BitcoinIngressEgress::process_vault_swap_request_full_witness(
+						*block,
+						deposit.clone(),
+					);
+				},
+			}
 		}
+		deduped_events
 	}
 }
 impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnessing {
 	fn run(
 		&mut self,
-		(_block, input): (BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>),
-	) {
-		match input {
-			BtcEvent::PreWitness(_) => { /* We don't care about pre-witnessing an egress*/ },
-			BtcEvent::Witness(egress) => {
-				BitcoinBroadcaster::broadcast_success(egress);
-			},
+		events: Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)>,
+	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
+		let deduped_events = dedup_events(events);
+		for (_, event) in &deduped_events {
+			match event {
+				BtcEvent::PreWitness(_) => { /* We don't care about pre-witnessing an egress*/ },
+				BtcEvent::Witness(egress) => {
+					BitcoinBroadcaster::broadcast_success(egress.clone());
+				},
+			}
 		}
+		deduped_events
 	}
 }
 
@@ -154,131 +212,6 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, RulesHook>> for TypesEgressWitnessi
 				.collect::<Vec<_>>();
 		}
 		vec![]
-	}
-}
-
-/// Returns one event per deposit witness. If multiple events share the same deposit witness:
-/// - keep only the `Witness` variant,
-impl Hook<HookTypeFor<TypesDepositChannelWitnessing, DedupEventsHook>>
-	for TypesDepositChannelWitnessing
-{
-	fn run(
-		&mut self,
-		events: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)>,
-	) -> Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> {
-		// Map: deposit_witness -> chosen BtcEvent
-		// todo! this is annoying, it require us to implement Ord down to the Chain type
-		let mut chosen: BTreeMap<
-			DepositWitness<Bitcoin>,
-			(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>),
-		> = BTreeMap::new();
-
-		for (block, event) in events {
-			let deposit: DepositWitness<Bitcoin> = event.deposit_witness().clone();
-
-			match chosen.get(&deposit) {
-				None => {
-					// No event yet for this deposit, store it
-					chosen.insert(deposit, (block, event));
-				},
-				Some((_, existing_event)) => {
-					// There's already an event for this deposit
-					match (existing_event, &event) {
-						// If we already have a Witness, do nothing
-						(BtcEvent::Witness(_), BtcEvent::PreWitness(_)) => (),
-						// If we have a PreWitness and the new event is a Witness, override it
-						(BtcEvent::PreWitness(_), BtcEvent::Witness(_)) => {
-							chosen.insert(deposit, (block, event));
-						},
-						// This should be impossible to reach!
-						(_, _) => (),
-					}
-				},
-			}
-		}
-		chosen.into_values().collect()
-	}
-}
-
-impl Hook<HookTypeFor<TypesVaultDepositWitnessing, DedupEventsHook>>
-	for TypesVaultDepositWitnessing
-{
-	fn run(
-		&mut self,
-		events: Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)>,
-	) -> Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)> {
-		// Map: deposit_witness -> chosen BtcEvent
-		// todo! this is annoying, it require us to implement Ord down to the Chain type
-		let mut chosen: BTreeMap<
-			VaultDepositWitness<Runtime, BitcoinInstance>,
-			(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>),
-		> = BTreeMap::new();
-
-		for (block, event) in events {
-			let deposit: VaultDepositWitness<Runtime, BitcoinInstance> =
-				event.deposit_witness().clone();
-
-			match chosen.get(&deposit) {
-				None => {
-					// No event yet for this deposit, store it
-					chosen.insert(deposit, (block, event));
-				},
-				Some((_, existing_event)) => {
-					// There's already an event for this deposit
-					match (existing_event, &event) {
-						// If we already have a Witness, do nothing
-						(BtcEvent::Witness(_), BtcEvent::PreWitness(_)) => (),
-						// If we have a PreWitness and the new event is a Witness, override it
-						(BtcEvent::PreWitness(_), BtcEvent::Witness(_)) => {
-							chosen.insert(deposit, (block, event));
-						},
-						// This should be impossible to reach!
-						(_, _) => (),
-					}
-				},
-			}
-		}
-		chosen.into_values().collect()
-	}
-}
-
-impl Hook<HookTypeFor<TypesEgressWitnessing, DedupEventsHook>> for TypesEgressWitnessing {
-	fn run(
-		&mut self,
-		events: Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)>,
-	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
-		// Map: deposit_witness -> chosen BtcEvent
-		// todo! this is annoying, it require us to implement Ord down to the Chain type
-		let mut chosen: BTreeMap<
-			TransactionConfirmation<Runtime, BitcoinInstance>,
-			(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>),
-		> = BTreeMap::new();
-
-		for (block, event) in events {
-			let deposit: TransactionConfirmation<Runtime, BitcoinInstance> =
-				event.deposit_witness().clone();
-
-			match chosen.get(&deposit) {
-				None => {
-					// No event yet for this deposit, store it
-					chosen.insert(deposit, (block, event));
-				},
-				Some((_, existing_event)) => {
-					// There's already an event for this deposit
-					match (existing_event, &event) {
-						// If we already have a Witness, do nothing
-						(BtcEvent::Witness(_), BtcEvent::PreWitness(_)) => (),
-						// If we have a PreWitness and the new event is a Witness, override it
-						(BtcEvent::PreWitness(_), BtcEvent::Witness(_)) => {
-							chosen.insert(deposit, (block, event));
-						},
-						// This should be impossible to reach!
-						(_, _) => (),
-					}
-				},
-			}
-		}
-		chosen.into_values().collect()
 	}
 }
 
