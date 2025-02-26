@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Rust cache 🦀💰
-        if: contains(inputs.ci-runner, 'no-cache') != true
+        if: ! contains(inputs.ci-runner, 'no-cache')
         uses: namespacelabs/nscloud-cache-action@v1
         with:
           cache: rust
