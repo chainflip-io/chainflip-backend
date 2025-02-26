@@ -201,7 +201,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ Default
 		+ AtLeast32BitUnsigned
 		+ Into<AssetAmount>
-		+ TryFrom<AssetAmount>
+		+ TryFrom<AssetAmount, Error: Debug>
 		+ FullCodec
 		+ MaxEncodedLen
 		+ BenchmarkValue;
