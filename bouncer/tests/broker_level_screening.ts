@@ -153,7 +153,7 @@ async function brokerLevelScreeningTestScenario(
 }
 
 async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
-  testBrokerLevelScreening.log('Testing broker level screening with Ethereum...');
+  testBrokerLevelScreening.log(`Testing broker level screening for Ethereum ${sourceAsset}...`);
   const MAX_RETRIES = 120;
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
@@ -179,24 +179,24 @@ async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
 
   if (sourceAsset === chainGasAsset('Ethereum')) {
     await send(sourceAsset, swapParams.depositAddress);
-    testBrokerLevelScreening.log('Sent initial tx...');
+    testBrokerLevelScreening.log(`Sent initial ${sourceAsset} tx...`);
     await observeEvent('ethereumIngressEgress:DepositFinalised').event;
-    testBrokerLevelScreening.log('Initial deposit received...');
+    testBrokerLevelScreening.log(`Initial deposit ${sourceAsset} received...`);
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit contracts.
     // We will check for a second transaction instead.
     // Sleep until the fetch is broadcasted so the contract is deployed. This is just a
     // temporary patch, we should instead monitor the right broadcast.
-    console.log('Sleeping for 60 seconds to wait for the fetch to be broadcasted...');
+    console.log(`Sleeping for 60 seconds to wait for the ${sourceAsset} fetch to be broadcasted...`);
     await sleep(60000);
   }
 
-  testBrokerLevelScreening.log('Sending tx to reject...');
+  testBrokerLevelScreening.log(`Sending ${sourceAsset} tx to reject...`);
   const txHash = (await send(sourceAsset, swapParams.depositAddress)).transactionHash as string;
-  testBrokerLevelScreening.log('Sent tx...');
+  testBrokerLevelScreening.log(`Sent ${sourceAsset} tx...`);
   const txId = hexStringToBytesArray(txHash);
 
   await markTxForRejection(txId, 'Ethereum');
-  testBrokerLevelScreening.log(`Marked ${txHash} for rejection. Awaiting refund.`);
+  testBrokerLevelScreening.log(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
   await observeEvent('ethereumIngressEgress:TransactionRejectedByBroker').event;
 
@@ -218,7 +218,7 @@ async function testBrokerLevelScreeningEthereum(sourceAsset: InternalAsset) {
     );
   }
 
-  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
+  testBrokerLevelScreening.log(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
 }
 
 // -- Test suite for broker level screening --
@@ -233,7 +233,7 @@ async function testBrokerLevelScreeningBitcoin() {
   const BLOCKS_TO_WAIT = 2;
 
   // 1. -- Test no boost and early tx report --
-  testBrokerLevelScreening.log('Testing broker level screening with no boost...');
+  testBrokerLevelScreening.log('Testing broker level screening for Bitcoin with no boost...');
   let btcRefundAddress = await newAssetAddress('Btc');
 
   await brokerLevelScreeningTestScenario(
@@ -248,11 +248,11 @@ async function testBrokerLevelScreeningBitcoin() {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
 
-  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
+  testBrokerLevelScreening.log(`Marked Bitcoin transaction was rejected and refunded 👍.`);
 
   // 2. -- Test boost and early tx report --
   testBrokerLevelScreening.log(
-    'Testing broker level screening with boost and a early tx report...',
+    'Testing broker level screening for Bitcoin with boost and a early tx report...',
   );
   btcRefundAddress = await newAssetAddress('Btc');
 
@@ -267,7 +267,7 @@ async function testBrokerLevelScreeningBitcoin() {
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
-  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
+  testBrokerLevelScreening.log(`Marked Bitcoin transaction was rejected and refunded 👍.`);
 
   // 3. -- Test boost and late tx report --
   // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
@@ -286,7 +286,7 @@ async function testBrokerLevelScreeningBitcoin() {
     test: (event) => event.data.channelId === channelId,
   }).event;
 
-  testBrokerLevelScreening.log(`Swap was executed and transaction was not refunded 👍.`);
+  testBrokerLevelScreening.log(`Bitcoin swap was executed and transaction was not refunded 👍.`);
 }
 
 async function main() {
