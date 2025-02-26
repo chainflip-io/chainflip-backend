@@ -16,6 +16,8 @@ import {
   isWithinOnePercent,
   amountToFineAmountBigInt,
   getEvmEndpoint,
+  chainContractId,
+  chainFromAsset,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
@@ -24,6 +26,7 @@ import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { getBtcBalance } from '../shared/get_btc_balance';
 import { getBalance } from '../shared/get_balance';
 import { send } from '../shared/send';
+import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 type SupportedChain = 'Bitcoin' | 'Ethereum';
 
@@ -301,27 +304,33 @@ async function testBrokerLevelScreeningEthereum(
   testBrokerLevelScreening.log(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
 }
 
-async function testBrokerLevelScreeningEthereum_LP(
+async function testBrokerLevelScreeningEthereumLiquidityDeposit(
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
   testBrokerLevelScreening.log(`Testing broker level screening for Ethereum ${sourceAsset}...`);
   const MAX_RETRIES = 120;
 
-  const destinationAddressForBtc = await newAssetAddress('Btc');
-  const ethereumRefundAddress = await newAssetAddress('Eth');
-
-  const refundParameters: FillOrKillParamsX128 = {
-    retryDurationBlocks: 0,
-    refundAddress: ethereumRefundAddress,
-    minPriceX128: '0',
-  };
-
-  // Create new LP deposit address for //LP_1
+  // setup access to chainflip api and lp
   await using chainflip = await getChainflipApi();
   const lp = createStateChainKeypair(process.env.LP_URI || '//LP_1');
 
-  let eventHandle = observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
+  // Get existing LP refund address of //LP_1 for `sourceAsset`
+  /* eslint-disable  @typescript-eslint/no-explicit-any */
+  const addressReponse = (
+    await chainflip.query.liquidityProvider.liquidityRefundAddress(
+      lp.address,
+      chainContractId(chainFromAsset(sourceAsset)),
+    )
+  ).toJSON() as any;
+  if (addressReponse === undefined) {
+    throw new Error(`There was now refund address for ${sourceAsset} for the LP.`);
+  }
+  const ethereumRefundAddress = addressReponse.eth;
+  testBrokerLevelScreening.log(`refund address is: ${ethereumRefundAddress}`);
+
+  // Create new LP deposit address for //LP_1
+  const eventHandle = observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
     test: (event) => event.data.asset === sourceAsset && event.data.accountId === lp.address,
   }).event;
 
@@ -332,12 +341,15 @@ async function testBrokerLevelScreeningEthereum_LP(
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 
-  const depositAddress = (await eventHandle).data.depositAddress[sourceAsset];
+  const depositAddress = (await eventHandle).data.depositAddress.Eth;
   testBrokerLevelScreening.log(`Got deposit address: ${depositAddress}`);
 
   if (sourceAsset === chainGasAsset('Ethereum')) {
-    const amount = '3';
+    // The first tx cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
+    // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
+    // succesfully to make sure the Deposit contract is deployed.
 
+    const amount = '3';
     const observeAccountCreditedEvent = observeEvent('assetBalances:AccountCredited', {
       test: (event) =>
         event.data.asset === sourceAsset &&
@@ -347,9 +359,6 @@ async function testBrokerLevelScreeningEthereum_LP(
         ),
     }).event;
 
-    // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
-    // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
-    // succesfully to make sure the Deposit contract is deployed.
     await send(sourceAsset, depositAddress, amount);
     testBrokerLevelScreening.log(`Sent initial ${sourceAsset} tx...`);
     await observeEvent('ethereumIngressEgress:DepositFinalised').event;
@@ -387,6 +396,36 @@ async function testBrokerLevelScreeningEthereum_LP(
   }
 
   testBrokerLevelScreening.log(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
+}
+
+// Sets the ingress_egress broker whitelist to the given `broker`.
+async function setWhitelistedBroker(brokerAddress: Uint8Array) {
+  const BTC_WHITELIST_PREFIX = '3ed3ce16dbc61ca64eaac5a96e809a8f6b8fb02fc586c9dab2385ea1690a7db6';
+  const ETH_WHITELIST_PREFIX = '4fc967eb3d0785df0389312c2ebd853e6b8fb02fc586c9dab2385ea1690a7db6';
+
+  const decodeHexStringToByteArray = (hex: string) => {
+    let hexString = hex;
+    const result = [];
+    while (hexString.length >= 2) {
+      result.push(parseInt(hexString.substring(0, 2), 16));
+      hexString = hexString.substring(2, hexString.length);
+    }
+    return result;
+  };
+
+  for (const prefix of [BTC_WHITELIST_PREFIX, ETH_WHITELIST_PREFIX]) {
+    await submitGovernanceExtrinsic((api) =>
+      api.tx.governance.callAsSudo(
+        api.tx.system.setStorage([
+          [
+            decodeHexStringToByteArray(prefix).concat(Array.from(brokerAddress)),
+            // Empty, we just need to insert the key.
+            '',
+          ],
+        ]),
+      ),
+    );
+  }
 }
 
 // -- Test suite for broker level screening --
@@ -459,14 +498,28 @@ async function main() {
   await ensureHealth();
   const previousMockmode = (await setMockmode('Manual')).previous;
 
+  // test rejection of swaps by the responsible broker
   await Promise.all([
-    // testBrokerLevelScreeningBitcoin(),
-    // testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    // testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    // testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    // testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningBitcoin(),
+    testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+  ]);
 
-    testBrokerLevelScreeningEthereum_LP('Eth', async (txId) =>
+  // test rejection of LP deposits, this requires the rejecting broker to be whitelisted:
+  await setWhitelistedBroker(broker.addressRaw);
+  await Promise.all([
+    testBrokerLevelScreeningEthereumLiquidityDeposit('Eth', async (txId) =>
+      setTxRiskScore('Ethereum', txId, 9.0),
+    ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('Usdt', async (txId) =>
+      setTxRiskScore('Ethereum', txId, 9.0),
+    ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('Flip', async (txId) =>
+      setTxRiskScore('Ethereum', txId, 9.0),
+    ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('Usdc', async (txId) =>
       setTxRiskScore('Ethereum', txId, 9.0),
     ),
   ]);
