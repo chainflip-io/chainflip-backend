@@ -16,7 +16,7 @@ use codec::{Decode, Encode};
 use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-pub use pallet_cf_ingress_egress::OwedAmount;
+pub use pallet_cf_ingress_egress::{ChannelAction, OwedAmount};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -216,6 +216,37 @@ type ChainAccountFor<C> = <C as Chain>::ChainAccount;
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct ChainAccounts {
 	pub btc_chain_accounts: Vec<ChainAccountFor<cf_chains::Bitcoin>>,
+	pub eth_chain_accounts: Vec<ChainAccountFor<cf_chains::Ethereum>>,
+}
+
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	Eq,
+	PartialEq,
+	TypeInfo,
+	Debug,
+	Clone,
+	Copy,
+	PartialOrd,
+	Ord,
+)]
+pub enum ChannelActionType {
+	Swap,
+	LiquidityProvision,
+	CcmTransfer,
+}
+
+impl<AccountId> From<ChannelAction<AccountId>> for ChannelActionType {
+	fn from(action: ChannelAction<AccountId>) -> Self {
+		match action {
+			ChannelAction::Swap { .. } => ChannelActionType::Swap,
+			ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
+			ChannelAction::CcmTransfer { .. } => ChannelActionType::CcmTransfer,
+		}
+	}
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
@@ -236,12 +267,13 @@ pub enum TransactionScreeningEvent<TxId> {
 	},
 }
 
-type BrokerRejectionEventFor<C> =
+pub type BrokerRejectionEventFor<C> =
 	TransactionScreeningEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
+	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
 }
 
 // READ THIS BEFORE UPDATING THIS TRAIT:
@@ -388,6 +420,7 @@ decl_runtime_apis!(
 		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
+		fn cf_all_open_deposit_channels() -> Vec<(AccountId32, ChannelActionType, ChainAccounts)>;
 	}
 );
 

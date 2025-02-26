@@ -1,12 +1,12 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositWitness, PalletSafeMode};
+use crate::{DepositWitness, PalletSafeMode, WhitelistedBrokers};
 
-use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
 	CcmDepositMetadata, Chain,
 };
+use cf_chains::{eth::EthereumTrackedData, ChannelRefundParameters};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -28,11 +28,11 @@ use cf_traits::{
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
+	AccountRoleRegistry, DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
-use frame_support::derive_impl;
+use frame_support::{assert_ok, derive_impl};
 use frame_system as system;
-use sp_core::{ConstBool, H256};
+use sp_core::{ConstBool, ConstU64, H256, U256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
 
 type AccountId = u64;
@@ -137,10 +137,13 @@ impl crate::Config for Test {
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
+	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
+pub const WHITELISTED_BROKER: <Test as frame_system::Config>::AccountId = BROKER + 1;
+pub const SCREENING_ID: <Test as frame_system::Config>::AccountId = 0xcf;
 
 impl_test_helpers! {
 	Test,
@@ -159,6 +162,10 @@ impl_test_helpers! {
 				priority_fee: Default::default()
 			}
 		);
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&WHITELISTED_BROKER,
+		));
+		WhitelistedBrokers::<Test>::insert(WHITELISTED_BROKER, ());
 	}
 }
 
@@ -218,6 +225,7 @@ pub enum DepositRequest {
 		source_asset: TestChainAsset,
 		destination_asset: TestChainAsset,
 		destination_address: ForeignChainAddress,
+		refund_address: Option<TestChainAccount>,
 	},
 }
 
@@ -263,6 +271,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						source_asset,
 						destination_asset,
 						ref destination_address,
+						refund_address,
 					} => IngressEgress::request_swap_deposit_address(
 						source_asset,
 						destination_asset.into(),
@@ -271,7 +280,11 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						BROKER,
 						None,
 						0,
-						None,
+						refund_address.map(|addr| ChannelRefundParameters {
+							retry_duration: 5,
+							refund_address: ForeignChainAddress::Eth(addr),
+							min_price: U256::zero(),
+						}),
 						None,
 					)
 					.map(|(channel_id, deposit_address, ..)| {
