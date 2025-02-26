@@ -21,6 +21,8 @@ import { getBtcBalance } from '../shared/get_btc_balance';
 import { getBalance } from '../shared/get_balance';
 import { send } from '../shared/send';
 
+type SupportedChain = 'Bitcoin' | 'Ethereum';
+
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
 
@@ -63,7 +65,7 @@ async function newAssetAddress(asset: InternalAsset, seed = null): Promise<strin
  *
  * @param txId - The txId as hash string.
  */
-async function markTxForRejection(txHash: string, chain: 'Bitcoin' | 'Ethereum') {
+async function markTxForRejection(txHash: string, chain: SupportedChain) {
   const txId = hexStringToBytesArray(txHash);
   await using chainflip = await getChainflipApi();
   switch (chain) {
@@ -134,7 +136,7 @@ async function setMockmode(mode: Mockmode) {
  * @param txid Hash of the transaction we want to report.
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
-async function setTxRiskScore(chain: 'Ethereum' | 'Bitcoin', txid: string, score: number) {
+async function setTxRiskScore(chain: SupportedChain, txid: string, score: number) {
   let endpoint;
   switch (chain) {
     case 'Bitcoin':
