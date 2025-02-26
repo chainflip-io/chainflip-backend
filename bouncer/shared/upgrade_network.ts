@@ -65,11 +65,11 @@ function killOldNodes() {
 async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string, keysDir: string) {
   logger.info('Starting new broker and lp-api.');
 
-  execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
+  await execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
     KEYS_DIR: keysDir,
   });
 
-  execWithLog(`${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`, 'start-lp-api', {
+  await execWithLog(`${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`, 'start-lp-api', {
     KEYS_DIR: keysDir,
   });
 
@@ -92,8 +92,7 @@ async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string,
 async function startDepositMonitor(localnetInitPath: string) {
   logger.info('Starting up deposit-monitor.');
 
-  let done = false;
-  execWithLog(
+  await execWithLog(
     `${localnetInitPath}/scripts/start-deposit-monitor.sh`,
     'start-deposit-monitor',
     {
@@ -102,20 +101,7 @@ async function startDepositMonitor(localnetInitPath: string) {
       DOCKER_COMPOSE_CMD: 'docker compose',
       additional_docker_compose_up_args: '--quiet-pull',
     },
-    // callback on success or failure
-    (_) => {
-      done = true;
-    },
   );
-
-  // `execWithLog` is not blocking, so we have to wait until the deposit monitor has started,
-  // waiting at most 10 seconds
-  for (let i = 0; i < 20; i++) {
-    await sleep(500);
-    if (done) {
-      break;
-    }
-  }
 }
 
 async function compatibleUpgrade(
@@ -132,7 +118,7 @@ async function compatibleUpgrade(
 
   const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
 
-  execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
+  await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
     INIT_RPC_PORT: `9944`,
     KEYS_DIR,
     NODE_COUNT: nodeCount,
@@ -145,7 +131,7 @@ async function compatibleUpgrade(
   await sleep(20000);
 
   // engines crashed when node shutdown, so restart them.
-  execWithLog(
+  await execWithLog(
     `${localnetInitPath}/scripts/start-all-engines.sh`,
     'start-all-engines-post-upgrade',
     {
@@ -212,7 +198,7 @@ async function incompatibleUpgradeNoBuild(
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
   const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
-  execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
+  await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
     INIT_RPC_PORT: `9944`,
     KEYS_DIR,
     NODE_COUNT: nodeCount,
@@ -235,7 +221,7 @@ async function incompatibleUpgradeNoBuild(
   logger.info('New node PID: ' + output.toString());
 
   // Restart the engines
-  execWithLog(
+  await execWithLog(
     `${localnetInitPath}/scripts/start-all-engines.sh`,
     'start-all-engines-post-upgrade',
     {

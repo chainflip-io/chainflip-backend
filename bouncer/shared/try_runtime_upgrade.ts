@@ -6,35 +6,24 @@ import { compileBinaries } from './utils/compile_binaries';
 import { createTmpDirIfNotExists, execWithRustLog } from './utils/exec_with_log';
 import { getChainflipApi } from './utils/substrate';
 
-function createSnapshotFile(networkUrl: string, blockHash: string) {
+async function createSnapshotFile(networkUrl: string, blockHash: string): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
   const snapshotFolder = createTmpDirIfNotExists('chainflip/snapshots/');
   const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
 
   console.log('Writing snapshot to: ', snapshotOutputPath);
 
-  execWithRustLog(
+  return execWithRustLog(
     `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`,
     `create-snapshot-${blockHash}`,
     'runtime::executive=debug',
-    (success) => {
-      if (!success) {
-        console.error('Failed to create snapshot.');
-      }
-      process.exitCode = 1;
-    },
   );
 }
 
-function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
+async function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
 
-  if (process.exitCode === 1) {
-    console.error('TryRuntime error detected. Exiting... CHECK THE NODE LOGS FOR MORE INFO');
-    throw new Error('TryRuntime error detected.');
-  }
-
-  execWithRustLog(
+  const success = await execWithRustLog(
     `try-runtime \
         --runtime ${runtimePath} on-runtime-upgrade \
         --disable-spec-version-check \
@@ -42,12 +31,11 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
         --uri ${networkUrl}`,
     `try-runtime-${blockHash}`,
     'runtime::executive=debug',
-    (success) => {
-      if (!success) {
-        createSnapshotFile(networkUrl, blockHash);
-      }
-    },
   );
+  if (!success) {
+    await createSnapshotFile(networkUrl, blockHash);
+  }
+  return success;
 }
 
 // 4 options:
@@ -72,7 +60,7 @@ export async function tryRuntimeUpgrade(
     let blockHash = await api.rpc.chain.getBlockHash(blockNumber);
     while (!blockHash.eq(latestBlock)) {
       blockHash = await api.rpc.chain.getBlockHash(blockNumber);
-      tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+      await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
       blockNumber++;
     }
     console.log(`Block ${latestBlock} has been reached, exiting.`);
@@ -83,17 +71,17 @@ export async function tryRuntimeUpgrade(
     let nextHash = await api.rpc.chain.getBlockHash();
 
     while (blocksProcessed < lastN) {
-      tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
+      await tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
 
       const currentBlockHeader = await api.rpc.chain.getHeader(nextHash);
       nextHash = currentBlockHeader.parentHash;
       blocksProcessed++;
     }
   } else if (block === 'latest') {
-    tryRuntimeCommand(runtimePath, 'latest', networkUrl);
+    await tryRuntimeCommand(runtimePath, 'latest', networkUrl);
   } else {
     const blockHash = await api.rpc.chain.getBlockHash(block);
-    tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+    await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
   }
 
   console.log('try-runtime upgrade successful.');
