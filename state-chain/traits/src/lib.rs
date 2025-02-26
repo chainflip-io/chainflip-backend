@@ -934,7 +934,7 @@ pub trait NetworkEnvironmentProvider<BlockNumber: Default> {
 	/// The type of Network the current chain is running on.
 	fn get_network_environment() -> NetworkEnvironment;
 
-	/// If the a CCM's Auxiliary data is ready to be looked up.
+	/// If the CCM's Auxiliary data is ready to be looked up.
 	fn ccm_auxiliary_data_ready(_id: SwapRequestId) -> bool {
 		true
 	}

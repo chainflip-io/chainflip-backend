@@ -260,6 +260,7 @@ pub struct CrossChainMessage<C: Chain, BlockNumber: Clone> {
 	// Where funds might be returned to if the message fails.
 	pub ccm_additional_data: CcmAdditionalData,
 	pub gas_budget: GasAmount,
+	// Contains information used to lookup for auxiliary data.
 	pub aux_data_lookup_key: CcmAuxDataLookupKey<BlockNumber>,
 }
 
