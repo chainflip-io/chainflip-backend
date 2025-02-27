@@ -78,7 +78,6 @@ async function testWithdrawCollectedAffiliateFees(
   const balanceObserveTimeout = 60;
   let success = false;
 
-  logger.info('Starting withdraw collected affiliate fees test...');
   logger.debug('Affiliate account ID:', affiliateAccountId);
   logger.debug('Withdraw address:', withdrawAddress);
 
