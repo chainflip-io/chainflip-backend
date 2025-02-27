@@ -2347,8 +2347,8 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		ScheduledTransactionsForRejection, TransactionRejectionDetails,
-		TransactionsMarkedForRejection,
+		boost_pool, BoostPools, ScheduledTransactionsForRejection, TransactionPrewitnessedStatus,
+		TransactionRejectionDetails, TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::H256, ChannelLifecycleHooks,
@@ -2557,8 +2557,10 @@ mod evm_transaction_rejection {
 
 	#[test]
 	fn whitelisted_broker_can_reject_two_concurrent_swap_deposits() {
-		const TAINTED_TX_ID_1: H256 = H256::repeat_byte(0xab);
-		const TAINTED_TX_ID_2: H256 = H256::repeat_byte(0xac);
+		const TAINTED_TX_ID_1: H256 = H256::repeat_byte(0xaa);
+		const TAINTED_TX_ID_2: H256 = H256::repeat_byte(0xbb);
+		const COMMINGLED_TX_ID: H256 = H256::repeat_byte(0xcc);
+		const CLEAN_TX_ID: H256 = H256::repeat_byte(0xdd);
 
 		new_test_ext()
 			.request_deposit_addresses(&[DepositRequest::SimpleSwap {
@@ -2591,7 +2593,7 @@ mod evm_transaction_rejection {
 							asset: ETH,
 							amount: DEFAULT_DEPOSIT_AMOUNT,
 							deposit_details: DepositDetails {
-								tx_hashes: Some(vec![TAINTED_TX_ID_1]),
+								tx_hashes: Some(vec![COMMINGLED_TX_ID, TAINTED_TX_ID_1]),
 							},
 						},
 						100,
@@ -2626,19 +2628,17 @@ mod evm_transaction_rejection {
 				let _ = MockEgressBroadcaster::get_success_pending_callbacks()
 					.pop()
 					.expect("Expected a callback");
-				assert_eq!(
-					MockEgressBroadcaster::get_pending_api_calls()
-						.into_iter()
-						.filter_map(|call| match call {
-							MockEthereumApiCall::RejectCall { deposit_details, .. } =>
-								Some(deposit_details.deposit_ids().unwrap()),
-							_ => None,
-						})
-						.flatten()
-						.collect::<Vec<_>>(),
-					vec![TAINTED_TX_ID_1],
-					"Expected to reject the tainted tx"
-				);
+
+				MockEgressBroadcaster::get_pending_api_calls()
+					.into_iter()
+					.filter_map(|call| match call {
+						MockEthereumApiCall::RejectCall { deposit_details, .. } =>
+							Some(deposit_details.deposit_ids().unwrap()),
+						_ => None,
+					})
+					.flatten()
+					.find(|tx_id| *tx_id == TAINTED_TX_ID_1)
+					.expect("Expected the tainted tx to be rejected");
 
 				let (_, _, deposit_address) = deposits[0];
 				let channel_details = DepositChannelLookup::<Test, _>::get(deposit_address)
@@ -2668,6 +2668,20 @@ mod evm_transaction_rejection {
 				deposits
 			})
 			.then_execute_at_next_block(|deposits| {
+				for (_, _, deposit_address) in &deposits {
+					Pallet::<Test, _>::process_channel_deposit_full_witness(
+						DepositWitness {
+							deposit_address: *deposit_address,
+							asset: ETH,
+							amount: DEFAULT_DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails { tx_hashes: Some(vec![CLEAN_TX_ID]) },
+						},
+						100,
+					);
+				}
+				deposits
+			})
+			.then_execute_at_next_block(|deposits| {
 				assert!(ScheduledTransactionsForRejection::<Test>::get().iter().any(
 					|TransactionRejectionDetails { deposit_details, .. }| {
 						deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_2)
@@ -2684,31 +2698,145 @@ mod evm_transaction_rejection {
 				));
 				deposits
 			})
-			// Simulate success -> apply callback
+			// Simulate success -> apply success callbacks
 			.then_apply_extrinsics(|_| {
-				[(
-					OriginTrait::root(),
-					MockEgressBroadcaster::get_success_pending_callbacks()
-						.pop()
-						.expect("Expected a callback"),
-					Ok(()),
-				)]
+				MockEgressBroadcaster::get_success_pending_callbacks()
+					.iter()
+					.map(|call| (OriginTrait::root(), call.clone(), Ok(())))
+					.collect::<Vec<_>>()
 			})
 			.then_process_blocks(1)
 			.then_execute_with_keep_context(|_| {
-				assert!(ScheduledTransactionsForRejection::<Test>::get().is_empty());
+				assert!(
+					ScheduledTransactionsForRejection::<Test>::get().is_empty(),
+					"Expected no pending txs, but got {:#?}",
+					ScheduledTransactionsForRejection::<Test>::get()
+				);
+				let rejected_ids = MockEgressBroadcaster::get_pending_api_calls()
+					.into_iter()
+					.filter_map(|call| match call {
+						MockEthereumApiCall::RejectCall { deposit_details, .. } =>
+							Some(deposit_details.deposit_ids().unwrap()),
+						_ => None,
+					})
+					.flatten()
+					.collect::<Vec<_>>();
+				assert!(
+					rejected_ids.contains(&TAINTED_TX_ID_1) &&
+						rejected_ids.contains(&TAINTED_TX_ID_2) &&
+						rejected_ids.contains(&COMMINGLED_TX_ID) &&
+						!rejected_ids.contains(&CLEAN_TX_ID),
+					"Expected the tainted and commingled txs to be rejected, but not the clean one."
+				);
+			});
+	}
+
+	#[test]
+	fn mark_after_prewitness_has_no_effect() {
+		const TAINTED_TX_ID: H256 = H256::repeat_byte(0xab);
+
+		new_test_ext()
+			// Add boost liquidity
+			.then_execute_at_next_block(|_| {
+				BoostPools::<Test, _>::insert(ETH_ETH, 10, {
+					let mut pool = boost_pool::BoostPool::new(10);
+					pool.add_funds(1234, 1_000_000);
+					pool
+				});
+			})
+			.request_deposit_addresses(&[DepositRequest::SimpleSwap {
+				source_asset: ETH_ETH,
+				destination_asset: ETH_FLIP,
+				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+				refund_address: Some(ALICE_ETH_ADDRESS),
+			}])
+			// Simulate a prewitness call.
+			// we can't use `then_apply_extrinsics` because at the moment there's no way to
+			// distinguish between pre-witness and witness origins.
+			.then_execute_at_next_block(|deposits| {
+				for (_, _, deposit_address) in &deposits {
+					assert_ok!(Pallet::<Test, _>::process_channel_deposit_prewitness(
+						DepositWitness::<Ethereum> {
+							deposit_address: *deposit_address,
+							asset: ETH_ETH,
+							amount: 1_000_000,
+							deposit_details: DepositDetails {
+								tx_hashes: Some(vec![TAINTED_TX_ID])
+							}
+						},
+						100,
+					));
+				}
+				deposits
+			})
+			.then_apply_extrinsics(|_| {
+				[(
+					OriginTrait::signed(BROKER),
+					crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID },
+					Ok(()),
+				)]
+			})
+			.then_execute_with_keep_context(|deposits| {
+				assert!(TransactionsMarkedForRejection::<Test, ()>::get(
+					SCREENING_ID,
+					TAINTED_TX_ID
+				)
+				.is_none());
+				assert!(
+					TransactionsMarkedForRejection::<Test, ()>::get(SCREENING_ID, TAINTED_TX_ID)
+						.is_none(),
+					"Tx was not reported by whitelisted broker."
+				);
 				assert_eq!(
-					MockEgressBroadcaster::get_pending_api_calls()
-						.into_iter()
-						.filter_map(|call| match call {
-							MockEthereumApiCall::RejectCall { deposit_details, .. } =>
-								Some(deposit_details.deposit_ids().unwrap()),
-							_ => None,
-						})
-						.flatten()
-						.collect::<Vec<_>>(),
-					vec![TAINTED_TX_ID_1, TAINTED_TX_ID_2],
-					"Expected both tainted txs to be rejected."
+					TransactionsMarkedForRejection::<Test, ()>::get(BROKER, TAINTED_TX_ID)
+						.expect("Tx was marked by broker"),
+					TransactionPrewitnessedStatus::Unseen
+				);
+				assert!(
+					matches!(
+						DepositChannelLookup::<Test, _>::get(deposits[0].2)
+							.expect("Deposit channel is not expired")
+							.boost_status,
+						BoostStatus::Boosted { .. },
+					),
+					"Deposit channel should be boosted, but is {:?}",
+					DepositChannelLookup::<Test, _>::get(deposits[0].2).unwrap()
+				);
+			})
+			.then_execute_at_next_block(|deposits| {
+				for (_, _, deposit_address) in &deposits {
+					Pallet::<Test, _>::process_channel_deposit_full_witness(
+						DepositWitness {
+							deposit_address: *deposit_address,
+							asset: ETH,
+							amount: DEFAULT_DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails {
+								tx_hashes: Some(vec![TAINTED_TX_ID]),
+							},
+						},
+						100,
+					);
+				}
+				deposits
+			})
+			.then_process_events(|_, event| match event {
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFailed { .. }) => {
+					panic!("Prewitnessed Deposit should not fail.");
+				},
+				RuntimeEvent::IngressEgress(PalletEvent::TransactionRejectedByBroker {
+					..
+				}) => panic!("Prewitnessed Transaction should not be rejected"),
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFetchesScheduled {
+					channel_id,
+					..
+				}) => Some(channel_id),
+				_ => None,
+			})
+			.inspect_context(|(deposits, scheduled_fetch_ids)| {
+				assert_eq!(scheduled_fetch_ids.len(), 1, "Expected 1 fetch.");
+				assert_eq!(
+					*scheduled_fetch_ids,
+					deposits.iter().map(|(_, id, _)| *id).collect::<Vec<_>>()
 				);
 			});
 	}
