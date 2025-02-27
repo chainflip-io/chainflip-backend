@@ -78,7 +78,6 @@ use std::{
 };
 
 pub mod broker;
-pub mod crypto;
 pub mod lp;
 pub mod monitoring;
 pub mod order_fills;

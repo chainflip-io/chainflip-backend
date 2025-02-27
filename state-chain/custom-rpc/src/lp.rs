@@ -41,6 +41,14 @@ use state_chain_runtime::{
 };
 use std::{ops::Range, sync::Arc};
 
+pub mod lp_crypto {
+	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
+	/// Liquidity Provider Key Type ID used to store the key on state chain node keystore
+	pub const LP_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"lqpr");
+
+	app_crypto!(sr25519, LP_KEY_TYPE_ID);
+}
+
 #[rpc(server, client, namespace = "lp")]
 pub trait LpSignedApi {
 	#[method(name = "register_account")]

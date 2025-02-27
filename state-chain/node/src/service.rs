@@ -1,8 +1,7 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 use custom_rpc::{
-	broker::{BrokerSignedApiServer, BrokerSignedRpc},
-	crypto::{broker_crypto, lp_crypto},
-	lp::{LpSignedApiServer, LpSignedRpc},
+	broker::{broker_crypto, BrokerSignedApiServer, BrokerSignedRpc},
+	lp::{lp_crypto, LpSignedApiServer, LpSignedRpc},
 	monitoring::MonitoringApiServer,
 	pool_client::SignedPoolClient,
 	CustomApiServer, CustomRpc,
@@ -260,7 +259,6 @@ pub fn new_full<
 			match keystore.sr25519_public_keys(broker_crypto::BROKER_KEY_TYPE_ID).as_slice() {
 				[pub_key] => {
 					let pub_key = broker_crypto::Public::from(*pub_key);
-					log::warn!("broker public key {:?}", pub_key); // TODO remove
 
 					keystore
 						.key_pair(&pub_key)
@@ -281,7 +279,6 @@ pub fn new_full<
 		let lp_key_pair = match keystore.sr25519_public_keys(lp_crypto::LP_KEY_TYPE_ID).as_slice() {
 			[pub_key] => {
 				let pub_key = lp_crypto::Public::from(*pub_key);
-				log::warn!("lp provider public key {:?}", pub_key); // TODO remove
 
 				keystore
 					.key_pair(&pub_key)
