@@ -1172,12 +1172,12 @@ pub mod pallet {
 								let broadcast_id =
 									T::Broadcaster::threshold_sign_and_broadcast_with_callback(
 										api_call,
-										Some(
+										tx.deposit_address.map(|deposit_address| {
 											Call::finalise_ingress {
-												addresses: vec![tx.deposit_address.clone()],
+												addresses: vec![deposit_address],
 											}
-											.into(),
-										),
+											.into()
+										}),
 										|_| None,
 									);
 								Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {

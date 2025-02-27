@@ -29,6 +29,8 @@ use cf_traits::{
 use frame_support::derive_impl;
 use sp_core::{ConstBool, ConstU64};
 
+use super::mock_eth::BROKER;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
@@ -128,5 +130,6 @@ impl_test_helpers! {
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Bitcoin>::set_tracked_data(
 			BitcoinTrackedData { btc_fee_info: Default::default() }
 		);
+		<MockAccountRoleRegistry as cf_traits::AccountRoleRegistry<Test>>::register_as_broker(&BROKER).unwrap();
 	}
 }

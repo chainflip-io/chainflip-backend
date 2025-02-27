@@ -3,7 +3,7 @@ use crate::{
 	tests::{ALICE, BROKER},
 	BoostPoolId, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness,
 	Event, ReportExpiresAt, ScheduledTransactionsForRejection, TransactionPrewitnessedStatus,
-	TransactionRejectionDetails, TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
+	TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
 };
 
 use frame_support::{
@@ -116,10 +116,6 @@ fn process_marked_transaction_and_expect_refund() {
 			helpers::request_address_and_deposit(BROKER, btc::Asset::Btc, deposit_details.clone());
 		let _ = DepositChannelLookup::<Test, ()>::get(address.clone()).unwrap();
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
 		assert_ok!(IngressEgress::mark_transaction_for_rejection(
 			OriginTrait::signed(BROKER),
 			tx_in_id,
@@ -161,10 +157,6 @@ fn finalize_boosted_tx_if_marked_after_prewitness() {
 	new_test_ext().execute_with(|| {
 		let tx_id = Hash::random();
 		let deposit_details = helpers::generate_btc_deposit(tx_id);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
 
 		let address: <Bitcoin as Chain>::ChainAccount =
 			helpers::setup_boost_swap().try_into().unwrap();
@@ -213,10 +205,6 @@ fn reject_tx_if_marked_before_prewitness() {
 	new_test_ext().execute_with(|| {
 		let tx_id = Hash::random();
 		let deposit_details = helpers::generate_btc_deposit(tx_id);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
 
 		let address: <Bitcoin as Chain>::ChainAccount =
 			helpers::setup_boost_swap().try_into().unwrap();
@@ -277,10 +265,6 @@ fn marked_transactions_expire_if_not_witnessed() {
 			helpers::request_address_and_deposit(BROKER, btc::Asset::Btc, deposit_details);
 		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
 		assert_ok!(IngressEgress::mark_transaction_for_rejection(
 			OriginTrait::signed(BROKER),
 			tx_id,
@@ -308,10 +292,6 @@ fn only_broker_can_mark_transaction_for_rejection() {
 			),
 			BadOrigin
 		);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
 
 		assert_ok!(IngressEgress::mark_transaction_for_rejection(
 			OriginTrait::signed(BROKER),
@@ -343,10 +323,6 @@ fn do_not_expire_marked_transactions_if_prewitnessed() {
 #[test]
 fn can_not_report_transaction_after_witnessing() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
 		let unreported = Hash::random();
 		let unseen = Hash::random();
 		let prewitnessed = Hash::random();
@@ -385,23 +361,18 @@ fn send_funds_back_after_they_have_been_rejected() {
 	new_test_ext().execute_with(|| {
 		let deposit_details = helpers::generate_btc_deposit(Hash::random());
 
-		let (_, address) =
-			helpers::request_address_and_deposit(BROKER, btc::Asset::Btc, deposit_details.clone());
+		assert_ok!(crate::Pallet::<Test, _>::mark_transaction_for_rejection(
+			OriginTrait::signed(BROKER),
+			deposit_details.id.tx_id
+		));
 
-		ScheduledTransactionsForRejection::<Test, ()>::append(TransactionRejectionDetails {
-			refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS))),
-			amount: DEFAULT_DEPOSIT_AMOUNT,
-			asset: btc::Asset::Btc,
-			deposit_details: deposit_details.clone(),
-			deposit_address: address,
-		});
+		helpers::request_address_and_deposit(BROKER, btc::Asset::Btc, deposit_details.clone());
 
 		assert_eq!(MockEgressBroadcaster::get_pending_api_calls().len(), 0);
-
-		assert_eq!(MockEgressBroadcaster::get_pending_api_calls().len(), 0);
-
 		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::get().len(), 1);
+
 		IngressEgress::on_finalize(1);
+
 		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::get().len(), 0);
 
 		assert_has_matching_event!(
@@ -412,7 +383,13 @@ fn send_funds_back_after_they_have_been_rejected() {
 			})
 		);
 
-		assert_eq!(MockEgressBroadcaster::get_pending_api_calls().len(), 1);
+		assert_eq!(
+			MockEgressBroadcaster::get_pending_api_calls().len(),
+			1,
+			"Expected 1 call, got: {:#?}, events: {:#?}",
+			MockEgressBroadcaster::get_pending_api_calls(),
+			System::events(),
+		);
 	});
 }
 
@@ -421,10 +398,6 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 	new_test_ext().execute_with(|| {
 		let tx_id = Hash::random();
 		let deposit_details = helpers::generate_btc_deposit(tx_id);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
 
 		let (_id, address, ..) = IngressEgress::request_liquidity_deposit_address(
 			BROKER,
