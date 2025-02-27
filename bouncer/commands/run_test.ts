@@ -41,6 +41,7 @@ import { testCancelOrdersBatch } from '../tests/create_and_delete_multiple_order
 import { depositChannelCreation } from '../tests/request_swap_deposit_address_with_affiliates';
 import { testDCASwaps } from '../tests/DCA_test';
 import { testBrokerLevelScreening } from '../tests/broker_level_screening';
+import { spamSolanaDepositChannels } from '../tests/spam_solana_deposit_channels';
 
 async function main() {
   const testName = process.argv[2];
@@ -69,6 +70,7 @@ async function main() {
     testCancelOrdersBatch,
     depositChannelCreation,
     testBrokerLevelScreening,
+    spamSolanaDepositChannels,
   ];
 
   // Help message
