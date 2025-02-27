@@ -211,7 +211,7 @@ impl OnEgressSuccess<SolanaAltWitnessingIdentifier, Option<Vec<SolAddressLookupT
 		Environment::add_sol_ccm_swap_alts(alt_identifier.swap_request_id, alts);
 	}
 
-	fn expire_election(alt_identifier: SolanaAltWitnessingIdentifier) -> bool {
+	fn should_expire_election(alt_identifier: SolanaAltWitnessingIdentifier) -> bool {
 		(crate::System::block_number() - alt_identifier.election_start_sc_block_number) >
 			EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
@@ -264,7 +264,7 @@ impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWi
 		}
 	}
 
-	fn expire_election(_: SolSignature) -> bool {
+	fn should_expire_election(_: SolSignature) -> bool {
 		false
 	}
 }
