@@ -27,11 +27,8 @@ live_runtime_version=$(curl -s -H "Content-Type: application/json" -d '{"id":1, 
 
 echo "Live runtime version: $live_runtime_version, Current Spec version: $spec_version"
 
-# Convert live_runtime_version to the same format for comparison
-live_runtime_version_comparable=$(printf "%d" $live_runtime_version)
-
 # Compare versions
-if [ $spec_version -gt $live_runtime_version_comparable ]; then
+if [ $spec_version -gt $live_runtime_version ]; then
     echo "Runtime version has been incremented."
     exit 0
 else
