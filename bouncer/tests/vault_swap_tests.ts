@@ -186,6 +186,6 @@ export async function testVaultSwap(testContext: TestContext) {
 
   // Test the affiliate withdrawal functionality
   const [broker, affiliateId, refundAddress] = await testFeeCollection(Assets.Btc, testContext);
-  await testWithdrawCollectedAffiliateFees(broker, affiliateId, refundAddress, testContext.logger);
+  await testWithdrawCollectedAffiliateFees(testContext.logger, broker, affiliateId, refundAddress);
   await testRefundVaultSwap(testContext.logger);
 }
