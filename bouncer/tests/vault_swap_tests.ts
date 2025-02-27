@@ -40,6 +40,7 @@ async function testRefundVaultSwap(logger: Logger) {
   logger.info('Sending vault swap...');
 
   await executeVaultSwap(
+    logger,
     inputAsset,
     destAsset,
     destAddress,
