@@ -58,9 +58,8 @@ export async function tryRuntimeUpgrade(
   block: number | 'latest' | 'all' | 'last-n',
   networkUrl: string,
   runtimePath: string,
-  lastN = 30,
+  lastN = 10,
 ) {
-
   const httpApi = await ApiPromise.create({
     provider: new HttpProvider(CHAINFLIP_HTTP_ENDPOINT),
     noInitWarn: true,
