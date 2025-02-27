@@ -192,6 +192,8 @@ pub struct SolanaAltWitnessingIdentifier {
 
 pub type SolanaAltWitnessing = electoral_systems::egress_success::EgressSuccess<
 	SolanaAltWitnessingIdentifier,
+	// We also want to allow for the election to come to consensus on the fact that one or more
+	// alts provided were invalid and so we cant witness all alts.
 	Option<Vec<SolAddressLookupTableAccount>>,
 	(),
 	SolanaAltWitnessingHook,
