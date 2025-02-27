@@ -33,8 +33,8 @@ use cf_traits::{
 };
 use frame_support::{assert_ok, derive_impl};
 use frame_system as system;
-use sp_core::{ConstBool, ConstU64, H256, U256};
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
+use sp_core::{ConstBool, ConstU64, U256};
+use sp_runtime::traits::Zero;
 
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
