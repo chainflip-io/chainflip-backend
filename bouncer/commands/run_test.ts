@@ -9,9 +9,7 @@
 
 import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
-
-// Note: This must be the same path as the one in shared/utils/vitest.ts. Importing it here breaks vitest.
-export const testInfoFile = '/tmp/chainflip/test_info.csv';
+import { testInfoFile } from '../shared/utils';
 
 // Check that a test file was provided as an argument
 const testFile = process.argv[2];
@@ -40,19 +38,15 @@ try {
 }
 
 // Get the test info that was saved to the file
-const testNamesAndFunctions: { testName: string; functionName: string }[] = [];
+let testNamesAndFunctions;
 try {
-  const data = readFileSync(testInfoFile, 'utf8');
-  const rows = data.split('\n');
-  for (const row of rows) {
-    const columns = row.split(',');
-    if (columns.length >= 2) {
-      testNamesAndFunctions.push({
-        testName: columns[0].trim(),
-        functionName: columns[1].trim(),
-      });
-    }
-  }
+  testNamesAndFunctions = readFileSync(testInfoFile, 'utf8')
+    .split('\n')
+    .filter((row) => row.includes(','))
+    .map((row) => {
+      const [testName, functionName] = row.split(',').map((col) => col.trim());
+      return { testName, functionName };
+    });
 } catch (err) {
   console.error(`Error reading the ${testInfoFile} file:`, err);
   process.exit(1);
