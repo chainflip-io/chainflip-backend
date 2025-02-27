@@ -636,3 +636,23 @@ fn test_refund_fee_calculation() {
 		assert_eq!(Swapping::take_refund_fee(3, Asset::Eth), Ok(0));
 	});
 }
+
+#[test]
+fn gas_calculation_can_handle_invalid_swap_rate() {
+	new_test_ext().execute_with(|| {
+		fn test_invalid_swap_rate(swap_rate: f64) {
+			SwapRate::set(swap_rate);
+			assert_eq!(
+				Swapping::calculate_input_for_gas_output::<Ethereum>(
+					cf_chains::assets::eth::Asset::Flip,
+					1000
+				),
+				None
+			);
+		}
+
+		test_invalid_swap_rate(1_f64 / (u128::MAX as f64));
+		test_invalid_swap_rate(0_f64);
+		test_invalid_swap_rate(u128::MAX as f64);
+	});
+}

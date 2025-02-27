@@ -33,7 +33,7 @@ impl AssetConverter for MockAssetConverter {
 			required_gas.into(),
 			true,
 		)
-		.map(|amount| C::ChainAmount::try_from(amount).expect("Asset amount is for this chain"))
+		.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 	}
 
 	fn calculate_input_for_desired_output(

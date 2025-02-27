@@ -2293,7 +2293,7 @@ pub mod pallet {
 				required_gas.into(),
 				true,
 			)
-			.map(|amount| C::ChainAmount::try_from(amount).expect("Asset amount is for this chain"))
+			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 		}
 
 		fn calculate_input_for_desired_output(
@@ -2336,8 +2336,11 @@ pub mod pallet {
 				.defensive_proof(
 					"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
 				)?;
-
-				Some(input_amount_to_convert.unique_saturated_into())
+				if input_amount_to_convert.is_zero() {
+					None
+				} else {
+					Some(input_amount_to_convert.unique_saturated_into())
+				}
 			}
 		}
 	}
