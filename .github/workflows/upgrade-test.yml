@@ -184,7 +184,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./setup_for_test.sh
+          ./run.sh
 
       - name: Upgrade network 🚀
         if: inputs.run-job
