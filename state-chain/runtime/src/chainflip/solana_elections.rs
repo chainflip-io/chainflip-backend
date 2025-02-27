@@ -692,12 +692,10 @@ impl AltWitnessingHandler for SolanaAltWitnessingHandler {
 		match CcmValidityChecker::decode_unchecked(
 			ccm_channel_metadata.ccm_additional_data,
 			ForeignChain::Solana,
-		)
-		.unwrap()
-		{
-			crate::DecodedCcmAdditionalData::Solana(versioned_ccm_data) => {
-				let alts = versioned_ccm_data.address_lookup_tables();
-				if !alts.is_empty() {
+		) {
+			Ok(crate::DecodedCcmAdditionalData::Solana(versioned_ccm_data)) => {
+				let alt_addresses = versioned_ccm_data.address_lookup_tables();
+				if !alt_addresses.is_empty() {
 					pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(
 						|| {
 							SolanaAltWitnessing::watch_for_egress::<
@@ -707,16 +705,18 @@ impl AltWitnessingHandler for SolanaAltWitnessingHandler {
 									RunnerStorageAccess<Runtime, SolanaInstance>,
 								>,
 							>(SolanaAltWitnessingIdentifier {
-								alt_addresses: alts,
+								alt_addresses,
 								swap_request_id,
 								election_start_sc_block_number: crate::System::block_number(),
 							})
 						},
 					)
-					.unwrap() //this should be fine as long as the election identifiers dont overflow and
+					.unwrap_or_else(|e| {log::error!("Cannot start Solana ALT witnessing election: {:?}", e);}) //The error should not happen as long as the election identifiers dont overflow and
 					 // the electoral system is initialized
 				}
 			},
+			// This should never happen since the same ccm validity check has been done while opening the channel.
+			Err(e) => log::error!("Ccm Check failed while decoding ccm_additional_data while initiating Solana ALT witnessing: {:?}", e),
 			_ => {},
 		}
 	}
