@@ -6,10 +6,10 @@ use sp_core::{
 use std::ops::Range;
 
 use anyhow::anyhow;
-use cf_primitives::chains::{Bitcoin, Ethereum, Polkadot};
+use cf_primitives::chains::{assets::any, Bitcoin, Ethereum, Polkadot};
 use cf_utilities::rpc::NumberOrHex;
 
-use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize};
 
 use crate::SwapChannelInfo;
 pub use cf_amm::{
@@ -122,88 +122,22 @@ pub struct OpenSwapChannels {
 	pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
 }
 
-pub fn collect_range_order_returns(
-	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
-) -> Vec<RangeOrder> {
-	filter_orders(events)
-		.filter_map(|order| match order {
-			LimitOrRangeOrder::RangeOrder(range_order) => Some(range_order),
-			_ => None,
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CloseOrderJson {
+	Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderIdJson },
+	Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderIdJson },
+}
+
+impl TryFrom<CloseOrderJson> for CloseOrder {
+	type Error = anyhow::Error;
+
+	fn try_from(value: CloseOrderJson) -> Result<Self, Self::Error> {
+		Ok(match value {
+			CloseOrderJson::Limit { base_asset, quote_asset, side, id } =>
+				CloseOrder::Limit { base_asset, quote_asset, side, id: id.try_into()? },
+			CloseOrderJson::Range { base_asset, quote_asset, id } =>
+				CloseOrder::Range { base_asset, quote_asset, id: id.try_into()? },
 		})
-		.collect()
-}
-
-pub fn collect_limit_order_returns(
-	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
-) -> Vec<LimitOrder> {
-	filter_orders(events)
-		.filter_map(|order| match order {
-			LimitOrRangeOrder::LimitOrder(limit_order) => Some(limit_order),
-			_ => None,
-		})
-		.collect()
-}
-
-pub fn collect_order_returns(
-	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
-) -> Vec<LimitOrRangeOrder> {
-	filter_orders(events).collect()
-}
-
-pub fn filter_orders(
-	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
-) -> impl Iterator<Item = LimitOrRangeOrder> {
-	events.into_iter().filter_map(|event| match event {
-		state_chain_runtime::RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::LimitOrderUpdated {
-				sell_amount_change,
-				sell_amount_total,
-				collected_fees,
-				bought_amount,
-				tick,
-				base_asset,
-				quote_asset,
-				side,
-				id,
-				..
-			},
-		) => Some(LimitOrRangeOrder::LimitOrder(LimitOrder {
-			base_asset,
-			quote_asset,
-			side,
-			id: id.into(),
-			tick,
-			sell_amount_total: sell_amount_total.into(),
-			collected_fees: collected_fees.into(),
-			bought_amount: bought_amount.into(),
-			sell_amount_change: sell_amount_change
-				.map(|increase_or_decrease| increase_or_decrease.map(|amount| amount.into())),
-		})),
-		state_chain_runtime::RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::RangeOrderUpdated {
-				size_change,
-				liquidity_total,
-				collected_fees,
-				tick_range,
-				base_asset,
-				quote_asset,
-				id,
-				..
-			},
-		) => Some(LimitOrRangeOrder::RangeOrder(RangeOrder {
-			base_asset,
-			quote_asset,
-			id: id.into(),
-			size_change: size_change.map(|increase_or_decrease| {
-				increase_or_decrease.map(|range_order_change| RangeOrderChange {
-					liquidity: range_order_change.liquidity.into(),
-					amounts: range_order_change.amounts.map(|amount| amount.into()),
-				})
-			}),
-			liquidity_total: liquidity_total.into(),
-			tick_range,
-			collected_fees: collected_fees.map(Into::into),
-		})),
-		_ => None,
-	})
+	}
 }
