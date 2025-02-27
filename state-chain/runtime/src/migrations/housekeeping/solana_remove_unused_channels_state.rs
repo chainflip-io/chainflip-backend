@@ -2,7 +2,7 @@ use crate::*;
 use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
 
 use pallet_cf_elections::{
-	electoral_systems::composite::tuple_6_impls::CompositeElectoralUnsynchronisedStateMapKey,
+	electoral_systems::composite::tuple_7_impls::CompositeElectoralUnsynchronisedStateMapKey,
 	ElectoralUnsynchronisedStateMap,
 };
 use sp_core::bounded::alloc::collections::BTreeSet;
