@@ -51,7 +51,7 @@ where
 						return Ok(None);
 					}
 
-					let owner_address = SolAddress::from_str(owner.as_str()).unwrap();
+					let owner_address = SolAddress::from_str(owner.as_str())?;
 
 					if owner_address != sol_prim::consts::ADDRESS_LOOKUP_TABLE_PROGRAM {
 						tracing::info!("Owner is not address lookup table program: {}", owner);
