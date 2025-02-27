@@ -91,7 +91,6 @@ where
 		}
 	}
 
-	/// Returns the AccountId of the current
 	pub fn account_id(&self) -> AccountId32 {
 		self.pair_signer.account_id.clone()
 	}
@@ -123,7 +122,7 @@ where
 
 	/// Returns the `RuntimeDecoder` at the given block. first it acquires the runtime version at
 	/// the given block then it returns a reference to an `RuntimeDecoder` from `runtime_decoders`
-	/// hash map. If not found it creates a new one and inserts inside the map for future quick
+	/// hash map. If not found it creates a new one and inserts it inside the map for future quick
 	/// access
 	async fn runtime_decoder(
 		&self,
@@ -140,7 +139,7 @@ where
 				decoders_map.get(&block_spec_version).unwrap()
 			}))
 		} else {
-			// Here we need to create a new error decoder for the runtime at the given block_hash
+			// Here we need to create a new runtime decoder for the runtime at the given block_hash
 			let maybe_new_decoder = self
 				.client
 				.runtime_api()
@@ -152,8 +151,8 @@ where
 			drop(decoders_read_guard);
 			let mut decoders_write_guard = self.runtime_decoders.write().await;
 
-			// Insert the new EventsDecoder. if anything goes wrong while creating it, return or
-			// insert a default build time EventsDecoder with the build runtime_version as key
+			// Insert the new RuntimeDecoder. If anything goes wrong while creating it, return or
+			// insert a default build time RuntimeDecoder with the build runtime_version as key
 			let new_decoder_key = match maybe_new_decoder {
 				Some(new_runtime_decoder) => {
 					decoders_write_guard.entry(block_spec_version).or_insert(new_runtime_decoder);
@@ -310,8 +309,8 @@ where
 				// This occurs when a transaction with the same nonce is in the transaction pool
 				// and the priority is <= priority of that existing tx
 				log::warn!(
-					"TooLowPriority error. More likely occurs when a transaction with the same none \
-					 is in the transaction pool. Resetting the pool_client managed nonce and resubmitting ..."
+					"TooLowPriority error. More likely occurs when a transaction with the same nonce \
+					 is in the transaction pool. Resetting the pool_client managed nonce ..."
 				);
 				self.clear_nonce().await;
 			},
@@ -320,11 +319,11 @@ where
 					sp_runtime::transaction_validity::InvalidTransaction::Stale,
 				),
 			) => {
-				// This occurs when the nonce has already been *consumed* i.e a
-				// transaction with that nonce is in a block
+				// This occurs when the nonce has already been *consumed* i.e
+				// a transaction with that nonce is in a block
 				log::warn!(
 					"InvalidTransaction::Stale error, more likely none too low. Resetting \
-					 the pool_client managed nonce and resubmitting..."
+					 the pool_client managed nonce ..."
 				);
 				self.clear_nonce().await;
 			},
@@ -478,31 +477,26 @@ where
 							TransactionStatus::Ready |
 							TransactionStatus::Broadcast(_) => continue,
 							TransactionStatus::Invalid => {
-								//log::warn!("Transaction failed status: {:?}", status);
 								return Err(CfApiError::OtherError(anyhow!(
 									"transaction is no longer valid in the current state. "
 								)))
 							},
 							TransactionStatus::Dropped => {
-								log::warn!("Transaction failed status: {:?}", status);
 								return Err(CfApiError::OtherError(anyhow!(
 									"transaction was dropped from the pool because of the limit"
 								)))
 							},
 							TransactionStatus::Usurped(_hash) => {
-								log::warn!("Transaction failed status: {:?}", status);
 								return Err(CfApiError::OtherError(anyhow!(
 									"Transaction has been replaced in the pool, "
 								)))
 							},
 							TransactionStatus::FinalityTimeout(_block_hash) => {
-								log::warn!("Transaction failed status: {:?}", status);
 								//return Err(CfApiError::OtherError(anyhow!("Maximum number of
 								// finality watchers has been reached")))
 								continue
 							},
 							TransactionStatus::Retracted(_block_hash) => {
-								log::warn!("Transaction failed status: {:?}", status);
 								Err(CfApiError::OtherError(anyhow!("The block this transaction was included in has been retracted.")))?
 							},
 						}
