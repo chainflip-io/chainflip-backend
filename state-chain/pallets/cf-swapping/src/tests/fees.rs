@@ -638,9 +638,9 @@ fn test_refund_fee_calculation() {
 }
 
 #[test]
-fn gas_calculation_can_handle_invalid_swap_rate() {
+fn gas_calculation_can_handle_extreme_swap_rate() {
 	new_test_ext().execute_with(|| {
-		fn test_invalid_swap_rate(swap_rate: f64) {
+		fn test_extreme_swap_rate(swap_rate: f64) {
 			SwapRate::set(swap_rate);
 			assert_eq!(
 				Swapping::calculate_input_for_gas_output::<Ethereum>(
@@ -651,8 +651,19 @@ fn gas_calculation_can_handle_invalid_swap_rate() {
 			);
 		}
 
-		test_invalid_swap_rate(1_f64 / (u128::MAX as f64));
-		test_invalid_swap_rate(0_f64);
-		test_invalid_swap_rate(u128::MAX as f64);
+		test_extreme_swap_rate(1_f64 / (u128::MAX as f64));
+		test_extreme_swap_rate(0_f64);
+		test_extreme_swap_rate(u128::MAX as f64);
+
+		// Using Solana here because it has a ChainAmount of u64, so the conversion to AssetAmount
+		// will fail when gas needed is larger than u64::MAX.
+		SwapRate::set(0.5);
+		assert_eq!(
+			Swapping::calculate_input_for_gas_output::<cf_chains::Solana>(
+				cf_chains::assets::sol::Asset::SolUsdc,
+				u64::MAX
+			),
+			None
+		);
 	});
 }
