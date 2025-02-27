@@ -305,7 +305,6 @@ pub struct ChainAccounts {
 pub enum ChannelActionType {
 	Swap,
 	LiquidityProvision,
-	CcmTransfer,
 }
 
 impl<AccountId> From<ChannelAction<AccountId>> for ChannelActionType {
@@ -313,37 +312,6 @@ impl<AccountId> From<ChannelAction<AccountId>> for ChannelActionType {
 		match action {
 			ChannelAction::Swap { .. } => ChannelActionType::Swap,
 			ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
-			ChannelAction::CcmTransfer { .. } => ChannelActionType::CcmTransfer,
-		}
-	}
-}
-
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	Eq,
-	PartialEq,
-	TypeInfo,
-	Debug,
-	Clone,
-	Copy,
-	PartialOrd,
-	Ord,
-)]
-pub enum ChannelActionType {
-	Swap,
-	LiquidityProvision,
-	CcmTransfer,
-}
-
-impl<AccountId> From<ChannelAction<AccountId>> for ChannelActionType {
-	fn from(action: ChannelAction<AccountId>) -> Self {
-		match action {
-			ChannelAction::Swap { .. } => ChannelActionType::Swap,
-			ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
-			ChannelAction::CcmTransfer { .. } => ChannelActionType::CcmTransfer,
 		}
 	}
 }
