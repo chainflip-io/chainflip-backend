@@ -83,7 +83,7 @@ fn parse_alt_account_info(
 					// We might want to return an AddressLookupTable Account type, it depends on how
 					// the elections are setup.
 					Ok(Some(AddressLookupTableAccount {
-						key: lookup_table_addresses[i].into(),
+						key: lookup_table_address.into(),
 						addresses: addresses_vector,
 					}))
 				},
@@ -93,7 +93,7 @@ fn parse_alt_account_info(
 				Some(_) => {
 					tracing::info!(
 						"Address lookup table account encoding is not JsonParsed for account {:?}: {:?}",
-						lookup_table_addresses[i],
+						lookup_table_address,
 						account_info
 					);
 					Ok(None)
