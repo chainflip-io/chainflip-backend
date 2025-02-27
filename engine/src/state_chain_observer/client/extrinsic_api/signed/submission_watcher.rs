@@ -24,7 +24,7 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, warn};
 
-use cf_node_clients::{error_decoder, signer, ExtrinsicDetails};
+use cf_node_client::{error_decoder, signer, ExtrinsicDetails};
 
 use crate::state_chain_observer::client::{
 	base_rpc_api,

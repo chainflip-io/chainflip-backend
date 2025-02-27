@@ -18,7 +18,6 @@ pub struct SwapChannelInfo<C: Chain> {
 	pub destination_asset: Asset,
 }
 
-/// Common macro to extract and event
 #[macro_export]
 macro_rules! extract_event {
     ($events:expr, $runtime_event_variant:path, $pallet_event_variant:path, $pattern:tt, $result:expr) => {

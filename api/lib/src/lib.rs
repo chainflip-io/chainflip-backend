@@ -29,7 +29,7 @@ pub mod primitives {
 	pub use pallet_cf_swapping::AffiliateDetails;
 	pub use state_chain_runtime::{self, BlockNumber, Hash};
 }
-pub use cf_node_clients::{WaitFor, WaitForResult};
+pub use cf_node_client::{WaitFor, WaitForResult};
 
 pub use cf_chains::eth::Address as EthereumAddress;
 

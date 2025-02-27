@@ -10,7 +10,7 @@ use super::{
 
 use anyhow::Result;
 use async_trait::async_trait;
-use cf_node_clients::{signer, WaitFor, WaitForResult};
+use cf_node_client::{signer, WaitFor, WaitForResult};
 use cf_utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, UnwrapOrCancel};
 use futures::StreamExt;
 use futures_util::FutureExt;

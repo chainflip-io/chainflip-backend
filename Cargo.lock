@@ -1533,7 +1533,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cf-node-clients"
+name = "cf-node-client"
 version = "0.1.0"
 dependencies = [
  "cf-amm",
@@ -1749,7 +1749,7 @@ dependencies = [
  "bs58 0.5.1",
  "cf-amm",
  "cf-chains",
- "cf-node-clients",
+ "cf-node-client",
  "cf-primitives",
  "cf-rpc-types",
  "chainflip-engine",
@@ -1873,7 +1873,7 @@ dependencies = [
  "bs58 0.5.1",
  "cf-amm",
  "cf-chains",
- "cf-node-clients",
+ "cf-node-client",
  "cf-primitives",
  "chainflip-node",
  "chrono",

@@ -10,7 +10,7 @@ use cf_chains::{
 	address::{AddressString, EncodedAddress},
 	ForeignChain,
 };
-use cf_node_clients::{WaitFor, WaitForResult};
+use cf_node_client::{WaitFor, WaitForResult};
 use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
