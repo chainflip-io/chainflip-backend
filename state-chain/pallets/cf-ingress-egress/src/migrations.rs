@@ -25,7 +25,7 @@ pub type PalletMigration<T, I> = (
 	VersionedMigration<
 		19,
 		20,
-		rename_scheduled_tx_for_reject::RenameScheduledTxForReject<T, I>,
+		rename_scheduled_tx_for_reject::RenameScheduledTransactionsForRejection<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,

@@ -2348,11 +2348,10 @@ mod evm_transaction_rejection {
 	use cf_chains::evm::H256;
 	use std::str::FromStr;
 
-	use crate::WhitelistedBrokers;
+	use crate::{
+		ScheduledTransactionsForRejection, TransactionsMarkedForRejection, WhitelistedBrokers,
+	};
 
-	use crate::ScheduledTxForReject;
-
-	use crate::TransactionsMarkedForRejection;
 	use cf_traits::{
 		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
 	};
@@ -2416,12 +2415,12 @@ mod evm_transaction_rejection {
 
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
-			let scheduled_tx_for_reject = ScheduledTxForReject::<Test, ()>::get();
+			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
 			assert_eq!(scheduled_tx_for_reject.len(), 1);
 
 			IngressEgress::on_finalize(2);
 
-			let scheduled_tx_for_reject = ScheduledTxForReject::<Test, ()>::get();
+			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
 			assert_eq!(scheduled_tx_for_reject.len(), 0);
 		});
 	}
@@ -2475,12 +2474,12 @@ mod evm_transaction_rejection {
 
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
-			let scheduled_tx_for_reject = ScheduledTxForReject::<Test, ()>::get();
+			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
 			assert_eq!(scheduled_tx_for_reject.len(), 1);
 
 			IngressEgress::on_finalize(2);
 
-			let scheduled_tx_for_reject = ScheduledTxForReject::<Test, ()>::get();
+			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
 			assert_eq!(scheduled_tx_for_reject.len(), 0);
 		});
 	}
