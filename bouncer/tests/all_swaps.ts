@@ -55,8 +55,12 @@ export async function initiateSwap(
 export async function testAllSwaps(textContext: TestContext) {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
 
+  textContext.logger.info(`🧪 Now inside testAllSwaps`);
+
   // Open a private BTC channel to be used for btc vault swaps
   await openPrivateBtcChannel(textContext.logger, '//BROKER_1');
+
+  textContext.logger.info(`🧪 Private broker channel opened`);
 
   function appendSwap(
     sourceAsset: Asset,
@@ -94,5 +98,6 @@ export async function testAllSwaps(textContext: TestContext) {
       });
   });
 
+  textContext.logger.info(`🧪 All swaps appended`);
   await Promise.all(allSwaps);
 }
