@@ -587,6 +587,7 @@ pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::Tra
 pub enum TransactionInId {
 	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
 	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
+	Arbitrum(TransactionInIdFor<cf_chains::Arbitrum>),
 	// other variants reserved for other chains.
 }
 
