@@ -6,6 +6,7 @@ pub mod deposit_channel_details_migration;
 pub mod rename_scheduled_tx_for_reject;
 pub mod scheduled_egress_ccm_migration;
 mod update_rejection_params;
+mod update_rejection_status;
 
 pub type PalletMigration<T, I> = (
 	/* ALREADY APPLIED ON BERGHAIN
@@ -72,5 +73,13 @@ pub type PalletMigration<T, I> = (
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<21, Pallet<T, I>>,
+	// APPLY THIS ON ALL NETWORKS
+	VersionedMigration<
+		21,
+		22,
+		update_rejection_status::Migration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<22, Pallet<T, I>>,
 );

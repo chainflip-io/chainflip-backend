@@ -84,13 +84,12 @@ pub enum BoostStatus<ChainAmount> {
 	NotBoosted,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
-pub enum TransactionPrewitnessedStatus {
-	/// Transaction was prewitnessed but not boosted due to being reported.
-	Prewitnessed,
-	/// Transaction has been reported but was not prewitnessed.
-	#[default]
-	Unseen,
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct TransactionRejectionStatus<BlockNumber> {
+	expires_at: BlockNumber,
+	/// We can't expire if the rejected tx has been prewitnessed. We need to wait until the
+	/// rejection is processed.
+	prewitnessed: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -731,7 +730,7 @@ pub mod pallet {
 			T::AccountId,
 			Blake2_128Concat,
 			TransactionInIdFor<T, I>,
-			TransactionPrewitnessedStatus,
+			TransactionRejectionStatus<BlockNumberFor<T>>,
 			OptionQuery,
 		>;
 
@@ -1029,7 +1028,9 @@ pub mod pallet {
 						&tx_id,
 						|status| {
 							match status.take() {
-								Some(TransactionPrewitnessedStatus::Unseen) => {
+								Some(TransactionRejectionStatus { prewitnessed, expires_at })
+									if !prewitnessed && expires_at == now =>
+								{
 									Self::deposit_event(
 										Event::<T, I>::TransactionRejectionRequestExpired {
 											account_id: account_id.clone(),
@@ -1597,16 +1598,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tx_id: TransactionInIdFor<T, I>,
 	) -> DispatchResult {
 		let lookup_id = Self::is_whitelisted_broker_or(account_id.clone());
+		let expires_at = <frame_system::Pallet<T>>::block_number()
+			.saturating_add(BlockNumberFor::<T>::from(MARKED_TX_EXPIRATION_BLOCKS));
 		TransactionsMarkedForRejection::<T, I>::try_mutate(&lookup_id, &tx_id, |opt| {
-			const UNSEEN: TransactionPrewitnessedStatus = TransactionPrewitnessedStatus::Unseen;
 			ensure!(
-				opt.replace(UNSEEN).unwrap_or_default() == UNSEEN,
+				!opt.replace(TransactionRejectionStatus { prewitnessed: false, expires_at })
+					.map(|s| s.prewitnessed)
+					.unwrap_or_default(),
 				Error::<T, I>::TransactionAlreadyPrewitnessed
 			);
 			Ok::<_, DispatchError>(())
 		})?;
-		let expires_at = <frame_system::Pallet<T>>::block_number()
-			.saturating_add(BlockNumberFor::<T>::from(MARKED_TX_EXPIRATION_BLOCKS));
 		ReportExpiresAt::<T, I>::append(expires_at, (&lookup_id, &tx_id));
 		Self::deposit_event(Event::<T, I>::TransactionRejectionRequestReceived {
 			account_id,
@@ -2195,14 +2197,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							match opt.as_mut() {
 								// Transaction has been reported, mark it as
 								// pre-witnessed.
-								Some(status @ TransactionPrewitnessedStatus::Unseen) => {
-									*status = TransactionPrewitnessedStatus::Prewitnessed;
+								Some(TransactionRejectionStatus { prewitnessed, .. }) => {
+									*prewitnessed = true;
 									true
 								},
-								// Pre-witnessing twice is unlikely but possible. Either
-								// way we don't want to change the status and
-								// we don't want to allow boosting.
-								Some(TransactionPrewitnessedStatus::Prewitnessed) => true,
 								// Transaction has not been reported.
 								None => false,
 							}

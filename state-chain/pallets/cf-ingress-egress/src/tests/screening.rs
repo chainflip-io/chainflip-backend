@@ -1,8 +1,10 @@
+use core::u64;
+
 use crate::{
 	mock_btc::*,
 	tests::{ALICE, BROKER},
 	BoostPoolId, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness,
-	Event, ReportExpiresAt, ScheduledTransactionsForRejection, TransactionPrewitnessedStatus,
+	Event, ReportExpiresAt, ScheduledTransactionsForRejection, TransactionRejectionStatus,
 	TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
 };
 
@@ -309,7 +311,7 @@ fn do_not_expire_marked_transactions_if_prewitnessed() {
 		TransactionsMarkedForRejection::<Test, ()>::insert(
 			BROKER,
 			tx_id,
-			TransactionPrewitnessedStatus::Prewitnessed,
+			TransactionRejectionStatus { prewitnessed: true, expires_at: u64::MAX },
 		);
 
 		ReportExpiresAt::<Test, ()>::insert(expiry_at, vec![(BROKER, tx_id)]);
@@ -330,12 +332,12 @@ fn can_not_report_transaction_after_witnessing() {
 		TransactionsMarkedForRejection::<Test, ()>::insert(
 			BROKER,
 			unseen,
-			TransactionPrewitnessedStatus::Unseen,
+			TransactionRejectionStatus { prewitnessed: false, expires_at: u64::MAX },
 		);
 		TransactionsMarkedForRejection::<Test, ()>::insert(
 			BROKER,
 			prewitnessed,
-			TransactionPrewitnessedStatus::Prewitnessed,
+			TransactionRejectionStatus { prewitnessed: true, expires_at: u64::MAX },
 		);
 
 		assert_ok!(IngressEgress::mark_transaction_for_rejection(
@@ -391,6 +393,65 @@ fn send_funds_back_after_they_have_been_rejected() {
 			System::events(),
 		);
 	});
+}
+
+#[test]
+fn test_mark_transaction_expiry_and_deposit() {
+	let tx_id = Hash::random();
+
+	let ext = new_test_ext()
+		// Mark a transaction
+		.then_apply_extrinsics(|_| {
+			[(
+				OriginTrait::signed(BROKER),
+				crate::Call::mark_transaction_for_rejection { tx_id },
+				Ok(()),
+			)]
+		})
+		// Advance 10 blocks
+		.then_process_blocks(10)
+		// Mark the same transaction again
+		.then_apply_extrinsics(|_| {
+			[(
+				OriginTrait::signed(BROKER),
+				crate::Call::mark_transaction_for_rejection { tx_id },
+				Ok(()),
+			)]
+		})
+		// Get expiry block of the first report
+		.then_execute_with(|_| {
+			let mut expiries = ReportExpiresAt::<Test, _>::iter().collect::<Vec<_>>();
+			expiries.sort_by_key(|(block, _)| *block);
+			(expiries[0].0, expiries[1].0)
+		});
+	let (first_expiry, second_expiry) = *ext.context();
+
+	ext
+		// Advance to the block after expiry block
+		.then_execute_at_block(first_expiry, |_| {
+			// First expiry should be triggered, but ignored.
+		})
+		.then_process_events(|_, event| {
+			match event {
+				RuntimeEvent::IngressEgress(Event::TransactionRejectionRequestExpired {
+					..
+				}) => panic!("Rejection Request Expired prematurely"),
+				_ => (),
+			};
+			None::<()>
+		})
+		.then_execute_at_block(second_expiry, |_| {
+			// Second expiry should be triggered, expiry is processed.
+		})
+		.then_execute_with_keep_context(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(Event::TransactionRejectionRequestExpired {
+					account_id: BROKER,
+					..
+				})
+			);
+		});
 }
 
 #[test]
