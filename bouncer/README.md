@@ -115,6 +115,12 @@ You can use `vitest`s `list` command to find the name of that test you what to r
 pnpm vitest list
 ```
 
+Or use the custom run test command with the file path of you test instead.
+
+```sh copy
+./commands/run_test.ts ./tests/myNewTest.ts
+```
+
 If your test uses the `SwapContext` within the `TestContext`, then the report will be automatically logged when the test finishes.
 If you would like to run your test with custom arguments, then you will have to create a test command file.
 See the `test_commands` folder for examples.

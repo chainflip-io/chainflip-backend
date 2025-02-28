@@ -1,5 +1,21 @@
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
 import { TestContext } from './test_context';
+import { testInfoFile } from '../utils';
+
+// Write the test name and function name to a file to be used by the `run_test.ts` command
+function writeTestInfoFile(name: string, testFunction: (context: TestContext) => Promise<void>) {
+  try {
+    const existingContent = existsSync(testInfoFile) ? readFileSync(testInfoFile, 'utf-8') : '';
+    const newEntry = `${name},${testFunction.name}\n`;
+    if (!existingContent.includes(newEntry)) {
+      writeFileSync(testInfoFile, existingContent + newEntry);
+    }
+  } catch (e) {
+    // This file is not needed for tests to run, so we just log and continue
+    console.log('Unable to write test info', e);
+  }
+}
 
 // Create a new SwapContext for each test
 beforeEach<{ testContext: TestContext }>((context) => {
@@ -34,6 +50,8 @@ export function concurrentTest(
     createTestFunction(name, testFunction),
     timeoutSeconds * 1000,
   );
+
+  writeTestInfoFile(name, testFunction);
 }
 export function serialTest(
   name: string,
@@ -45,4 +63,6 @@ export function serialTest(
     createTestFunction(name, testFunction),
     timeoutSeconds * 1000,
   );
+
+  writeTestInfoFile(name, testFunction);
 }

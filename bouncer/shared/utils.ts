@@ -50,6 +50,8 @@ export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];
 export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 
+export const testInfoFile = '/tmp/chainflip/test_info.csv';
+
 export type Asset = SDKAsset;
 export type Chain = SDKChain;
 
