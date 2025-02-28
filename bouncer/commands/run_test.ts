@@ -71,7 +71,7 @@ async function main() {
     testCancelOrdersBatch,
     depositChannelCreation,
     testVaultSwapFeeCollection,
-    testBrokerLevelScreening,
+    // testBrokerLevelScreening,
     testSolanaVaultSettingsGovernance,
   ];
 

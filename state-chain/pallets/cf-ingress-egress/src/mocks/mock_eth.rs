@@ -1,12 +1,12 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositWitness, PalletSafeMode};
+use crate::{DepositWitness, PalletSafeMode, WhitelistedBrokers};
 
-use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
 	CcmDepositMetadata, Chain,
 };
+use cf_chains::{eth::EthereumTrackedData, ChannelRefundParameters};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -29,12 +29,12 @@ use cf_traits::{
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
+	AccountRoleRegistry, DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
-use frame_support::derive_impl;
+use frame_support::{assert_ok, derive_impl};
 use frame_system as system;
-use sp_core::{ConstBool, H256};
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
+use sp_core::{ConstBool, ConstU64, U256};
+use sp_runtime::traits::Zero;
 
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -48,29 +48,7 @@ frame_support::construct_runtime!(
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
-	type Nonce = u64;
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Block = Block;
-	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = frame_support::traits::ConstU64<250>;
-	type Version = ();
-	type PalletInfo = PalletInfo;
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = frame_support::traits::ConstU16<2112>;
-	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 impl_mock_chainflip!(Test);
@@ -137,12 +115,15 @@ impl crate::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
-	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;
+	type AllowTransactionReports = ConstBool<true>;
+	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
+pub const WHITELISTED_BROKER: <Test as frame_system::Config>::AccountId = BROKER + 1;
+pub const SCREENING_ID: <Test as frame_system::Config>::AccountId = 0xcf;
 
 impl_test_helpers! {
 	Test,
@@ -161,9 +142,11 @@ impl_test_helpers! {
 				priority_fee: Default::default()
 			}
 		);
-
-		<MockAccountRoleRegistry as cf_traits::AccountRoleRegistry<Test>>::register_as_broker(&BROKER).unwrap();
-
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&BROKER));
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&WHITELISTED_BROKER,
+		));
+		WhitelistedBrokers::<Test>::insert(WHITELISTED_BROKER, ());
 	}
 }
 
@@ -223,6 +206,7 @@ pub enum DepositRequest {
 		source_asset: TestChainAsset,
 		destination_asset: TestChainAsset,
 		destination_address: ForeignChainAddress,
+		refund_address: Option<TestChainAccount>,
 	},
 }
 
@@ -268,6 +252,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						source_asset,
 						destination_asset,
 						ref destination_address,
+						refund_address,
 					} => IngressEgress::request_swap_deposit_address(
 						source_asset,
 						destination_asset.into(),
@@ -275,8 +260,12 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						Default::default(),
 						BROKER,
 						None,
-						0,
-						None,
+						10,
+						refund_address.map(|addr| ChannelRefundParameters {
+							retry_duration: 5,
+							refund_address: ForeignChainAddress::Eth(addr),
+							min_price: U256::zero(),
+						}),
 						None,
 					)
 					.map(|(channel_id, deposit_address, ..)| {
