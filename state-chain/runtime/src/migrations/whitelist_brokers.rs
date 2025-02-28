@@ -1,5 +1,7 @@
 use crate::Runtime;
-use cf_chains::instances::EthereumInstance;
+use cf_chains::instances::{
+	ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+};
 use cf_runtime_utilities::genesis_hashes;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sp_std::vec;
@@ -27,6 +29,22 @@ impl OnRuntimeUpgrade for Migration {
 			_ => vec![],
 		} {
 			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, EthereumInstance>::insert(
+				crate::AccountId::new(broker_id),
+				(),
+			);
+			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, BitcoinInstance>::insert(
+				crate::AccountId::new(broker_id),
+				(),
+			);
+			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, ArbitrumInstance>::insert(
+				crate::AccountId::new(broker_id),
+				(),
+			);
+			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, SolanaInstance>::insert(
+				crate::AccountId::new(broker_id),
+				(),
+			);
+			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, PolkadotInstance>::insert(
 				crate::AccountId::new(broker_id),
 				(),
 			);
