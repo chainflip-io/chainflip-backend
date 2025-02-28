@@ -565,7 +565,7 @@ impl
 				broker_fee: Some(swap_details.broker_fee),
 				affiliate_fees: swap_details.affiliate_fees,
 				dca_params: swap_details.dca_params,
-				refund_params: Some(swap_details.refund_params),
+				refund_params: swap_details.refund_params,
 				boost_fee: swap_details.boost_fee.into(),
 			},
 		);
