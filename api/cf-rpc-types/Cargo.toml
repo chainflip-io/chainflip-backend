@@ -1,0 +1,27 @@
+[package]
+name = "cf-rpc-types"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+edition = "2021"
+description = "Chainflip rpc related types"
+
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+
+# State Chain
+cf-amm = { workspace = true, default-features = true }
+state-chain-runtime = { workspace = true, default-features = true }
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+frame-support = { workspace = true, default-features = true }
+pallet-cf-pools = { workspace = true, default-features = true }
+pallet-cf-funding = { workspace = true, default-features = true }
+
+

@@ -1,42 +1,44 @@
-use std::{fmt, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
 use cf_chains::{
-	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParameters,
-	ChannelRefundParametersEncoded, ForeignChain,
+	evm::to_evm_address, CcmChannelMetadata, ChannelRefundParameters,
+	ChannelRefundParametersEncoded,
 };
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
 pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
 pub mod primitives {
-	pub use cf_primitives::*;
-	pub use pallet_cf_governance::ProposalId;
-	pub use pallet_cf_swapping::AffiliateDetails;
-	pub use state_chain_runtime::{self, BlockNumber, Hash};
-	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
 		CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	};
+	pub use cf_primitives::*;
+	pub use pallet_cf_governance::ProposalId;
+	pub use pallet_cf_swapping::AffiliateDetails;
+	pub use state_chain_runtime::{self, BlockNumber, Hash};
 }
+pub use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
+
 pub use cf_chains::eth::Address as EthereumAddress;
+
 pub use chainflip_engine::{
 	settings,
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcApi, RawRpcApi},
 		chain_api::ChainApi,
-		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, WaitFor, WaitForResult},
+		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 		storage_api::StorageApi,
 		BlockInfo,
 	},
@@ -47,7 +49,9 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
-use cf_utilities::{rpc::NumberOrHex, task_scope::Scope};
+pub use cf_rpc_types::{broker::*, *};
+
+use cf_utilities::task_scope::Scope;
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
@@ -205,7 +209,7 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
 	async fn request_redemption(
 		&self,
-		amount: primitives::RedemptionAmount,
+		amount: RedemptionAmount,
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
@@ -306,45 +310,6 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 		println!("If you're the governance dictator, the rotation will begin soon.");
 
 		Ok(())
-	}
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SwapDepositAddress {
-	pub address: AddressString,
-	pub issued_block: state_chain_runtime::BlockNumber,
-	pub channel_id: ChannelId,
-	pub source_chain_expiry_block: NumberOrHex,
-	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<RefundParametersRpc>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct WithdrawFeesDetail {
-	pub tx_hash: H256,
-	pub egress_id: (ForeignChain, u64),
-	pub egress_amount: U256,
-	pub egress_fee: U256,
-	pub destination_address: AddressString,
-}
-
-impl fmt::Display for WithdrawFeesDetail {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(
-			f,
-			"\
-			Tx hash: {:?}\n\
-			Egress id: {:?}\n\
-			Egress amount: {}\n\
-			Egress fee: {}\n\
-			Destination address: {}\n\
-			",
-			self.tx_hash,
-			self.egress_id,
-			self.egress_amount,
-			self.egress_fee,
-			self.destination_address,
-		)
 	}
 }
 
@@ -581,14 +546,6 @@ pub trait SimpleSubmissionApi: SignedExtrinsicApi {
 #[async_trait]
 impl<T: SignedExtrinsicApi + Sized + Send + Sync + 'static> SimpleSubmissionApi for T {}
 
-pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
-
-#[derive(Serialize, Deserialize)]
-pub enum TransactionInId {
-	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
-	// other variants reserved for other chains.
-}
-
 #[async_trait]
 pub trait DepositMonitorApi:
 	SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static
@@ -711,7 +668,7 @@ mod tests {
 	mod key_generation {
 
 		use super::*;
-		use cf_chains::address::clean_foreign_chain_address;
+		use cf_chains::{address::clean_foreign_chain_address, ForeignChain};
 		use sp_core::crypto::Ss58Codec;
 
 		#[test]
