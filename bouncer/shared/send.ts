@@ -19,48 +19,50 @@ import { sendSolUsdc } from './send_solusdc';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-export async function send(
-  asset: Asset,
-  address: string,
-  amount?: string,
-  log = true,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
+export async function send(asset: Asset, address: string, amount?: string, log = true) {
   switch (asset) {
     case 'Btc':
-      return sendBtc(address, amount ?? defaultAssetAmounts(asset));
+      await sendBtc(address, amount ?? defaultAssetAmounts(asset));
+      break;
     case 'Eth':
-      return sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log);
+      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log);
+      break;
     case 'ArbEth':
-      return sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log);
+      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log);
+      break;
     case 'Dot':
-      return sendDot(address, amount ?? defaultAssetAmounts(asset));
+      await sendDot(address, amount ?? defaultAssetAmounts(asset));
+      break;
     case 'Sol':
-      return sendSol(address, amount ?? defaultAssetAmounts(asset));
+      await sendSol(address, amount ?? defaultAssetAmounts(asset));
+      break;
     case 'Usdc':
     case 'Usdt':
     case 'Flip': {
       const contractAddress = getContractAddress('Ethereum', asset);
-      return sendErc20(
+      await sendErc20(
         'Ethereum',
         address,
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
         log,
       );
+      break;
     }
     case 'ArbUsdc': {
       const contractAddress = getContractAddress('Arbitrum', asset);
-      return sendErc20(
+      await sendErc20(
         'Arbitrum',
         address,
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
         log,
       );
+      break;
     }
     case 'SolUsdc':
-      return sendSolUsdc(address, amount ?? defaultAssetAmounts(asset));
+      await sendSolUsdc(address, amount ?? defaultAssetAmounts(asset));
+      break;
     default:
       throw new Error(`Unsupported asset type: ${asset}`);
   }

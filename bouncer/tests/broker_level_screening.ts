@@ -509,38 +509,6 @@ async function main() {
   await ensureHealth();
   const previousMockmode = (await setMockmode('Manual')).previous;
 
-  await Promise.all([
-    testBrokerLevelScreeningBitcoin(),
-    testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-  ]);
-
-  // test rejection of LP deposits, this requires the rejecting broker to be whitelisted:
-  await setWhitelistedBroker(broker.addressRaw);
-  await Promise.all([
-    testBrokerLevelScreeningEthereumLiquidityDeposit('Eth', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
-    testBrokerLevelScreeningEthereumLiquidityDeposit('Usdt', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
-    testBrokerLevelScreeningEthereumLiquidityDeposit('Flip', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
-    testBrokerLevelScreeningEthereumLiquidityDeposit('Usdc', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
-  ]);
-
-  await setMockmode(previousMockmode);
-}
-
-async function main() {
-  await ensureHealth();
-  const previousMockmode = (await setMockmode('Manual')).previous;
-
   // test rejection of swaps by the responsible broker
   await Promise.all([
     testBrokerLevelScreeningBitcoin(),

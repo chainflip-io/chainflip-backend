@@ -26,5 +26,5 @@ export async function sendErc20(
 
   if (log) console.log('Transferring ' + amount + ' ' + symbol + ' to ' + destinationAddress);
 
-  return signAndSendTxEvm(chain, contractAddress, '0', txData, undefined, log);
+  await signAndSendTxEvm(chain, contractAddress, '0', txData, undefined, log);
 }

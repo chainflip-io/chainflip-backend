@@ -104,7 +104,7 @@ export async function sendEvmNative(
   log = true,
 ) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals('Eth'));
-  return signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, undefined, log);
+  await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, undefined, log);
 }
 
 export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => boolean) {
