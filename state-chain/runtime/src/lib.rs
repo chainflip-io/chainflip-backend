@@ -489,7 +489,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
-	type AllowTransactionReports = ConstBool<false>;
+	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 }
 
