@@ -610,6 +610,13 @@ pub trait DepositMonitorApi:
 					),
 				)
 				.await,
+			TransactionInId::Arbitrum(tx_id) =>
+				self.simple_submission_with_dry_run(
+					state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+				)
+				.await,
 		}
 	}
 }
