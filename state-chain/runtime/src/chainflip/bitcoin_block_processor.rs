@@ -49,28 +49,17 @@ fn dedup_events<T: Ord + Clone>(
 	let mut chosen: BTreeMap<T, (BlockNumber, BtcEvent<T>)> = BTreeMap::new();
 
 	for (block, event) in events {
-		let deposit: T = event.deposit_witness().clone();
+		let deposit = event.deposit_witness().clone();
 
-		match chosen.get(&deposit) {
-			None => {
-				// No event yet for this deposit, store it
-				chosen.insert(deposit, (block, event));
-			},
-			Some((_, existing_event)) => {
-				// There's already an event for this deposit
-				match (existing_event, &event) {
-					// If we already have a Witness, do nothing
-					(BtcEvent::Witness(_), BtcEvent::PreWitness(_)) => (),
-					// If we have a PreWitness and the new event is a Witness, override it
-					(BtcEvent::PreWitness(_), BtcEvent::Witness(_)) => {
-						chosen.insert(deposit, (block, event));
-					},
-					// This should be impossible to reach!
-					(_, _) => (),
-				}
-			},
+		// Only insert if no event exists yet, or if we're upgrading from PreWitness to Witness
+		if !chosen.contains_key(&deposit) ||
+			(matches!(chosen.get(&deposit), Some((_, BtcEvent::PreWitness(_)))) &&
+				matches!(event, BtcEvent::Witness(_)))
+		{
+			chosen.insert(deposit, (block, event));
 		}
 	}
+
 	chosen.into_values().collect()
 }
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
