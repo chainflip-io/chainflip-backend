@@ -3,6 +3,8 @@ name = "cf-rpc-types"
 version = "0.1.0"
 authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 edition = "2021"
+description = "Chainflip rpc related types"
+
 
 [lints]
 workspace = true
