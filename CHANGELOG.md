@@ -1,6 +1,12 @@
-# Changelog
+
 
 All notable changes included in each Chainflip release will be documented in this file.
+
+## [1.7.11] - 2025-02-28
+
+### Features
+
+- Increase Ethereum safety margin
 
 ## [1.7.10] - 2025-02-26
 

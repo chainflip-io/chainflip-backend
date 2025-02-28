@@ -209,7 +209,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 1_07_10,
+	spec_version: 1_07_11,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -1255,6 +1255,7 @@ type AllMigrations = (
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
 	migrations::whitelist_brokers::Migration,
+	migrations::increase_eth_safety_margin::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
