@@ -95,6 +95,17 @@ impl<
 		Ok(())
 	}
 
+	fn is_vote_needed(
+		(_, current_partial_vote, _): (
+			VotePropertiesOf<Self>,
+			PartialVoteOf<Self>,
+			AuthorityVoteOf<Self>,
+		),
+		(proposed_partial_vote, _): (PartialVoteOf<Self>, crate::VoteOf<Self>),
+	) -> bool {
+		current_partial_vote != proposed_partial_vote
+	}
+
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
