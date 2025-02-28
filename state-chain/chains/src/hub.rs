@@ -304,7 +304,7 @@ impl FeeEstimationApi<Assethub> for AssethubTrackedData {
 
 		self.median_tip + transfer::EXTRINSIC_FEE
 	}
-	
+
 	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Assethub as Chain>::ChainAmount> {
 		None
 	}
@@ -819,6 +819,16 @@ pub enum AssetsCall {
 		#[allow(missing_docs)]
 		#[codec(compact)]
 		value: PolkadotBalance,
+	},
+	#[codec(index = 32u8)]
+	transfer_all {
+		#[allow(missing_docs)]
+		#[codec(compact)]
+		id: PolkadotIndex,
+		#[allow(missing_docs)]
+		dest: PolkadotAccountIdLookup,
+		#[allow(missing_docs)]
+		keep_alive: bool,
 	},
 }
 

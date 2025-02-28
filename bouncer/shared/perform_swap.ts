@@ -421,7 +421,7 @@ export async function performVaultSwap(
       transactionId,
     };
   } catch (err) {
-    console.error('err:', err);
+    console.error(tag, 'Error in performVaultSwap() in perform_swap.ts: ', err);
     swapContext?.updateStatus(swapTag, SwapStatus.Failure);
     if (err instanceof Error) {
       console.log(err.stack);

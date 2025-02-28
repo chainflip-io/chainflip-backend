@@ -4,7 +4,7 @@ import { rangeOrder } from '../shared/range_order';
 import { Asset } from './utils';
 
 export const deposits = new Map<Asset, number>([
-  ['Dot', 200000],
+  ['Dot', 20000],
   ['Eth', 1000],
   ['ArbEth', 1000],
   ['Btc', 100],
@@ -14,7 +14,7 @@ export const deposits = new Map<Asset, number>([
   ['Flip', 100000],
   ['Sol', 1000],
   ['SolUsdc', 1000000],
-  ['HubDot', 100000],
+  ['HubDot', 10000],
   ['HubUsdc', 250000],
   ['HubUsdt', 250000],
 ]);
@@ -53,7 +53,7 @@ export async function setupSwaps(): Promise<void> {
     createLpPool('HubUsdt', price.get('HubUsdt')!),
   ]);
 
-  const lp1Deposits = Promise.all([
+  await Promise.all([
     depositLiquidity('Usdc', deposits.get('Usdc')!, false, '//LP_1'),
     depositLiquidity('Eth', deposits.get('Eth')!, false, '//LP_1'),
     depositLiquidity('Dot', deposits.get('Dot')!, false, '//LP_1'),
@@ -69,7 +69,7 @@ export async function setupSwaps(): Promise<void> {
     depositLiquidity('HubUsdt', deposits.get('HubUsdt')!, false, '//LP_1'),
   ]);
 
-  const lpApiDeposits = Promise.all([
+  await Promise.all([
     depositLiquidity('Usdc', 1000, false, '//LP_API'),
     depositLiquidity('Eth', 100, false, '//LP_API'),
     depositLiquidity('Dot', 2000, false, '//LP_API'),
@@ -84,8 +84,6 @@ export async function setupSwaps(): Promise<void> {
     depositLiquidity('HubUsdc', 1000, false, '//LP_API'),
     depositLiquidity('HubUsdt', 1000, false, '//LP_API'),
   ]);
-
-  await Promise.all([lp1Deposits, lpApiDeposits]);
 
   await Promise.all([
     rangeOrder('Eth', deposits.get('Eth')! * 0.9999),

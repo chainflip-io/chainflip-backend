@@ -8,8 +8,8 @@ use crate::{
 	},
 	FetchAssetParams, TransferAssetParams,
 };
-use cf_utilities::SliceToArray;
 use cf_primitives::{ASSETHUB_USDC_ASSET_ID, ASSETHUB_USDT_ASSET_ID};
+use cf_utilities::SliceToArray;
 use sp_std::{boxed::Box, vec::Vec};
 
 pub fn extrinsic_builder(

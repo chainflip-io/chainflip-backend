@@ -92,7 +92,7 @@ export async function executeEvmVaultSwap(
     brokerAddress,
     { chain: srcChain, asset: stateChainAssetFromAsset(sourceAsset) },
     { chain: destChain, asset: stateChainAssetFromAsset(destAsset) },
-    destChain === Chains.Polkadot ? decodeDotAddressForContract(destAddress) : destAddress,
+    (destChain === Chains.Polkadot || destChain === Chains.Assethub) ? decodeDotAddressForContract(destAddress) : destAddress,
     brokerCommissionBps,
     extraParameters,
     messageMetadata && {

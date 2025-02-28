@@ -188,18 +188,6 @@ async function main(): Promise<void> {
     chainflip.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),
   );
 
-  // Step 8
-  console.log('Creating USDC and USDT tokens on Assethub');
-  let batch = [
-    assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1337, alice.address, true, 10000)),
-    assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1984, alice.address, true, 10000)),
-    assethub.tx.assets.setMetadata(1337, "USD Coin", "USDC", 6),
-    assethub.tx.assets.setMetadata(1984, "Tether USD", "USDT", 6),
-    assethub.tx.assets.mint(1337, alice.address, 100000000000000),
-    assethub.tx.assets.mint(1984, alice.address, 100000000000000)
-  ];
-  await assethub.tx.utility.batchAll(batch).signAndSend(alice, {nonce: -1});
-
   // Confirmation
   console.log('Waiting for new epoch...');
   await observeEvent('validator:NewEpoch').event;

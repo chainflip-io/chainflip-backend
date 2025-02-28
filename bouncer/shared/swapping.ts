@@ -56,7 +56,7 @@ function newCcmArbitraryBytes(maxLength: number): string {
 }
 
 // Protocol limits
-const MAX_CCM_MSG_LENGTH = 15_000;
+const MAX_CCM_MSG_LENGTH = 10_240; // TODO! change back to 15_000 once chainflip-sdk supports this + assethub
 const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
 
 // In Arbitrum's localnet large messages (~ >4k) end up with large gas estimations

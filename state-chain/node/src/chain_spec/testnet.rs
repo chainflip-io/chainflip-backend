@@ -43,12 +43,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
-		"13d0723c0891a46a0e0931e23fb7c9961c0f87bc73ad965b35cf0f1d84a986b8"
+		"e18e14d3c065e36e7d96db5f5a32482a15953c11933590b739b5562b6994bf2d"
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	hub_genesis_hash: H256(hex_literal::hex!(
-		"4d515dfd1fceb9c43f7ddb50b85b45ab971688e46082f5bfd2f2bf1d8f6d71c7"
+		"e58c46099b158aeb474d1020ea706f468d4edfa27e6e3e75688da1bb17fd6876"
 	)),
 	hub_vault_account_id: None,
 	hub_runtime_version: RuntimeVersion { spec_version: 1003004, transaction_version: 15 },

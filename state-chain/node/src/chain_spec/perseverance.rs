@@ -51,7 +51,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	hub_genesis_hash: H256(hex_literal::hex!(
-		"4d515dfd1fceb9c43f7ddb50b85b45ab971688e46082f5bfd2f2bf1d8f6d71c7"
+		"4fb7a1b11ba4a38827cf211b3effc87971413e4a9fd79c6bcc2c633383496832"
 	)),
 	hub_vault_account_id: None,
 	hub_runtime_version: RuntimeVersion { spec_version: 1003004, transaction_version: 15 },

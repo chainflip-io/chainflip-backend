@@ -59,16 +59,16 @@ pub fn extrinsic_builder(
 											keep_alive: false,
 										}),
 									cf_primitives::chains::assets::hub::Asset::HubUsdt =>
-										AssethubRuntimeCall::Assets(AssetsCall::transfer {
+										AssethubRuntimeCall::Assets(AssetsCall::transfer_all {
 											id: ASSETHUB_USDT_ASSET_ID,
 											dest: PolkadotAccountIdLookup::from(transfer_params.to),
-											value: transfer_params.amount,
+											keep_alive: false,
 										}),
 									cf_primitives::chains::assets::hub::Asset::HubUsdc =>
-										AssethubRuntimeCall::Assets(AssetsCall::transfer {
+										AssethubRuntimeCall::Assets(AssetsCall::transfer_all {
 											id: ASSETHUB_USDC_ASSET_ID,
 											dest: PolkadotAccountIdLookup::from(transfer_params.to),
-											value: transfer_params.amount,
+											keep_alive: false,
 										}),
 								},
 							],
