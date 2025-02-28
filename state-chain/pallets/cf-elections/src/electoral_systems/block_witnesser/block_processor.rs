@@ -28,8 +28,7 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 /// - The block data type.
 /// - The event type produced during block processing.
 /// - The rules to generate events (for example, pre-witness and full witness rules).
-/// - The logic for executing events.
-/// - The logic for deduplicating events.
+/// - The logic for executing and deduplicating events.
 ///
 /// These are defined via the [`BWProcessorTypes`] trait, which is a generic parameter for this
 /// processor.
@@ -42,7 +41,6 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 ///     - `Event`: The type of event generated from processing blocks.
 ///     - `Rules`: A hook to process block data and generate events.
 ///     - `Execute`: A hook to execute generated events.
-///     - `DedupEvents`: A hook to deduplicate events.
 ///     - `SafetyMargin`: A hook to retrieve the chain specific safety-margin
 #[derive_where(Debug, Clone, PartialEq, Eq;
 	T::ChainBlockNumber: Debug + Clone + Eq,
@@ -50,7 +48,6 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 	T::Event: Debug + Clone + Eq,
 	T::Rules: Debug + Clone + Eq,
 	T::Execute: Debug + Clone + Eq,
-	T::DedupEvents: Debug + Clone + Eq,
 	T::SafetyMargin: Debug + Clone + Eq,
 )]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
@@ -60,7 +57,6 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 	T::Event: Encode,
 	T::Rules: Encode,
 	T::Execute: Encode,
-	T::DedupEvents: Encode,
 	T::SafetyMargin: Encode,
 ))]
 pub struct BlockProcessor<T: BWProcessorTypes> {
@@ -72,7 +68,6 @@ pub struct BlockProcessor<T: BWProcessorTypes> {
 	pub reorg_events: BTreeMap<T::ChainBlockNumber, Vec<T::Event>>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
-	pub dedup_events: T::DedupEvents,
 	pub safety_margin: T::SafetyMargin,
 }
 impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
@@ -84,7 +79,6 @@ impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 			reorg_events: Default::default(),
 			rules: Default::default(),
 			execute: Default::default(),
-			dedup_events: Default::default(),
 			safety_margin: Default::default(),
 		}
 	}
@@ -108,8 +102,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// 3. **Processing Rules:** The processor applies the chain-specific rules (via the `rules`
 	///    hook) to the stored block data, generating a set of events.
 	///
-	/// 4. **Deduplication and Execution:** Generated events are deduplicated using the
-	///    `dedup_events` hook. The remaining events are then executed via the `execute` hook.
+	/// 4. **Deduplication and Execution:** Generated events are deduplicated and then executed via
+	///    the `execute` hook.
 	///
 	/// # Parameters
 	///
@@ -163,12 +157,9 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			},
 		}
 		let events = self.process_rules(last_block);
-		let last_events = self.dedup_events.run(events);
-		for event in &last_events {
-			self.execute.run(event.clone());
-		}
+		let executed_events = self.execute.run(events.clone());
 		self.clean_old(last_block);
-		last_events
+		executed_events
 	}
 
 	/// Processes the stored block data to generate events by applying the provided rules.
@@ -265,11 +256,10 @@ pub(crate) mod test {
 				block_processor::BlockProcessor,
 				primitives::ChainProgressInner,
 				state_machine::{
-					BWProcessorTypes, DedupEventsHook, ExecuteHook, HookTypeFor, RulesHook,
-					SafetyMarginHook,
+					BWProcessorTypes, ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook,
 				},
 			},
-			state_machine::core::{hook_test_utils::IncreasingHook, Hook, TypesFor},
+			state_machine::core::{Hook, TypesFor},
 		},
 		*,
 	};
@@ -323,17 +313,21 @@ pub(crate) mod test {
 		}
 	}
 
-	impl Hook<HookTypeFor<Types, DedupEventsHook>> for Types {
+	impl Hook<HookTypeFor<Types, SafetyMarginHook>> for Types {
+		fn run(&mut self, _input: ()) -> u32 {
+			3
+		}
+	}
+
+	impl Hook<HookTypeFor<Types, ExecuteHook>> for Types {
 		fn run(
 			&mut self,
 			events: Vec<(BlockNumber, MockBtcEvent)>,
 		) -> Vec<(BlockNumber, MockBtcEvent)> {
-			// Map: deposit_witness -> chosen BtcEvent
-			// todo! this is annoying, it require us to implement Ord down to the Chain type
 			let mut chosen: BTreeMap<u8, (BlockNumber, MockBtcEvent)> = BTreeMap::new();
 
 			for (block, event) in events {
-				let deposit = *event.deposit_witness();
+				let deposit: u8 = *event.deposit_witness();
 
 				match chosen.get(&deposit) {
 					None => {
@@ -355,13 +349,7 @@ pub(crate) mod test {
 					},
 				}
 			}
-			chosen.into_values().collect()
-		}
-	}
-
-	impl Hook<HookTypeFor<Types, SafetyMarginHook>> for Types {
-		fn run(&mut self, _input: ()) -> u32 {
-			3
+			chosen.into_values().collect::<Vec<_>>()
 		}
 	}
 
@@ -370,8 +358,7 @@ pub(crate) mod test {
 		type BlockData = MockBlockData;
 		type Event = MockBtcEvent;
 		type Rules = Types;
-		type Execute = IncreasingHook<HookTypeFor<Types, ExecuteHook>>;
-		type DedupEvents = Types;
+		type Execute = Types;
 		type SafetyMargin = Types;
 	}
 
@@ -490,12 +477,18 @@ pub(crate) mod test {
 	fn number_of_events_executed_is_correct() {
 		let mut processor = BlockProcessor::<Types>::default();
 
-		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4])));
-		processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![6])));
-		processor.process_block_data(ChainProgressInner::Progress(17), Some((16, vec![18])));
+		let mut events =
+			processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4])));
+		events.extend(
+			processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![6]))),
+		);
+		events.extend(
+			processor.process_block_data(ChainProgressInner::Progress(17), Some((16, vec![18]))),
+		);
 
 		assert_eq!(
-			processor.execute.counter, 5,
+			events.len(),
+			5,
 			"Hook should have been called 5 times: 3 pre-witness deposit and 2 full deposit"
 		)
 	}

@@ -68,12 +68,6 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
 
 pub struct ExecuteHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
-	type Input = (T::ChainBlockNumber, T::Event);
-	type Output = ();
-}
-
-pub struct DedupEventsHook;
-impl<T: BWProcessorTypes> HookType for HookTypeFor<T, DedupEventsHook> {
 	type Input = Vec<(T::ChainBlockNumber, T::Event)>;
 	type Output = Vec<(T::ChainBlockNumber, T::Event)>;
 }
@@ -99,12 +93,6 @@ pub trait BWProcessorTypes: Sized {
 	type Event: Serde + Debug + Clone + Eq;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
 	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + Serde + Debug + Clone + Eq;
-	type DedupEvents: Hook<HookTypeFor<Self, DedupEventsHook>>
-		+ Default
-		+ Serde
-		+ Debug
-		+ Clone
-		+ Eq;
 
 	type SafetyMargin: Hook<HookTypeFor<Self, SafetyMarginHook>>
 		+ Default
@@ -446,7 +434,6 @@ mod tests {
 					reorg_events: Default::default(),
 					rules: Default::default(),
 					execute: Default::default(),
-					dedup_events: Default::default(),
 					safety_margin: ConstantHook::new(1),
 				},
 				_phantom: core::marker::PhantomData,
@@ -494,7 +481,6 @@ mod tests {
 		type Event = ();
 		type Rules = ConstantHook<HookTypeFor<Self, RulesHook>>;
 		type Execute = ConstantHook<HookTypeFor<Self, ExecuteHook>>;
-		type DedupEvents = ConstantHook<HookTypeFor<Self, DedupEventsHook>>;
 		type SafetyMargin = ConstantHook<HookTypeFor<Self, SafetyMarginHook>>;
 	}
 
