@@ -1,7 +1,7 @@
 use cf_primitives::*;
 use sp_core::{
 	serde::{Deserialize, Serialize},
-	H256, U256,
+	U256,
 };
 use std::ops::Range;
 
@@ -16,31 +16,6 @@ pub use cf_amm::{
 	common::{PoolPairsMap, Side},
 	math::Tick,
 };
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case")]
-pub enum ApiWaitForResult<T> {
-	TxHash(H256),
-	TxDetails { tx_hash: H256, response: T },
-}
-
-impl<T> ApiWaitForResult<T> {
-	pub fn map_details<R>(self, f: impl FnOnce(T) -> R) -> ApiWaitForResult<R> {
-		match self {
-			ApiWaitForResult::TxHash(hash) => ApiWaitForResult::TxHash(hash),
-			ApiWaitForResult::TxDetails { response, tx_hash } =>
-				ApiWaitForResult::TxDetails { tx_hash, response: f(response) },
-		}
-	}
-
-	#[track_caller]
-	pub fn unwrap_details(self) -> T {
-		match self {
-			ApiWaitForResult::TxHash(_) => panic!("unwrap_details called on TransactionHash"),
-			ApiWaitForResult::TxDetails { response, .. } => response,
-		}
-	}
-}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RangeOrder {

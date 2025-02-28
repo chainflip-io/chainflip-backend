@@ -9,16 +9,16 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		ApiWaitForResult, CloseOrderJson, LimitOrRangeOrder, LimitOrder, LpApi, OpenSwapChannels,
-		OrderIdJson, RangeOrder, RangeOrderSizeJson, Side, Tick,
+		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LpApi, OpenSwapChannels, OrderIdJson,
+		RangeOrder, RangeOrderSizeJson, Side, Tick,
 	},
 	primitives::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash,
 	},
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
-	RedemptionAmount, SignedExtrinsicApi, StateChainApi, WaitFor,
+	AccountId32, AddressString, ApiWaitForResult, BlockUpdate, ChainApi, EthereumAddress,
+	OperatorApi, RedemptionAmount, SignedExtrinsicApi, StateChainApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::{order_fills::OrderFills, CustomApiClient};

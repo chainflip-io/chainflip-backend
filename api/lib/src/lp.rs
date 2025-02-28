@@ -10,7 +10,7 @@ use cf_chains::{
 	address::{AddressString, EncodedAddress},
 	ForeignChain,
 };
-use cf_node_client::{WaitFor, WaitForResult};
+use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
 use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
@@ -23,8 +23,8 @@ use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
 
 pub use cf_rpc_types::lp::{
-	ApiWaitForResult, CloseOrderJson, LimitOrRangeOrder, LimitOrder, OpenSwapChannels, OrderIdJson,
-	RangeOrder, RangeOrderChange, RangeOrderSizeJson,
+	CloseOrderJson, LimitOrRangeOrder, LimitOrder, OpenSwapChannels, OrderIdJson, RangeOrder,
+	RangeOrderChange, RangeOrderSizeJson,
 };
 
 fn collect_range_order_returns(

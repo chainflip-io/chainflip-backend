@@ -29,7 +29,7 @@ pub mod primitives {
 	pub use pallet_cf_swapping::AffiliateDetails;
 	pub use state_chain_runtime::{self, BlockNumber, Hash};
 }
-pub use cf_node_client::{WaitFor, WaitForResult};
+pub use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
 
 pub use cf_chains::eth::Address as EthereumAddress;
 
@@ -49,10 +49,7 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
-pub use cf_rpc_types::{
-	broker::{RefundParameters, SwapDepositAddress, TransactionInId, WithdrawFeesDetail},
-	RedemptionAmount,
-};
+pub use cf_rpc_types::{broker::*, *};
 
 use cf_utilities::task_scope::Scope;
 use chainflip_engine::state_chain_observer::client::{
