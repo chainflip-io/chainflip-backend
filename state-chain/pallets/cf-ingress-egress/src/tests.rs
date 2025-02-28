@@ -2347,8 +2347,8 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		boost_pool, BoostPools, ScheduledTransactionsForRejection, TransactionPrewitnessedStatus,
-		TransactionRejectionDetails, TransactionsMarkedForRejection,
+		boost_pool, BoostPools, ScheduledTransactionsForRejection, TransactionRejectionDetails,
+		TransactionRejectionStatus, TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::H256, ChannelLifecycleHooks,
@@ -2787,11 +2787,11 @@ mod evm_transaction_rejection {
 						.is_none(),
 					"Tx was not reported by whitelisted broker."
 				);
-				assert_eq!(
+				assert!(matches!(
 					TransactionsMarkedForRejection::<Test, ()>::get(BROKER, TAINTED_TX_ID)
 						.expect("Tx was marked by broker"),
-					TransactionPrewitnessedStatus::Unseen
-				);
+					TransactionRejectionStatus { prewitnessed: false, .. }
+				));
 				assert!(
 					matches!(
 						DepositChannelLookup::<Test, _>::get(deposits[0].2)
