@@ -1,0 +1,41 @@
+[package]
+name = "cf-node-client"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+edition = "2021"
+description = "Chainflip node client related common types and utilities"
+
+[lints]
+workspace = true
+
+[dependencies]
+codec = { workspace = true, default-features = true }
+scale-info = { workspace = true, features = ["derive"] }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+thiserror = { workspace = true }
+
+state-chain-runtime = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-api = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-version = { workspace = true }
+frame-system = { workspace = true, default-features = true }
+frame-support = { workspace = true, default-features = true }
+frame-metadata = { workspace = true, default-features = true, features = [
+    "current",
+] }
+frame-metadata-hash-extension = { workspace = true }
+subxt = { workspace = true, features = ["runtime-metadata-path"] }
+
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true }
+pallet-cf-pools = { workspace = true, default-features = true }
+cf-amm = { workspace = true, default-features = true }
+
+
+
+[dev-dependencies]
+pallet-cf-funding = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
+
+
