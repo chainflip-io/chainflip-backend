@@ -19,9 +19,8 @@ use cf_chains::{
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ChannelRefundParameters,
-	ChannelRefundParametersEncoded, DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall,
-	ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin, TransactionBuilder,
-	TransferAssetParams,
+	DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall, ForeignChain, ForeignChainAddress,
+	RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, SwapId, FLIPPERINOS_PER_FLIP,

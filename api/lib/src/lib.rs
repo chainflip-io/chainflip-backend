@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
-use cf_chains::{evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ForeignChain};
+use cf_chains::{evm::to_evm_address, CcmChannelMetadata};
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
@@ -26,9 +26,8 @@ pub mod primitives {
 	pub use pallet_cf_swapping::AffiliateDetails;
 	pub use state_chain_runtime::{self, BlockNumber, Hash};
 }
-pub use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
-
 pub use cf_chains::eth::Address as EthereumAddress;
+pub use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
 
 pub use chainflip_engine::{
 	settings,
@@ -307,45 +306,6 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 		println!("If you're the governance dictator, the rotation will begin soon.");
 
 		Ok(())
-	}
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SwapDepositAddress {
-	pub address: AddressString,
-	pub issued_block: state_chain_runtime::BlockNumber,
-	pub channel_id: ChannelId,
-	pub source_chain_expiry_block: NumberOrHex,
-	pub channel_opening_fee: U256,
-	pub refund_parameters: RefundParametersRpc,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct WithdrawFeesDetail {
-	pub tx_hash: H256,
-	pub egress_id: (ForeignChain, u64),
-	pub egress_amount: U256,
-	pub egress_fee: U256,
-	pub destination_address: AddressString,
-}
-
-impl fmt::Display for WithdrawFeesDetail {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(
-			f,
-			"\
-			Tx hash: {:?}\n\
-			Egress id: {:?}\n\
-			Egress amount: {}\n\
-			Egress fee: {}\n\
-			Destination address: {}\n\
-			",
-			self.tx_hash,
-			self.egress_id,
-			self.egress_amount,
-			self.egress_fee,
-			self.destination_address,
-		)
 	}
 }
 

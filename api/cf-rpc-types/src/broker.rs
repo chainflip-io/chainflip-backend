@@ -20,7 +20,7 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<RefundParametersRpc>,
+	pub refund_parameters: RefundParametersRpc,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
