@@ -242,13 +242,11 @@ fn generate_ccm_deposit() -> CcmDepositMetadata {
 	}
 }
 
-fn generate_channel_refund_parameters() -> ChannelRefundParametersEncoded {
-	ChannelRefundParametersEncoded {
-		retry_duration: 100,
-		refund_address: EncodedAddress::Eth([1; 20]),
-		min_price: U256::from(0),
-	}
-}
+const REFUND_PARAMS: ChannelRefundParametersEncoded = ChannelRefundParametersEncoded {
+	retry_duration: 100,
+	refund_address: EncodedAddress::Eth([1; 20]),
+	min_price: U256::zero(),
+};
 
 fn get_broker_balance<T: Config>(who: &T::AccountId, asset: Asset) -> AssetAmount {
 	T::BalanceApi::get_balance(who, asset)
@@ -302,7 +300,7 @@ fn request_swap_success_with_valid_parameters() {
 			None,
 			0,
 			Default::default(),
-			generate_channel_refund_parameters(),
+			REFUND_PARAMS,
 			None,
 		));
 	});
@@ -392,7 +390,7 @@ fn expect_swap_id_to_be_emitted() {
 				None,
 				0,
 				Default::default(),
-				generate_channel_refund_parameters(),
+				REFUND_PARAMS,
 				None,
 			));
 
@@ -454,7 +452,7 @@ fn rejects_invalid_swap_deposit() {
 				Some(ccm.clone()),
 				0,
 				Default::default(),
-				generate_channel_refund_parameters(),
+				REFUND_PARAMS,
 				None,
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
@@ -470,7 +468,7 @@ fn rejects_invalid_swap_deposit() {
 				Some(ccm),
 				0,
 				Default::default(),
-				generate_channel_refund_parameters(),
+				REFUND_PARAMS,
 				None,
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
@@ -1052,7 +1050,7 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 	new_test_ext().execute_with(|| {
 		let dca_parameters = DcaParameters { number_of_chunks: 5, chunk_interval: 2 };
 
-		let refund_parameters = generate_channel_refund_parameters();
+		let refund_parameters = REFUND_PARAMS;
 
 		const BOOST_FEE: u16 = 100;
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
@@ -1064,7 +1062,7 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 			None,
 			BOOST_FEE,
 			Default::default(),
-			generate_channel_refund_parameters(),
+			REFUND_PARAMS,
 			Some(dca_parameters.clone()),
 		));
 		assert_event_sequence!(

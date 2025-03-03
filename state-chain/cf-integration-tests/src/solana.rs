@@ -59,9 +59,9 @@ const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
-const REFUND_PARAMS: ChannelRefundParameters<SolAddress> = ChannelRefundParameters {
+const REFUND_PARAMS: ChannelRefundParameters<EncodedAddress> = ChannelRefundParameters {
 	retry_duration: 0,
-	refund_address: FALLBACK_ADDRESS,
+	refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
 	min_price: sp_core::U256::zero(),
 };
 
@@ -111,11 +111,7 @@ fn schedule_deposit_to_swap(
 		ccm,
 		0u16,
 		Default::default(),
-		ChannelRefundParametersEncoded {
-			retry_duration: 0,
-			refund_address: EncodedAddress::Sol([1u8; 32]),
-			min_price: sp_core::U256::zero(),
-		},
+		REFUND_PARAMS,
 		None,
 	));
 
@@ -385,7 +381,11 @@ fn vault_swap_deposit_witness(
 		deposit_details: (),
 		broker_fee: None,
 		affiliate_fees: Default::default(),
-		refund_params: REFUND_PARAMS,
+		refund_params: ChannelRefundParameters {
+			retry_duration: REFUND_PARAMS.retry_duration,
+			refund_address: FALLBACK_ADDRESS,
+			min_price: REFUND_PARAMS.min_price,
+		},
 		dca_params: None,
 		boost_fee: 0,
 		deposit_address: Some(SolAddress([2u8; 32])),
@@ -442,11 +442,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					Some(invalid_ccm.channel_metadata.clone()),
 					0u16,
 					Default::default(),
-					ChannelRefundParametersEncoded {
-						retry_duration: 0,
-						refund_address: EncodedAddress::Sol([1u8; 32]),
-						min_price: sp_core::U256::zero(),
-					},
+					REFUND_PARAMS,
 					None,
 				),
 				pallet_cf_swapping::Error::<Runtime>::InvalidCcm,
@@ -460,11 +456,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					0,
 					Some(invalid_ccm.channel_metadata.clone()),
 					0u16,
-					ChannelRefundParametersEncoded {
-						retry_duration: 0,
-						refund_address: EncodedAddress::Sol([1u8; 32]),
-						min_price: sp_core::U256::zero(),
-					},
+					REFUND_PARAMS,
 				),
 				pallet_cf_swapping::Error::<Runtime>::InvalidCcm,
 			);
