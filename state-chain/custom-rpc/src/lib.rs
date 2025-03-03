@@ -77,6 +77,7 @@ use std::{
 };
 
 pub mod broker;
+pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
 pub mod pool_client;

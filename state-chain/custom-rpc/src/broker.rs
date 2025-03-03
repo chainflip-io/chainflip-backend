@@ -1,21 +1,16 @@
 use crate::{pool_client::SignedPoolClient, CfApiError, RpcResult};
 pub use cf_chains::eth::Address as EthereumAddress;
 use cf_chains::{
-	address::{AddressString, EncodedAddress},
-	CcmChannelMetadata, ChannelRefundParameters, ChannelRefundParametersEncoded,
-	VaultSwapExtraParametersRpc,
+	address::AddressString, CcmChannelMetadata, ChannelRefundParameters,
+	ChannelRefundParametersEncoded, VaultSwapExtraParametersRpc,
 };
 use cf_node_client::{extract_dynamic_event, subxt_state_chain_config::cf_static_runtime};
-use cf_primitives::{
-	AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters,
-};
+use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId, DcaParameters};
 use cf_rpc_types::broker::{
 	GetOpenDepositChannelsQuery, RefundParameters, SwapDepositAddress, TransactionInId,
 	WithdrawFeesDetail,
 };
-use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
 use jsonrpsee::{core::async_trait, proc_macros::rpc};
-use pallet_cf_swapping::AffiliateDetails;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
 };
