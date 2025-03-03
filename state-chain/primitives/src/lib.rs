@@ -462,22 +462,26 @@ pub type ShortId = u8;
 pub enum CcmAuxDataLookupKey<BlockNumber: Clone> {
 	#[default]
 	NotRequired,
-	Alt(SwapRequestId, BlockNumber),
+	Alt {
+		// Used to lookup ALT query result
+		swap_request_id: SwapRequestId,
+		// Used to calculate when to expire and refund ccm
+		block_created: BlockNumber,
+	},
 }
 
 impl<BlockNumber: Clone> CcmAuxDataLookupKey<BlockNumber> {
 	pub fn swap_request_id(&self) -> Option<SwapRequestId> {
 		match self {
 			CcmAuxDataLookupKey::NotRequired => None,
-			CcmAuxDataLookupKey::Alt(swap_request_id, ..) => Some(*swap_request_id),
+			CcmAuxDataLookupKey::Alt { swap_request_id, .. } => Some(*swap_request_id),
 		}
 	}
 
 	pub fn block_created(&self) -> Option<BlockNumber> {
 		match self {
 			CcmAuxDataLookupKey::NotRequired => None,
-			CcmAuxDataLookupKey::Alt(_swap_request_id, block_created) =>
-				Some(block_created.clone()),
+			CcmAuxDataLookupKey::Alt { block_created, .. } => Some(block_created.clone()),
 		}
 	}
 }

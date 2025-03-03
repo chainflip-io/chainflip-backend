@@ -2937,10 +2937,10 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_address,
 						gas_budget,
 						aux_data_lookup_key: match swap_request_id {
-							Some(swap_request_id) => CcmAuxDataLookupKey::Alt(
+							Some(swap_request_id) => CcmAuxDataLookupKey::Alt {
 								swap_request_id,
-								<frame_system::Pallet<T>>::block_number(),
-							),
+								block_created: <frame_system::Pallet<T>>::block_number(),
+							},
 							None => CcmAuxDataLookupKey::NotRequired,
 						},
 					});

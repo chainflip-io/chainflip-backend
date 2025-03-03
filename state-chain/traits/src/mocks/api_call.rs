@@ -47,7 +47,7 @@ pub enum MockEthereumApiCall<MockEvmEnvironment> {
 }
 
 impl<MockEvmEnvironment> MockEthereumApiCall<MockEvmEnvironment> {
-	pub fn set_is_aux_ready(ready: bool) {
+	pub fn set_aux_data_ready(ready: bool) {
 		AUX_DATA_READY.set(ready);
 	}
 }
