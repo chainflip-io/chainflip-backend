@@ -1,7 +1,7 @@
 use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes},
-	electoral_systems::exact_value::*,
+	electoral_systems::witness_something_by_identifier::*,
 };
 
 use cf_primitives::AuthorityCount;
@@ -12,15 +12,12 @@ thread_local! {
 }
 
 pub struct MockHook;
-impl ExactValueHook<(), EgressData> for MockHook {
-	fn on_consensus(_id: (), _egress_data: EgressData) {
+impl WitnessSomethingHook<(), EgressData> for MockHook {
+	fn on_successful_witness(_id: (), _egress_data: EgressData) {
 		HOOK_CALLED.with(|hook_called| hook_called.set(true));
 	}
-	fn should_expire_election(_id: ()) -> bool {
-		SHOULD_EXPIRE_ELECTION.with(|should_expire_election| should_expire_election.get())
-	}
+	fn should_expire_election(id: ()) -> bool { false }
 }
-
 impl MockHook {
 	pub fn called() -> bool {
 		HOOK_CALLED.with(|hook_called| hook_called.get())
@@ -28,7 +25,6 @@ impl MockHook {
 }
 
 type EgressData = u64;
-type SimpleEgressSuccess = ExactValue<(), EgressData, (), MockHook, (), u32>;
 
 register_checks! {
 	SimpleEgressSuccess {

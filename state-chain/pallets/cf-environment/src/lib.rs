@@ -819,7 +819,7 @@ impl<T: Config> Pallet<T> {
 		swap_request_id: SwapRequestId,
 		alts: AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	) {
-		SolanaCcmSwapAlts::<T>::insert(swap_request_id, alts.ok_or(()));
+		SolanaCcmSwapAlts::<T>::insert(swap_request_id, alts);
 	}
 
 	pub fn take_sol_ccm_swap_alts(
