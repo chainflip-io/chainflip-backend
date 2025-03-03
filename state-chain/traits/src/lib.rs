@@ -930,13 +930,9 @@ pub trait OnDeposit<C: Chain> {
 	fn on_deposit_made(_deposit_details: C::DepositDetails) {}
 }
 
-pub trait NetworkEnvironmentProvider<BlockNumber: Default> {
+pub trait NetworkEnvironmentProvider {
 	/// The type of Network the current chain is running on.
 	fn get_network_environment() -> NetworkEnvironment;
-
-	fn max_wait_time_for_ccm_aux_data() -> BlockNumber {
-		Default::default()
-	}
 }
 
 pub trait OnBroadcastReady<C: Chain> {
@@ -1185,5 +1181,11 @@ pub trait InitiateSolanaAltWitnessing {
 	fn initiate_alt_witnessing(
 		_ccm_channel_metadata: CcmChannelMetadata,
 		_swap_request_id: SwapRequestId,
-	);
+		_maybe_dca_params: Option<DcaParameters>,
+	) {
+	}
+
+	fn max_wait_time_for_ccm_aux_data() -> BlockNumber {
+		Default::default()
+	}
 }

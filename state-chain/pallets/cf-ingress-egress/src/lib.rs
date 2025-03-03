@@ -591,7 +591,7 @@ pub mod pallet {
 		/// Provides callbacks for deposit lifecycle events.
 		type DepositHandler: OnDeposit<Self::TargetChain>;
 
-		type NetworkEnvironment: NetworkEnvironmentProvider<BlockNumberFor<Self>>;
+		type NetworkEnvironment: NetworkEnvironmentProvider;
 
 		/// Allows assets to be converted through the AMM.
 		type AssetConverter: AssetConverter;
@@ -1738,7 +1738,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut maybe_no_of_transfers_remaining =
 			T::FetchesTransfersLimitProvider::maybe_ccm_limit();
 
-		let ccm_max_wait_time = T::NetworkEnvironment::max_wait_time_for_ccm_aux_data();
+		let ccm_max_wait_time = T::AltWitnessingHandler::max_wait_time_for_ccm_aux_data();
 		let current_block = <frame_system::Pallet<T>>::block_number();
 
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain, BlockNumberFor<T>>> =
@@ -2833,7 +2833,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		error: ExecutexSwapAndCallError,
 	) {
 		Self::deposit_event(Event::<T, I>::CcmEgressInvalid { egress_id: ccm.egress_id, error });
-
 		if let Ok(decoded_data) = T::CcmValidityChecker::decode_unchecked(
 			ccm.ccm_additional_data.clone(),
 			T::TargetChain::get(),

@@ -607,13 +607,9 @@ impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTabl
 
 impl SolanaEnvironment for SolEnvironment {}
 
-impl NetworkEnvironmentProvider<BlockNumber> for SolEnvironment {
+impl NetworkEnvironmentProvider for SolEnvironment {
 	fn get_network_environment() -> NetworkEnvironment {
 		Environment::network_environment()
-	}
-
-	fn max_wait_time_for_ccm_aux_data() -> BlockNumber {
-		cf_chains::sol::sol_tx_core::consts::MAX_WAIT_TIME_FOR_CCM_AUX_DATA
 	}
 }
 

@@ -25,7 +25,7 @@ use cf_primitives::{
 	AccountRole, AuthorityCount, CcmAuxDataLookupKey, ForeignChain, SwapRequestId,
 };
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
-use cf_traits::NetworkEnvironmentProvider;
+use cf_traits::AltWitnessingHandler;
 use cf_utilities::bs58_array;
 use codec::Encode;
 use frame_support::{
@@ -46,7 +46,8 @@ use sp_core::ConstU32;
 use sp_runtime::BoundedBTreeMap;
 use state_chain_runtime::{
 	chainflip::{
-		address_derivation::AddressDerivation, solana_elections::TransactionSuccessDetails,
+		address_derivation::AddressDerivation,
+		solana_elections::{SolanaAltWitnessingHandler, TransactionSuccessDetails},
 		ChainAddressConverter, SolEnvironment,
 		SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
 	},
@@ -1049,7 +1050,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 			});
 
 			assert!(SolEnvironment::get_address_lookup_tables(swap_request_id).is_err());
-			let max_aux_wait_time = SolEnvironment::max_wait_time_for_ccm_aux_data();
+			let max_aux_wait_time = SolanaAltWitnessingHandler::max_wait_time_for_ccm_aux_data();
 
 			testnet.move_forward_blocks(max_aux_wait_time);
 
