@@ -726,4 +726,8 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 			_ => {},
 		}
 	}
+
+	fn max_wait_time_for_ccm_aux_data() -> BlockNumberFor<Runtime> {
+		cf_chains::sol::sol_tx_core::consts::EXPIRY_TIME_FOR_ALT_ELECTIONS
+	}
 }

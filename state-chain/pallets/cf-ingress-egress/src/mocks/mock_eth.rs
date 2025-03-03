@@ -104,16 +104,17 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 }
 
 pub(crate) const MOCK_MAX_WAIT_TIME_FOR_CCM_AUX_DATA: BlockNumberFor<Test> = 100u64;
+pub struct MockAltWitnesser;
+impl AltWitnessingHandler<BlockNumberFor<Test>> for MockAltWitnesser {
+	fn max_wait_time_for_ccm_aux_data() -> BlockNumberFor<Test> {
+		MOCK_MAX_WAIT_TIME_FOR_CCM_AUX_DATA
+	}
+}
 
 pub struct MockNetworkEnvironmentProvider {}
-
-impl NetworkEnvironmentProvider<BlockNumberFor<Test>> for MockNetworkEnvironmentProvider {
+impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
 		cf_primitives::NetworkEnvironment::Development
-	}
-
-	fn max_wait_time_for_ccm_aux_data() -> u64 {
-		MOCK_MAX_WAIT_TIME_FOR_CCM_AUX_DATA
 	}
 }
 
