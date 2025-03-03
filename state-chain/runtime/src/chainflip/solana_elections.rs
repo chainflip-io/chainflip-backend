@@ -687,7 +687,7 @@ impl FromSolOrNot for SolanaVaultSwapDetails {
 }
 
 pub struct SolanaAltWitnessingHandler;
-impl AltWitnessingHandler for SolanaAltWitnessingHandler {
+impl AltWitnessingHandler<BlockNumberFor<Runtime>> for SolanaAltWitnessingHandler {
 	fn initiate_alt_witnessing(
 		ccm_channel_metadata: CcmChannelMetadata,
 		swap_request_id: SwapRequestId,
@@ -726,5 +726,9 @@ impl AltWitnessingHandler for SolanaAltWitnessingHandler {
 			Err(e) => log::error!("Ccm Check failed while decoding ccm_additional_data while initiating Solana ALT witnessing: {:?}", e),
 			_ => {},
 		}
+	}
+
+	fn max_wait_time_for_ccm_aux_data() -> BlockNumberFor<Runtime> {
+		cf_chains::sol::sol_tx_core::consts::EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
 }

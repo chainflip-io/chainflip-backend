@@ -29,7 +29,7 @@ use cf_traits::{
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, NoAltWitnessing, OnDeposit,
+	AltWitnessingHandler, DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
 use frame_system::{self as system, pallet_prelude::BlockNumberFor};
@@ -103,16 +103,17 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 }
 
 pub(crate) const MOCK_MAX_WAIT_TIME_FOR_CCM_AUX_DATA: BlockNumberFor<Test> = 100u64;
+pub struct MockAltWitnesser;
+impl AltWitnessingHandler<BlockNumberFor<Test>> for MockAltWitnesser {
+	fn max_wait_time_for_ccm_aux_data() -> BlockNumberFor<Test> {
+		MOCK_MAX_WAIT_TIME_FOR_CCM_AUX_DATA
+	}
+}
 
 pub struct MockNetworkEnvironmentProvider {}
-
-impl NetworkEnvironmentProvider<BlockNumberFor<Test>> for MockNetworkEnvironmentProvider {
+impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
 		cf_primitives::NetworkEnvironment::Development
-	}
-
-	fn max_wait_time_for_ccm_aux_data() -> u64 {
-		MOCK_MAX_WAIT_TIME_FOR_CCM_AUX_DATA
 	}
 }
 
@@ -142,7 +143,7 @@ impl crate::Config for Test {
 	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
-	type AltWitnessingHandler = NoAltWitnessing;
+	type AltWitnessingHandler = MockAltWitnesser;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;

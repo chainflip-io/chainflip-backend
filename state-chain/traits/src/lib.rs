@@ -930,13 +930,9 @@ pub trait OnDeposit<C: Chain> {
 	fn on_deposit_made(_deposit_details: C::DepositDetails) {}
 }
 
-pub trait NetworkEnvironmentProvider<BlockNumber: Default> {
+pub trait NetworkEnvironmentProvider {
 	/// The type of Network the current chain is running on.
 	fn get_network_environment() -> NetworkEnvironment;
-
-	fn max_wait_time_for_ccm_aux_data() -> BlockNumber {
-		Default::default()
-	}
 }
 
 pub trait OnBroadcastReady<C: Chain> {
@@ -1181,13 +1177,18 @@ pub trait AffiliateRegistry {
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
 }
 
-pub trait AltWitnessingHandler {
+pub trait AltWitnessingHandler<BlockNumber: Default> {
 	fn initiate_alt_witnessing(
 		_ccm_channel_metadata: CcmChannelMetadata,
 		_swap_request_id: SwapRequestId,
 	) {
 	}
+
+	fn max_wait_time_for_ccm_aux_data() -> BlockNumber {
+		Default::default()
+	}
 }
 
 pub struct NoAltWitnessing;
-impl AltWitnessingHandler for NoAltWitnessing {}
+impl AltWitnessingHandler<u64> for NoAltWitnessing {}
+impl AltWitnessingHandler<u32> for NoAltWitnessing {}
