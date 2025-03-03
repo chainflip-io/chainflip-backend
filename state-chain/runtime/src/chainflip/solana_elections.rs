@@ -35,11 +35,11 @@ use pallet_cf_elections::{
 		self,
 		blockchain::delta_based_ingress::BackoffSettings,
 		composite::{tuple_7_impls::Hooks, CompositeRunner},
-		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
 		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
+		witness_something_by_identifier::WitnessSomethingHook,
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
@@ -134,14 +134,15 @@ pub type SolanaNonceTracking = electoral_systems::monotonic_change::MonotonicCha
 	BlockNumberFor<Runtime>,
 >;
 
-pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSuccess<
-	SolSignature,
-	TransactionSuccessDetails,
-	(),
-	SolanaEgressWitnessingHook,
-	<Runtime as Chainflip>::ValidatorId,
-	BlockNumberFor<Runtime>,
->;
+pub type SolanaEgressWitnessing =
+	electoral_systems::witness_something_by_identifier::WitnessSomethingByIdentifier<
+		SolSignature,
+		TransactionSuccessDetails,
+		(),
+		SolanaEgressWitnessingHook,
+		<Runtime as Chainflip>::ValidatorId,
+		BlockNumberFor<Runtime>,
+	>;
 
 pub type SolanaLiveness = electoral_systems::liveness::Liveness<
 	<Solana as Chain>::ChainBlockNumber,
@@ -190,23 +191,24 @@ pub struct SolanaAltWitnessingIdentifier {
 	pub election_start_sc_block_number: BlockNumberFor<Runtime>,
 }
 
-pub type SolanaAltWitnessing = electoral_systems::egress_success::EgressSuccess<
-	SolanaAltWitnessingIdentifier,
-	// We also want to allow for the election to come to consensus on the fact that one or more
-	// alts provided were invalid and so we cant witness all alts.
-	Option<Vec<SolAddressLookupTableAccount>>,
-	(),
-	SolanaAltWitnessingHook,
-	<Runtime as Chainflip>::ValidatorId,
-	BlockNumberFor<Runtime>,
->;
+pub type SolanaAltWitnessing =
+	electoral_systems::witness_something_by_identifier::WitnessSomethingByIdentifier<
+		SolanaAltWitnessingIdentifier,
+		// We also want to allow for the election to come to consensus on the fact that one or more
+		// alts provided were invalid and so we cant witness all alts.
+		Option<Vec<SolAddressLookupTableAccount>>,
+		(),
+		SolanaAltWitnessingHook,
+		<Runtime as Chainflip>::ValidatorId,
+		BlockNumberFor<Runtime>,
+	>;
 
 pub struct SolanaAltWitnessingHook;
 
-impl OnEgressSuccess<SolanaAltWitnessingIdentifier, Option<Vec<SolAddressLookupTableAccount>>>
+impl WitnessSomethingHook<SolanaAltWitnessingIdentifier, Option<Vec<SolAddressLookupTableAccount>>>
 	for SolanaAltWitnessingHook
 {
-	fn on_egress_success(
+	fn on_successful_witness(
 		alt_identifier: SolanaAltWitnessingIdentifier,
 		alts: Option<Vec<SolAddressLookupTableAccount>>,
 	) {
@@ -229,8 +231,8 @@ pub struct TransactionSuccessDetails {
 
 pub struct SolanaEgressWitnessingHook;
 
-impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
-	fn on_egress_success(
+impl WitnessSomethingHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
+	fn on_successful_witness(
 		signature: SolSignature,
 		TransactionSuccessDetails { tx_fee, transaction_successful }: TransactionSuccessDetails,
 	) {
@@ -563,7 +565,7 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 
 	fn watch_for_egress_success(signature: SolSignature) -> DispatchResult {
 		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
-			SolanaEgressWitnessing::watch_for_egress::<
+			SolanaEgressWitnessing::witness_something::<
 				DerivedElectoralAccess<
 					_,
 					SolanaEgressWitnessing,
@@ -700,7 +702,7 @@ impl AltWitnessingHandler for SolanaAltWitnessingHandler {
 				if !alt_addresses.is_empty() {
 					pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(
 						|| {
-							SolanaAltWitnessing::watch_for_egress::<
+							SolanaAltWitnessing::witness_something::<
 								DerivedElectoralAccess<
 									_,
 									SolanaAltWitnessing,

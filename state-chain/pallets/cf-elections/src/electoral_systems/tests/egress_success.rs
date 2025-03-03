@@ -1,7 +1,7 @@
 use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes},
-	electoral_systems::egress_success::*,
+	electoral_systems::witness_something_by_identifier::*,
 };
 
 use cf_primitives::AuthorityCount;
@@ -11,8 +11,8 @@ thread_local! {
 }
 
 pub struct MockHook;
-impl OnEgressSuccess<(), EgressData> for MockHook {
-	fn on_egress_success(_id: (), _egress_data: EgressData) {
+impl WitnessSomethingHook<(), EgressData> for MockHook {
+	fn on_successful_witness(_id: (), _egress_data: EgressData) {
 		HOOK_CALLED.with(|hook_called| hook_called.set(true));
 	}
 }
