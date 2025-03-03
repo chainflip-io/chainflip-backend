@@ -19,6 +19,7 @@ impl OnRuntimeUpgrade for Migration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use cf_chains::instances::ArbitrumInstance;
+		log::info!("🚀 Increasing Arbitrum safety margin");
 
 		let arb_margin = WitnessSafetyMargin::<Runtime, ArbitrumInstance>::get();
 
@@ -31,14 +32,13 @@ impl OnRuntimeUpgrade for Migration {
 				WitnessSafetyMargin::<Runtime, ArbitrumInstance>::put(NEW_ARB_SAFETY_MARGIN);
 			},
 			genesis_hashes::PERSEVERANCE => {
-				// Nothing
+				WitnessSafetyMargin::<Runtime, ArbitrumInstance>::put(NEW_ARB_SAFETY_MARGIN);
 			},
 			genesis_hashes::SISYPHOS => {
-				// Nothing
+				WitnessSafetyMargin::<Runtime, ArbitrumInstance>::put(NEW_ARB_SAFETY_MARGIN);
 			},
 			_ => {},
 		}
-
 		Weight::zero()
 	}
 
@@ -53,13 +53,14 @@ impl OnRuntimeUpgrade for Migration {
 				assert_eq!(new_arb_margin, Some(NEW_ARB_SAFETY_MARGIN));
 			},
 			genesis_hashes::PERSEVERANCE => {
-				assert_eq!(new_arb_margin, old_arb_margin);
+				assert_eq!(new_arb_margin, Some(NEW_ARB_SAFETY_MARGIN));
 			},
 			genesis_hashes::SISYPHOS => {
-				assert_eq!(new_arb_margin, old_arb_margin);
+				assert_eq!(new_arb_margin, Some(NEW_ARB_SAFETY_MARGIN));
 			},
 			_ => {},
 		}
+		log::info!("✅ Successfully increased Arbitrum safety margin");
 		Ok(())
 	}
 }
