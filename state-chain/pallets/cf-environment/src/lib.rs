@@ -248,7 +248,8 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		SwapRequestId,
-		Result<Vec<SolAddressLookupTableAccount>, ()>,
+		Option<Vec<SolAddressLookupTableAccount>>,
+		OptionQuery,
 	>;
 
 	// OTHER ENVIRONMENT ITEMS
@@ -816,12 +817,12 @@ impl<T: Config> Pallet<T> {
 		swap_request_id: SwapRequestId,
 		alts: Option<Vec<SolAddressLookupTableAccount>>,
 	) {
-		SolanaCcmSwapAlts::<T>::insert(swap_request_id, alts.ok_or(()));
+		SolanaCcmSwapAlts::<T>::insert(swap_request_id, alts);
 	}
 
 	pub fn take_sol_ccm_swap_alts(
 		swap_request_id: SwapRequestId,
-	) -> Option<Result<Vec<SolAddressLookupTableAccount>, ()>> {
+	) -> Option<Option<Vec<SolAddressLookupTableAccount>>> {
 		SolanaCcmSwapAlts::<T>::take(swap_request_id)
 	}
 }
