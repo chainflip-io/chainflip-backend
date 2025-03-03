@@ -219,6 +219,8 @@ impl VoterApi<SolanaAltWitnessing> for SolanaAltWitnessingVoter {
 			alt_witnessing_identifier.alt_addresses,
 		)
 		.await
+		// We wrap the vote in a Some her since the vote is always valid if there was no error in
+		// rpc while querying.
 		.map(|maybe_lookup_tables| Some(maybe_lookup_tables))
 	}
 }
