@@ -153,54 +153,63 @@ fn test_network_fee_calculation() {
 }
 
 #[test]
-fn test_calculate_input_for_gas_output() {
-	use cf_chains::assets::eth::Asset as EthereumAsset;
-	const FLIP: EthereumAsset = EthereumAsset::Flip;
-
+fn test_calculate_input_for_desired_output() {
 	new_test_ext().execute_with(|| {
 		// If swap simulation fails -> no conversion.
 		MockSwappingApi::set_swaps_should_fail(true);
-		assert!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000).is_none());
+		assert!(Swapping::calculate_input_for_desired_output(Asset::Flip, Asset::Eth, 1000, true)
+			.is_none());
 
 		// Set swap rate to 2 and turn swaps back on.
 		SwapRate::set(2_f64);
 		MockSwappingApi::set_swaps_should_fail(false);
 
 		// Desired output is zero -> trivially ok.
-		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 0), Some(0));
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(Asset::Flip, Asset::Eth, 0, true),
+			Some(0)
+		);
 
 		// Desired output requires 2 swap legs, each with a swap rate of 2. So output should be
 		// 1/4th of input.
-		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000), Some(250));
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(Asset::Flip, Asset::Eth, 1000, true),
+			Some(250)
+		);
+		// Answer should be the same for gas calculation function
+		assert_eq!(
+			Swapping::calculate_input_for_gas_output::<Ethereum>(
+				cf_chains::assets::eth::Asset::Flip,
+				1000
+			),
+			Some(250)
+		);
 
 		// Desired output is gas asset, requires 1 swap leg. So output should be 1/2 of input.
 		assert_eq!(
-			Swapping::calculate_input_for_gas_output::<Ethereum>(EthereumAsset::Usdc, 1000),
+			Swapping::calculate_input_for_desired_output(Asset::Usdc, Asset::Eth, 1000, true),
 			Some(500)
 		);
 
-		// Input is gas asset -> trivially ok.
+		// Input is same asset -> trivially ok.
 		assert_eq!(
-			Swapping::calculate_input_for_gas_output::<Ethereum>(
-				cf_chains::assets::eth::GAS_ASSET,
-				1000
-			),
+			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Eth, 1000, true),
 			Some(1000)
 		);
-	});
-}
 
-#[test]
-fn test_fee_estimation_basis() {
-	for asset in Asset::all() {
-		if !asset.is_gas_asset() {
-			assert!(
-				utilities::fee_estimation_basis(asset).is_some(),
-	             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_basis function definition.",
-	             asset,
-	         );
-		}
-	}
+		// Make sure the network fee is taken.
+		NetworkFee::set(Permill::from_percent(1));
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Usdc, 1000, true),
+			Some(505)
+		);
+
+		// Now that the network fee is not 0, make sure it can be ignored if desired.
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Usdc, 1000, false),
+			Some(500)
+		);
+	});
 }
 
 #[test]
@@ -213,16 +222,7 @@ fn network_fee_swap_gets_burnt() {
 
 	new_test_ext()
 		.execute_with(|| {
-			Swapping::init_swap_request(
-				INPUT_ASSET,
-				AMOUNT,
-				OUTPUT_ASSET,
-				SwapRequestType::NetworkFee,
-				Default::default(),
-				None,
-				None,
-				SwapOrigin::Internal,
-			);
+			Swapping::init_network_fee_swap_request(INPUT_ASSET, AMOUNT);
 
 			assert_eq!(FlipToBurn::<Test>::get(), 0);
 
@@ -618,4 +618,53 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 				MIN_NETWORK_FEE + NETWORK_FEE * INPUT_AMOUNT
 			);
 		});
+}
+
+#[test]
+fn test_refund_fee_calculation() {
+	new_test_ext().execute_with(|| {
+		MinimumNetworkFeePerChunk::<Test>::set(10);
+
+		// Usdc, no conversion needed, so the refund fee is just 10
+		assert_eq!(Swapping::take_refund_fee(1000, Asset::Usdc), Ok(990));
+		assert_eq!(Swapping::take_refund_fee(0, Asset::Usdc), Ok(0));
+		assert_eq!(Swapping::take_refund_fee(5, Asset::Usdc), Ok(0));
+		assert_eq!(Swapping::take_refund_fee(u128::MAX, Asset::Usdc), Ok(u128::MAX - 10));
+
+		// Conversion needed, so the refund fee is 10 / DEFAULT_SWAP_RATE = 5
+		assert_eq!(Swapping::take_refund_fee(1000, Asset::Eth), Ok(995));
+		assert_eq!(Swapping::take_refund_fee(0, Asset::Eth), Ok(0));
+		assert_eq!(Swapping::take_refund_fee(3, Asset::Eth), Ok(0));
+	});
+}
+
+#[test]
+fn gas_calculation_can_handle_extreme_swap_rate() {
+	new_test_ext().execute_with(|| {
+		fn test_extreme_swap_rate(swap_rate: f64) {
+			SwapRate::set(swap_rate);
+			assert_eq!(
+				Swapping::calculate_input_for_gas_output::<Ethereum>(
+					cf_chains::assets::eth::Asset::Flip,
+					1000
+				),
+				None
+			);
+		}
+
+		test_extreme_swap_rate(1_f64 / (u128::MAX as f64));
+		test_extreme_swap_rate(0_f64);
+		test_extreme_swap_rate(u128::MAX as f64);
+
+		// Using Solana here because it has a ChainAmount of u64, so the conversion to AssetAmount
+		// will fail when gas needed is larger than u64::MAX.
+		SwapRate::set(0.5);
+		assert_eq!(
+			Swapping::calculate_input_for_gas_output::<cf_chains::Solana>(
+				cf_chains::assets::sol::Asset::SolUsdc,
+				u64::MAX
+			),
+			None
+		);
+	});
 }

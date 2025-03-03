@@ -17,9 +17,10 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
-	FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
+	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, SwapLimitsProvider,
+	SwapOutputAction, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -566,9 +567,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
 
-	/// Minimum network fee charged per chunk (only applies to regular swaps, i.e. it excludes
-	/// internal swaps like ingress/egress fees). In practice this should also effectively be the
-	/// minimum fee charged per swap request due to us also enforcing minimum chunk size.
+	/// Minimum network fee in USDC, charged per chunk (only applies to regular swaps, i.e. it
+	/// excludes internal swaps like ingress/egress fees). In practice this should also effectively
+	/// be the minimum fee charged per swap request due to us also enforcing minimum chunk size.
 	#[pallet::storage]
 	pub type MinimumNetworkFeePerChunk<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
@@ -836,16 +837,7 @@ pub mod pallet {
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					CollectedNetworkFee::<T>::mutate(|collected_fee| {
-						Self::init_swap_request(
-							Asset::Usdc,
-							*collected_fee,
-							Asset::Flip,
-							SwapRequestType::NetworkFee,
-							Default::default(),
-							None, /* no refund */
-							None, /* no DCA */
-							SwapOrigin::Internal,
-						);
+						Self::init_network_fee_swap_request(Asset::Usdc, *collected_fee);
 
 						collected_fee.set_zero();
 					});
@@ -1630,33 +1622,45 @@ pub mod pallet {
 						return;
 					};
 
-					let amount_to_refund = swap.input_amount + *remaining_input_amount;
-
-					match &refund_params.refund_destination {
-						AccountOrAddress::ExternalAddress(address) => {
-							Self::egress_for_swap(
-								request.id,
-								amount_to_refund,
-								request.input_asset,
-								address.clone(),
-								None, /* refunds don't use ccm parameters */
-								true, /* refund */
+					let total_input_remaining = swap.input_amount + *remaining_input_amount;
+					let amount_to_refund =
+						match Self::take_refund_fee(total_input_remaining, request.input_asset) {
+							Ok(remaining) => remaining,
+							Err(e) => {
+								log_or_panic!(
+								"Failed to calculate refund fee for swap request {swap_request_id}: {e:?}"
 							);
-						},
-						AccountOrAddress::InternalAccount(account_id) => {
-							Self::deposit_event(Event::<T>::RefundedOnChain {
-								swap_request_id,
-								account_id: account_id.clone(),
-								asset: request.input_asset,
-								amount: amount_to_refund,
-							});
+								total_input_remaining
+							},
+						};
 
-							T::BalanceApi::credit_account(
-								account_id,
-								request.input_asset,
-								amount_to_refund,
-							);
-						},
+					if amount_to_refund > 0 {
+						match &refund_params.refund_destination {
+							AccountOrAddress::ExternalAddress(address) => {
+								Self::egress_for_swap(
+									request.id,
+									amount_to_refund,
+									request.input_asset,
+									address.clone(),
+									None, /* refunds don't use ccm parameters */
+									true, /* refund */
+								);
+							},
+							AccountOrAddress::InternalAccount(account_id) => {
+								Self::deposit_event(Event::<T>::RefundedOnChain {
+									swap_request_id,
+									account_id: account_id.clone(),
+									asset: request.input_asset,
+									amount: amount_to_refund,
+								});
+
+								T::BalanceApi::credit_account(
+									account_id,
+									request.input_asset,
+									amount_to_refund,
+								);
+							},
+						}
 					}
 
 					// In case of DCA we may have partially swapped and now have some output
@@ -1997,23 +2001,24 @@ pub mod pallet {
 		}
 
 		#[transactional]
-		pub fn swap_with_network_fee_for_gas(
+		pub fn swap_with_network_fee(
 			from: Asset,
 			to: Asset,
 			input_amount: AssetAmount,
+			min_fee_enforced: bool,
 		) -> Result<SwapOutput, DispatchError> {
 			Ok(match (from, to) {
 				(_, STABLE_ASSET) => {
 					let FeeTaken { remaining_amount: output, fee } = Self::take_network_fee(
 						T::SwappingApi::swap_single_leg(from, to, input_amount)?,
-						false,
+						min_fee_enforced,
 					);
 
 					SwapOutput { intermediary: None, output, network_fee: fee }
 				},
 				(STABLE_ASSET, _) => {
 					let FeeTaken { remaining_amount: input_amount, fee } =
-						Self::take_network_fee(input_amount, false);
+						Self::take_network_fee(input_amount, min_fee_enforced);
 
 					SwapOutput {
 						intermediary: None,
@@ -2024,7 +2029,7 @@ pub mod pallet {
 				_ => {
 					let FeeTaken { remaining_amount: intermediary, fee } = Self::take_network_fee(
 						T::SwappingApi::swap_single_leg(from, STABLE_ASSET, input_amount)?,
-						false,
+						min_fee_enforced,
 					);
 
 					SwapOutput {
@@ -2103,6 +2108,34 @@ pub mod pallet {
 					}
 				},
 			};
+		}
+
+		pub(super) fn take_refund_fee(
+			total_input_amount: AssetAmount,
+			input_asset: Asset,
+		) -> Result<AssetAmount, DispatchError> {
+			let refund_fee_usdc = MinimumNetworkFeePerChunk::<T>::get();
+			if (refund_fee_usdc == 0) || (total_input_amount == 0) {
+				return Ok(total_input_amount)
+			}
+
+			let required_refund_fee_as_input_asset = Self::calculate_input_for_desired_output(
+				input_asset,
+				STABLE_ASSET,
+				refund_fee_usdc,
+				false, /* Without network fee */
+			)
+			.ok_or(DispatchError::Other("Invalid fee estimation"))?;
+
+			let refund_fee =
+				sp_std::cmp::min(required_refund_fee_as_input_asset, total_input_amount);
+			let remaining_amount_to_refund = total_input_amount.saturating_sub(refund_fee);
+
+			if refund_fee > 0 {
+				Self::init_network_fee_swap_request(input_asset, refund_fee);
+			}
+
+			Ok(remaining_amount_to_refund)
 		}
 	}
 
@@ -2260,44 +2293,53 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
+	impl<T: Config> AssetConverter for Pallet<T> {
 		fn calculate_input_for_gas_output<C: Chain>(
 			input_asset: C::ChainAsset,
 			required_gas: C::ChainAmount,
 		) -> Option<C::ChainAmount> {
+			Self::calculate_input_for_desired_output(
+				input_asset.into(),
+				C::GAS_ASSET.into(),
+				required_gas.into(),
+				true,
+			)
+			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
+		}
+
+		fn calculate_input_for_desired_output(
+			input_asset: Asset,
+			output_asset: Asset,
+			desired_output_amount: AssetAmount,
+			with_network_fee: bool,
+		) -> Option<AssetAmount> {
 			use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 
-			if required_gas.is_zero() {
+			if desired_output_amount.is_zero() {
 				return Some(Zero::zero())
 			}
 
-			let output_asset = C::GAS_ASSET.into();
-			let input_asset = input_asset.into();
 			if input_asset == output_asset {
-				return Some(required_gas)
+				return Some(desired_output_amount)
 			}
 
-			let estimation_input = utilities::fee_estimation_basis(input_asset).defensive_proof(
-				"Fee estimation cap not available. Please report this to Chainflip Labs.",
-			)?;
+			let estimation_input = utilities::fee_estimation_basis(input_asset);
 
 			let estimation_output = with_transaction_unchecked(|| {
-				TransactionOutcome::Rollback(
-					Self::swap_with_network_fee_for_gas(
-						input_asset,
-						output_asset,
-						estimation_input,
-					)
-					.ok(),
-				)
-			})?
-			.output;
+				TransactionOutcome::Rollback(if with_network_fee {
+					Self::swap_with_network_fee(input_asset, output_asset, estimation_input, false)
+						.map(|swap| swap.output)
+				} else {
+					T::SwappingApi::swap_single_leg(input_asset, output_asset, estimation_input)
+				})
+			})
+			.ok()?;
 
 			if estimation_output == 0 {
 				None
 			} else {
 				let input_amount_to_convert = multiply_by_rational_with_rounding(
-					required_gas.into(),
+					desired_output_amount,
 					estimation_input,
 					estimation_output,
 					sp_arithmetic::Rounding::Down,
@@ -2305,8 +2347,11 @@ pub mod pallet {
 				.defensive_proof(
 					"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
 				)?;
-
-				Some(input_amount_to_convert.unique_saturated_into())
+				if input_amount_to_convert.is_zero() {
+					None
+				} else {
+					Some(input_amount_to_convert.unique_saturated_into())
+				}
 			}
 		}
 	}
@@ -2419,18 +2464,33 @@ pub(crate) mod utilities {
 	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.
-	pub(crate) fn fee_estimation_basis(asset: Asset) -> Option<u128> {
+	pub(crate) fn fee_estimation_basis(asset: Asset) -> u128 {
 		use cf_primitives::FLIPPERINOS_PER_FLIP;
-		/// 20 Dollars.
+
+		const ETH_DECIMALS: u32 = 18;
+		const DOT_DECIMALS: u32 = 10;
+		const BTC_DECIMALS: u32 = 8;
+		const SOL_DECIMALS: u32 = 9;
+
+		/// ~20 Dollars.
+		const FLIP_ESTIMATION_CAP: u128 = 10 * FLIPPERINOS_PER_FLIP;
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
+		const ETH_ESTIMATION_CAP: u128 = 8 * 10u128.pow(ETH_DECIMALS - 3);
+		const DOT_ESTIMATION_CAP: u128 = 4 * 10u128.pow(DOT_DECIMALS);
+		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
+		const SOL_ESTIMATION_CAP: u128 = 14 * 10u128.pow(SOL_DECIMALS - 2);
 
 		match asset {
-			Asset::Flip => Some(10 * FLIPPERINOS_PER_FLIP),
-			Asset::Usdc => Some(USD_ESTIMATION_CAP),
-			Asset::Usdt => Some(USD_ESTIMATION_CAP),
-			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
-			Asset::SolUsdc => Some(USD_ESTIMATION_CAP),
-			_ => None,
+			Asset::Flip => FLIP_ESTIMATION_CAP,
+			Asset::Usdc => USD_ESTIMATION_CAP,
+			Asset::Usdt => USD_ESTIMATION_CAP,
+			Asset::ArbUsdc => USD_ESTIMATION_CAP,
+			Asset::SolUsdc => USD_ESTIMATION_CAP,
+			Asset::Eth => ETH_ESTIMATION_CAP,
+			Asset::Dot => DOT_ESTIMATION_CAP,
+			Asset::ArbEth => ETH_ESTIMATION_CAP,
+			Asset::Btc => BTC_ESTIMATION_CAP,
+			Asset::Sol => SOL_ESTIMATION_CAP,
 		}
 	}
 

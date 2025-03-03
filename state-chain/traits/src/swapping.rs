@@ -1,8 +1,11 @@
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
-	CcmDepositMetadataGeneric, ForeignChainAddress, RefundParametersExtended, SwapOrigin,
+	AccountOrAddress, CcmDepositMetadataGeneric, Chain, ForeignChainAddress,
+	RefundParametersExtended, SwapOrigin,
 };
-use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
+use cf_primitives::{
+	Asset, AssetAmount, Beneficiaries, BlockNumber, DcaParameters, Price, SwapRequestId,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -59,7 +62,7 @@ pub type SwapRequestType<AccountId> = SwapRequestTypeGeneric<ForeignChainAddress
 pub type SwapRequestTypeEncoded<AccountId> = SwapRequestTypeGeneric<EncodedAddress, AccountId>;
 
 pub trait SwapRequestHandler {
-	type AccountId;
+	type AccountId: Clone;
 
 	fn init_swap_request(
 		input_asset: Asset,
@@ -71,4 +74,63 @@ pub trait SwapRequestHandler {
 		dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId;
+
+	fn init_network_fee_swap_request(
+		input_asset: Asset,
+		input_amount: AssetAmount,
+	) -> SwapRequestId {
+		Self::init_swap_request(
+			input_asset,
+			input_amount,
+			Asset::Flip,
+			SwapRequestType::NetworkFee,
+			Default::default(), /* broker fees */
+			None,               /* refund params */
+			None,               /* dca params */
+			SwapOrigin::Internal,
+		)
+	}
+
+	fn init_ingress_egress_fee_swap_request<C: Chain>(
+		input_asset: C::ChainAsset,
+		input_amount: C::ChainAmount,
+	) -> SwapRequestId {
+		Self::init_swap_request(
+			input_asset.into(),
+			input_amount.into(),
+			C::GAS_ASSET.into(),
+			SwapRequestType::IngressEgressFee,
+			Default::default(), /* broker fees */
+			None,               /* refund params */
+			None,               /* dca params */
+			SwapOrigin::Internal,
+		)
+	}
+
+	fn init_internal_swap_request(
+		input_asset: Asset,
+		input_amount: AssetAmount,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		account_id: Self::AccountId,
+	) -> SwapRequestId {
+		Self::init_swap_request(
+			input_asset,
+			input_amount,
+			output_asset,
+			SwapRequestType::Regular {
+				output_action: SwapOutputAction::CreditOnChain { account_id: account_id.clone() },
+			},
+			Default::default(), /* no broker fees */
+			Some(RefundParametersExtended {
+				retry_duration,
+				refund_destination: AccountOrAddress::InternalAccount(account_id.clone()),
+				min_price,
+			}),
+			dca_params,
+			SwapOrigin::OnChainAccount(account_id),
+		)
+	}
 }
