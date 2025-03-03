@@ -1048,7 +1048,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 				aux_data_lookup_key: CcmAuxDataLookupKey::Alt(swap_request_id, System::block_number()),
 			});
 
-			assert!(!SolEnvironment::ccm_auxiliary_data_ready(swap_request_id));
+			assert!(SolEnvironment::get_address_lookup_tables(swap_request_id).is_err());
 			let max_aux_wait_time = SolEnvironment::max_wait_time_for_ccm_aux_data();
 
 			testnet.move_forward_blocks(max_aux_wait_time);
@@ -1058,7 +1058,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmEgressInvalid { 
 					egress_id: (ForeignChain::Solana, 1u64), 
 					error,
-				}) if error == cf_chains::ExecutexSwapAndCallError::DispatchError(pallet_cf_ingress_egress::Error::<Runtime, SolanaInstance>::ExceededMaxCcmAuxData.into()) => true,
+				}) if error == cf_chains::ExecutexSwapAndCallError::DispatchError(pallet_cf_ingress_egress::Error::<Runtime, SolanaInstance>::ExceededMaxCcmAuxDataWaitTime.into()) => true,
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::InvalidCcmRefunded { 
 				asset, 
 				destination_address,
