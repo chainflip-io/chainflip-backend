@@ -243,7 +243,7 @@ services:
       start_period: 10s
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:version-1-7-85c3192258c31b3a2b93ff609bb31bcca32cf3c9
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:dev-abb565383e47e2bc37ccd2bfd00835bbf0152bd6
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
@@ -286,4 +286,16 @@ services:
       - CFDM_BROKER_IDS_TO_MONITOR=cFM8kRvLBXagj6ZXvrt7wCM4jGmHvb5842jTtXXg3mRHjrvKy
       - CFDM_STATECHAIN_VAULT_ADDRESSES_POLLING_INTERVAL_MILLIS=20000
       - CFDM_VAULT_SCREENING_INTERVAL_MINUTES=2
+      - CFDM_ANALYSIS_PROVIDER_ALSO_USE_BYBIT_API=false
+      - CFDM_ANALYSIS_PROVIDER_ALSO_USE_CHAINFLIP_API=false
+
+      - CFDM_BLACKLIST_BYBIT_PROVIDER=BybitBlacklist
+      - CFDM_BLACKLIST_BYBIT_URL=""
+      - CFDM_BLACKLIST_BYBIT_UPDATE_INTERVAL_SECS=20
+      - CFDM_BLACKLIST_BYBIT_FOUND_RISKSCORE=10.0
+
+      - CFDM_BLACKLIST_CHAINFLIP_PROVIDER=ChainflipBlacklist
+      - CFDM_BLACKLIST_CHAINFLIP_URL=""
+      - CFDM_BLACKLIST_CHAINFLIP_UPDATE_INTERVAL_SECS=6
+      - CFDM_BLACKLIST_CHAINFLIP_FOUND_RISKSCORE=10.0
 
