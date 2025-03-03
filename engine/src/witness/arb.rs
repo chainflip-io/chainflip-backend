@@ -201,7 +201,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 			destination_address,
 			deposit_metadata,
 			tx_id,
-			vault_swap_parameters.clone()
+			vault_swap_parameters
 		);
 
 		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
