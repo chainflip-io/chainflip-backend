@@ -612,10 +612,6 @@ impl NetworkEnvironmentProvider<BlockNumber> for SolEnvironment {
 		Environment::network_environment()
 	}
 
-	fn ccm_auxiliary_data_ready(id: SwapRequestId) -> bool {
-		pallet_cf_environment::SolanaCcmSwapAlts::<Runtime>::contains_key(id)
-	}
-
 	fn max_wait_time_for_ccm_aux_data() -> BlockNumber {
 		cf_chains::sol::sol_tx_core::consts::MAX_WAIT_TIME_FOR_CCM_AUX_DATA
 	}

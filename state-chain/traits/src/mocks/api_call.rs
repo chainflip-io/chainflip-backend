@@ -15,6 +15,13 @@ pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
 pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
 pub const ETHEREUM_USDC_ADDRESS: [u8; 20] = [0x45; 20];
 pub const ETHEREUM_USDT_ADDRESS: [u8; 20] = [0xba; 20];
+
+thread_local! {
+	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = const { std::cell::RefCell::new(true) };
+	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	pub static AUX_DATA_READY: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
 #[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
 pub struct MockEvmEnvironment;
 
@@ -37,6 +44,12 @@ pub enum MockEthereumApiCall<MockEvmEnvironment> {
 	ExecutexSwapAndCall(MockEthExecutexSwapAndCall<MockEvmEnvironment>),
 	TransferFallback(MockEthTransferFallback<MockEvmEnvironment>),
 	RejectCall,
+}
+
+impl<MockEvmEnvironment> MockEthereumApiCall<MockEvmEnvironment> {
+	pub fn set_is_aux_ready(ready: bool) {
+		AUX_DATA_READY.set(ready);
+	}
 }
 
 impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
@@ -85,11 +98,6 @@ impl MockEthAllBatch<MockEvmEnvironment> {
 	pub fn set_success(success: bool) {
 		ALL_BATCH_SUCCESS.with(|cell| *cell.borrow_mut() = success);
 	}
-}
-
-thread_local! {
-	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = const { std::cell::RefCell::new(true) };
-	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
@@ -155,6 +163,8 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
+		} else if !AUX_DATA_READY.with(|cell| cell.get()) {
+			Err(ExecutexSwapAndCallError::TryAgainLater)
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockEthExecutexSwapAndCall {
 				nonce: Default::default(),
