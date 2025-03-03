@@ -42,6 +42,7 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
   // Test all combinations
   // const useLegacy = maxBytes < BYTES_PER_ALT || Math.random() < 0.5;
   // const useAlt = !useLegacy && Math.random() < 0.5;
+  // TODO: To remove, this is for testing purposes
   const useLegacy = false;
   const useAlt = true;
   let bytesAvailable = maxBytes;
