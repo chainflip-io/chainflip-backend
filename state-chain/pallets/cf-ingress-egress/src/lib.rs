@@ -976,7 +976,7 @@ pub mod pallet {
 		/// Transaction cannot be reported after being pre-witnessed or boosted.
 		TransactionAlreadyPrewitnessed,
 		/// Waited too long for a CCM's Auxiliary data.
-		ExceededMaxCcmAuxData,
+		ExceededMaxCcmAuxDataWaitTime,
 	}
 
 	#[pallet::hooks]
@@ -1740,41 +1740,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ccm_max_wait_time = T::NetworkEnvironment::max_wait_time_for_ccm_aux_data();
 		let current_block = <frame_system::Pallet<T>>::block_number();
 
-		let past_max_wait_time = |block_started: BlockNumberFor<T>| {
-			(current_block.saturating_sub(block_started)) >= ccm_max_wait_time
-		};
-
-		// A CCM is ready to be egressed when:
-		// A. No aux data lookup is required. OR
-		// B. Lookup is required:
-		// 		i. Its Auxiliary data is ready to be looked up, or
-		// 		ii. the max wait time has passed
-		let ccm_ready_for_egress = |aux_lookup: &CcmAuxDataLookupKey<BlockNumberFor<T>>| -> bool {
-			match aux_lookup {
-				CcmAuxDataLookupKey::Alt(swap_id, block_started) =>
-					T::NetworkEnvironment::ccm_auxiliary_data_ready(*swap_id) ||
-						past_max_wait_time(*block_started),
-				CcmAuxDataLookupKey::NotRequired => true,
-			}
-		};
-
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain, BlockNumberFor<T>>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
 				ccms.extract_if(.., |ccm| {
 					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) &&
-						ccm_ready_for_egress(&ccm.aux_data_lookup_key) &&
 						Self::should_fetch_or_transfer(&mut maybe_no_of_transfers_remaining)
 				})
 				.collect()
 			});
 		for ccm in ccms_to_send {
 			if let Some(block_created) = ccm.aux_data_lookup_key.block_created() {
-				if past_max_wait_time(block_created) {
+				if current_block.saturating_sub(block_created) >= ccm_max_wait_time {
 					Self::refund_invalid_ccm(
 						ccm,
 						ExecutexSwapAndCallError::DispatchError(
-							Error::<T, I>::ExceededMaxCcmAuxData.into(),
+							Error::<T, I>::ExceededMaxCcmAuxDataWaitTime.into(),
 						),
 					);
 					continue;
@@ -2859,6 +2840,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ccm.amount,
 					fallback_address.clone(),
 					None,
+					None
 				) {
 					Ok(egress_details) => Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
 						asset: ccm.asset,
@@ -2951,9 +2933,13 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_chain,
 						source_address,
 						gas_budget,
-						aux_data_lookup_key: CcmAuxDataLookupKey::NotRequired, /* TODO Ramiz:
-						                                                        * Pass this in as
-						                                                        * a parameter */
+						aux_data_lookup_key: match swap_request_id {
+							Some(swap_request_id) => CcmAuxDataLookupKey::Alt(
+								swap_request_id,
+								<frame_system::Pallet<T>>::block_number(),
+							),
+							None => CcmAuxDataLookupKey::NotRequired,
+						},
 					});
 
 					Ok(egress_details)
