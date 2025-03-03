@@ -8,12 +8,18 @@ pub struct ErrorDecoder {
 
 impl Default for ErrorDecoder {
 	fn default() -> Self {
-		let metadata = frame_metadata::RuntimeMetadataPrefixed::decode(
-			&mut state_chain_runtime::Runtime::metadata_at_version(15)
-				.expect("Version 15 should be supported by the runtime.")
-				.as_slice(),
-		)
-		.expect("Runtime metadata should be valid.");
+		let opaque_metadata = state_chain_runtime::Runtime::metadata_at_version(15)
+			.expect("Version 15 should be supported by the runtime.");
+
+		Self::new(opaque_metadata)
+	}
+}
+
+impl ErrorDecoder {
+	pub fn new(opaque_metadata: sp_core::OpaqueMetadata) -> Self {
+		let metadata =
+			frame_metadata::RuntimeMetadataPrefixed::decode(&mut opaque_metadata.as_slice())
+				.expect("Runtime metadata should be valid.");
 
 		let metadata: frame_metadata::v15::RuntimeMetadataV15 = match metadata.1 {
 			frame_metadata::RuntimeMetadata::V15(metadata) => metadata,
@@ -65,9 +71,7 @@ impl Default for ErrorDecoder {
 			},
 		}
 	}
-}
 
-impl ErrorDecoder {
 	pub fn decode_dispatch_error(
 		&self,
 		dispatch_error: sp_runtime::DispatchError,

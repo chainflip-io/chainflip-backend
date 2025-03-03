@@ -1,3 +1,4 @@
+use crate::events_decoder::DynamicEvents;
 use frame_support::dispatch::DispatchInfo;
 use sp_core::{
 	serde::{Deserialize, Serialize},
@@ -5,11 +6,15 @@ use sp_core::{
 };
 
 pub mod error_decoder;
+pub mod events_decoder;
+pub mod runtime_decoder;
 pub mod signer;
 pub mod subxt_state_chain_config;
 
 pub type ExtrinsicDetails =
 	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
+
+pub type ExtrinsicData = (H256, DynamicEvents, state_chain_runtime::Header, DispatchInfo);
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
 pub enum WaitFor {
@@ -52,4 +57,11 @@ impl<T> ApiWaitForResult<T> {
 			ApiWaitForResult::TxDetails { response, .. } => response,
 		}
 	}
+}
+
+#[derive(Debug)]
+pub enum WaitForDynamicResult {
+	// The hash of the SC transaction that was submitted.
+	TransactionHash(H256),
+	Data(ExtrinsicData),
 }

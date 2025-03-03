@@ -12,6 +12,7 @@ use cf_chains::{
 	sol::SolAddress,
 	CcmChannelMetadata, Chain, VaultSwapExtraParametersRpc, MAX_CCM_MSG_LENGTH,
 };
+use cf_node_client::{error_decoder, events_decoder};
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
@@ -48,6 +49,7 @@ use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
+	transaction_validity::TransactionValidityError,
 	AccountId32, Percent, Permill,
 };
 use sp_state_machine::InspectState;
@@ -74,8 +76,10 @@ use std::{
 	sync::Arc,
 };
 
+pub mod broker;
 pub mod monitoring;
 pub mod order_fills;
+pub mod pool_client;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcRedemptionsInfo {
@@ -1041,7 +1045,7 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TransactionScreeningEvents>;
 
-	#[method(name = "get_affiliates")]
+	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
 	fn cf_affiliate_details(
 		&self,
 		broker: state_chain_runtime::AccountId,
@@ -1159,6 +1163,16 @@ pub enum CfApiError {
 	DispatchError(#[from] DispatchErrorWithMessage),
 	#[error("{0:?}")]
 	RuntimeApiError(#[from] ApiError),
+	#[error("{0:?}")]
+	SubstrateClientError(#[from] sc_client_api::blockchain::Error),
+	#[error("{0:?}")]
+	TransactionPoolError(#[from] sc_transaction_pool::error::Error),
+	#[error("{0:?}")]
+	TransactionValidityError(#[from] TransactionValidityError),
+	#[error("{0:?}")]
+	ExtrinsicDispatchError(#[from] error_decoder::DispatchError),
+	#[error("{0:?}")]
+	ExtrinsicDynamicEventsError(#[from] events_decoder::DynamicEventError),
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
 	#[error(transparent)]
@@ -1204,6 +1218,11 @@ impl From<CfApiError> for ErrorObjectOwned {
 			},
 			CfApiError::ErrorObject(object) => object,
 			CfApiError::OtherError(error) => internal_error(error),
+			CfApiError::SubstrateClientError(error) => call_error(error),
+			CfApiError::TransactionPoolError(error) => call_error(error),
+			CfApiError::TransactionValidityError(error) => call_error(error),
+			CfApiError::ExtrinsicDispatchError(error) => call_error(error),
+			CfApiError::ExtrinsicDynamicEventsError(error) => call_error(error),
 		}
 	}
 }

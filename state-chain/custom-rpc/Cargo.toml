@@ -43,6 +43,16 @@ sc-client-api = { workspace = true, default-features = true }
 frame-system = { workspace = true, default-features = true }
 frame-support = { workspace = true, default-features = true }
 
+cf-rpc-types = { workspace = true }
+cf-node-client = { workspace = true }
+sp-application-crypto = { workspace = true }
+scale-info = { workspace = true, features = ["derive"] }
+sc-transaction-pool = { workspace = true, default-features = true }
+sc-transaction-pool-api = { workspace = true, default-features = true }
+sp-transaction-pool = { workspace = true }
+frame-system-rpc-runtime-api = { workspace = true }
+sp-block-builder = { workspace = true }
+
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }
 serde_json = { workspace = true }
