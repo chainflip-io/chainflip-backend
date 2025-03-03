@@ -1,6 +1,5 @@
 use crate::Runtime;
-use cf_chains::instances::{ArbitrumInstance, EthereumInstance};
-use cf_runtime_utilities::genesis_hashes;
+use cf_chains::instances::ArbitrumInstance;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use pallet_cf_ingress_egress::WitnessSafetyMargin;
 #[cfg(feature = "try-runtime")]
@@ -30,10 +29,11 @@ impl OnRuntimeUpgrade for Migration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let (old_arb_margin): (Option<u64>) = Decode::decode(&mut &state[..])
+		let old_arb_margin: Option<u64> = Decode::decode(&mut &state[..])
 			.map_err(|_| DispatchError::Other("Failed to decode state"))?;
 		let new_arb_margin = WitnessSafetyMargin::<Runtime, ArbitrumInstance>::get();
 		assert_eq!(new_arb_margin, Some(NEW_ARB_SAFETY_MARGIN));
+		assert_ne!(old_arb_margin, new_arb_margin);
 		log::info!("✅ Successfully increased Arbitrum safety margin");
 		Ok(())
 	}
