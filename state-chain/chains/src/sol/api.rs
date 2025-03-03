@@ -406,7 +406,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
 		// TODO roy: Coordinate with Ramiz on the interface for getting ALTS
 		let address_lookup_tables =
-			std::iter::once(sol_api_environment.address_lookup_table_account)
+			sp_std::iter::once(sol_api_environment.address_lookup_table_account)
 				.chain(Environment::get_address_lookup_tables(swap_request_id)?)
 				.collect::<Vec<_>>();
 
