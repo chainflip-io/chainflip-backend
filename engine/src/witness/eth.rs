@@ -250,7 +250,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 			destination_address,
 			deposit_metadata,
 			tx_id,
-			vault_swap_parameters.clone()
+			vault_swap_parameters
 		);
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
