@@ -1121,7 +1121,7 @@ pub mod pallet {
 			// Convert the refund parameter from `EncodedAddress` into `ForeignChainAddress` type.
 			let refund_params_internal = refund_parameters.clone().try_map_address(|addr| {
 				T::AddressConverter::try_from_encoded_address(addr)
-					.map_err(|_| Error::<T>::InvalidRefundAddress.into())
+					.map_err(|_| Error::<T>::InvalidRefundAddress)
 			})?;
 
 			if let Some(ccm) = channel_metadata.as_ref() {

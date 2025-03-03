@@ -3,10 +3,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
-use cf_chains::{
-	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
-	ForeignChain,
-};
+use cf_chains::{evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ForeignChain};
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
@@ -380,29 +377,20 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
-		let destination_address = destination_address
-			.try_parse_to_encoded_address(destination_asset.into())
-			.map_err(anyhow::Error::msg)?;
-
-		let internal_refund_parameters = ChannelRefundParametersEncoded {
-			retry_duration: refund_parameters.retry_duration,
-			refund_address: refund_parameters
-				.refund_address
-				.try_parse_to_encoded_address(source_asset.into())
-				.map_err(anyhow::Error::msg)?,
-			min_price: refund_parameters.min_price,
-		};
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
 					destination_asset,
-					destination_address,
+					destination_address: destination_address
+						.try_parse_to_encoded_address(destination_asset.into())?,
 					broker_commission,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees: affiliate_fees.unwrap_or_default(),
-					refund_parameters: internal_refund_parameters,
+					refund_parameters: refund_parameters.try_map_address(|addr| {
+						addr.try_parse_to_encoded_address(source_asset.into())
+					})?,
 					dca_parameters,
 				},
 			)
