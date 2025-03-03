@@ -466,7 +466,7 @@ pub enum CcmAuxDataLookupKey<BlockNumber: Clone> {
 		// Used to lookup ALT query result
 		swap_request_id: SwapRequestId,
 		// Used to calculate when to expire and refund ccm
-		block_created: BlockNumber,
+		created_at: BlockNumber,
 	},
 }
 
@@ -478,10 +478,10 @@ impl<BlockNumber: Clone> CcmAuxDataLookupKey<BlockNumber> {
 		}
 	}
 
-	pub fn block_created(&self) -> Option<BlockNumber> {
+	pub fn created_at(&self) -> Option<BlockNumber> {
 		match self {
 			CcmAuxDataLookupKey::NotRequired => None,
-			CcmAuxDataLookupKey::Alt { block_created, .. } => Some(block_created.clone()),
+			CcmAuxDataLookupKey::Alt { created_at, .. } => Some(created_at.clone()),
 		}
 	}
 }

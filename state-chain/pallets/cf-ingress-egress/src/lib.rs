@@ -928,6 +928,7 @@ pub mod pallet {
 			deduction_percent: Percent,
 		},
 		InvalidCcmRefunded {
+			egress_id: EgressId,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			destination_address: TargetChainAccount<T, I>,
@@ -1750,8 +1751,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.collect()
 			});
 		for ccm in ccms_to_send {
-			if let Some(block_created) = ccm.aux_data_lookup_key.block_created() {
-				if current_block.saturating_sub(block_created) >= ccm_max_wait_time {
+			if let Some(created_at) = ccm.aux_data_lookup_key.created_at() {
+				if current_block.saturating_sub(created_at) >= ccm_max_wait_time {
 					Self::refund_invalid_ccm(
 						ccm,
 						ExecutexSwapAndCallError::DispatchError(
@@ -1789,7 +1790,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(ExecutexSwapAndCallError::TryAgainLater) =>
 					ScheduledEgressCcm::<T, I>::append(ccm),
 				Err(error) => {
-					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. egress_id: {:?}, aux_data_lookup_key: {:?}, Error: {:?}", ccm.egress_id, ccm.aux_data_lookup_key, error);
+					log::warn!("Failed to construct CCM. Funds will be refunded to the fallback refund address. egress_id: {:?}, aux_data_lookup_key: {:?}, Error: {:?}", ccm.egress_id, ccm.aux_data_lookup_key, error);
 					Self::refund_invalid_ccm(ccm, error);
 				},
 			};
@@ -2842,6 +2843,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					None
 				) {
 					Ok(egress_details) => Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
+						egress_id: ccm.egress_id,
 						asset: ccm.asset,
 						amount: egress_details.egress_amount,
 						destination_address: fallback_address,
@@ -2850,6 +2852,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				};
 			}
 		} else {
+			// Ccm additional data is invalid - This should never happen.
 			log::warn!("Cannot refund failed Ccm: failed to decode `ccm_additional_data`. aux_data_lookup_key: {:?}", ccm.aux_data_lookup_key);
 		}
 	}
@@ -2935,7 +2938,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						aux_data_lookup_key: match swap_request_id {
 							Some(swap_request_id) => CcmAuxDataLookupKey::Alt {
 								swap_request_id,
-								block_created: <frame_system::Pallet<T>>::block_number(),
+								created_at: <frame_system::Pallet<T>>::block_number(),
 							},
 							None => CcmAuxDataLookupKey::NotRequired,
 						},
