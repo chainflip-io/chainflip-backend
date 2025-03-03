@@ -1046,7 +1046,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 				source_address: None,
 				ccm_additional_data: ccm.ccm_additional_data,
 				gas_budget: ccm.gas_budget,
-				aux_data_lookup_key: CcmAuxDataLookupKey::Alt{swap_request_id, block_created: System::block_number()},
+				aux_data_lookup_key: CcmAuxDataLookupKey::Alt{swap_request_id, created_at: System::block_number()},
 			});
 
 			assert!(SolEnvironment::get_address_lookup_tables(swap_request_id).is_err());
