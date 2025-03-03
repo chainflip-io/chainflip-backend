@@ -1,8 +1,7 @@
 use crate::*;
 
-use frame_support::{pallet_prelude::Weight, traits::UncheckedOnRuntimeUpgrade};
-
 use codec::{Decode, Encode};
+use frame_support::{pallet_prelude::Weight, traits::UncheckedOnRuntimeUpgrade};
 use scale_info::TypeInfo;
 
 pub mod old {
@@ -27,6 +26,14 @@ pub mod old {
 pub struct AddCcmAuxDataLookupKeyMigration<T, I>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for AddCcmAuxDataLookupKeyMigration<T, I> {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		Ok(BTreeSet::from_iter(
+			ScheduledEgressCcm::<T, I>::get().into_iter().map(|ccm| ccm.egress_id),
+		)
+		.encode())
+	}
+
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("🍗 Running migration for IngressEgress pallet: Adding Ccm aux data lookup key to `CrossChainMessage`.");
 		let _ = ScheduledEgressCcm::<T, I>::translate::<old::CrossChainMessage<T::TargetChain>, _>(
@@ -52,5 +59,17 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for AddCcmAuxDataLookup
 		);
 
 		Weight::zero()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+		let pre_upgrade = BTreeSet::decode(&mut &state[..]).unwrap();
+		let post_upgrade = BTreeSet::from_iter(
+			ScheduledEgressCcm::<T, I>::get().into_iter().map(|ccm| ccm.egress_id),
+		);
+
+		assert_eq!(pre_upgrade, post_upgrade);
+
+		Ok(())
 	}
 }

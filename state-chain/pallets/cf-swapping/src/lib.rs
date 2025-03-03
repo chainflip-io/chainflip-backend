@@ -2046,19 +2046,19 @@ pub mod pallet {
 		) {
 			let is_ccm_swap = maybe_ccm_metadata.is_some();
 
-			let mut aux_lookup_key = None;
-
-			if let Some(ccm) = maybe_ccm_metadata.as_ref() {
-				if let Ok(DecodedCcmAdditionalData::Solana(sol_ccm_data)) =
-					T::CcmValidityChecker::decode_unchecked(
-						ccm.channel_metadata.ccm_additional_data.clone(),
-						asset.into(),
-					) {
-					// Only pass in `swap_request_id` if Ccm requires auxiliary data lookup.
-					aux_lookup_key = (!sol_ccm_data.address_lookup_tables().is_empty())
-						.then_some(swap_request_id);
-				}
-			}
+			let aux_lookup_key = maybe_ccm_metadata.as_ref().and_then(|ccm| {
+				T::CcmValidityChecker::decode_unchecked(
+					ccm.channel_metadata.ccm_additional_data.clone(),
+					asset.into(),
+				)
+				.ok()
+				.and_then(|decoded| match decoded {
+					DecodedCcmAdditionalData::Solana(sol_ccm_data)
+						if !sol_ccm_data.address_lookup_tables().is_empty() =>
+						Some(swap_request_id),
+					_ => None,
+				})
+			});
 
 			match T::EgressHandler::schedule_egress(
 				asset,

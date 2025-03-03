@@ -2545,7 +2545,7 @@ fn can_wait_egress_ccm_until_aux_data_ready() {
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				gas_budget: GAS_BUDGET,
-				aux_data_lookup_key: CcmAuxDataLookupKey::Alt{ swap_request_id: SwapRequestId(1), block_created: 1},
+				aux_data_lookup_key: CcmAuxDataLookupKey::Alt{ swap_request_id: SwapRequestId(1), created_at: 1},
 			}
 		);
 
@@ -2611,7 +2611,7 @@ fn can_refund_egress_ccm_after_max_wait_time() {
 			gas_budget: GAS_BUDGET,
 			aux_data_lookup_key: CcmAuxDataLookupKey::Alt {
 				swap_request_id: SwapRequestId(1),
-				block_created: 1,
+				created_at: 1,
 			},
 		});
 
