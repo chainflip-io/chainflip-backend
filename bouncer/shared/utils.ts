@@ -1190,3 +1190,46 @@ export async function createEvmWalletAndFund(logger: Logger, asset: Asset): Prom
   await send(logger, asset, wallet.address, undefined);
   return wallet;
 }
+
+/**
+ * Executes an RPC call with automatic retries and timeout handling.
+ *
+ * This function attempts to execute the provided RPC call function, and if it fails,
+ * will retry up to the specified maximum number of attempts. Each attempt is also
+ * subject to a timeout, after which the attempt is considered failed.
+ *
+ * @param rpcCall - A function that returns a Promise with the RPC call result
+ * @param options - Configuration options:
+ *   - maxAttempts: Maximum number of retry attempts
+ *   - timeoutMs: Timeout in milliseconds for each attempt
+ *   - operation: Description of the operation for logging purposes
+ * @returns A Promise that resolves with the result of the RPC call
+ * @throws Error if all retry attempts fail or timeout
+ */
+export async function retryRpcCall<T>(
+  rpcCall: () => Promise<T>,
+  options: { maxAttempts: number; timeoutMs: number; operation: string },
+): Promise<T> {
+  const { maxAttempts, timeoutMs, operation } = options;
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    try {
+      // Use Promise.race to handle timeout
+      return await Promise.race([
+        rpcCall(),
+        new Promise<T>((_, reject) => {
+          setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
+        }),
+      ]);
+    } catch (error) {
+      attempt++;
+      console.warn(`Attempt ${attempt} failed for ${operation}: ${error}`);
+      if (attempt >= maxAttempts) {
+        throw new Error(`Failed to complete ${operation} after ${maxAttempts} attempts`);
+      }
+    }
+  }
+
+  throw new Error(`Failed to complete ${operation} after ${maxAttempts} attempts`);
+}
