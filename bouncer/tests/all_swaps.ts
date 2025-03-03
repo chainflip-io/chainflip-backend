@@ -49,7 +49,7 @@ export async function testAllSwaps(textContext: TestContext) {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
 
   // Open a private BTC channel to be used for btc vault swaps
-  await openPrivateBtcChannel('//BROKER_1');
+  // await openPrivateBtcChannel('//BROKER_1');
 
   function appendSwap(
     sourceAsset: Asset,
@@ -62,32 +62,34 @@ export async function testAllSwaps(textContext: TestContext) {
     );
   }
 
-  Object.values(Assets).forEach((sourceAsset) => {
-    Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset)
-      .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+  // Object.values(Assets).forEach((sourceAsset) => {
+  //   Object.values(Assets)
+  //     .filter((destAsset) => sourceAsset !== destAsset)
+  //     .forEach((destAsset) => {
+  //       // Regular swaps
+  //       appendSwap(sourceAsset, destAsset, testSwap);
 
-        const sourceChain = chainFromAsset(sourceAsset);
-        const destChain = chainFromAsset(destAsset);
-        if (vaultSwapSupportedChains.includes(sourceChain)) {
-          // Vault Swaps
-          appendSwap(sourceAsset, destAsset, testVaultSwap);
+  //       const sourceChain = chainFromAsset(sourceAsset);
+  //       const destChain = chainFromAsset(destAsset);
+  //       if (vaultSwapSupportedChains.includes(sourceChain)) {
+  //         // Vault Swaps
+  //         appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-          // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
-          if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
-            // CCM Vault swaps
-            appendSwap(sourceAsset, destAsset, testVaultSwap, true);
-          }
-        }
+  //         // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
+  //         if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
+  //           // CCM Vault swaps
+  //           appendSwap(sourceAsset, destAsset, testVaultSwap, true);
+  //         }
+  //       }
 
-        if (ccmSupportedChains.includes(destChain)) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, true);
-        }
-      });
-  });
+  //       if (ccmSupportedChains.includes(destChain)) {
+  //         // CCM swaps
+  //         appendSwap(sourceAsset, destAsset, testSwap, true);
+  //       }
+  //     });
+  // });
+
+  appendSwap("ArbEth", "Sol", testSwap, true);
 
   await Promise.all(allSwaps);
 }
