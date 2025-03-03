@@ -44,10 +44,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry,
-	AltWitnessingHandler, AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster,
+	InitiateSolanaAltWitnessing, AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster,
 	Chainflip, ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	InitiateSolanaAltWitnessing, NetworkEnvironmentProvider, OnDeposit, PoolApi,
+	NetworkEnvironmentProvider, OnDeposit, PoolApi,
 	ScheduledEgressDetails, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
 	SwapRequestType,
 };
