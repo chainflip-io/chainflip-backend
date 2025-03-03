@@ -1,8 +1,8 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
-import type { ApiPromise } from '@polkadot/api';
+import { ApiPromise, HttpProvider } from '@polkadot/api';
 import Keyring from '../polkadot/keyring';
 import { handleSubstrateError, snowWhiteMutex } from './utils';
-import { getChainflipApi } from './utils/substrate';
+import { CHAINFLIP_HTTP_ENDPOINT } from './utils/substrate';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
@@ -18,11 +18,15 @@ export async function submitGovernanceExtrinsic(
   ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
   preAuthorise = 0,
 ) {
-  await using chainflip = await getChainflipApi();
-  const extrinsic = await cb(chainflip);
+  const httpApi = await ApiPromise.create({
+    provider: new HttpProvider(CHAINFLIP_HTTP_ENDPOINT),
+    noInitWarn: true,
+  });
+
+  const extrinsic = await cb(httpApi);
   await snowWhiteMutex.runExclusive(async () => {
-    await chainflip.tx.governance
+    await httpApi.tx.governance
       .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
-      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(httpApi));
   });
 }
