@@ -19,7 +19,7 @@ let swapCount = 1;
 
 // Protocol limits
 const MAX_CCM_MSG_LENGTH = 15_000;
-const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
+const MAX_CCM_ADDITIONAL_DATA_LENGTH = 3000;
 
 // In Arbitrum's localnet large messages (~ >4k) end up with large gas estimations
 // of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
@@ -40,8 +40,10 @@ const BYTES_PER_ALT = 34; // 32 + 1 + 1 (for vector lengths)
 
 function newSolanaCcmAdditionalData(maxBytes: number) {
   // Test all combinations
-  const useLegacy = maxBytes < BYTES_PER_ALT || Math.random() < 0.5;
-  const useAlt = !useLegacy && Math.random() < 0.5;
+  // const useLegacy = maxBytes < BYTES_PER_ALT || Math.random() < 0.5;
+  // const useAlt = !useLegacy && Math.random() < 0.5;
+  const useLegacy = false;
+  const useAlt = true;
   let bytesAvailable = maxBytes;
 
   const additionalAccounts = [];
@@ -86,7 +88,7 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
     fallback_address: fallbackAddress,
   };
 
-  if (!useAlt) {
+  if (useLegacy) {
     return u8aToHex(
       solVersionedCcmAdditionalDataCodec.enc({
         tag: 'V0',
@@ -116,6 +118,8 @@ function newCcmArbitraryBytes(maxLength: number): string {
   return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
 }
 
+// For Solana the maximum number of extra accounts that can be passed is limited by the tx size
+// and therefore also depends on the message length.
 function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: number): string {
   const destChain = chainFromAsset(destAsset);
 
@@ -130,13 +134,7 @@ function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: nu
       if (maxLength !== undefined) {
         bytesAvailable = Math.min(bytesAvailable, maxLength);
       }
-
-      // The maximum number of extra accounts that can be passed is limited by the tx size
-      // and therefore also depends on the message length.
       const ccmAdditonalData = newSolanaCcmAdditionalData(bytesAvailable);
-      // if (ccmAdditonalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
-      //   throw new Error(`CCM additional data length exceeds limit: ${ccmAdditonalData.length}`);
-      // }
       return ccmAdditonalData;
     }
     default:

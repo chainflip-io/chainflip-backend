@@ -826,8 +826,13 @@ export async function observeSolanaCcmEvent(
 
           // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
-            const { additional_accounts: expectedAdditionalAccounts } =
-              solVersionedCcmAdditionalDataCodec.dec(messageMetadata.ccmAdditionalData!).value;
+            const decodedCcmAdditionalData = solVersionedCcmAdditionalDataCodec.dec(
+              messageMetadata.ccmAdditionalData!,
+            );
+            const expectedAdditionalAccounts =
+              decodedCcmAdditionalData.tag === 'V0'
+                ? decodedCcmAdditionalData.value.additional_accounts
+                : decodedCcmAdditionalData.value.ccm_accounts.additional_accounts;
 
             if (
               expectedAdditionalAccounts.length !== event.data.remaining_is_writable.length ||
