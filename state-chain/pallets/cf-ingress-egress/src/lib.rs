@@ -1747,16 +1747,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for ccm in ccms_to_send {
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 				TransferAssetParams {
-					asset: ccm.asset.clone(),
-					amount: ccm.amount.clone(),
+					asset: ccm.asset,
+					amount: ccm.amount,
 					to: ccm.destination_address.clone(),
 				},
-				ccm.source_chain.clone(),
+				ccm.source_chain,
 				ccm.source_address.clone(),
-				ccm.gas_budget.clone(),
+				ccm.gas_budget,
 				ccm.message.clone().to_vec(),
 				ccm.ccm_additional_data.clone().to_vec(),
-				ccm.swap_request_id.clone(),
+				ccm.swap_request_id,
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(

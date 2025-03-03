@@ -201,7 +201,6 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 	}
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 struct SolanaAltWitnessingVoter {
 	client: SolRetryRpcClient,
@@ -221,7 +220,7 @@ impl VoterApi<SolanaAltWitnessing> for SolanaAltWitnessingVoter {
 		.await
 		// We wrap the vote in a Some her since the vote is always valid if there was no error in
 		// rpc while querying.
-		.map(|maybe_lookup_tables| Some(maybe_lookup_tables))
+		.map(Some)
 	}
 }
 

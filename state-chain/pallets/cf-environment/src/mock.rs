@@ -189,8 +189,10 @@ impl RecoverDurableNonce for MockSolEnvironment {
 	}
 }
 
-impl ChainEnvironment<SwapRequestId, Vec<SolAddressLookupTableAccount>> for MockSolEnvironment {
-	fn lookup(_s: SwapRequestId) -> Option<Vec<SolAddressLookupTableAccount>> {
+impl ChainEnvironment<SwapRequestId, Option<Vec<SolAddressLookupTableAccount>>>
+	for MockSolEnvironment
+{
+	fn lookup(_s: SwapRequestId) -> Option<Option<Vec<SolAddressLookupTableAccount>>> {
 		None
 	}
 }

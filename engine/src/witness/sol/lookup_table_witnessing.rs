@@ -1,5 +1,4 @@
 use cf_chains::sol::SolAddress;
-use itertools::Itertools;
 
 use crate::sol::{
 	commitment_config::CommitmentConfig,
@@ -151,19 +150,22 @@ mod tests {
 				let mainnet_alt_address: SolAddress =
 					SolAddress::from_str("2immgwYNHBbyVQKVGCEkgWpi53bLwWNRMB5G2nbgYV17").unwrap();
 
-				let addresses =
-					get_lookup_table_state(&client, mainnet_alt_address).await.unwrap().unwrap();
+				let addresses = get_lookup_table_state(&client, vec![mainnet_alt_address])
+					.await
+					.unwrap()
+					.unwrap();
 
 				// Check the first one just to make sure it's working
 				assert_eq!(
-					addresses.first().unwrap(),
-					&SolAddress::from_str("11111111111111111111111111111111").unwrap()
+					addresses.first().unwrap().addresses.first().unwrap(),
+					&SolAddress::from_str("11111111111111111111111111111111").unwrap().into()
 				);
 
 				// Test that a program will return None and not error
 				let addresses = get_lookup_table_state(
 					&client,
-					SolAddress::from_str("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4").unwrap(),
+					vec![SolAddress::from_str("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4")
+						.unwrap()],
 				)
 				.await
 				.unwrap();
@@ -172,7 +174,8 @@ mod tests {
 				// Test a non existing address
 				let addresses = get_lookup_table_state(
 					&client,
-					SolAddress::from_str("6UzppnNP2baug3BisB9Mb1J5t43hV1YcawUtPXHchoHS").unwrap(),
+					vec![SolAddress::from_str("6UzppnNP2baug3BisB9Mb1J5t43hV1YcawUtPXHchoHS")
+						.unwrap()],
 				)
 				.await
 				.unwrap();
@@ -209,7 +212,7 @@ mod tests {
 					SolAddress::from_str("ASriuNGwqUosyrUYNrpjMNUsGYAKFAVB4e3bVpeaRC7Y").unwrap();
 
 				let addresses =
-					get_lookup_table_state(&client, mainnet_empty_address).await.unwrap();
+					get_lookup_table_state(&client, vec![mainnet_empty_address]).await.unwrap();
 
 				assert_eq!(addresses, None);
 
@@ -217,7 +220,7 @@ mod tests {
 					SolAddress::from_str("3bVqyf58hQHsxbjnqnSkopnoyEHB9v9KQwhZj7h1DucW").unwrap();
 
 				let addresses =
-					get_lookup_table_state(&client, mainnet_nonce_account).await.unwrap();
+					get_lookup_table_state(&client, vec![mainnet_nonce_account]).await.unwrap();
 
 				assert_eq!(addresses, None);
 
