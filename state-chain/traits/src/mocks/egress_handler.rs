@@ -101,7 +101,10 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 						gas_budget: message.channel_metadata.gas_budget,
 						aux_data_lookup_key: match swap_request_id {
 							None => CcmAuxDataLookupKey::NotRequired,
-							Some(id) => CcmAuxDataLookupKey::Alt(id, 0u64),
+							Some(id) => CcmAuxDataLookupKey::Alt {
+								swap_request_id: id,
+								block_created: 0u64,
+							},
 						},
 					},
 					None => MockEgressParameter::<C>::Swap {

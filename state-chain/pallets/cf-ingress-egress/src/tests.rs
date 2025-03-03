@@ -2531,7 +2531,7 @@ fn can_wait_egress_ccm_until_aux_data_ready() {
 
 		System::set_block_number(1);
 
-		MockEthereumApiCall::<MockEvmEnvironment>::set_is_aux_ready(false);
+		MockEthereumApiCall::<MockEvmEnvironment>::set_aux_data_ready(false);
 
 		let amount = 5_000;
 		ScheduledEgressCcm::<Test, ()>::append(
@@ -2545,7 +2545,7 @@ fn can_wait_egress_ccm_until_aux_data_ready() {
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				gas_budget: GAS_BUDGET,
-				aux_data_lookup_key: CcmAuxDataLookupKey::Alt(SwapRequestId(1), 1),
+				aux_data_lookup_key: CcmAuxDataLookupKey::Alt{ swap_request_id: SwapRequestId(1), block_created: 1},
 			}
 		);
 
@@ -2555,7 +2555,7 @@ fn can_wait_egress_ccm_until_aux_data_ready() {
 		assert_eq!(MockEgressBroadcaster::get_pending_api_calls(), vec![]);
 
 		// Set the aux data to "ready".
-		MockEthereumApiCall::<MockEvmEnvironment>::set_is_aux_ready(true);
+		MockEthereumApiCall::<MockEvmEnvironment>::set_aux_data_ready(true);
 
 		// Check that the CCM should be egressed now.
 		IngressEgress::on_finalize(1);
@@ -2596,7 +2596,7 @@ fn can_refund_egress_ccm_after_max_wait_time() {
 
 		System::set_block_number(100);
 
-		MockEthereumApiCall::<MockEvmEnvironment>::set_is_aux_ready(false);
+		MockEthereumApiCall::<MockEvmEnvironment>::set_aux_data_ready(false);
 
 		let amount = 5_000;
 		ScheduledEgressCcm::<Test, ()>::append(CrossChainMessage {
@@ -2609,7 +2609,10 @@ fn can_refund_egress_ccm_after_max_wait_time() {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			gas_budget: GAS_BUDGET,
-			aux_data_lookup_key: CcmAuxDataLookupKey::Alt(SwapRequestId(1), 1),
+			aux_data_lookup_key: CcmAuxDataLookupKey::Alt {
+				swap_request_id: SwapRequestId(1),
+				block_created: 1,
+			},
 		});
 
 		// CCM is not egressed since the data isn't ready.
