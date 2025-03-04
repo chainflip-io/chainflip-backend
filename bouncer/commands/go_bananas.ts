@@ -21,7 +21,7 @@ import { createLpPool } from '../shared/create_lp_pool';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { getChainflipApi } from '../shared/utils/substrate';
 import { globalLogger as logger } from '../shared/utils/logger';
-import {lpApiEndpoint} from "../shared/json_rpc";
+import { lpApiEndpoint } from '../shared/json_rpc';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function call(method: string, params: any, id: string) {

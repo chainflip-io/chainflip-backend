@@ -1,7 +1,7 @@
 import { InternalAsset as Asset, Chain, Asset as SCAsset, broker } from '@chainflip/cli';
 import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset } from './utils';
 import { Logger } from './utils/logger';
-import {brokerApiEndpoint} from "./json_rpc";
+import { brokerApiEndpoint } from './json_rpc';
 
 const defaultCommissionBps = 100; // 1%
 
