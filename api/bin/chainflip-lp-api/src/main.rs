@@ -1,5 +1,8 @@
 use anyhow::anyhow;
-use cf_primitives::{BasisPoints, BlockNumber, EgressId};
+use cf_primitives::{
+	chains::{Arbitrum, Solana},
+	BasisPoints, BlockNumber, EgressId,
+};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -128,7 +131,7 @@ pub trait Rpc {
 	async fn free_balances(&self) -> RpcResult<AssetMap<U256>>;
 
 	#[method(name = "get_open_swap_channels")]
-	async fn get_open_swap_channels(&self) -> RpcResult<OpenSwapChannels>;
+	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels>;
 
 	#[method(name = "request_redemption")]
 	async fn request_redemption(
@@ -396,15 +399,17 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn get_open_swap_channels(&self) -> RpcResult<OpenSwapChannels> {
+	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels> {
 		let api = self.api.query_api();
 
-		let (ethereum, bitcoin, polkadot) = tokio::try_join!(
-			api.get_open_swap_channels::<Ethereum>(None),
-			api.get_open_swap_channels::<Bitcoin>(None),
-			api.get_open_swap_channels::<Polkadot>(None),
+		let (ethereum, bitcoin, polkadot, arbitrum, solana) = tokio::try_join!(
+			api.get_open_swap_channels::<Ethereum>(at),
+			api.get_open_swap_channels::<Bitcoin>(at),
+			api.get_open_swap_channels::<Polkadot>(at),
+			api.get_open_swap_channels::<Arbitrum>(at),
+			api.get_open_swap_channels::<Solana>(at),
 		)?;
-		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
+		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot, arbitrum, solana })
 	}
 
 	async fn request_redemption(
