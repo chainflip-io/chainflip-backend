@@ -1,5 +1,3 @@
-use core::u64;
-
 use crate::{
 	mock_btc::*,
 	tests::{ALICE, BROKER},
@@ -432,12 +430,12 @@ fn test_mark_transaction_expiry_and_deposit() {
 			// First expiry should be triggered, but ignored.
 		})
 		.then_process_events(|_, event| {
-			match event {
-				RuntimeEvent::IngressEgress(Event::TransactionRejectionRequestExpired {
-					..
-				}) => panic!("Rejection Request Expired prematurely"),
-				_ => (),
-			};
+			if let RuntimeEvent::IngressEgress(Event::TransactionRejectionRequestExpired {
+				..
+			}) = event
+			{
+				panic!("Rejection Request Expired prematurely");
+			}
 			None::<()>
 		})
 		.then_execute_at_block(second_expiry, |_| {
