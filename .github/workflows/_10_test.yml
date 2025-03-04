@@ -8,7 +8,7 @@ on:
 
 env:
   FORCE_COLOR: 1
-
+  CARGO_TERM_COLOR: always
 jobs:
   unit-tests:
     runs-on: namespace-profile-${{ inputs.ci-runner }}
@@ -32,4 +32,31 @@ jobs:
       - name: Run tests 🧪
         run: |
           cargo cf-test-ci --locked
+        timeout-minutes: 23
+  unit-tests-nextest:
+    runs-on: namespace-profile-${{ inputs.ci-runner }}
+    container:
+      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
+      volumes:
+        - /cache:/cache
+      options: --cap-add=SYS_ADMIN
+      env:
+        NSC_CACHE_PATH: "/cache"
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Set up Rust cache 🦀💰
+        if: contains(inputs.ci-runner, 'no-cache') == false
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
+
+      - uses: taiki-e/install-action@a209ff0ce0349f9e7cadc4ba8f6a415c8d3b0813
+        with:
+          tool: nextest@0.9.92
+
+      - name: Run tests 🧪
+        run: |
+          cargo nextest run cf-test-ci --locked
         timeout-minutes: 23
