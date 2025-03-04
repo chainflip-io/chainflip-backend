@@ -47,10 +47,11 @@ export function specVersion(
       }
 
       if (foundMacro && line.includes('spec_version:')) {
-        const specVersionLine = line.match(/(spec_version:\s*)(\d+)/);
+        const specVersionLine = line.match(/(spec_version:\s*)(\d+(?:_\d+)*)/);
 
         if (specVersionLine) {
-          const currentSpecVersion = parseInt(specVersionLine[2]);
+          const versionWithUnderscores = specVersionLine[2];
+          const currentSpecVersion = parseInt(versionWithUnderscores.replace(/_/g, ''));
 
           if (readOrWrite === 'read') {
             return currentSpecVersion;
