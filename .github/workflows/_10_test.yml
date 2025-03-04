@@ -19,29 +19,11 @@ jobs:
       options: --cap-add=SYS_ADMIN
       env:
         NSC_CACHE_PATH: "/cache"
-    steps:
-      - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-
-      - name: Set up Rust cache 🦀💰
-        if: contains(inputs.ci-runner, 'no-cache') == false
-        uses: namespacelabs/nscloud-cache-action@v1
-        with:
-          cache: rust
-
-      - name: Run tests 🧪
-        run: |
-          cargo cf-test-ci --locked
-        timeout-minutes: 23
-  unit-tests-nextest:
-    runs-on: namespace-profile-${{ inputs.ci-runner }}
-    container:
-      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
-      volumes:
-        - /cache:/cache
-      options: --cap-add=SYS_ADMIN
-      env:
-        NSC_CACHE_PATH: "/cache"
+    strategy:
+      matrix:
+        test-run-cmd:
+          - cargo
+          - cargo nextest run
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -58,5 +40,5 @@ jobs:
 
       - name: Run tests 🧪
         run: |
-          cargo nextest run cf-test-ci --locked
+          ${{ matrix.test-run-cmd }} cf-test-ci --locked
         timeout-minutes: 23
