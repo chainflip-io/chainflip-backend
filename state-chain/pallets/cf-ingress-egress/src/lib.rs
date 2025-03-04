@@ -2902,7 +2902,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
-		_swap_request_id: Option<SwapRequestId>,
+		swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
