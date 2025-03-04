@@ -990,10 +990,10 @@ impl<A: Clone> ChannelRefundParameters<A> {
 			min_price: self.min_price,
 		}
 	}
-	pub fn try_map_address<B, F: FnOnce(A) -> Result<B, DispatchError>>(
+	pub fn try_map_address<B, E, F: FnOnce(A) -> Result<B, E>>(
 		&self,
 		f: F,
-	) -> Result<ChannelRefundParameters<B>, DispatchError> {
+	) -> Result<ChannelRefundParameters<B>, E> {
 		Ok(ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone())?,
@@ -1022,22 +1022,20 @@ pub struct EvmVaultSwapExtraParameters<Address, Amount> {
 	pub refund_parameters: ChannelRefundParameters<Address>,
 }
 impl<Address: Clone, Amount> EvmVaultSwapExtraParameters<Address, Amount> {
-	pub fn try_map_address<AddressOther>(
+	pub fn try_map_address<AddressOther, E>(
 		self,
-		f: impl Fn(Address) -> Result<AddressOther, DispatchError>,
-	) -> Result<EvmVaultSwapExtraParameters<AddressOther, Amount>, DispatchError> {
+		f: impl Fn(Address) -> Result<AddressOther, E>,
+	) -> Result<EvmVaultSwapExtraParameters<AddressOther, Amount>, E> {
 		Ok(EvmVaultSwapExtraParameters {
 			input_amount: self.input_amount,
-			refund_parameters: self.refund_parameters.try_map_address(|a| {
-				f(a).map_err(|_| "Failed to convert address in refund parameters".into())
-			})?,
+			refund_parameters: self.refund_parameters.try_map_address(f)?,
 		})
 	}
 
-	pub fn try_map_amounts<AmountOther>(
+	pub fn try_map_amounts<AmountOther, E>(
 		self,
-		f: impl Fn(Amount) -> Result<AmountOther, DispatchError>,
-	) -> Result<EvmVaultSwapExtraParameters<Address, AmountOther>, DispatchError> {
+		f: impl Fn(Amount) -> Result<AmountOther, E>,
+	) -> Result<EvmVaultSwapExtraParameters<Address, AmountOther>, E> {
 		Ok(EvmVaultSwapExtraParameters {
 			input_amount: f(self.input_amount)?,
 			refund_parameters: self.refund_parameters,
@@ -1068,10 +1066,10 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 	/// Try map address type parameters into another type.
 	/// Typically used to convert RPC supported types into internal types.
-	pub fn try_map_address<AddressOther>(
+	pub fn try_map_address<AddressOther, E>(
 		self,
-		f: impl Fn(Address) -> Result<AddressOther, DispatchError>,
-	) -> Result<VaultSwapExtraParameters<AddressOther, Amount>, DispatchError> {
+		f: impl Fn(Address) -> Result<AddressOther, E>,
+	) -> Result<VaultSwapExtraParameters<AddressOther, Amount>, E> {
 		Ok(match self {
 			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
 				VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration },
@@ -1089,20 +1087,18 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				from: f(from)?,
 				event_data_account: f(event_data_account)?,
 				input_amount,
-				refund_parameters: refund_parameters.try_map_address(|a| {
-					f(a).map_err(|_| "Failed to convert address in refund parameters".into())
-				})?,
-				from_token_account: from_token_account.map(f).transpose()?,
+				refund_parameters: refund_parameters.try_map_address(&f)?,
+				from_token_account: from_token_account.map(&f).transpose()?,
 			},
 		})
 	}
 
 	/// Try map numerical parameters into another type.
 	/// Typically used to convert RPC supported types into internal types.
-	pub fn try_map_amounts<NumberOther>(
+	pub fn try_map_amounts<NumberOther, E>(
 		self,
-		f: impl Fn(Amount) -> Result<NumberOther, DispatchError>,
-	) -> Result<VaultSwapExtraParameters<Address, NumberOther>, DispatchError> {
+		f: impl Fn(Amount) -> Result<NumberOther, E>,
+	) -> Result<VaultSwapExtraParameters<Address, NumberOther>, E> {
 		Ok(match self {
 			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
 				VaultSwapExtraParameters::Bitcoin {
@@ -1143,13 +1139,11 @@ impl VaultSwapExtraParametersRpc {
 	pub fn try_into_encoded_params(
 		self,
 		chain: ForeignChain,
-	) -> Result<VaultSwapExtraParametersEncoded, DispatchError> {
-		self.try_map_address(|a| {
-			a.try_parse_to_encoded_address(chain)
-				.map_err(|_| "Invalid address for chain".into())
-		})?
-		.try_map_amounts(|n| {
-			u128::try_from(n).map_err(|_| "Cannot convert number input into u128".into())
-		})
+	) -> anyhow::Result<VaultSwapExtraParametersEncoded> {
+		self.try_map_address(|a| a.try_parse_to_encoded_address(chain))?
+			.try_map_amounts(|n| {
+				u128::try_from(n)
+					.map_err(|_| anyhow::anyhow!("Cannot convert number input into u128"))
+			})
 	}
 }

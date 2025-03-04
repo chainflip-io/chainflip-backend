@@ -1922,9 +1922,7 @@ where
 					destination_asset,
 					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
 					broker_commission,
-					extra_parameters
-						.try_into_encoded_params(source_asset.into())
-						.map_err(DispatchErrorWithMessage::from)?,
+					extra_parameters.try_into_encoded_params(source_asset.into())?,
 					channel_metadata,
 					boost_fee.unwrap_or_default(),
 					affiliate_fees.unwrap_or_default(),

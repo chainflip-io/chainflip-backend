@@ -41,6 +41,7 @@ use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepo
 use pallet_cf_pools::{HistoricalEarnedFees, OrderId, RangeOrderSize};
 use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::{H160, U256};
+
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
@@ -53,11 +54,12 @@ use state_chain_runtime::{
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
-const ETH_REFUND_PARAMS: ChannelRefundParameters<H160> = ChannelRefundParameters {
-	retry_duration: 5,
-	refund_address: sp_core::H160([100u8; 20]),
-	min_price: sp_core::U256::zero(),
-};
+const ETH_REFUND_PARAMS: ChannelRefundParameters<<Ethereum as Chain>::ChainAccount> =
+	ChannelRefundParameters {
+		retry_duration: 5,
+		refund_address: H160([100u8; 20]),
+		min_price: sp_core::U256::zero(),
+	};
 
 fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {
 	assert_ok!(LiquidityPools::new_pool(
@@ -267,7 +269,7 @@ fn basic_pool_setup_provision_and_swap() {
 				None,
 				0u16,
 				Default::default(),
-				None,
+				ETH_REFUND_PARAMS.map_address(|addr| EncodedAddress::Eth(addr.0)),
 				None,
 			));
 
@@ -391,7 +393,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Some(message),
 			0u16,
 			Default::default(),
-			None,
+			ETH_REFUND_PARAMS.map_address(|addr| EncodedAddress::Eth(addr.0)),
 			None,
 		));
 
@@ -532,7 +534,7 @@ fn vault_swap_deposit_witness(
 		deposit_details: DepositDetails { tx_hashes: None },
 		broker_fee: None,
 		affiliate_fees: Default::default(),
-		refund_params: Some(ETH_REFUND_PARAMS),
+		refund_params: ETH_REFUND_PARAMS,
 		dca_params: None,
 		boost_fee: 0,
 		deposit_address: Some(H160::from([0x03; 20])),

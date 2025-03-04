@@ -605,7 +605,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParametersEncoded>,
+			refund_parameters: ChannelRefundParametersEncoded,
 			dca_parameters: Option<DcaParameters>,
 		},
 		/// A swap is scheduled for the first time
@@ -902,6 +902,7 @@ pub mod pallet {
 			broker_commission: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
+			refund_parameters: ChannelRefundParametersEncoded,
 		) -> DispatchResult {
 			Self::request_swap_deposit_address_with_affiliates(
 				origin,
@@ -914,7 +915,7 @@ pub mod pallet {
 				Default::default(),
 				// This extrinsic is for backwards compatibility and does not support new
 				// features like FoK or DCA
-				None,
+				refund_parameters,
 				None,
 			)
 		}
@@ -1091,7 +1092,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParametersEncoded>,
+			refund_parameters: ChannelRefundParametersEncoded,
 			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
@@ -1118,15 +1119,10 @@ pub mod pallet {
 				.map_err(address_error_to_pallet_error::<T>)?;
 
 			// Convert the refund parameter from `EncodedAddress` into `ForeignChainAddress` type.
-			let refund_params_internal = refund_parameters
-				.clone()
-				.map(|params| {
-					params.try_map_address(|addr| {
-						T::AddressConverter::try_from_encoded_address(addr)
-							.map_err(|_| Error::<T>::InvalidRefundAddress.into())
-					})
-				})
-				.transpose()?;
+			let refund_params_internal = refund_parameters.clone().try_map_address(|addr| {
+				T::AddressConverter::try_from_encoded_address(addr)
+					.map_err(|_| Error::<T>::InvalidRefundAddress)
+			})?;
 
 			if let Some(ccm) = channel_metadata.as_ref() {
 				let destination_chain: ForeignChain = destination_asset.into();
