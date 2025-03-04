@@ -33,7 +33,7 @@ use crate::{
 	},
 };
 use cf_amm::{
-	common::{PoolPairsMap, Side},
+	common::PoolPairsMap,
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
@@ -72,11 +72,9 @@ use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{
-	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
-};
+use pallet_cf_ingress_egress::{IngressOrEgress, OwedAmount, TargetChainAsset};
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
+	AskBidMap, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{
