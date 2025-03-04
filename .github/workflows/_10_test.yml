@@ -21,9 +21,9 @@ jobs:
         NSC_CACHE_PATH: "/cache"
     strategy:
       matrix:
-        test-run-cmd:
-          - cargo
-          - cargo nextest run
+        cargo-profile:
+          - cf-test-ci
+          - cf-test-ci-nextest
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -44,5 +44,5 @@ jobs:
 
       - name: Run tests 🧪
         run: |
-          ${{ matrix.test-run-cmd }} cf-test-ci --locked
+          cargo ${{ matrix.cargo-profile }} --locked
         timeout-minutes: 23
