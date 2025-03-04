@@ -17,9 +17,9 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
-	ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin, TransactionInIdForAnyChain,
-	TransferAssetParams,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, DepositChannel,
+	DepositOriginType, ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin,
+	TransactionInIdForAnyChain, TransferAssetParams,
 };
 
 use cf_chains::eth::Address as EthereumAddress;
@@ -411,7 +411,7 @@ fn addresses_are_getting_reused() {
 			source_asset: EthAsset::Eth,
 			destination_asset: EthAsset::Flip,
 			destination_address: ForeignChainAddress::Eth(Default::default()),
-			refund_address: None,
+			refund_address: ALICE_ETH_ADDRESS,
 		}])
 		// The address should have been taken from the pool and the id counter unchanged.
 		.then_execute_with_keep_context(|_| {
@@ -481,7 +481,7 @@ fn reused_address_channel_id_matches() {
 			EthAsset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth([0u8; 20].into()),
+				refund_address: Some(ForeignChainAddress::Eth([0u8; 20].into())),
 			},
 			0,
 		)
@@ -1433,7 +1433,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 			EthAsset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: CHANNEL_REQUESTER,
-				refund_address: ForeignChainAddress::Eth(Default::default()),
+				refund_address: Some(ForeignChainAddress::Eth(Default::default())),
 			},
 			0
 		));
@@ -1450,7 +1450,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 				EthAsset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: CHANNEL_REQUESTER,
-					refund_address: ForeignChainAddress::Eth(Default::default()),
+					refund_address: Some(ForeignChainAddress::Eth(Default::default())),
 				},
 				0
 			),
@@ -1627,7 +1627,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			EthAsset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth(Default::default())
+				refund_address: Some(ForeignChainAddress::Eth(Default::default()))
 			},
 			0,
 		));
@@ -1647,7 +1647,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 				EthAsset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: 0,
-					refund_address: ForeignChainAddress::Eth(Default::default())
+					refund_address: Some(ForeignChainAddress::Eth(Default::default()))
 				},
 				0,
 			),
@@ -2245,7 +2245,7 @@ fn private_and_regular_channel_ids_do_not_overlap() {
 				EthAsset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: 0,
-					refund_address: ForeignChainAddress::Eth(Default::default()),
+					refund_address: Some(ForeignChainAddress::Eth(Default::default())),
 				},
 				0,
 			)
@@ -2323,7 +2323,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 				None,
 				ChannelAction::LiquidityProvision {
 					lp_account: 0,
-					refund_address: ForeignChainAddress::Eth(Default::default()),
+					refund_address: Some(ForeignChainAddress::Eth(Default::default())),
 				},
 				0,
 				DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
@@ -2347,7 +2347,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 			None,
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth(Default::default()),
+				refund_address: Some(ForeignChainAddress::Eth(Default::default())),
 			},
 			0,
 			DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
@@ -2580,7 +2580,7 @@ mod evm_transaction_rejection {
 				source_asset: ETH_ETH,
 				destination_asset: ETH_FLIP,
 				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
-				refund_address: Some(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
 			}])
 			.then_apply_extrinsics(|_| {
 				[
@@ -2761,7 +2761,7 @@ mod evm_transaction_rejection {
 				source_asset: ETH_ETH,
 				destination_asset: ETH_FLIP,
 				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
-				refund_address: Some(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
 			}])
 			// Simulate a prewitness call.
 			// we can't use `then_apply_extrinsics` because at the moment there's no way to

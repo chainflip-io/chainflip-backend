@@ -911,8 +911,6 @@ pub mod pallet {
 				channel_metadata,
 				boost_fee,
 				Default::default(),
-				// This extrinsic is for backwards compatibility and does not support new
-				// features like FoK or DCA
 				refund_parameters,
 				None,
 			)

@@ -1017,7 +1017,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 		let (_, address, _, _) = IngressEgress::open_channel(
 			&ALICE,
 			EthAsset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()) },
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: Some(ForeignChainAddress::Eth([0u8; 20].into())) },
 			TIER_5_BPS,
 		)
 		.unwrap();
@@ -1025,7 +1025,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 		assert_ok!(IngressEgress::process_deposits(
 			RuntimeOrigin::root(),
 			vec![
-				// The deposit into an unkown address should fail
+				// The deposit into an unknown address should fail
 				DepositWitness {
 					deposit_address: [0; 20].into(),
 					asset: EthAsset::Eth,
