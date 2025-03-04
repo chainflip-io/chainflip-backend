@@ -19,13 +19,13 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
-use cf_chains::{evm::to_evm_address, CcmChannelMetadata};
+use cf_chains::{evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto};
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_rpc_types::RedemptionAmount;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
@@ -549,6 +549,16 @@ pub trait SimpleSubmissionApi: SignedExtrinsicApi {
 #[async_trait]
 impl<T: SignedExtrinsicApi + Sized + Send + Sync + 'static> SimpleSubmissionApi for T {}
 
+pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+
+#[derive(Serialize, Deserialize)]
+pub enum TransactionInId {
+	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
+	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
+	Arbitrum(TransactionInIdFor<cf_chains::Arbitrum>),
+	// other variants reserved for other chains.
+}
+
 #[async_trait]
 pub trait DepositMonitorApi:
 	SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static
@@ -558,6 +568,20 @@ pub trait DepositMonitorApi:
 			TransactionInId::Bitcoin(tx_id) =>
 				self.simple_submission_with_dry_run(
 					state_chain_runtime::RuntimeCall::BitcoinIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+				)
+				.await,
+			TransactionInId::Ethereum(tx_id) =>
+				self.simple_submission_with_dry_run(
+					state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+				)
+				.await,
+			TransactionInId::Arbitrum(tx_id) =>
+				self.simple_submission_with_dry_run(
+					state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
 						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
 					),
 				)
