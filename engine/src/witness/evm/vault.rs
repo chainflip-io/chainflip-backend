@@ -47,6 +47,17 @@ where
 	Ok((vault_swap_parameters, ccm_additional_data))
 }
 
+pub(crate) fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
+	from: Primitive,
+) -> Result<CfType>
+where
+	<Primitive as TryInto<CfType>>::Error: std::fmt::Display,
+{
+	from.try_into().map_err(|err| {
+		anyhow!("Failed to convert into {:?}: {err}", std::any::type_name::<CfType>(),)
+	})
+}
+
 pub fn call_from_event<
 	C: cf_chains::Chain<ChainAccount = EthereumAddress, ChainBlockNumber = u64>,
 	CallBuilder: IngressCallBuilder<Chain = C>,
@@ -64,17 +75,6 @@ where
 	fn try_into_encoded_address(chain: ForeignChain, bytes: Vec<u8>) -> Result<EncodedAddress> {
 		EncodedAddress::from_chain_bytes(chain, bytes)
 			.map_err(|e| anyhow!("Failed to convert into EncodedAddress: {e}"))
-	}
-
-	fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
-		from: Primitive,
-	) -> Result<CfType>
-	where
-		<Primitive as TryInto<CfType>>::Error: std::fmt::Display,
-	{
-		from.try_into().map_err(|err| {
-			anyhow!("Failed to convert into {:?}: {err}", std::any::type_name::<CfType>(),)
-		})
 	}
 
 	Ok(match event.event_parameters {
@@ -98,7 +98,7 @@ where
 				None,
 				event.tx_hash,
 				vault_swap_parameters,
-			))
+			)?)
 		},
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
 			dst_chain,
@@ -123,7 +123,7 @@ where
 				None,
 				event.tx_hash,
 				vault_swap_parameters,
-			))
+			)?)
 		},
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
 			dst_chain,
@@ -158,7 +158,7 @@ where
 				}),
 				event.tx_hash,
 				vault_swap_parameters,
-			))
+			)?)
 		},
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
@@ -180,7 +180,7 @@ where
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
 				try_into_primitive(amount)?,
-				try_into_primitive(dst_token)?,
+				dst_token,
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				Some(CcmDepositMetadata {
 					source_chain,
@@ -196,7 +196,7 @@ where
 				}),
 				event.tx_hash,
 				vault_swap_parameters,
-			))
+			)?)
 		},
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
 			recipient,
@@ -233,7 +233,7 @@ macro_rules! vault_deposit_witness {
 	($source_asset: expr, $deposit_amount: expr, $dest_asset: expr, $dest_address: expr, $metadata: expr, $tx_id: expr, $params: expr) => {
 		VaultDepositWitness {
 			input_asset: $source_asset.try_into().expect("invalid asset for chain"),
-			output_asset: $dest_asset,
+			output_asset: crate::witness::evm::vault::try_into_primitive($dest_asset)?,
 			deposit_amount: $deposit_amount,
 			destination_address: $dest_address,
 			deposit_metadata: $metadata,
@@ -264,12 +264,12 @@ pub trait IngressCallBuilder {
 		block_height: <Self::Chain as cf_chains::Chain>::ChainBlockNumber,
 		source_asset: Asset,
 		deposit_amount: cf_primitives::AssetAmount,
-		destination_asset: Asset,
+		destination_asset: u32,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: H256,
 		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
-	) -> state_chain_runtime::RuntimeCall;
+	) -> Result<state_chain_runtime::RuntimeCall>;
 
 	fn vault_transfer_failed(
 		asset: <Self::Chain as cf_chains::Chain>::ChainAsset,

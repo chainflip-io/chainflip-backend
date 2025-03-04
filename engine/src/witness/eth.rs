@@ -237,12 +237,12 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		block_height: u64,
 		source_asset: Asset,
 		deposit_amount: AssetAmount,
-		destination_asset: Asset,
+		destination_asset: u32,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_id: H256,
 		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
-	) -> state_chain_runtime::RuntimeCall {
+	) -> Result<state_chain_runtime::RuntimeCall> {
 		let deposit = vault_deposit_witness!(
 			source_asset,
 			deposit_amount,
@@ -252,12 +252,12 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 			tx_id,
 			vault_swap_parameters
 		);
-		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+		Ok(state_chain_runtime::RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
 				block_height,
 				deposit: Box::new(deposit),
 			},
-		)
+		))
 	}
 
 	fn vault_transfer_failed(
