@@ -79,7 +79,7 @@ let endpoint;
 switch (network) {
   case 'mainnet':
   case 'berghain':
-    endpoint = 'https://mainnet-archive.chainflip.io:443';
+    endpoint = 'https://mainnet-rpc.chainflip.io:443';
     break;
   case 'perseverance':
     endpoint = 'https://perseverance.chainflip.xyz:443';
@@ -101,10 +101,10 @@ console.log(`Spec version in runtime/src/lib.rs: ${specVersionInSource}`);
 
 if (specVersionInSource >= releaseSpecVersion) {
   console.log(
-    `Spec version is correct. Version in TOML is greater than or equal to the release spec version.`,
+    `Spec version is correct. Version in source (${specVersionInSource}) is greater than or equal to the release spec version (${releaseSpecVersion}).`,
   );
 } else {
   throw Error(
-    `Spec version is incorrect. Version in TOML (${specVersionInSource}) should be greater than or equal to the release spec version (${releaseSpecVersion}).`,
+    `Spec version is incorrect. Version in source (${specVersionInSource}) should be greater than or equal to the release spec version (${releaseSpecVersion}).`,
   );
 }
