@@ -692,6 +692,7 @@ impl AltWitnessingHandler for SolanaAltWitnessingHandler {
 		ccm_channel_metadata: CcmChannelMetadata,
 		swap_request_id: SwapRequestId,
 	) {
+		use sp_std::vec;
 		// The unwrap should succeed because it has been checked while opening the channel
 		match CcmValidityChecker::decode_unchecked(
 			ccm_channel_metadata.ccm_additional_data,
@@ -717,6 +718,8 @@ impl AltWitnessingHandler for SolanaAltWitnessingHandler {
 					)
 					.unwrap_or_else(|e| {log::error!("Cannot start Solana ALT witnessing election: {:?}", e);}) //The error should not happen as long as the election identifiers dont overflow and
 					 // the electoral system is initialized
+				} else {
+					Environment::add_sol_ccm_swap_alts(swap_request_id, Some(vec![]));
 				}
 			},
 			// This should never happen since the same ccm validity check has been done while opening the channel.
