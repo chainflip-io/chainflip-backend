@@ -891,13 +891,6 @@ pub trait CustomApi {
 	async fn cf_subscribe_pool_price(&self, from_asset: Asset, to_asset: Asset);
 	#[subscription(name = "subscribe_pool_price_v2", item = BlockUpdate<PoolPriceV2>)]
 	async fn cf_subscribe_pool_price_v2(&self, base_asset: Asset, quote_asset: Asset);
-	#[subscription(name = "subscribe_prewitness_swaps", item = BlockUpdate<RpcPrewitnessedSwap>)]
-	async fn cf_subscribe_prewitness_swaps(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-	);
 
 	// Subscribe to a stream that on every block produces a list of all scheduled/pending
 	// swaps in the base_asset/quote_asset pool, including any "implicit" half-swaps (as a
@@ -921,15 +914,6 @@ pub trait CustomApi {
 		quote_asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<ScheduledSwap>>;
-
-	#[method(name = "prewitness_swaps")]
-	fn cf_prewitness_swaps(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcPrewitnessedSwap>;
 
 	#[method(name = "supported_assets")]
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>>;
@@ -1768,55 +1752,6 @@ where
 					.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
 					.collect()
 			})
-	}
-
-	async fn cf_subscribe_prewitness_swaps(
-		&self,
-		pending_sink: PendingSubscriptionSink,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-	) {
-		self.new_subscription(
-			Default::default(), /* notification_behaviour */
-			false,              /* only_on_changes */
-			true,               /* end_on_error */
-			pending_sink,
-			move |client, hash| {
-				Ok::<_, CfApiError>(RpcPrewitnessedSwap {
-					base_asset,
-					quote_asset,
-					side,
-					amounts: (*client.runtime_api())
-						.cf_prewitness_swaps(hash, base_asset, quote_asset, side)?
-						.into_iter()
-						.map(|s| s.into())
-						.collect(),
-				})
-			},
-		)
-		.await
-	}
-
-	fn cf_prewitness_swaps(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcPrewitnessedSwap> {
-		Ok(RpcPrewitnessedSwap {
-			base_asset,
-			quote_asset,
-			side,
-			amounts: self
-				.client
-				.runtime_api()
-				.cf_prewitness_swaps(self.unwrap_or_best(at), base_asset, quote_asset, side)?
-				.into_iter()
-				.map(|s| s.into())
-				.collect(),
-		})
 	}
 
 	async fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
