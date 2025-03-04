@@ -415,11 +415,6 @@ decl_runtime_apis!(
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount;
-		fn cf_prewitness_swaps(
-			base_asset: Asset,
-			quote_asset: Asset,
-			side: Side,
-		) -> Vec<AssetAmount>;
 		fn cf_scheduled_swaps(
 			base_asset: Asset,
 			quote_asset: Asset,

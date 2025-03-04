@@ -1961,66 +1961,6 @@ impl_runtime_apis! {
 			Swapping::minimum_chunk_size(asset)
 		}
 
-		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
-		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
-		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Side) -> Vec<AssetAmount> {
-			let (from, to) = AssetPair::to_swap(base_asset, quote_asset, side);
-
-			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>
-				where Runtime: pallet_cf_ingress_egress::Config<I>,
-				C: cf_chains::Chain<ChainAccount = <<Runtime as pallet_cf_ingress_egress::Config<I>>::TargetChain as cf_chains::Chain>::ChainAccount>
-			{
-				let mut filtered_swaps = Vec::new();
-				for deposit in deposit_witnesses {
-					let Some(details) = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, I>::get(
-						deposit.deposit_address,
-					) else {
-						continue
-					};
-					let channel_asset: Asset = details.deposit_channel.asset.into();
-
-					match details.action {
-						ChannelAction::Swap { destination_asset, channel_metadata, .. }
-							// Ignoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
-							if destination_asset == to && channel_asset == from && channel_metadata.is_none() =>
-						{
-							filtered_swaps.push(deposit.amount.into());
-						},
-						_ => {
-							// ignore other deposit actions
-						}
-					}
-				}
-				filtered_swaps
-			}
-
-			let mut all_prewitnessed_swaps = Vec::new();
-			let current_block_events = System::read_events_no_consensus();
-
-			for event in current_block_events {
-				#[allow(clippy::collapsible_match)]
-				match *event {
-					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
-						match call {
-							RuntimeCall::BitcoinIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
-								deposit_witnesses, ..
-							}) => {
-								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Bitcoin, BitcoinInstance>(from, to, deposit_witnesses));
-							},
-							_ => {
-								// ignore, we only care about calls that trigger swaps.
-							},
-						}
-					}
-					_ => {
-						// ignore, we only care about Prewitnessed calls
-					}
-				}
-			}
-
-			all_prewitnessed_swaps
-		}
-
 		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
 			assert_eq!(quote_asset, STABLE_ASSET, "Only USDC is supported as quote asset");
 
