@@ -653,8 +653,8 @@ pub struct TransactionFee {
 }
 
 impl DepositDetailsToTransactionInId<EvmCrypto> for DepositDetails {
-	fn deposit_id(&self) -> Option<H256> {
-		None
+	fn deposit_ids(&self) -> Option<Vec<H256>> {
+		self.tx_hashes.clone()
 	}
 }
 

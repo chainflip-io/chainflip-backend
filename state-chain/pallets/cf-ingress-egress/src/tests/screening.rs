@@ -2,8 +2,8 @@ use crate::{
 	mock_btc::*,
 	tests::{ALICE, BROKER},
 	BoostPoolId, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness,
-	Event, ReportExpiresAt, ScheduledTransactionsForRejection, TransactionPrewitnessedStatus,
-	TransactionRejectionDetails, TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
+	Event, ReportExpiresAt, ScheduledTransactionsForRejection, TransactionRejectionStatus,
+	TransactionsMarkedForRejection, MARKED_TX_EXPIRATION_BLOCKS,
 };
 
 use frame_support::{
@@ -116,10 +116,6 @@ fn process_marked_transaction_and_expect_refund() {
 			helpers::request_address_and_deposit(BROKER, btc::Asset::Btc, deposit_details.clone());
 		let _ = DepositChannelLookup::<Test, ()>::get(address.clone()).unwrap();
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
 		assert_ok!(IngressEgress::mark_transaction_for_rejection(
 			OriginTrait::signed(BROKER),
 			tx_in_id,
@@ -161,10 +157,6 @@ fn finalize_boosted_tx_if_marked_after_prewitness() {
 	new_test_ext().execute_with(|| {
 		let tx_id = Hash::random();
 		let deposit_details = helpers::generate_btc_deposit(tx_id);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
 
 		let address: <Bitcoin as Chain>::ChainAccount =
 			helpers::setup_boost_swap().try_into().unwrap();
@@ -213,10 +205,6 @@ fn reject_tx_if_marked_before_prewitness() {
 	new_test_ext().execute_with(|| {
 		let tx_id = Hash::random();
 		let deposit_details = helpers::generate_btc_deposit(tx_id);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
 
 		let address: <Bitcoin as Chain>::ChainAccount =
 			helpers::setup_boost_swap().try_into().unwrap();
@@ -277,10 +265,6 @@ fn marked_transactions_expire_if_not_witnessed() {
 			helpers::request_address_and_deposit(BROKER, btc::Asset::Btc, deposit_details);
 		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
 		assert_ok!(IngressEgress::mark_transaction_for_rejection(
 			OriginTrait::signed(BROKER),
 			tx_id,
@@ -309,10 +293,6 @@ fn only_broker_can_mark_transaction_for_rejection() {
 			BadOrigin
 		);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
 		assert_ok!(IngressEgress::mark_transaction_for_rejection(
 			OriginTrait::signed(BROKER),
 			Default::default(),
@@ -329,7 +309,7 @@ fn do_not_expire_marked_transactions_if_prewitnessed() {
 		TransactionsMarkedForRejection::<Test, ()>::insert(
 			BROKER,
 			tx_id,
-			TransactionPrewitnessedStatus::Prewitnessed,
+			TransactionRejectionStatus { prewitnessed: true, expires_at: u64::MAX },
 		);
 
 		ReportExpiresAt::<Test, ()>::insert(expiry_at, vec![(BROKER, tx_id)]);
@@ -343,10 +323,6 @@ fn do_not_expire_marked_transactions_if_prewitnessed() {
 #[test]
 fn can_not_report_transaction_after_witnessing() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
 		let unreported = Hash::random();
 		let unseen = Hash::random();
 		let prewitnessed = Hash::random();
@@ -354,12 +330,12 @@ fn can_not_report_transaction_after_witnessing() {
 		TransactionsMarkedForRejection::<Test, ()>::insert(
 			BROKER,
 			unseen,
-			TransactionPrewitnessedStatus::Unseen,
+			TransactionRejectionStatus { prewitnessed: false, expires_at: u64::MAX },
 		);
 		TransactionsMarkedForRejection::<Test, ()>::insert(
 			BROKER,
 			prewitnessed,
-			TransactionPrewitnessedStatus::Prewitnessed,
+			TransactionRejectionStatus { prewitnessed: true, expires_at: u64::MAX },
 		);
 
 		assert_ok!(IngressEgress::mark_transaction_for_rejection(
@@ -385,18 +361,19 @@ fn send_funds_back_after_they_have_been_rejected() {
 	new_test_ext().execute_with(|| {
 		let deposit_details = helpers::generate_btc_deposit(Hash::random());
 
-		ScheduledTransactionsForRejection::<Test, ()>::append(TransactionRejectionDetails {
-			refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS))),
-			amount: DEFAULT_DEPOSIT_AMOUNT,
-			asset: btc::Asset::Btc,
-			deposit_details,
-		});
+		assert_ok!(crate::Pallet::<Test, _>::mark_transaction_for_rejection(
+			OriginTrait::signed(BROKER),
+			deposit_details.id.tx_id
+		));
+
+		helpers::request_address_and_deposit(BROKER, btc::Asset::Btc, deposit_details.clone());
 
 		assert_eq!(MockEgressBroadcaster::get_pending_api_calls().len(), 0);
+		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::get().len(), 1);
 
 		IngressEgress::on_finalize(1);
 
-		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::decode_len(), None);
+		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::get().len(), 0);
 
 		assert_has_matching_event!(
 			Test,
@@ -406,8 +383,73 @@ fn send_funds_back_after_they_have_been_rejected() {
 			})
 		);
 
-		assert_eq!(MockEgressBroadcaster::get_pending_api_calls().len(), 1);
+		assert_eq!(
+			MockEgressBroadcaster::get_pending_api_calls().len(),
+			1,
+			"Expected 1 call, got: {:#?}, events: {:#?}",
+			MockEgressBroadcaster::get_pending_api_calls(),
+			System::events(),
+		);
 	});
+}
+
+#[test]
+fn test_mark_transaction_expiry_and_deposit() {
+	let tx_id = Hash::random();
+
+	let ext = new_test_ext()
+		// Mark a transaction
+		.then_apply_extrinsics(|_| {
+			[(
+				OriginTrait::signed(BROKER),
+				crate::Call::mark_transaction_for_rejection { tx_id },
+				Ok(()),
+			)]
+		})
+		// Advance 10 blocks
+		.then_process_blocks(10)
+		// Mark the same transaction again
+		.then_apply_extrinsics(|_| {
+			[(
+				OriginTrait::signed(BROKER),
+				crate::Call::mark_transaction_for_rejection { tx_id },
+				Ok(()),
+			)]
+		})
+		// Get expiry block of the first report
+		.then_execute_with(|_| {
+			let mut expiries = ReportExpiresAt::<Test, _>::iter().collect::<Vec<_>>();
+			expiries.sort_by_key(|(block, _)| *block);
+			(expiries[0].0, expiries[1].0)
+		});
+	let (first_expiry, second_expiry) = *ext.context();
+
+	ext
+		// Advance to the block after expiry block
+		.then_execute_at_block(first_expiry, |_| {
+			// First expiry should be triggered, but ignored.
+		})
+		.then_process_events(|_, event| {
+			if let RuntimeEvent::IngressEgress(Event::TransactionRejectionRequestExpired {
+				..
+			}) = event
+			{
+				panic!("Rejection Request Expired prematurely");
+			}
+			None::<()>
+		})
+		.then_execute_at_block(second_expiry, |_| {
+			// Second expiry should be triggered, expiry is processed.
+		})
+		.then_execute_with_keep_context(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(Event::TransactionRejectionRequestExpired {
+					account_id: BROKER,
+					..
+				})
+			);
+		});
 }
 
 #[test]
@@ -415,10 +457,6 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 	new_test_ext().execute_with(|| {
 		let tx_id = Hash::random();
 		let deposit_details = helpers::generate_btc_deposit(tx_id);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
 
 		let (_id, address, ..) = IngressEgress::request_liquidity_deposit_address(
 			BROKER,

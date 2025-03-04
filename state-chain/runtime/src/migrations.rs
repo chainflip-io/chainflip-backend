@@ -9,3 +9,4 @@ pub mod remove_fee_tracking_migration;
 pub mod solana_remove_unused_channels_state;
 pub mod solana_transaction_data_migration;
 pub mod solana_vault_swaps_migration;
+pub mod whitelist_brokers;
