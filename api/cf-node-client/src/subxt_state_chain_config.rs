@@ -46,8 +46,35 @@ impl Config for StateChainConfig {
 /// * Any cf type that needs to be substituted must be defined in the `substitute_type` directive.
 /// * For any other complex types with multiple hierarchies or generics, please add manual
 ///   conversion functions below.
+#[cfg(not(debug_assertions))]
 #[subxt::subxt(
 	runtime_path = "../../target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm",
+	substitute_type(
+		path = "primitive_types::U256",
+		with = "::subxt::utils::Static<sp_core::U256>"
+	),
+	substitute_type(
+		path = "cf_chains::address::EncodedAddress",
+		with = "::subxt::utils::Static<cf_chains::address::EncodedAddress>"
+	),
+	substitute_type(
+		path = "cf_primitives::chains::assets::any::Asset",
+		with = "::subxt::utils::Static<cf_primitives::chains::assets::any::Asset>"
+	),
+	substitute_type(
+		path = "cf_primitives::chains::ForeignChain",
+		with = "::subxt::utils::Static<cf_primitives::chains::ForeignChain>"
+	),
+	substitute_type(
+		path = "cf_amm::common::Side",
+		with = "::subxt::utils::Static<cf_amm::common::Side>"
+	)
+)]
+pub mod cf_static_runtime {}
+
+#[cfg(debug_assertions)]
+#[subxt::subxt(
+	runtime_path = "../../target/debug/wbuild/state-chain-runtime/state_chain_runtime.wasm",
 	substitute_type(
 		path = "primitive_types::U256",
 		with = "::subxt::utils::Static<sp_core::U256>"
