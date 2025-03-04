@@ -1264,7 +1264,6 @@ type AllMigrations = (
 	migrations::solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
 	migrations::reap_old_accounts::Migration,
 	migrations::whitelist_brokers::Migration,
-	migrations::increase_arb_safety_margin::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not

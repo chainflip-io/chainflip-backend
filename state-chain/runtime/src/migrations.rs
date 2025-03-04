@@ -3,7 +3,6 @@
 pub mod api_calls_gas_migration;
 pub mod arbitrum_chain_tracking_migration;
 pub mod housekeeping;
-pub mod increase_arb_safety_margin;
 pub mod reap_old_accounts;
 pub mod refresh_delta_based_ingress;
 pub mod remove_fee_tracking_migration;
