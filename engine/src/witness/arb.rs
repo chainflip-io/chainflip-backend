@@ -3,13 +3,13 @@ mod chain_tracking;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{
-	address::EncodedAddress,
 	cf_parameters::VaultSwapParameters,
 	evm::{DepositDetails, H256},
 	Arbitrum, CcmDepositMetadata,
 };
 use cf_primitives::{chains::assets::arb::Asset as ArbAsset, Asset, EpochIndex};
 use cf_utilities::task_scope::Scope;
+use ethers::types::Bytes;
 use futures_core::Future;
 use itertools::Itertools;
 use pallet_cf_ingress_egress::VaultDepositWitness;
@@ -189,7 +189,8 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		source_asset: Asset,
 		deposit_amount: U256,
 		destination_asset: u32,
-		destination_address: EncodedAddress,
+		dst_chain: u32,
+		dst_address: Bytes,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_id: H256,
 		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
@@ -198,7 +199,8 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 			source_asset,
 			deposit_amount,
 			destination_asset,
-			destination_address,
+			dst_chain,
+			dst_address,
 			deposit_metadata,
 			tx_id,
 			vault_swap_parameters

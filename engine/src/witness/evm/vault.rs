@@ -58,6 +58,14 @@ where
 	})
 }
 
+pub(crate) fn try_into_encoded_address(
+	chain: ForeignChain,
+	bytes: Vec<u8>,
+) -> Result<EncodedAddress> {
+	EncodedAddress::from_chain_bytes(chain, bytes)
+		.map_err(|e| anyhow!("Failed to convert into EncodedAddress: {e}"))
+}
+
 pub fn call_from_event<
 	C: cf_chains::Chain<ChainAccount = EthereumAddress, ChainBlockNumber = u64>,
 	CallBuilder: IngressCallBuilder<Chain = C>,
@@ -72,11 +80,6 @@ pub fn call_from_event<
 where
 	EthereumAddress: IntoForeignChainAddress<C>,
 {
-	fn try_into_encoded_address(chain: ForeignChain, bytes: Vec<u8>) -> Result<EncodedAddress> {
-		EncodedAddress::from_chain_bytes(chain, bytes)
-			.map_err(|e| anyhow!("Failed to convert into EncodedAddress: {e}"))
-	}
-
 	Ok(match event.event_parameters {
 		VaultEvents::SwapNativeFilter(SwapNativeFilter {
 			dst_chain,
@@ -92,9 +95,10 @@ where
 			Some(CallBuilder::vault_swap_request(
 				block_height,
 				native_asset,
-				try_into_primitive(amount)?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				amount,
+				dst_token,
+				dst_chain,
+				dst_address,
 				None,
 				event.tx_hash,
 				vault_swap_parameters,
@@ -117,9 +121,10 @@ where
 				*(supported_assets
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-				try_into_primitive(amount)?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				amount,
+				dst_token,
+				dst_chain,
+				dst_address,
 				None,
 				event.tx_hash,
 				vault_swap_parameters,
@@ -141,9 +146,10 @@ where
 			Some(CallBuilder::vault_swap_request(
 				block_height,
 				native_asset,
-				try_into_primitive(amount)?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				amount,
+				dst_token,
+				dst_chain,
+				dst_address,
 				Some(CcmDepositMetadata {
 					source_chain,
 					source_address: Some(sender.into_foreign_chain_address()),
@@ -181,7 +187,8 @@ where
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
 				amount,
 				dst_token,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				dst_chain,
+				dst_address,
 				Some(CcmDepositMetadata {
 					source_chain,
 					source_address: Some(sender.into_foreign_chain_address()),
@@ -230,12 +237,12 @@ where
 }
 
 macro_rules! vault_deposit_witness {
-	($source_asset: expr, $deposit_amount: expr, $dest_asset: expr, $dest_address: expr, $metadata: expr, $tx_id: expr, $params: expr) => {
+	($source_asset: expr, $deposit_amount: expr, $dest_asset: expr, $dest_chain: expr, $dest_address: expr, $metadata: expr, $tx_id: expr, $params: expr) => {
 		VaultDepositWitness {
 			input_asset: $source_asset.try_into().expect("invalid asset for chain"),
 			output_asset: crate::witness::evm::vault::try_into_primitive($dest_asset)?,
 			deposit_amount: crate::witness::evm::vault::try_into_primitive($deposit_amount)?,
-			destination_address: $dest_address,
+			destination_address: crate::witness::evm::vault::try_into_encoded_address(crate::witness::evm::vault::try_into_primitive($dest_chain)?, $dest_address.to_vec())?,
 			deposit_metadata: $metadata,
 			tx_id: $tx_id,
 			deposit_details: DepositDetails { tx_hashes: Some(vec![$tx_id]) },
@@ -265,7 +272,8 @@ pub trait IngressCallBuilder {
 		source_asset: Asset,
 		deposit_amount: U256,
 		destination_asset: u32,
-		destination_address: EncodedAddress,
+		dst_chain: u32,
+		dst_address: Bytes,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: H256,
 		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
