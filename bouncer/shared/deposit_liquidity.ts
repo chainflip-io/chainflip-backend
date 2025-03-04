@@ -54,7 +54,7 @@ export async function depositLiquidity(
     test: (event) => event.data.asset === ccy && event.data.accountId === lp.address,
   }).event;
 
-  logger.debug('Requesting ' + ccy + ' deposit address');
+  logger.debug(`Requesting ${ccy} deposit address`);
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(ccy, null)
@@ -63,8 +63,8 @@ export async function depositLiquidity(
 
   const ingressAddress = (await eventHandle).data.depositAddress[chain];
 
-  logger.debug('Received ' + ccy + ' address: ' + ingressAddress);
-  logger.debug('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
+  logger.trace(`Received ${ccy} deposit address: ${ingressAddress}`);
+  logger.info(`Initiating transfer of ${amount} ${ccy} to ${ingressAddress}`);
   eventHandle = observeEvent(logger, 'assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === ccy &&
@@ -78,5 +78,6 @@ export async function depositLiquidity(
 
   await send(logger, ccy, ingressAddress, String(amount));
 
-  return eventHandle;
+  await eventHandle;
+  logger.debug(`Liquidity deposited: ${amount} ${ccy} to ${ingressAddress}`);
 }

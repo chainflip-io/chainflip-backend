@@ -3,14 +3,14 @@
  * Command: on_chain_swap
  *
  * Description:
- * Performs an on-chain swap of a specified amount from one asset to another.
+ * Performs an on-chain swap (Swap using an LP's free balance) of a specified amount from one asset to another.
  * The default LP account used is LP_1. Set `LP_URI` environment variable to use a different LP account.
  *
  * Usage:
  * on_chain_swap <inputAsset> <outputAsset> <amount>
  *
  * Example:
- * on_chain_swap Eth Flip 20
+ * ./commands/on_chain_swap.ts Eth Flip 20
  */
 import { InternalAssets as Assets } from '@chainflip/cli';
 import {
@@ -65,4 +65,4 @@ await lpMutex.runExclusive(async () => {
 });
 
 await swapEvent;
-logger.info('On-chain swap completed');
+logger.info('✅ On-chain swap completed');
