@@ -652,7 +652,7 @@ fn can_egress_ccm() {
 			amount,
 			destination_address,
 			Some(ccm.clone()),
-			Default::default(),
+			Some(SOME_SWAP_REQUEST_ID),
 		).expect("Egress should succeed");
 
 		assert!(ScheduledEgressFetchOrTransfer::<Test, ()>::get().is_empty());
@@ -667,7 +667,10 @@ fn can_egress_ccm() {
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				gas_budget: GAS_BUDGET,
-				aux_data_lookup_key: CcmAuxDataLookupKey::Alts(SOME_SWAP_REQUEST_ID, System::block_number()),
+				aux_data_lookup_key: CcmAuxDataLookupKey::Alt {
+					swap_request_id: SOME_SWAP_REQUEST_ID,
+					created_at: System::block_number()
+				},
 			}
 		]);
 
