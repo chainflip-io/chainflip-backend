@@ -129,7 +129,8 @@ fn max_swap_amount_can_be_removed() {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 					broker_id: Some(BROKER),
 				},
-			);
+			)
+			.unwrap();
 		};
 
 		initiate_swap();
@@ -232,7 +233,8 @@ fn can_swap_below_max_amount() {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 				broker_id: Some(BROKER),
 			},
-		);
+		)
+		.unwrap();
 
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0u128);
 

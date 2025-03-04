@@ -1881,11 +1881,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_address: Option<ForeignChainAddress>,
 		amount_after_fees: TargetChainAmount<T, I>,
 		origin: DepositOrigin<T, I>,
-	) -> DepositAction<T, I> {
+	) -> Result<DepositAction<T, I>, DispatchError> {
 		match action.clone() {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
 				T::Balance::credit_account(&lp_account, asset.into(), amount_after_fees.into());
-				DepositAction::LiquidityProvision { lp_account }
+				Ok(DepositAction::LiquidityProvision { lp_account })
 			},
 			ChannelAction::Swap {
 				destination_asset,
@@ -1921,8 +1921,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					}),
 					dca_params,
 					origin.into(),
-				);
-				DepositAction::Swap { swap_request_id }
+				)?;
+				Ok(DepositAction::Swap { swap_request_id })
 			},
 		}
 	}
@@ -2135,7 +2135,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						source_address,
 						amount_after_fees,
 						origin.clone(),
-					);
+					)
+					.ok()?;
 
 					Self::deposit_event(Event::DepositBoosted {
 						deposit_address,
@@ -2381,10 +2382,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work, and
 				// it seems easiest to not write a special case (esp if we only support boost for
 				// BTC)
-				Some(T::SwapRequestHandler::init_network_fee_swap_request(
+
+				T::SwapRequestHandler::init_network_fee_swap_request(
 					asset.into(),
 					network_fee_from_boost.into(),
-				))
+				)
+				.ok()
 			} else {
 				None
 			};
@@ -2422,7 +2425,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					source_address,
 					amount_after_fees,
 					origin.clone(),
-				);
+				)
+				.map_err(DepositFailedReason::DepositWitnessRejected)?;
 
 				Self::deposit_event(Event::DepositFinalised {
 					deposit_address,
@@ -2761,10 +2765,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}), available_amount);
 
 			if !transaction_fee.is_zero() {
-				T::SwapRequestHandler::init_ingress_egress_fee_swap_request::<T::TargetChain>(
-					asset,
-					transaction_fee,
-				);
+				if let Err(e) = T::SwapRequestHandler::init_ingress_egress_fee_swap_request::<
+					T::TargetChain,
+				>(asset, transaction_fee)
+				{
+					log::warn!("Unable to schedule swap for ${transaction_fee:?} ${asset:?}. {e:?}, Ignoring ingress egress fees.");
+				};
 			}
 
 			transaction_fee

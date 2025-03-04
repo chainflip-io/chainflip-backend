@@ -18,9 +18,9 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, SwapLimitsProvider,
-	SwapOutputAction, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, MinimumDeposit,
+	SwapLimitsProvider, SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -391,7 +391,7 @@ where
 
 #[frame_support::pallet]
 pub mod pallet {
-	use core::cmp::max;
+	use core::{cmp::max, result::Result::Err};
 
 	use cf_amm::math::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{
@@ -459,6 +459,8 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Amount = <Self as Chainflip>::Amount,
 		>;
+
+		type MinimumDeposit: MinimumDeposit;
 	}
 
 	#[pallet::pallet]
@@ -803,6 +805,8 @@ pub mod pallet {
 		/// The affiliate has not withdrawn their earned fees. This is a pre-requisite for
 		/// deregistration of a broker.
 		AffiliateEarnedFeesNotWithdrawn,
+		/// The input amount of internal swaps must at least the minimum deposit amount.
+		InternalSwapBelowMinimumDepositAmount,
 	}
 
 	#[pallet::genesis_config]
@@ -837,9 +841,10 @@ pub mod pallet {
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					CollectedNetworkFee::<T>::mutate(|collected_fee| {
-						Self::init_network_fee_swap_request(Asset::Usdc, *collected_fee);
-
-						collected_fee.set_zero();
+						match Self::init_network_fee_swap_request(Asset::Usdc, *collected_fee) {
+							Ok(_) => collected_fee.set_zero(),
+							Err(e) => log_or_panic!("Failed to initiate network fee swap: {e:?}"),
+						};
 					});
 				}
 			}
@@ -2115,7 +2120,7 @@ pub mod pallet {
 			input_asset: Asset,
 		) -> Result<AssetAmount, DispatchError> {
 			let refund_fee_usdc = MinimumNetworkFeePerChunk::<T>::get();
-			if (refund_fee_usdc == 0) || (total_input_amount == 0) {
+			if refund_fee_usdc.is_zero() || total_input_amount.is_zero() {
 				return Ok(total_input_amount)
 			}
 
@@ -2131,8 +2136,8 @@ pub mod pallet {
 				sp_std::cmp::min(required_refund_fee_as_input_asset, total_input_amount);
 			let remaining_amount_to_refund = total_input_amount.saturating_sub(refund_fee);
 
-			if refund_fee > 0 {
-				Self::init_network_fee_swap_request(input_asset, refund_fee);
+			if !refund_fee.is_zero() {
+				Self::init_network_fee_swap_request(input_asset, refund_fee)?;
 			}
 
 			Ok(remaining_amount_to_refund)
@@ -2151,7 +2156,15 @@ pub mod pallet {
 			refund_params: Option<RefundParametersExtended<Self::AccountId>>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin<Self::AccountId>,
-		) -> SwapRequestId {
+		) -> Result<SwapRequestId, DispatchError> {
+			// Enforce minimum swap amount for internal swaps only
+			if let SwapOrigin::OnChainAccount(_) = origin {
+				ensure!(
+					input_amount >= T::MinimumDeposit::get(input_asset),
+					Error::<T>::InternalSwapBelowMinimumDepositAmount
+				);
+			};
+
 			let request_id = SwapRequestIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
@@ -2289,7 +2302,7 @@ pub mod pallet {
 				},
 			};
 
-			request_id
+			Ok(request_id)
 		}
 	}
 

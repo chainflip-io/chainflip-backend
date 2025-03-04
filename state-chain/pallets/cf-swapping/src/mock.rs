@@ -12,7 +12,7 @@ use cf_traits::{
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
-	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
+	AccountRoleRegistry, ChannelIdAllocator, MinimumDeposit, SwappingApi,
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use sp_core::ConstU32;
@@ -168,6 +168,14 @@ impl ChannelIdAllocator for MockChannelIdAllocator {
 	}
 }
 
+pub const MINIMUM_DEPOSIT: u128 = 100;
+pub struct MockMinimumDepositProvider;
+impl MinimumDeposit for MockMinimumDepositProvider {
+	fn get(_asset: Asset) -> AssetAmount {
+		MINIMUM_DEPOSIT
+	}
+}
+
 impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = MockDepositHandler<AnyChain, Self>;
@@ -184,6 +192,7 @@ impl pallet_cf_swapping::Config for Test {
 	type NetworkFee = NetworkFee;
 	type ChannelIdAllocator = MockChannelIdAllocator;
 	type Bonder = MockBonderFor<Self>;
+	type MinimumDeposit = MockMinimumDepositProvider;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

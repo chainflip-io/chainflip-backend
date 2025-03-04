@@ -223,7 +223,8 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 				broker_id: Some(BROKER),
 			},
-		);
+		)
+		.unwrap();
 	}
 }
 
@@ -279,7 +280,8 @@ fn swap_with_custom_broker_fee(
 			deposit_block_height: 0,
 			broker_id: BROKER,
 		},
-	);
+	)
+	.unwrap();
 }
 
 #[test]
@@ -362,7 +364,8 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 				broker_id: Some(BROKER),
 			},
-		);
+		)
+		.unwrap();
 
 		assert_swaps_queue_is_empty();
 	});
@@ -541,7 +544,8 @@ fn process_all_into_stable_swaps_first() {
 						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 						broker_id: Some(BROKER),
 					},
-				);
+				)
+				.unwrap();
 			});
 
 		assert_eq!(
@@ -681,7 +685,8 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 					broker_id: Some(BROKER),
 				},
-			);
+			)
+			.unwrap();
 
 			// Change the swap rate so swap output will be 0
 			SwapRate::set(0.0001f64);
@@ -1521,7 +1526,8 @@ mod on_chain_swapping {
 					min_price,
 					None,
 					LP_ACCOUNT,
-				);
+				)
+				.unwrap();
 
 				assert_has_matching_event!(
 					Test,
@@ -1598,7 +1604,8 @@ mod on_chain_swapping {
 					min_price,
 					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
 					LP_ACCOUNT,
-				);
+				)
+				.unwrap();
 
 				assert_has_matching_event!(
 					Test,
@@ -1675,6 +1682,58 @@ mod on_chain_swapping {
 					EXPECTED_OUTPUT_AMOUNT
 				);
 			});
+	}
+
+	#[test]
+	fn reject_internal_swap_request_bellow_minimum_amount() {
+		const BELLOW_MINIMUM_AMOUNT: AssetAmount = MINIMUM_DEPOSIT - 1;
+
+		new_test_ext().execute_with(|| {
+			// Error if the amount is below the minimum deposit and its an internal swap
+			assert_noop!(
+				Swapping::init_internal_swap_request(
+					INPUT_ASSET,
+					BELLOW_MINIMUM_AMOUNT,
+					OUTPUT_ASSET,
+					0,
+					U256::from(1),
+					None,
+					LP_ACCOUNT,
+				),
+				Error::<Test>::InternalSwapBelowMinimumDepositAmount
+			);
+
+			// Internal swaps that is equal to or above the minimum deposit are fine
+			assert_ok!(Swapping::init_internal_swap_request(
+				INPUT_ASSET,
+				MINIMUM_DEPOSIT,
+				OUTPUT_ASSET,
+				0,
+				U256::from(0),
+				None,
+				LP_ACCOUNT,
+			));
+
+			// Its fine for all other types of swaps to be below the minimum deposit
+			assert_ok!(Swapping::init_network_fee_swap_request(INPUT_ASSET, BELLOW_MINIMUM_AMOUNT));
+			assert_ok!(Swapping::init_swap_request(
+				INPUT_ASSET,
+				BELLOW_MINIMUM_AMOUNT,
+				OUTPUT_ASSET,
+				SwapRequestType::NetworkFee,
+				Default::default(),
+				None,
+				None,
+				SwapOrigin::DepositChannel {
+					deposit_address: MockAddressConverter::to_encoded_address(
+						ForeignChainAddress::Eth([0; 20].into())
+					),
+					channel_id: 1,
+					deposit_block_height: 0,
+					broker_id: BROKER,
+				},
+			));
+		});
 	}
 }
 

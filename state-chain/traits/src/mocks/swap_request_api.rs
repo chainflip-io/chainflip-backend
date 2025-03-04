@@ -5,6 +5,7 @@ use crate::{
 use cf_chains::{Chain, RefundParametersExtended, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode};
+use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
 
 use crate::mocks::MockPalletStorage;
@@ -51,7 +52,7 @@ where
 		_refund_params: Option<RefundParametersExtended<Self::AccountId>>,
 		_dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
-	) -> SwapRequestId {
+	) -> Result<SwapRequestId, DispatchError> {
 		let id = Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<Vec<MockSwapRequest>>| {
 			let swaps = swaps.get_or_insert(vec![]);
 			let id = swaps.len();
@@ -88,6 +89,6 @@ where
 			_ => { /* do nothing */ },
 		};
 
-		(id as u64).into()
+		Ok((id as u64).into())
 	}
 }

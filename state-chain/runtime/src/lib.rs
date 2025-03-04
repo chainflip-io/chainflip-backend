@@ -63,7 +63,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
-	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit, SwapLimits,
+	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, MinimumDeposit, NoLimit, SwapLimits,
 	SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
@@ -153,8 +153,8 @@ pub use pallet_cf_validator::SetSizeParameters;
 use chainflip::{
 	boost_api::IngressEgressBoostApi, epoch_transition::ChainflipEpochTransitions,
 	evm_vault_activator::EvmVaultActivator, BroadcastReadyProvider, BtcEnvironment,
-	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment, SolEnvironment,
-	SolanaLimit, TokenholderGovernanceBroadcaster,
+	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment,
+	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -314,6 +314,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type BalanceApi = AssetBalances;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
+	type MinimumDeposit = MinimumDepositProvider;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -1797,14 +1798,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
-			use pallet_cf_ingress_egress::MinimumDeposit;
-			match asset.into() {
-				ForeignChainAndAsset::Ethereum(asset) => MinimumDeposit::<Runtime, EthereumInstance>::get(asset),
-				ForeignChainAndAsset::Polkadot(asset) => MinimumDeposit::<Runtime, PolkadotInstance>::get(asset),
-				ForeignChainAndAsset::Bitcoin(asset) => MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
-				ForeignChainAndAsset::Arbitrum(asset) => MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
-				ForeignChainAndAsset::Solana(asset) => MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
-			}
+			chainflip::MinimumDepositProvider::get(asset)
 		}
 
 		fn cf_egress_dust_limit(generic_asset: Asset) -> AssetAmount {

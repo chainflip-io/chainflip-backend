@@ -46,7 +46,8 @@ fn swap_output_amounts_correctly_account_for_fees() {
 						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 						broker_id: Some(BROKER),
 					},
-				);
+				)
+				.unwrap();
 
 				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 
@@ -222,7 +223,7 @@ fn network_fee_swap_gets_burnt() {
 
 	new_test_ext()
 		.execute_with(|| {
-			Swapping::init_network_fee_swap_request(INPUT_ASSET, AMOUNT);
+			Swapping::init_network_fee_swap_request(INPUT_ASSET, AMOUNT).unwrap();
 
 			assert_eq!(FlipToBurn::<Test>::get(), 0);
 
@@ -256,28 +257,21 @@ fn network_fee_swap_gets_burnt() {
 fn transaction_fees_are_collected() {
 	const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
-	const INPUT_ASSET: Asset = Asset::Flip;
-	const OUTPUT_ASSET: Asset = Asset::Eth;
 	const AMOUNT: AssetAmount = 100;
 
 	new_test_ext()
 		.execute_with(|| {
-			Swapping::init_swap_request(
-				INPUT_ASSET,
+			Swapping::init_ingress_egress_fee_swap_request::<Ethereum>(
+				cf_chains::assets::eth::Asset::Flip,
 				AMOUNT,
-				OUTPUT_ASSET,
-				SwapRequestType::IngressEgressFee,
-				Default::default(),
-				None,
-				None,
-				SwapOrigin::Internal,
-			);
+			)
+			.unwrap();
 
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					swap_request_id: SWAP_REQUEST_ID,
-					input_asset: INPUT_ASSET,
+					input_asset: Asset::Flip,
 					input_amount: AMOUNT,
 					output_asset: OUTPUT_ASSET,
 					request_type: SwapRequestTypeEncoded::IngressEgressFee,
@@ -379,7 +373,8 @@ fn input_amount_excludes_network_fee() {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 					broker_id: Some(BROKER),
 				},
-			);
+			)
+			.unwrap();
 		})
 		.then_process_blocks_until(|_| System::block_number() == 3)
 		.then_execute_with(|_| {
@@ -588,7 +583,8 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 					broker_id: Some(BROKER),
 				},
-			);
+			)
+			.unwrap();
 
 			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
 		})
@@ -609,7 +605,8 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 					broker_id: Some(BROKER),
 				},
-			);
+			)
+			.unwrap();
 		})
 		.then_process_blocks_until_block(FEE_SWAP_BLOCK)
 		.then_execute_with(|_| {

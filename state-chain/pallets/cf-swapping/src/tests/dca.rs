@@ -695,7 +695,8 @@ fn test_minimum_chunk_size() {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 				broker_id: Some(BROKER),
 			},
-		);
+		)
+		.unwrap();
 
 		// Check that the swap was initiated with the updated number of chunks
 		let expected_dca_params = DcaParameters {

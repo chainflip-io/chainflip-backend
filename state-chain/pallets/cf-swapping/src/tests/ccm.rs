@@ -27,7 +27,8 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 		None,
 		None,
 		origin.clone(),
-	);
+	)
+	.unwrap();
 
 	System::assert_has_event(RuntimeEvent::Swapping(Event::SwapRequested {
 		swap_request_id: SWAP_REQUEST_ID,
@@ -120,7 +121,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 					broker_id: Some(BROKER),
 				},
-			);
+			)
+			.unwrap();
 
 			// Principal swap is scheduled first
 			assert_eq!(

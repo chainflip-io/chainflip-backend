@@ -7,6 +7,7 @@ use cf_primitives::{
 	Asset, AssetAmount, Beneficiaries, BlockNumber, DcaParameters, Price, SwapRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -73,12 +74,12 @@ pub trait SwapRequestHandler {
 		refund_params: Option<RefundParametersExtended<Self::AccountId>>,
 		dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
-	) -> SwapRequestId;
+	) -> Result<SwapRequestId, DispatchError>;
 
 	fn init_network_fee_swap_request(
 		input_asset: Asset,
 		input_amount: AssetAmount,
-	) -> SwapRequestId {
+	) -> Result<SwapRequestId, DispatchError> {
 		Self::init_swap_request(
 			input_asset,
 			input_amount,
@@ -94,7 +95,7 @@ pub trait SwapRequestHandler {
 	fn init_ingress_egress_fee_swap_request<C: Chain>(
 		input_asset: C::ChainAsset,
 		input_amount: C::ChainAmount,
-	) -> SwapRequestId {
+	) -> Result<SwapRequestId, DispatchError> {
 		Self::init_swap_request(
 			input_asset.into(),
 			input_amount.into(),
@@ -115,7 +116,7 @@ pub trait SwapRequestHandler {
 		min_price: Price,
 		dca_params: Option<DcaParameters>,
 		account_id: Self::AccountId,
-	) -> SwapRequestId {
+	) -> Result<SwapRequestId, DispatchError> {
 		Self::init_swap_request(
 			input_asset,
 			input_amount,

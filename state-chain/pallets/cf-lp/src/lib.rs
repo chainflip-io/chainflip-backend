@@ -351,7 +351,7 @@ pub mod pallet {
 				min_price,
 				dca_params,
 				account_id,
-			);
+			)?;
 
 			Ok(())
 		}
