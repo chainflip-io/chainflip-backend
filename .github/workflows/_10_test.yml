@@ -28,6 +28,10 @@ jobs:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
+      # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands
+      - name: Configure Git 🛠️
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
       - name: Set up Rust cache 🦀💰
         if: contains(inputs.ci-runner, 'no-cache') == false
         uses: namespacelabs/nscloud-cache-action@v1
