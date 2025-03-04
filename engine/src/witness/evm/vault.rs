@@ -179,7 +179,7 @@ where
 				*(supported_assets
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-				try_into_primitive(amount)?,
+				amount,
 				dst_token,
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				Some(CcmDepositMetadata {
@@ -234,7 +234,7 @@ macro_rules! vault_deposit_witness {
 		VaultDepositWitness {
 			input_asset: $source_asset.try_into().expect("invalid asset for chain"),
 			output_asset: crate::witness::evm::vault::try_into_primitive($dest_asset)?,
-			deposit_amount: $deposit_amount,
+			deposit_amount: crate::witness::evm::vault::try_into_primitive($deposit_amount)?,
 			destination_address: $dest_address,
 			deposit_metadata: $metadata,
 			tx_id: $tx_id,
@@ -263,7 +263,7 @@ pub trait IngressCallBuilder {
 	fn vault_swap_request(
 		block_height: <Self::Chain as cf_chains::Chain>::ChainBlockNumber,
 		source_asset: Asset,
-		deposit_amount: cf_primitives::AssetAmount,
+		deposit_amount: U256,
 		destination_asset: u32,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,

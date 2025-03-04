@@ -9,12 +9,12 @@ use cf_chains::{
 	evm::{DepositDetails, H256},
 	CcmDepositMetadata, Ethereum,
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset, AssetAmount, EpochIndex};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset, EpochIndex};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use itertools::Itertools;
 use pallet_cf_ingress_egress::VaultDepositWitness;
-use sp_core::H160;
+use sp_core::{H160, U256};
 
 use crate::{
 	db::PersistentKeyDB,
@@ -236,7 +236,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 	fn vault_swap_request(
 		block_height: u64,
 		source_asset: Asset,
-		deposit_amount: AssetAmount,
+		deposit_amount: U256,
 		destination_asset: u32,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
