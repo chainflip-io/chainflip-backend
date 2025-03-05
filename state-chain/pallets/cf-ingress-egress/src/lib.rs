@@ -1585,19 +1585,17 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn is_whitelisted_broker_or(broker_id: T::AccountId) -> T::AccountId {
-		if WhitelistedBrokers::<T, I>::contains_key(&broker_id) {
-			T::ScreeningBrokerId::get()
-		} else {
-			broker_id
-		}
-	}
-
 	fn mark_transaction_for_rejection_inner(
 		account_id: T::AccountId,
 		tx_id: TransactionInIdFor<T, I>,
 	) -> DispatchResult {
-		let lookup_id = Self::is_whitelisted_broker_or(account_id.clone());
+		let lookup_id = {
+			if WhitelistedBrokers::<T, I>::contains_key(&account_id) {
+				T::ScreeningBrokerId::get()
+			} else {
+				account_id.clone()
+			}
+		};
 		let expires_at = <frame_system::Pallet<T>>::block_number()
 			.saturating_add(BlockNumberFor::<T>::from(MARKED_TX_EXPIRATION_BLOCKS));
 		TransactionsMarkedForRejection::<T, I>::try_mutate(&lookup_id, &tx_id, |opt| {
@@ -2183,32 +2181,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if let (Some(tx_ids), Some(broker_id)) =
 				(deposit_details.deposit_ids(), origin.broker_id())
 			{
-				let lookup_id = Self::is_whitelisted_broker_or(broker_id.clone());
-
-				let any_reported = if &lookup_id == broker_id {
-					vec![broker_id]
-				} else {
-					vec![broker_id, &lookup_id]
-				}
-				.iter()
-				.flat_map(|account_id| {
-					tx_ids.clone().into_iter().map(move |tx_id| {
-						TransactionsMarkedForRejection::<T, I>::mutate(account_id, tx_id, |opt| {
-							match opt.as_mut() {
-								// Transaction has been reported, mark it as
-								// pre-witnessed.
-								Some(TransactionRejectionStatus { prewitnessed, .. }) => {
-									*prewitnessed = true;
-									true
+				let any_reported = [&T::ScreeningBrokerId::get(), broker_id]
+					.into_iter()
+					.flat_map(|account_id| {
+						tx_ids.clone().into_iter().map(move |tx_id| {
+							TransactionsMarkedForRejection::<T, I>::mutate(
+								account_id,
+								tx_id,
+								|opt| {
+									match opt.as_mut() {
+										// Transaction has been reported, mark it as
+										// pre-witnessed.
+										Some(TransactionRejectionStatus {
+											prewitnessed, ..
+										}) => {
+											*prewitnessed = true;
+											true
+										},
+										// Transaction has not been reported.
+										None => false,
+									}
 								},
-								// Transaction has not been reported.
-								None => false,
-							}
+							)
 						})
 					})
-				})
-				// Collect to ensure all are processed before continuing.
-				.collect::<Vec<_>>();
+					// Collect to ensure all are processed before continuing.
+					.collect::<Vec<_>>();
 				if any_reported.contains(&true) {
 					return None;
 				}
@@ -2398,10 +2396,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return Err(DepositFailedReason::BelowMinimumDeposit);
 			}
 			if T::AllowTransactionReports::get() {
-				if let (Some(tx_ids), Some(broker_id)) = (
-					deposit_details.deposit_ids(),
-					origin.broker_id().map(|id| Self::is_whitelisted_broker_or(id.clone())),
-				) {
+				if let (Some(tx_ids), Some(broker_id)) =
+					(deposit_details.deposit_ids(), origin.broker_id())
+				{
 					let is_marked_by_broker_or_screening_id = !tx_ids
 						.iter()
 						.filter_map(|tx_id| {
@@ -2411,13 +2408,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							let screening_id = T::ScreeningBrokerId::get();
 							match (
 								TransactionsMarkedForRejection::<T, I>::take(&screening_id, tx_id),
-								(screening_id != broker_id)
-									.then(|| {
-										TransactionsMarkedForRejection::<T, I>::take(
-											&broker_id, tx_id,
-										)
-									})
-									.flatten(),
+								TransactionsMarkedForRejection::<T, I>::take(&broker_id, tx_id),
 							) {
 								(None, None) => None,
 								_ => Some(()),
