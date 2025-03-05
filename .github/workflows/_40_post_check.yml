@@ -131,7 +131,7 @@ jobs:
         if: ${{ ! inputs.full-bouncer }}
         working-directory: bouncer
         run: |
-          ./fast_bouncer.sh
+          ./run.sh
 
       - name: Write chain explorer to file 📝
         if: failure()
