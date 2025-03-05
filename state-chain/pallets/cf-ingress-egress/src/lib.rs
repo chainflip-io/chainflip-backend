@@ -1479,19 +1479,17 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn is_whitelisted_broker_or(broker_id: T::AccountId) -> T::AccountId {
-		if WhitelistedBrokers::<T, I>::contains_key(&broker_id) {
-			T::ScreeningBrokerId::get()
-		} else {
-			broker_id
-		}
-	}
-
 	fn mark_transaction_for_rejection_inner(
 		account_id: T::AccountId,
 		tx_id: TransactionInIdFor<T, I>,
 	) -> DispatchResult {
-		let lookup_id = Self::is_whitelisted_broker_or(account_id.clone());
+		let lookup_id = {
+			if WhitelistedBrokers::<T, I>::contains_key(&account_id) {
+				T::ScreeningBrokerId::get()
+			} else {
+				account_id.clone()
+			}
+		};
 		TransactionsMarkedForRejection::<T, I>::try_mutate(&lookup_id, &tx_id, |opt| {
 			const UNSEEN: TransactionPrewitnessedStatus = TransactionPrewitnessedStatus::Unseen;
 			ensure!(
@@ -1858,43 +1856,39 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			if T::AllowTransactionReports::get() {
 				if let Some(tx_ids) = deposit_details.deposit_ids() {
-					let lookup_id = Self::is_whitelisted_broker_or(owner.clone());
-
-					let any_reported =
-						if lookup_id == owner { vec![owner] } else { vec![owner, lookup_id] }
-							.iter()
-							.flat_map(|account_id| {
-								tx_ids.clone().into_iter().map(move |tx_id| {
-									TransactionsMarkedForRejection::<T, I>::mutate(
-										account_id,
-										tx_id,
-										|opt| {
-											match opt.as_mut() {
-												// Transaction has been reported, mark it as
-												// pre-witnessed.
-												Some(
-													status @ TransactionPrewitnessedStatus::Unseen,
-												) => {
-													*status =
-														TransactionPrewitnessedStatus::Prewitnessed;
-													true
-												},
-												// Pre-witnessing twice is unlikely but possible.
-												// Either way we don't want to change
-												// the status and we don't want to allow
-												// boosting.
-												Some(
-													TransactionPrewitnessedStatus::Prewitnessed,
-												) => true,
-												// Transaction has not been reported.
-												None => false,
-											}
-										},
-									)
-								})
+					let any_reported = [T::ScreeningBrokerId::get(), owner]
+						.iter()
+						.flat_map(|account_id| {
+							tx_ids.clone().into_iter().map(move |tx_id| {
+								TransactionsMarkedForRejection::<T, I>::mutate(
+									account_id,
+									tx_id,
+									|opt| {
+										match opt.as_mut() {
+											// Transaction has been reported, mark it as
+											// pre-witnessed.
+											Some(
+												status @ TransactionPrewitnessedStatus::Unseen,
+											) => {
+												*status =
+													TransactionPrewitnessedStatus::Prewitnessed;
+												true
+											},
+											// Pre-witnessing twice is unlikely but possible.
+											// Either way we don't want to change
+											// the status and we don't want to allow
+											// boosting.
+											Some(TransactionPrewitnessedStatus::Prewitnessed) =>
+												true,
+											// Transaction has not been reported.
+											None => false,
+										}
+									},
+								)
 							})
-							// Collect to ensure all are processed before continuing.
-							.collect::<Vec<_>>();
+						})
+						// Collect to ensure all are processed before continuing.
+						.collect::<Vec<_>>();
 					if any_reported.contains(&true) {
 						continue;
 					}
@@ -2131,14 +2125,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						let screening_id = T::ScreeningBrokerId::get();
 						match (
 							TransactionsMarkedForRejection::<T, I>::take(&screening_id, tx_id),
-							(screening_id != deposit_channel_details.owner)
-								.then(|| {
-									TransactionsMarkedForRejection::<T, I>::take(
-										&deposit_channel_details.owner,
-										tx_id,
-									)
-								})
-								.flatten(),
+							TransactionsMarkedForRejection::<T, I>::take(
+								&deposit_channel_details.owner,
+								tx_id,
+							),
 						) {
 							(None, None) => None,
 							_ => Some(()),

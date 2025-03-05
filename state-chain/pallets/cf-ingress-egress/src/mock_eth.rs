@@ -163,6 +163,9 @@ impl_test_helpers! {
 			}
 		);
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
 			&WHITELISTED_BROKER,
 		));
 		WhitelistedBrokers::<Test>::insert(WHITELISTED_BROKER, ());
@@ -279,7 +282,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						Default::default(),
 						BROKER,
 						None,
-						0,
+						10,
 						refund_address.map(|addr| ChannelRefundParameters {
 							retry_duration: 5,
 							refund_address: ForeignChainAddress::Eth(addr),

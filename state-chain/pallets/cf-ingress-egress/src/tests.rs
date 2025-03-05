@@ -2065,12 +2065,14 @@ fn failed_ccm_deposit_can_deposit_event() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		ScheduledTxForReject, TransactionRejectionDetails, TransactionsMarkedForRejection,
+		boost_pool, BoostPools, ScheduledTxForReject, TransactionRejectionDetails,
+		TransactionsMarkedForRejection,
 	};
 	use cf_chains::{evm::H256, ChannelLifecycleHooks, DepositDetailsToTransactionInId};
 	use cf_traits::{
 		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
 	};
+	use sp_io::unreachable;
 	use std::str::FromStr;
 
 	#[test]
@@ -2086,10 +2088,6 @@ mod evm_transaction_rejection {
 				)
 				.unwrap(),
 			];
-
-			assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-				&BROKER,
-			));
 
 			let (_, deposit_address, block, _) = IngressEgress::request_liquidity_deposit_address(
 				BROKER,
@@ -2149,9 +2147,6 @@ mod evm_transaction_rejection {
 				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 			)
 			.unwrap();
-			assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-				&BROKER,
-			));
 			let (_, deposit_address, block, _) = IngressEgress::request_liquidity_deposit_address(
 				BROKER,
 				eth::Asset::Eth,
@@ -2402,6 +2397,96 @@ mod evm_transaction_rejection {
 					vec![TAINTED_TX_ID_1, TAINTED_TX_ID_2],
 					"Expected both tainted txs to be rejected."
 				);
+			});
+	}
+
+	#[test]
+	fn boosted_transaction_can_be_rejected_by_whitelisted_broker_or_owner() {
+		const TAINTED_TX_ID_1: H256 = H256::repeat_byte(0xab);
+		const TAINTED_TX_ID_2: H256 = H256::repeat_byte(0xcd);
+
+		new_test_ext()
+			// Add boost liquidity
+			.then_execute_at_next_block(|_| {
+				BoostPools::<Test, _>::insert(ETH_ETH, 10, {
+					let mut pool = boost_pool::BoostPool::new(10);
+					pool.add_funds(1234, 1_000_000);
+					pool
+				});
+			})
+			.request_deposit_addresses(&[DepositRequest::SimpleSwap {
+				source_asset: ETH_ETH,
+				destination_asset: ETH_FLIP,
+				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+				refund_address: Some(ALICE_ETH_ADDRESS),
+			}])
+			.assert_calls_ok(&[WHITELISTED_BROKER, BROKER][..], |id| match id {
+				&WHITELISTED_BROKER =>
+					crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_1 },
+				&BROKER => crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_2 },
+				_ => unreachable(),
+			})
+			.then_execute_with_keep_context(|_| {
+				assert!(TransactionsMarkedForRejection::<Test, ()>::get(
+					SCREENING_ID,
+					TAINTED_TX_ID_1
+				)
+				.is_some());
+				assert!(TransactionsMarkedForRejection::<Test, ()>::get(BROKER, TAINTED_TX_ID_2)
+					.is_some());
+			})
+			.then_execute_with_keep_context(|deposit_details| {
+				let (_, _, deposit_address) = deposit_details[0];
+				assert_ok!(Pallet::<Test, _>::process_deposits(
+					OriginTrait::root(), // defaults to pre-witness origin
+					[TAINTED_TX_ID_1, TAINTED_TX_ID_2]
+						.into_iter()
+						.map(|tx_id| DepositWitness {
+							deposit_address,
+							asset: ETH_ETH,
+							amount: DEFAULT_DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
+						})
+						.collect::<Vec<_>>(),
+					100,
+				));
+			})
+			.then_process_events(|_, event| match event {
+				RuntimeEvent::IngressEgress(PalletEvent::DepositBoosted { .. }) => {
+					panic!("Boosted a fetch for a tainted tx");
+				},
+				_ => None::<()>,
+			})
+			.then_process_blocks(1)
+			.then_execute_with_keep_context(|(deposit_details, _)| {
+				let (_, _, deposit_address) = deposit_details[0];
+				for tx_id in [TAINTED_TX_ID_1, TAINTED_TX_ID_2] {
+					assert_ok!(Pallet::<Test, _>::process_single_deposit(
+						deposit_address,
+						ETH_ETH,
+						DEFAULT_DEPOSIT_AMOUNT,
+						DepositDetails { tx_hashes: Some(vec![tx_id]) },
+						100
+					));
+				}
+			})
+			.then_process_events(|_, event| match event {
+				RuntimeEvent::IngressEgress(PalletEvent::DepositIgnored {
+					reason: DepositIgnoredReason::TransactionRejectedByBroker,
+					deposit_details,
+					..
+				}) => Some(deposit_details.deposit_ids().unwrap()),
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFetchesScheduled { .. }) |
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFinalised { .. }) => {
+					panic!("Processed a deposit for a tainted tx");
+				},
+				_ => None,
+			})
+			.inspect_context(|(_, deposit_ids)| {
+				let deposit_ids = deposit_ids.into_iter().flatten().collect::<Vec<_>>();
+				assert_eq!(deposit_ids.len(), 2, "Expected 2 DepositIgnored events");
+				assert!(deposit_ids.contains(&&TAINTED_TX_ID_1));
+				assert!(deposit_ids.contains(&&TAINTED_TX_ID_2));
 			});
 	}
 }
