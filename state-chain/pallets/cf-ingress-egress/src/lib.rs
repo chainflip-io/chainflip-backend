@@ -2408,7 +2408,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							let screening_id = T::ScreeningBrokerId::get();
 							match (
 								TransactionsMarkedForRejection::<T, I>::take(&screening_id, tx_id),
-								TransactionsMarkedForRejection::<T, I>::take(&broker_id, tx_id),
+								TransactionsMarkedForRejection::<T, I>::take(broker_id, tx_id),
 							) {
 								(None, None) => None,
 								_ => Some(()),

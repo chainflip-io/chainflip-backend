@@ -2861,11 +2861,12 @@ mod evm_transaction_rejection {
 				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
 				refund_address: Some(ALICE_ETH_ADDRESS),
 			}])
-			.assert_calls_ok(&[WHITELISTED_BROKER, BROKER][..], |id| match id {
-				&WHITELISTED_BROKER =>
-					crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_1 },
-				&BROKER => crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_2 },
-				_ => unreachable!(),
+			.assert_calls_ok(&[WHITELISTED_BROKER, BROKER][..], |id| {
+				if *id == WHITELISTED_BROKER {
+					crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_1 }
+				} else {
+					crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_2 }
+				}
 			})
 			.then_execute_with_keep_context(|_| {
 				assert!(TransactionsMarkedForRejection::<Test, ()>::get(
@@ -2929,7 +2930,7 @@ mod evm_transaction_rejection {
 				_ => None,
 			})
 			.inspect_context(|(_, deposit_ids)| {
-				let deposit_ids = deposit_ids.into_iter().flatten().collect::<Vec<_>>();
+				let deposit_ids = deposit_ids.iter().flatten().collect::<Vec<_>>();
 				assert_eq!(deposit_ids.len(), 2, "Expected 2 DepositIgnored events");
 				assert!(deposit_ids.contains(&&TAINTED_TX_ID_1));
 				assert!(deposit_ids.contains(&&TAINTED_TX_ID_2));
