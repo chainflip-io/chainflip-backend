@@ -19,7 +19,6 @@ pub type PalletMigration<T, I> = (
 	>,
 	 */
 	// APPLY THIS ON BERGHAIN
-	/*
 	VersionedMigration<
 		18,
 		19,
@@ -41,7 +40,6 @@ pub type PalletMigration<T, I> = (
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	*/
 	/* ALREADY APPLIED ON PERSA/SISY
 	VersionedMigration<
 		17,
@@ -66,13 +64,13 @@ pub type PalletMigration<T, I> = (
 	>,
 	*/
 	// APPLY THIS ON PERSA/SISY
-	VersionedMigration<
-		20,
-		21,
-		update_rejection_params::Migration<T, I>,
-		Pallet<T, I>,
-		<T as frame_system::Config>::DbWeight,
-	>,
+	// VersionedMigration<
+	// 	20,
+	// 	21,
+	// 	update_rejection_params::Migration<T, I>,
+	// 	Pallet<T, I>,
+	// 	<T as frame_system::Config>::DbWeight,
+	// >,
 	// APPLY THIS ON ALL NETWORKS
 	VersionedMigration<
 		21,
