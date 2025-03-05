@@ -1,5 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import { webSocket } from 'rxjs/webSocket';
+import { Subject } from 'rxjs';
 import WebSocket from 'ws';
 import { lpApiRpc } from '../shared/json_rpc';
 import { amountToFineAmount, Asset, assetDecimals, chainFromAsset } from '../shared/utils';
@@ -14,50 +15,80 @@ enum Side {
     Sell = 'sell'
 }
 
-const btc = {
-    "id": 1,
-    "jsonrpc": "2.0",
-    "method": "cf_subscribe_scheduled_swaps",
-    "params": {
-        "base_asset": {
-            "chain": "Bitcoin",
-            "asset": "BTC"
-        },
-        "quote_asset": {
-            "chain": "Ethereum",
-            "asset": "USDC"
-        }
+// Event types
+interface SwapEvent {
+    type: 'SWAP';
+    baseAsset: { chain: string; asset: string };
+    quoteAsset: { chain: string; asset: string };
+    side: Side;
+    amount: number;
+}
+
+interface PriceEvent {
+    type: 'PRICE';
+    baseAsset: { chain: string; asset: string };
+    price: number;
+}
+
+// Central event bus
+const eventBus = new Subject<SwapEvent | PriceEvent>();
+
+class MarketDataService {
+    constructor() {
+        this.initStateChainSubscription();
     }
-};
 
-const eth = {
-    "id": 1,
-    "jsonrpc": "2.0",
-    "method": "cf_subscribe_scheduled_swaps",
-    "params": {
-        "base_asset": {
-            "chain": "Ethereum",
-            "asset": "ETH"
-        },
-        "quote_asset": {
-            "chain": "Ethereum",
-            "asset": "USDC"
-        }
+    private subscriptionGenerator(chain: string, asset: string): any {
+        return {
+            "id": 1,
+            "jsonrpc": "2.0",
+            "method": "cf_subscribe_scheduled_swaps",
+            "params": {
+                "base_asset": {
+                    "chain": chain,
+                    "asset": asset
+                },
+                "quote_asset": {
+                    "chain": "Ethereum",
+                    "asset": "USDC"
+                }
+            }
+        };
     }
-};
 
-const orderBook = [];
+    private initStateChainSubscription() {
+        const wsConnection = webSocket('ws://127.0.0.1:9944');
 
-async function deployLiquidity() { }
+        wsConnection.subscribe({
+            next: (msg: any) => {
+                if (msg.method === 'cf_subscribe_scheduled_swaps') {
+                    this.processSwaps(msg.params.result.swaps);
+                }
+            },
+            error: (err) => console.error('WebSocket error:', err),
+        });
 
-async function buyOrder() {
+        // Initialize subscriptions
+        wsConnection.next(this.subscriptionGenerator('Bitcoin', 'BTC'));
+        wsConnection.next(this.subscriptionGenerator('Ethereum', 'ETH'));
+    }
 
+    private processSwaps(swaps: any[]) {
+        swaps.forEach(swap => {
+            eventBus.next({
+                type: 'SWAP',
+                baseAsset: swap.base_asset,
+                quoteAsset: { chain: 'Ethereum', asset: 'USDC' },
+                side: swap.side,
+                amount: swap.amount
+            });
+        });
+    }
 }
 
 function generateRandomOrderId(): number {
     return Math.floor(Math.random() * 10000) + 1;
 }
-
 
 async function openLimitOrder(chain: Chain, asset: Asset, side: Side, price: number, amount: number): Promise<number> {
     console.log(`Opening limit order for ${asset} ${side} ${price} ${amount}`);
