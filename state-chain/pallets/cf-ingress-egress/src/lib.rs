@@ -2486,34 +2486,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} = vault_deposit_witness.clone();
 
 		if Self::should_reject_vault_swap(&broker_fee) {
-			// TODO: We are going to make refund_params mandatory so we can remove this if let check
-			// as soon the other PR is merged.
-			if let Some(refund_params) = refund_params {
-				if let Ok(api_call) =
-					<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
-						TransferAssetParams {
-							asset: source_asset,
-							amount: deposit_amount,
-							to: refund_params.clone().refund_address,
-						},
-					) {
-					T::Broadcaster::threshold_sign_and_broadcast(api_call);
-					Self::deposit_event(Event::VaultSwapRefunded {
-						tx_id: tx_id.clone(),
-						broker_id: broker_fee
-							.as_ref()
-							.map(|Beneficiary { account, .. }| account.clone()),
+			if let Ok(api_call) =
+				<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
+					TransferAssetParams {
 						asset: source_asset,
 						amount: deposit_amount,
-						refund_address: T::AddressConverter::to_encoded_address(
-							refund_params.refund_address.into_foreign_chain_address(),
-						),
-					});
-				} else {
-					log_or_panic!("Failed to create refund api call for vault swap.");
-				}
-			};
-
+						to: refund_params.clone().refund_address,
+					},
+				) {
+				T::Broadcaster::threshold_sign_and_broadcast(api_call);
+				Self::deposit_event(Event::VaultSwapRefunded {
+					tx_id: tx_id.clone(),
+					broker_id: broker_fee
+						.as_ref()
+						.map(|Beneficiary { account, .. }| account.clone()),
+					asset: source_asset,
+					amount: deposit_amount,
+					refund_address: T::AddressConverter::to_encoded_address(
+						refund_params.refund_address.into_foreign_chain_address(),
+					),
+				});
+			} else {
+				log_or_panic!("Failed to create refund api call for vault swap.");
+			}
 			return;
 		}
 
