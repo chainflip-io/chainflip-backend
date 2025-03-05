@@ -139,7 +139,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
-		.expect("Failed to fetch Ethereum supported assets");
+		.expect("Failed to fetch Arbitrum supported assets");
 
 	let arb_usdc_contract_address =
 		*arb_supported_erc20_tokens.get(&ArbAsset::ArbUsdc).expect("USDC not supported");
