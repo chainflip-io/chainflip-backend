@@ -2396,11 +2396,11 @@ fn gets_refunded_if_vault_transaction_was_aborted() {
 			tx_id,
 			broker_fee: None,
 			affiliate_fees: Default::default(),
-			refund_params: Some(ChannelRefundParameters {
+			refund_params: ChannelRefundParameters {
 				retry_duration: 0,
 				min_price: U256::from(0),
 				refund_address: H160::default(),
-			}),
+			},
 			dca_params: None,
 			boost_fee: 0,
 		};
