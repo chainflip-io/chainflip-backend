@@ -13,6 +13,10 @@ pub struct TrackerOptions {
 	eth_ws_endpoint: Option<String>,
 	#[clap(long = "eth.rpc.http_endpoint")]
 	eth_http_endpoint: Option<String>,
+	#[clap(long = "arb.rpc.ws_endpoint")]
+	arb_ws_endpoint: Option<String>,
+	#[clap(long = "arb.rpc.http_endpoint")]
+	arb_http_endpoint: Option<String>,
 	#[clap(long = "dot.rpc.ws_endpoint")]
 	dot_ws_endpoint: Option<String>,
 	#[clap(long = "dot.rpc.http_endpoint")]
@@ -32,6 +36,7 @@ pub struct TrackerOptions {
 #[derive(Clone, Deserialize, Debug)]
 pub struct DepositTrackerSettings {
 	pub eth: WsHttpEndpoints,
+	pub arb: WsHttpEndpoints,
 	pub dot: WsHttpEndpoints,
 	pub state_chain_ws_endpoint: String,
 	pub btc: HttpBasicAuthEndpoint,
@@ -61,6 +66,8 @@ impl CfSettings for DepositTrackerSettings {
 		config_builder
 			.set_default("eth.ws_endpoint", "ws://localhost:8546")?
 			.set_default("eth.http_endpoint", "http://localhost:8545")?
+			.set_default("arb.ws_endpoint", "ws://localhost:8548")?
+			.set_default("arb.http_endpoint", "http://localhost:8547")?
 			.set_default("dot.ws_endpoint", "ws://localhost:9947")?
 			.set_default("dot.http_endpoint", "http://localhost:9947")?
 			.set_default("state_chain_ws_endpoint", "ws://localhost:9944")?
@@ -88,6 +95,8 @@ impl Source for TrackerOptions {
 
 		insert_command_line_option(&mut map, "eth.ws_endpoint", &self.eth_ws_endpoint);
 		insert_command_line_option(&mut map, "eth.http_endpoint", &self.eth_http_endpoint);
+		insert_command_line_option(&mut map, "arb.ws_endpoint", &self.arb_ws_endpoint);
+		insert_command_line_option(&mut map, "arb.http_endpoint", &self.arb_http_endpoint);
 		insert_command_line_option(&mut map, "dot.ws_endpoint", &self.dot_ws_endpoint);
 		insert_command_line_option(&mut map, "dot.http_endpoint", &self.dot_http_endpoint);
 		insert_command_line_option(
