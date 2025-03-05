@@ -1,3 +1,4 @@
+use cf_chains::{Arbitrum, Solana};
 use cf_primitives::*;
 use sp_core::{
 	serde::{Deserialize, Serialize},
@@ -95,6 +96,8 @@ pub struct OpenSwapChannels {
 	pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
 	pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
 	pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
+	pub arbitrum: Vec<SwapChannelInfo<Arbitrum>>,
+	pub solana: Vec<SwapChannelInfo<Solana>>,
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
