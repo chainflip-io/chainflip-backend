@@ -12,6 +12,7 @@ CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 [alias]
 cf-test = "test --features runtime-benchmarks,try-runtime"
 cf-test-ci = "test --release --features runtime-benchmarks,slow-tests,try-runtime"
+cf-test-ci-nextest = "nextest run --release --features runtime-benchmarks,slow-tests,try-runtime"
 cf-test-cfe = "test --package chainflip-engine --package multisig"
 
 cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings -A deprecated"
