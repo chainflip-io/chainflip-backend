@@ -1,7 +1,7 @@
-use cf_chains::{Chain, Ethereum};
+use cf_chains::{Arbitrum, Chain};
 use cf_utilities::task_scope;
 use chainflip_api::primitives::{
-	chains::assets::eth::Asset as EthAsset, Asset, EpochIndex, ForeignChain,
+	chains::assets::arb::Asset as ArbAsset, Asset, EpochIndex, ForeignChain,
 };
 use std::sync::Arc;
 
@@ -13,12 +13,9 @@ use chainflip_engine::{
 		StateChainClient,
 	},
 	witness::{
+		arb::ArbCallBuilder,
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
-		eth::EthCallBuilder,
-		evm::{
-			erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
-			source::EvmSource,
-		},
+		evm::{erc20_deposits::usdc::UsdcEvents, source::EvmSource},
 	},
 };
 
@@ -43,98 +40,74 @@ where
 		+ 'static,
 	ProcessingFut: futures::Future<Output = ()> + Send + 'static,
 {
-	let eth_client = {
-		let nodes = NodeContainer { primary: settings.eth.clone(), backup: None };
+	let arb_client = {
+		let nodes = NodeContainer { primary: settings.arb.clone(), backup: None };
 
 		EvmRetryRpcClient::<EvmRpcClient>::new(
 			scope,
 			nodes,
-			env_params.eth_chain_id.into(),
-			"eth_rpc",
-			"eth_subscribe",
-			"Ethereum",
-			Ethereum::WITNESS_PERIOD,
+			env_params.arb_chain_id.into(),
+			"arb_rpc",
+			"arb_subscribe",
+			"Arbitrum",
+			Arbitrum::WITNESS_PERIOD,
 		)?
 	};
 
-	let vaults = epoch_source.vaults::<Ethereum>().await;
-	let eth_source = EvmSource::<_, Ethereum>::new(eth_client.clone())
+	let vaults = epoch_source.vaults::<Arbitrum>().await;
+	let arb_source = EvmSource::<_, Arbitrum>::new(arb_client.clone())
 		.strictly_monotonic()
 		.chunk_by_vault(vaults, scope);
 
-	let eth_source_deposit_addresses = eth_source
+	let arb_source_deposit_addresses = arb_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream, state_chain_client.clone())
 		.await;
 
-	eth_source_deposit_addresses
+	arb_source_deposit_addresses
 		.clone()
 		.erc20_deposits::<_, _, _, UsdcEvents>(
 			witness_call.clone(),
-			eth_client.clone(),
-			EthAsset::Usdc,
-			env_params.eth_usdc_contract_address,
+			arb_client.clone(),
+			ArbAsset::ArbUsdc,
+			env_params.arb_usdc_contract_address,
 		)
 		.await?
 		.logging("witnessing USDCDeposits")
 		.spawn(scope);
 
-	eth_source_deposit_addresses
-		.clone()
-		.erc20_deposits::<_, _, _, FlipEvents>(
-			witness_call.clone(),
-			eth_client.clone(),
-			EthAsset::Flip,
-			env_params.eth_flip_contract_address,
-		)
-		.await?
-		.logging("witnessing FlipDeposits")
-		.spawn(scope);
-
-	eth_source_deposit_addresses
-		.clone()
-		.erc20_deposits::<_, _, _, UsdtEvents>(
-			witness_call.clone(),
-			eth_client.clone(),
-			EthAsset::Usdt,
-			env_params.eth_usdt_contract_address,
-		)
-		.await?
-		.logging("witnessing USDTDeposits")
-		.spawn(scope);
-
-	eth_source_deposit_addresses
+	arb_source_deposit_addresses
 		.clone()
 		.ethereum_deposits(
 			witness_call.clone(),
-			eth_client.clone(),
-			EthAsset::Eth,
-			env_params.eth_address_checker_address,
-			env_params.eth_vault_address,
+			arb_client.clone(),
+			ArbAsset::ArbEth,
+			env_params.arb_address_checker_address,
+			env_params.arb_vault_address,
 		)
 		.await
 		.logging("witnessing EthereumDeposits")
 		.spawn(scope);
 
-	eth_source
+	arb_source
 		.clone()
-		.vault_witnessing::<EthCallBuilder, _, _, _>(
+		.vault_witnessing::<ArbCallBuilder, _, _, _>(
 			witness_call.clone(),
-			eth_client.clone(),
-			env_params.eth_vault_address,
-			Asset::Eth,
-			ForeignChain::Ethereum,
-			env_params.eth_supported_erc20_tokens.clone(),
+			arb_client.clone(),
+			env_params.arb_vault_address,
+			Asset::ArbEth,
+			ForeignChain::Arbitrum,
+			env_params.arb_supported_erc20_tokens.clone(),
 		)
 		.logging("witnessing Vault")
 		.spawn(scope);
 
-	eth_source
+	arb_source
 		.clone()
 		.key_manager_witnessing(
 			witness_call.clone(),
-			eth_client.clone(),
-			env_params.eth_key_manager_address,
+			arb_client.clone(),
+			env_params.arb_key_manager_address,
 		)
 		.logging("witnessing KeyManager")
 		.spawn(scope);

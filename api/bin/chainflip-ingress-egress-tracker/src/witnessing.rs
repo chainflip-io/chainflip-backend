@@ -1,13 +1,16 @@
+mod arb;
 mod btc;
 mod dot;
 mod eth;
+
 pub mod state_chain;
 
 use self::state_chain::handle_call;
 use crate::{settings::DepositTrackerSettings, store::RedisStore};
 use cf_utilities::task_scope;
 use chainflip_api::primitives::{
-	chains::assets::eth::Asset as EthAsset, Asset, NetworkEnvironment,
+	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
+	Asset, NetworkEnvironment,
 };
 use chainflip_engine::{
 	state_chain_observer::{
@@ -28,17 +31,29 @@ use std::collections::HashMap;
 pub(super) struct EnvironmentParameters {
 	eth_chain_id: u64,
 	eth_vault_address: H160,
+	eth_key_manager_address: H160,
 	eth_address_checker_address: H160,
-	flip_contract_address: H160,
-	usdc_contract_address: H160,
-	usdt_contract_address: H160,
-	supported_erc20_tokens: HashMap<H160, Asset>,
+
+	eth_flip_contract_address: H160,
+	eth_usdc_contract_address: H160,
+	eth_usdt_contract_address: H160,
+	eth_supported_erc20_tokens: HashMap<H160, Asset>,
+
+	arb_chain_id: u64,
+	arb_vault_address: H160,
+	arb_address_checker_address: H160,
+	arb_key_manager_address: H160,
+	arb_usdc_contract_address: H160,
+	arb_supported_erc20_tokens: HashMap<H160, Asset>,
+
 	dot_genesis_hash: PolkadotHash,
 	pub chainflip_network: NetworkEnvironment,
 }
 
 async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> EnvironmentParameters {
 	use state_chain_runtime::Runtime;
+
+	// Ethereum
 
 	let eth_chain_id = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumChainId<Runtime>>(
@@ -61,26 +76,80 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		.await
 		.expect("State Chain client connection failed");
 
-	let supported_erc20_tokens: HashMap<_, _> = state_chain_client
+	let eth_key_manager_address = state_chain_client
+		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.expect("Failed to get KeyManager address from SC");
+
+	let eth_supported_erc20_tokens: HashMap<_, _> = state_chain_client
 		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.expect("Failed to fetch Ethereum supported assets");
 
-	let flip_contract_address =
-		*supported_erc20_tokens.get(&EthAsset::Flip).expect("FLIP not supported");
+	let eth_flip_contract_address =
+		*eth_supported_erc20_tokens.get(&EthAsset::Flip).expect("FLIP not supported");
 
-	let usdc_contract_address =
-		*supported_erc20_tokens.get(&EthAsset::Usdc).expect("USDC not supported");
+	let eth_usdc_contract_address =
+		*eth_supported_erc20_tokens.get(&EthAsset::Usdc).expect("USDC not supported");
 
-	let usdt_contract_address =
-		*supported_erc20_tokens.get(&EthAsset::Usdt).expect("USDT not supported");
+	let eth_usdt_contract_address =
+		*eth_supported_erc20_tokens.get(&EthAsset::Usdt).expect("USDT not supported");
 
-	let supported_erc20_tokens: HashMap<H160, Asset> = supported_erc20_tokens
+	let eth_supported_erc20_tokens: HashMap<H160, Asset> = eth_supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
+
+	// Arbitrum
+
+	let arb_chain_id = state_chain_client
+		.storage_value::<pallet_cf_environment::ArbitrumChainId<Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.expect("State Chain client connection failed");
+
+	let arb_vault_address = state_chain_client
+		.storage_value::<pallet_cf_environment::ArbitrumVaultAddress<Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.expect("Failed to get Vault contract address from SC");
+
+	let arb_address_checker_address = state_chain_client
+		.storage_value::<pallet_cf_environment::ArbitrumAddressCheckerAddress<Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.expect("State Chain client connection failed");
+
+	let arb_key_manager_address = state_chain_client
+		.storage_value::<pallet_cf_environment::ArbitrumKeyManagerAddress<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.expect("Failed to get KeyManager address from SC");
+
+	let arb_supported_erc20_tokens: HashMap<_, _> = state_chain_client
+		.storage_map::<pallet_cf_environment::ArbitrumSupportedAssets<state_chain_runtime::Runtime>, _>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.expect("Failed to fetch Ethereum supported assets");
+
+	let arb_usdc_contract_address =
+		*arb_supported_erc20_tokens.get(&ArbAsset::ArbUsdc).expect("USDC not supported");
+
+	let arb_supported_erc20_tokens: HashMap<H160, Asset> = arb_supported_erc20_tokens
+		.into_iter()
+		.map(|(asset, address)| (address, asset.into()))
+		.collect();
+
+	// Polkadot
 
 	let dot_genesis_hash = PolkadotHash::from_slice(
 		state_chain_client
@@ -102,11 +171,20 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 	EnvironmentParameters {
 		eth_chain_id,
 		eth_vault_address,
-		flip_contract_address,
-		usdc_contract_address,
-		usdt_contract_address,
+		eth_key_manager_address,
+		eth_flip_contract_address,
+		eth_usdc_contract_address,
+		eth_usdt_contract_address,
 		eth_address_checker_address,
-		supported_erc20_tokens,
+		eth_supported_erc20_tokens,
+
+		arb_chain_id,
+		arb_vault_address,
+		arb_key_manager_address,
+		arb_address_checker_address,
+		arb_usdc_contract_address,
+		arb_supported_erc20_tokens,
+
 		dot_genesis_hash,
 		chainflip_network,
 	}
@@ -147,6 +225,17 @@ pub(super) async fn start(
 	};
 
 	eth::start(
+		scope,
+		state_chain_client.clone(),
+		unfinalized_chain_stream.clone(),
+		settings.clone(),
+		env_params.clone(),
+		epoch_source.clone(),
+		witness_call.clone(),
+	)
+	.await?;
+
+	arb::start(
 		scope,
 		state_chain_client.clone(),
 		unfinalized_chain_stream.clone(),
