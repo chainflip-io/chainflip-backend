@@ -35,7 +35,7 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 pub mod pallet {
 	use cf_chains::{AccountOrAddress, Chain};
 	use cf_primitives::{BlockNumber, ChannelId, EgressId, Price};
-	use cf_traits::HistoricalFeeMigration;
+	use cf_traits::{HistoricalFeeMigration, MinimumDeposit};
 
 	use super::*;
 
@@ -90,6 +90,9 @@ pub mod pallet {
 		type MigrationHelper: HistoricalFeeMigration<
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
+
+		/// The interface to access the minimum deposit amount for each asset
+		type MinimumDeposit: MinimumDeposit;
 	}
 
 	#[pallet::error]
@@ -121,6 +124,8 @@ pub mod pallet {
 		CannotTransferToOriginAccount,
 		/// The account still has funds remaining in the boost pools
 		BoostedFundsRemaining,
+		/// The input amount of on-chain swaps must be at least the minimum deposit amount.
+		OnChainSwapBelowMinimumDepositAmount,
 	}
 
 	#[pallet::event]
@@ -324,8 +329,8 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::internal_swap())]
-		pub fn internal_swap(
+		#[pallet::weight(T::WeightInfo::on_chain_swap())]
+		pub fn on_chain_swap(
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			input_asset: Asset,
@@ -336,6 +341,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+			ensure!(
+				amount >= T::MinimumDeposit::get(input_asset),
+				Error::<T>::OnChainSwapBelowMinimumDepositAmount
+			);
+
 			Self::ensure_has_refund_address_for_asset(&account_id, output_asset)?;
 
 			T::PoolApi::sweep(&account_id)?;
@@ -343,7 +353,7 @@ pub mod pallet {
 			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)
 				.map_err(|_| Error::<T>::InsufficientBalance)?;
 
-			T::SwapRequestHandler::init_internal_swap_request(
+			T::SwapRequestHandler::init_on_chain_swap_request(
 				input_asset,
 				amount,
 				output_asset,

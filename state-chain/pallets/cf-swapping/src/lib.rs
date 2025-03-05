@@ -2111,7 +2111,7 @@ pub mod pallet {
 			input_asset: Asset,
 		) -> Result<AssetAmount, DispatchError> {
 			let refund_fee_usdc = MinimumNetworkFeePerChunk::<T>::get();
-			if (refund_fee_usdc == 0) || (total_input_amount == 0) {
+			if refund_fee_usdc.is_zero() || total_input_amount.is_zero() {
 				return Ok(total_input_amount)
 			}
 
@@ -2127,7 +2127,7 @@ pub mod pallet {
 				sp_std::cmp::min(required_refund_fee_as_input_asset, total_input_amount);
 			let remaining_amount_to_refund = total_input_amount.saturating_sub(refund_fee);
 
-			if refund_fee > 0 {
+			if !refund_fee.is_zero() {
 				Self::init_network_fee_swap_request(input_asset, refund_fee);
 			}
 

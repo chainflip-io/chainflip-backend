@@ -14,7 +14,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler, swap_request_api::MockSwapRequestHandler,
 	},
-	AccountRoleRegistry, BalanceApi, BoostApi, HistoricalFeeMigration,
+	AccountRoleRegistry, BalanceApi, BoostApi, HistoricalFeeMigration, MinimumDeposit,
 };
 use frame_support::{
 	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -72,6 +72,14 @@ impl HistoricalFeeMigration for MockMigrationHelper {
 
 	fn get_fee_amount(_account_id: Self::AccountId, _asset: Asset) -> AssetAmount {
 		todo!()
+	}
+}
+
+pub const MINIMUM_DEPOSIT: u128 = 100;
+pub struct MockMinimumDepositProvider;
+impl MinimumDeposit for MockMinimumDepositProvider {
+	fn get(_asset: Asset) -> AssetAmount {
+		MINIMUM_DEPOSIT
 	}
 }
 
@@ -165,6 +173,7 @@ impl crate::Config for Test {
 	type BoostApi = MockIngressEgressBoostApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type MigrationHelper = MockMigrationHelper;
+	type MinimumDeposit = MockMinimumDepositProvider;
 }
 
 pub struct MockIngressEgressBoostApi;

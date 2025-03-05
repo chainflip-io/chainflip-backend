@@ -48,6 +48,7 @@ use cf_chains::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
+	instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance, SolanaInstance},
 	sol::{
 		api::{
 			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
@@ -63,7 +64,8 @@ use cf_chains::{
 	Solana, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
+	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
+	DcaParameters,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
@@ -981,5 +983,24 @@ impl FetchesTransfersLimitProvider for EvmLimit {
 
 	fn maybe_fetches_limit() -> Option<usize> {
 		Some(20)
+	}
+}
+
+pub struct MinimumDepositProvider;
+impl cf_traits::MinimumDeposit for MinimumDepositProvider {
+	fn get(asset: Asset) -> AssetAmount {
+		use pallet_cf_ingress_egress::MinimumDeposit;
+		match asset.into() {
+			ForeignChainAndAsset::Ethereum(asset) =>
+				MinimumDeposit::<Runtime, EthereumInstance>::get(asset),
+			ForeignChainAndAsset::Polkadot(asset) =>
+				MinimumDeposit::<Runtime, PolkadotInstance>::get(asset),
+			ForeignChainAndAsset::Bitcoin(asset) =>
+				MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
+			ForeignChainAndAsset::Arbitrum(asset) =>
+				MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
+			ForeignChainAndAsset::Solana(asset) =>
+				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
+		}
 	}
 }

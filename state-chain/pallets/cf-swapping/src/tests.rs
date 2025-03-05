@@ -1515,7 +1515,7 @@ mod on_chain_swapping {
 
 		new_test_ext()
 			.execute_with(|| {
-				Swapping::init_internal_swap_request(
+				Swapping::init_on_chain_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
@@ -1592,7 +1592,7 @@ mod on_chain_swapping {
 		new_test_ext()
 			.execute_with(|| {
 				MinimumNetworkFeePerChunk::<Test>::set(MIN_NETWORK_FEE);
-				Swapping::init_internal_swap_request(
+				Swapping::init_on_chain_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
