@@ -341,6 +341,7 @@ pub type BrokerRejectionEventFor<C> =
 pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
 	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
+	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
 }
 
 // READ THIS BEFORE UPDATING THIS TRAIT:
