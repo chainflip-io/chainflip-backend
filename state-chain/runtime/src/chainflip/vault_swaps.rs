@@ -113,9 +113,11 @@ pub fn evm_vault_swap<A>(
 	channel_metadata: Option<cf_chains::CcmChannelMetadata>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	let refund_params = refund_params.try_map_address(|addr| {
-		ChainAddressConverter::try_from_encoded_address(addr)
-			.and_then(|addr| addr.try_into().map_err(|_| ()))
-			.map_err(|_| "Invalid refund address".into())
+		Ok::<_, DispatchErrorWithMessage>(
+			ChainAddressConverter::try_from_encoded_address(addr)
+				.and_then(|addr| addr.try_into().map_err(|_| ()))
+				.map_err(|_| "Invalid refund address")?,
+		)
 	})?;
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
 		.try_into()
@@ -255,9 +257,11 @@ pub fn solana_vault_swap<A>(
 
 	let from = SolPubkey::try_from(from).map_err(|_| "Invalid Solana Address: from")?;
 	let refund_parameters = refund_parameters.try_map_address(|addr| {
-		ChainAddressConverter::try_from_encoded_address(addr)
-			.and_then(|addr| addr.try_into().map_err(|_| ()))
-			.map_err(|_| "Invalid refund address".into())
+		Ok::<_, DispatchErrorWithMessage>(
+			ChainAddressConverter::try_from_encoded_address(addr)
+				.and_then(|addr| addr.try_into().map_err(|_| ()))
+				.map_err(|_| "Invalid refund address")?,
+		)
 	})?;
 	let event_data_account = SolPubkey::try_from(event_data_account)
 		.map_err(|_| "Invalid Solana Address: event_data_account")?;

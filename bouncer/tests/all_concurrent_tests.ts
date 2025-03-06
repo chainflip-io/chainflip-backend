@@ -16,7 +16,6 @@ import { depositChannelCreation } from './request_swap_deposit_address_with_affi
 import { testDCASwaps } from './DCA_test';
 import { testBrokerLevelScreening } from './broker_level_screening';
 import { checkSolEventAccountsClosure } from '../shared/sol_vault_swap';
-import { legacyEvmVaultSwaps } from './legacy_vault_swap';
 import { testVaultSwapFeeCollection } from './vault_swap_fee_collection';
 
 async function runAllConcurrentTests() {
@@ -48,7 +47,6 @@ async function runAllConcurrentTests() {
     testCancelOrdersBatch.run(),
     depositChannelCreation.run(),
     testBrokerLevelScreening.run(),
-    legacyEvmVaultSwaps.run(),
     testVaultSwapFeeCollection.run(),
   ];
 

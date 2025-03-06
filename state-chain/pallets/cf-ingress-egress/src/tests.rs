@@ -17,9 +17,13 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
-	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, DepositChannel,
+	DepositOriginType, ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin,
+	TransactionInIdForAnyChain, TransferAssetParams,
 };
+
+use cf_chains::eth::Address as EthereumAddress;
+
 use cf_primitives::{
 	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,
 	DcaParameters, ForeignChain, MAX_AFFILIATES,
@@ -407,7 +411,7 @@ fn addresses_are_getting_reused() {
 			source_asset: EthAsset::Eth,
 			destination_asset: EthAsset::Flip,
 			destination_address: ForeignChainAddress::Eth(Default::default()),
-			refund_address: None,
+			refund_address: ALICE_ETH_ADDRESS,
 		}])
 		// The address should have been taken from the pool and the id counter unchanged.
 		.then_execute_with_keep_context(|_| {
@@ -1890,7 +1894,7 @@ fn submit_vault_swap_request(
 			tx_id,
 			broker_fee: Some(broker_fee),
 			affiliate_fees,
-			refund_params: Some(refund_params),
+			refund_params,
 			dca_params,
 			boost_fee,
 		}),
@@ -2241,7 +2245,10 @@ fn private_and_regular_channel_ids_do_not_overlap() {
 			let (channel_id, ..) = IngressEgress::open_channel(
 				&ALICE,
 				EthAsset::Eth,
-				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				ChannelAction::LiquidityProvision {
+					lp_account: 0,
+					refund_address: Some(ForeignChainAddress::Eth(Default::default())),
+				},
 				0,
 			)
 			.unwrap();
@@ -2316,7 +2323,10 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 				BoostStatus::NotBoosted,
 				0,
 				None,
-				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				ChannelAction::LiquidityProvision {
+					lp_account: 0,
+					refund_address: Some(ForeignChainAddress::Eth(Default::default())),
+				},
 				0,
 				DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
 			)
@@ -2337,7 +2347,10 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 			},
 			0,
 			None,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			ChannelAction::LiquidityProvision {
+				lp_account: 0,
+				refund_address: Some(ForeignChainAddress::Eth(Default::default())),
+			},
 			0,
 			DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
 		)
@@ -2569,7 +2582,7 @@ mod evm_transaction_rejection {
 				source_asset: ETH_ETH,
 				destination_asset: ETH_FLIP,
 				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
-				refund_address: Some(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
 			}])
 			.then_apply_extrinsics(|_| {
 				[
@@ -2750,7 +2763,7 @@ mod evm_transaction_rejection {
 				source_asset: ETH_ETH,
 				destination_asset: ETH_FLIP,
 				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
-				refund_address: Some(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
 			}])
 			// Simulate a prewitness call.
 			// we can't use `then_apply_extrinsics` because at the moment there's no way to

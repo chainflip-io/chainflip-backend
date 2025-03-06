@@ -3,10 +3,10 @@ use crate::{DepositWitness, PalletSafeMode, WhitelistedBrokers};
 
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
-	eth::Address as EthereumAddress,
-	CcmDepositMetadata, Chain,
+	eth::EthereumTrackedData,
+	evm::U256,
 };
-use cf_chains::{eth::EthereumTrackedData, ChannelRefundParameters};
+use cf_chains::{Chain, ChannelRefundParameters};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -33,7 +33,7 @@ use cf_traits::{
 };
 use frame_support::{assert_ok, derive_impl};
 use frame_system as system;
-use sp_core::{ConstBool, ConstU64, U256};
+use sp_core::{ConstBool, ConstU64};
 use sp_runtime::traits::Zero;
 
 type AccountId = u64;
@@ -206,7 +206,7 @@ pub enum DepositRequest {
 		source_asset: TestChainAsset,
 		destination_asset: TestChainAsset,
 		destination_address: ForeignChainAddress,
-		refund_address: Option<TestChainAccount>,
+		refund_address: TestChainAccount,
 	},
 }
 
@@ -261,11 +261,11 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						BROKER,
 						None,
 						10,
-						refund_address.map(|addr| ChannelRefundParameters {
+						ChannelRefundParameters {
 							retry_duration: 5,
-							refund_address: ForeignChainAddress::Eth(addr),
+							refund_address: ForeignChainAddress::Eth(refund_address),
 							min_price: U256::zero(),
-						}),
+						},
 						None,
 					)
 					.map(|(channel_id, deposit_address, ..)| {

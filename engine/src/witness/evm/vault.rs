@@ -30,22 +30,21 @@ abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json")
 fn decode_cf_parameters<RefundAddress, CcmData>(
 	cf_parameters: &[u8],
 	block_height: u64,
-) -> (Option<VaultSwapParameters<RefundAddress>>, CcmData)
+) -> Result<(VaultSwapParameters<RefundAddress>, CcmData)>
 where
 	RefundAddress: Decode,
 	CcmData: Default + Decode,
 {
-	if let Ok(decoded) = VersionedCfParameters::decode(&mut &cf_parameters[..]) {
-		match decoded {
-			VersionedCfParameters::V0(CfParameters {
-				ccm_additional_data,
-				vault_swap_parameters,
-			}) => (Some(vault_swap_parameters), ccm_additional_data),
-		}
-	} else {
-		tracing::warn!("Failed to decode cf_parameters: {cf_parameters:?} at block {block_height}");
-		(None, Default::default())
-	}
+	let VersionedCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
+		VersionedCfParameters::decode(&mut &cf_parameters[..])
+			.inspect_err(|_| {
+				tracing::warn!(
+					"Failed to decode cf_parameters: {cf_parameters:?} at block {block_height}"
+				)
+			})
+			.map_err(|_| anyhow!("Failed to decode cf_parameters!"))?;
+
+	Ok((vault_swap_parameters, ccm_additional_data))
 }
 
 pub fn call_from_event<
@@ -88,7 +87,7 @@ where
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ()) =
-				decode_cf_parameters(&cf_parameters[..], block_height);
+				decode_cf_parameters(&cf_parameters[..], block_height)?;
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
@@ -111,7 +110,7 @@ where
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ()) =
-				decode_cf_parameters(&cf_parameters[..], block_height);
+				decode_cf_parameters(&cf_parameters[..], block_height)?;
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
@@ -137,7 +136,7 @@ where
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ccm_additional_data) =
-				decode_cf_parameters(&cf_parameters[..], block_height);
+				decode_cf_parameters(&cf_parameters[..], block_height)?;
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
@@ -173,7 +172,7 @@ where
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ccm_additional_data) =
-				decode_cf_parameters(&cf_parameters[..], block_height);
+				decode_cf_parameters(&cf_parameters[..], block_height)?;
 
 			Some(CallBuilder::vault_swap_request(
 				block_height,
@@ -232,45 +231,26 @@ where
 
 macro_rules! vault_deposit_witness {
 	($source_asset: expr, $deposit_amount: expr, $dest_asset: expr, $dest_address: expr, $metadata: expr, $tx_id: expr, $params: expr) => {
-		if let Some(params) = $params {
-			VaultDepositWitness {
-				input_asset: $source_asset.try_into().expect("invalid asset for chain"),
-				output_asset: $dest_asset,
-				deposit_amount: $deposit_amount,
-				destination_address: $dest_address,
-				deposit_metadata: $metadata,
-				tx_id: $tx_id,
-				deposit_details: DepositDetails { tx_hashes: Some(vec![$tx_id]) },
-				broker_fee: params.broker_fee.into(),
-				affiliate_fees: params.affiliate_fees
-					.into_iter()
-					.map(Into::into)
-					.collect_vec()
-					.try_into()
-					.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
-				boost_fee: params.boost_fee.into(),
-				dca_params: params.dca_params,
-				refund_params: Some(params.refund_params),
-				channel_id: None,
-				deposit_address: None,
-			}
-		} else {
-			VaultDepositWitness {
-				input_asset: $source_asset.try_into().expect("invalid asset for chain"),
-				output_asset: $dest_asset,
-				deposit_amount: $deposit_amount,
-				destination_address: $dest_address,
-				deposit_metadata: $metadata,
-				tx_id: $tx_id,
-				deposit_details: DepositDetails { tx_hashes: Some(vec![$tx_id]) },
-				broker_fee: None,
-				affiliate_fees: Default::default(),
-				boost_fee: 0,
-				dca_params: None,
-				refund_params: None,
-				channel_id: None,
-				deposit_address: None,
-			}
+		VaultDepositWitness {
+			input_asset: $source_asset.try_into().expect("invalid asset for chain"),
+			output_asset: $dest_asset,
+			deposit_amount: $deposit_amount,
+			destination_address: $dest_address,
+			deposit_metadata: $metadata,
+			tx_id: $tx_id,
+			deposit_details: DepositDetails { tx_hashes: Some(vec![$tx_id]) },
+			broker_fee: $params.broker_fee.into(),
+			affiliate_fees: $params.affiliate_fees
+				.into_iter()
+				.map(Into::into)
+				.collect_vec()
+				.try_into()
+				.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
+			boost_fee: $params.boost_fee.into(),
+			dca_params: $params.dca_params,
+			refund_params: $params.refund_params,
+			channel_id: None,
+			deposit_address: None,
 		}
 	}
 }
@@ -288,9 +268,7 @@ pub trait IngressCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: H256,
-		vault_swap_parameters: Option<
-			VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
-		>,
+		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
 	) -> state_chain_runtime::RuntimeCall;
 
 	fn vault_transfer_failed(
