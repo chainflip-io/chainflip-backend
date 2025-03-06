@@ -67,7 +67,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
-		.expect("Failed to get Vault contract address from SC");
+		.expect("Failed to get Ethereum Vault contract address from SC");
 
 	let eth_address_checker_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<Runtime>>(
@@ -81,7 +81,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
-		.expect("Failed to get KeyManager address from SC");
+		.expect("Failed to get Ethereum KeyManager address from SC");
 
 	let eth_supported_erc20_tokens: HashMap<_, _> = state_chain_client
 		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
@@ -118,7 +118,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
-		.expect("Failed to get Vault contract address from SC");
+		.expect("Failed to get Arbitrum Vault contract address from SC");
 
 	let arb_address_checker_address = state_chain_client
 		.storage_value::<pallet_cf_environment::ArbitrumAddressCheckerAddress<Runtime>>(
@@ -132,7 +132,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
-		.expect("Failed to get KeyManager address from SC");
+		.expect("Failed to get Arbitrum KeyManager address from SC");
 
 	let arb_supported_erc20_tokens: HashMap<_, _> = state_chain_client
 		.storage_map::<pallet_cf_environment::ArbitrumSupportedAssets<state_chain_runtime::Runtime>, _>(
