@@ -179,7 +179,7 @@ where
 	Ok(())
 }
 
-struct ArbCallBuilder {}
+pub struct ArbCallBuilder {}
 
 impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 	type Chain = Arbitrum;

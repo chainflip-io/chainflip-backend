@@ -573,6 +573,7 @@ pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::Tra
 pub enum TransactionInId {
 	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
 	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
+	Arbitrum(TransactionInIdFor<cf_chains::Arbitrum>),
 	// other variants reserved for other chains.
 }
 
@@ -592,6 +593,13 @@ pub trait DepositMonitorApi:
 			TransactionInId::Ethereum(tx_id) =>
 				self.simple_submission_with_dry_run(
 					state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+				)
+				.await,
+			TransactionInId::Arbitrum(tx_id) =>
+				self.simple_submission_with_dry_run(
+					state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
 						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
 					),
 				)
