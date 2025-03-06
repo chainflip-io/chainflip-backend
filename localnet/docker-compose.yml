@@ -243,7 +243,7 @@ services:
       start_period: 10s
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:dev-6f6dee4b0bcd1373ab3deee5770d96d79ae473bc
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:dev-b7cc56fed1ed1fecd8460b59f43ed038edfe649e
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
