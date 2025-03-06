@@ -56,7 +56,7 @@ export async function sendVaultTransaction(
 }
 
 export async function waitForBtcTransaction(logger: Logger, txid: string, confirmations = 1) {
-  logger.debug(
+  logger.trace(
     `Waiting for Btc transaction to be confirmed, txid: ${txid}, required confirmations: ${confirmations}`,
   );
   for (let i = 0; i < 50; i++) {
@@ -65,6 +65,7 @@ export async function waitForBtcTransaction(logger: Logger, txid: string, confir
     if (transactionDetails.confirmations < confirmations) {
       await sleep(1000);
     } else {
+      logger.trace(`Btc transaction confirmed, txid: ${txid}`);
       return;
     }
   }
