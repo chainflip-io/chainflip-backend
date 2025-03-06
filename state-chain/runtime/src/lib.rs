@@ -53,7 +53,7 @@ use cf_chains::{
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
+	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCcmAuxDataProvider, SolanaCrypto},
 	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
 	TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
 };
@@ -400,6 +400,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
+	type CcmAuxDataProvider = ();
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -429,6 +430,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
+	type CcmAuxDataProvider = ();
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -458,6 +460,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
+	type CcmAuxDataProvider = ();
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -487,6 +490,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
+	type CcmAuxDataProvider = ();
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -516,6 +520,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
+	type CcmAuxDataProvider = SolanaCcmAuxDataProvider<SolEnvironment>;
 }
 
 impl pallet_cf_pools::Config for Runtime {

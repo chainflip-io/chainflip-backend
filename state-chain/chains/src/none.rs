@@ -28,6 +28,7 @@ impl Chain for NoneChain {
 	type ChainAssetMap<
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = AssetMap<T>;
+	type CcmAuxData = ();
 }
 
 impl FeeRefundCalculator<NoneChain> for () {

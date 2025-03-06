@@ -1,4 +1,4 @@
-use crate::RejectCall;
+use crate::{CcmAuxDataProvider, RejectCall};
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::marker::PhantomData;
@@ -29,6 +29,8 @@ use crate::{
 };
 
 use cf_primitives::{EgressId, ForeignChain, GasAmount, SwapRequestId};
+
+use super::SolanaCcmAuxDataProvider;
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
@@ -62,6 +64,11 @@ pub type DurableNonceAndAccount = (SolAddress, SolHash);
 pub struct VaultSwapAccountAndSender {
 	pub vault_swap_account: SolAddress,
 	pub swap_sender: SolAddress,
+}
+
+pub enum GetAltError {
+	AltsInvalid,
+	AltsNotYetWitnessed,
 }
 
 /// Super trait combining all Environment lookups required for the Solana chain.
@@ -108,11 +115,11 @@ pub trait SolanaEnvironment:
 	/// Get any user-defined Address lookup tables from the Environment.
 	fn get_address_lookup_tables(
 		id: SwapRequestId,
-	) -> Result<Vec<SolAddressLookupTableAccount>, SolanaTransactionBuildingError> {
+	) -> Result<Vec<SolAddressLookupTableAccount>, GetAltError> {
 		match Self::lookup(id) {
 			Some(Some(alts)) => Ok(alts),
-			Some(None) => Err(SolanaTransactionBuildingError::AltsInvalid),
-			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed),
+			Some(None) => Err(GetAltError::AltsInvalid),
+			None => Err(GetAltError::AltsNotYetWitnessed),
 		}
 	}
 }
@@ -367,7 +374,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: Option<SwapRequestId>,
+		extra_lookup_tables: <SolanaCcmAuxDataProvider<Environment> as CcmAuxDataProvider>::CcmAuxData,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// For extra safety, re-verify the validity of the CCM message here
 		// and extract the decoded `ccm_accounts` from `ccm_additional_data`.
@@ -404,10 +411,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::current_agg_key()?;
 
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
-		let mut address_lookup_tables = vec![sol_api_environment.address_lookup_table_account];
-		if let Some(id) = swap_request_id {
-			address_lookup_tables.extend(Environment::get_address_lookup_tables(id)?);
-		}
+		let mut address_lookup_tables: Vec<SolAddressLookupTableAccount> =
+			vec![sol_api_environment.address_lookup_table_account];
+		address_lookup_tables.extend(extra_lookup_tables);
 
 		// Ensure the CCM parameters do not contain blacklisted accounts.
 		check_ccm_for_blacklisted_accounts(
@@ -659,7 +665,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: Option<SwapRequestId>,
+		aux_data: <SolanaCcmAuxDataProvider<Env> as CcmAuxDataProvider>::CcmAuxData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		Self::ccm_transfer(
 			transfer_param,
@@ -670,15 +676,11 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			gas_budget,
 			message,
 			ccm_additional_data,
-			swap_request_id,
+			aux_data,
 		)
 		.map_err(|e| {
 			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {}", e);
-			match e {
-				SolanaTransactionBuildingError::AltsNotYetWitnessed =>
-					ExecutexSwapAndCallError::TryAgainLater,
-				_ => ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e),
-			}
+			ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e)
 		})
 	}
 }

@@ -119,6 +119,32 @@ pub mod witness_period {
 	}
 }
 
+pub enum CcmDataResponse<CcmAuxData> {
+	NotRequired,
+	Ready(CcmAuxData),
+
+	NotReady,
+	Invalid,
+}
+
+pub trait CcmAuxDataProvider {
+	type CcmAuxData: Member + Parameter + Default;
+
+	fn get_ccm_aux_data_for_swap_request_id(
+		swap_request_id: SwapRequestId,
+	) -> CcmDataResponse<Self::CcmAuxData>;
+}
+
+impl CcmAuxDataProvider for () {
+	type CcmAuxData = ();
+
+	fn get_ccm_aux_data_for_swap_request_id(
+		_swap_request_id: SwapRequestId,
+	) -> CcmDataResponse<Self::CcmAuxData> {
+		CcmDataResponse::NotRequired
+	}
+}
+
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter + ChainInstanceAlias {
@@ -283,6 +309,8 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ TransactionMetadata<Self>
 		+ BenchmarkValue
 		+ Default;
+
+	type CcmAuxData: Member + Parameter + Default;
 
 	/// The type representing the transaction hash for this particular chain
 	type TransactionRef: Member + Parameter + BenchmarkValue;
@@ -593,7 +621,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: Option<SwapRequestId>,
+		aux_data: C::CcmAuxData,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
