@@ -209,7 +209,6 @@ pub mod pallet {
 			self.0.checked_add(1).map(Self)
 		}
 
-		#[cfg(any(feature = "runtime-benchmarks", test))]
 		pub const fn from_u64(value: u64) -> Self {
 			Self(value)
 		}
@@ -224,7 +223,7 @@ pub mod pallet {
 	)]
 	pub struct ElectionIdentifier<Extra>(UniqueMonotonicIdentifier, Extra);
 	impl<Extra> ElectionIdentifier<Extra> {
-		pub(crate) fn new(unique_monotonic: UniqueMonotonicIdentifier, extra: Extra) -> Self {
+		pub fn new(unique_monotonic: UniqueMonotonicIdentifier, extra: Extra) -> Self {
 			Self(unique_monotonic, extra)
 		}
 

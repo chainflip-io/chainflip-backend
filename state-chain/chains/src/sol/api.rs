@@ -128,7 +128,7 @@ pub trait RecoverDurableNonce {
 }
 
 /// Errors that can arise when building Solana Transactions.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, Debug)]
 pub enum SolanaTransactionBuildingError {
 	CannotLookupApiEnvironment,
 	CannotLookupCurrentAggKey,
@@ -675,7 +675,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			swap_request_id,
 		)
 		.map_err(|e| {
-			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {}", e);
+			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);
 			match e {
 				SolanaTransactionBuildingError::AltsNotYetWitnessed =>
 					ExecutexSwapAndCallError::TryAgainLater,
