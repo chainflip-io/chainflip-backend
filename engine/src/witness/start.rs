@@ -3,7 +3,6 @@ use std::sync::Arc;
 use cf_utilities::task_scope::Scope;
 
 use crate::{
-	btc::retry_rpc::BtcRetryRpcClient,
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
@@ -21,6 +20,7 @@ use state_chain_runtime::{BitcoinInstance, SolanaInstance};
 use super::common::epoch_source::EpochSource;
 
 use anyhow::Result;
+use crate::btc::cached_rpc::BtcCachingClient;
 
 /// Starts all the witnessing tasks.
 // It's important that this function is not blocking, at any point, even if there is no connection
@@ -31,7 +31,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
-	btc_client: BtcRetryRpcClient,
+	btc_client: BtcCachingClient,
 	dot_client: DotRetryRpcClient,
 	sol_client: SolRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
@@ -99,18 +99,6 @@ where
 		epoch_source.clone(),
 		db.clone(),
 	);
-
-	// let start_btc = super::btc::start(
-	// 	scope,
-	// 	btc_client.clone(),
-	// 	witness_call.clone(),
-	// 	prewitness_call,
-	// 	state_chain_client.clone(),
-	// 	state_chain_stream.clone(),
-	// 	unfinalised_state_chain_stream.clone(),
-	// 	epoch_source.clone(),
-	// 	db.clone(),
-	// );
 
 	let start_dot = super::dot::start(
 		scope,

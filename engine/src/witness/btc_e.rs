@@ -48,13 +48,13 @@ use state_chain_runtime::chainflip::bitcoin_elections::{
 use std::sync::Arc;
 
 use crate::{
-	btc::retry_rpc::BtcRetryRpcClient,
+	btc::cached_rpc::BtcCachingClient,
 	witness::btc::deposits::{egress_witnessing, vault_deposits},
 };
 
 #[derive(Clone)]
 pub struct BitcoinDepositChannelWitnessingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -93,7 +93,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 
 #[derive(Clone)]
 pub struct BitcoinVaultDepositWitnessingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -129,7 +129,7 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 
 #[derive(Clone)]
 pub struct BitcoinBlockHeightTrackingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -215,7 +215,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 
 #[derive(Clone)]
 pub struct BitcoinEgressWitnessingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -256,7 +256,7 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 
 #[derive(Clone)]
 pub struct BitcoinFeeVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -276,7 +276,7 @@ impl VoterApi<BitcoinFeeTracking> for crate::witness::btc_e::BitcoinFeeVoter {
 
 #[derive(Clone)]
 pub struct BitcoinLivenessVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -292,7 +292,7 @@ impl VoterApi<BitcoinLiveness> for BitcoinLivenessVoter {
 
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>
 where

@@ -14,8 +14,9 @@ use anyhow::Result;
 use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, VerboseBlock};
 
 #[derive(Clone)]
-pub struct BtcRetryRpcClient {
+pub struct BtcRetryRpcClient { //BtcCachedRcpClient
 	retry_client: RetrierClient<BtcRpcClient>,
+	// cache
 }
 
 const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);

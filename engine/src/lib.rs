@@ -55,6 +55,8 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
+use crate::btc::cached_rpc::BtcCachingClient;
+use crate::btc::rpc::BtcRpcClient;
 
 pub fn settings_and_run_main(
 	settings_strings: Vec<String>,
@@ -284,7 +286,18 @@ async fn run_main(
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				BtcRetryRpcClient::new(scope, settings.btc.nodes, expected_btc_network).await?
+				BtcRetryRpcClient::new(scope, settings.btc.nodes.clone(), expected_btc_network).await?
+			};
+			let btc_caching_client = {
+				let expected_btc_network = cf_chains::btc::BitcoinNetwork::from(
+					state_chain_client
+						.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
+							state_chain_runtime::Runtime,
+						>>(state_chain_client.latest_finalized_block().hash)
+						.await
+						.expect(STATE_CHAIN_CONNECTION),
+				);
+				BtcCachingClient::new(BtcRpcClient::new(settings.btc.nodes.primary, Some(expected_btc_network)).expect("Should succesfully create the BTC client").await)
 			};
 			let dot_client = {
 				let expected_dot_genesis_hash = PolkadotHash::from(
@@ -319,7 +332,7 @@ async fn run_main(
 				scope,
 				eth_client.clone(),
 				arb_client.clone(),
-				btc_client.clone(),
+				btc_caching_client,
 				dot_client.clone(),
 				sol_client.clone(),
 				state_chain_client.clone(),
