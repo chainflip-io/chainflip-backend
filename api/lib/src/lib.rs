@@ -4,8 +4,8 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
 use cf_chains::{
-	evm::to_evm_address, CcmChannelMetadata, ChannelRefundParameters,
-	ChannelRefundParametersEncoded,
+	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParameters,
+	ChannelRefundParametersEncoded, ForeignChain,
 };
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
@@ -338,33 +338,23 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParametersRpc>,
+		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
-		let destination_address = destination_address
-			.try_parse_to_encoded_address(destination_asset.into())
-			.map_err(anyhow::Error::msg)?;
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
 					destination_asset,
-					destination_address,
+					destination_address: destination_address
+						.try_parse_to_encoded_address(destination_asset.into())?,
 					broker_commission,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees: affiliate_fees.unwrap_or_default(),
-					refund_parameters: refund_parameters
-						.map(|rpc_params: ChannelRefundParameters<AddressString>| {
-							Ok::<_, anyhow::Error>(ChannelRefundParametersEncoded {
-								retry_duration: rpc_params.retry_duration,
-								refund_address: rpc_params
-									.refund_address
-									.try_parse_to_encoded_address(source_asset.into())?,
-								min_price: rpc_params.min_price,
-							})
-						})
-						.transpose()?,
+					refund_parameters: refund_parameters.try_map_address(|addr| {
+						addr.try_parse_to_encoded_address(source_asset.into())
+					})?,
 					dca_parameters,
 				},
 			)
@@ -390,11 +380,10 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				channel_id: *channel_id,
 				source_chain_expiry_block: (*source_chain_expiry_block).into(),
 				channel_opening_fee: (*channel_opening_fee).into(),
-				refund_parameters: refund_parameters.as_ref().map(|params| {
-					params.map_address(|refund_address| {
+				refund_parameters: refund_parameters
+					.map_address(|refund_address| {
 						AddressString::from_encoded_address(&refund_address)
-					})
-				}),
+					}),
 			}
 		)
 	}

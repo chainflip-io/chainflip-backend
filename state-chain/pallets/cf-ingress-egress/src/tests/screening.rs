@@ -12,6 +12,9 @@ use frame_support::{
 	weights::Weight,
 };
 
+use cf_chains::ChannelRefundParametersDecoded;
+use sp_core::U256;
+
 use cf_chains::{
 	btc::{deposit_address::DepositAddress, Hash, ScriptPubkey, UtxoId},
 	ForeignChainAddress,
@@ -91,7 +94,11 @@ mod helpers {
 			BROKER,
 			None,
 			10,
-			None,
+			ChannelRefundParametersDecoded {
+				retry_duration: 100,
+				refund_address: ForeignChainAddress::Eth([1; 20].into()),
+				min_price: U256::from(0),
+			},
 			None,
 		)
 		.unwrap();

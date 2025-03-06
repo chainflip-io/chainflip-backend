@@ -242,6 +242,12 @@ fn generate_ccm_deposit() -> CcmDepositMetadata {
 	}
 }
 
+const REFUND_PARAMS: ChannelRefundParametersEncoded = ChannelRefundParametersEncoded {
+	retry_duration: 100,
+	refund_address: EncodedAddress::Eth([1; 20]),
+	min_price: U256::zero(),
+};
+
 fn get_broker_balance<T: Config>(who: &T::AccountId, asset: Asset) -> AssetAmount {
 	T::BalanceApi::get_balance(who, asset)
 }
@@ -294,7 +300,7 @@ fn request_swap_success_with_valid_parameters() {
 			None,
 			0,
 			Default::default(),
-			None,
+			REFUND_PARAMS,
 			None,
 		));
 	});
@@ -384,7 +390,7 @@ fn expect_swap_id_to_be_emitted() {
 				None,
 				0,
 				Default::default(),
-				None,
+				REFUND_PARAMS,
 				None,
 			));
 
@@ -446,7 +452,7 @@ fn rejects_invalid_swap_deposit() {
 				Some(ccm.clone()),
 				0,
 				Default::default(),
-				None,
+				REFUND_PARAMS,
 				None,
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
@@ -462,7 +468,7 @@ fn rejects_invalid_swap_deposit() {
 				Some(ccm),
 				0,
 				Default::default(),
-				None,
+				REFUND_PARAMS,
 				None,
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
@@ -1042,13 +1048,9 @@ fn swaps_get_retried_after_failure() {
 #[test]
 fn deposit_address_ready_event_contains_correct_parameters() {
 	new_test_ext().execute_with(|| {
-		let refund_parameters = ChannelRefundParametersEncoded {
-			retry_duration: 10,
-			refund_address: EncodedAddress::Eth([10; 20]),
-			min_price: 100.into(),
-		};
-
 		let dca_parameters = DcaParameters { number_of_chunks: 5, chunk_interval: 2 };
+
+		let refund_parameters = REFUND_PARAMS;
 
 		const BOOST_FEE: u16 = 100;
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
@@ -1060,17 +1062,17 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 			None,
 			BOOST_FEE,
 			Default::default(),
-			Some(refund_parameters.clone()),
+			REFUND_PARAMS,
 			Some(dca_parameters.clone()),
 		));
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
 				boost_fee: BOOST_FEE,
-				refund_parameters: Some(ref refund_params_in_event),
+				refund_parameters: ref refund_parameters_in_event,
 				dca_parameters: Some(ref dca_params_in_event),
 				..
-			}) if *refund_params_in_event == refund_parameters && dca_params_in_event == &dca_parameters
+			}) if *refund_parameters_in_event == refund_parameters && dca_params_in_event == &dca_parameters
 		);
 	});
 }

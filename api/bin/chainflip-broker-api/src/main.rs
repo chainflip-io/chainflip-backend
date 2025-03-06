@@ -91,7 +91,7 @@ pub trait Rpc {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParametersRpc>,
+		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress>;
 
@@ -194,7 +194,7 @@ impl RpcServer for RpcServerImpl {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParametersRpc>,
+		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
 		Ok(self
