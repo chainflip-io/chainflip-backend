@@ -35,6 +35,7 @@ impl Chain for AnyChain {
 	type TransactionRef = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+	type CcmAuxData = ();
 }
 
 impl FeeRefundCalculator<AnyChain> for () {

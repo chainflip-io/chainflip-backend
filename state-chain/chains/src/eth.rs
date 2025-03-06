@@ -50,6 +50,7 @@ impl Chain for Ethereum {
 	type TransactionRef = H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
+	type CcmAuxData = ();
 }
 
 #[derive(

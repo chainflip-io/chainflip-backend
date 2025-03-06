@@ -1192,3 +1192,21 @@ pub trait AltWitnessingHandler<BlockNumber: Default> {
 pub struct NoAltWitnessing;
 impl AltWitnessingHandler<u64> for NoAltWitnessing {}
 impl AltWitnessingHandler<u32> for NoAltWitnessing {}
+
+pub trait CcmAuxDataProvider {
+	type CcmAuxData: Member + Parameter + Default;
+
+	fn get_ccm_aux_data_for_swap_request_id(
+		swap_request_id: SwapRequestId,
+	) -> Option<Self::CcmAuxData>;
+}
+
+impl CcmAuxDataProvider for () {
+	type CcmAuxData = ();
+
+	fn get_ccm_aux_data_for_swap_request_id(
+		_swap_request_id: SwapRequestId,
+	) -> Option<Self::CcmAuxData> {
+		None
+	}
+}

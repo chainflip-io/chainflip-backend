@@ -27,9 +27,9 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
-	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
-	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
+	AllBatch, AllBatchError, CcmAdditionalData, CcmAuxDataProvider, CcmChannelMetadata,
+	CcmDataResponse, CcmDepositMetadata, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks,
+	ChannelRefundParameters, ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall, SwapOrigin,
@@ -618,6 +618,10 @@ pub mod pallet {
 		type CcmValidityChecker: CcmValidityCheck;
 
 		type AffiliateRegistry: AffiliateRegistry<AccountId = Self::AccountId>;
+
+		type CcmAuxDataProvider: CcmAuxDataProvider<
+			CcmAuxData = <Self::TargetChain as Chain>::CcmAuxData,
+		>;
 
 		#[pallet::constant]
 		type AllowTransactionReports: Get<bool>;
@@ -1750,9 +1754,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				})
 				.collect()
 			});
+
+		// CCM not yet created
 		for ccm in ccms_to_send {
-			if let Some(created_at) = ccm.aux_data_lookup_key.created_at() {
-				if current_block.saturating_sub(created_at) >= ccm_max_wait_time {
+			// if let Some(created_at) = ccm.aux_data_lookup_key.created_at() {
+			// 	if current_block.saturating_sub(created_at) >= ccm_max_wait_time {
+			// 		Self::refund_invalid_ccm(
+			// 			ccm,
+			// 			ExecutexSwapAndCallError::DispatchError(
+			// 				Error::<T, I>::ExceededMaxCcmAuxDataWaitTime.into(),
+			// 			),
+			// 		);
+			// 		continue;
+			// 	}
+			// }
+
+			let aux_data = match T::CcmAuxDataProvider::get_ccm_aux_data_for_swap_request_id(
+				// We just always pass the swap_request_id
+				ccm.aux_data_lookup_key.swap_request_id().unwrap(),
+			) {
+				CcmDataResponse::Ready(aux_data) => aux_data,
+				CcmDataResponse::NotReady => {
+					ScheduledEgressCcm::<T, I>::append(ccm);
+					continue;
+				},
+				CcmDataResponse::Invalid => {
 					Self::refund_invalid_ccm(
 						ccm,
 						ExecutexSwapAndCallError::DispatchError(
@@ -1760,8 +1786,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						),
 					);
 					continue;
-				}
-			}
+				},
+				CcmDataResponse::NotRequired => <T::TargetChain as Chain>::CcmAuxData::default(),
+			};
 
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 				TransferAssetParams {
@@ -1774,7 +1801,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.gas_budget,
 				ccm.message.to_vec(),
 				ccm.ccm_additional_data.to_vec(),
-				ccm.aux_data_lookup_key.swap_request_id(),
+				aux_data,
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -1787,10 +1814,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						egress_id: ccm.egress_id,
 					});
 				},
-				Err(ExecutexSwapAndCallError::TryAgainLater) =>
-					ScheduledEgressCcm::<T, I>::append(ccm),
 				Err(error) => {
-					log::warn!("Failed to construct CCM. Funds will be refunded to the fallback refund address. egress_id: {:?}, aux_data_lookup_key: {:?}, Error: {:?}", ccm.egress_id, ccm.aux_data_lookup_key, error);
+					log::warn!(
+						"Failed to construct CCM. Funds will be refunded to the fallback
+					refund address. egress_id: {:?}, aux_data_lookup_key: {:?}, Error: {:?}",
+						ccm.egress_id,
+						ccm.aux_data_lookup_key,
+						error
+					);
 					Self::refund_invalid_ccm(ccm, error);
 				},
 			};
@@ -2840,7 +2871,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ccm.amount,
 					fallback_address.clone(),
 					None,
-					None
+					None,
 				) {
 					Ok(egress_details) => Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
 						egress_id: ccm.egress_id,

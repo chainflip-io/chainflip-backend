@@ -1,14 +1,17 @@
+use core::marker::PhantomData;
+
+use api::{GetAltError, SolanaEnvironment, SolanaTransactionBuildingError};
 pub use cf_primitives::chains::Solana;
 
-use cf_primitives::ChannelId;
+use cf_primitives::{ChannelId, SwapRequestId};
 use sp_core::ConstBool;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
 	address, assets,
 	sol::sol_tx_core::{AccountBump, SlotNumber},
-	DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator,
-	TypeInfo,
+	CcmAuxDataProvider, CcmDataResponse, DepositChannel, DepositDetailsToTransactionInId,
+	FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{sp_runtime::RuntimeDebug, Parameter};
@@ -75,6 +78,26 @@ pub struct SolanaTransactionData {
 /// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
 pub type SolanaTransactionInId = (SolAddress, u64);
 
+#[derive(Debug, TypeInfo, Encode, Decode, PartialEq, Eq)]
+pub struct SolanaCcmAuxDataProvider<Env: SolanaEnvironment> {
+	_env: PhantomData<Env>,
+}
+
+impl<Env: SolanaEnvironment> CcmAuxDataProvider for SolanaCcmAuxDataProvider<Env> {
+	type CcmAuxData = Vec<AddressLookupTableAccount>;
+
+	// Implement this by fetching the shit from Environment.
+	fn get_ccm_aux_data_for_swap_request_id(
+		swap_request_id: SwapRequestId,
+	) -> CcmDataResponse<Self::CcmAuxData> {
+		match Env::get_address_lookup_tables(swap_request_id) {
+			Ok(alt_witnessing_data) => CcmDataResponse::Ready(alt_witnessing_data),
+			Err(GetAltError::AltsNotYetWitnessed) => CcmDataResponse::NotReady,
+			Err(GetAltError::AltsInvalid) => CcmDataResponse::Invalid,
+		}
+	}
+}
+
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
@@ -99,6 +122,7 @@ impl Chain for Solana {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 	type TransactionRef = SolSignature;
+	type CcmAuxData = Vec<AddressLookupTableAccount>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
