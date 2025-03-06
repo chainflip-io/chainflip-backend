@@ -99,7 +99,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn internal_swap() {
+	fn on_chain_swap() {
 		let lp_id =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::LiquidityProvider)
 				.unwrap();
@@ -114,7 +114,7 @@ mod benchmarks {
 		T::BalanceApi::credit_account(&lp_id, Asset::Eth, 1000);
 
 		#[extrinsic_call]
-		Pallet::<T>::internal_swap(
+		Pallet::<T>::on_chain_swap(
 			caller,
 			1000,
 			Asset::Eth,

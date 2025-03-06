@@ -37,7 +37,7 @@ pub trait WeightInfo {
 	fn register_lp_account() -> Weight;
 	fn deregister_lp_account() -> Weight;
 	fn register_liquidity_refund_address() -> Weight;
-	fn internal_swap() -> Weight;
+	fn on_chain_swap() -> Weight;
 }
 
 /// Weights for pallet_cf_lp using the Substrate node and recommended hardware.
@@ -172,7 +172,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
 	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn internal_swap() -> Weight {
+	fn on_chain_swap() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1051`
 		//  Estimated: `4516`
@@ -314,7 +314,7 @@ impl WeightInfo for () {
 	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
 	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn internal_swap() -> Weight {
+	fn on_chain_swap() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1051`
 		//  Estimated: `4516`

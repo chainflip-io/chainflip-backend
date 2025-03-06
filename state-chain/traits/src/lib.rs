@@ -1185,3 +1185,7 @@ pub trait AffiliateRegistry {
 	/// Return the reverse mapping from account id to affiliate short id.
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
 }
+
+pub trait MinimumDeposit {
+	fn get(asset: Asset) -> AssetAmount;
+}
