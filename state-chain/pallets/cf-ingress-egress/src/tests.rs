@@ -9,7 +9,7 @@ use crate::{
 	Event, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit,
 	NetworkFeeDeductionFromBoostPercent, Pallet, PalletConfigUpdate, PalletSafeMode,
 	PrewitnessedDepositIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
-	VaultDepositWitness,
+	VaultDepositWitness, WitnessSafetyMargin,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -1463,7 +1463,7 @@ fn can_update_all_config_items() {
 		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
 		const NEW_DEPOSIT_CHANNEL_LIFETIME: u64 = 99;
 		const NETWORK_FEE_DEDUCTION: Percent = Percent::from_parts(50);
-
+		const NEW_WITNESS_SAFETY_MARGIN: u64 = 300;
 		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Flip), 0);
@@ -1488,7 +1488,8 @@ fn can_update_all_config_items() {
 				},
 				PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
 					deduction_percent: NETWORK_FEE_DEDUCTION
-				}
+				},
+				PalletConfigUpdate::SetWitnessSafetyMargin { margin: NEW_WITNESS_SAFETY_MARGIN }
 			]
 			.try_into()
 			.unwrap()
@@ -1500,6 +1501,7 @@ fn can_update_all_config_items() {
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Eth), NEW_MIN_DEPOSIT_ETH);
 		assert_eq!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
 		assert_eq!(NetworkFeeDeductionFromBoostPercent::<Test, _>::get(), NETWORK_FEE_DEDUCTION);
+		assert_eq!(WitnessSafetyMargin::<Test, _>::get(), Some(NEW_WITNESS_SAFETY_MARGIN));
 
 		// Check that the events were emitted
 		assert_events_eq!(

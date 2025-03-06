@@ -2,7 +2,7 @@ use crate::Config;
 use core::marker::PhantomData;
 use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 
-#[allow(unused)]
+#[allow(dead_code)]
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for Migration<T, I> {

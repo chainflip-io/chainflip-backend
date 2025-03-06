@@ -85,7 +85,7 @@ jobs:
           - chainflip-engine-databases
         docker-repo:
           - ghcr.io/${{ github.repository }}
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-default
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -170,7 +170,7 @@ jobs:
           - chainflip-lp-api
         docker-repo:
           - chainfliplabs
-    runs-on: namespace-profile-rust-builder
+    runs-on: namespace-profile-default
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
