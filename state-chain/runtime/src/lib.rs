@@ -507,7 +507,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
-	type AllowTransactionReports = ConstBool<false>;
+	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 }
 
@@ -2363,6 +2363,7 @@ impl_runtime_apis! {
 				chain_accounts: [
 					open_deposit_channels_for_account::<Runtime, BitcoinInstance>(account_id.as_ref()),
 					open_deposit_channels_for_account::<Runtime, EthereumInstance>(account_id.as_ref()),
+					open_deposit_channels_for_account::<Runtime, ArbitrumInstance>(account_id.as_ref()),
 				].into_iter().flatten().collect()
 			}
 		}
@@ -2390,7 +2391,11 @@ impl_runtime_apis! {
 
 			let btc_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, BitcoinInstance>();
 			let eth_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, EthereumInstance>();
-			let accounts = btc_chain_accounts.keys().chain(eth_chain_accounts.keys()).cloned().collect::<BTreeSet<_>>();
+			let arb_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, ArbitrumInstance>();
+			let accounts = btc_chain_accounts.keys()
+				.chain(eth_chain_accounts.keys())
+				.chain(arb_chain_accounts.keys())
+				.cloned().collect::<BTreeSet<_>>();
 
 			accounts.into_iter().map(|key| {
 				let (account_id, channel_action_type) = key.clone();
@@ -2398,6 +2403,7 @@ impl_runtime_apis! {
 					chain_accounts: [
 						btc_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						eth_chain_accounts.get(&key).cloned().unwrap_or_default(),
+						arb_chain_accounts.get(&key).cloned().unwrap_or_default(),
 					].into_iter().flatten().collect()
 				})
 			}).collect()
@@ -2431,7 +2437,7 @@ impl_runtime_apis! {
 
 			let mut btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>> = Default::default();
 			let mut eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>> = Default::default();
-			let mut arb_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>> = Default::default();
+			let mut arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>> = Default::default();
 			for event_record in System::read_events_no_consensus() {
 				match event_record.event {
 					RuntimeEvent::BitcoinIngressEgress(event) => btc_events.extend(extract_screening_events::<Runtime, BitcoinInstance>(event)),

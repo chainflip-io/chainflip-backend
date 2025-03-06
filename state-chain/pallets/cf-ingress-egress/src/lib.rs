@@ -325,6 +325,9 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	SetNetworkFeeDeductionFromBoost {
 		deduction_percent: Percent,
 	},
+	SetWitnessSafetyMargin {
+		margin: TargetChainBlockNumber<T, I>,
+	},
 }
 
 macro_rules! append_chain_to_name {
@@ -373,6 +376,12 @@ where
 					.variant("SetNetworkFeeDeductionFromBoost", |v| {
 						v.index(3).fields(
 							Fields::named().field(|f| f.ty::<Percent>().name("deduction_percent")),
+						)
+					})
+					.variant(append_chain_to_name!(SetWitnessSafetyMargin), |v| {
+						v.index(4).fields(
+							Fields::named()
+								.field(|f| f.ty::<TargetChainBlockNumber<T, I>>().name("margin")),
 						)
 					}),
 			)
@@ -947,6 +956,9 @@ pub mod pallet {
 		NetworkFeeDeductionFromBoostSet {
 			deduction_percent: Percent,
 		},
+		WitnessSafetyMarginSet {
+			margin: TargetChainBlockNumber<T, I>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1396,6 +1408,10 @@ pub mod pallet {
 						Self::deposit_event(Event::<T, I>::NetworkFeeDeductionFromBoostSet {
 							deduction_percent,
 						});
+					},
+					PalletConfigUpdate::SetWitnessSafetyMargin { margin } => {
+						WitnessSafetyMargin::<T, I>::set(Some(margin));
+						Self::deposit_event(Event::<T, I>::WitnessSafetyMarginSet { margin });
 					},
 				}
 			}

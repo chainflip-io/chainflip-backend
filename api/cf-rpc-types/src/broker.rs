@@ -16,14 +16,14 @@
 
 use anyhow::bail;
 
-pub use cf_chains::{address::AddressString, RefundParametersRpc};
 use cf_chains::{Chain, ChainCrypto, ChannelRefundParameters, ForeignChain};
+pub use cf_chains::{RefundParametersRpc, address::AddressString};
 use cf_primitives::AffiliateShortId;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_utilities::rpc::NumberOrHex;
 use sp_core::{
-	serde::{Deserialize, Serialize},
 	H256, U256,
+	serde::{Deserialize, Serialize},
 };
 use std::fmt;
 
@@ -74,6 +74,7 @@ pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::Tra
 pub enum TransactionInId {
 	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
 	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
+	Arbitrum(TransactionInIdFor<cf_chains::Arbitrum>),
 	// other variants reserved for other chains.
 }
 
