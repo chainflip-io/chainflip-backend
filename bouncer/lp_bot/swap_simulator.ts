@@ -1,21 +1,19 @@
 #!/usr/bin/env -S pnpm tsx
 
-import { newAddress } from '../shared/utils';
+import { newAddress, sleep } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
 
 import { globalLogger as logger } from '../shared/utils/logger';
 import { sendBtc } from '../shared/send_btc';
+import { sendErc20 } from '../shared/send_erc20';
+import { getContractAddress } from '../shared/utils';
 
-async function main() {
-    console.log(`Lets swap!`);
 
-    // Scedeule a BTC to ETH swap
 
+async function doSwap() {
     const destinationAddressForUsdc = await newAddress('Usdc', 'test');
-
-    const refundAddress = await newAddress('Btc', 'test');
-
+    const refundAddress = await newAddress('Usdt', 'test');
     const refundParameters: FillOrKillParamsX128 = {
         retryDurationBlocks: 0,
         refundAddress,
@@ -24,7 +22,7 @@ async function main() {
 
     const swapParams = await requestNewSwap(
         logger.child({ tag: 'swapSimulator' }),
-        'Btc',
+        'Usdt',
         'Usdc',
         destinationAddressForUsdc,
         undefined,
@@ -33,10 +31,20 @@ async function main() {
         refundParameters,
     );
 
-    const txId = await sendBtc(logger, swapParams.depositAddress, '0.0001', 0);
+    const contractAddress = getContractAddress('Ethereum', 'Usdt');
+    await sendErc20(logger, 'Ethereum', swapParams.depositAddress, contractAddress, '100');
+    logger.info(`Usdt sent to ${swapParams.depositAddress}`);
+}
 
-    console.log(`BTC sent to ${swapParams.depositAddress}`);
-    console.log(`BTC txid: ${txId}`);
+
+async function main() {
+    logger.info(`Lets swap!`);
+
+    for (let i = 0; i < 10; i++) {
+        logger.info(`Swapping ${i} times`);
+        await doSwap();
+        await sleep(2000);
+    }
 }
 
 main();

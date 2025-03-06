@@ -153,11 +153,9 @@ async function processSwap(swaps: any) {
         // If someone sells we want to buy
         if (swap.side == Side.Sell) {
             let orderId = await openLimitOrder(swap.base_asset.chain, swap.base_asset.asset, Side.Buy, 0, swap.amount);
-            orderBook.push(orderId);
         } else {
             // If someone buys we want to sell
             let orderId = await openLimitOrder(swap.base_asset.chain, swap.base_asset.asset, Side.Sell, 0, swap.amount);
-            orderBook.push(orderId);
         }
     }
 }
