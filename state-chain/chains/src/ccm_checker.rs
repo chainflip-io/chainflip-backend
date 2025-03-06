@@ -137,15 +137,18 @@ impl CcmValidityCheck for CcmValidityChecker {
 			// If there are any user lookup tables we can't tell how many of the ccm_accounts
 			// are there. Therefore we must count optimistically by counting that each address
 			// is present in a lookup table.
-			// But actually if the address is repeated it take sonly 1 bytes, otherwise it will take two, never 33
+			// But actually if the address is repeated it take sonly 1 bytes, otherwise it will take
+			// two, never 33
 			let accounts_length = if num_address_lookup_tables > 0 {
-				// Each empty lookup table is 34 bytes -> 32 bytes for address plus 2 for vector lengths.
-				// Then 1 byte per account reference.
-				let mut lookup_tables_length = num_address_lookup_tables * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION + 2);
-				let accounts_length =
-					ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
+				// Each empty lookup table is 34 bytes -> 32 bytes for address plus 2 for vector
+				// lengths. Then 1 byte per account reference.
+				let mut lookup_tables_length =
+					num_address_lookup_tables * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION + 2);
+				let accounts_length = ccm_accounts.additional_accounts.len() *
+					ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 				lookup_tables_length += accounts_length;
-				// The user could have passed the CfTester and CfReceiver with the lookup table so we must allow extra bytes
+				// The user could have passed the CfTester and CfReceiver with the lookup table so
+				// we must allow extra bytes
 				lookup_tables_length.saturating_sub(ACCOUNT_KEY_LENGTH_IN_TRANSACTION * 2)
 			} else {
 				// It's hard at this stage to compute exactly the length of the finally build
@@ -173,8 +176,8 @@ impl CcmValidityCheck for CcmValidityChecker {
 				if asset == SolAsset::SolUsdc {
 					seen_addresses.insert(TOKEN_PROGRAM_ID);
 				}
-				let mut accounts_length =
-					ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
+				let mut accounts_length = ccm_accounts.additional_accounts.len() *
+					ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
 				for ccm_address in &ccm_accounts.additional_accounts {
 					if seen_addresses.insert(ccm_address.pubkey.into()) {
