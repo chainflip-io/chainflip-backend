@@ -81,7 +81,7 @@ jobs:
         uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4
         with:
           repo: paritytech/try-runtime-cli
-          tag: v0.7.0
+          tag: v0.8.0
           extension-matching: disable
           rename-to: try-runtime
           chmod: 0755
@@ -173,20 +173,8 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           touch ./localnet/.setup_complete
-          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana programs version. Remove after 1.8 is released.
-          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[0-9.]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
           ./localnet/manage.sh
           git reset --hard
-
-      # TODO: This is a temporary workaround to insert the 1.8 image nonces. Remove after 1.8 is released.
-      - name: Nonce workaround
-        if: inputs.run-job
-        run: |
-          git checkout ${{ github.sha }}
-          git rev-parse HEAD
-          cd bouncer
-          pnpm install --frozen-lockfile
-          ./shared/force_sol_nonces.ts
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
@@ -221,66 +209,66 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./tests/all_concurrent_tests.ts
+          pnpm vitest run -t "ConcurrentTests"
 
       - name: Print chainflip-engine logs 🚗
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
 
       - name: Print solana logs ☀️
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/solana/*.log
           cat /tmp/solana/test-ledger/validator.log
 
       - name: Print new pre-upgrade chainflip-engine logs 🚗
-        if: always()
+        if: inputs.run-job
         # In the case of a compatible upgrade, we don't expect any logs here
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine-pre-upgrade.*log
 
       - name: Print new post-upgrade chainflip-engine logs 🚗
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine-post-upgrade.*log
 
       - name: Print chainflip-node logs 📡
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-node.*log
 
       - name: Print chainflip-broker-api logs 💼
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-broker-api.*log
 
       - name: Print chainflip-lp-api logs 🤑
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-lp-api.*log
 
       - name: Print chainflip-deposit-monitor logs 🔬
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-deposit-monitor.*log
 
       - name: Print localnet init debug logs 🕵️‍♂️
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           cat /tmp/chainflip/debug.log
 
       - name: Upload Localnet Logs 💾
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -289,13 +277,22 @@ jobs:
             /tmp/chainflip/*/chainflip-*.*log
 
       - name: Upload Chainflip Logs 💾
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
           name: chainflip-logs-upgrade-test
           path: |
             /tmp/chainflip/logs/*.log
+
+      - name: Upload Bouncer Logs 💾
+        if: inputs.run-job
+        continue-on-error: true
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        with:
+          name: bouncer-logs-upgrade-test
+          path: |
+            /tmp/chainflip/bouncer.log
 
       - name: Write chain explorer to file 📝
         if: failure()
@@ -327,7 +324,7 @@ jobs:
             /tmp/chainflip/snapshots/*.snap
 
       - name: Clean Up docker containers 🧹
-        if: always()
+        if: inputs.run-job
         continue-on-error: true
         run: |
           ls -alR /tmp/chainflip
