@@ -33,9 +33,9 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
-	ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin, TransactionInIdForAnyChain,
-	TransferAssetParams,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, DepositChannel,
+	DepositOriginType, ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin,
+	TransactionInIdForAnyChain, TransferAssetParams,
 };
 
 use cf_chains::eth::Address as EthereumAddress;
@@ -431,7 +431,7 @@ fn addresses_are_getting_reused() {
 			source_asset: EthAsset::Eth,
 			destination_asset: EthAsset::Flip,
 			destination_address: ForeignChainAddress::Eth(Default::default()),
-			refund_address: None,
+			refund_address: ALICE_ETH_ADDRESS,
 		}])
 		// The address should have been taken from the pool and the id counter unchanged.
 		.then_execute_with_keep_context(|_| {
@@ -2617,7 +2617,7 @@ mod evm_transaction_rejection {
 				source_asset: ETH_ETH,
 				destination_asset: ETH_FLIP,
 				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
-				refund_address: Some(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
 			}])
 			.then_apply_extrinsics(|_| {
 				[
@@ -2798,7 +2798,7 @@ mod evm_transaction_rejection {
 				source_asset: ETH_ETH,
 				destination_asset: ETH_FLIP,
 				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
-				refund_address: Some(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
 			}])
 			// Simulate a prewitness call.
 			// we can't use `then_apply_extrinsics` because at the moment there's no way to

@@ -20,9 +20,8 @@ use crate::{DepositWitness, PalletSafeMode, WhitelistedBrokers};
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
 	eth::EthereumTrackedData,
-	ChannelRefundParameters,
+	Chain, ChannelRefundParameters,
 };
-pub use cf_chains::{CcmDepositMetadata, Chain};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -223,7 +222,7 @@ pub enum DepositRequest {
 		source_asset: TestChainAsset,
 		destination_asset: TestChainAsset,
 		destination_address: ForeignChainAddress,
-		refund_address: Option<TestChainAccount>,
+		refund_address: TestChainAccount,
 	},
 }
 
@@ -280,9 +279,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						10,
 						ChannelRefundParameters {
 							retry_duration: 5,
-							refund_address: ForeignChainAddress::Eth(
-								refund_address.unwrap_or_else(|| [0u8; 20].into()),
-							),
+							refund_address: ForeignChainAddress::Eth(refund_address),
 							min_price: U256::zero(),
 						},
 						None,
