@@ -2511,18 +2511,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
+		let destination_address = match T::AddressConverter::decode_and_validate_address_for_asset(
+			destination_address,
+			destination_asset,
+		) {
+			Ok(address) => address,
+			Err(_) => {
+				emit_deposit_failed_event(DepositFailedReason::InvalidDestinationAddress);
+				return;
+			},
+		};
+
 		let action = ChannelAction::Swap {
 			destination_asset,
-			destination_address: match T::AddressConverter::decode_and_validate_address_for_asset(
-				destination_address,
-				destination_asset,
-			) {
-				Ok(address) => address,
-				Err(_) => {
-					emit_deposit_failed_event(DepositFailedReason::InvalidDestinationAddress);
-					return;
-				},
-			},
+			destination_address,
 			broker_fees,
 			channel_metadata: channel_metadata.clone(),
 			refund_params: refund_params
