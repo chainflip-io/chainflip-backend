@@ -25,6 +25,8 @@ pub enum SetFeesError {
 	TypeInfo,
 	Deserialize,
 	Serialize,
+	PartialOrd,
+	Ord,
 	Hash,
 )]
 #[serde(rename_all = "snake_case")]
