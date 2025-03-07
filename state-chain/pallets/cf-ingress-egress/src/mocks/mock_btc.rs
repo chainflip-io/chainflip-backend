@@ -14,6 +14,7 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		affiliate_registry::MockAffiliateRegistry,
+		alt_witnessing::MockAltWitnessing,
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
@@ -24,7 +25,7 @@ use cf_traits::{
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	DummyIngressSource, NetworkEnvironmentProvider, NoAltWitnessing, OnDeposit,
+	DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -107,7 +108,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
-	type AltWitnessingHandler = NoAltWitnessing;
+	type SolanaAltWitnessingHandler = MockAltWitnessing;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;

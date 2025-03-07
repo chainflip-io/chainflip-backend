@@ -44,11 +44,12 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry,
-	AltWitnessingHandler, AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster,
-	Chainflip, ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
+	AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip,
+	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapLimitsProvider,
-	SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	InitiateSolanaAltWitnessing, NetworkEnvironmentProvider, OnDeposit, PoolApi,
+	ScheduledEgressDetails, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
+	SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -612,7 +613,7 @@ pub mod pallet {
 
 		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
 
-		type AltWitnessingHandler: AltWitnessingHandler;
+		type SolanaAltWitnessingHandler: InitiateSolanaAltWitnessing;
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
@@ -1967,10 +1968,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					origin.into(),
 				);
 				if let Some(ccm_channel_metadata) = channel_metadata {
-					T::AltWitnessingHandler::initiate_alt_witnessing(
-						ccm_channel_metadata,
-						swap_request_id,
-					)
+					if ForeignChain::Solana == destination_asset.into() {
+						T::SolanaAltWitnessingHandler::initiate_alt_witnessing(
+							ccm_channel_metadata,
+							swap_request_id,
+						);
+					}
 				}
 				DepositAction::Swap { swap_request_id }
 			},

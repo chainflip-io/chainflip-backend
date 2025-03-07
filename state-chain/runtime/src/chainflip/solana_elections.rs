@@ -23,8 +23,8 @@ use cf_chains::{
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, SwapRequestId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, AltWitnessingHandler,
-	Broadcaster, Chainflip, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
+	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
+	ElectionEgressWitnesser, GetBlockHeight, IngressSource, InitiateSolanaAltWitnessing,
 	SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
@@ -687,7 +687,7 @@ impl FromSolOrNot for SolanaVaultSwapDetails {
 }
 
 pub struct SolanaAltWitnessingHandler;
-impl AltWitnessingHandler for SolanaAltWitnessingHandler {
+impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 	fn initiate_alt_witnessing(
 		ccm_channel_metadata: CcmChannelMetadata,
 		swap_request_id: SwapRequestId,
