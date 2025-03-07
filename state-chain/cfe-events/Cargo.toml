@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Chainflip <https://chainflip.io>"]
 description = "Events for CFE"
+license = "Apache-2.0"
 
 
 [lints]

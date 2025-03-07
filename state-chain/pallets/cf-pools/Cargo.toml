@@ -5,7 +5,7 @@ authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 description = "The Chainflip pools pallet."
 edition = "2021"
 homepage = "https://chainflip.io"
-license = "<TODO>"
+license = "Apache-2.0"
 publish = false
 repository = "https://github.com/chainflip-io/chainflip-backend"
 

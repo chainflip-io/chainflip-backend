@@ -1,7 +1,9 @@
 [package]
+authors = ["Chainflip team <https://github.com/chainflip-io>", "Anza Maintainers <maintainers@anza.xyz>"]
 name = "sol-prim"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

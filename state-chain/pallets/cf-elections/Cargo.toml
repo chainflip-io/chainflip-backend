@@ -5,7 +5,7 @@ authors = ["Chainflip <https://chainflip.io>"]
 description = "FRAME pallet for chainflip witnessing."
 edition = "2021"
 homepage = "https://chainflip.io"
-license = "TBC"
+license = "Apache-2.0"
 publish = false
 repository = "https://github.com/chainflip-io/chainflip-backend/pallets/"
 

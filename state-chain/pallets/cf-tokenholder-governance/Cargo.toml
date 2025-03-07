@@ -5,7 +5,7 @@ version = "0.1.0"
 description = "FRAME pallet providing tokenholder governance for Chainflip"
 edition = "2021"
 homepage = "https://chainflip.io"
-license = "<TODO>"
+license = "Apache-2.0"
 publish = false
 repository = "https://github.com/chainflip-io/chainflip-backend"
 

@@ -3,10 +3,10 @@ authors = ["Chainflip <https://chainflip.io>"]
 description = "Multisig component of the Chainflip Engine"
 edition = "2021"
 homepage = "https://chainflip.io"
-license = "TBC"
 name = "multisig"
 repository = "https://github.com/chainflip-io/chainflip-backend"
 version = "0.1.0"
+license = "Apache-2.0"
 
 [lints]
 workspace = true
