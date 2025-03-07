@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(slice_flatten)] // Required for the `flatten` method used in SafeMode trait.
 
 mod async_result;
 mod liquidity;
