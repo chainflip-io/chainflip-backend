@@ -1964,7 +1964,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						),
 						min_price: params.min_price,
 					}),
-					dca_params,
+					dca_params.clone(),
 					origin.into(),
 				);
 				if let Some(ccm_channel_metadata) = channel_metadata {
@@ -1972,6 +1972,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						T::SolanaAltWitnessingHandler::initiate_alt_witnessing(
 							ccm_channel_metadata,
 							swap_request_id,
+							dca_params,
 						);
 					}
 				}

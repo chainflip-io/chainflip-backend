@@ -188,7 +188,7 @@ pub type SolanaVaultSwapTracking =
 pub struct SolanaAltWitnessingIdentifier {
 	pub swap_request_id: SwapRequestId,
 	pub alt_addresses: Vec<SolAddress>,
-	pub election_start_sc_block_number: BlockNumberFor<Runtime>,
+	pub election_expiry_block_number: BlockNumberFor<Runtime>,
 }
 
 pub type SolanaAltWitnessing =
@@ -219,8 +219,7 @@ impl
 	}
 
 	fn should_expire_election(alt_identifier: SolanaAltWitnessingIdentifier) -> bool {
-		(crate::System::block_number() - alt_identifier.election_start_sc_block_number) >
-			EXPIRY_TIME_FOR_ALT_ELECTIONS
+		crate::System::block_number() >= alt_identifier.election_expiry_block_number
 	}
 }
 
@@ -694,6 +693,7 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 	fn initiate_alt_witnessing(
 		ccm_channel_metadata: CcmChannelMetadata,
 		swap_request_id: SwapRequestId,
+		maybe_dca_params: Option<DcaParameters>,
 	) {
 		use sp_std::vec;
 		// The unwrap should succeed because it has been checked while opening the channel
@@ -715,7 +715,7 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 							>(SolanaAltWitnessingIdentifier {
 								alt_addresses,
 								swap_request_id,
-								election_start_sc_block_number: crate::System::block_number(),
+								election_expiry_block_number: calculate_expiry_block_number_for_alt_election(crate::System::block_number(), maybe_dca_params),
 							})
 						},
 					)
@@ -730,4 +730,13 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 			_ => {},
 		}
 	}
+}
+
+fn calculate_expiry_block_number_for_alt_election(
+	current_block_number: BlockNumberFor<Runtime>,
+	_maybe_dca_params: Option<DcaParameters>,
+) -> BlockNumberFor<Runtime> {
+	//TODO: Configure the election expiry based on estimation of how long a swap would take given
+	// the dca parameters. Currently, we return a constant
+	current_block_number + EXPIRY_TIME_FOR_ALT_ELECTIONS
 }
