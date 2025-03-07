@@ -2874,7 +2874,7 @@ mod evm_transaction_rejection {
 				source_asset: ETH_ETH,
 				destination_asset: ETH_FLIP,
 				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
-				refund_address: Some(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
 			}])
 			.assert_calls_ok(&[WHITELISTED_BROKER, BROKER][..], |id| {
 				if *id == WHITELISTED_BROKER {
