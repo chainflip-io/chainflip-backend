@@ -6,7 +6,9 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
+	address::{
+		AddressString, EncodedAddress, ForeignChainAddressHumanreadable, ToHumanreadableAddress,
+	},
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
@@ -1055,6 +1057,12 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>>;
+
+	#[method(name = "vault_addresses")]
+	fn cf_vault_addresses(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<(EncodedAddress, EncodedAddress, EncodedAddress)>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1321,6 +1329,7 @@ where
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>,
+		cf_vault_addresses() -> (EncodedAddress, EncodedAddress, EncodedAddress),
 	}
 
 	pass_through_and_flatten! {

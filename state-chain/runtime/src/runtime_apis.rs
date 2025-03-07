@@ -518,6 +518,7 @@ decl_runtime_apis!(
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
 		fn cf_all_open_deposit_channels() -> Vec<(AccountId32, ChannelActionType, ChainAccounts)>;
+		fn cf_vault_addresses() -> (EncodedAddress, EncodedAddress, EncodedAddress);
 	}
 );
 

@@ -1,4 +1,4 @@
-use cf_chains::{address::EncodedAddress, RefundParametersRpc, VaultSwapExtraParametersRpc};
+use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
@@ -74,6 +74,13 @@ impl From<BrokerApiError> for ErrorObjectOwned {
 pub enum GetOpenDepositChannelsQuery {
 	All,
 	Mine,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VaultAddresses {
+	ethereum: String,
+	arbitrum: String,
+	bitcoin: String,
 }
 
 #[rpc(server, client, namespace = "broker")]
@@ -157,8 +164,8 @@ pub trait Rpc {
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail>;
 
-	#[method(name = "get_vault_addresses", aliases = ["broker_getVaultAddresses"])]
-	async fn get_vault_addresses(&self) -> RpcResult<Vec<EncodedAddress>>;
+	#[method(name = "vault_addresses", aliases = ["broker_getVaultAddresses"])]
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
 }
 
 pub struct RpcServerImpl {
@@ -346,8 +353,13 @@ impl RpcServer for RpcServerImpl {
 		Ok(self.api.broker_api().affiliate_withdrawal_request(affiliate_account_id).await?)
 	}
 
-	async fn get_vault_addresses(&self) -> RpcResult<Vec<EncodedAddress>> {
-		Ok(self.api.query_api().get_vault_addresses().await?)
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
+		let (eth, arb, btc) = self.api.raw_client().cf_vault_addresses(None).await?;
+		Ok(VaultAddresses {
+			ethereum: eth.to_string(),
+			arbitrum: arb.to_string(),
+			bitcoin: btc.to_string(),
+		})
 	}
 }
 
