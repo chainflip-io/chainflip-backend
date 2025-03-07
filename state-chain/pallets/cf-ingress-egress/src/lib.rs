@@ -929,13 +929,6 @@ pub mod pallet {
 		NetworkFeeDeductionFromBoostSet {
 			deduction_percent: Percent,
 		},
-		VaultSwapRefunded {
-			tx_id: TransactionInIdFor<T, I>,
-			broker_id: Option<T::AccountId>,
-			asset: TargetChainAsset<T, I>,
-			amount: TargetChainAmount<T, I>,
-			refund_address: EncodedAddress,
-		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -2026,21 +2019,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Returns true if the vault swap should be rejected.
+	/// Returns the broker fee and affiliate fees for a vault swap.
 	///
-	/// A vault swap should be rejected if the broker fee is not set or the account is not a broker.
-	fn should_reject_vault_swap(broker_fee: &Option<Beneficiary<T::AccountId>>) -> bool {
-		match broker_fee {
-			Some(Beneficiary { account, .. }) =>
-				!T::AccountRoleRegistry::has_account_role(account, AccountRole::Broker),
-			_ => true,
-		}
-	}
-
+	/// If the broker fee is not set or the account is not a broker, the function returns None.
 	fn assemble_broker_fees(
 		broker_fee: Option<Beneficiary<T::AccountId>>,
 		affiliate_fees: Affiliates<AffiliateShortId>,
-	) -> Beneficiaries<T::AccountId> {
+	) -> Option<Beneficiaries<T::AccountId>> {
 		broker_fee
 			.as_ref()
 			.filter(|Beneficiary { account, .. }| {
@@ -2081,7 +2066,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"must fit since affiliates are limited to 1 fewer element than beneficiaries",
 				)
 			})
-			.unwrap_or_default()
 	}
 
 	fn process_prewitness_deposit_inner(
@@ -2211,9 +2195,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		}: VaultDepositWitness<T, I>,
 	) {
-		if Self::should_reject_vault_swap(&broker_fee) {
+		let origin = DepositOrigin::vault(
+			tx_id.clone(),
+			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
+		);
+		let Some(broker_fees) = Self::assemble_broker_fees(broker_fee, affiliate_fees) else {
 			return;
-		}
+		};
 
 		let destination_address_internal =
 			match T::AddressConverter::decode_and_validate_address_for_asset(
@@ -2247,12 +2235,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return;
 			}
 		}
-
-		let origin = DepositOrigin::vault(
-			tx_id.clone(),
-			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
-		);
-		let broker_fees = Self::assemble_broker_fees(broker_fee, affiliate_fees);
 
 		let (channel_metadata, source_address) = match deposit_metadata {
 			Some(metadata) => (Some(metadata.channel_metadata), metadata.source_address),
@@ -2485,36 +2467,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		} = vault_deposit_witness.clone();
 
-		if Self::should_reject_vault_swap(&broker_fee) {
-			if let Ok(api_call) =
-				<T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
-					TransferAssetParams {
-						asset: source_asset,
-						amount: deposit_amount,
-						to: refund_params.clone().refund_address,
-					},
-				) {
-				T::Broadcaster::threshold_sign_and_broadcast(api_call);
-				Self::deposit_event(Event::VaultSwapRefunded {
-					tx_id: tx_id.clone(),
-					broker_id: broker_fee
-						.as_ref()
-						.map(|Beneficiary { account, .. }| account.clone()),
-					asset: source_asset,
-					amount: deposit_amount,
-					refund_address: T::AddressConverter::to_encoded_address(
-						refund_params.refund_address.into_foreign_chain_address(),
-					),
-				});
-			} else {
-				log_or_panic!("Failed to create refund api call for vault swap.");
-			}
-			return;
-		}
-
-		let boost_status =
-			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
-
 		let emit_deposit_failed_event = move |reason: DepositFailedReason| {
 			Self::deposit_event(Event::<T, I>::DepositFailed {
 				block_height,
@@ -2523,6 +2475,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					vault_witness: Box::new(vault_deposit_witness),
 				},
 			});
+		};
+
+		let deposit_origin = DepositOrigin::vault(
+			tx_id.clone(),
+			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
+		);
+		let Some(broker_fees) =
+			Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone())
+		else {
+			// TODO:
+			// - Use AllBatch instead of transfer fallback.
+			// - Bitcoin utxo needs to be fetched
+			//   (T::DepositHandler::on_deposit_made(deposit_details);)
+			// - We need a link between broadcast_id and this deposit / rejection.
+			// - We also need to make sure that if the tx is marked, it can be rejected even if the
+			//   broker is invalid.
+			//
+			// Solution: add a new variant to ChannelAction that signals a refund instead of a swap.
+			todo!()
 		};
 
 		let destination_address_internal =
@@ -2536,12 +2507,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					return;
 				},
 			};
-
-		let deposit_origin = DepositOrigin::vault(
-			tx_id.clone(),
-			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
-		);
-		let broker_fees = Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone());
 
 		if T::SwapLimitsProvider::validate_broker_fees(&broker_fees).is_err() {
 			emit_deposit_failed_event(DepositFailedReason::InvalidBrokerFees);
@@ -2585,26 +2550,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
-		let action = ChannelAction::Swap {
-			destination_asset,
-			destination_address: destination_address_internal,
-			broker_fees,
-			channel_metadata: channel_metadata.clone(),
-			refund_params: refund_params
-				.map_address(|address| address.into_foreign_chain_address()),
-			dca_params: dca_params.clone(),
-		};
-
 		match Self::process_full_witness_deposit_inner(
 			deposit_address.clone(),
 			source_asset,
 			deposit_amount,
 			deposit_details.clone(),
 			source_address,
-			boost_status,
+			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted),
 			boost_fee,
 			channel_id,
-			action,
+			ChannelAction::Swap {
+				destination_asset,
+				destination_address: destination_address_internal,
+				broker_fees,
+				channel_metadata: channel_metadata.clone(),
+				refund_params: refund_params
+					.map_address(|address| address.into_foreign_chain_address()),
+				dca_params: dca_params.clone(),
+			},
 			block_height,
 			deposit_origin,
 		) {
