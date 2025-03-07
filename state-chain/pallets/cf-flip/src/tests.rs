@@ -499,6 +499,7 @@ mod test_tx_payments {
 				0,
 			)
 			.expect("Alice can afford the fee.")
+			.imbalance
 			.is_none());
 		});
 	}
@@ -547,7 +548,7 @@ mod test_tx_payments {
 			.expect("Alice can afford the fee.");
 
 			// Fee is in escrow.
-			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(FEE));
+			assert_eq!(escrow.imbalance.as_ref().map(|fee| fee.peek()), Some(FEE));
 			// Issuance unchanged.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
@@ -609,7 +610,7 @@ mod test_tx_payments {
 			.expect("Alice can afford the fee.");
 
 			// Fee is in escrow.
-			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(PRE_FEE));
+			assert_eq!(escrow.imbalance.as_ref().map(|fee| fee.peek()), Some(PRE_FEE));
 			// Issuance unchanged.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
