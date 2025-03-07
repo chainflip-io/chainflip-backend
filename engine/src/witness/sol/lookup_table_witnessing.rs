@@ -68,23 +68,26 @@ fn parse_alt_account_info(
 					if deactivation_slot != Slot::MAX {
 						return Ok(None);
 					}
-					let addresses =
-						info.get("addresses").and_then(Value::as_array).ok_or(anyhow!(
-							"Addresses not found in address lookup table account info: {:?}",
-							info
-						))?;
 
-					let addresses_vector: Vec<cf_chains::sol::SolPubkey> = addresses
-						.iter()
-						.filter_map(|address| address.as_str())
-						.map(|address| SolAddress::from_str(address).unwrap().into())
-						.collect();
-
-					// We might want to return an AddressLookupTable Account type, it depends on how
-					// the elections are setup.
 					Ok(Some(AddressLookupTableAccount {
 						key: lookup_table_address.into(),
-						addresses: addresses_vector,
+						addresses: info
+							.get("addresses")
+							.and_then(Value::as_array)
+							.ok_or(anyhow!(
+								"Addresses not found in address lookup table account info: {:?}",
+								info
+							))?
+							.iter()
+							.filter_map(|address| address.as_str())
+							// if any of the address in the lookup table cannot be parsed (which
+							// means its invalid), we currently fail the whole table, and hence the
+							// whole vote. We could return a table with missing addresses but then
+							// we would have to change the AddressLookupTableAccount account type
+							// (to have Option<Vec<Addresses>>). Since its a type taken from the
+							// Solana sdk, we dont want to modify it. Hence, we fail here.
+							.map(|address| SolAddress::from_str(address).map(|a| a.into()))
+							.collect::<Result<_, _>>()?,
 					}))
 				},
 				// If the account is not JsonParsed as a Lookup Table we assume it's either empty or
