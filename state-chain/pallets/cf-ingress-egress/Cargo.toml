@@ -5,7 +5,7 @@ description = "Chainflip ingress and egress pallet"
 authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 homepage = "https://chainflip.io"
 edition = "2021"
-license = "<TODO>"
+license = "Apache-2.0"
 publish = false
 repository = "https://github.com/chainflip-io/chainflip-backend"
 
