@@ -8453,6 +8453,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-trading-strategy"
+version = "0.1.0"
+dependencies = [
+ "cf-primitives",
+ "cf-runtime-utilities",
+ "cf-test-utilities",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2)",
+]
+
+[[package]]
 name = "pallet-cf-validator"
 version = "0.1.0"
 dependencies = [
@@ -13632,6 +13649,7 @@ dependencies = [
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-tokenholder-governance",
+ "pallet-cf-trading-strategy",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",

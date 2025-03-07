@@ -9,7 +9,10 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
-use cf_traits::{PoolApi, SwappingApi};
+use cf_traits::{
+	mocks::{balance_api::MockBalance, trading_strategy_limits::MockTradingStrategyParameters},
+	BalanceApi, PoolApi, SwappingApi,
+};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::{bounded_vec, ConstU32, U256};
 use sp_runtime::BoundedVec;
@@ -90,6 +93,10 @@ fn test_mint_range_order_with_asset_amounts() {
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
+
+		MockBalance::credit_account(&ALICE, FLIP, 1_000_000);
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 1_000_000);
+
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
 			FLIP,
@@ -137,6 +144,8 @@ fn test_sweeping() {
 			price_at_tick(0).unwrap(),
 		));
 
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, POSITION_0_SIZE);
+
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
 			ETH,
@@ -147,17 +156,12 @@ fn test_sweeping() {
 			POSITION_0_SIZE,
 		));
 
-		assert_eq!(AliceCollectedEth::get(), 0);
-		assert_eq!(AliceCollectedUsdc::get(), 0);
-		assert_eq!(AliceDebitedEth::get(), 0);
-		assert_eq!(AliceDebitedUsdc::get(), POSITION_0_SIZE);
+		assert_eq!(MockBalance::get_balance(&ALICE, ETH), 0);
+		assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 0);
 
 		LiquidityPools::swap_single_leg(ETH, STABLE_ASSET, SWAP_AMOUNT).unwrap();
 
-		assert_eq!(AliceCollectedEth::get(), 0);
-		assert_eq!(AliceCollectedUsdc::get(), 0);
-		assert_eq!(AliceDebitedEth::get(), 0);
-		assert_eq!(AliceDebitedUsdc::get(), POSITION_0_SIZE);
+		MockBalance::credit_account(&ALICE, ETH, POSITION_1_SIZE);
 
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
@@ -169,10 +173,8 @@ fn test_sweeping() {
 			POSITION_1_SIZE,
 		));
 
-		assert_eq!(AliceCollectedEth::get(), SWAP_AMOUNT);
-		assert_eq!(AliceCollectedUsdc::get(), 0);
-		assert_eq!(AliceDebitedEth::get(), POSITION_1_SIZE);
-		assert_eq!(AliceDebitedUsdc::get(), POSITION_0_SIZE);
+		assert_eq!(MockBalance::get_balance(&ALICE, ETH), SWAP_AMOUNT);
+		assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 0);
 	});
 }
 
@@ -200,6 +202,11 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 				limit_total_swap_inputs: Default::default(),
 			})
 		);
+
+		MockBalance::credit_account(&ALICE, Asset::Eth, 5_000);
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 1_000);
+		MockBalance::credit_account(&BOB, Asset::Eth, 10_000);
+		MockBalance::credit_account(&BOB, STABLE_ASSET, 10_000);
 
 		// Setup liquidity for the pool with 2 LPer
 		assert_ok!(LiquidityPools::set_limit_order(
@@ -301,10 +308,11 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 
 		// All LP'ers fees and bought amount are Collected and accredited.
 		// Fee and swaps are calculated proportional to the liquidity amount.
-		assert_eq!(AliceCollectedEth::get(), 908u128);
-		assert_eq!(AliceCollectedUsdc::get(), 3_333u128);
-		assert_eq!(BobCollectedEth::get(), 9090u128);
-		assert_eq!(BobCollectedUsdc::get(), 6_666u128);
+		assert_eq!(MockBalance::get_balance(&ALICE, Asset::Eth), 908);
+		assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 3_333);
+
+		assert_eq!(MockBalance::get_balance(&BOB, Asset::Eth), 9090);
+		assert_eq!(MockBalance::get_balance(&BOB, STABLE_ASSET), 6_666);
 
 		// New pool fee is set and event emitted.
 		assert_eq!(
@@ -384,10 +392,17 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		);
 
 		// Setting the pool fees will collect nothing, since all positions are reset/refreshed.
-		AliceCollectedEth::set(0u128);
-		AliceCollectedUsdc::set(0u128);
-		BobCollectedEth::set(0u128);
-		BobCollectedUsdc::set(0u128);
+		let take_balances_snapshot = || {
+			(
+				MockBalance::get_balance(&ALICE, Asset::Eth),
+				MockBalance::get_balance(&ALICE, Asset::Usdc),
+				MockBalance::get_balance(&BOB, Asset::Eth),
+				MockBalance::get_balance(&BOB, Asset::Usdc),
+			)
+		};
+
+		let balances_before = take_balances_snapshot();
+
 		assert_ok!(LiquidityPools::set_pool_fees(
 			RuntimeOrigin::root(),
 			Asset::Eth,
@@ -396,10 +411,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		));
 
 		// No fees are collected.
-		assert_eq!(AliceCollectedEth::get(), 0u128);
-		assert_eq!(AliceCollectedUsdc::get(), 0u128);
-		assert_eq!(BobCollectedEth::get(), 0u128);
-		assert_eq!(BobCollectedUsdc::get(), 0u128);
+		assert_eq!(balances_before, take_balances_snapshot());
 	});
 }
 
@@ -418,6 +430,10 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			fee,
 			price_at_tick(0).unwrap(),
 		));
+
+		MockBalance::credit_account(&ALICE, Asset::Eth, 100);
+		MockBalance::credit_account(&BOB, Asset::Eth, 100_000);
+		MockBalance::credit_account(&BOB, STABLE_ASSET, 10_000);
 
 		// Setup liquidity for the pool with 2 LPer
 		assert_ok!(LiquidityPools::set_limit_order(
@@ -483,8 +499,9 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		));
 
 		// 100 swapped + 100 fee. The position is fully consumed.
-		assert_eq!(AliceCollectedUsdc::get(), 200u128);
-		assert_eq!(AliceDebitedEth::get(), 100u128);
+		assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 200);
+		assert_eq!(MockBalance::get_balance(&ALICE, Asset::Eth), 0);
+
 		let pallet_limit_orders = Pools::<Test>::get(asset_pair).unwrap().limit_orders_cache;
 		assert_eq!(pallet_limit_orders.base.get(&ALICE), None);
 		assert_eq!(pallet_limit_orders.base.get(&BOB).unwrap().get(&0), Some(&100));
@@ -554,6 +571,11 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			})
 		);
 
+		MockBalance::credit_account(&ALICE, Asset::Eth, 4988);
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 4988);
+		MockBalance::credit_account(&BOB, Asset::Eth, 4988);
+		MockBalance::credit_account(&BOB, STABLE_ASSET, 4988);
+
 		// Setup liquidity for the pool with 2 LPer with range orders
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
@@ -563,6 +585,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			Some(range.clone()),
 			RangeOrderSize::Liquidity { liquidity: 1_000_000 },
 		));
+
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(BOB),
 			Asset::Eth,
@@ -583,10 +606,11 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			STABLE_ASSET,
 			new_fee
 		));
-		assert_eq!(AliceCollectedEth::get(), 0u128);
-		assert_eq!(AliceCollectedUsdc::get(), 0u128);
-		assert_eq!(BobCollectedEth::get(), 0u128);
-		assert_eq!(BobCollectedUsdc::get(), 0u128);
+
+		assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 0);
+		assert_eq!(MockBalance::get_balance(&ALICE, Asset::Eth), 0);
+		assert_eq!(MockBalance::get_balance(&BOB, STABLE_ASSET), 0);
+		assert_eq!(MockBalance::get_balance(&BOB, Asset::Eth), 0);
 
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE), false),
@@ -635,15 +659,10 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 
 		// Earned liquidity pool fees are paid out.
 		// Total of ~ 4_000 fee were paid, evenly split between Alice and Bob.
-		assert_eq!(AliceCollectedEth::get(), 5_988u128);
-		assert_eq!(AliceCollectedUsdc::get(), 5_984u128);
-		assert_eq!(AliceDebitedEth::get(), 4_988u128);
-		assert_eq!(AliceDebitedUsdc::get(), 4_988u128);
-
-		assert_eq!(BobCollectedEth::get(), 5_988u128);
-		assert_eq!(BobCollectedUsdc::get(), 5_984u128);
-		assert_eq!(BobDebitedEth::get(), 4_988u128);
-		assert_eq!(BobDebitedUsdc::get(), 4_988u128);
+		assert_eq!(MockBalance::get_balance(&ALICE, Asset::Eth), 5988);
+		assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 5984);
+		assert_eq!(MockBalance::get_balance(&BOB, Asset::Eth), 5988);
+		assert_eq!(MockBalance::get_balance(&BOB, STABLE_ASSET), 5984);
 	});
 }
 
@@ -658,6 +677,10 @@ fn can_execute_scheduled_limit_order() {
 			400_000u32,
 			price_at_tick(0).unwrap(),
 		));
+
+		const AMOUNT: AssetAmount = 55;
+
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT);
 		assert_ok!(LiquidityPools::schedule_limit_order_update(
 			RuntimeOrigin::signed(ALICE),
 			Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
@@ -666,7 +689,7 @@ fn can_execute_scheduled_limit_order() {
 				side: Side::Buy,
 				id: order_id,
 				option_tick: Some(100),
-				sell_amount: 55,
+				sell_amount: AMOUNT,
 			}),
 			6
 		));
@@ -748,6 +771,11 @@ fn can_get_all_pool_orders() {
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
+
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
+		MockBalance::credit_account(&ALICE, Asset::Eth, 10_000_000);
+		MockBalance::credit_account(&BOB, STABLE_ASSET, 10_000_000);
+		MockBalance::credit_account(&BOB, Asset::Eth, 10_000_000);
 
 		// Setup liquidity for the pool with 2 LPer, each has limit and range orders.
 		assert_ok!(LiquidityPools::set_range_order(
@@ -910,6 +938,10 @@ fn fees_are_recorded() {
 			));
 		}
 
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 1_000_000_000_000_000_000);
+		MockBalance::credit_account(&ALICE, Asset::Eth, 1_000_000_000_000_000_000);
+		MockBalance::credit_account(&BOB, Asset::Btc, 1_000_000_000_000_000_000);
+
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
@@ -969,6 +1001,9 @@ fn test_maximum_slippage_limits() {
 			asset_pair: AssetPair::new(OTHER_ASSET, STABLE_ASSET).unwrap(),
 			limit: Some(1),
 		}));
+
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
+		MockBalance::credit_account(&ALICE, BASE_ASSET, 10_000_000);
 
 		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
 			for (size, expected_output) in [
@@ -1157,6 +1192,10 @@ fn test_cancel_orders_batch() {
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
+
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 2_000_000);
+		MockBalance::credit_account(&ALICE, FLIP, 2_000_000);
+
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
 			FLIP,
@@ -1309,5 +1348,77 @@ fn handle_zero_liquidity_changes_set_range_order() {
 			),
 			crate::Error::<Test>::InvalidSize
 		);
+	});
+}
+
+#[test]
+fn auto_sweeping() {
+	const ASSET: Asset = Asset::Usdt;
+
+	let get_balance =
+		|lp| (MockBalance::get_balance(lp, ASSET), MockBalance::get_balance(lp, STABLE_ASSET));
+
+	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			ASSET,
+			STABLE_ASSET,
+			0,
+			price_at_tick(0).unwrap(),
+		));
+
+		for (lp, amount) in [(ALICE, 20_000), (BOB, 10_000)] {
+			MockBalance::credit_account(&lp, ASSET, amount);
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(lp),
+				ASSET,
+				STABLE_ASSET,
+				Side::Sell,
+				1,
+				Some(100),
+				amount
+			));
+		}
+
+		// Setting different thresholds for different assets to improve coverage:
+		MockTradingStrategyParameters::set_order_update_threshold(&STABLE_ASSET, 10000);
+		MockTradingStrategyParameters::set_order_update_threshold(&ASSET, 5000);
+
+		assert_eq!(get_balance(&ALICE), (0, 0));
+		assert_eq!(get_balance(&BOB), (0, 0));
+
+		assert!(LiquidityPools::swap_single_leg(STABLE_ASSET, ASSET, 20_000).is_ok());
+
+		// Alice's funds should have been swept, but not yet Bob's:
+		assert_eq!(get_balance(&ALICE), (0, 13_332));
+		assert_eq!(get_balance(&BOB), (0, 0));
+
+		// Another swap should result in Bob's orders being swept too:
+		assert!(LiquidityPools::swap_single_leg(STABLE_ASSET, ASSET, 10_100).is_ok());
+
+		assert_eq!(get_balance(&ALICE), (0, 13_332));
+		assert_eq!(get_balance(&BOB), (0, 10_032));
+
+		// Check that auto-sweeping works in the other direction too
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			ASSET,
+			STABLE_ASSET,
+			Side::Buy,
+			1,
+			Some(0),
+			5_000
+		));
+
+		// Note: increase due to implicit sweeping above
+		assert_eq!(get_balance(&ALICE), (0, 15_063));
+
+		// The amount in this swap is not sufficient to trigger auto sweeping:
+		assert!(LiquidityPools::swap_single_leg(ASSET, STABLE_ASSET, 3_000).is_ok());
+		assert_eq!(get_balance(&ALICE), (0, 15_063));
+
+		// This swap should take us over the threshold for ASSET:
+		assert!(LiquidityPools::swap_single_leg(ASSET, STABLE_ASSET, 2_000).is_ok());
+		assert_eq!(get_balance(&ALICE), (5000, 15_063));
 	});
 }

@@ -41,8 +41,8 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
-	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
+	traits::{ConstU32, EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
+	BoundedBTreeMap, CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
 use sp_std::{
@@ -1188,4 +1188,27 @@ pub trait AffiliateRegistry {
 
 pub trait MinimumDeposit {
 	fn get(asset: Asset) -> AssetAmount;
+}
+
+#[derive(Decode, Encode, Default, Debug, TypeInfo)]
+pub struct TradingStrategyParameters {
+	pub order_update_thresholds: BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>,
+	pub strategy_deployment_thresholds: BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>,
+}
+
+impl TradingStrategyParameters {
+	pub fn get_order_update_threshold(&self, asset: &Asset) -> AssetAmount {
+		self.order_update_thresholds.get(asset).copied().unwrap_or_default()
+	}
+	pub fn get_strategy_deployment_threshold(&self, asset: &Asset) -> AssetAmount {
+		self.strategy_deployment_thresholds.get(asset).copied().unwrap_or_default()
+	}
+}
+
+pub trait TradingStrategyParametersProvider {
+	fn get_parameters() -> TradingStrategyParameters;
+}
+
+pub trait NonceProvider<AccountId, Nonce> {
+	fn get_nonce(account: &AccountId) -> Nonce;
 }

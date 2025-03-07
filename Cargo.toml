@@ -45,6 +45,7 @@ members = [
   "state-chain/pallets/cf-validator",
   "state-chain/pallets/cf-vaults",
   "state-chain/pallets/cf-witnesser",
+  "state-chain/pallets/cf-trading-strategy",
   "state-chain/primitives",
   "state-chain/runtime",
   "state-chain/runtime-utilities",
@@ -261,6 +262,7 @@ pallet-cf-tokenholder-governance = { path = "state-chain/pallets/cf-tokenholder-
 pallet-cf-validator = { path = "state-chain/pallets/cf-validator", default-features = false }
 pallet-cf-vaults = { path = "state-chain/pallets/cf-vaults", default-features = false }
 pallet-cf-witnesser = { path = "state-chain/pallets/cf-witnesser", default-features = false }
+pallet-cf-trading-strategy = { path = "state-chain/pallets/cf-trading-strategy", default-features = false }
 
 cf-amm = { path = "state-chain/amm", default-features = false }
 cf-amm-math = { path = "state-chain/amm-math", default-features = false }

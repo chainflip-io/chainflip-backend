@@ -109,6 +109,10 @@ pub type BroadcastId = u32;
 /// bits.
 pub type Price = U256;
 
+/// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
+/// in units of asset One.
+pub type Tick = i32;
+
 define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
 
 define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize);

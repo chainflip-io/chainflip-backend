@@ -517,6 +517,7 @@ impl pallet_cf_pools::Config for Runtime {
 	type LpRegistrationApi = LiquidityProvider;
 	type SwapRequestHandler = Swapping;
 	type SafeMode = RuntimeSafeMode;
+	type TradingStrategyParameters = TradingStrategy;
 	type WeightInfo = ();
 }
 
@@ -1022,6 +1023,14 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
+impl pallet_cf_trading_strategy::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
+	type BalanceApi = AssetBalances;
+	type PoolApi = LiquidityPools;
+	type NonceProvider = chainflip::NonceProvider;
+}
+
 #[frame_support::runtime]
 mod runtime {
 	#[runtime::runtime]
@@ -1137,6 +1146,9 @@ mod runtime {
 
 	#[runtime::pallet_index(47)]
 	pub type AssetBalances = pallet_cf_asset_balances;
+
+	#[runtime::pallet_index(48)]
+	pub type TradingStrategy = pallet_cf_trading_strategy;
 }
 
 /// The address format for describing accounts.
@@ -1233,6 +1245,8 @@ pub type PalletExecutionOrder = (
 	SolanaIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
+	// Miscellaneous
+	TradingStrategy,
 );
 
 /// Contains:
@@ -1293,6 +1307,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
+	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 );
 
 macro_rules! instanced_migrations {
@@ -1371,6 +1386,7 @@ mod benches {
 		[pallet_cf_cfe_interface, CfeInterface]
 		[pallet_cf_asset_balances, AssetBalances]
 		[pallet_cf_elections, SolanaElections]
+		[pallet_cf_trading_strategy, TradingStrategy]
 	);
 }
 

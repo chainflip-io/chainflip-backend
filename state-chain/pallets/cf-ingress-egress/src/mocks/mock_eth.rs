@@ -27,6 +27,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
+		pool_api::MockPoolApi,
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
@@ -122,7 +123,7 @@ impl crate::Config for Test {
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
-	type PoolApi = Self;
+	type PoolApi = MockPoolApi;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;

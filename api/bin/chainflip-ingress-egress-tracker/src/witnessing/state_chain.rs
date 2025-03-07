@@ -642,6 +642,7 @@ where
 		LiquidityProvider(_) |
 		LiquidityPools(_) |
 		SolanaElections(_) => {},
+		TradingStrategy(_) => {},
 	};
 
 	Ok(())

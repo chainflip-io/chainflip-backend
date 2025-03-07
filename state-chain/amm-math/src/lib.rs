@@ -2,16 +2,12 @@
 
 pub mod test_utilities;
 
-pub use cf_primitives::Price;
+pub use cf_primitives::{Price, Tick};
 use sp_core::{U256, U512};
 
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
 /// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.
 pub type Amount = U256;
-
-/// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
-/// in units of asset One.
-pub type Tick = i32;
 
 /// The square root of the price.
 ///
