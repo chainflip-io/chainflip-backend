@@ -1972,6 +1972,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						T::SolanaAltWitnessingHandler::initiate_alt_witnessing(
 							ccm_channel_metadata,
 							swap_request_id,
+							dca_params,
 						);
 					}
 				}
