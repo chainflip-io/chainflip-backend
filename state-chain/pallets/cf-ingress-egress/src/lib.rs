@@ -2457,9 +2457,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		} = vault_deposit_witness.clone();
 
-		let boost_status =
-			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
-
 		let emit_deposit_failed_event = move |reason: DepositFailedReason| {
 			Self::deposit_event(Event::<T, I>::DepositFailed {
 				block_height,
@@ -2470,22 +2467,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 		};
 
-		let destination_address_internal =
-			match T::AddressConverter::decode_and_validate_address_for_asset(
-				destination_address.clone(),
-				destination_asset,
-			) {
-				Ok(address) => address,
-				Err(_) => {
-					emit_deposit_failed_event(DepositFailedReason::InvalidDestinationAddress);
-					return;
-				},
-			};
-
-		let deposit_origin = DepositOrigin::vault(
-			tx_id.clone(),
-			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
-		);
 		let broker_fees = Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone());
 
 		if T::SwapLimitsProvider::validate_broker_fees(&broker_fees).is_err() {
@@ -2497,7 +2478,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if T::CcmValidityChecker::check_and_decode(
 				&metadata.channel_metadata,
 				destination_asset,
-				destination_address,
+				destination_address.clone(),
 			)
 			.is_err()
 			{
@@ -2530,9 +2511,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
+		let destination_address = match T::AddressConverter::decode_and_validate_address_for_asset(
+			destination_address,
+			destination_asset,
+		) {
+			Ok(address) => address,
+			Err(_) => {
+				emit_deposit_failed_event(DepositFailedReason::InvalidDestinationAddress);
+				return;
+			},
+		};
+
 		let action = ChannelAction::Swap {
 			destination_asset,
-			destination_address: destination_address_internal,
+			destination_address,
 			broker_fees,
 			channel_metadata: channel_metadata.clone(),
 			refund_params: refund_params
@@ -2546,12 +2538,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_amount,
 			deposit_details.clone(),
 			source_address,
-			boost_status,
+			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted),
 			boost_fee,
 			channel_id,
 			action,
 			block_height,
-			deposit_origin,
+			DepositOrigin::vault(
+				tx_id.clone(),
+				broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
+			),
 		) {
 			Ok(FullWitnessDepositOutcome::BoostFinalised) => {
 				// Clean up a record that's no longer needed:
@@ -2831,9 +2826,6 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 							amount,
 						);
 
-					let egress_details =
-						ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld);
-
 					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 						egress_id,
 						asset,
@@ -2846,7 +2838,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						gas_budget,
 					});
 
-					Ok(egress_details)
+					Ok(ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld))
 				},
 				None => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
