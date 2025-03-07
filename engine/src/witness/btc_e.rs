@@ -31,7 +31,7 @@ use state_chain_runtime::{
 };
 
 use crate::{
-	btc::{retry_rpc::BtcRetryRpcApi, rpc::BlockHeader},
+	btc::rpc::BlockHeader,
 	elections::voter_api::{CompositeVoter, VoterApi},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,

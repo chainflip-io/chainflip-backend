@@ -14,7 +14,8 @@ use anyhow::Result;
 use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, VerboseBlock};
 
 #[derive(Clone)]
-pub struct BtcRetryRpcClient { //BtcCachedRcpClient
+pub struct BtcRetryRpcClient {
+	//BtcCachedRcpClient
 	retry_client: RetrierClient<BtcRpcClient>,
 	// cache
 }

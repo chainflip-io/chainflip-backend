@@ -1,182 +1,183 @@
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::sync::Arc;
+use crate::btc::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, VerboseBlock};
 use bitcoin::{BlockHash, Txid};
-use futures_core::future::LocalBoxFuture;
-use crate::btc::rpc::BtcRpcApi;
-use tokio::sync::RwLock;
 use cf_chains::btc::{BlockNumber, BtcAmount};
-use cf_utilities::future_map::FutureMap;
-use crate::btc::rpc::{BlockHeader, BtcRpcClient, VerboseBlock};
+use cf_utilities::{task_scope, task_scope::Scope};
+use futures_util::FutureExt;
+use std::{
+	collections::{HashMap, HashSet},
+	hash::Hash,
+	sync::Arc,
+};
+use tokio::sync::{mpsc, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum RequestKey {
-    BlockHash(u64),
-    Block(BlockHash),
+	BlockHash(u64),
+	Block(BlockHash),
 }
 
 #[derive(Debug, Clone)]
 enum ResponseValue {
-    BlockHash(BlockHash),
-    Block(VerboseBlock),
+	BlockHash(BlockHash),
+	Block(VerboseBlock),
 }
 #[derive(Clone)]
-pub(crate) struct BtcCachingClient {
-    client: BtcRpcClient,
-    cache: Arc<RwLock<HashMap<RequestKey, ResponseValue>>>,
-    in_flight: Arc<RwLock<FutureMap<RequestKey, LocalBoxFuture<'static, Result<ResponseValue, anyhow::Error>>>>>,
+pub struct BtcCachingClient {
+	sender: mpsc::UnboundedSender<RequestKey>,
+	client: BtcRpcClient,
+	cache: Arc<RwLock<HashMap<RequestKey, ResponseValue>>>,
+	in_flight: Arc<RwLock<HashSet<RequestKey>>>,
 }
 
 impl BtcCachingClient {
-    pub fn new(client: BtcRpcClient) -> Self {
-        Self {
-            client,
-            cache: Arc::new(RwLock::new(HashMap::new())),
-            in_flight: Arc::new(RwLock::new(FutureMap::default())),
-        }
-    }
+	pub async fn new(scope: &Scope<'_, anyhow::Error>, client: BtcRpcClient) -> Self {
+		let (sender, mut receiver) = mpsc::unbounded_channel::<RequestKey>();
+		let cache = Arc::new(RwLock::new(HashMap::new()));
+		let in_flight = Arc::new(RwLock::new(HashSet::default()));
 
-    async fn get(&self, key: RequestKey) -> Result<ResponseValue, anyhow::Error> {
-        // First, check the cache
-        {
-            let cache = self.cache.read().await;
-            if let Some(value) = cache.get(&key) {
-                return Ok(value.clone());
-            }
-        }
+		scope.spawn({
+			let client_copy = client.clone();
+			let cache_copy = Arc::clone(&cache);
+			let in_flight_copy = Arc::clone(&in_flight);
+			task_scope::task_scope(|scope| {
+				async move {
+					while let Some(request) = receiver.recv().await {
+						let client_copy = client_copy.clone();
+						let cache_copy = Arc::clone(&cache_copy);
+						let in_flight_copy = Arc::clone(&in_flight_copy);
+						match request {
+							RequestKey::BlockHash(number) => scope.spawn(async move {
+								let block_hash = client_copy.block_hash(number).await;
+								let response = ResponseValue::BlockHash(
+									block_hash.expect("Missing blockhash"),
+								);
 
-        // Check if we need to create a new request
-        let should_create_request = {
-            let in_flight = self.in_flight.read().await;
-            !in_flight.contains_key(&key)
-        };
+								{
+									let mut cache = cache_copy.write().await;
+									cache.insert(request, response);
+								}
+								{
+									let mut in_flight = in_flight_copy.write().await;
+									in_flight.remove(&request);
+								}
+								Ok(())
+							}),
+							RequestKey::Block(hash) => scope.spawn(async move {
+								let block = client_copy.block(hash).await?;
+								let response = ResponseValue::Block(block);
 
-        // Create a new request if needed
-        if should_create_request {
-            let cache_clone = Arc::clone(&self.cache);
-            let in_flight_clone = Arc::clone(&self.in_flight);
-            let key_clone = key;
-            let client_clone = self.client.clone();
+								{
+									let mut cache = cache_copy.write().await;
+									cache.insert(request, response);
+								}
+								{
+									let mut in_flight = in_flight_copy.write().await;
+									in_flight.remove(&request);
+								}
+								Ok(())
+							}),
+						}
+					}
+					Ok(())
+				}
+				.boxed()
+			})
+		});
 
-            let request_future: LocalBoxFuture<'static, Result<ResponseValue, anyhow::Error>> = match key {
-                RequestKey::BlockHash(number) => {
-                    Box::pin(async move {
-                        let block_hash = client_clone.block_hash(number).await;
-                        let response = ResponseValue::BlockHash(block_hash.expect("Missing blockhash"));
+		Self { sender, client, cache, in_flight }
+	}
 
-                        // Store in cache
-                        {
-                            let mut cache = cache_clone.write().await;
-                            cache.insert(key_clone, response.clone());
-                        }
-                        // Remove from in_flight
-                        {
-                            let mut in_flight = in_flight_clone.write().await;
-                            in_flight.remove(key_clone);
-                        }
-                        Ok(response)
-                    })
-                },
-                RequestKey::Block(hash) => {
-                    Box::pin(async move {
-                        let block = client_clone.block(hash).await?;
-                        let response = ResponseValue::Block(block);
+	async fn get(&self, key: RequestKey) -> Result<ResponseValue, anyhow::Error> {
+		{
+			let cache = self.cache.read().await;
+			if let Some(value) = cache.get(&key) {
+				return Ok(value.clone());
+			}
+		}
 
-                        // Store in cache
-                        {
-                            let mut cache = cache_clone.write().await;
-                            cache.insert(key_clone, response.clone());
-                        }
-                        // Remove from in_flight
-                        {
-                            let mut in_flight = in_flight_clone.write().await;
-                            in_flight.remove(key_clone);
-                        }
-                        Ok(response)
-                    })
-                },
-                // Add other cases as needed
-            };
+		let should_create_request = {
+			let in_flight = self.in_flight.read().await;
+			!in_flight.contains(&key)
+		};
 
-            // Now add it to in_flight with a separate lock acquisition
-            let mut in_flight = self.in_flight.write().await;
+		if should_create_request {
+			let _ = self.sender.send(key);
 
-            // Double-check that no other thread added it while we were creating the future
-            if !in_flight.contains_key(&key) {
-                in_flight.insert(key, request_future);
-            }
-        }
+			// Now add it to in_flight with a separate lock acquisition
+			let mut in_flight = self.in_flight.write().await;
 
-        // Wait for the result
-        self.wait_for_result(key).await
-    }
+			// Double-check that no other thread added it while we were creating the future
+			if !in_flight.contains(&key) {
+				in_flight.insert(key);
+			}
+		}
 
-    async fn wait_for_result(&self, key: RequestKey) -> Result<ResponseValue, anyhow::Error> {
-        let cache = Arc::clone(&self.cache);
-        let in_flight = Arc::clone(&self.in_flight);
+		// Wait for the result
+		self.wait_for_result(key).await
+	}
 
-        loop {
-            // Check if the result is already in cache
-            {
-                let cache_read = cache.read().await;
-                if let Some(value) = cache_read.get(&key) {
-                    return Ok(value.clone());
-                }
-            }
+	async fn wait_for_result(&self, key: RequestKey) -> Result<ResponseValue, anyhow::Error> {
+		loop {
+			// Check if the result is already in cache
+			{
+				let cache_read = self.cache.read().await;
+				if let Some(value) = cache_read.get(&key) {
+					return Ok(value.clone());
+				}
+			}
 
-            // Check if we need to continue waiting
-            let still_in_flight = {
-                let in_flight_read = in_flight.read().await;
-                in_flight_read.contains_key(&key)
-            };
+			// Check if we need to continue waiting
+			let still_in_flight = {
+				let in_flight_read = self.in_flight.read().await;
+				in_flight_read.contains(&key)
+			};
 
-            if !still_in_flight {
-                // The request is no longer in-flight, but the result isn't in the cache.
-                return Err(anyhow::anyhow!("Request completed but result not in cache"));
-            }
+			if !still_in_flight {
+				// The request is no longer in-flight, but the result isn't in the cache.
+				return Err(anyhow::anyhow!("Request completed but result not in cache"));
+			}
 
-            // The request is still in-flight, yield to allow it to progress
-            tokio::task::yield_now().await;
-        }
-    }
+			// The request is still in-flight, yield to allow it to progress
+			tokio::task::yield_now().await;
+		}
+	}
 
-    async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock> {
-        let key = RequestKey::Block(block_hash);
-        match self.get(key).await? {
-            ResponseValue::Block(block) => Ok(block),
-            _ => Err(anyhow::anyhow!("Unexpected response type")),
-        }
-    }
+	pub async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock> {
+		let key = RequestKey::Block(block_hash);
+		match self.get(key).await? {
+			ResponseValue::Block(block) => Ok(block),
+			_ => Err(anyhow::anyhow!("Unexpected response type")),
+		}
+	}
 
-    async fn block_hash(&self, block_number: BlockNumber) -> BlockHash {
-        let key = RequestKey::BlockHash(block_number);
-        match self.get(key).await.expect("Failed to get block hash") {
-            ResponseValue::BlockHash(hash) => hash,
-            _ => panic!("Unexpected response type"),
-        }
-    }
+	pub async fn block_hash(&self, block_number: BlockNumber) -> BlockHash {
+		let key = RequestKey::BlockHash(block_number);
+		match self.get(key).await.expect("Failed to get block hash") {
+			ResponseValue::BlockHash(hash) => hash,
+			_ => panic!("Unexpected response type"),
+		}
+	}
 
-    // Directly pass through non-cached methods to the underlying client
-    async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
-        self.client.send_raw_transaction(transaction_bytes).await
-    }
+	// Directly pass through non-cached methods to the underlying client
+	pub async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
+		self.client.send_raw_transaction(transaction_bytes).await
+	}
 
-    async fn next_block_fee_rate(&self) -> Option<BtcAmount> {
-        self.client.next_block_fee_rate().await.expect("No fee available")
-    }
+	pub async fn next_block_fee_rate(&self) -> Option<BtcAmount> {
+		self.client.next_block_fee_rate().await.expect("No fee available")
+	}
 
-    async fn average_block_fee_rate(&self, block_hash: BlockHash) -> BtcAmount {
-        self.client.average_block_fee_rate(block_hash).await.expect("No fee available")
-    }
+	pub async fn average_block_fee_rate(&self, block_hash: BlockHash) -> BtcAmount {
+		self.client.average_block_fee_rate(block_hash).await.expect("No fee available")
+	}
 
-    async fn best_block_header(&self) -> anyhow::Result<BlockHeader> {
-        let best_block_hash = self.client.best_block_hash().await?;
-        self.client.block_header(best_block_hash).await
-    }
+	pub async fn best_block_header(&self) -> anyhow::Result<BlockHeader> {
+		let best_block_hash = self.client.best_block_hash().await?;
+		self.client.block_header(best_block_hash).await
+	}
 
-    async fn block_header(&self, block_number: BlockNumber) -> anyhow::Result<BlockHeader> {
-        let hash = self.client.block_hash(block_number).await.expect("No blockHash");
-        self.client.block_header(hash).await
-    }
-
+	pub async fn block_header(&self, block_number: BlockNumber) -> anyhow::Result<BlockHeader> {
+		let hash = self.client.block_hash(block_number).await.expect("No blockHash");
+		self.client.block_header(hash).await
+	}
 }

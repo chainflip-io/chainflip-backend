@@ -19,8 +19,8 @@ use state_chain_runtime::{BitcoinInstance, SolanaInstance};
 
 use super::common::epoch_source::EpochSource;
 
-use anyhow::Result;
 use crate::btc::cached_rpc::BtcCachingClient;
+use anyhow::Result;
 
 /// Starts all the witnessing tasks.
 // It's important that this function is not blocking, at any point, even if there is no connection
