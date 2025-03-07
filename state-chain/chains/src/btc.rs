@@ -405,8 +405,8 @@ impl Utxo {
 }
 
 impl DepositDetailsToTransactionInId<BitcoinCrypto> for Utxo {
-	fn deposit_id(&self) -> Option<Hash> {
-		Some(self.id.tx_id)
+	fn deposit_ids(&self) -> Option<Vec<Hash>> {
+		Some(vec![self.id.tx_id])
 	}
 }
 
