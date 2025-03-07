@@ -86,7 +86,7 @@ export async function requestNewSwap(
             (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
           event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
           event.data.channelMetadata.ccmAdditionalData ===
-            (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
+            (messageMetadata.additionalData === '0x' ? '' : messageMetadata.additionalData)
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
