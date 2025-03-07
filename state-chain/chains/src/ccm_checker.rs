@@ -141,19 +141,19 @@ impl CcmValidityCheck for CcmValidityChecker {
 			// two, never 33
 			let accounts_length = if num_address_lookup_tables > 0 {
 				// Each empty lookup table is 34 bytes -> 32 bytes for address plus 2 for vector
-				// lengths. Then 1 byte per account reference.
+				// lengths. Then it'd be either 1 byte per account reference (if repeated) or
+				// 2 bytes if account in the ALT (one reference in ix, the other in the 
+				// transaction's address_table_lookups). We use the least restrictive.
 				let mut lookup_tables_length =
 					num_address_lookup_tables * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION + 2);
 				let accounts_length = ccm_accounts.additional_accounts.len() *
 					ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 				lookup_tables_length += accounts_length;
-				// The user could have passed the CfTester and CfReceiver with the lookup table so
-				// we must allow extra bytes
-				lookup_tables_length.saturating_sub(ACCOUNT_KEY_LENGTH_IN_TRANSACTION * 2)
+				// The user could have the CfReceiver and destination address in the lookup table
+				// so we must allow extra bytes.
+				lookup_tables_length.saturating_add(2).saturating_sub(ACCOUNT_KEY_LENGTH_IN_TRANSACTION * 2)
 			} else {
-				// It's hard at this stage to compute exactly the length of the finally build
-				// transaction from the message and the additional accounts. Duplicated
-				// accounts only take one reference byte while new accounts take 32 bytes.
+				// Duplicated accounts one reference byte while new accounts take 32 bytes.
 				// Technically it shouldn't be necessary to pass duplicated accounts as
 				// it will all be executed in the same instruction. However when integrating
 				// with other protocols, many of the account's values are part of a returned
