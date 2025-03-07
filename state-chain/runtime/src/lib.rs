@@ -2529,6 +2529,13 @@ impl_runtime_apis! {
 				pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&broker).collect()
 			}
 		}
+
+		fn cf_vault_addresses() -> (EncodedAddress, EncodedAddress, EncodedAddress) {
+			let eth_vault_address = EncodedAddress::Eth(Environment::eth_vault_address().into());
+			let arb_vault_address = EncodedAddress::Arb(Environment::arb_vault_address().into());
+			let btc_vault_address = EncodedAddress::Btc(derive_btc_vault_deposit_address(0).into());
+			(eth_vault_address, arb_vault_address, btc_vault_address)
+		}
 	}
 
 

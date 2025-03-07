@@ -76,6 +76,13 @@ pub enum GetOpenDepositChannelsQuery {
 	Mine,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VaultAddresses {
+	ethereum: String,
+	arbitrum: String,
+	bitcoin: String,
+}
+
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
 	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
@@ -156,6 +163,9 @@ pub trait Rpc {
 		&self,
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "vault_addresses", aliases = ["broker_getVaultAddresses"])]
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
 }
 
 pub struct RpcServerImpl {
@@ -341,6 +351,15 @@ impl RpcServer for RpcServerImpl {
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().affiliate_withdrawal_request(affiliate_account_id).await?)
+	}
+
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
+		let (eth, arb, btc) = self.api.raw_client().cf_vault_addresses(None).await?;
+		Ok(VaultAddresses {
+			ethereum: eth.to_string(),
+			arbitrum: arb.to_string(),
+			bitcoin: btc.to_string(),
+		})
 	}
 }
 
