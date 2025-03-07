@@ -1,5 +1,9 @@
 use super::*;
-use cf_chains::{address::ToHumanreadableAddress, instances::ChainInstanceFor, Chain};
+use cf_chains::{
+	address::{EncodedAddress, ToHumanreadableAddress},
+	instances::ChainInstanceFor,
+	Chain,
+};
 use cf_primitives::{chains::assets::any, AssetAmount, EpochIndex, FlipBalance};
 use cf_utilities::task_scope;
 use chainflip_engine::state_chain_observer::client::{
@@ -13,7 +17,10 @@ use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_validator::RotationPhase;
 use serde::Deserialize;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
-use state_chain_runtime::runtime_apis::FailingWitnessValidators;
+use state_chain_runtime::{
+	chainflip::address_derivation::btc::derive_btc_vault_deposit_address,
+	runtime_apis::FailingWitnessValidators,
+};
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
 
@@ -236,6 +243,33 @@ impl QueryApi {
 			.await?;
 
 		Ok(result)
+	}
+
+	pub async fn get_vault_addresses(&self) -> Result<Vec<EncodedAddress>, anyhow::Error> {
+		let block_hash = self.state_chain_client.latest_finalized_block().hash;
+
+		let eth_vault_address = EncodedAddress::Eth(
+			self.state_chain_client
+				.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
+					block_hash,
+				)
+				.await?
+				.into(),
+		);
+
+		let arb_vault_address = EncodedAddress::Arb(
+			self.state_chain_client
+				.storage_value::<pallet_cf_environment::ArbitrumVaultAddress<state_chain_runtime::Runtime>>(
+					block_hash,
+				)
+				.await?
+				.into(),
+		);
+
+		let btc_vault_address =
+			EncodedAddress::Btc(derive_btc_vault_deposit_address(0).as_bytes().to_vec());
+
+		Ok(vec![eth_vault_address, arb_vault_address, btc_vault_address])
 	}
 }
 

@@ -1,4 +1,4 @@
-use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
+use cf_chains::{address::EncodedAddress, RefundParametersRpc, VaultSwapExtraParametersRpc};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
@@ -156,6 +156,9 @@ pub trait Rpc {
 		&self,
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "get_vault_addresses", aliases = ["broker_getVaultAddresses"])]
+	async fn get_vault_addresses(&self) -> RpcResult<Vec<EncodedAddress>>;
 }
 
 pub struct RpcServerImpl {
@@ -341,6 +344,10 @@ impl RpcServer for RpcServerImpl {
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().affiliate_withdrawal_request(affiliate_account_id).await?)
+	}
+
+	async fn get_vault_addresses(&self) -> RpcResult<Vec<EncodedAddress>> {
+		Ok(self.api.query_api().get_vault_addresses().await?)
 	}
 }
 
