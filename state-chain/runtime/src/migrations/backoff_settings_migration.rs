@@ -8,7 +8,7 @@ use pallet_cf_elections::{
 };
 
 use chainflip::solana_elections::SolanaElectoralSystemRunner;
-use pallet_cf_elections::electoral_systems::composite::tuple_6_impls;
+use pallet_cf_elections::electoral_systems::composite::tuple_7_impls;
 
 mod old {
 	use crate::chainflip::solana_elections::SolanaIngressSettings;
@@ -48,13 +48,13 @@ mod old {
 					enum_name: $name,
 				) -> <SolanaElectoralSystemRunner as ElectoralSystemTypes>::$type {
 					match enum_name {
-						$name::A(a) => tuple_6_impls::$name::A(a),
+						$name::A(a) => tuple_7_impls::$name::A(a),
 						// Convert from the old into the new type
 						$name::B(b) => translate_from_old(b),
-						$name::C(c) => tuple_6_impls::$name::C(c),
-						$name::D(d) => tuple_6_impls::$name::D(d),
-						$name::EE(ee) => tuple_6_impls::$name::EE(ee),
-						$name::FF(ff) => tuple_6_impls::$name::FF(ff),
+						$name::C(c) => tuple_7_impls::$name::C(c),
+						$name::D(d) => tuple_7_impls::$name::D(d),
+						$name::EE(ee) => tuple_7_impls::$name::EE(ee),
+						$name::FF(ff) => tuple_7_impls::$name::FF(ff),
 					}
 				}
 			}
@@ -80,7 +80,7 @@ mod old {
 	) -> <SolanaElectoralSystemRunner as ElectoralSystemTypes>::ElectionProperties {
 		// Setting them all to the latest block number means that all deltabased elections open at
 		// time of migration will backoff in 1 hour.
-		tuple_6_impls::CompositeElectionProperties::B((
+		tuple_7_impls::CompositeElectionProperties::B((
 			old,
 			frame_system::Pallet::<Runtime>::block_number(),
 		))
@@ -153,6 +153,7 @@ impl UncheckedOnRuntimeUpgrade for SolanaBackoffSettingsMigration {
 					d,
 					ee,
 					ff,
+					(),
 				),
 			);
 		}
@@ -175,7 +176,7 @@ impl UncheckedOnRuntimeUpgrade for SolanaBackoffSettingsMigration {
 		assert_eq!(pre_upgrade_properties_count, current_properties_count);
 
 		// Check we have backoff settings set correctly.
-		for (_id, (_a, (_bb, backoff_settings), _c, _d, _ee, _ff)) in
+		for (_id, (_a, (_bb, backoff_settings), _c, _d, _ee, _ff, _gg)) in
 			ElectoralSettings::<Runtime, SolanaInstance>::iter()
 		{
 			assert_eq!(
@@ -186,7 +187,7 @@ impl UncheckedOnRuntimeUpgrade for SolanaBackoffSettingsMigration {
 
 		// Check we have the correct properties set.
 		for (_id, property) in ElectionProperties::<Runtime, SolanaInstance>::iter() {
-			if let tuple_6_impls::CompositeElectionProperties::B(delta_properties) = property {
+			if let tuple_7_impls::CompositeElectionProperties::B(delta_properties) = property {
 				{
 					assert_eq!(delta_properties.1, pre_upgrade_block_number);
 				}

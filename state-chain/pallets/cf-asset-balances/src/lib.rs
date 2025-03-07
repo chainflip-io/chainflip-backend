@@ -167,17 +167,23 @@ impl<T: Config> Pallet<T> {
 		amount: AssetAmount,
 	) -> Result<(), DispatchError> {
 		match with_storage_layer(|| {
-			T::EgressHandler::schedule_egress(chain.gas_asset(), amount, address.clone(), None)
-				.map_err(Into::into)
-				.and_then(
-					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
-						if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
-							Err(Error::<T>::RefundAmountTooLow.into())
-						} else {
-							Ok(result)
-						}
-					},
-				)
+			T::EgressHandler::schedule_egress(
+				chain.gas_asset(),
+				amount,
+				address.clone(),
+				None,
+				None,
+			)
+			.map_err(Into::into)
+			.and_then(
+				|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
+					if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
+						Err(Error::<T>::RefundAmountTooLow.into())
+					} else {
+						Ok(result)
+					}
+				},
+			)
 		}) {
 			Ok(ScheduledEgressDetails { egress_id, .. }) => {
 				Self::deposit_event(Event::RefundScheduled {

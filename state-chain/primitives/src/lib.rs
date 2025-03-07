@@ -111,7 +111,7 @@ pub type Price = U256;
 
 define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
 
-define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize);
+define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize, Ord, PartialOrd);
 
 pub type PrewitnessedDepositId = u64;
 
