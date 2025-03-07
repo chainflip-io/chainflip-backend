@@ -35,11 +35,11 @@ use pallet_cf_elections::{
 		self,
 		blockchain::delta_based_ingress::BackoffSettings,
 		composite::{tuple_7_impls::Hooks, CompositeRunner},
+		exact_value::ExactValueHook,
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
 		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
-		witness_something_by_identifier::WitnessSomethingHook,
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
@@ -134,15 +134,14 @@ pub type SolanaNonceTracking = electoral_systems::monotonic_change::MonotonicCha
 	BlockNumberFor<Runtime>,
 >;
 
-pub type SolanaEgressWitnessing =
-	electoral_systems::witness_something_by_identifier::WitnessSomethingByIdentifier<
-		SolSignature,
-		TransactionSuccessDetails,
-		(),
-		SolanaEgressWitnessingHook,
-		<Runtime as Chainflip>::ValidatorId,
-		BlockNumberFor<Runtime>,
-	>;
+pub type SolanaEgressWitnessing = electoral_systems::exact_value::ExactValue<
+	SolSignature,
+	TransactionSuccessDetails,
+	(),
+	SolanaEgressWitnessingHook,
+	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
+>;
 
 pub type SolanaLiveness = electoral_systems::liveness::Liveness<
 	<Solana as Chain>::ChainBlockNumber,
@@ -191,22 +190,21 @@ pub struct SolanaAltWitnessingIdentifier {
 	pub election_expiry_block_number: BlockNumberFor<Runtime>,
 }
 
-pub type SolanaAltWitnessing =
-	electoral_systems::witness_something_by_identifier::WitnessSomethingByIdentifier<
-		SolanaAltWitnessingIdentifier,
-		// We also want to allow for the election to come to consensus on the fact that one or more
-		// alts provided were invalid and so we cant witness all alts.
-		AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
-		(),
-		SolanaAltWitnessingHook,
-		<Runtime as Chainflip>::ValidatorId,
-		BlockNumberFor<Runtime>,
-	>;
+pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
+	SolanaAltWitnessingIdentifier,
+	// We also want to allow for the election to come to consensus on the fact that one or more
+	// alts provided were invalid and so we cant witness all alts.
+	AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	(),
+	SolanaAltWitnessingHook,
+	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
+>;
 
 pub struct SolanaAltWitnessingHook;
 
 impl
-	WitnessSomethingHook<
+	ExactValueHook<
 		SolanaAltWitnessingIdentifier,
 		AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	> for SolanaAltWitnessingHook
@@ -233,7 +231,7 @@ pub struct TransactionSuccessDetails {
 
 pub struct SolanaEgressWitnessingHook;
 
-impl WitnessSomethingHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
+impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
 	fn on_successful_witness(
 		signature: SolSignature,
 		TransactionSuccessDetails { tx_fee, transaction_successful }: TransactionSuccessDetails,
@@ -567,7 +565,7 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 
 	fn watch_for_egress_success(signature: SolSignature) -> DispatchResult {
 		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
-			SolanaEgressWitnessing::witness_something::<
+			SolanaEgressWitnessing::witness_exact_value::<
 				DerivedElectoralAccess<
 					_,
 					SolanaEgressWitnessing,
@@ -706,7 +704,7 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 				if !alt_addresses.is_empty() {
 					pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(
 						|| {
-							SolanaAltWitnessing::witness_something::<
+							SolanaAltWitnessing::witness_exact_value::<
 								DerivedElectoralAccess<
 									_,
 									SolanaAltWitnessing,
