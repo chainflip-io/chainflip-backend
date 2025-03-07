@@ -70,11 +70,6 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
 
   bytesAvailable -= numAdditionalAccounts * SOLANA_BYTES_PER_ACCOUNT;
 
-  // TODO: We can add bytesAvailable number of repeated accounts to test the limit.
-  // For example repeating the cfReceiverAddress. I think it's working but I'm off
-  // by 1 byte in the calculations (we can actually pass one less byte than we think)
-  // for the v0 transactions. Protocol checks seems to work so far. To do more testing
-  // when the end to end flow is done.
   const ccmAdditionalData = {
     cf_receiver: {
       pubkey: new PublicKey(cfReceiverAddress).toBytes(),
