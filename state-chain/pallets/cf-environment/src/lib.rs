@@ -13,7 +13,9 @@ use cf_chains::{
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
 	sol::{
-		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
+		api::{
+			AltConsensusResult, DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall,
+		},
 		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolHash, Solana,
 		NONCE_NUMBER_CRITICAL_NONCES,
 	},
@@ -248,7 +250,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		SwapRequestId,
-		Option<Vec<SolAddressLookupTableAccount>>,
+		AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 		OptionQuery,
 	>;
 
@@ -815,14 +817,14 @@ impl<T: Config> Pallet<T> {
 
 	pub fn add_sol_ccm_swap_alts(
 		swap_request_id: SwapRequestId,
-		alts: Option<Vec<SolAddressLookupTableAccount>>,
+		alts: AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	) {
 		SolanaCcmSwapAlts::<T>::insert(swap_request_id, alts);
 	}
 
 	pub fn take_sol_ccm_swap_alts(
 		swap_request_id: SwapRequestId,
-	) -> Option<Option<Vec<SolAddressLookupTableAccount>>> {
+	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
 		SolanaCcmSwapAlts::<T>::take(swap_request_id)
 	}
 }

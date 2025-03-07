@@ -9,7 +9,7 @@ use cf_chains::{
 	instances::{ChainInstanceAlias, SolanaInstance},
 	sol::{
 		api::{
-			SolanaApi, SolanaTransactionBuildingError, SolanaTransactionType,
+			AltConsensusResult, SolanaApi, SolanaTransactionBuildingError, SolanaTransactionType,
 			VaultSwapAccountAndSender,
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
@@ -196,7 +196,7 @@ pub type SolanaAltWitnessing =
 		SolanaAltWitnessingIdentifier,
 		// We also want to allow for the election to come to consensus on the fact that one or more
 		// alts provided were invalid and so we cant witness all alts.
-		Option<Vec<SolAddressLookupTableAccount>>,
+		AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 		(),
 		SolanaAltWitnessingHook,
 		<Runtime as Chainflip>::ValidatorId,
@@ -205,12 +205,15 @@ pub type SolanaAltWitnessing =
 
 pub struct SolanaAltWitnessingHook;
 
-impl WitnessSomethingHook<SolanaAltWitnessingIdentifier, Option<Vec<SolAddressLookupTableAccount>>>
-	for SolanaAltWitnessingHook
+impl
+	WitnessSomethingHook<
+		SolanaAltWitnessingIdentifier,
+		AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	> for SolanaAltWitnessingHook
 {
 	fn on_successful_witness(
 		alt_identifier: SolanaAltWitnessingIdentifier,
-		alts: Option<Vec<SolAddressLookupTableAccount>>,
+		alts: AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	) {
 		Environment::add_sol_ccm_swap_alts(alt_identifier.swap_request_id, alts);
 	}
@@ -719,7 +722,7 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 					.unwrap_or_else(|e| {log::error!("Cannot start Solana ALT witnessing election: {:?}", e);}) //The error should not happen as long as the election identifiers dont overflow and
 					 // the electoral system is initialized
 				} else {
-					Environment::add_sol_ccm_swap_alts(swap_request_id, Some(vec![]));
+					Environment::add_sol_ccm_swap_alts(swap_request_id, AltConsensusResult::ValidConsensusAlts(vec![]));
 				}
 			},
 			// This should never happen since the same ccm validity check has been done while opening the channel.

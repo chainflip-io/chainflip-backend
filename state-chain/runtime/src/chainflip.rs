@@ -50,9 +50,9 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
-			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
-			SolanaEnvironment,
+			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
+			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
+			SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
@@ -597,8 +597,12 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
-impl ChainEnvironment<SwapRequestId, Option<Vec<SolAddressLookupTableAccount>>> for SolEnvironment {
-	fn lookup(swap_request_id: SwapRequestId) -> Option<Option<Vec<SolAddressLookupTableAccount>>> {
+impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
+	for SolEnvironment
+{
+	fn lookup(
+		swap_request_id: SwapRequestId,
+	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
 		Environment::take_sol_ccm_swap_alts(swap_request_id)
 	}
 }

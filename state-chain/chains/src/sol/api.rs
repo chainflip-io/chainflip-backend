@@ -73,7 +73,7 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
-	+ ChainEnvironment<SwapRequestId, Option<Vec<SolAddressLookupTableAccount>>>
+	+ ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
 	+ RecoverDurableNonce
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
@@ -110,8 +110,9 @@ pub trait SolanaEnvironment:
 		id: SwapRequestId,
 	) -> Result<Vec<SolAddressLookupTableAccount>, SolanaTransactionBuildingError> {
 		match Self::lookup(id) {
-			Some(Some(alts)) => Ok(alts),
-			Some(None) => Err(SolanaTransactionBuildingError::AltsInvalid),
+			Some(AltConsensusResult::ValidConsensusAlts(alts)) => Ok(alts),
+			Some(AltConsensusResult::AltsInvalidNoConsensus) =>
+				Err(SolanaTransactionBuildingError::AltsInvalid),
 			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed),
 		}
 	}
@@ -759,3 +760,19 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 }
 
 impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {}
+
+#[derive(
+	Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Ord, PartialOrd,
+)]
+pub enum AltConsensusResult<T> {
+	ValidConsensusAlts(T),
+	AltsInvalidNoConsensus,
+}
+impl<T> AltConsensusResult<T> {
+	pub fn unwrap(self) -> T {
+		match self {
+			AltConsensusResult::ValidConsensusAlts(alts) => alts,
+			AltConsensusResult::AltsInvalidNoConsensus => panic!(),
+		}
+	}
+}
