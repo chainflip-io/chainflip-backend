@@ -49,15 +49,13 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
   const fallbackAddress = Keypair.generate().publicKey.toBytes();
 
   if (useAlt) {
+    // We will only use one ALT
     bytesAvailable -= BYTES_PER_ALT;
-    // We are passing cfReceiver and cfTester in the ALT so we have extra bytes available
-    bytesAvailable += 32 * 2;
-    // Repeat cfReceiverAddress as a proxy for testing that we can include additional accounts from the ALT
-    additionalAccounts.push({
-      pubkey: new PublicKey(cfReceiverAddress).toBytes(),
-      is_writable: Math.random() < 0.5,
-    });
-    bytesAvailable -= 1;
+    // We are passing cfTester in the ALT so we have extra bytes available.
+    // TODO: If we update the solana image we could also include the cfReceiverAddress.
+    // It's an issue with that image that is incorrectly adding CfReceiver programId instead.
+    const usedAccountsInAlt = 1;
+    bytesAvailable += 32 * usedAccountsInAlt - usedAccountsInAlt;
   }
 
   const maxAccounts = Math.floor(bytesAvailable / SOLANA_BYTES_PER_ACCOUNT);
@@ -118,7 +116,7 @@ function newCcmArbitraryBytes(maxLength: number): string {
 
 // For Solana the maximum number of extra accounts that can be passed is limited by the tx size
 // and therefore also depends on the message length.
-function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: number): string {
+function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: number): string {
   const destChain = chainFromAsset(destAsset);
 
   switch (destChain) {
@@ -126,7 +124,7 @@ function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: nu
     case 'Arbitrum':
       return '0x';
     case 'Solana': {
-      const messageLength = (message!.length - 2) / 2;
+      const messageLength = message.slice(2).length / 2;
       let bytesAvailable =
         (destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC) - messageLength;
       if (maxLength !== undefined) {
@@ -168,7 +166,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
   return newCcmArbitraryBytes(length);
 }
 // Minimum overhead to ensure simple CCM transactions succeed
-const OVERHEAD_COMPUTE_UNITS = 40000;
+const OVERHEAD_COMPUTE_UNITS = 30000;
 
 export async function newCcmMetadata(
   destAsset: Asset,
