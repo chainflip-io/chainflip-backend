@@ -1,5 +1,4 @@
 import Web3 from 'web3';
-import { approveVault } from '@chainflip/cli';
 import {
   Chain,
   amountToFineAmount,
@@ -18,10 +17,7 @@ const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
   Arbitrum: undefined,
 };
 
-export async function getNextEvmNonce(
-  chain: Chain,
-  callback?: (nextNonce: number) => ReturnType<typeof approveVault>,
-): Promise<number> {
+export async function getNextEvmNonce(chain: Chain): Promise<number> {
   let mutex;
   switch (chain) {
     case 'Ethereum':
@@ -42,10 +38,7 @@ export async function getNextEvmNonce(
       const txCount = await web3.eth.getTransactionCount(address);
       nextEvmNonce[chain] = txCount;
     }
-    // The SDK returns null if no transaction is sent
-    if (callback && (await callback(nextEvmNonce[chain]!)) === null) {
-      return nextEvmNonce[chain]!;
-    }
+
     return nextEvmNonce[chain]!++;
   });
 }
