@@ -11,13 +11,31 @@ import { sendErc20 } from '../shared/send_erc20';
 
 (global as any).WebSocket = WebSocket;
 
+enum OrderStatus {
+    Submitted = 'submitted',
+    Accepted = 'accepted',
+    Filled = 'filled',
+    Cancelled = 'cancelled'
+}
+
+class Order {
+    constructor(
+        public orderId: number,
+        public status: OrderStatus,
+        public asset: Asset,
+        public side: Side,
+        public amount: number,
+        public price: number,
+    ) { }
+}
+
 enum Side {
     Buy = 'buy',
     Sell = 'sell'
 }
 
-// Types for our domain
 type Swap = {
+    swapId: number;
     baseAsset: { chain: string; asset: string };
     quoteAsset: { chain: string; asset: string };
     side: Side;
@@ -32,14 +50,16 @@ type TradeDecision = {
     price: number;
 }
 
-const analyzeSwap = (swap: Swap): TradeDecision => {
-    // logger.info(`Analyzing swap: ${JSON.stringify(swap)}`);
+const ORDER_BOOK = new Map<number, Order>();
+const SWAPS = new Map<number, Swap>();
+
+const tradingStrategy = (swap: Swap): TradeDecision => {
 
     // Only handle USDT pairs
     if (swap.baseAsset.asset !== 'USDT') {
         return { shouldTrade: false, side: swap.side, asset: swap.baseAsset, amount: 0, price: 0 };
     }
-    // Place orders on both sides
+
     return {
         shouldTrade: true,
         side: swap.side === Side.Sell ? Side.Buy : Side.Sell, // If someone sells we buy and vice versa
@@ -52,10 +72,6 @@ const analyzeSwap = (swap: Swap): TradeDecision => {
 // Pure function for order creation
 const createOrderPayload = (decision: TradeDecision) => {
     const orderId = Math.floor(Math.random() * 10000) + 1;
-    // const buyOrSellAmount = decision.side === Side.Buy
-    //     ? parseInt(amountToFineAmount(decision.amount.toString(), assetDecimals('Usdc')))
-    //     : parseInt(amountToFineAmount(decision.amount.toString(), assetDecimals(decision.asset)));
-
     return {
         orderId,
         params: [
@@ -69,69 +85,81 @@ const createOrderPayload = (decision: TradeDecision) => {
     };
 };
 
-// Side effects are isolated in these functions
-const executeOrder = async (orderPayload: ReturnType<typeof createOrderPayload>) => {
-    console.log(`Executing order: ${JSON.stringify(orderPayload)}`);
+const transmitOrder = async (orderPayload: ReturnType<typeof createOrderPayload>) => {
     try {
-        const response = await lpApiRpc(logger, 'lp_set_limit_order', orderPayload.params);
-        // console.log(`Order executed: ${orderPayload.orderId}, Response: ${JSON.stringify(response)}`);
+        await lpApiRpc(logger, 'lp_set_limit_order', orderPayload.params);
         return orderPayload.orderId;
     } catch (error) {
-        console.error(`Failed to execute order: ${error}`);
+        logger.error(`Failed to execute order: ${error}`);
         return null;
     }
 };
 
-// Transform the WebSocket stream into a stream of MarketEvents
 const createSwapStream = (wsConnection: any): Observable<Swap> => {
     return wsConnection.pipe(
         filter((msg: any) => msg.method === 'cf_subscribe_scheduled_swaps'),
-        map((msg: any) => msg.params.result.swaps),
+        map((msg: any) => {
+            logger.info(`Swap received: ${JSON.stringify(msg.params.result.swaps, null, 2)}`);
+            return msg.params.result.swaps;
+        }),
         mergeMap((swaps: any[]) => from(swaps)),
         map((swap: any): Swap => ({
+            swapId: swap.swap_id,
             baseAsset: swap.base_asset,
             quoteAsset: swap.quote_asset,
             side: swap.side,
             amount: swap.amount
-        }))
+        })),
+        filter((swap: Swap) => {
+            if (SWAPS.has(swap.swapId)) {
+                return false;
+            }
+            SWAPS.set(swap.swapId, swap);
+            return true;
+        })
     );
 };
 
-const createOrderFillStream = (wsConnection: any) => {
-    wsConnection.pipe(
-        filter((msg: any) => msg.method === 'lp_subscribe_order_fills'),
-        map((msg: any) => console.log("Order fill Jan: ", msg)));
+const manageOrders = (decision: TradeDecision) => {
+    // Check if there is an order already in the order book and if yes get the amount and price
+    const ordersForAsset = Array.from(ORDER_BOOK.values()).filter(
+        order => order.asset === decision.asset &&
+            order.status === OrderStatus.Submitted
+    );
+
+    // If there is an order in the order book, we need to update the amount and price
+    if (ordersForAsset.length > 0) {
+        const order = ordersForAsset[0];
+        order.amount = decision.amount;
+        order.price = decision.price;
+    }
+
 }
 
-// Transform MarketEvents into TradeDecisions
 const createTradeDecisionStream = (swaps$: Observable<Swap>): Observable<TradeDecision> => {
     return swaps$.pipe(
-        map(analyzeSwap),
+        map(tradingStrategy),
         filter(decision => decision.shouldTrade)
     );
 };
 
-// Transform TradeDecisions into order executions
 const createOrderStream = (decisions$: Observable<TradeDecision>): Observable<number | null> => {
     return decisions$.pipe(
         map(createOrderPayload),
-        mergeMap(orderPayload => from(executeOrder(orderPayload)))
+        mergeMap(orderPayload => from(transmitOrder(orderPayload)))
     );
 };
 
 const depositUsdcLiquidity = async (amount: string) => {
-    console.log(`Depositing ${amount} USDC`);
     const contractAddress = getContractAddress('Ethereum', 'Usdc');
-    console.log(`Contract address: ${contractAddress}`);
     const liquidityDepositAddress = await lpApiRpc(logger, 'lp_liquidity_deposit', [{ chain: 'Ethereum', asset: 'USDC' }, 'InBlock']);
-    console.log(`Address: ${liquidityDepositAddress.tx_details.response}`);
     await sendErc20(logger, 'Ethereum', liquidityDepositAddress.tx_details.response, contractAddress, amount);
-    console.log(`Liquidity deposited: ${amount}`);
+    logger.info(`Liquidity deposited: ${amount} USDC!`);
 }
 
 const cancelAllOrders = async () => {
-    const response = await lpApiRpc(logger, 'lp_cancel_all_orders', []);
-    console.log(`Cancel all orders response: ${JSON.stringify(response, null, 2)}`);
+    logger.info("Cancelling all orders");
+    await lpApiRpc(logger, 'lp_cancel_all_orders', []);
 }
 
 // WebSocket setup and subscription handling
@@ -150,14 +178,14 @@ const initializeLiquidityProviderBot = () => {
     orders$.subscribe({
         next: (orderId) => {
             if (orderId) {
-                logger.info(`Order executed successfully: ${orderId}`);
+                logger.info(`Submitted order: ${orderId} successfully!`);
+                ORDER_BOOK.set(orderId, OrderStatus.Submitted);
             }
         },
         error: (err) => logger.error('Error in order stream:', err),
         complete: () => logger.info('Order stream completed')
     });
 
-    // Initialize subscriptions
     stateChainWsConnection.next({
         id: 1,
         jsonrpc: "2.0",
@@ -179,7 +207,11 @@ const initializeLiquidityProviderBot = () => {
 
     lpWsConnection.subscribe({
         next: (msg: any) => {
-            console.log(`${JSON.stringify(msg, null, 2)}`);
+            if (msg.method === 'lp_subscribe_order_fills') {
+                if (msg.params.result.fills.length > 0) {
+                    logger.info(`Order fills received: ${JSON.stringify(msg.params.result.fills, null, 2)}`);
+                }
+            }
         }
     });
 
@@ -188,7 +220,6 @@ const initializeLiquidityProviderBot = () => {
 
 // Main application
 const main = async () => {
-    // logger.info('Starting liquidity provider bot');
     // await depositUsdcLiquidity('10000');
     await cancelAllOrders();
     const [stateChainWsConnection, lpWsConnection] = initializeLiquidityProviderBot();
