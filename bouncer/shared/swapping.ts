@@ -40,11 +40,8 @@ const BYTES_PER_ALT = 34; // 32 + 1 + 1 (for vector lengths)
 
 function newSolanaCcmAdditionalData(maxBytes: number) {
   // Test all combinations
-  // const useLegacy = maxBytes < BYTES_PER_ALT || Math.random() < 0.5;
-  // const useAlt = !useLegacy && Math.random() < 0.5;
-  // TODO: To remove, this is for testing purposes
-  const useLegacy = false;
-  const useAlt = true;
+  const useLegacy = maxBytes < BYTES_PER_ALT || Math.random() < 0.5;
+  const useAlt = !useLegacy && Math.random() < 0.5;
   let bytesAvailable = maxBytes;
 
   const additionalAccounts = [];
@@ -136,6 +133,9 @@ function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: nu
         bytesAvailable = Math.min(bytesAvailable, maxLength);
       }
       const ccmAdditonalData = newSolanaCcmAdditionalData(bytesAvailable);
+      if (ccmAdditonalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
+        throw new Error(`CCM additional data length exceeds limit: ${ccmAdditonalData.length}`);
+      }
       return ccmAdditonalData;
     }
     default:
