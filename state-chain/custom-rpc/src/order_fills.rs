@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use super::*;
 
-use cf_primitives::AccountId;
-use pallet_cf_pools::{AssetPair, OrderId, Pool};
+use cf_primitives::{AccountId, OrderId};
+use pallet_cf_pools::{AssetPair, Pool};
 use state_chain_runtime::Runtime;
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq, Eq)]

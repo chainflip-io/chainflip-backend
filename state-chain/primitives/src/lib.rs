@@ -6,7 +6,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	BoundedVec, MultiSignature, Percent, RuntimeDebug,
+	BoundedVec, FixedU64, MultiSignature, Percent, RuntimeDebug,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -17,6 +17,7 @@ use sp_std::{
 	ops::{Deref, DerefMut},
 	vec::Vec,
 };
+
 pub mod chains;
 
 #[macro_export]
@@ -457,3 +458,20 @@ pub struct DcaParameters {
 }
 
 pub type ShortId = u8;
+pub type OrderId = u64;
+pub type Multiplier = FixedU64;
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Default, RuntimeDebug)]
+pub enum ScalableFeeCallInfo<AccountId> {
+	// The call is normal, its transaction fee is not scalable.
+	#[default]
+	NoScaling,
+	// Transactions about updating Liquidity Pool positions.
+	PoolPositionUpdates(AccountId, OrderId),
+}
+
+impl<AccountId: PartialEq> ScalableFeeCallInfo<AccountId> {
+	pub fn scalable_fee(&self) -> bool {
+		*self != ScalableFeeCallInfo::NoScaling
+	}
+}

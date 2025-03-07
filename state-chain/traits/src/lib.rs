@@ -30,15 +30,15 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, SemVer,
-	ThresholdSignatureRequestId,
+	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, Multiplier, NetworkEnvironment,
+	ScalableFeeCallInfo, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize, One},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
 	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
@@ -1189,3 +1189,16 @@ pub trait AffiliateRegistry {
 pub trait MinimumDeposit {
 	fn get(asset: Asset) -> AssetAmount;
 }
+
+pub trait TransactionFeeScaler<Call, AccountId> {
+	fn call_info(_call: &Call, _caller: &AccountId) -> ScalableFeeCallInfo<AccountId> {
+		Default::default()
+	}
+
+	fn get_fee_multiplier(_call_info: ScalableFeeCallInfo<AccountId>) -> Multiplier {
+		Multiplier::one()
+	}
+}
+
+pub struct NoTransactionFeeScaling;
+impl<Call, AccountId> TransactionFeeScaler<Call, AccountId> for NoTransactionFeeScaling {}
