@@ -127,18 +127,48 @@ impl CcmValidityCheck for CcmValidityChecker {
 					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 
 			let ccm_accounts = decoded_data.ccm_accounts();
+			let address_lookup_tables = decoded_data.address_lookup_tables();
+			let num_address_lookup_tables = address_lookup_tables.len();
 
-			// It's hard at this stage to compute exactly the length of the finally build
-			// transaction from the message and the additional accounts. Duplicated
-			// accounts only take one reference byte while new accounts take 32 bytes.
+			if num_address_lookup_tables > MAX_CCM_USER_ALTS as usize {
+				return Err(CcmValidityError::TooManyAddressLookupTables)
+			}
+
+			// Chainflip uses Versioned transactions regardless of the user passing an ALT or not.
+			// Calculate the extra lenght for each user ALT. Also, a user ALT makes it so we can't
+			// exactly calculate the final length, since we can't know the ALT content beforehand.
+			// Therefore, we calculate the most optimistic scenario when an ALT is passed and it
+			// might fail to build on egress but we rely on the user to provide the correct ALTs.
+			// A Solana CCM that fais to build will be refunded to a fallback address on Solana.
+			// The most optimistic scenario is the ALT containing both the CfReceiver and the
+			// destination address as well as all the ccm additional accounts.
+			let (lookup_tables_length, extra_buffer, bytes_per_new_account) =
+				if num_address_lookup_tables > 0 {
+					// Each empty lookup table is 34 bytes -> 32 bytes for address plus 2 for vector
+					// lengths (write_indexes and readonly_indexes).
+					let lookup_tables_length =
+						num_address_lookup_tables * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION + 2);
+
+					// Account for CfReceiver and destination address being in the the lookup table.
+					let extra_buffer = (ACCOUNT_KEY_LENGTH_IN_TRANSACTION * 2)
+						.saturating_sub(2 * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION);
+
+					// Each non-repeated account would take an extra byte on the address table
+					// lookups.
+					(lookup_tables_length, extra_buffer, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION)
+				} else {
+					// Without lookup tables each new non-repeated account will take a full acocunt.
+					(0, 0, ACCOUNT_KEY_LENGTH_IN_TRANSACTION)
+				};
+
 			// Technically it shouldn't be necessary to pass duplicated accounts as
 			// it will all be executed in the same instruction. However when integrating
 			// with other protocols, many of the account's values are part of a returned
 			// payload from an API and it makes it cumbersome to then deduplicate on the
 			// fly and then make it match with the receiver contract. It can be done
 			// but it then requires extra configuration bytes in the payload, which
-			// then defeats the purpose.
-			// Therefore we want to allow for duplicated accounts, both duplicated
+			// then defeats the purpose of decreasing the payload length.
+			// Therefore we want to account for duplicated accounts, both duplicated
 			// within the additional accounts and with our accounts. Then we can
 			// calculate the length accordingly.
 			// The Chainflip accounts are irrelevant to the user except for a
@@ -156,14 +186,14 @@ impl CcmValidityCheck for CcmValidityChecker {
 			let mut accounts_length =
 				ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
-			// TODO PRO-2046: we should not check the length here?
 			for ccm_address in &ccm_accounts.additional_accounts {
 				if seen_addresses.insert(ccm_address.pubkey.into()) {
-					accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
+					accounts_length += bytes_per_new_account;
 				}
 			}
 
-			let ccm_length = ccm.message.len() + accounts_length;
+			let ccm_length = (ccm.message.len() + accounts_length + lookup_tables_length)
+				.saturating_sub(extra_buffer);
 
 			if ccm_length >
 				match asset {
@@ -171,10 +201,6 @@ impl CcmValidityCheck for CcmValidityChecker {
 					SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
 				} {
 				return Err(CcmValidityError::CcmIsTooLong)
-			}
-
-			if decoded_data.address_lookup_tables().len() > MAX_CCM_USER_ALTS as usize {
-				return Err(CcmValidityError::TooManyAddressLookupTables)
 			}
 
 			Ok(DecodedCcmAdditionalData::Solana(decoded_data))
