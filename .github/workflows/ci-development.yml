@@ -6,6 +6,7 @@ on:
       - main
       - "release/*"
       - "feat/solana-versioned-transaction*"
+      - "feat/alt-elections"
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true

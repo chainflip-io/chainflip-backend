@@ -55,7 +55,7 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
     // TODO: If we update the solana image we could also include the cfReceiverAddress.
     // It's an issue with that image that is incorrectly adding CfReceiver programId instead.
     const usedAccountsInAlt = 1;
-    bytesAvailable += 32 * usedAccountsInAlt - usedAccountsInAlt;
+    bytesAvailable += usedAccountsInAlt * 32 - usedAccountsInAlt * 1;
   }
 
   const maxAccounts = Math.floor(bytesAvailable / SOLANA_BYTES_PER_ACCOUNT);
