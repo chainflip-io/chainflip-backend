@@ -3,10 +3,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
-use cf_chains::{
-	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParameters,
-	ChannelRefundParametersEncoded, ForeignChain,
-};
+use cf_chains::{evm::to_evm_address, CcmChannelMetadata};
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
@@ -534,15 +531,6 @@ pub trait SimpleSubmissionApi: SignedExtrinsicApi {
 
 #[async_trait]
 impl<T: SignedExtrinsicApi + Sized + Send + Sync + 'static> SimpleSubmissionApi for T {}
-
-pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
-
-#[derive(Serialize, Deserialize)]
-pub enum TransactionInId {
-	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
-	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
-	// other variants reserved for other chains.
-}
 
 #[async_trait]
 pub trait DepositMonitorApi:

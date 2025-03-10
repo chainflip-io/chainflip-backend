@@ -20,7 +20,7 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<RefundParametersRpc>,
+	pub refund_parameters: RefundParametersRpc,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -57,6 +57,7 @@ pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::Tra
 #[derive(Serialize, Deserialize)]
 pub enum TransactionInId {
 	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
+	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
 	// other variants reserved for other chains.
 }
 
