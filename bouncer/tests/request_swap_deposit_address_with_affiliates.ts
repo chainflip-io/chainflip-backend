@@ -1,22 +1,47 @@
 import * as ss58 from '@chainflip/utils/ss58';
 import * as base58 from '@chainflip/utils/base58';
 import { isHex } from '@chainflip/utils/string';
-import { hexToBytes } from '@chainflip/utils/bytes';
+import { bytesToHex, hexToBytes } from '@chainflip/utils/bytes';
 import { ApiPromise, Keyring } from '@polkadot/api';
-import { broker, chainConstants, getInternalAsset } from '@chainflip/cli';
+import { Asset, broker, chainConstants, getInternalAsset } from '@chainflip/cli';
 import assert from 'assert';
 import { z } from 'zod';
 import { getChainflipApi } from '../shared/utils/substrate';
-import { deferredPromise, handleSubstrateError, shortChainFromAsset } from '../shared/utils';
+import { Chain, deferredPromise, handleSubstrateError, shortChainFromAsset } from '../shared/utils';
 import { TestContext } from '../shared/utils/test_context';
+
+function toEncodedAddress(chain: Chain, address: string) {
+  switch (chain) {
+    case 'Arbitrum':
+      assert(isHex(address), 'Expected hex-encoded EVM address');
+      return { Arb: hexToBytes(address) };
+    case 'Ethereum':
+      assert(isHex(address), 'Expected hex-encoded EVM address');
+      return { Eth: hexToBytes(address) };
+    case 'Polkadot':
+      return { Dot: isHex(address) ? hexToBytes(address) : ss58.decode(address).data };
+    case 'Solana':
+      return { Sol: isHex(address) ? hexToBytes(address) : base58.decode(address) };
+    case 'Bitcoin':
+      return { Btc: bytesToHex(new TextEncoder().encode(address)) };
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
 
 export async function depositChannelCreation(testContext: TestContext) {
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
 
-  const account = keyring.addFromUri('//BROKER_2');
+  const account1 = keyring.addFromUri('//BROKER_2');
   const account2 = keyring.addFromUri('//BROKER_1');
-  type NewSwapRequest = Parameters<(typeof broker)['buildExtrinsicPayload']>[0];
+  type SwapDetails = Omit<
+    Parameters<(typeof broker)['requestSwapDepositAddress']>[0],
+    'srcChain' | 'destChain'
+  > & {
+    srcAsset: { asset: Asset; chain: Chain };
+    destAsset: { asset: Asset; chain: Chain };
+  };
 
   const numberSchema = z.string().transform((n) => Number(n.replace(/,/g, '')));
   const bigintSchema = z.string().transform((n) => BigInt(n.replace(/,/g, '')));
@@ -62,7 +87,7 @@ export async function depositChannelCreation(testContext: TestContext) {
 
   const requestSwapDepositAddress = async (
     chainflip: ApiPromise,
-    params: NewSwapRequest,
+    params: SwapDetails,
     getNonce: () => number,
   ) => {
     const deferred = deferredPromise<z.output<typeof eventSchema>>();
@@ -71,8 +96,35 @@ export async function depositChannelCreation(testContext: TestContext) {
     const eventMatcher = chainflip.events.swapping.SwapDepositAddressReady;
 
     const unsubscribe = await chainflip.tx.swapping
-      .requestSwapDepositAddressWithAffiliates(...broker.buildExtrinsicPayload(params))
-      .signAndSend(account, { nonce: getNonce() }, (result) => {
+      .requestSwapDepositAddressWithAffiliates(
+        getInternalAsset(params.srcAsset),
+        getInternalAsset(params.destAsset),
+        toEncodedAddress(params.destAsset.chain, params.destAddress),
+        params.commissionBps ?? 0,
+        params.ccmParams && {
+          message: params.ccmParams.message,
+          gas_budget: `0x${BigInt(params.ccmParams.gasBudget).toString(16)}`,
+          ccm_additional_data: params.ccmParams.ccmAdditionalData,
+        },
+        getInternalAsset(params.srcAsset) === 'Btc' ? params.maxBoostFeeBps ?? 0 : 0,
+        (params.affiliates ?? []).map(({ account, commissionBps }) => ({
+          account: isHex(account) ? account : bytesToHex(ss58.decode(account).data),
+          bps: commissionBps,
+        })),
+        params.fillOrKillParams && {
+          retry_duration: params.fillOrKillParams.retryDurationBlocks,
+          refund_address: toEncodedAddress(
+            params.srcAsset.chain,
+            params.fillOrKillParams.refundAddress,
+          ),
+          min_price: `0x${BigInt(params.fillOrKillParams.minPriceX128).toString(16)}`,
+        },
+        params.dcaParams && {
+          number_of_chunks: params.dcaParams.numberOfChunks,
+          chunk_interval: params.dcaParams.chunkIntervalBlocks,
+        },
+      )
+      .signAndSend(account1, { nonce: getNonce() }, (result) => {
         if (!result.isInBlock) return;
 
         if (result.dispatchError) {
@@ -91,8 +143,8 @@ export async function depositChannelCreation(testContext: TestContext) {
 
     const event = await promise.finally(unsubscribe);
 
-    const sourceAsset = getInternalAsset({ chain: params.srcChain, asset: params.srcAsset });
-    const destinationAsset = getInternalAsset({ chain: params.destChain, asset: params.destAsset });
+    const sourceAsset = getInternalAsset(params.srcAsset);
+    const destinationAsset = getInternalAsset(params.destAsset);
 
     assert.strictEqual(event.sourceAsset, sourceAsset, 'source asset is wrong');
     assert.strictEqual(event.destinationAsset, destinationAsset, 'destination asset is wrong');
@@ -172,12 +224,10 @@ export async function depositChannelCreation(testContext: TestContext) {
     addrs.map(
       (destAddress) =>
         ({
-          srcAsset: 'FLIP',
-          srcChain: 'Ethereum',
-          destChain,
-          destAsset: chainConstants[destChain].assets[0],
+          srcAsset: { asset: 'FLIP', chain: 'Ethereum' },
+          destAsset: { asset: chainConstants[destChain].assets[0], chain: destChain },
           destAddress,
-        }) as NewSwapRequest,
+        }) as SwapDetails,
     ),
   );
 
@@ -185,21 +235,19 @@ export async function depositChannelCreation(testContext: TestContext) {
     addrs.map(
       (refundAddress) =>
         ({
-          destAsset: 'FLIP',
-          destChain: 'Ethereum',
+          destAsset: { asset: 'FLIP', chain: 'Ethereum' },
           destAddress: addresses.Ethereum[0],
-          srcChain,
-          srcAsset: chainConstants[srcChain].assets[0],
+          srcAsset: { asset: chainConstants[srcChain].assets[0], chain: srcChain },
           fillOrKillParams: {
             refundAddress,
             minPriceX128: '1',
             retryDurationBlocks: 100,
           },
-        }) as NewSwapRequest,
+        }) as SwapDetails,
     ),
   );
 
-  const withDca: NewSwapRequest = {
+  const withDca: SwapDetails = {
     ...refundCases[0],
     dcaParams: {
       numberOfChunks: 7200,
@@ -207,18 +255,18 @@ export async function depositChannelCreation(testContext: TestContext) {
     },
   };
 
-  const withCommission: NewSwapRequest = {
+  const withCommission: SwapDetails = {
     ...baseCases[0],
     commissionBps: 100,
   };
 
-  const withAffiliates: NewSwapRequest = {
+  const withAffiliates: SwapDetails = {
     ...baseCases[0],
     affiliates: [{ account: account2.address, commissionBps: 100 }],
   };
 
-  const withCcm: NewSwapRequest = {
-    ...baseCases.find((c) => c.destChain === 'Arbitrum')!,
+  const withCcm: SwapDetails = {
+    ...baseCases.find((c) => c.destAsset.chain === 'Arbitrum')!,
     ccmParams: {
       message: '0xcafebabe',
       gasBudget: '1000000',
@@ -227,7 +275,7 @@ export async function depositChannelCreation(testContext: TestContext) {
   };
 
   await using api = await getChainflipApi();
-  let nonce = (await api.rpc.system.accountNextIndex(account.address)).toJSON() as number;
+  let nonce = (await api.rpc.system.accountNextIndex(account1.address)).toJSON() as number;
 
   const allCases = [...baseCases, ...refundCases, withDca, withCommission, withAffiliates, withCcm];
   const results = await Promise.allSettled(
