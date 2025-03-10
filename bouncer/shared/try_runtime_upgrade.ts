@@ -7,14 +7,13 @@ import { compileBinaries } from './utils/compile_binaries';
 import { mkTmpDir, execWithRustLog } from './utils/exec_with_log';
 import { CHAINFLIP_HTTP_ENDPOINT } from './utils/substrate';
 import { retryRpcCall } from './utils';
-import { globalLogger as logger } from './utils/logger';
 
 async function createSnapshotFile(networkUrl: string, blockHash: string): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
   const snapshotFolder = await mkTmpDir('chainflip/snapshots/');
   const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
 
-  logger.info('Writing snapshot to: ', snapshotOutputPath);
+  console.log('Writing snapshot to: ', snapshotOutputPath);
 
   return execWithRustLog(
     `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`,
@@ -65,7 +64,7 @@ export async function tryRuntimeUpgrade(
   if (block === 'all') {
     const latestBlock = await httpApi.rpc.chain.getBlockHash();
 
-    logger.info('Running migrations until we reach block with hash: ' + latestBlock);
+    console.log('Running migrations until we reach block with hash: ' + latestBlock);
 
     let blockNumber = 1;
     let blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
@@ -74,15 +73,15 @@ export async function tryRuntimeUpgrade(
       await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
       blockNumber++;
     }
-    logger.info(`Block ${latestBlock} has been reached, exiting.`);
+    console.log(`Block ${latestBlock} has been reached, exiting.`);
   } else if (block === 'last-n') {
-    logger.info(`Running migrations for the last ${lastN} blocks.`);
+    console.log(`Running migrations for the last ${lastN} blocks.`);
     let blocksProcessed = 0;
 
     let nextHash = await httpApi.rpc.chain.getBlockHash();
 
     while (blocksProcessed < lastN) {
-      logger.info('Running try-runtime for block: ', nextHash.toString());
+      console.log('Running try-runtime for block: ', nextHash.toString());
       await tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
 
       const currentHash = nextHash;
@@ -105,7 +104,7 @@ export async function tryRuntimeUpgrade(
     await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
   }
 
-  logger.info('try-runtime upgrade successful.');
+  console.log('try-runtime upgrade successful.');
 }
 
 export async function tryRuntimeUpgradeWithCompileRuntime(
