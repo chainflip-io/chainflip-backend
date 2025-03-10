@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Address, Digest};
+use cf_primitives::BlockNumber;
 use cf_utilities::bs58_array;
 
 pub const SOLANA_SIGNATURE_LEN: usize = 64;

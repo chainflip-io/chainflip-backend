@@ -70,9 +70,9 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
-			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
-			SolanaEnvironment,
+			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
+			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,SolanaApi
+			SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
 		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
@@ -85,6 +85,7 @@ use cf_chains::{
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
 	DcaParameters,
+	SwapRequestId,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
@@ -684,6 +685,16 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
+impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
+	for SolEnvironment
+{
+	fn lookup(
+		swap_request_id: SwapRequestId,
+	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+		Environment::take_sol_ccm_swap_alts(swap_request_id)
+	}
+}
+
 impl SolanaEnvironment for SolEnvironment {}
 
 pub struct TokenholderGovernanceBroadcaster;
@@ -825,6 +836,7 @@ macro_rules! impl_egress_api_for_anychain {
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
 				maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+				swap_request_id: Option<SwapRequestId>,
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
@@ -835,6 +847,7 @@ macro_rules! impl_egress_api_for_anychain {
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 							maybe_ccm_deposit_metadata,
+							swap_request_id,
 						)
 						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
 						.map_err(Into::into),
