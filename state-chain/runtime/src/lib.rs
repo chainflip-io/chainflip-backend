@@ -169,7 +169,7 @@ pub use pallet_cf_validator::SetSizeParameters;
 
 use chainflip::{
 	boost_api::IngressEgressBoostApi, epoch_transition::ChainflipEpochTransitions,
-	evm_vault_activator::EvmVaultActivator, BroadcastReadyProvider, BtcEnvironment,
+	evm_vault_activator::EvmVaultActivator,  solana_elections::SolanaAltWitnessingHandler, BroadcastReadyProvider, BtcEnvironment,
 	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment,
 	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
 };
@@ -409,6 +409,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type SolanaAltWitnessingHandler = SolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -437,6 +438,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type SolanaAltWitnessingHandler = SolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -465,6 +467,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type SolanaAltWitnessingHandler = SolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -493,6 +496,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type SolanaAltWitnessingHandler = SolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -521,6 +525,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type SolanaAltWitnessingHandler = SolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;

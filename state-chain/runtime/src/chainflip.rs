@@ -67,8 +67,8 @@ use cf_chains::{
 	instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance, SolanaInstance},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
-			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaAddressLookupTables,
+			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
+			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
 			SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
@@ -82,6 +82,7 @@ use cf_chains::{
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
 	DcaParameters,
+	SwapRequestId,
 };
 
 use cf_traits::{
@@ -615,12 +616,13 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
-impl ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccount>>
+impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
 	for SolEnvironment
 {
-	fn lookup(_s: SolanaAddressLookupTables) -> Option<Vec<SolAddressLookupTableAccount>> {
-		// TODO Ramiz: Lookup SolanaElection pallet for the ALTS using the given SwapRequestId
-		None
+	fn lookup(
+		swap_request_id: SwapRequestId,
+	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+		Environment::take_sol_ccm_swap_alts(swap_request_id)
 	}
 }
 
@@ -761,6 +763,7 @@ macro_rules! impl_egress_api_for_anychain {
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
 				maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+				swap_request_id: Option<SwapRequestId>,
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
@@ -771,6 +774,7 @@ macro_rules! impl_egress_api_for_anychain {
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 							maybe_ccm_deposit_metadata,
+							swap_request_id,
 						)
 						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
 						.map_err(Into::into),

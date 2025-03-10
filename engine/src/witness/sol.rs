@@ -44,9 +44,9 @@ use pallet_cf_elections::{
 };
 use state_chain_runtime::{
 	chainflip::solana_elections::{
-		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystemRunner,
-		SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking, SolanaVaultSwapTracking,
-		TransactionSuccessDetails,
+		SolanaAltWitnessing, SolanaBlockHeightTracking, SolanaEgressWitnessing,
+		SolanaElectoralSystemRunner, SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking,
+		SolanaVaultSwapTracking, TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
@@ -217,6 +217,30 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 	}
 }
 
+#[derive(Clone)]
+struct SolanaAltWitnessingVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaAltWitnessing> for SolanaAltWitnessingVoter {
+	async fn vote(
+		&self,
+		_settings: <SolanaAltWitnessing as ElectoralSystemTypes>::ElectoralSettings,
+		alt_witnessing_identifier: <SolanaAltWitnessing as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<SolanaAltWitnessing>>, anyhow::Error> {
+		lookup_table_witnessing::get_lookup_table_state(
+			&self.client,
+			alt_witnessing_identifier.alt_addresses,
+		)
+		.await
+		// We wrap the vote in a Some here since the vote is always valid if there was no error in
+		// rpc while querying. This is so we come to consensus on "None" if the lookup table is not
+		// found.
+		.map(Some)
+	}
+}
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: SolRetryRpcClient,
@@ -243,7 +267,8 @@ where
 						SolanaNonceTrackingVoter { client: client.clone() },
 						SolanaEgressWitnessingVoter { client: client.clone() },
 						SolanaLivenessVoter { client: client.clone() },
-						SolanaVaultSwapsVoter { client },
+						SolanaVaultSwapsVoter { client: client.clone() },
+						SolanaAltWitnessingVoter { client },
 					)),
 				)
 				.continuously_vote()
