@@ -45,10 +45,7 @@ jobs:
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Install Rust Toolchain 💿
-        run: |
-          TOOLCHAIN=$(grep "channel = " rust-toolchain.toml | cut -d'"' -f2)
-          rustup install $TOOLCHAIN
-          rustup target add wasm32-unknown-unknown --toolchain $TOOLCHAIN-aarch64-apple-darwin
+        run: rustup update
 
       - name: Build chainflip binaries 🏗️
         run: |
