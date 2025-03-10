@@ -35,7 +35,10 @@ export async function depositChannelCreation(testContext: TestContext) {
 
   const account1 = keyring.addFromUri('//BROKER_2');
   const account2 = keyring.addFromUri('//BROKER_1');
-  type SwapDetails = Parameters<(typeof broker)['requestSwapDepositAddress']>[0] & {
+  type SwapDetails = Omit<
+    Parameters<(typeof broker)['requestSwapDepositAddress']>[0],
+    'srcChain' | 'destChain'
+  > & {
     srcAsset: { asset: Asset; chain: Chain };
     destAsset: { asset: Asset; chain: Chain };
   };
@@ -268,7 +271,7 @@ export async function depositChannelCreation(testContext: TestContext) {
   };
 
   const withCcm: SwapDetails = {
-    ...baseCases.find((c) => c.destChain === 'Arbitrum')!,
+    ...baseCases.find((c) => c.destAsset.chain === 'Arbitrum')!,
     ccmParams: {
       message: '0xcafebabe',
       gasBudget: '1000000',

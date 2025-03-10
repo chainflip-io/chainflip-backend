@@ -1,5 +1,5 @@
 import { InternalAsset as Asset, Chains } from '@chainflip/cli';
-import { HDNodeWallet } from 'ethers';
+import { Contract, HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import BigNumber from 'bignumber.js';
 import Web3 from 'web3';
@@ -19,7 +19,7 @@ import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap'
 import { getChainflipApi } from './utils/substrate';
 import { ChannelRefundParameters } from './sol_vault_swap';
 import { Logger } from './utils/logger';
-import { approveErc20 } from './approve_erc20';
+import { getErc20abi } from './contract_interfaces';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
@@ -69,11 +69,11 @@ export async function executeEvmVaultSwap(
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.
 
-    await approveErc20(
-      logger,
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    await approveEvmTokenVault(
       sourceAsset,
-      getContractAddress(srcChain, 'VAULT'),
       (BigInt(amountToFineAmount(amountToSwap, assetDecimals(sourceAsset))) * 100n).toString(),
+      evmWallet,
     );
   }
 
@@ -129,4 +129,27 @@ export async function executeEvmVaultSwap(
   const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
 
   return receipt.transactionHash;
+}
+
+export async function approveEvmTokenVault(
+  sourceAsset: Asset,
+  amount: string,
+  wallet: HDNodeWallet,
+) {
+  if (!erc20Assets.includes(sourceAsset)) {
+    throw new Error(`Unsupported asset, not an ERC20: ${sourceAsset}`);
+  }
+
+  const erc20abi = await getErc20abi();
+  const chain = chainFromAsset(sourceAsset);
+  const tokenContractAddress = getContractAddress(chain, sourceAsset);
+  const sourceTokenContract = new Contract(tokenContractAddress, erc20abi, wallet);
+
+  const approvalTx = await sourceTokenContract.approve(
+    getContractAddress(chain, 'VAULT'),
+    amount,
+    // This is run with fresh addresses to prevent nonce issues
+    { nonce: 0 },
+  );
+  await approvalTx.wait();
 }
