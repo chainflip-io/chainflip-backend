@@ -134,14 +134,17 @@ impl CcmValidityCheck for CcmValidityChecker {
 				return Err(CcmValidityError::TooManyAddressLookupTables)
 			}
 
+			// We calculate the final length of the CCM transaction to fail early if it's certain
+			// that the egress will fail.
 			// Chainflip uses Versioned transactions regardless of the user passing an ALT or not.
-			// Calculate the extra lenght for each user ALT. Also, a user ALT makes it so we can't
-			// exactly calculate the final length, since we can't know the ALT content beforehand.
-			// Therefore, we calculate the most optimistic scenario when an ALT is passed and it
-			// might fail to build on egress but we rely on the user to provide the correct ALTs.
-			// A Solana CCM that fais to build will be refunded to a fallback address on Solana.
-			// The most optimistic scenario is the ALT containing both the CfReceiver and the
-			// destination address as well as all the ccm additional accounts.
+			// If the user doesn't pass any additional address lookup table (ALT) the final length
+			// of the egress can be calculated deterministically. However, a user ALT makes it so
+			// we can't exactly calculate the final length, since we can't know the ALT content
+			// beforehand. Therefore, we calculate the most optimistic scenario when an ALT is
+			// passed and it might fail to build on egress but we rely on the user to provide
+			// valid ALTs that will make it so the egress transaction will succeed. If that was
+			// not the case and the CCM egress were to fail, the user would be refunded to a
+			// fallback address.
 			let (lookup_tables_length, extra_buffer, bytes_per_new_account) =
 				if num_address_lookup_tables > 0 {
 					// Each empty lookup table is 34 bytes -> 32 bytes for address plus 2 for vector
@@ -149,7 +152,10 @@ impl CcmValidityCheck for CcmValidityChecker {
 					let lookup_tables_length =
 						num_address_lookup_tables * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION + 2);
 
-					// Account for CfReceiver and destination address being in the the lookup table.
+					// The most optimistic scenario is the ALT containing both the CfReceiver and
+					// the destination address as well as all the ccm additional accounts. That
+					// will allow for an extra amount of bytes that is available for the user
+					// transaction.
 					let extra_buffer = (ACCOUNT_KEY_LENGTH_IN_TRANSACTION * 2)
 						.saturating_sub(2 * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION);
 
@@ -162,8 +168,8 @@ impl CcmValidityCheck for CcmValidityChecker {
 				};
 
 			// Technically it shouldn't be necessary to pass duplicated accounts as
-			// it will all be executed in the same instruction. However when integrating
-			// with other protocols, many of the account's values are part of a returned
+			// it will all be executed in the same instruction. However, when integrating
+			// with other protocols, many of the account's are part of a returned
 			// payload from an API and it makes it cumbersome to then deduplicate on the
 			// fly and then make it match with the receiver contract. It can be done
 			// but it then requires extra configuration bytes in the payload, which
@@ -171,8 +177,8 @@ impl CcmValidityCheck for CcmValidityChecker {
 			// Therefore we want to account for duplicated accounts, both duplicated
 			// within the additional accounts and with our accounts. Then we can
 			// calculate the length accordingly.
-			// The Chainflip accounts are irrelevant to the user except for a
-			// few that are accounted for here.
+			// The only Chainflip accounts that are relevant to the user for deduplication
+			// purposes are used when initializing the `seen_addresses set.
 			let mut seen_addresses = BTreeSet::from_iter([
 				SYSTEM_PROGRAM_ID,
 				SYS_VAR_INSTRUCTIONS,
