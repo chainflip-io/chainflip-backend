@@ -42,8 +42,6 @@ pub struct ApiEnvironment;
 pub struct CurrentAggKey;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct CurrentOnChainKey;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
-pub struct SolanaAddressLookupTables(pub SwapRequestId);
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
 
@@ -75,7 +73,7 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
-	+ ChainEnvironment<SolanaAddressLookupTables, Vec<SolAddressLookupTableAccount>>
+	+ ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
 	+ RecoverDurableNonce
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
@@ -108,8 +106,15 @@ pub trait SolanaEnvironment:
 	}
 
 	/// Get any user-defined Address lookup tables from the Environment.
-	fn get_address_lookup_tables(id: SwapRequestId) -> Vec<SolAddressLookupTableAccount> {
-		Self::lookup(SolanaAddressLookupTables(id)).unwrap_or_default()
+	fn get_address_lookup_tables(
+		id: SwapRequestId,
+	) -> Result<Vec<SolAddressLookupTableAccount>, SolanaTransactionBuildingError> {
+		match Self::lookup(id) {
+			Some(AltConsensusResult::ValidConsensusAlts(alts)) => Ok(alts),
+			Some(AltConsensusResult::AltsInvalidNoConsensus) =>
+				Err(SolanaTransactionBuildingError::AltsInvalid),
+			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed),
+		}
 	}
 }
 
@@ -134,6 +139,8 @@ pub enum SolanaTransactionBuildingError {
 	InvalidCcm(CcmValidityError),
 	FailedToSerializeFinalTransaction,
 	FinalTransactionExceededMaxLength(u32),
+	AltsNotYetWitnessed,
+	AltsInvalid,
 }
 
 impl sp_std::fmt::Display for SolanaTransactionBuildingError {
@@ -399,8 +406,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
 		// TODO roy: Coordinate with Ramiz on the interface for getting ALTS
-		let mut address_lookup_tables = vec![sol_api_environment.address_lookup_table_account];
-		address_lookup_tables.extend(Environment::get_address_lookup_tables(swap_request_id));
+		let address_lookup_tables =
+			sp_std::iter::once(sol_api_environment.address_lookup_table_account)
+				.chain(Environment::get_address_lookup_tables(swap_request_id)?)
+				.collect::<Vec<_>>();
 
 		// Ensure the CCM parameters do not contain blacklisted accounts.
 		check_ccm_for_blacklisted_accounts(
@@ -412,41 +421,40 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 		let durable_nonce = Environment::nonce_account()?;
 
-		let fallback = TransferAssetParams {
-			asset: transfer_param.asset,
-			amount: transfer_param.amount,
-			to: ccm_accounts.fallback_address.into(),
-		};
-
 		let compute_limit =
 			SolTrackedData::calculate_ccm_compute_limit(gas_budget, transfer_param.asset);
 
-		// Build the transaction
-		let transaction = match transfer_param.asset {
-			SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
-				transfer_param.amount,
-				transfer_param.to,
-				source_chain,
-				source_address,
-				message,
-				ccm_accounts,
-				sol_api_environment.vault_program,
-				sol_api_environment.vault_program_data_account,
-				agg_key,
-				durable_nonce,
-				compute_price,
-				compute_limit,
-				address_lookup_tables,
-			),
-			SolAsset::SolUsdc => {
-				let ata = derive_associated_token_account(
+		Ok(Self {
+			call_type: SolanaTransactionType::CcmTransfer {
+				fallback: TransferAssetParams {
+					asset: transfer_param.asset,
+					amount: transfer_param.amount,
+					to: ccm_accounts.fallback_address.into(),
+				},
+			},
+			transaction: match transfer_param.asset {
+				SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
+					transfer_param.amount,
 					transfer_param.to,
-					sol_api_environment.usdc_token_mint_pubkey,
-				)
-				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-
-				SolanaTransactionBuilder::ccm_transfer_token(
-					ata.address,
+					source_chain,
+					source_address,
+					message,
+					ccm_accounts,
+					sol_api_environment.vault_program,
+					sol_api_environment.vault_program_data_account,
+					agg_key,
+					durable_nonce,
+					compute_price,
+					compute_limit,
+					address_lookup_tables,
+				),
+				SolAsset::SolUsdc => SolanaTransactionBuilder::ccm_transfer_token(
+					derive_associated_token_account(
+						transfer_param.to,
+						sol_api_environment.usdc_token_mint_pubkey,
+					)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?
+					.address,
 					transfer_param.amount,
 					transfer_param.to,
 					source_chain,
@@ -464,27 +472,22 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					SOL_USDC_DECIMAL,
 					compute_limit,
 					address_lookup_tables,
-				)
-			},
-		}
-		.inspect_err(|e| {
-			// CCM call building is NOT transactional - meaning when this fails,
-			// storage is not rolled back. We must recover the durable nonce here,
-			// since it has been taken from storage but not actually used.
-			log::error!(
-				"CCM building failed. Nonce recovered. Error: {:?}
-				Transfer param: {:?}
-				Nonce recovered: {:?}",
-				e,
-				transfer_param,
-				durable_nonce
-			);
-			Environment::recover_durable_nonce(durable_nonce.0);
-		})?;
-
-		Ok(Self {
-			call_type: SolanaTransactionType::CcmTransfer { fallback },
-			transaction,
+				),
+			}
+			.inspect_err(|e| {
+				// CCM call building is NOT transactional - meaning when this fails,
+				// storage is not rolled back. We must recover the durable nonce here,
+				// since it has been taken from storage but not actually used.
+				log::error!(
+					"CCM building failed. Nonce recovered. Error: {:?}
+					Transfer param: {:?}
+					Nonce recovered: {:?}",
+					e,
+					transfer_param,
+					durable_nonce
+				);
+				Environment::recover_durable_nonce(durable_nonce.0);
+			})?,
 			signer: None,
 			_phantom: Default::default(),
 		})
@@ -672,8 +675,12 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			swap_request_id,
 		)
 		.map_err(|e| {
-			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);
-			ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e)
+			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {}", e);
+			match e {
+				SolanaTransactionBuildingError::AltsNotYetWitnessed =>
+					ExecutexSwapAndCallError::TryAgainLater,
+				_ => ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e),
+			}
 		})
 	}
 }
@@ -753,3 +760,11 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 }
 
 impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {}
+
+#[derive(
+	Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Ord, PartialOrd,
+)]
+pub enum AltConsensusResult<T> {
+	ValidConsensusAlts(T),
+	AltsInvalidNoConsensus,
+}

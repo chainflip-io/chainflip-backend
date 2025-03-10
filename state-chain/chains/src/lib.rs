@@ -581,6 +581,8 @@ pub enum ExecutexSwapAndCallError {
 	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
 	/// Some other DispatchError occurred.
 	DispatchError(DispatchError),
+	/// ALT witnessing is still not finished for solana ccms.
+	TryAgainLater,
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {

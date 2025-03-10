@@ -76,4 +76,4 @@ macro_rules! generate_individual_vote_storage_tuple_impls {
 }
 #[cfg(test)]
 generate_individual_vote_storage_tuple_impls!(tuple_2_impls: (A, B));
-generate_individual_vote_storage_tuple_impls!(tuple_6_impls: (A, B, C, D, EE, FF));
+generate_individual_vote_storage_tuple_impls!(tuple_7_impls: (A, B, C, D, EE, FF, GG));

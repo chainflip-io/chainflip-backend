@@ -15,7 +15,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// This electoral system detects if something occurred or not. Voters simply vote if something
 /// happened, and if they haven't seen it happen, they don't vote.
-pub struct EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber> {
+pub struct ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber> {
 	_phantom: core::marker::PhantomData<(
 		Identifier,
 		Value,
@@ -26,20 +26,21 @@ pub struct EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateCh
 	)>,
 }
 
-pub trait OnEgressSuccess<Identifier, Value> {
-	fn on_egress_success(id: Identifier, value: Value);
+pub trait ExactValueHook<Identifier, Value> {
+	fn on_consensus(id: Identifier, value: Value);
+	fn should_expire_election(id: Identifier) -> bool;
 }
 
 impl<
 		Identifier: Member + Parameter + Ord,
 		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-		Hook: OnEgressSuccess<Identifier, Value> + 'static,
+		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
+	> ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
-	pub fn watch_for_egress<
+	pub fn witness_exact_value<
 		ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
 	>(
 		identifier: Identifier,
@@ -53,11 +54,11 @@ impl<
 		Identifier: Member + Parameter + Ord,
 		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-		Hook: OnEgressSuccess<Identifier, Value> + 'static,
+		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystemTypes
-	for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
+	for ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
 	type StateChainBlockNumber = StateChainBlockNumber;
@@ -80,11 +81,11 @@ impl<
 		Identifier: Member + Parameter + Ord,
 		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-		Hook: OnEgressSuccess<Identifier, Value> + 'static,
+		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystem
-	for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
+	for ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -92,6 +93,17 @@ impl<
 		_vote: &PartialVoteOf<Self>,
 	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
 		Ok(())
+	}
+
+	fn is_vote_needed(
+		(_, current_partial_vote, _): (
+			VotePropertiesOf<Self>,
+			PartialVoteOf<Self>,
+			AuthorityVoteOf<Self>,
+		),
+		(proposed_partial_vote, _): (PartialVoteOf<Self>, crate::VoteOf<Self>),
+	) -> bool {
+		current_partial_vote != proposed_partial_vote
 	}
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
@@ -108,10 +120,12 @@ impl<
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
 			let election_access = ElectoralAccess::election_mut(election_identifier);
-			if let Some(egress_data) = election_access.check_consensus()?.has_consensus() {
-				let identifier = election_access.properties()?;
+			let identifier = election_access.properties()?;
+			if let Some(witnessed_value) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
-				Hook::on_egress_success(identifier, egress_data);
+				Hook::on_consensus(identifier, witnessed_value);
+			} else if Hook::should_expire_election(identifier) {
+				election_access.delete();
 			}
 		}
 

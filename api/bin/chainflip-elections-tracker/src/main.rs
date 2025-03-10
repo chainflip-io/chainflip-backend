@@ -22,7 +22,7 @@ use opentelemetry_sdk::{
 	trace::{RandomIdGenerator, TracerProvider},
 };
 use pallet_cf_elections::{
-	UniqueMonotonicIdentifier, electoral_systems::composite::tuple_6_impls::*,
+	UniqueMonotonicIdentifier, electoral_systems::composite::tuple_7_impls::*,
 };
 use state_chain_runtime::{
 	Runtime, SolanaInstance, chainflip::solana_elections::SolanaElectoralSystemRunner,
@@ -118,6 +118,7 @@ async fn observe_elections<T: Tracer + Send>(
 							CompositeElectionProperties::D(_)  => 3,
 							CompositeElectionProperties::EE(_) => 4,
 							CompositeElectionProperties::FF(_) => 5,
+							CompositeElectionProperties::GG(_) => 6,
 						};
 					(*key, (ELECTORAL_SYSTEM_NAMES[index].into(), val.clone()))
 				})
