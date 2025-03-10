@@ -2769,6 +2769,7 @@ dependencies = [
  "sp-state-machine 0.43.0",
  "sp-transaction-pool",
  "state-chain-runtime",
+ "substrate-frame-rpc-system",
  "thiserror 1.0.69",
  "utilities",
 ]

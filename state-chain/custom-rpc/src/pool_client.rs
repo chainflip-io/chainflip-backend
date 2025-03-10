@@ -1,9 +1,8 @@
 use crate::{internal_error, CfApiError, RpcResult, StorageQueryApi};
 use anyhow::anyhow;
 use cf_node_client::{
-	runtime_decoder::{build_runtime_version, RuntimeDecoder},
-	signer::PairSigner,
-	ExtrinsicData, ExtrinsicDetails, WaitFor, WaitForDynamicResult, WaitForResult,
+	runtime_decoder::RuntimeDecoder, signer::PairSigner, ExtrinsicData, ExtrinsicDetails, WaitFor,
+	WaitForDynamicResult, WaitForResult,
 };
 use codec::{Decode, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
@@ -24,6 +23,7 @@ use sp_runtime::{
 };
 use state_chain_runtime::{runtime_apis::CustomRuntimeApi, AccountId, Hash, Nonce, RuntimeCall};
 use std::{collections::HashMap, future::Future, marker::PhantomData, ops::Deref, sync::Arc};
+use substrate_frame_rpc_system::{System, SystemApiServer};
 
 const SIGNED_EXTRINSIC_LIFETIME: state_chain_runtime::BlockNumber = 128;
 
@@ -48,13 +48,13 @@ where
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
-	pub client: Arc<C>,
-	pub pool: Arc<FullPool<B, C>>,
-	pub _phantom_b: PhantomData<B>,
-	pub _phantom_be: PhantomData<BE>,
-	pub pair_signer: PairSigner<sp_core::sr25519::Pair>,
-	pub runtime_decoders: Arc<RwLock<HashMap<u32, RuntimeDecoder>>>,
-	pub nonce: Arc<RwLock<Option<Nonce>>>,
+	client: Arc<C>,
+	pool: Arc<FullPool<B, C>>,
+	_phantom: PhantomData<(B, BE)>,
+	system_api: System<FullPool<B, C>, C, B>,
+	pair_signer: PairSigner<sp_core::sr25519::Pair>,
+	runtime_decoders: Arc<RwLock<HashMap<u32, RuntimeDecoder>>>,
+	nonce: Arc<RwLock<Option<Nonce>>>,
 }
 
 impl<C, B, BE> SignedPoolClient<C, B, BE>
@@ -80,13 +80,13 @@ where
 {
 	pub fn new(client: Arc<C>, pool: Arc<FullPool<B, C>>, pair: sp_core::sr25519::Pair) -> Self {
 		Self {
-			client,
-			pool,
-			_phantom_b: Default::default(),
-			_phantom_be: Default::default(),
+			_phantom: Default::default(),
+			system_api: System::new(client.clone(), pool.clone(), sc_rpc_api::DenyUnsafe::Yes),
 			pair_signer: PairSigner::new(pair),
 			runtime_decoders: Arc::new(RwLock::new(HashMap::new())),
 			nonce: Arc::new(RwLock::new(None)),
+			client,
+			pool,
 		}
 	}
 
@@ -94,7 +94,7 @@ where
 		self.pair_signer.account_id.clone()
 	}
 
-	async fn next_nonce(&self, at_block: Hash) -> RpcResult<Nonce> {
+	async fn next_nonce(&self) -> RpcResult<Nonce> {
 		let mut current_nonce = self.nonce.write().await;
 
 		match *current_nonce {
@@ -103,11 +103,9 @@ where
 				Ok(old_nonce + 1)
 			},
 			None => {
-				// If nonce is not set, reset it from account
-				let account_nonce = self
-					.client
-					.runtime_api()
-					.account_nonce(at_block, self.pair_signer.account_id.clone())?;
+				// If nonce is not set, reset it using the substrate_frame_rpc_system::System api
+				// which takes into consideration all pending transactions currently in the pool
+				let account_nonce = self.system_api.nonce(self.account_id()).await?;
 				*current_nonce = Some(account_nonce);
 				Ok(account_nonce)
 			},
@@ -139,37 +137,24 @@ where
 			}))
 		} else {
 			// Here we need to create a new runtime decoder for the runtime at the given block_hash
-			let maybe_new_decoder = self
-				.client
-				.runtime_api()
-				.metadata_at_version(block_hash, 15)
-				.expect("Version 15 should be supported by the runtime.")
-				.map(RuntimeDecoder::new);
+			let new_runtime_decoder = RuntimeDecoder::new(
+				self.client
+					.runtime_api()
+					.metadata_at_version(block_hash, 15)
+					.expect("metadata_at_version Runtime API should be supported")
+					.expect("Version 15 should be supported by the runtime."),
+			);
 
 			// Upgrade the read guard to a write guard
 			drop(decoders_read_guard);
 			let mut decoders_write_guard = self.runtime_decoders.write().await;
 
-			// Insert the new RuntimeDecoder. If anything goes wrong while creating it, return or
-			// insert a default build time RuntimeDecoder with the build runtime_version as key
-			let new_decoder_key = match maybe_new_decoder {
-				Some(new_runtime_decoder) => {
-					decoders_write_guard.entry(block_spec_version).or_insert(new_runtime_decoder);
-					block_spec_version
-				},
-				None => {
-					let default_spec_version = build_runtime_version().spec_version;
-					decoders_write_guard
-						.entry(default_spec_version)
-						.or_insert(RuntimeDecoder::default());
-					default_spec_version
-				},
-			};
+			decoders_write_guard.insert(block_spec_version, new_runtime_decoder);
 
 			// Downgrade the write guard to a read guard and return the reference
 			drop(decoders_write_guard);
 			Ok(RwLockReadGuard::map(self.runtime_decoders.read().await, |decoders_map| {
-				decoders_map.get(&new_decoder_key).unwrap()
+				decoders_map.get(&block_spec_version).unwrap()
 			}))
 		}
 	}
@@ -421,12 +406,13 @@ where
 			self.dry_run_extrinsic(call.clone()).await?;
 		}
 		loop {
-			let at_block = self.client.info().best_hash;
+			let extrinsic = self.create_signed_extrinsic(call.clone(), self.next_nonce().await?)?;
 
-			let extrinsic =
-				self.create_signed_extrinsic(call.clone(), self.next_nonce(at_block).await?)?;
-
-			match self.pool.submit_one(at_block, TransactionSource::External, extrinsic).await {
+			match self
+				.pool
+				.submit_one(self.client.info().best_hash, TransactionSource::External, extrinsic)
+				.await
+			{
 				Ok(tx_hash) => return Ok(tx_hash),
 				Err(e) => {
 					self.handle_transaction_pool_error(e).await?;
@@ -451,13 +437,15 @@ where
 		}
 
 		loop {
-			let at_block = self.client.info().best_hash;
-			let extrinsic =
-				self.create_signed_extrinsic(call.clone(), self.next_nonce(at_block).await?)?;
+			let extrinsic = self.create_signed_extrinsic(call.clone(), self.next_nonce().await?)?;
 
 			match self
 				.pool
-				.submit_and_watch(at_block, TransactionSource::External, extrinsic)
+				.submit_and_watch(
+					self.client.info().best_hash,
+					TransactionSource::External,
+					extrinsic,
+				)
 				.await
 			{
 				Ok(mut status_stream) => {
