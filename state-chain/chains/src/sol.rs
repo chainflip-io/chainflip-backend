@@ -53,7 +53,6 @@ pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
 // Bytes left that are available for the user when building the native and token ccm transfers.
 // All function parameters are already accounted except additional_accounts and message.
-// TODO: Should we pass again the source address? Takes up to 32 bytes
 pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 418usize; // 814 bytes left
 pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 507usize; // 725 bytes left
 

@@ -9,7 +9,8 @@ use cf_chains::{
 	ccm_checker::{CcmValidityError, VersionedSolanaCcmAdditionalData},
 	sol::{
 		api::{
-			SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError, SolanaTransactionType,
+			AltConsensusResult, SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError,
+			SolanaTransactionType,
 		},
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
@@ -973,7 +974,7 @@ fn vote_for_alt_election(election_identifier: u64, alts: Vec<SolAddressLookupTab
 			UniqueMonotonicIdentifier::from_u64(election_identifier),
 			CompositeElectionIdentifierExtra::GG(()),
 		),
-		AuthorityVote::Vote(CompositeVote::GG(Some(alts))),
+		AuthorityVote::Vote(CompositeVote::GG(AltConsensusResult::ValidConsensusAlts(alts))),
 	)
 	.unwrap();
 	Validator::current_authorities().into_iter().for_each(|id| {
