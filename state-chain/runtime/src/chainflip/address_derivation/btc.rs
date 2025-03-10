@@ -46,18 +46,36 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 
 /// ONLY FOR USE IN RPC CALLS.
 ///
-/// Derives the BTC vault deposit address from the private channel id.
+/// Derives the current and previous BTC vault deposit addresses from the private channel id.
 /// Note: This function will **panic** if the private channel id is out of bounds or if there is
 /// no active epoch key for Bitcoin.
-pub fn derive_btc_vault_deposit_address(private_channel_id: u64) -> String {
+///
+/// Returns a tuple of the previous and current BTC vault deposit addresses.
+/// Note: If there is no previous key, the current address is returned for both the previous and
+/// current addresses.
+pub fn derive_btc_vault_deposit_addresses(private_channel_id: u64) -> (String, String) {
 	let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
 		.expect("We should always have a key for the current epoch.");
-	DepositAddress::new(
+
+	let current = DepositAddress::new(
 		key.current,
 		private_channel_id.try_into().expect("Private channel id out of bounds."),
 	)
 	.script_pubkey()
-	.to_address(&Environment::network_environment().into())
+	.to_address(&Environment::network_environment().into());
+
+	let previous = if let Some(previous) = key.previous {
+		DepositAddress::new(
+			previous,
+			private_channel_id.try_into().expect("Private channel id out of bounds."),
+		)
+		.script_pubkey()
+		.to_address(&Environment::network_environment().into())
+	} else {
+		current.clone()
+	};
+
+	(previous, current)
 }
 
 #[test]

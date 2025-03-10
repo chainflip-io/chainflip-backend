@@ -66,7 +66,7 @@ use state_chain_runtime::{
 		ChannelActionType, CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
 		RuntimeApiPenalty, SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo,
-		VaultSwapDetails,
+		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -1062,7 +1062,7 @@ pub trait CustomApi {
 	fn cf_vault_addresses(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<(EncodedAddress, EncodedAddress, EncodedAddress)>;
+	) -> RpcResult<VaultAddresses<EncodedAddress>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1329,7 +1329,7 @@ where
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>,
-		cf_vault_addresses() -> (EncodedAddress, EncodedAddress, EncodedAddress),
+		cf_vault_addresses() -> VaultAddresses<EncodedAddress>,
 	}
 
 	pass_through_and_flatten! {

@@ -7,7 +7,8 @@ use chainflip_api::{
 	self,
 	primitives::{
 		state_chain_runtime::runtime_apis::{
-			ChainAccounts, ChannelActionType, TransactionScreeningEvents, VaultSwapDetails,
+			ChainAccounts, ChannelActionType, TransactionScreeningEvents, VaultAddresses,
+			VaultSwapDetails,
 		},
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
 		DcaParameters,
@@ -74,13 +75,6 @@ impl From<BrokerApiError> for ErrorObjectOwned {
 pub enum GetOpenDepositChannelsQuery {
 	All,
 	Mine,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct VaultAddresses {
-	ethereum: String,
-	arbitrum: String,
-	bitcoin: String,
 }
 
 #[rpc(server, client, namespace = "broker")]
@@ -165,7 +159,7 @@ pub trait Rpc {
 	) -> RpcResult<WithdrawFeesDetail>;
 
 	#[method(name = "vault_addresses", aliases = ["broker_getVaultAddresses"])]
-	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses<String>>;
 }
 
 pub struct RpcServerImpl {
@@ -353,13 +347,9 @@ impl RpcServer for RpcServerImpl {
 		Ok(self.api.broker_api().affiliate_withdrawal_request(affiliate_account_id).await?)
 	}
 
-	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
-		let (eth, arb, btc) = self.api.raw_client().cf_vault_addresses(None).await?;
-		Ok(VaultAddresses {
-			ethereum: eth.to_string(),
-			arbitrum: arb.to_string(),
-			bitcoin: btc.to_string(),
-		})
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses<String>> {
+		let vault_addresses = self.api.raw_client().cf_vault_addresses(None).await?;
+		Ok(vault_addresses.into())
 	}
 }
 

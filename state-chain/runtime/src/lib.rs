@@ -11,7 +11,7 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::{
-		address_derivation::btc::derive_btc_vault_deposit_address,
+		address_derivation::btc::derive_btc_vault_deposit_addresses,
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -27,10 +27,11 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
-		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
-		TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
+		BoostPoolDetails, BrokerInfo, BtcDepositAddresses, CcmData, ChannelActionType,
+		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvents,
+		ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2008,8 +2009,7 @@ impl_runtime_apis! {
 				earned_fees: Asset::all().map(|asset|
 					(asset, AssetBalances::get_balance(&account_id, asset))
 				).collect(),
-				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
-					.map(derive_btc_vault_deposit_address),
+				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id).map(|channel| derive_btc_vault_deposit_addresses(channel).1),
 				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
 				bond: account_info.bond()
 			}
@@ -2530,11 +2530,21 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_vault_addresses() -> (EncodedAddress, EncodedAddress, EncodedAddress) {
-			let eth_vault_address = EncodedAddress::Eth(Environment::eth_vault_address().into());
-			let arb_vault_address = EncodedAddress::Arb(Environment::arb_vault_address().into());
-			let btc_vault_address = EncodedAddress::Btc(derive_btc_vault_deposit_address(0).into());
-			(eth_vault_address, arb_vault_address, btc_vault_address)
+		fn cf_vault_addresses() -> VaultAddresses<EncodedAddress> {
+			// By passing 0 we get the acutal vault address.
+			let (previous, current) = derive_btc_vault_deposit_addresses(0);
+			VaultAddresses {
+				ethereum_vault: EncodedAddress::Eth(Environment::eth_vault_address().into()),
+				arbitrum_vault: EncodedAddress::Arb(Environment::arb_vault_address().into()),
+				bitcoin_vault: BtcDepositAddresses {
+					previous: EncodedAddress::Btc(previous.into()),
+					current: EncodedAddress::Btc(current.into()),
+				},
+				bitcoin_deposit_addresses: BrokerPrivateBtcChannels::<Runtime>::iter().map(|(k, v)| (k, BtcDepositAddresses {
+					previous: EncodedAddress::Btc(derive_btc_vault_deposit_addresses(v).0.into()),
+					current: EncodedAddress::Btc(derive_btc_vault_deposit_addresses(v).1.into()),
+				})).collect(),
+			}
 		}
 	}
 

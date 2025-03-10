@@ -344,6 +344,47 @@ pub struct TransactionScreeningEvents {
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
 }
 
+/// Struct that represents the BTC deposit addresses for a given private channel id.
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct BtcDepositAddresses<AddressType> {
+	pub previous: AddressType,
+	pub current: AddressType,
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct VaultAddresses<AddressType> {
+	pub ethereum_vault: AddressType,
+	pub arbitrum_vault: AddressType,
+	pub bitcoin_vault: BtcDepositAddresses<AddressType>,
+	pub bitcoin_deposit_addresses: BTreeMap<AccountId32, BtcDepositAddresses<AddressType>>,
+}
+
+#[cfg(feature = "std")]
+impl From<BtcDepositAddresses<EncodedAddress>> for BtcDepositAddresses<String> {
+	fn from(btc_vault_address: BtcDepositAddresses<EncodedAddress>) -> Self {
+		BtcDepositAddresses {
+			previous: btc_vault_address.previous.to_string(),
+			current: btc_vault_address.current.to_string(),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<VaultAddresses<EncodedAddress>> for VaultAddresses<String> {
+	fn from(vault_addresses: VaultAddresses<EncodedAddress>) -> Self {
+		VaultAddresses {
+			ethereum_vault: vault_addresses.ethereum_vault.to_string(),
+			arbitrum_vault: vault_addresses.arbitrum_vault.to_string(),
+			bitcoin_vault: vault_addresses.bitcoin_vault.into(),
+			bitcoin_deposit_addresses: vault_addresses
+				.bitcoin_deposit_addresses
+				.into_iter()
+				.map(|(k, v)| (k, v.into()))
+				.collect(),
+		}
+	}
+}
+
 // READ THIS BEFORE UPDATING THIS TRAIT:
 //
 // ## When changing an existing method:
@@ -518,7 +559,7 @@ decl_runtime_apis!(
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
 		fn cf_all_open_deposit_channels() -> Vec<(AccountId32, ChannelActionType, ChainAccounts)>;
-		fn cf_vault_addresses() -> (EncodedAddress, EncodedAddress, EncodedAddress);
+		fn cf_vault_addresses() -> VaultAddresses<EncodedAddress>;
 	}
 );
 

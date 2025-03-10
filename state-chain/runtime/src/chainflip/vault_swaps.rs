@@ -1,6 +1,6 @@
 use crate::{
 	chainflip::{
-		address_derivation::btc::derive_btc_vault_deposit_address, AddressConverter,
+		address_derivation::btc::derive_btc_vault_deposit_addresses, AddressConverter,
 		ChainAddressConverter, EvmEnvironment, SolEnvironment,
 	},
 	runtime_apis::{DispatchErrorWithMessage, EvmVaultSwapDetails, VaultSwapDetails},
@@ -95,7 +95,7 @@ pub fn bitcoin_vault_swap(
 
 	Ok(VaultSwapDetails::Bitcoin {
 		nulldata_payload: encode_swap_params_in_nulldata_payload(params),
-		deposit_address: derive_btc_vault_deposit_address(private_channel_id),
+		deposit_address: derive_btc_vault_deposit_addresses(private_channel_id).1,
 	})
 }
 
