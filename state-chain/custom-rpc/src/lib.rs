@@ -2544,4 +2544,50 @@ mod test {
 		})
 		.unwrap());
 	}
+
+	#[test]
+	fn test_vault_addresses_custom_rpc() {
+		use state_chain_runtime::runtime_apis::BtcDepositAddresses;
+		let val: VaultAddresses<EncodedAddress> = VaultAddresses {
+			ethereum_vault: EncodedAddress::Eth([0; 20]),
+			arbitrum_vault: EncodedAddress::Arb([1; 20]),
+			bitcoin_vault: BtcDepositAddresses {
+				previous: EncodedAddress::Btc(Vec::new()),
+				current: EncodedAddress::Btc(Vec::new()),
+			},
+			bitcoin_deposit_addresses: BTreeMap::from([(
+				ID_1.clone(),
+				BtcDepositAddresses {
+					previous: EncodedAddress::Btc(Vec::new()),
+					current: EncodedAddress::Btc(Vec::new()),
+				},
+			)]),
+		};
+		insta::assert_json_snapshot!(val);
+	}
+
+	#[test]
+	fn test_vault_addresses_broker_api() {
+		use state_chain_runtime::runtime_apis::BtcDepositAddresses;
+		let val: VaultAddresses<String> = VaultAddresses {
+			ethereum_vault: "0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968".to_string(),
+			arbitrum_vault: "0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968".to_string(),
+			bitcoin_vault: BtcDepositAddresses {
+				previous: "bcrt1p3cexjsg0qgwp6cqvmdk7fs5fus9k2kht3aesfel6r5muxwftqaas3ppc90"
+					.to_string(),
+				current: "bcrt1p3cexjsg0qgwp6cqvmdk7fs5fus9k2kht3aesfel6r5muxwftqaas3ppc90"
+					.to_string(),
+			},
+			bitcoin_deposit_addresses: BTreeMap::from([(
+				ID_1.clone(),
+				BtcDepositAddresses {
+					previous: "bcrt1p3cexjsg0qgwp6cqvmdk7fs5fus9k2kht3aesfel6r5muxwftqaas3ppc90"
+						.to_string(),
+					current: "bcrt1p3cexjsg0qgwp6cqvmdk7fs5fus9k2kht3aesfel6r5muxwftqaas3ppc90"
+						.to_string(),
+				},
+			)]),
+		};
+		insta::assert_json_snapshot!(val);
+	}
 }
