@@ -47,7 +47,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
-	ThresholdSignatureRequestId,
+	SwapRequestId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -913,6 +913,7 @@ pub trait EgressApi<C: Chain> {
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+		swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
@@ -1240,4 +1241,11 @@ pub struct PoolPrice {
 // Used to get price of a given pool
 pub trait PoolPriceProvider {
 	fn pool_price(base_asset: Asset, quote_asset: Asset) -> Result<PoolPrice, DispatchError>;
+}
+
+pub trait InitiateSolanaAltWitnessing {
+	fn initiate_alt_witnessing(
+		_ccm_channel_metadata: CcmChannelMetadata,
+		_swap_request_id: SwapRequestId,
+	);
 }

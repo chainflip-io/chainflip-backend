@@ -32,6 +32,7 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		affiliate_registry::MockAffiliateRegistry,
+		alt_witnessing::MockAltWitnessing,
 		api_call::{
 			MockBitcoinApiCall, MockBtcEnvironment, MockEthereumApiCall, MockEvmEnvironment,
 		},
@@ -137,6 +138,7 @@ impl Config<Instance1> for Test {
 	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapParameterValidation = MockSwapParameterValidation;
+	type SolanaAltWitnessingHandler = MockAltWitnessing;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
@@ -166,6 +168,7 @@ impl Config<Instance2> for Test {
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapParameterValidation = MockSwapParameterValidation;
+	type SolanaAltWitnessingHandler = MockAltWitnessing;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
