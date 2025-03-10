@@ -1,24 +1,26 @@
-use crate::{internal_error, CfApiError, RpcResult, StorageQueryApi};
-use anyhow::anyhow;
+use crate::StorageQueryApi;
 use cf_node_client::{
-	runtime_decoder::RuntimeDecoder, signer::PairSigner, ExtrinsicData, ExtrinsicDetails, WaitFor,
-	WaitForDynamicResult, WaitForResult,
+	error_decoder, events_decoder, runtime_decoder::RuntimeDecoder, signer::PairSigner,
+	ExtrinsicData, ExtrinsicDetails, WaitFor, WaitForDynamicResult, WaitForResult,
 };
 use codec::{Decode, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::StreamExt;
-use jsonrpsee::tokio::sync::{RwLock, RwLockReadGuard};
+use jsonrpsee::{
+	tokio::sync::{RwLock, RwLockReadGuard},
+	types::ErrorObjectOwned,
+};
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
 };
 use sc_transaction_pool::FullPool;
 use sc_transaction_pool_api::{TransactionPool, TransactionStatus};
-use sp_api::{CallApiAt, Core, Metadata};
+use sp_api::{ApiError, CallApiAt, Core, Metadata};
 use sp_block_builder::BlockBuilder;
 use sp_core::crypto::AccountId32;
 use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT},
-	transaction_validity::TransactionSource,
+	transaction_validity::{TransactionSource, TransactionValidityError},
 	Either,
 };
 use state_chain_runtime::{runtime_apis::CustomRuntimeApi, AccountId, Hash, Nonce, RuntimeCall};
@@ -26,6 +28,33 @@ use std::{collections::HashMap, future::Future, marker::PhantomData, ops::Deref,
 use substrate_frame_rpc_system::{System, SystemApiServer};
 
 const SIGNED_EXTRINSIC_LIFETIME: state_chain_runtime::BlockNumber = 128;
+
+#[derive(thiserror::Error, Debug)]
+pub enum PoolClientError {
+	#[error("The block for this hash was not found: {0}")]
+	BlockNotFound(Hash),
+	#[error("The block extrinsics does not have an extrinsic at index {0}")]
+	ExtrinsicNotFound(usize),
+	#[error("{0:?}")]
+	TransactionStatusError(&'static str),
+
+	#[error("{0:?}")]
+	CodecError(#[from] codec::Error),
+	#[error("{0:?}")]
+	RuntimeApiError(#[from] ApiError),
+	#[error("{0:?}")]
+	SubstrateClientError(#[from] sc_client_api::blockchain::Error),
+	#[error("{0:?}")]
+	TransactionPoolError(#[from] sc_transaction_pool::error::Error),
+	#[error("{0:?}")]
+	TransactionValidityError(#[from] TransactionValidityError),
+	#[error("{0:?}")]
+	ExtrinsicDispatchError(#[from] error_decoder::DispatchError),
+	#[error("{0:?}")]
+	ExtrinsicDynamicEventsError(#[from] events_decoder::DynamicEventError),
+	#[error(transparent)]
+	ErrorObject(#[from] ErrorObjectOwned),
+}
 
 pub struct SignedPoolClient<C, B, BE>
 where
@@ -94,7 +123,7 @@ where
 		self.pair_signer.account_id.clone()
 	}
 
-	async fn next_nonce(&self) -> RpcResult<Nonce> {
+	async fn next_nonce(&self) -> Result<Nonce, PoolClientError> {
 		let mut current_nonce = self.nonce.write().await;
 
 		match *current_nonce {
@@ -124,7 +153,7 @@ where
 	async fn runtime_decoder(
 		&self,
 		block_hash: Hash,
-	) -> RpcResult<impl Deref<Target = RuntimeDecoder> + '_> {
+	) -> Result<impl Deref<Target = RuntimeDecoder> + '_, PoolClientError> {
 		let block_spec_version = self.client.runtime_version_at(block_hash)?.spec_version;
 
 		// Acquire a read guard for the runtime_decoders map
@@ -159,7 +188,11 @@ where
 		}
 	}
 
-	fn create_signed_extrinsic(&self, call: RuntimeCall, nonce: Nonce) -> RpcResult<B::Extrinsic> {
+	fn create_signed_extrinsic(
+		&self,
+		call: RuntimeCall,
+		nonce: Nonce,
+	) -> Result<B::Extrinsic, PoolClientError> {
 		let finalized_block_hash = self.client.info().finalized_hash;
 		let finalized_block_number = self.client.info().finalized_number;
 		let genesis_hash = self.client.info().genesis_hash;
@@ -179,23 +212,23 @@ where
 
 		let call_data = signed_extrinsic.encode();
 
-		Ok(Decode::decode(&mut &call_data[..]).map_err(internal_error)?)
+		Ok(Decode::decode(&mut &call_data[..])?)
 	}
 
 	async fn get_extrinsic_data(
 		&self,
 		block_hash: Hash,
 		extrinsic_index: usize,
-	) -> RpcResult<ExtrinsicData> {
-		let Some(signed_block) = self.client.block(block_hash)? else {
-			Err(CfApiError::OtherError(anyhow!("The signed block this transaction was not found")))?
-		};
-		let Some(extrinsic) = signed_block.block.extrinsics().get(extrinsic_index) else {
-			Err(CfApiError::OtherError(anyhow!(
-				"The signed block extrinsics does not have an extrinsic at index {:?}",
-				extrinsic_index
-			)))?
-		};
+	) -> Result<ExtrinsicData, PoolClientError> {
+		let signed_block = self
+			.client
+			.block(block_hash)?
+			.ok_or(PoolClientError::BlockNotFound(block_hash))?;
+		let extrinsic = signed_block
+			.block
+			.extrinsics()
+			.get(extrinsic_index)
+			.ok_or(PoolClientError::ExtrinsicNotFound(extrinsic_index))?;
 
 		// Construct the storage key for system events
 		let events_storage_key = sp_core::storage::StorageKey(
@@ -215,7 +248,7 @@ where
 		match dynamic_events.extrinsic_result()? {
 			Either::Left(dispatch_info) =>
 				Ok((tx_hash, dynamic_events, signed_block.block.header().clone(), dispatch_info)),
-			Either::Right(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
+			Either::Right(dispatch_error) => Err(PoolClientError::ExtrinsicDispatchError(
 				self.runtime_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
 			)),
 		}
@@ -225,21 +258,21 @@ where
 		&self,
 		block_hash: Hash,
 		extrinsic_index: usize,
-	) -> RpcResult<ExtrinsicDetails> {
-		let Some(signed_block) = self.client.block(block_hash)? else {
-			Err(CfApiError::OtherError(anyhow!("The signed block this transaction was not found")))?
-		};
-		let Some(extrinsic) = signed_block.block.extrinsics().get(extrinsic_index) else {
-			Err(CfApiError::OtherError(anyhow!(
-				"The signed block extrinsics does not have an extrinsic at index {:?}",
-				extrinsic_index
-			)))?
-		};
+	) -> Result<ExtrinsicDetails, PoolClientError> {
+		let signed_block = self
+			.client
+			.block(block_hash)?
+			.ok_or(PoolClientError::BlockNotFound(block_hash))?;
+
+		let extrinsic = signed_block
+			.block
+			.extrinsics()
+			.get(extrinsic_index)
+			.ok_or(PoolClientError::ExtrinsicNotFound(extrinsic_index))?;
 
 		let block_events = StorageQueryApi::new(&self.client)
-			.get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>, _>(
-				block_hash,
-			)?;
+			.get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>, _>(block_hash)
+			.map_err(|e| PoolClientError::ErrorObject(e.into()))?;
 
 		let extrinsic_events = block_events
 			.iter()
@@ -276,7 +309,7 @@ where
 
 		match result {
 			Ok(details) => Ok(details),
-			Err(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
+			Err(dispatch_error) => Err(PoolClientError::ExtrinsicDispatchError(
 				self.runtime_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
 			)),
 		}
@@ -285,7 +318,7 @@ where
 	async fn handle_transaction_pool_error(
 		&self,
 		pool_error: sc_transaction_pool::error::Error,
-	) -> RpcResult<()> {
+	) -> Result<(), PoolClientError> {
 		match pool_error {
 			sc_transaction_pool::error::Error::Pool(
 				sc_transaction_pool_api::error::Error::TooLowPriority { .. },
@@ -334,7 +367,7 @@ where
 	/// This is the same function used by Polkadot System api rpc call `system_dryRun`.
 	/// Meant to be used to quickly test if an extrinsic would result in a failure. Note that this
 	/// always uses the current account nonce at the best block.
-	async fn dry_run_extrinsic(&self, call: RuntimeCall) -> RpcResult<()> {
+	async fn dry_run_extrinsic(&self, call: RuntimeCall) -> Result<(), PoolClientError> {
 		let best_block = self.client.info().best_hash;
 
 		// For apply_extrinsic call, always uses the current stored account nonce.
@@ -350,7 +383,7 @@ where
 		match self.client.runtime_api().apply_extrinsic(best_block, extrinsic)? {
 			Ok(dispatch_result) => match dispatch_result {
 				Ok(_) => Ok(()),
-				Err(dispatch_error) => Err(CfApiError::ExtrinsicDispatchError(
+				Err(dispatch_error) => Err(PoolClientError::ExtrinsicDispatchError(
 					self.runtime_decoder(best_block).await?.decode_dispatch_error(dispatch_error),
 				)),
 			},
@@ -370,7 +403,7 @@ where
 		call: RuntimeCall,
 		wait_for: WaitFor,
 		dry_run: bool,
-	) -> RpcResult<WaitForResult> {
+	) -> Result<WaitForResult, PoolClientError> {
 		match wait_for {
 			WaitFor::NoWait =>
 				Ok(WaitForResult::TransactionHash(self.submit_one(call, dry_run).await?)),
@@ -386,7 +419,7 @@ where
 		call: RuntimeCall,
 		wait_for: WaitFor,
 		dry_run: bool,
-	) -> RpcResult<WaitForDynamicResult> {
+	) -> Result<WaitForDynamicResult, PoolClientError> {
 		match wait_for {
 			WaitFor::NoWait =>
 				Ok(WaitForDynamicResult::TransactionHash(self.submit_one(call, dry_run).await?)),
@@ -401,7 +434,11 @@ where
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool without watching for its progress.
 	/// if successful, it returns the transaction hash otherwise returns a CallError
-	pub async fn submit_one(&self, call: RuntimeCall, dry_run: bool) -> RpcResult<Hash> {
+	pub async fn submit_one(
+		&self,
+		call: RuntimeCall,
+		dry_run: bool,
+	) -> Result<Hash, PoolClientError> {
 		if dry_run {
 			self.dry_run_extrinsic(call.clone()).await?;
 		}
@@ -427,9 +464,9 @@ where
 		until_finalized: bool,
 		dry_run: bool,
 		get_extrinsic_fn: F,
-	) -> RpcResult<T>
+	) -> Result<T, PoolClientError>
 	where
-		Fut: Future<Output = RpcResult<T>> + Send,
+		Fut: Future<Output = Result<T, PoolClientError>> + Send,
 		F: Fn(Hash, usize) -> Fut + Send,
 	{
 		if dry_run {
@@ -464,19 +501,19 @@ where
 							TransactionStatus::Ready |
 							TransactionStatus::Broadcast(_) => continue,
 							TransactionStatus::Invalid => {
-								return Err(CfApiError::OtherError(anyhow!(
-									"transaction is no longer valid in the current state. "
-								)))
+								return Err(PoolClientError::TransactionStatusError(
+									"transaction is no longer valid in the current state"
+								))
 							},
 							TransactionStatus::Dropped => {
-								return Err(CfApiError::OtherError(anyhow!(
+								return Err(PoolClientError::TransactionStatusError(
 									"transaction was dropped from the pool because of the limit"
-								)))
+								))
 							},
 							TransactionStatus::Usurped(_hash) => {
-								return Err(CfApiError::OtherError(anyhow!(
-									"Transaction has been replaced in the pool, "
-								)))
+								return Err(PoolClientError::TransactionStatusError(
+									"Transaction has been replaced in the pool, by another transaction that provides the same tags for example same (sender, nonce)."
+								))
 							},
 							TransactionStatus::FinalityTimeout(_block_hash) => {
 								//return Err(CfApiError::OtherError(anyhow!("Maximum number of
@@ -484,11 +521,13 @@ where
 								continue
 							},
 							TransactionStatus::Retracted(_block_hash) => {
-								Err(CfApiError::OtherError(anyhow!("The block this transaction was included in has been retracted.")))?
+								Err(PoolClientError::TransactionStatusError("The block this transaction was included in has been retracted."))?
 							},
 						}
 					}
-					return Err(CfApiError::OtherError(anyhow!("transaction unexpected error")))
+					return Err(PoolClientError::TransactionStatusError(
+						"transaction status unexpected error",
+					))
 				},
 				Err(e) => {
 					self.handle_transaction_pool_error(e).await?;
@@ -511,7 +550,7 @@ where
 		call: RuntimeCall,
 		until_finalized: bool,
 		dry_run: bool,
-	) -> RpcResult<ExtrinsicDetails> {
+	) -> Result<ExtrinsicDetails, PoolClientError> {
 		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, tx_index| {
 			self.get_extrinsic_details(block_hash, tx_index)
 		})
@@ -531,7 +570,7 @@ where
 		call: RuntimeCall,
 		until_finalized: bool,
 		dry_run: bool,
-	) -> RpcResult<ExtrinsicData> {
+	) -> Result<ExtrinsicData, PoolClientError> {
 		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, tx_index| {
 			self.get_extrinsic_data(block_hash, tx_index)
 		})
