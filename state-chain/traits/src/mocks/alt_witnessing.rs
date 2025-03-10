@@ -1,5 +1,3 @@
-use cf_primitives::DcaParameters;
-
 use crate::InitiateSolanaAltWitnessing;
 
 pub struct MockAltWitnessing;
