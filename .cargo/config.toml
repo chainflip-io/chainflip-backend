@@ -46,6 +46,8 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2024-0384: Unmaintained transitive dependency `instant` used by substrate.
 # - RUSTSEC-2024-0421: Transitive dependency `idna` used by libp2p, among others.
 # - RUSTSEC-2025-0009: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
+# - RUSTSEC-2025-0010: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
+# - RUSTSEC-2024-0436: Paste is no longer maintained. This is a pre-processor macro, so not an immediate security concern.
 cf-audit = '''
 audit -D unmaintained -D unsound
     --ignore RUSTSEC-2021-0139
@@ -60,4 +62,6 @@ audit -D unmaintained -D unsound
     --ignore RUSTSEC-2024-0384
     --ignore RUSTSEC-2024-0421
     --ignore RUSTSEC-2025-0009
+    --ignore RUSTSEC-2025-0010
+    --ignore RUSTSEC-2024-0436
 '''
