@@ -44,6 +44,9 @@ jobs:
       - name: Configure Git 🛠️
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
+      - name: Install Rust Toolchain 💿
+        run: rustup toolchain install
+
       - name: Build chainflip binaries 🏗️
         run: |
           cargo cf-build-${{ inputs.profile }} --locked
