@@ -19,27 +19,27 @@ pub type PalletMigration<T, I> = (
 	>,
 	 */
 	// APPLY THIS ON BERGHAIN
-	VersionedMigration<
-		18,
-		19,
-		deposit_channel_details_migration::DepositChannelDetailsMigration<T, I>,
-		Pallet<T, I>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	VersionedMigration<
-		19,
-		20,
-		scheduled_egress_ccm_migration::ScheduledEgressCcmMigration<T, I>,
-		Pallet<T, I>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	VersionedMigration<
-		20,
-		21,
-		rename_scheduled_tx_for_reject::RenameScheduledTxForReject<T, I>,
-		Pallet<T, I>,
-		<T as frame_system::Config>::DbWeight,
-	>,
+	// VersionedMigration<
+	// 	18,
+	// 	19,
+	// 	deposit_channel_details_migration::DepositChannelDetailsMigration<T, I>,
+	// 	Pallet<T, I>,
+	// 	<T as frame_system::Config>::DbWeight,
+	// >,
+	// VersionedMigration<
+	// 	19,
+	// 	20,
+	// 	scheduled_egress_ccm_migration::ScheduledEgressCcmMigration<T, I>,
+	// 	Pallet<T, I>,
+	// 	<T as frame_system::Config>::DbWeight,
+	// >,
+	// VersionedMigration<
+	// 	20,
+	// 	21,
+	// 	rename_scheduled_tx_for_reject::RenameScheduledTxForReject<T, I>,
+	// 	Pallet<T, I>,
+	// 	<T as frame_system::Config>::DbWeight,
+	// >,
 	/* ALREADY APPLIED ON PERSA/SISY
 	VersionedMigration<
 		17,
@@ -64,13 +64,13 @@ pub type PalletMigration<T, I> = (
 	>,
 	*/
 	// APPLY THIS ON PERSA/SISY
-	// VersionedMigration<
-	// 	20,
-	// 	21,
-	// 	update_rejection_params::Migration<T, I>,
-	// 	Pallet<T, I>,
-	// 	<T as frame_system::Config>::DbWeight,
-	// >,
+	VersionedMigration<
+		20,
+		21,
+		update_rejection_params::Migration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
 	// APPLY THIS ON ALL NETWORKS
 	VersionedMigration<
 		21,
