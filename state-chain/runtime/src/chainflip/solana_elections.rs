@@ -209,7 +209,7 @@ impl
 		AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	> for SolanaAltWitnessingHook
 {
-	fn on_successful_witness(
+	fn on_consensus(
 		alt_identifier: SolanaAltWitnessingIdentifier,
 		alts: AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	) {
@@ -232,7 +232,7 @@ pub struct TransactionSuccessDetails {
 pub struct SolanaEgressWitnessingHook;
 
 impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
-	fn on_successful_witness(
+	fn on_consensus(
 		signature: SolSignature,
 		TransactionSuccessDetails { tx_fee, transaction_successful }: TransactionSuccessDetails,
 	) {
@@ -693,7 +693,6 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 		swap_request_id: SwapRequestId,
 	) {
 		use sp_std::vec;
-		// The unwrap should succeed because it has been checked while opening the channel
 		match CcmValidityChecker::decode_unchecked(
 			ccm_channel_metadata.ccm_additional_data,
 			ForeignChain::Solana,

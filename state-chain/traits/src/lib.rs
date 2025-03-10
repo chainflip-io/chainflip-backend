@@ -1180,6 +1180,5 @@ pub trait InitiateSolanaAltWitnessing {
 	fn initiate_alt_witnessing(
 		_ccm_channel_metadata: CcmChannelMetadata,
 		_swap_request_id: SwapRequestId,
-	) {
-	}
+	);
 }

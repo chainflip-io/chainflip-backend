@@ -768,11 +768,3 @@ pub enum AltConsensusResult<T> {
 	ValidConsensusAlts(T),
 	AltsInvalidNoConsensus,
 }
-impl<T> AltConsensusResult<T> {
-	pub fn unwrap(self) -> T {
-		match self {
-			AltConsensusResult::ValidConsensusAlts(alts) => alts,
-			AltConsensusResult::AltsInvalidNoConsensus => panic!(),
-		}
-	}
-}

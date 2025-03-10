@@ -27,7 +27,7 @@ pub struct ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChain
 }
 
 pub trait ExactValueHook<Identifier, Value> {
-	fn on_successful_witness(id: Identifier, value: Value);
+	fn on_consensus(id: Identifier, value: Value);
 	fn should_expire_election(id: Identifier) -> bool;
 }
 
@@ -120,11 +120,11 @@ impl<
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
 			let election_access = ElectoralAccess::election_mut(election_identifier);
+			let identifier = election_access.properties()?;
 			if let Some(witnessed_value) = election_access.check_consensus()?.has_consensus() {
-				let identifier = election_access.properties()?;
 				election_access.delete();
-				Hook::on_successful_witness(identifier, witnessed_value);
-			} else if Hook::should_expire_election(election_access.properties()?) {
+				Hook::on_consensus(identifier, witnessed_value);
+			} else if Hook::should_expire_election(identifier) {
 				election_access.delete();
 			}
 		}

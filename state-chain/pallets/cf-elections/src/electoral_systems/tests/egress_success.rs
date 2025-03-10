@@ -13,7 +13,7 @@ thread_local! {
 
 pub struct MockHook;
 impl ExactValueHook<(), EgressData> for MockHook {
-	fn on_successful_witness(_id: (), _egress_data: EgressData) {
+	fn on_consensus(_id: (), _egress_data: EgressData) {
 		HOOK_CALLED.with(|hook_called| hook_called.set(true));
 	}
 	fn should_expire_election(_id: ()) -> bool {
