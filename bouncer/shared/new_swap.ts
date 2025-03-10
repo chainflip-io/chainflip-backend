@@ -53,7 +53,7 @@ export async function newSwap(
           ccmParams: messageMetadata && {
             message: messageMetadata.message,
             gasBudget: messageMetadata.gasBudget.toString(),
-            additionalData: messageMetadata.additionalData,
+            ccmAdditionalData: messageMetadata.ccmAdditionalData,
           },
           commissionBps: brokerCommissionBps,
           maxBoostFeeBps: boostFeeBps,

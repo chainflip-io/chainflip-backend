@@ -104,7 +104,7 @@ export async function depositChannelCreation(testContext: TestContext) {
         params.ccmParams && {
           message: params.ccmParams.message,
           gas_budget: `0x${BigInt(params.ccmParams.gasBudget).toString(16)}`,
-          ccm_additional_data: params.ccmParams.additionalData,
+          ccm_additional_data: params.ccmParams.ccmAdditionalData,
         },
         getInternalAsset(params.srcAsset) === 'Btc' ? params.maxBoostFeeBps ?? 0 : 0,
         (params.affiliates ?? []).map(({ account, commissionBps }) => ({
@@ -143,18 +143,13 @@ export async function depositChannelCreation(testContext: TestContext) {
 
     const event = await promise.finally(unsubscribe);
 
-    assert.strictEqual(
-      event.sourceAsset,
-      getInternalAsset(params.srcAsset),
-      'source asset is wrong',
-    );
-    assert.strictEqual(
-      event.destinationAsset,
-      getInternalAsset(params.destAsset),
-      'destination asset is wrong',
-    );
+    const sourceAsset = getInternalAsset(params.srcAsset);
+    const destinationAsset = getInternalAsset(params.destAsset);
 
-    const destChain = shortChainFromAsset(getInternalAsset(params.destAsset));
+    assert.strictEqual(event.sourceAsset, sourceAsset, 'source asset is wrong');
+    assert.strictEqual(event.destinationAsset, destinationAsset, 'destination asset is wrong');
+
+    const destChain = shortChainFromAsset(destinationAsset);
     const transformDestAddress = addressTransforms[destChain];
 
     assert.strictEqual(
@@ -174,7 +169,7 @@ export async function depositChannelCreation(testContext: TestContext) {
         event.refundParameters?.retryDuration,
         params.fillOrKillParams.retryDurationBlocks,
       );
-      const sourceChain = shortChainFromAsset(getInternalAsset(params.srcAsset));
+      const sourceChain = shortChainFromAsset(sourceAsset);
       const transformRefundAddress = addressTransforms[sourceChain];
       assert.strictEqual(
         transformRefundAddress(event.refundParameters!.refundAddress[sourceChain]!),
@@ -204,7 +199,7 @@ export async function depositChannelCreation(testContext: TestContext) {
       assert.strictEqual(event.channelMetadata.gasBudget, BigInt(params.ccmParams.gasBudget));
       assert.strictEqual(
         event.channelMetadata.ccmAdditionalData,
-        params.ccmParams.additionalData === '0x' ? '' : params.ccmParams.additionalData,
+        params.ccmParams.ccmAdditionalData === '0x' ? '' : params.ccmParams.ccmAdditionalData,
       );
     }
   };
@@ -275,7 +270,7 @@ export async function depositChannelCreation(testContext: TestContext) {
     ccmParams: {
       message: '0xcafebabe',
       gasBudget: '1000000',
-      additionalData: '0x',
+      ccmAdditionalData: '0x',
     },
   };
 

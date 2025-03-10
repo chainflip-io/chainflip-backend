@@ -138,7 +138,7 @@ export async function newCcmMetadata(
   ccmAdditionalDataArray?: string,
 ): Promise<CcmDepositMetadata> {
   const message = ccmMessage ?? newCcmMessage(destAsset);
-  const additionalData = ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message);
+  const ccmAdditionalData = ccmAdditionalDataArray ?? newCcmAdditionalData(destAsset, message);
   const destChain = chainFromAsset(destAsset);
 
   let userLogicGasBudget;
@@ -159,7 +159,7 @@ export async function newCcmMetadata(
   return {
     message,
     gasBudget: userLogicGasBudget?.toString(),
-    additionalData,
+    ccmAdditionalData,
   };
 }
 

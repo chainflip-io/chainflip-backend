@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.8.0-beta.1
-        version: 1.8.0-beta.1(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)
+        specifier: 1.8.0-beta.2
+        version: 1.8.0-beta.2(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)
       '@chainflip/utils':
         specifier: ^0.4.0
         version: 0.4.0
@@ -154,15 +154,15 @@ packages:
   '@chainflip/bitcoin@1.1.1':
     resolution: {integrity: sha512-Jr6X/0QTSFYpTp23ZPhyioL6wL9x3Xpj6OGjadQKZyhobRN4BZkhLogv20HDYTJcRzVphzrTJArbEaNie04XVA==}
 
-  '@chainflip/cli@1.8.0-beta.1':
-    resolution: {integrity: sha512-Qb7oKmC/2+8adFty5fvMAUYOqw/t1Pf2KhK7BehYbW8uldAz0GLL6Ztmr4Qb73UDY3eEVmpLlqhMtTla1ECXOg==}
+  '@chainflip/cli@1.8.0-beta.2':
+    resolution: {integrity: sha512-PC+9b/Fvkpf8qbzY2zE0mn50y+sb19scpg0OfG34dDpUDDlgKFGyfVj9Vk6B1lpqRgQsNHjd0QPjUZX6laRlTg==}
     hasBin: true
     peerDependencies:
       axios: ^1.7.7
       ethers: ^6.13.3
 
-  '@chainflip/rpc@1.8.6':
-    resolution: {integrity: sha512-aufMeb0ltGuudujH/H20EHPKsvt+qaYSB7weSy5Vw0ZfhUuQzDvFegXIpDLKajeUVpzaniKIlE2rKk4574nKDA==}
+  '@chainflip/rpc@1.8.7':
+    resolution: {integrity: sha512-ixvNrK9IHGZpajcJW4P5r1v3prSVLDHgTdzfE2wKTFekidL2pYk7duAW2windW/OXPG63ii6cmHqLQ8IGlF7dg==}
 
   '@chainflip/solana@2.0.1':
     resolution: {integrity: sha512-hUz2vgGSEZ6OKDB0s7uATDOmAthwPf71c5vTUIoBaA7E9iQLt60C8uLkB0ZRZO1Ie0oHQuSIS8YBIvjuyvhVxQ==}
@@ -172,6 +172,9 @@ packages:
 
   '@chainflip/utils@0.5.1':
     resolution: {integrity: sha512-1Zjoib2oPQLQGh4uMEnaQvC5EKAPctGlnS83PoJNa8lYYsg+A0p8HkZBWrsVseSeeinmyk9+sjuHUStAziCXtA==}
+
+  '@chainflip/utils@0.6.0':
+    resolution: {integrity: sha512-ZwyNKv3FVVJw5aOcRf/4rTxCclP+prerxPnTGBrFcBYEYSrPlyx4eI1dc7J35xmKD2yq+vQgwNjCx1h6oJuoPA==}
 
   '@coral-xyz/anchor-errors@0.30.1':
     resolution: {integrity: sha512-9Mkradf5yS5xiLWrl9WrpjqOrAV+/W2RQHDlbnAZBivoGpOs1ECjoDCkVk4aRG8ZdiFiB8zQEVlxf+8fKkmSfQ==}
@@ -3700,10 +3703,10 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@chainflip/cli@1.8.0-beta.1(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)':
+  '@chainflip/cli@1.8.0-beta.2(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@chainflip/bitcoin': 1.1.1(typescript@5.5.3)
-      '@chainflip/rpc': 1.8.6
+      '@chainflip/rpc': 1.8.7
       '@chainflip/solana': 2.0.1(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       '@chainflip/utils': 0.5.1
       axios: 1.7.2
@@ -3718,9 +3721,9 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@chainflip/rpc@1.8.6':
+  '@chainflip/rpc@1.8.7':
     dependencies:
-      '@chainflip/utils': 0.4.0
+      '@chainflip/utils': 0.6.0
       zod: 3.24.2
 
   '@chainflip/solana@2.0.1(bufferutil@4.0.8)(utf-8-validate@5.0.10)':
@@ -3735,6 +3738,12 @@ snapshots:
   '@chainflip/utils@0.4.0': {}
 
   '@chainflip/utils@0.5.1':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.1.2
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.6.0':
     dependencies:
       '@date-fns/utc': 2.1.0
       bignumber.js: 9.1.2

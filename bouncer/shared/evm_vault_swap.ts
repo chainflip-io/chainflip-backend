@@ -68,7 +68,6 @@ export async function executeEvmVaultSwap(
 
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.
-
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     await approveEvmTokenVault(
       sourceAsset,
@@ -103,7 +102,7 @@ export async function executeEvmVaultSwap(
     messageMetadata && {
       message: messageMetadata.message as `0x${string}`,
       gas_budget: messageMetadata.gasBudget,
-      ccm_additional_data: messageMetadata.additionalData,
+      ccm_additional_data: messageMetadata.ccmAdditionalData,
     },
     boostFeeBps ?? 0,
     affiliateFees.map((fee) => ({
