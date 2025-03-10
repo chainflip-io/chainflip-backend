@@ -48,6 +48,7 @@ jobs:
         run: |
           TOOLCHAIN=$(grep "channel = " rust-toolchain.toml | cut -d'"' -f2)
           rustup install $TOOLCHAIN
+          rustup target add wasm32-unknown-unknown --toolchain $TOOLCHAIN-aarch64-apple-darwin
 
       - name: Build chainflip binaries 🏗️
         run: |
