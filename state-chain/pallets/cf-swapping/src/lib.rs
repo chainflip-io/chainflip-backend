@@ -1431,6 +1431,7 @@ pub mod pallet {
 					earned_fees,
 					destination_address.clone(),
 					None,
+					None,
 				)
 				.map_err(Into::into)?;
 
@@ -2079,7 +2080,13 @@ pub mod pallet {
 		) {
 			let is_ccm_swap = maybe_ccm_metadata.is_some();
 
-			match T::EgressHandler::schedule_egress(asset, amount, address, maybe_ccm_metadata) {
+			match T::EgressHandler::schedule_egress(
+				asset,
+				amount,
+				address,
+				maybe_ccm_metadata,
+				Some(swap_request_id),
+			) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
 					if is_refund {
 						Self::deposit_event(Event::<T>::RefundEgressScheduled {
