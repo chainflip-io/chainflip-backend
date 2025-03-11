@@ -2,6 +2,19 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.8.3] - 2025-03-11
+
+### Features
+
+- Ethereum broker level screening ([#5674](https://github.com/chainflip-io/chainflip-backend/issues/5674))
+- Arb ingress egress tracker (picked from: #5702) ([#5705](https://github.com/chainflip-io/chainflip-backend/issues/5705))
+- Enable bls for arb ([#5687](https://github.com/chainflip-io/chainflip-backend/issues/5687))
+- Mandatory refund params  ([#5694](https://github.com/chainflip-io/chainflip-backend/issues/5694))
+
+### Fixes
+
+- Ensure boosted txs can be rejected ([#5704](https://github.com/chainflip-io/chainflip-backend/issues/5704))
+
 ## [1.8.2] - 2025-02-12
 
 ### Features
