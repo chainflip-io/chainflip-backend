@@ -2064,8 +2064,6 @@ pub mod pallet {
 								swap_request_id,
 								T::SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(
 									frame_system::Pallet::<T>::block_number().saturated_into::<u32>(),
-									// If in the future DCA affect expiry calculation, pass it in through a parameter.
-									None
 								))),
 						_ => None,
 					}

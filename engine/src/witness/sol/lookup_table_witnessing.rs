@@ -50,58 +50,42 @@ fn parse_alt_account_info(
 	account_info: Option<UiAccount>,
 	lookup_table_address: SolAddress,
 ) -> Result<Option<AddressLookupTableAccount>, anyhow::Error> {
-					if owner_address != sol_prim::consts::ADDRESS_LOOKUP_TABLE_PROGRAM {
-						tracing::info!("Owner is not address lookup table program: {}", owner);
-						return Ok(None);
-					}
+	match account_info {
+		Some(UiAccount {
+			data: UiAccountData::Json(ParsedAccount { program, space: _, parsed }),
+			owner,
+			..
+		}) => {
+			if program != "address-lookup-table" {
+				tracing::info!("Program is not an address lookup table: {}", program);
+				return Ok(None);
+			}
 
 			let owner_address = SolAddress::from_str(owner.as_str())?;
 
-					let deactivation_slot: Slot = Slot::from_str(
-						info.get("deactivationSlot").and_then(Value::as_str).ok_or(anyhow!(
-							"Deactivation slot not found in address lookup table account info: {:?}",
-							info
-						))?,
-					)?;
+			if owner_address != sol_prim::consts::ADDRESS_LOOKUP_TABLE_PROGRAM {
+				tracing::info!("Owner is not address lookup table program: {}", owner);
+				return Ok(None);
+			}
 
-					// Address lookup table is being deactivated
-					if deactivation_slot != Slot::MAX {
-						return Ok(None);
-					}
+			let info = match parsed.get("info").and_then(Value::as_object) {
+				Some(value) => value,
+				None => {
+					tracing::info!("Failed to parse the info: {}", parsed);
+					return Ok(None);
+				},
+			};
 
-					Ok(Some(AddressLookupTableAccount {
-						key: lookup_table_address.into(),
-						addresses: info
-							.get("addresses")
-							.and_then(Value::as_array)
-							.ok_or(anyhow!(
-								"Addresses not found in address lookup table account info: {:?}",
-								info
-							))?
-							.iter()
-							.filter_map(|address| address.as_str())
-							// if any of the address in the lookup table cannot be parsed (which
-							// means its invalid), we currently fail the whole table, and hence the
-							// whole vote. We could return a table with missing addresses but then
-							// we would have to change the AddressLookupTableAccount account type
-							// (to have Option<Vec<Addresses>>). Since its a type taken from the
-							// Solana sdk, we dont want to modify it. Hence, we fail here.
-							.map(|address| SolAddress::from_str(address).map(|a| a.into()))
-							.collect::<Result<_, _>>()?,
-					}))
-				},
-				// If the account is not JsonParsed as a Lookup Table we assume it's either empty or
-				// another account. We can also consider not returning an Option and instead
-				// return an empty vector if the ALT is not found.
-				Some(_) => {
-					tracing::info!(
-						"Address lookup table account encoding is not JsonParsed for account {:?}: {:?}",
-						lookup_table_address,
-						account_info
-					);
-					Ok(None)
-				},
-				None => Ok(None),
+			let deactivation_slot: Slot = Slot::from_str(
+				info.get("deactivationSlot").and_then(Value::as_str).ok_or(anyhow!(
+					"Deactivation slot not found in address lookup table account info: {:?}",
+					info
+				))?,
+			)?;
+
+			// Address lookup table is being deactivated
+			if deactivation_slot != Slot::MAX {
+				return Ok(None);
 			}
 
 			Ok(Some(AddressLookupTableAccount {
@@ -125,6 +109,16 @@ fn parse_alt_account_info(
 					.collect::<Result<_, _>>()?,
 			}))
 		},
+		Some(_) => {
+			tracing::info!(
+				"Address lookup table account encoding is not JsonParsed for account {:?}: {:?}",
+				lookup_table_address,
+				account_info
+			);
+			Ok(None)
+		},
+		None => Ok(None),
+	}
 }
 
 #[cfg(test)]

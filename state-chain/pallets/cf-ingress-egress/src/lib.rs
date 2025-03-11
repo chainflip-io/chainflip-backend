@@ -44,10 +44,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry,
-	InitiateSolanaAltWitnessing, AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster,
-	Chainflip, ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
+	AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip,
+	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	NetworkEnvironmentProvider, OnDeposit, PoolApi,
+	InitiateSolanaAltWitnessing, NetworkEnvironmentProvider, OnDeposit, PoolApi,
 	ScheduledEgressDetails, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
 	SwapRequestType,
 };
@@ -1951,7 +1951,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						),
 						min_price: params.min_price,
 					}),
-					dca_params.clone(),
+					dca_params,
 					origin.into(),
 				);
 				if let Some(ccm_channel_metadata) = channel_metadata {
@@ -1959,7 +1959,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						T::SolanaAltWitnessingHandler::initiate_alt_witnessing(
 							ccm_channel_metadata,
 							swap_request_id,
-							dca_params,
 						);
 					}
 				}
