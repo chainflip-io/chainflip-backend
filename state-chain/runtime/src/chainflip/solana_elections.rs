@@ -13,7 +13,7 @@ use cf_chains::{
 			VaultSwapAccountAndSender,
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
-		sol_tx_core::{consts::EXPIRY_TIME_FOR_ALT_ELECTIONS, SlotNumber},
+		sol_tx_core::{SlotNumber, EXPIRY_TIME_FOR_ALT_ELECTIONS},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
 		SolanaCrypto,
 	},
@@ -711,7 +711,7 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 							>(SolanaAltWitnessingIdentifier {
 								alt_addresses,
 								swap_request_id,
-								election_expiry_block_number: crate::System::block_number() + EXPIRY_TIME_FOR_ALT_ELECTIONS,
+								election_expiry_block_number: Self::calculate_expiry_block_number_for_alt_election(crate::System::block_number(), maybe_dca_params),
 							})
 						},
 					)
@@ -727,7 +727,12 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 		}
 	}
 
-	fn max_wait_time_for_ccm_aux_data() -> BlockNumberFor<Runtime> {
-		cf_chains::sol::sol_tx_core::consts::EXPIRY_TIME_FOR_ALT_ELECTIONS
+	fn calculate_expiry_block_number_for_alt_election(
+		current_block_number: u32,
+		_maybe_dca_params: Option<DcaParameters>,
+	) -> u32 {
+		// TODO: Configure the election expiry based on estimation of how long a swap would take
+		// given the dca parameters. Currently, we return a constant
+		current_block_number + EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
 }

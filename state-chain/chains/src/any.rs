@@ -1,15 +1,16 @@
 use crate::{
-	address::ForeignChainAddress, none::NoneChainCrypto, Chain, DepositDetailsToTransactionInId,
-	FeeRefundCalculator,
+	address::ForeignChainAddress, none::NoneChainCrypto, sol::SolanaAltLookup,
+	CcmAuxDataLookupKeyConversion, Chain, DepositDetailsToTransactionInId, FeeRefundCalculator,
 };
-use codec::{FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
-use sp_runtime::traits::Member;
+use scale_info::TypeInfo;
+use sp_runtime::{traits::Member, RuntimeDebug};
 
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
 	chains::{assets, AnyChain},
-	AssetAmount, ChannelId,
+	AssetAmount, ChannelId, SwapRequestId,
 };
 
 impl Chain for AnyChain {
@@ -35,6 +36,7 @@ impl Chain for AnyChain {
 	type TransactionRef = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+	type CcmAuxDataLookupKey = AnyChainCcmAuxDataLookupKey;
 }
 
 impl FeeRefundCalculator<AnyChain> for () {
@@ -47,3 +49,43 @@ impl FeeRefundCalculator<AnyChain> for () {
 }
 
 impl DepositDetailsToTransactionInId<NoneChainCrypto> for () {}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum AnyChainCcmAuxDataLookupKey {
+	Solana(SolanaAltLookup),
+	Others,
+}
+
+impl TryInto<()> for AnyChainCcmAuxDataLookupKey {
+	type Error = ();
+	fn try_into(self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl TryInto<SolanaAltLookup> for AnyChainCcmAuxDataLookupKey {
+	type Error = ();
+	fn try_into(self) -> Result<SolanaAltLookup, Self::Error> {
+		if let AnyChainCcmAuxDataLookupKey::Solana(lookup) = self {
+			Ok(lookup)
+		} else {
+			Err(())
+		}
+	}
+}
+
+impl CcmAuxDataLookupKeyConversion for AnyChainCcmAuxDataLookupKey {
+	fn expiry(&self) -> Option<u32> {
+		if let AnyChainCcmAuxDataLookupKey::Solana(lookup) = self {
+			lookup.expiry()
+		} else {
+			None
+		}
+	}
+	fn from_alt_lookup_key(swap_request_id: SwapRequestId, expiry: u32) -> Self {
+		AnyChainCcmAuxDataLookupKey::Solana(SolanaAltLookup::from_alt_lookup_key(
+			swap_request_id,
+			expiry,
+		))
+	}
+}

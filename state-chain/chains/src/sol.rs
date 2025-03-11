@@ -1,14 +1,14 @@
 pub use cf_primitives::chains::Solana;
 
-use cf_primitives::ChannelId;
+use cf_primitives::{ChannelId, SwapRequestId};
 use sp_core::ConstBool;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
 	address, assets,
 	sol::sol_tx_core::{AccountBump, SlotNumber},
-	DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator,
-	TypeInfo,
+	CcmAuxDataLookupKeyConversion, DepositChannel, DepositDetailsToTransactionInId,
+	FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{sp_runtime::RuntimeDebug, Parameter};
@@ -72,6 +72,24 @@ pub struct SolanaTransactionData {
 	pub skip_preflight: bool,
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct SolanaAltLookup {
+	// Used to lookup ALT query result
+	pub swap_request_id: SwapRequestId,
+	// Blocknumber when this CCM will expire and be refunded
+	pub expiry: u32,
+}
+
+impl CcmAuxDataLookupKeyConversion for SolanaAltLookup {
+	fn expiry(&self) -> Option<u32> {
+		Some(self.expiry)
+	}
+
+	fn from_alt_lookup_key(swap_request_id: SwapRequestId, expiry: u32) -> Self {
+		SolanaAltLookup { swap_request_id, expiry }
+	}
+}
+
 /// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
 pub type SolanaTransactionInId = (SolAddress, u64);
 
@@ -99,6 +117,7 @@ impl Chain for Solana {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 	type TransactionRef = SolSignature;
+	type CcmAuxDataLookupKey = SolanaAltLookup;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

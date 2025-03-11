@@ -896,7 +896,7 @@ pub trait EgressApi<C: Chain> {
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
-		swap_request_id: Option<SwapRequestId>,
+		ccm_aux_data_lookup_key: Option<C::CcmAuxDataLookupKey>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
@@ -1185,7 +1185,10 @@ pub trait InitiateSolanaAltWitnessing {
 	) {
 	}
 
-	fn max_wait_time_for_ccm_aux_data() -> BlockNumber {
-		Default::default()
+	fn calculate_expiry_block_number_for_alt_election(
+		current_block_number: BlockNumber,
+		_maybe_dca_params: Option<DcaParameters>,
+	) -> BlockNumber {
+		current_block_number + cf_chains::sol::sol_tx_core::EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
 }
