@@ -270,9 +270,7 @@ pub fn new_full<
 				},
 				[] => None, // No BROKER_KEY_TYPE_ID keys found
 				_ => {
-					log::warn!(
-					"Found more than one broker keys in the node keystore. Disabling broker API ..."
-				);
+					log::warn!("Found more than one broker keys in the node keystore. Disabling broker API ...");
 					None
 				},
 			};
@@ -290,9 +288,7 @@ pub fn new_full<
 			},
 			[] => None, // No LP_KEY_TYPE_ID keys found
 			_ => {
-				log::warn!(
-					"Found more than one lp provider keys in the node keystore. Disabling LP API ..."
-				);
+				log::warn!("Found more than one lp provider keys in the node keystore. Disabling LP API ...");
 				None
 			},
 		};

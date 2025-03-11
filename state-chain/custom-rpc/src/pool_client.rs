@@ -210,6 +210,7 @@ where
 		);
 		assert!(lifetime.contains(&(finalized_block_number + 1)));
 
+		// Needs to be returned as an OpaqueExtrinsic, which is just a wrapped `Vec<u8>`
 		let call_data = signed_extrinsic.encode();
 
 		Ok(Decode::decode(&mut &call_data[..])?)
