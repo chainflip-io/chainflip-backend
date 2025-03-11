@@ -1181,13 +1181,11 @@ pub trait InitiateSolanaAltWitnessing {
 	fn initiate_alt_witnessing(
 		_ccm_channel_metadata: CcmChannelMetadata,
 		_swap_request_id: SwapRequestId,
-		_maybe_dca_params: Option<DcaParameters>,
 	) {
 	}
 
 	fn calculate_expiry_block_number_for_alt_election(
 		current_block_number: BlockNumber,
-		_maybe_dca_params: Option<DcaParameters>,
 	) -> BlockNumber {
 		current_block_number + cf_chains::sol::sol_tx_core::EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}

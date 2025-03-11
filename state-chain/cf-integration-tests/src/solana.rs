@@ -1044,11 +1044,11 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 				source_address: None,
 				ccm_additional_data: ccm.ccm_additional_data,
 				gas_budget: ccm.gas_budget,
-				aux_data_lookup_key: Some(SolanaAltLookup{swap_request_id, expiry: SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(System::block_number(), None)}),
+				aux_data_lookup_key: Some(SolanaAltLookup{swap_request_id, expiry: SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(System::block_number())}),
 			});
 
 			assert!(SolEnvironment::get_address_lookup_tables(swap_request_id).is_err());
-			let aux_election_expiry = SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(System::block_number(), None);
+			let aux_election_expiry = SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(System::block_number());
 
 			testnet.move_forward_blocks(aux_election_expiry - System::block_number());
 

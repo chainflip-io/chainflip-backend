@@ -35,11 +35,11 @@ use pallet_cf_elections::{
 		self,
 		blockchain::delta_based_ingress::BackoffSettings,
 		composite::{tuple_7_impls::Hooks, CompositeRunner},
+		exact_value::ExactValueHook,
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
 		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
-		witness_something_by_identifier::{WitnessSomethingByIdentifier, WitnessSomethingHook},
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
@@ -134,7 +134,7 @@ pub type SolanaNonceTracking = electoral_systems::monotonic_change::MonotonicCha
 	BlockNumberFor<Runtime>,
 >;
 
-pub type SolanaEgressWitnessing = electoral_systems::witness_something_by_identifier::WitnessSomethingByIdentifier<
+pub type SolanaEgressWitnessing = electoral_systems::exact_value::ExactValue<
 	SolSignature,
 	TransactionSuccessDetails,
 	(),
@@ -190,7 +190,7 @@ pub struct SolanaAltWitnessingIdentifier {
 	pub election_expiry_block_number: BlockNumberFor<Runtime>,
 }
 
-pub type SolanaAltWitnessing = WitnessSomethingByIdentifier<
+pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 	SolanaAltWitnessingIdentifier,
 	// We also want to allow for the election to come to consensus on the fact that one or more
 	// alts provided were invalid and so we cant witness all alts.
@@ -204,12 +204,12 @@ pub type SolanaAltWitnessing = WitnessSomethingByIdentifier<
 pub struct SolanaAltWitnessingHook;
 
 impl
-	WitnessSomethingHook<
+	ExactValueHook<
 		SolanaAltWitnessingIdentifier,
 		AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	> for SolanaAltWitnessingHook
 {
-	fn on_successful_witness(
+	fn on_consensus(
 		alt_identifier: SolanaAltWitnessingIdentifier,
 		alts: AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	) {
@@ -231,7 +231,7 @@ pub struct TransactionSuccessDetails {
 
 pub struct SolanaEgressWitnessingHook;
 
-impl WitnessSomethingHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
+impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
 	fn on_consensus(
 		signature: SolSignature,
 		TransactionSuccessDetails { tx_fee, transaction_successful }: TransactionSuccessDetails,
@@ -711,7 +711,7 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 							>(SolanaAltWitnessingIdentifier {
 								alt_addresses,
 								swap_request_id,
-								election_expiry_block_number: Self::calculate_expiry_block_number_for_alt_election(crate::System::block_number(), maybe_dca_params),
+								election_expiry_block_number: crate::System::block_number() + EXPIRY_TIME_FOR_ALT_ELECTIONS,
 							})
 						},
 					)
@@ -725,14 +725,5 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 			Err(e) => log::error!("Ccm Check failed while decoding ccm_additional_data while initiating Solana ALT witnessing: {:?}", e),
 			_ => {},
 		}
-	}
-
-	fn calculate_expiry_block_number_for_alt_election(
-		current_block_number: u32,
-		_maybe_dca_params: Option<DcaParameters>,
-	) -> u32 {
-		// TODO: Configure the election expiry based on estimation of how long a swap would take
-		// given the dca parameters. Currently, we return a constant
-		current_block_number + EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
 }
