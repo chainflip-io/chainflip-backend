@@ -15,17 +15,15 @@ use cf_chains::{
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolAddressLookupTableAccount, SolCcmAccounts, SolCcmAddress, SolHash,
-		SolPubkey, SolanaCrypto,
+		SolPubkey, SolanaCrypto, SolanaAltLookup,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
 	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
-use cf_primitives::{
-	AccountRole, AuthorityCount, CcmAuxDataLookupKey, ForeignChain, SwapRequestId,
-};
+use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
-use cf_traits::AltWitnessingHandler;
+use cf_traits::InitiateSolanaAltWitnessing;
 use cf_utilities::bs58_array;
 use codec::Encode;
 use frame_support::{
@@ -946,14 +944,14 @@ fn solana_failed_ccm_can_trigger_refund_transfer() {
 				source_address: None,
 				ccm_additional_data: ccm.ccm_additional_data,
 				gas_budget: ccm.gas_budget,
-				aux_data_lookup_key: CcmAuxDataLookupKey::NotRequired,
+				aux_data_lookup_key: None,
 			});
 
 			testnet.move_forward_blocks(1);
 
 			// When CCM transaction building failed, fallback to refund the asset via Transfer instead.
-			assert!(assert_events_match!(Runtime, RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::InvalidCcmRefunded { 
-				asset, 
+			assert!(assert_events_match!(Runtime, RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::InvalidCcmRefunded {
+				asset,
 				destination_address,
 				..
 			}) if asset == SolAsset::Sol && destination_address == FALLBACK_ADDRESS => true));
@@ -1046,17 +1044,17 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 				source_address: None,
 				ccm_additional_data: ccm.ccm_additional_data,
 				gas_budget: ccm.gas_budget,
-				aux_data_lookup_key: CcmAuxDataLookupKey::Alt{swap_request_id, created_at: System::block_number()},
+				aux_data_lookup_key: Some(SolanaAltLookup{swap_request_id, expiry: SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(System::block_number(), None)}),
 			});
 
 			assert!(SolEnvironment::get_address_lookup_tables(swap_request_id).is_err());
-			let max_aux_wait_time = SolanaAltWitnessingHandler::max_wait_time_for_ccm_aux_data();
+			let aux_election_expiry = SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(System::block_number(), None);
 
-			testnet.move_forward_blocks(max_aux_wait_time);
+			testnet.move_forward_blocks(aux_election_expiry - System::block_number());
 
 			// Since we have waited for too long, treat the CCM as invalid and refund the asset via Transfer instead.
 			assert_eq!(assert_events_match!(Runtime,
-				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmEgressInvalid { 
+				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmEgressInvalid {
 					egress_id: (ForeignChain::Solana, 1u64), 
 					error,
 				}) if error == cf_chains::ExecutexSwapAndCallError::DispatchError(pallet_cf_ingress_egress::Error::<Runtime, SolanaInstance>::ExceededMaxCcmAuxDataWaitTime.into()) => true,

@@ -27,9 +27,9 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
-	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
-	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
+	AllBatch, AllBatchError, CcmAdditionalData, CcmAuxDataLookupKeyConversion, CcmChannelMetadata,
+	CcmDepositMetadata, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks,
+	ChannelRefundParameters, ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall, SwapOrigin,
@@ -37,9 +37,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
-	Beneficiary, BoostPoolTier, BroadcastId, CcmAuxDataLookupKey, ChannelId, DcaParameters,
-	EgressCounter, EgressId, EpochIndex, ForeignChain, GasAmount, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
+	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
+	EpochIndex, ForeignChain, GasAmount, PrewitnessedDepositId, SwapRequestId,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -53,7 +53,7 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
-	sp_runtime::{traits::Zero, DispatchError, Permill, Saturating},
+	sp_runtime::{traits::Zero, DispatchError, Permill, SaturatedConversion, Saturating},
 	transactional,
 };
 use frame_system::pallet_prelude::*;
@@ -248,7 +248,7 @@ pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 
 /// Cross-chain messaging requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct CrossChainMessage<C: Chain, BlockNumber: Clone> {
+pub struct CrossChainMessage<C: Chain> {
 	pub egress_id: EgressId,
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
@@ -261,10 +261,10 @@ pub struct CrossChainMessage<C: Chain, BlockNumber: Clone> {
 	pub ccm_additional_data: CcmAdditionalData,
 	pub gas_budget: GasAmount,
 	// Contains information used to lookup for auxiliary data.
-	pub aux_data_lookup_key: CcmAuxDataLookupKey<BlockNumber>,
+	pub aux_data_lookup_key: Option<C::CcmAuxDataLookupKey>,
 }
 
-impl<C: Chain, BlockNumber: Clone> CrossChainMessage<C, BlockNumber> {
+impl<C: Chain> CrossChainMessage<C> {
 	fn asset(&self) -> C::ChainAsset {
 		self.asset
 	}
@@ -663,7 +663,7 @@ pub mod pallet {
 	/// Scheduled cross chain messages for the Ethereum chain.
 	#[pallet::storage]
 	pub type ScheduledEgressCcm<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<CrossChainMessage<T::TargetChain, BlockNumberFor<T>>>, ValueQuery>;
+		StorageValue<_, Vec<CrossChainMessage<T::TargetChain>>, ValueQuery>;
 
 	/// Stores the list of assets that are not allowed to be egressed.
 	#[pallet::storage]
@@ -1739,10 +1739,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut maybe_no_of_transfers_remaining =
 			T::FetchesTransfersLimitProvider::maybe_ccm_limit();
 
-		let ccm_max_wait_time = T::AltWitnessingHandler::max_wait_time_for_ccm_aux_data();
-		let current_block = <frame_system::Pallet<T>>::block_number();
+		let current_block: u32 = <frame_system::Pallet<T>>::block_number().saturated_into::<u32>();
 
-		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain, BlockNumberFor<T>>> =
+		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
 				ccms.extract_if(.., |ccm| {
@@ -1752,8 +1751,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.collect()
 			});
 		for ccm in ccms_to_send {
-			if let Some(created_at) = ccm.aux_data_lookup_key.created_at() {
-				if current_block.saturating_sub(created_at) >= ccm_max_wait_time {
+			// If we waited for too long, fail the CCM and refund.
+			if let Some(expiry) = ccm.aux_data_lookup_key.clone().and_then(|key| key.expiry()) {
+				if current_block >= expiry {
 					Self::refund_invalid_ccm(
 						ccm,
 						ExecutexSwapAndCallError::DispatchError(
@@ -1762,7 +1762,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					);
 					continue;
 				}
-			}
+			};
 
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 				TransferAssetParams {
@@ -1775,7 +1775,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.gas_budget,
 				ccm.message.to_vec(),
 				ccm.ccm_additional_data.to_vec(),
-				ccm.aux_data_lookup_key.swap_request_id(),
+				ccm.aux_data_lookup_key.clone(),
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -2829,10 +2829,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn refund_invalid_ccm(
-		ccm: CrossChainMessage<T::TargetChain, BlockNumberFor<T>>,
-		error: ExecutexSwapAndCallError,
-	) {
+	fn refund_invalid_ccm(ccm: CrossChainMessage<T::TargetChain>, error: ExecutexSwapAndCallError) {
 		Self::deposit_event(Event::<T, I>::CcmEgressInvalid { egress_id: ccm.egress_id, error });
 		if let Ok(decoded_data) = T::CcmValidityChecker::decode_unchecked(
 			ccm.ccm_additional_data.clone(),
@@ -2902,7 +2899,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
-		swap_request_id: Option<SwapRequestId>,
+		ccm_aux_data_lookup_key: Option<<T::TargetChain as Chain>::CcmAuxDataLookupKey>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
@@ -2939,13 +2936,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_chain,
 						source_address,
 						gas_budget,
-						aux_data_lookup_key: match swap_request_id {
-							Some(swap_request_id) => CcmAuxDataLookupKey::Alt {
-								swap_request_id,
-								created_at: <frame_system::Pallet<T>>::block_number(),
-							},
-							None => CcmAuxDataLookupKey::NotRequired,
-						},
+						aux_data_lookup_key: ccm_aux_data_lookup_key,
 					});
 
 					Ok(egress_details)

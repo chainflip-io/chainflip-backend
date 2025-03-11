@@ -290,6 +290,8 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
+
+	type CcmAuxDataLookupKey: Member + Parameter + Clone + CcmAuxDataLookupKeyConversion;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -593,7 +595,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: Option<SwapRequestId>,
+		aux_data_lookup_key: Option<C::CcmAuxDataLookupKey>,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
@@ -1156,4 +1158,18 @@ impl VaultSwapExtraParametersRpc {
 			u128::try_from(n).map_err(|_| "Cannot convert number input into u128".into())
 		})
 	}
+}
+
+/// For handling conversions to and from the Generic Ccm Aux Data Lookup Key.
+pub trait CcmAuxDataLookupKeyConversion {
+	/// For solana Address Lookup table
+	fn expiry(&self) -> Option<u32>;
+	fn from_alt_lookup_key(swap_request_id: SwapRequestId, expiry: u32) -> Self;
+}
+
+impl CcmAuxDataLookupKeyConversion for () {
+	fn expiry(&self) -> Option<u32> {
+		None
+	}
+	fn from_alt_lookup_key(_swap_request_id: SwapRequestId, _expiry: u32) -> Self {}
 }

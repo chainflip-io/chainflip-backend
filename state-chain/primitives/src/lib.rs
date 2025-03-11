@@ -457,31 +457,3 @@ pub struct DcaParameters {
 }
 
 pub type ShortId = u8;
-
-#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, Clone, Default)]
-pub enum CcmAuxDataLookupKey<BlockNumber: Clone> {
-	#[default]
-	NotRequired,
-	Alt {
-		// Used to lookup ALT query result
-		swap_request_id: SwapRequestId,
-		// Used to calculate when to expire and refund ccm
-		created_at: BlockNumber,
-	},
-}
-
-impl<BlockNumber: Clone> CcmAuxDataLookupKey<BlockNumber> {
-	pub fn swap_request_id(&self) -> Option<SwapRequestId> {
-		match self {
-			CcmAuxDataLookupKey::NotRequired => None,
-			CcmAuxDataLookupKey::Alt { swap_request_id, .. } => Some(*swap_request_id),
-		}
-	}
-
-	pub fn created_at(&self) -> Option<BlockNumber> {
-		match self {
-			CcmAuxDataLookupKey::NotRequired => None,
-			CcmAuxDataLookupKey::Alt { created_at, .. } => Some(created_at.clone()),
-		}
-	}
-}

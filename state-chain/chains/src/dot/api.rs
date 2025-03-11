@@ -129,7 +129,7 @@ where
 		_gas_budget: GasAmount,
 		_message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
-		_swap_request_id: Option<SwapRequestId>,
+		__aux_data_lookup_key: Option<()>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		Err(ExecutexSwapAndCallError::Unsupported)
 	}

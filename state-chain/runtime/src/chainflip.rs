@@ -748,7 +748,7 @@ macro_rules! impl_egress_api_for_anychain {
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
 				maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
-				swap_request_id: Option<SwapRequestId>,
+				ccm_aux_data_lookup_key: Option<<AnyChain as Chain>::CcmAuxDataLookupKey>,
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
@@ -759,7 +759,7 @@ macro_rules! impl_egress_api_for_anychain {
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 							maybe_ccm_deposit_metadata,
-							swap_request_id,
+							ccm_aux_data_lookup_key.and_then(|lookup| lookup.try_into().ok()),
 						)
 						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
 						.map_err(Into::into),

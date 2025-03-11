@@ -19,7 +19,7 @@ use crate::{
 		},
 		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolAsset, SolHash,
-		SolTrackedData, SolVersionedTransaction, SolanaCrypto,
+		SolTrackedData, SolVersionedTransaction, SolanaAltLookup, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
@@ -660,7 +660,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: Option<SwapRequestId>,
+		aux_data_lookup_key: Option<SolanaAltLookup>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		Self::ccm_transfer(
 			transfer_param,
@@ -671,7 +671,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			gas_budget,
 			message,
 			ccm_additional_data,
-			swap_request_id,
+			aux_data_lookup_key.map(|key| key.swap_request_id),
 		)
 		.map_err(|e| {
 			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);
