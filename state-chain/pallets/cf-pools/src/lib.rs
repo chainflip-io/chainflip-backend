@@ -534,7 +534,7 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
+			Self::try_update_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
 						.get(&lp)
@@ -615,7 +615,7 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
+			Self::try_update_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
 						.get(&lp)
@@ -898,7 +898,8 @@ pub mod pallet {
 			for order in orders {
 				match order {
 					CloseOrder::Limit { base_asset, quote_asset, side, id } => {
-						Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+						let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+						Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 							match pool.limit_orders_cache[side.to_sold_pair()]
 								.get(lp)
 								.and_then(|limit_orders| limit_orders.get(&id))
@@ -925,7 +926,8 @@ pub mod pallet {
 						})?;
 					},
 					CloseOrder::Range { base_asset, quote_asset, id } => {
-						Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+						let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+						Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 							match (pool
 								.range_orders_cache
 								.get(lp)
@@ -1379,7 +1381,7 @@ impl<T: Config> Pallet<T> {
 			T::SafeMode::get().limit_order_update_enabled,
 			Error::<T>::UpdatingLimitOrdersDisabled
 		);
-		Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+		Self::try_update_order(lp, base_asset, quote_asset, |asset_pair, pool| {
 			let tick = match (
 				pool.limit_orders_cache[side.to_sold_pair()]
 					.get(lp)
@@ -1429,7 +1431,7 @@ impl<T: Config> Pallet<T> {
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
-		Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+		Self::try_update_order(lp, base_asset, quote_asset, |asset_pair, pool| {
 			let tick = match (
 				pool.limit_orders_cache[side.to_sold_pair()]
 					.get(lp)
@@ -1780,7 +1782,10 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn try_mutate_order<R, F: FnOnce(&AssetPair, &mut Pool<T>) -> Result<R, DispatchError>>(
+	/// Mutate the pool with the given function.
+	/// Note that this does not sweep before mutating the order because any given update function
+	/// should already sweep the order.
+	fn try_update_order<R, F: FnOnce(&AssetPair, &mut Pool<T>) -> Result<R, DispatchError>>(
 		lp: &T::AccountId,
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
@@ -1789,7 +1794,6 @@ impl<T: Config> Pallet<T> {
 		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, base_asset)?;
 		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, quote_asset)?;
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
-		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)
 	}
 
