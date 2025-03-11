@@ -86,14 +86,13 @@ jobs:
       - name: Start a localnet 🚀
         env:
           BINARY_ROOT_PATH: .
-          DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
+          DEBUG_OUTPUT_DESTINATION: /dev/stdout
         run: |
           set -x
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
-          touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
           echo "Check for libchainflip_engine_v*.so"

@@ -155,7 +155,7 @@ jobs:
         if: inputs.run-job
         env:
           BINARY_ROOT_PATH: ./upgrade-from-bins
-          DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
+          DEBUG_OUTPUT_DESTINATION: /dev/stdout
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           set -x
@@ -163,7 +163,6 @@ jobs:
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
-          touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
           echo "/usr/lib before copy of .so files"
