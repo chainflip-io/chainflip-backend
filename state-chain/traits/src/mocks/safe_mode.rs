@@ -31,13 +31,14 @@ mod test {
 	fn test_mock_safe_mode() {
 		use frame_support::traits::Get;
 		sp_io::TestExternalities::default().execute_with(|| {
-			assert!(
-				<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get() ==
-					MockRuntimeSafeMode {
-						a: ExampleSafeModeA::CODE_GREEN,
-						b: ExampleSafeModeB::CODE_GREEN,
-					}
-			);
+			assert!(matches!(
+				<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get(),
+				MockRuntimeSafeMode {
+					a: ExampleSafeModeA::CODE_GREEN,
+					b: ExampleSafeModeB::CODE_GREEN,
+					..
+				}
+			));
 			assert!(
 				<MockRuntimeSafeMode as Get<ExampleSafeModeA>>::get() ==
 					ExampleSafeModeA::CODE_GREEN
@@ -49,13 +50,14 @@ mod test {
 
 			MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode::CODE_RED);
 
-			assert!(
-				<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get() ==
-					MockRuntimeSafeMode {
-						a: ExampleSafeModeA::CODE_RED,
-						b: ExampleSafeModeB::CODE_RED,
-					}
-			);
+			assert!(matches!(
+				<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get(),
+				MockRuntimeSafeMode {
+					a: ExampleSafeModeA::CODE_RED,
+					b: ExampleSafeModeB::CODE_RED,
+					..
+				}
+			));
 			assert_eq!(
 				<MockRuntimeSafeMode as Get<ExampleSafeModeA>>::get(),
 				ExampleSafeModeA::CODE_RED
