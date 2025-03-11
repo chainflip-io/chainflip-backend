@@ -3,6 +3,7 @@ authors = ["Chainflip <https://chainflip.io>"]
 edition = "2021"
 name = "generate-genesis-keys"
 version = "0.1.0"
+license = "Apache-2.0"
 
 [lints]
 workspace = true
