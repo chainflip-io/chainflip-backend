@@ -1004,11 +1004,3 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 		}
 	}
 }
-
-pub struct NonceProvider;
-
-impl cf_traits::NonceProvider<AccountId, super::Nonce> for NonceProvider {
-	fn get_nonce(account: &AccountId) -> super::Nonce {
-		System::account_nonce(account)
-	}
-}

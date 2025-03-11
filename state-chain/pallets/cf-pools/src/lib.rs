@@ -11,7 +11,6 @@ use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, BalanceApi, Chainflip, PoolApi, SwapRequestHandler, SwappingApi,
-	TradingStrategyParametersProvider,
 };
 
 pub use cf_traits::{IncreaseOrDecrease, OrderId};
@@ -269,8 +268,6 @@ pub mod pallet {
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
-
-		type TradingStrategyParameters: TradingStrategyParametersProvider;
 	}
 
 	#[pallet::pallet]
@@ -292,6 +289,13 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type MaximumPriceImpact<T: Config> =
 		StorageMap<_, Twox64Concat, AssetPair, u32, OptionQuery>;
+
+	/// Stores thresholds for each asset used in auto-sweeping: if after a swap the amount
+	/// collectable from a limit order reaches/exceeds the threshold, the order it automatically
+	/// swept
+	#[pallet::storage]
+	pub(super) type LimitOrderAutoSweepingThresholds<T: Config> =
+		StorageValue<_, BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>, ValueQuery>;
 
 	#[pallet::storage]
 	/// Historical earned fees for an account.
@@ -1013,7 +1017,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 
 				// Auto-sweeping limit orders in case collected amount reaches a threshold:
 				{
-					let thresholds = T::TradingStrategyParameters::get_parameters();
+					let autosweeping_thresholds = LimitOrderAutoSweepingThresholds::<T>::get();
 
 					let collected_orders = {
 						// Clone pool since we don't actually want to make changes
@@ -1022,13 +1026,18 @@ impl<T: Config> SwappingApi for Pallet<T> {
 						pool_state.collect_all_limit_orders()
 					};
 
-					for (base_or_quote, results) in collected_orders {
-						for ((lp, order_id), tick, collected, _pos_info) in results {
+					for (base_or_quote, results_for_order) in collected_orders {
+						for ((lp, order_id), tick, collected, _pos_info) in results_for_order {
 							let asset_to_collect = asset_pair.assets()[!base_or_quote];
 
-							if collected.bought_amount >=
-								thresholds.get_order_update_threshold(&asset_to_collect).into()
-							{
+							let threshold = autosweeping_thresholds
+								.get(&asset_to_collect)
+								.copied()
+								// Default to 1 to prevent updating with 0 amounts
+								.unwrap_or(1)
+								.into();
+
+							if collected.bought_amount >= threshold {
 								Self::sweep_limit_order(
 									pool,
 									&lp,
@@ -1491,6 +1500,8 @@ impl<T: Config> Pallet<T> {
 			NoOpStatus::Error,
 		)?;
 
+		// We requested no change in the amount we "sell" (sweeping only collects
+		// funds in the amount we "buy"), so that's the outcome we expect:
 		if sold_amount_change != 0 {
 			log_or_panic!("Unexpected sold amount change after sweeping");
 		}

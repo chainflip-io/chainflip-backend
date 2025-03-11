@@ -16,10 +16,7 @@ use frame_system::pallet_prelude::*;
 use frame_support::sp_runtime::FixedU64;
 
 use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
-use cf_traits::{
-	AccountRoleRegistry, BalanceApi, Chainflip, IncreaseOrDecrease, NonceProvider, OrderId, Side,
-	TradingStrategyParameters, TradingStrategyParametersProvider,
-};
+use cf_traits::{AccountRoleRegistry, BalanceApi, Chainflip, IncreaseOrDecrease, OrderId, Side};
 
 pub use pallet::*;
 use weights::WeightInfo;
@@ -58,6 +55,7 @@ pub mod pallet {
 
 	use cf_runtime_utilities::log_or_panic;
 	use cf_traits::PoolApi;
+	use frame_support::sp_runtime::traits::One;
 
 	use super::*;
 
@@ -73,8 +71,6 @@ pub mod pallet {
 		type BalanceApi: BalanceApi<AccountId = Self::AccountId>;
 
 		type PoolApi: PoolApi<AccountId = Self::AccountId>;
-
-		type NonceProvider: NonceProvider<Self::AccountId, Self::Nonce>;
 	}
 
 	#[pallet::pallet]
@@ -87,10 +83,21 @@ pub mod pallet {
 	pub(super) type Strategies<T: Config> =
 		StorageMap<_, Identity, T::AccountId, TradingStrategyEntry<T::AccountId>, OptionQuery>;
 
-	// Stores the minimum amount for each asset that triggers an update/creation of limit orders
+	/// Stores thresholds used to determine whether a trading strategy for a given asset
+	/// has enough funds in "free balance" to make it worthwhile updating/creating a limit order
+	/// with them. Note that we use store map as a single value since it is often more convenient to
+	/// read multiple assets at once (and this map is small).
 	#[pallet::storage]
-	pub type TradingStrategyParametersStorage<T: Config> =
-		StorageValue<_, TradingStrategyParameters, ValueQuery>;
+	pub(super) type LimitOrderUpdateThresholds<T: Config> =
+		StorageValue<_, BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>, ValueQuery>;
+
+	/// Stores minimum amount per asset necessary to deploy a strategy if only one of the two
+	/// assets is provided. If both assets are provided, we allow splitting the requirement between
+	/// them: e.g. it is possible to start a strategy with only 30% of the required amount of asset
+	/// A, as long as there is at least 70% of the required amount of asset B.
+	#[pallet::storage]
+	pub(super) type MinimumDeploymentAmountForStrategy<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -99,7 +106,7 @@ pub mod pallet {
 
 			// TODO: use safe mode here checking if auto strategies are enabled
 
-			let parameters = Self::get_parameters();
+			let order_update_thresholds = LimitOrderUpdateThresholds::<T>::get();
 
 			weight_used += T::DbWeight::get().reads(1);
 
@@ -111,15 +118,18 @@ pub mod pallet {
 			{
 				match strategy {
 					TradingStrategy::SellAndBuyAtTicks { sell_tick, buy_tick } => {
-						let new_weight_estimate = weight_used
-							.saturating_add(limit_order_update_weight)
-							.saturating_add(limit_order_update_weight);
+						let new_weight_estimate =
+							weight_used.saturating_add(limit_order_update_weight * 2);
 
 						let mut update_limit_order_from_balance = |sell_asset, side, tick| {
 							weight_used += T::DbWeight::get().reads(1);
 							let balance = T::BalanceApi::get_balance(&strategy_id, sell_asset);
 
-							if balance >= parameters.get_order_update_threshold(&sell_asset) {
+							// Default to 1 to prevent updating with 0 amounts
+							let threshold =
+								order_update_thresholds.get(&sell_asset).copied().unwrap_or(1);
+
+							if balance >= threshold {
 								weight_used += limit_order_update_weight;
 
 								if T::PoolApi::update_limit_order(
@@ -152,7 +162,7 @@ pub mod pallet {
 				}
 			}
 
-			Weight::zero()
+			weight_used
 		}
 	}
 
@@ -201,27 +211,25 @@ pub mod pallet {
 			let strategy_id = {
 				// Check that strategy is created with sufficient funds:
 				{
-					const ONE: FixedU64 = FixedU64::from_u32(1);
-					let parameters = TradingStrategyParametersStorage::<T>::get();
 					let fraction_of_required = |asset, provided| {
-						let required = parameters.get_strategy_deployment_threshold(&asset);
+						let min_required = MinimumDeploymentAmountForStrategy::<T>::get(asset);
 
-						if required == 0 {
-							ONE
+						if min_required == 0 {
+							FixedU64::one()
 						} else {
-							FixedU64::from_rational(provided, required)
+							FixedU64::from_rational(provided, min_required)
 						}
 					};
 
 					ensure!(
 						fraction_of_required(base_asset, base_asset_amount) +
 							fraction_of_required(quote_asset, quote_asset_amount) >=
-							ONE,
+							FixedU64::one(),
 						Error::<T>::AmountBelowDeploymentThreshold
 					);
 				}
 
-				let nonce = T::NonceProvider::get_nonce(lp);
+				let nonce = frame_system::Pallet::<T>::account_nonce(lp);
 
 				let strategy_id = derive_strategy_id::<T>(lp, nonce);
 
@@ -265,20 +273,19 @@ pub mod pallet {
 			let TradingStrategy::SellAndBuyAtTicks { buy_tick, sell_tick } = strategy;
 
 			let cancel_limit_orders = |side, tick| {
-				T::PoolApi::update_limit_order(
+				// TODO: check if order cancellation is infallible?
+				T::PoolApi::cancel_limit_order(
 					&strategy_id,
 					base_asset,
 					STABLE_ASSET,
 					side,
 					STRATEGY_ORDER_ID,
-					Some(tick),
-					IncreaseOrDecrease::Decrease(AssetAmount::MAX),
+					tick,
 				)
-				.unwrap();
 			};
 
-			cancel_limit_orders(Side::Buy, buy_tick);
-			cancel_limit_orders(Side::Sell, sell_tick);
+			cancel_limit_orders(Side::Buy, buy_tick)?;
+			cancel_limit_orders(Side::Sell, sell_tick)?;
 
 			for asset in [base_asset, STABLE_ASSET] {
 				let balance = T::BalanceApi::get_balance(&strategy_id, asset);
@@ -304,6 +311,8 @@ pub mod pallet {
 			let strategy =
 				Strategies::<T>::get(&strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
 
+			ensure!(lp == &strategy.owner, Error::<T>::InvalidOwner);
+
 			Self::add_funds_to_existing_strategy(
 				lp,
 				&strategy_id,
@@ -312,12 +321,6 @@ pub mod pallet {
 				quote_asset_amount,
 			)
 		}
-	}
-}
-
-impl<T: Config> TradingStrategyParametersProvider for Pallet<T> {
-	fn get_parameters() -> TradingStrategyParameters {
-		TradingStrategyParametersStorage::<T>::get()
 	}
 }
 

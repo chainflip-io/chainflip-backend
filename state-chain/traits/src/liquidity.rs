@@ -110,6 +110,25 @@ pub trait PoolApi {
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult;
+
+	fn cancel_limit_order(
+		account: &Self::AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderId,
+		tick: Tick,
+	) -> DispatchResult {
+		Self::update_limit_order(
+			account,
+			base_asset,
+			quote_asset,
+			side,
+			id,
+			Some(tick),
+			IncreaseOrDecrease::Decrease(AssetAmount::MAX),
+		)
+	}
 }
 
 pub trait SwappingApi {

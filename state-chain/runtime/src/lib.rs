@@ -517,7 +517,6 @@ impl pallet_cf_pools::Config for Runtime {
 	type LpRegistrationApi = LiquidityProvider;
 	type SwapRequestHandler = Swapping;
 	type SafeMode = RuntimeSafeMode;
-	type TradingStrategyParameters = TradingStrategy;
 	type WeightInfo = ();
 }
 
@@ -1028,7 +1027,6 @@ impl pallet_cf_trading_strategy::Config for Runtime {
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
 	type BalanceApi = AssetBalances;
 	type PoolApi = LiquidityPools;
-	type NonceProvider = chainflip::NonceProvider;
 }
 
 #[frame_support::runtime]
@@ -2818,6 +2816,14 @@ mod test {
 	use super::*;
 
 	const CALL_ENUM_MAX_SIZE: usize = 320;
+
+	#[test]
+	fn account_id_size() {
+		assert!(
+			core::mem::size_of::<AccountId>() <= 32,
+			r"Our use of blake2_256 to derive account ids requires that account ids are no larger than 32 bytes"
+		);
+	}
 
 	// Introduced from polkadot
 	#[test]

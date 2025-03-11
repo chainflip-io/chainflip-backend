@@ -25,10 +25,9 @@ pub enum SetFeesError {
 	TypeInfo,
 	Deserialize,
 	Serialize,
-	PartialOrd,
-	Ord,
 	Hash,
 )]
+#[cfg_attr(feature = "std", derive(PartialOrd, Ord))]
 #[serde(rename_all = "snake_case")]
 pub enum Side {
 	Buy,

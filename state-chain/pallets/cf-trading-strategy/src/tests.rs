@@ -113,11 +113,8 @@ fn automated_strategy_basic_usage() {
 
 			// Update the threshold to check that limit orders won't be updated
 			// if the threshold is not reached:
-			TradingStrategyParametersStorage::<Test>::mutate(|params| {
-				params
-					.order_update_thresholds
-					.try_insert(BASE_ASSET, ADDITIONAL_BASE_AMOUNT * 2)
-					.unwrap();
+			LimitOrderUpdateThresholds::<Test>::mutate(|thresholds| {
+				thresholds.try_insert(BASE_ASSET, ADDITIONAL_BASE_AMOUNT * 2).unwrap();
 			});
 
 			assert_eq!(get_balance(LP), (0, 0));
@@ -212,16 +209,8 @@ fn strategy_deployment_threshold() {
 		MockBalance::credit_account(&LP, BASE_ASSET, MIN_BASE_AMOUNT * 10);
 		MockBalance::credit_account(&LP, STABLE_ASSET, MIN_QUOTE_AMOUNT * 10);
 
-		TradingStrategyParametersStorage::<Test>::mutate(|params| {
-			params
-				.strategy_deployment_thresholds
-				.try_insert(BASE_ASSET, MIN_BASE_AMOUNT)
-				.unwrap();
-			params
-				.strategy_deployment_thresholds
-				.try_insert(STABLE_ASSET, MIN_QUOTE_AMOUNT)
-				.unwrap();
-		});
+		MinimumDeploymentAmountForStrategy::<Test>::insert(BASE_ASSET, MIN_BASE_AMOUNT);
+		MinimumDeploymentAmountForStrategy::<Test>::insert(STABLE_ASSET, MIN_QUOTE_AMOUNT);
 
 		for (base_amount, quote_amount) in [
 			(MIN_BASE_AMOUNT - 1, 0),

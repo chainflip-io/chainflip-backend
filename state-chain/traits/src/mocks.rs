@@ -30,7 +30,6 @@ pub mod ingress_egress_fee_handler;
 pub mod key_provider;
 pub mod key_rotator;
 pub mod liability_tracker;
-pub mod nonce_provider;
 pub mod offence_reporting;
 pub mod on_account_funded;
 pub mod pool_api;
@@ -43,7 +42,6 @@ pub mod swap_request_api;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod tracked_data_provider;
-pub mod trading_strategy_limits;
 pub mod waived_fees_mock;
 
 #[macro_export]

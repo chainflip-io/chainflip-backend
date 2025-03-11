@@ -1,7 +1,7 @@
 use crate::{
 	self as pallet_cf_pools, mock::*, AskBidMap, AssetAmounts, AssetPair, CloseOrder, Error, Event,
-	HistoricalEarnedFees, LimitOrder, PoolInfo, PoolOrders, PoolPairsMap, Pools, RangeOrder,
-	RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
+	HistoricalEarnedFees, LimitOrder, LimitOrderAutoSweepingThresholds, PoolInfo, PoolOrders,
+	PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
 use cf_amm::{
 	common::Side,
@@ -9,10 +9,7 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
-use cf_traits::{
-	mocks::{balance_api::MockBalance, trading_strategy_limits::MockTradingStrategyParameters},
-	BalanceApi, PoolApi, SwappingApi,
-};
+use cf_traits::{mocks::balance_api::MockBalance, BalanceApi, PoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::{bounded_vec, ConstU32, U256};
 use sp_runtime::BoundedVec;
@@ -1381,8 +1378,10 @@ fn auto_sweeping() {
 		}
 
 		// Setting different thresholds for different assets to improve coverage:
-		MockTradingStrategyParameters::set_order_update_threshold(&STABLE_ASSET, 10000);
-		MockTradingStrategyParameters::set_order_update_threshold(&ASSET, 5000);
+		LimitOrderAutoSweepingThresholds::<Test>::mutate(|thresholds| {
+			thresholds.try_insert(ASSET, 5_000).unwrap();
+			thresholds.try_insert(STABLE_ASSET, 10_000).unwrap();
+		});
 
 		assert_eq!(get_balance(&ALICE), (0, 0));
 		assert_eq!(get_balance(&BOB), (0, 0));
