@@ -911,13 +911,13 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
 	async fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
-	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
+	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>, aliases = ["lp_subscribe_order_fills"])]
 	async fn cf_subscribe_lp_order_fills(&self);
 
-	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
+	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>, aliases = ["broker_subscribe_transaction_screening_events"])]
 	async fn cf_subscribe_transaction_screening_events(&self);
 
-	#[method(name = "lp_get_order_fills")]
+	#[method(name = "lp_get_order_fills", aliases = ["lp_order_fills"])]
 	fn cf_lp_get_order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
 
 	#[method(name = "scheduled_swaps")]
@@ -1047,7 +1047,7 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TransactionScreeningEvents>;
 
-	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
+	#[method(name = "get_affiliates")]
 	fn cf_affiliate_details(
 		&self,
 		broker: state_chain_runtime::AccountId,

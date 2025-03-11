@@ -11,6 +11,7 @@ use cf_rpc_types::broker::{
 	WithdrawFeesDetail,
 };
 use jsonrpsee::{core::async_trait, proc_macros::rpc};
+use pallet_cf_swapping::AffiliateDetails;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
 };
@@ -80,6 +81,9 @@ pub trait BrokerSignedApi {
 		query: GetOpenDepositChannelsQuery,
 	) -> RpcResult<ChainAccounts>;
 
+	// #[method(name = "subscribe_transaction_screening_events")] is aliased in custom_rpc because
+	// it just a pass-through
+
 	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId>;
 
@@ -92,7 +96,11 @@ pub trait BrokerSignedApi {
 		withdrawal_address: EthereumAddress,
 	) -> RpcResult<AccountId32>;
 
-	// #[method(name = "get_affiliates")] is aliased in custom_rpc because it just a pass-through
+	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
+	async fn get_affiliates(
+		&self,
+		affiliate: Option<AccountId32>,
+	) -> RpcResult<Vec<(AccountId32, AffiliateDetails)>>;
 
 	#[method(name = "affiliate_withdrawal_request", aliases = ["broker_affiliateWithdrawalRequest"])]
 	async fn affiliate_withdrawal_request(
@@ -398,6 +406,20 @@ where
 			{ affiliate_id },
 			AccountId32::from(affiliate_id.0)
 		)?)
+	}
+
+	async fn get_affiliates(
+		&self,
+		affiliate: Option<AccountId32>,
+	) -> RpcResult<Vec<(AccountId32, AffiliateDetails)>> {
+		self.client
+			.runtime_api()
+			.cf_affiliate_details(
+				self.client.info().best_hash,
+				self.signed_pool_client.account_id(),
+				affiliate,
+			)
+			.map_err(CfApiError::RuntimeApiError)
 	}
 
 	async fn affiliate_withdrawal_request(
