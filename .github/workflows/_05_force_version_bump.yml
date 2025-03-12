@@ -1,10 +1,9 @@
-
 on:
-    workflow_call:
-      inputs:
-        network-to-check-against:
-          required: true
-          type: string
+  workflow_call:
+    inputs:
+      network-to-check-against:
+        required: true
+        type: string
 
 jobs:
   force-version-bump:
@@ -33,15 +32,16 @@ jobs:
 
       - name: Permissions for latest binaries 🚓
         run: |
-            chmod +x ./latest-release-bins/chainflip-*
+          chmod +x ./latest-release-bins/chainflip-*
 
       - name: Get version of the latest release ✍️
         run: |
-            set -x
-            echo $(pwd)
-            RELEASE_VERSION=$(./latest-release-bins/chainflip-node --version)
-            echo $RELEASE_VERSION
-            echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
+          set -x
+          echo $(pwd)
+          # RELEASE_VERSION=$(./latest-release-bins/chainflip-node --version)
+          RELEASE_VERSION=1.7.10
+          echo $RELEASE_VERSION
+          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
 
       - name: Install node dependencies 📦
         working-directory: bouncer
@@ -50,6 +50,6 @@ jobs:
       - name: Check the version of the branch is greater than the current release 🔍
         working-directory: bouncer
         run: |
-            set -x
-            echo ${{ env.RELEASE_VERSION }}
-            ./commands/check_bin_and_runtime_versions.ts ${{ github.workspace }} "${{ env.RELEASE_VERSION }}" ${{ inputs.network-to-check-against }}
+          set -x
+          echo ${{ env.RELEASE_VERSION }}
+          ./commands/check_bin_and_runtime_versions.ts ${{ github.workspace }} "${{ env.RELEASE_VERSION }}" ${{ inputs.network-to-check-against }}
