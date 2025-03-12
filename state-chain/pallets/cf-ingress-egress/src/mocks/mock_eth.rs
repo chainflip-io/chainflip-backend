@@ -103,7 +103,7 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	}
 }
 
-pub struct MockNetworkEnvironmentProvider {}
+pub struct MockNetworkEnvironmentProvider;
 impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
 		cf_primitives::NetworkEnvironment::Development

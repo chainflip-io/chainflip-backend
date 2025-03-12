@@ -41,7 +41,7 @@ use pallet_cf_ingress_egress::{
 };
 use pallet_cf_validator::RotationPhase;
 use sp_core::ConstU32;
-use sp_runtime::BoundedBTreeMap;
+use sp_runtime::{BoundedBTreeMap, SaturatedConversion};
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation,
@@ -1033,6 +1033,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 			};
 
 			let swap_request_id = SwapRequestId(1u64);
+
 			// Directly insert a CCM to be ingressed. 
 			pallet_cf_ingress_egress::ScheduledEgressCcm::<Runtime, SolanaInstance>::append(pallet_cf_ingress_egress::CrossChainMessage {
 				egress_id: (ForeignChain::Solana, 1u64),
@@ -1044,13 +1045,12 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 				source_address: None,
 				ccm_additional_data: ccm.ccm_additional_data,
 				gas_budget: ccm.gas_budget,
-				aux_data_lookup_key: Some(SolanaAltLookup{swap_request_id, expiry: SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(System::block_number())}),
+				aux_data_lookup_key: Some(SolanaAltLookup{swap_request_id, created_at: System::block_number().saturated_into::<u32>()}),
 			});
 
 			assert!(SolEnvironment::get_address_lookup_tables(swap_request_id).is_err());
-			let aux_election_expiry = SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(System::block_number());
 
-			testnet.move_forward_blocks(aux_election_expiry - System::block_number());
+			testnet.move_forward_blocks(SolanaAltWitnessingHandler::max_wait_time_for_alt_witnessing());
 
 			// Since we have waited for too long, treat the CCM as invalid and refund the asset via Transfer instead.
 			assert_eq!(assert_events_match!(Runtime,

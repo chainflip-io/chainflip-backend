@@ -142,7 +142,7 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 		_gas_budget: GasAmount,
 		_message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
-		__aux_data_lookup_key: Option<()>,
+		_aux_data_lookup_key: Option<()>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		Err(ExecutexSwapAndCallError::Unsupported)
 	}

@@ -1752,8 +1752,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 		for ccm in ccms_to_send {
 			// If we waited for too long, fail the CCM and refund.
-			if let Some(expiry) = ccm.aux_data_lookup_key.clone().and_then(|key| key.expiry()) {
-				if current_block >= expiry {
+			if let Some(created_at) =
+				ccm.aux_data_lookup_key.clone().and_then(|key| key.created_at())
+			{
+				if current_block >=
+					created_at +
+						T::SolanaAltWitnessingHandler::max_wait_time_for_alt_witnessing()
+				{
 					Self::refund_invalid_ccm(
 						ccm,
 						ExecutexSwapAndCallError::DispatchError(

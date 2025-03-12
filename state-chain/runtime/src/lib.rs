@@ -314,7 +314,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	type BalanceApi = AssetBalances;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
-	type SolanaAltWitnessingHandler = SolanaAltWitnessingHandler;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -505,7 +504,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = SolanaChainTrackingProvider;
-	type NetworkEnvironment = SolEnvironment;
+	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;

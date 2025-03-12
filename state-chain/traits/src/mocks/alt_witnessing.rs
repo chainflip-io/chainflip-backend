@@ -1,4 +1,5 @@
 use crate::InitiateSolanaAltWitnessing;
+
 pub struct MockAltWitnessing;
 impl InitiateSolanaAltWitnessing for MockAltWitnessing {
 	fn initiate_alt_witnessing(

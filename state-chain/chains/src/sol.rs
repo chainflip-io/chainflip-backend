@@ -76,17 +76,17 @@ pub struct SolanaTransactionData {
 pub struct SolanaAltLookup {
 	// Used to lookup ALT query result
 	pub swap_request_id: SwapRequestId,
-	// Blocknumber when this CCM will expire and be refunded
-	pub expiry: u32,
+	// Blocknumber when this CCM was created. Used to calculate expiry.
+	pub created_at: u32,
 }
 
 impl CcmAuxDataLookupKeyConversion for SolanaAltLookup {
-	fn expiry(&self) -> Option<u32> {
-		Some(self.expiry)
+	fn created_at(&self) -> Option<u32> {
+		Some(self.created_at)
 	}
 
-	fn from_alt_lookup_key(swap_request_id: SwapRequestId, expiry: u32) -> Self {
-		SolanaAltLookup { swap_request_id, expiry }
+	fn from_alt_lookup_key(swap_request_id: SwapRequestId, created_at: u32) -> Self {
+		SolanaAltLookup { swap_request_id, created_at }
 	}
 }
 
