@@ -108,13 +108,13 @@ mod tests {
 		));
 		let others = AnyChainCcmAuxDataLookupKey::Others;
 
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Ethereum as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Ok(()));
+		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Ethereum as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Err(()));
 		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Ethereum as Chain>::CcmAuxDataLookupKey>>::try_into(others.clone()), Ok(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Arbitrum as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Ok(()));
+		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Arbitrum as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Err(()));
 		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Arbitrum as Chain>::CcmAuxDataLookupKey>>::try_into(others.clone()), Ok(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Polkadot as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Ok(()));
+		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Polkadot as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Err(()));
 		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Polkadot as Chain>::CcmAuxDataLookupKey>>::try_into(others.clone()), Ok(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Bitcoin as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Ok(()));
+		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Bitcoin as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Err(()));
 		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Bitcoin as Chain>::CcmAuxDataLookupKey>>::try_into(others.clone()), Ok(()));
 
 		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Solana as Chain>::CcmAuxDataLookupKey>>::try_into(sol), Ok(SolanaAltLookup {
