@@ -5,7 +5,8 @@ use crate::{
 			ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
 			MAX_CCM_USER_ALTS, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 		},
-		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC,
+		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_USER_CCM_BYTES_SOL,
+		MAX_USER_CCM_BYTES_USDC,
 	},
 	CcmAdditionalData, CcmChannelMetadata, Chain, ForeignChainAddress,
 };
@@ -203,8 +204,8 @@ impl CcmValidityCheck for CcmValidityChecker {
 
 			if ccm_length >
 				match asset {
-					SolAsset::Sol => MAX_CCM_BYTES_SOL,
-					SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
+					SolAsset::Sol => MAX_USER_CCM_BYTES_SOL,
+					SolAsset::SolUsdc => MAX_USER_CCM_BYTES_USDC,
 				} {
 				return Err(CcmValidityError::CcmIsTooLong)
 			}
@@ -258,7 +259,7 @@ mod test {
 	use super::*;
 	use crate::sol::{
 		sol_tx_core::sol_test_values::{self, ccm_accounts, ccm_parameter_v1, user_alt},
-		SolCcmAddress, SolPubkey, MAX_CCM_BYTES_SOL,
+		SolCcmAddress, SolPubkey, MAX_USER_CCM_BYTES_SOL,
 	};
 
 	pub const DEST_ADDR: EncodedAddress = EncodedAddress::Sol([0x00; 32]);
@@ -295,7 +296,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_sol() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_SOL].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -310,7 +311,7 @@ mod test {
 
 		// Length check for Sol
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_SOL + 1].try_into().unwrap();
+		invalid_ccm.message = vec![0x01; MAX_USER_CCM_BYTES_SOL + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::Sol, DEST_ADDR),
 			CcmValidityError::CcmIsTooLong
@@ -334,7 +335,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_usdc() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_USDC].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_USDC].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -349,7 +350,7 @@ mod test {
 
 		// Length check for SolUsdc
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_USDC + 1].try_into().unwrap();
+		invalid_ccm.message = vec![0x01; MAX_USER_CCM_BYTES_USDC + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::SolUsdc, DEST_ADDR),
 			CcmValidityError::CcmIsTooLong
@@ -401,12 +402,12 @@ mod test {
 		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
 
 		// Only fails for Solana chain.
-		ccm.message = [0x00; MAX_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
+		ccm.message = [0x00; MAX_USER_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, DEST_ADDR),
 			CcmValidityError::CcmIsTooLong
 		);
-		ccm.message = [0x00; MAX_CCM_BYTES_USDC + 1].to_vec().try_into().unwrap();
+		ccm.message = [0x00; MAX_USER_CCM_BYTES_USDC + 1].to_vec().try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::SolUsdc, DEST_ADDR),
 			CcmValidityError::CcmIsTooLong
@@ -516,7 +517,7 @@ mod test {
 	#[test]
 	fn can_check_length_native_duplicated() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL - 36].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_SOL - 36].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -537,7 +538,7 @@ mod test {
 	#[test]
 	fn can_check_length_duplicated_with_destination_address() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL - 36].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_SOL - 36].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -564,7 +565,7 @@ mod test {
 	#[test]
 	fn can_check_length_native_duplicated_fail() {
 		let invalid_ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL - 68].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_SOL - 68].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -589,7 +590,7 @@ mod test {
 	#[test]
 	fn can_check_length_usdc_duplicated() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_USDC - 37].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_USDC - 37].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -611,7 +612,7 @@ mod test {
 	#[test]
 	fn can_check_length_usdc_duplicated_fail() {
 		let invalid_ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_USDC - 36].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_USDC - 36].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },

@@ -585,8 +585,8 @@ pub mod test {
 				address_derivation::derive_deposit_address, consts::SOL_USDC_DECIMAL,
 				sol_test_values::*, PdaAndBump,
 			},
-			SolanaDepositFetchId, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES, MAX_CCM_BYTES_SOL,
-			MAX_CCM_BYTES_USDC,
+			SolanaDepositFetchId, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
+			MAX_USER_CCM_BYTES_SOL, MAX_USER_CCM_BYTES_USDC,
 		},
 		TransferAssetParams,
 	};
@@ -892,7 +892,6 @@ pub mod test {
 		let env = api_env();
 		let mut ccm_accounts = ccm_accounts();
 		ccm_accounts.additional_accounts = vec![];
-		println!("ccm_accounts: {:?}", ccm_accounts);
 
 		let transaction = SolanaTransactionBuilder::ccm_transfer_native(
 			transfer_param.amount,
@@ -912,7 +911,10 @@ pub mod test {
 		.unwrap();
 
 		let serialized_tx = sign_and_serialize(transaction);
-		assert_eq!(serialized_tx.len(), MAX_TRANSACTION_LENGTH - MAX_CCM_BYTES_SOL);
+
+		// Check that a CCM native transfer with no additional accounts and an empty message
+		// results in the expected number of expected bytes available to the user.
+		assert_eq!(serialized_tx.len(), MAX_TRANSACTION_LENGTH - MAX_USER_CCM_BYTES_SOL);
 	}
 
 	#[test]
@@ -950,7 +952,10 @@ pub mod test {
 		.unwrap();
 
 		let serialized_tx = sign_and_serialize(transaction);
-		assert_eq!(serialized_tx.len(), MAX_TRANSACTION_LENGTH - MAX_CCM_BYTES_USDC);
+
+		// Check that a CCM token transfer with no additional accounts and an empty message
+		// results in the expected number of expected bytes available to the user.
+		assert_eq!(serialized_tx.len(), MAX_TRANSACTION_LENGTH - MAX_USER_CCM_BYTES_USDC);
 	}
 
 	#[test]
