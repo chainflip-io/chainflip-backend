@@ -2,7 +2,7 @@
 CF_ETH_CONTRACT_ABI_ROOT = { value = "contract-interfaces/eth-contract-abis", relative = true }
 CF_ETH_CONTRACT_ABI_TAG = "v1.1.2"
 CF_SOL_PROGRAM_IDL_ROOT = { value = "contract-interfaces/sol-program-idls", relative = true }
-CF_SOL_PROGRAM_IDL_TAG = "v1.0.1-swap-endpoint"
+CF_SOL_PROGRAM_IDL_TAG = "v1.0.0"
 CF_ARB_CONTRACT_ABI_ROOT = { value = "contract-interfaces/arb-contract-abis", relative = true }
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
@@ -12,7 +12,6 @@ CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 [alias]
 cf-test = "test --features runtime-benchmarks,try-runtime"
 cf-test-ci = "test --release --features runtime-benchmarks,slow-tests,try-runtime"
-cf-test-ci-nextest = "nextest run --release --features runtime-benchmarks,slow-tests,try-runtime"
 cf-test-cfe = "test --package chainflip-engine --package multisig"
 
 cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings -A deprecated"
