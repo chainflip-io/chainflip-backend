@@ -47,6 +47,9 @@ jobs:
       - name: Install Rust Toolchain 💿
         run: rustup toolchain install nightly-2025-01-10-aarch64-apple-darwin
 
+      - name: Add wasm build target
+        run: rustup target add wasm32-unknown-unknown --toolchain nightly-2025-01-10-aarch64-apple-darwin
+
       - name: Build chainflip binaries 🏗️
         run: |
           cargo cf-build-${{ inputs.profile }} --locked
