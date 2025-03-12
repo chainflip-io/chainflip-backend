@@ -136,7 +136,7 @@ impl crate::Config for Test {
 	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
-	type SolanaAltWitnessingHandler = MockAltWitnessing;
+	type CcmAuxDataWitnessingHandler = MockAltWitnessing;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;
