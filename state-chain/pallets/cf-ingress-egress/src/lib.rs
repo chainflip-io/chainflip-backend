@@ -613,7 +613,7 @@ pub mod pallet {
 
 		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
 
-		type SolanaAltWitnessingHandler: InitiateSolanaAltWitnessing;
+		type CcmAuxDataWitnessingHandler: InitiateSolanaAltWitnessing;
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
@@ -660,7 +660,7 @@ pub mod pallet {
 	pub type ScheduledEgressFetchOrTransfer<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<FetchOrTransfer<T::TargetChain>>, ValueQuery>;
 
-	/// Scheduled cross chain messages for the Ethereum chain.
+	/// Scheduled cross chain messages to be egressed.
 	#[pallet::storage]
 	pub type ScheduledEgressCcm<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<CrossChainMessage<T::TargetChain>>, ValueQuery>;
@@ -929,7 +929,8 @@ pub mod pallet {
 			deduction_percent: Percent,
 		},
 		InvalidCcmRefunded {
-			egress_id: EgressId,
+			ccm_egress_id: EgressId,
+			refund_transfer_egress_id: EgressId,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			destination_address: TargetChainAccount<T, I>,
@@ -1757,7 +1758,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			{
 				if current_block >=
 					created_at +
-						T::SolanaAltWitnessingHandler::max_wait_time_for_alt_witnessing()
+						T::CcmAuxDataWitnessingHandler::max_wait_time_for_alt_witnessing()
 				{
 					Self::refund_invalid_ccm(
 						ccm,
@@ -1796,7 +1797,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(ExecutexSwapAndCallError::TryAgainLater) =>
 					ScheduledEgressCcm::<T, I>::append(ccm),
 				Err(error) => {
-					log::warn!("Failed to construct CCM. Funds will be refunded to the fallback refund address. egress_id: {:?}, aux_data_lookup_key: {:?}, Error: {:?}", ccm.egress_id, ccm.aux_data_lookup_key, error);
 					Self::refund_invalid_ccm(ccm, error);
 				},
 			};
@@ -1961,7 +1961,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 				if let Some(ccm_channel_metadata) = channel_metadata {
 					if ForeignChain::Solana == destination_asset.into() {
-						T::SolanaAltWitnessingHandler::initiate_alt_witnessing(
+						T::CcmAuxDataWitnessingHandler::initiate_alt_witnessing(
 							ccm_channel_metadata,
 							swap_request_id,
 						);
@@ -2848,7 +2848,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					None
 				) {
 					Ok(egress_details) => Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
-						egress_id: ccm.egress_id,
+						ccm_egress_id: ccm.egress_id,
+						refund_transfer_egress_id: egress_details.egress_id,
 						asset: ccm.asset,
 						amount: egress_details.egress_amount,
 						destination_address: fallback_address,
