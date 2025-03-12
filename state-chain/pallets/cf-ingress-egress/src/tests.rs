@@ -2376,12 +2376,13 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 fn gets_refunded_if_vault_transaction_was_aborted() {
 	new_test_ext().execute_with(|| {
 		let tx_id = H256::default();
+		const DEPOSIT_AMOUNT: AssetAmount = 100;
 
 		let vault_swap = VaultDepositWitness {
 			input_asset: Asset::Eth.try_into().unwrap(),
 			deposit_address: Default::default(),
 			channel_id: Some(0),
-			deposit_amount: 100,
+			deposit_amount: DEPOSIT_AMOUNT,
 			deposit_details: Default::default(),
 			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::Eth(Default::default()),
@@ -2417,6 +2418,19 @@ fn gets_refunded_if_vault_transaction_was_aborted() {
 			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
 			1,
 			"Refund broadcast should have been scheduled!"
+		);
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(Event::DepositFinalised {
+				action: DepositAction::Refund {
+					egress_id: _,
+					channel_id: _,
+					refund_success: true,
+					amount: DEPOSIT_AMOUNT,
+				},
+				..
+			})
 		);
 	});
 }
