@@ -42,7 +42,7 @@ jobs:
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Install Rust Toolchain 💿
-        run: rustup toolchain install
+        run: rustup toolchain install nightly
 
       - name: Build chainflip binaries 🏗️
         run: |
