@@ -56,17 +56,20 @@ pub enum AnyChainCcmAuxDataLookupKey {
 	Others,
 }
 
-impl TryInto<()> for AnyChainCcmAuxDataLookupKey {
+impl TryFrom<AnyChainCcmAuxDataLookupKey> for () {
 	type Error = ();
-	fn try_into(self) -> Result<(), Self::Error> {
-		Ok(())
+	fn try_from(value: AnyChainCcmAuxDataLookupKey) -> Result<(), Self::Error> {
+		match value {
+			AnyChainCcmAuxDataLookupKey::Solana(_) => Err(()),
+			AnyChainCcmAuxDataLookupKey::Others => Ok(()),
+		}
 	}
 }
 
-impl TryInto<SolanaAltLookup> for AnyChainCcmAuxDataLookupKey {
+impl TryFrom<AnyChainCcmAuxDataLookupKey> for SolanaAltLookup {
 	type Error = ();
-	fn try_into(self) -> Result<SolanaAltLookup, Self::Error> {
-		if let AnyChainCcmAuxDataLookupKey::Solana(lookup) = self {
+	fn try_from(value: AnyChainCcmAuxDataLookupKey) -> Result<SolanaAltLookup, Self::Error> {
+		if let AnyChainCcmAuxDataLookupKey::Solana(lookup) = value {
 			Ok(lookup)
 		} else {
 			Err(())
