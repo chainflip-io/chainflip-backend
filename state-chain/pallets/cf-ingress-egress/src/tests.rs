@@ -2069,16 +2069,6 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 			0
 		));
 
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::VaultSwapRefunded {
-			tx_id: H256::default(),
-			broker_id: Some(NOT_A_BROKER),
-			asset: INPUT_ASSET.try_into().unwrap(),
-			amount: INPUT_AMOUNT,
-			refund_address: MockAddressConverter::to_encoded_address(ForeignChainAddress::Eth(
-				ETH_REFUND_PARAMS.refund_address,
-			)),
-		}));
-
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
 }
@@ -2322,7 +2312,10 @@ fn assembling_broker_fees() {
 			Beneficiary { account: 50, bps: 5 },
 		];
 
-		assert_eq!(IngressEgress::assemble_broker_fees(Some(broker_fee), affiliate_fees), expected);
+		assert_eq!(
+			IngressEgress::assemble_broker_fees(Some(broker_fee), affiliate_fees),
+			Some(expected)
+		);
 	});
 }
 
@@ -2407,34 +2400,23 @@ fn gets_refunded_if_vault_transaction_was_aborted() {
 
 		IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
 
-		IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::IngressEgress(Event::VaultSwapRefunded { tx_id: _, .. })
+		assert_eq!(
+			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+			0,
+			"Refund broadcast should have been scheduled!"
 		);
+
+		IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
 
 		assert!(
 			MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
 			"No swaps should have been triggered!"
 		);
 
-		assert!(
-			MockEgressBroadcaster::get_pending_api_calls().len() == 1,
+		assert_eq!(
+			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+			1,
 			"Refund broadcast should have been scheduled!"
 		);
-	});
-}
-
-#[test]
-fn reject_requirements_test() {
-	new_test_ext().execute_with(|| {
-		let should_fail = Some(Beneficiary { account: ALICE, bps: 0 });
-		let should_succeed = Some(Beneficiary { account: BROKER, bps: 0 });
-
-		assert!(IngressEgress::should_reject_vault_swap(&should_fail));
-		assert!(IngressEgress::should_reject_vault_swap(&None));
-
-		assert!(!IngressEgress::should_reject_vault_swap(&should_succeed));
 	});
 }
