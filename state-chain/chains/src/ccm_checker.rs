@@ -21,7 +21,8 @@ use crate::{
 			ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
 			MAX_CCM_USER_ALTS, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 		},
-		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC,
+		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_USER_CCM_BYTES_SOL,
+		MAX_USER_CCM_BYTES_USDC,
 	},
 	CcmAdditionalData, CcmChannelMetadata, Chain, ForeignChainAddress,
 };
@@ -143,22 +144,58 @@ impl CcmValidityCheck for CcmValidityChecker {
 					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 
 			let ccm_accounts = decoded_data.ccm_accounts();
+			let address_lookup_tables = decoded_data.address_lookup_tables();
+			let num_address_lookup_tables = address_lookup_tables.len();
 
-			// It's hard at this stage to compute exactly the length of the finally build
-			// transaction from the message and the additional accounts. Duplicated
-			// accounts only take one reference byte while new accounts take 32 bytes.
+			if num_address_lookup_tables > MAX_CCM_USER_ALTS as usize {
+				return Err(CcmValidityError::TooManyAddressLookupTables)
+			}
+
+			// We calculate the final length of the CCM transaction to fail early if it's certain
+			// that the egress will fail.
+			// Chainflip uses Versioned transactions regardless of the user passing an ALT or not.
+			// If the user doesn't pass any additional address lookup table (ALT) the final length
+			// of the egress can be calculated deterministically. However, a user ALT makes it so
+			// we can't exactly calculate the final length, since we can't know the ALT content
+			// beforehand. Therefore, we calculate the most optimistic scenario when an ALT is
+			// passed and it might fail to build on egress but we rely on the user to provide
+			// valid ALTs that will make it so the egress transaction will succeed. If that was
+			// not the case and the CCM egress were to fail, the user would be refunded to a
+			// fallback address.
+			let (lookup_tables_length, extra_buffer, bytes_per_new_account) =
+				if num_address_lookup_tables > 0 {
+					// Each empty lookup table is 34 bytes -> 32 bytes for address plus 2 for vector
+					// lengths (write_indexes and readonly_indexes).
+					let lookup_tables_length =
+						num_address_lookup_tables * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION + 2);
+
+					// The most optimistic scenario is the ALT containing both the CfReceiver and
+					// the destination address as well as all the ccm additional accounts. That
+					// will allow for an extra amount of bytes that is available for the user
+					// transaction.
+					let extra_buffer = (ACCOUNT_KEY_LENGTH_IN_TRANSACTION * 2)
+						.saturating_sub(2 * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION);
+
+					// Each non-repeated account would take an extra byte on the address table
+					// lookups.
+					(lookup_tables_length, extra_buffer, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION)
+				} else {
+					// Without lookup tables each new non-repeated account will take a full account.
+					(0, 0, ACCOUNT_KEY_LENGTH_IN_TRANSACTION)
+				};
+
 			// Technically it shouldn't be necessary to pass duplicated accounts as
-			// it will all be executed in the same instruction. However when integrating
-			// with other protocols, many of the account's values are part of a returned
+			// it will all be executed in the same instruction. However, when integrating
+			// with other protocols, many of the accounts are part of a returned
 			// payload from an API and it makes it cumbersome to then deduplicate on the
 			// fly and then make it match with the receiver contract. It can be done
 			// but it then requires extra configuration bytes in the payload, which
-			// then defeats the purpose.
-			// Therefore we want to allow for duplicated accounts, both duplicated
+			// then defeats the purpose of decreasing the payload length.
+			// Therefore we want to account for duplicated accounts, both duplicated
 			// within the additional accounts and with our accounts. Then we can
 			// calculate the length accordingly.
-			// The Chainflip accounts are irrelevant to the user except for a
-			// few that are accounted for here.
+			// The only Chainflip accounts that are relevant to the user for deduplication
+			// purposes are used when initializing the `seen_addresses` set.
 			let mut seen_addresses = BTreeSet::from_iter([
 				SYSTEM_PROGRAM_ID,
 				SYS_VAR_INSTRUCTIONS,
@@ -172,25 +209,21 @@ impl CcmValidityCheck for CcmValidityChecker {
 			let mut accounts_length =
 				ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
 
-			// TODO PRO-2046: we should not check the length here?
 			for ccm_address in &ccm_accounts.additional_accounts {
 				if seen_addresses.insert(ccm_address.pubkey.into()) {
-					accounts_length += ACCOUNT_KEY_LENGTH_IN_TRANSACTION;
+					accounts_length += bytes_per_new_account;
 				}
 			}
 
-			let ccm_length = ccm.message.len() + accounts_length;
+			let ccm_length = (ccm.message.len() + accounts_length + lookup_tables_length)
+				.saturating_sub(extra_buffer);
 
 			if ccm_length >
 				match asset {
-					SolAsset::Sol => MAX_CCM_BYTES_SOL,
-					SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
+					SolAsset::Sol => MAX_USER_CCM_BYTES_SOL,
+					SolAsset::SolUsdc => MAX_USER_CCM_BYTES_USDC,
 				} {
 				return Err(CcmValidityError::CcmIsTooLong)
-			}
-
-			if decoded_data.address_lookup_tables().len() > MAX_CCM_USER_ALTS as usize {
-				return Err(CcmValidityError::TooManyAddressLookupTables)
 			}
 
 			Ok(DecodedCcmAdditionalData::Solana(decoded_data))
@@ -242,7 +275,7 @@ mod test {
 	use super::*;
 	use crate::sol::{
 		sol_tx_core::sol_test_values::{self, ccm_accounts, ccm_parameter_v1, user_alt},
-		SolCcmAddress, SolPubkey, MAX_CCM_BYTES_SOL,
+		SolCcmAddress, SolPubkey, MAX_USER_CCM_BYTES_SOL,
 	};
 
 	pub const DEST_ADDR: EncodedAddress = EncodedAddress::Sol([0x00; 32]);
@@ -279,7 +312,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_sol() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_SOL].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -294,7 +327,7 @@ mod test {
 
 		// Length check for Sol
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_SOL + 1].try_into().unwrap();
+		invalid_ccm.message = vec![0x01; MAX_USER_CCM_BYTES_SOL + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::Sol, DEST_ADDR),
 			CcmValidityError::CcmIsTooLong
@@ -318,7 +351,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_usdc() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_USDC].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_USDC].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -333,7 +366,7 @@ mod test {
 
 		// Length check for SolUsdc
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_USDC + 1].try_into().unwrap();
+		invalid_ccm.message = vec![0x01; MAX_USER_CCM_BYTES_USDC + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::SolUsdc, DEST_ADDR),
 			CcmValidityError::CcmIsTooLong
@@ -385,12 +418,12 @@ mod test {
 		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
 
 		// Only fails for Solana chain.
-		ccm.message = [0x00; MAX_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
+		ccm.message = [0x00; MAX_USER_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, DEST_ADDR),
 			CcmValidityError::CcmIsTooLong
 		);
-		ccm.message = [0x00; MAX_CCM_BYTES_USDC + 1].to_vec().try_into().unwrap();
+		ccm.message = [0x00; MAX_USER_CCM_BYTES_USDC + 1].to_vec().try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::SolUsdc, DEST_ADDR),
 			CcmValidityError::CcmIsTooLong
@@ -500,7 +533,7 @@ mod test {
 	#[test]
 	fn can_check_length_native_duplicated() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL - 36].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_SOL - 36].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -521,7 +554,7 @@ mod test {
 	#[test]
 	fn can_check_length_duplicated_with_destination_address() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL - 36].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_SOL - 36].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -548,7 +581,7 @@ mod test {
 	#[test]
 	fn can_check_length_native_duplicated_fail() {
 		let invalid_ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL - 68].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_SOL - 68].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -573,7 +606,7 @@ mod test {
 	#[test]
 	fn can_check_length_usdc_duplicated() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_USDC - 37].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_USDC - 37].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },
@@ -595,7 +628,7 @@ mod test {
 	#[test]
 	fn can_check_length_usdc_duplicated_fail() {
 		let invalid_ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_USDC - 36].try_into().unwrap(),
+			message: vec![0x01; MAX_USER_CCM_BYTES_USDC - 36].try_into().unwrap(),
 			gas_budget: 0,
 			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: CF_RECEIVER_ADDR, is_writable: true },

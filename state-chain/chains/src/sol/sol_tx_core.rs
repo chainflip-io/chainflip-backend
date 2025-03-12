@@ -328,6 +328,14 @@ pub mod sol_test_values {
 	}
 
 	pub fn chainflip_alt() -> SolAddressLookupTableAccount {
+		let token_vault_ata =
+			crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+				TOKEN_VAULT_PDA_ACCOUNT,
+				USDC_TOKEN_MINT_PUB_KEY,
+			)
+			.unwrap()
+			.address;
+
 		SolAddressLookupTableAccount {
 			key: const_address("4EQ4ZTskvNwkBaQjBJW5grcmV5Js82sUooNLHNTpdHdi").into(),
 			addresses: vec![
@@ -341,6 +349,12 @@ pub mod sol_test_values {
 					SWAP_ENDPOINT_DATA_ACCOUNT_ADDRESS,
 					SWAP_ENDPOINT_PROGRAM,
 					SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
+					sol_prim::consts::TOKEN_PROGRAM_ID,
+					sol_prim::consts::SYS_VAR_INSTRUCTIONS,
+					sol_prim::consts::ASSOCIATED_TOKEN_PROGRAM_ID,
+					sol_prim::consts::SYSTEM_PROGRAM_ID,
+					sol_prim::consts::SYS_VAR_RECENT_BLOCKHASHES,
+					token_vault_ata,
 				],
 				NONCE_ACCOUNTS.to_vec(),
 			]
@@ -354,6 +368,20 @@ pub mod sol_test_values {
 
 	pub fn user_alt() -> SolAddressLookupTableAccount {
 		SolAddressLookupTableAccount { key: ADDRESS_LOOKUP_TABLE_ACCOUNT.into(), addresses: vec![] }
+	}
+
+	#[track_caller]
+	pub fn sign_and_serialize(mut transaction: SolVersionedTransaction) -> Vec<u8> {
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let durable_nonce = durable_nonce().1.into();
+
+		// Sign the transaction with the given signers and blockhash.
+		transaction.test_only_sign(vec![agg_key_keypair].into(), durable_nonce);
+
+		transaction
+			.clone()
+			.finalize_and_serialize()
+			.expect("Transaction serialization must succeed")
 	}
 
 	#[track_caller]

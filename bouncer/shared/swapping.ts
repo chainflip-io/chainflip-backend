@@ -18,47 +18,9 @@ import { Logger } from './utils/logger';
 
 let swapCount = 1;
 
-export function newSolanaCcmAdditionalData(maxAccounts: number) {
-  const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
-
-  const fallbackAddress = Keypair.generate().publicKey.toBytes();
-
-  const additionalAccounts = [];
-  const numAdditionalAccounts = Math.floor(Math.random() * maxAccounts);
-
-  for (let i = 0; i < numAdditionalAccounts; i++) {
-    additionalAccounts.push({
-      pubkey: Keypair.generate().publicKey.toBytes(),
-      is_writable: Math.random() < 0.5,
-    });
-  }
-
-  const ccmAdditionalData = {
-    cf_receiver: {
-      pubkey: new PublicKey(cfReceiverAddress).toBytes(),
-      is_writable: false,
-    },
-    additional_accounts: additionalAccounts,
-    fallback_address: fallbackAddress,
-  };
-
-  return u8aToHex(
-    solVersionedCcmAdditionalDataCodec.enc({
-      tag: 'V0',
-      value: ccmAdditionalData,
-    }),
-  );
-}
-
-// Generate random bytes. Setting a minimum length of 10 because very short messages can end up
-// with the SC returning an ASCII character in SwapDepositAddressReady.
-function newCcmArbitraryBytes(maxLength: number): string {
-  return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
-}
-
 // Protocol limits
 const MAX_CCM_MSG_LENGTH = 15_000;
-const MAX_CCM_ADDITIONAL_DATA_LENGTH = 1000;
+const MAX_CCM_ADDITIONAL_DATA_LENGTH = 3000;
 
 // In Arbitrum's localnet large messages (~ >4k) end up with large gas estimations
 // of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
@@ -72,29 +34,99 @@ const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 300;
 const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 150;
 
 // Solana CCM-related parameters. These are limits in the protocol.
-const MAX_CCM_BYTES_SOL = 694 + 32; // Adding 32 for now to account for the empty source_address
-const MAX_CCM_BYTES_USDC = 481 + 32; // Adding 32 for now to account for the empty source_address
+const MAX_CCM_BYTES_SOL = 814; // Before Versioned transactions 694 + 32
+const MAX_CCM_BYTES_USDC = 725; // Before Versioned transactions 481 + 32
 const SOLANA_BYTES_PER_ACCOUNT = 33;
+const BYTES_PER_ALT = 34; // 32 + 1 + 1 (for vector lengths)
 
-function newCcmAdditionalData(destAsset: Asset, message?: string, maxLength?: number): string {
+function newSolanaCcmAdditionalData(maxBytes: number) {
+  // Test all combinations
+  const useLegacy = maxBytes < BYTES_PER_ALT || Math.random() < 0.5;
+  const useAlt = !useLegacy && Math.random() < 0.5;
+  let bytesAvailable = maxBytes;
+
+  const additionalAccounts = [];
+  const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
+  const fallbackAddress = Keypair.generate().publicKey.toBytes();
+
+  if (useAlt) {
+    // We will only use one ALT
+    bytesAvailable -= BYTES_PER_ALT;
+    // We are passing cfTester in the ALT so we have extra bytes available.
+    // TODO: If we update the solana image we could also include the cfReceiverAddress.
+    // It's an issue with that image that is incorrectly adding CfReceiver programId instead.
+    const usedAccountsInAlt = 1;
+    bytesAvailable += usedAccountsInAlt * 32 - usedAccountsInAlt * 1;
+  }
+
+  const maxAccounts = Math.floor(bytesAvailable / SOLANA_BYTES_PER_ACCOUNT);
+  const numAdditionalAccounts = Math.floor(Math.random() * maxAccounts);
+
+  for (let i = 0; i < numAdditionalAccounts; i++) {
+    additionalAccounts.push({
+      pubkey: Keypair.generate().publicKey.toBytes(),
+      is_writable: Math.random() < 0.5,
+    });
+  }
+
+  bytesAvailable -= numAdditionalAccounts * SOLANA_BYTES_PER_ACCOUNT;
+
+  const ccmAdditionalData = {
+    cf_receiver: {
+      pubkey: new PublicKey(cfReceiverAddress).toBytes(),
+      is_writable: false,
+    },
+    additional_accounts: additionalAccounts,
+    fallback_address: fallbackAddress,
+  };
+
+  if (useLegacy) {
+    return u8aToHex(
+      solVersionedCcmAdditionalDataCodec.enc({
+        tag: 'V0',
+        value: ccmAdditionalData,
+      }),
+    );
+  }
+
+  const ccmAltAdditionalData = {
+    ccm_accounts: ccmAdditionalData,
+    alts: useAlt
+      ? [new PublicKey(getContractAddress('Solana', 'USER_ADDRESS_LOOKUP_TABLE')).toBytes()]
+      : [],
+  };
+
+  return u8aToHex(
+    solVersionedCcmAdditionalDataCodec.enc({
+      tag: 'V1',
+      value: ccmAltAdditionalData,
+    }),
+  );
+}
+
+// Generate random bytes. Setting a minimum length of 10 because very short messages can end up
+// with the SC returning an ASCII character in SwapDepositAddressReady.
+function newCcmArbitraryBytes(maxLength: number): string {
+  return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
+}
+
+// For Solana the maximum number of extra accounts that can be passed is limited by the tx size
+// and therefore also depends on the message length.
+function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: number): string {
   const destChain = chainFromAsset(destAsset);
-  let length: number;
 
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
       return '0x';
     case 'Solana': {
-      const messageLength = (message!.length - 2) / 2;
-      length = (destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC) - messageLength;
+      const messageLength = message.slice(2).length / 2;
+      let bytesAvailable =
+        (destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC) - messageLength;
       if (maxLength !== undefined) {
-        length = Math.min(length, maxLength);
+        bytesAvailable = Math.min(bytesAvailable, maxLength);
       }
-      const maxAccounts = Math.floor(length / SOLANA_BYTES_PER_ACCOUNT);
-
-      // The maximum number of extra accounts that can be passed is limited by the tx size
-      // and therefore also depends on the message length.
-      const ccmAdditonalData = newSolanaCcmAdditionalData(maxAccounts);
+      const ccmAdditonalData = newSolanaCcmAdditionalData(bytesAvailable);
       if (ccmAdditonalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
         throw new Error(`CCM additional data length exceeds limit: ${ccmAdditonalData.length}`);
       }
@@ -130,7 +162,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
   return newCcmArbitraryBytes(length);
 }
 // Minimum overhead to ensure simple CCM transactions succeed
-const OVERHEAD_COMPUTE_UNITS = 20000;
+const OVERHEAD_COMPUTE_UNITS = 30000;
 
 export async function newCcmMetadata(
   destAsset: Asset,

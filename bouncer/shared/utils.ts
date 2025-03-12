@@ -83,8 +83,14 @@ const solCcmAccountsCodec = Struct({
   fallback_address: TsBytes(32),
 });
 
+const solCcmAltAccountsCodec = Struct({
+  ccm_accounts: solCcmAccountsCodec,
+  alts: Vector(TsBytes(32)),
+});
+
 export const solVersionedCcmAdditionalDataCodec = Enum({
   V0: solCcmAccountsCodec,
+  V1: solCcmAltAccountsCodec,
 });
 
 export function getContractAddress(chain: Chain, contract: string): string {
@@ -786,8 +792,13 @@ export async function observeSolanaCcmEvent(
 
           // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
-            const { additional_accounts: expectedAdditionalAccounts } =
-              solVersionedCcmAdditionalDataCodec.dec(messageMetadata.ccmAdditionalData!).value;
+            const decodedCcmAdditionalData = solVersionedCcmAdditionalDataCodec.dec(
+              messageMetadata.ccmAdditionalData!,
+            );
+            const expectedAdditionalAccounts =
+              decodedCcmAdditionalData.tag === 'V0'
+                ? decodedCcmAdditionalData.value.additional_accounts
+                : decodedCcmAdditionalData.value.ccm_accounts.additional_accounts;
 
             if (
               expectedAdditionalAccounts.length !== event.data.remaining_is_writable.length ||
