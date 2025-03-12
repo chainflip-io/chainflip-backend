@@ -59,9 +59,9 @@ fn download_old_dylib(dest_folder: &Path, is_mainnet: bool) -> Result<(), Box<dy
 		// We want to download the sig file and verify the downloaded dylib only for mainnet.
 		if is_mainnet {
 			let mut dylib_sig_location = dylib_location.clone();
-			dylib_sig_location.add_extension("sig");
+			dylib_sig_location.add_extension("asc");
 
-			download_file(format!("{download_dylib}.sig"), dylib_sig_location.clone())?;
+			download_file(format!("{download_dylib}.asc"), dylib_sig_location.clone())?;
 			gpg_verify_signature(dylib_location, dylib_sig_location)?;
 		}
 
