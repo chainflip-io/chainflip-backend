@@ -1,15 +1,12 @@
 use crate::{
 	address::EncodedAddress,
 	sol::{
-		sol_tx_core::{
-			consts::{
-				ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
-				SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
-			},
-			MAX_CCM_USER_ALTS,
+		sol_tx_core::consts::{
+			ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
+			SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 		},
 		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_USER_CCM_BYTES_SOL,
-		MAX_USER_CCM_BYTES_USDC,
+		MAX_USER_CCM_BYTES_USDC, MAX_CCM_USER_ALTS,
 	},
 	CcmAdditionalData, CcmChannelMetadata, Chain, ForeignChainAddress,
 };

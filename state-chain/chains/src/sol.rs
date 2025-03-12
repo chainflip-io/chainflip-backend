@@ -1,6 +1,6 @@
 pub use cf_primitives::chains::Solana;
 
-use cf_primitives::{ChannelId, SwapRequestId};
+use cf_primitives::{BlockNumber, ChannelId, SwapRequestId};
 use sp_core::ConstBool;
 use sp_std::{vec, vec::Vec};
 
@@ -55,6 +55,13 @@ pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 // All function parameters are already accounted except additional_accounts and message.
 pub const MAX_USER_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 418usize; // 814 bytes left
 pub const MAX_USER_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 507usize; // 725 bytes left
+
+/// Maximum number of Accounts Lookup Tables user can pass in as part of CCM call.
+pub const MAX_CCM_USER_ALTS: u8 = 3u8;
+
+/// The maximum number of blocks we wait for external Aux data elections to finish
+/// before we fail to egress CCM messages.
+pub const EXPIRY_TIME_FOR_ALT_ELECTIONS: BlockNumber = 100u32;
 
 // Nonce management values
 pub const NONCE_NUMBER_CRITICAL_NONCES: usize = 1;

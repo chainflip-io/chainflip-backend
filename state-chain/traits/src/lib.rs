@@ -1185,6 +1185,6 @@ pub trait InitiateSolanaAltWitnessing {
 	}
 
 	fn max_wait_time_for_alt_witnessing() -> BlockNumber {
-		cf_chains::sol::sol_tx_core::EXPIRY_TIME_FOR_ALT_ELECTIONS
+		cf_chains::sol::EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
 }
