@@ -39,9 +39,10 @@ pub enum TradingStrategy {
 	SellAndBuyAtTicks { sell_tick: Tick, buy_tick: Tick },
 }
 
-fn derive_strategy_id<T: Config>(lp: &T::AccountId, nonce: T::Nonce) -> T::AccountId {
+fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
 	use frame_support::{sp_runtime::traits::TrailingZeroInput, Hashable};
 
+	let nonce = frame_system::Pallet::<T>::account_nonce(lp);
 	// Combination of lp + nonce is unique for every successful call, so this should
 	// generate unique ids:
 	Decode::decode(&mut TrailingZeroInput::new(
@@ -229,9 +230,7 @@ pub mod pallet {
 					);
 				}
 
-				let nonce = frame_system::Pallet::<T>::account_nonce(lp);
-
-				let strategy_id = derive_strategy_id::<T>(lp, nonce);
+				let strategy_id = derive_strategy_id::<T>(lp);
 
 				Self::deposit_event(Event::<T>::StrategyDeployed {
 					account_id: lp.clone(),
