@@ -42,7 +42,7 @@ jobs:
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Install Rust Toolchain 💿
-        run: rustup toolchain install nightly-2024-07-31-aarch64-apple-darwin --allow-downgrade
+        run: rustup toolchain install
 
       - name: Build chainflip binaries 🏗️
         run: |
