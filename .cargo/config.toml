@@ -2,7 +2,7 @@
 CF_ETH_CONTRACT_ABI_ROOT = { value = "contract-interfaces/eth-contract-abis", relative = true }
 CF_ETH_CONTRACT_ABI_TAG = "v1.1.2"
 CF_SOL_PROGRAM_IDL_ROOT = { value = "contract-interfaces/sol-program-idls", relative = true }
-CF_SOL_PROGRAM_IDL_TAG = "v1.0.0"
+CF_SOL_PROGRAM_IDL_TAG = "v1.0.1-swap-endpoint"
 CF_ARB_CONTRACT_ABI_ROOT = { value = "contract-interfaces/arb-contract-abis", relative = true }
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
@@ -12,6 +12,7 @@ CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 [alias]
 cf-test = "test --features runtime-benchmarks,try-runtime"
 cf-test-ci = "test --release --features runtime-benchmarks,slow-tests,try-runtime"
+cf-test-ci-nextest = "nextest run --release --features runtime-benchmarks,slow-tests,try-runtime"
 cf-test-cfe = "test --package chainflip-engine --package multisig"
 
 cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings -A deprecated"
@@ -32,34 +33,37 @@ tree --no-default-features --depth 1 --edges=features,normal
 # Requires `cargo-audit`. Run `cargo install cargo-audit` to install it.
 # The `cf-audit` command is configured to ignore the following advisories:
 # Vulnerabilities:
-# - RUSTSEC-2022-0093: This advisory is related to ed25519-dalek's public api design, which we don't expose.
 # - RUSTSEC-2024-0344: curve25519-dalek is a transitive dependency of `substrate`
-# Unsound:
-# - RUSTSEC-2021-0145: This advisory only affects the windows platform. It's a transitive dependency of `substrate`.
 # Unmaintained:
 # - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2021-0139: This advisory comes from `ansi_term`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
+# - RUSTSEC-2022-0080: This advisory comes from `parity-util-mem`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2024-0336: This adivsory comes from rustls, which is a dependency of the `try-runtime-cli` crate.
 # - RUSTSEC-2024-0320: Unmaintained transitive `yaml-rust` dependency of `insta` crate. We only use insta for testing.
 # - RUSTSEC-2024-0370: Unmaintained transitive dependency. Only affects macro generation efficiency.
-# - RUSTSEC-2024-0375: Unmaintained transitive dependency used by clap.
 # - RUSTSEC-2024-0388: Unmaintained transitive dependency `derivative` used by substrate.
 # - RUSTSEC-2024-0384: Unmaintained transitive dependency `instant` used by substrate.
 # - RUSTSEC-2024-0421: Transitive dependency `idna` used by libp2p, among others.
+# - RUSTSEC-2025-0009: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
+# - RUSTSEC-2025-0010: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
+# - RUSTSEC-2024-0436: Paste is no longer maintained. This is a pre-processor macro, so not an immediate security concern.
+# - RUSTSEC-2025-0014: Humantime is no longer maintained. Transitive dependency of `env_logger`.
 cf-audit = '''
 audit -D unmaintained -D unsound
-    --ignore RUSTSEC-2022-0093
     --ignore RUSTSEC-2021-0139
     --ignore RUSTSEC-2020-0168
     --ignore RUSTSEC-2022-0061
-    --ignore RUSTSEC-2021-0145
+    --ignore RUSTSEC-2022-0080
     --ignore RUSTSEC-2024-0320
     --ignore RUSTSEC-2024-0336
     --ignore RUSTSEC-2024-0344
     --ignore RUSTSEC-2024-0370
-    --ignore RUSTSEC-2024-0375
     --ignore RUSTSEC-2024-0388
     --ignore RUSTSEC-2024-0384
     --ignore RUSTSEC-2024-0421
+    --ignore RUSTSEC-2025-0009
+    --ignore RUSTSEC-2025-0010
+    --ignore RUSTSEC-2024-0436
+    --ignore RUSTSEC-2025-0014
 '''
