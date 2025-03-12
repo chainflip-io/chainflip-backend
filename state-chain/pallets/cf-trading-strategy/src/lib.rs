@@ -129,7 +129,13 @@ pub mod pallet {
 						let new_weight_estimate =
 							weight_used.saturating_add(limit_order_update_weight * 2);
 
-						let mut update_limit_order_from_balance = |sell_asset, side, tick| {
+						let mut update_limit_order_from_balance = |side| {
+							let (tick, sell_asset) = if side == Side::Buy {
+								(buy_tick, STABLE_ASSET)
+							} else {
+								(sell_tick, base_asset)
+							};
+
 							weight_used += T::DbWeight::get().reads(1);
 							let balance = T::BalanceApi::get_balance(&strategy_id, sell_asset);
 
@@ -164,8 +170,8 @@ pub mod pallet {
 							break;
 						}
 
-						update_limit_order_from_balance(base_asset, Side::Sell, sell_tick);
-						update_limit_order_from_balance(STABLE_ASSET, Side::Buy, buy_tick);
+						update_limit_order_from_balance(Side::Sell);
+						update_limit_order_from_balance(Side::Buy);
 					},
 				}
 			}
