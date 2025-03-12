@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.11] - 2025-03-12
+
+### Fixes
+
+- Reopen expired Solana channels for fetching.
+
 ## [1.7.10] - 2025-02-26
 
 ### Features
