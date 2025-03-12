@@ -348,8 +348,7 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
-		let vault_addresses = self.api.raw_client().cf_vault_addresses(None).await?;
-		Ok(vault_addresses.into())
+		Ok(self.api.raw_client().cf_vault_addresses(None).await?)
 	}
 }
 

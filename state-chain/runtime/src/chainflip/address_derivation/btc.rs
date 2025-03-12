@@ -63,15 +63,11 @@ pub fn derive_btc_vault_deposit_addresses(private_channel_id: u64) -> (Option<St
 		.script_pubkey()
 		.to_address(&Environment::network_environment().into());
 
-	let previous = if let Some(previous) = key.previous {
-		Some(
-			DepositAddress::new(previous, private_channel_id)
-				.script_pubkey()
-				.to_address(&Environment::network_environment().into()),
-		)
-	} else {
-		None
-	};
+	let previous = key.previous.map(|previous| {
+		DepositAddress::new(previous, private_channel_id)
+			.script_pubkey()
+			.to_address(&Environment::network_environment().into())
+	});
 
 	(previous, current)
 }

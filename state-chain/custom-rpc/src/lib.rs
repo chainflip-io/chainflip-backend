@@ -2179,6 +2179,8 @@ where
 mod test {
 	use std::collections::BTreeSet;
 
+	use cf_chains::address::EncodedAddress;
+
 	use super::*;
 	use cf_chains::{assets::sol, btc::ScriptPubkey};
 	use cf_primitives::{
