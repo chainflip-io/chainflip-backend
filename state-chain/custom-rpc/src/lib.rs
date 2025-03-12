@@ -6,9 +6,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::{
-		AddressString, EncodedAddress, ForeignChainAddressHumanreadable, ToHumanreadableAddress,
-	},
+	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
@@ -1058,11 +1056,11 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>>;
 
-	#[method(name = "vault_addresses")]
+	#[method(name = "get_vault_addresses")]
 	fn cf_vault_addresses(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<VaultAddresses<EncodedAddress>>;
+	) -> RpcResult<VaultAddresses>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1329,7 +1327,7 @@ where
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>,
-		cf_vault_addresses() -> VaultAddresses<EncodedAddress>,
+		cf_vault_addresses() -> VaultAddresses,
 	}
 
 	pass_through_and_flatten! {
@@ -2547,46 +2545,10 @@ mod test {
 
 	#[test]
 	fn test_vault_addresses_custom_rpc() {
-		use state_chain_runtime::runtime_apis::BtcDepositAddresses;
-		let val: VaultAddresses<EncodedAddress> = VaultAddresses {
-			ethereum_vault: EncodedAddress::Eth([0; 20]),
-			arbitrum_vault: EncodedAddress::Arb([1; 20]),
-			bitcoin_vault: BtcDepositAddresses {
-				previous: EncodedAddress::Btc(Vec::new()),
-				current: EncodedAddress::Btc(Vec::new()),
-			},
-			bitcoin_deposit_addresses: BTreeMap::from([(
-				ID_1.clone(),
-				BtcDepositAddresses {
-					previous: EncodedAddress::Btc(Vec::new()),
-					current: EncodedAddress::Btc(Vec::new()),
-				},
-			)]),
-		};
-		insta::assert_json_snapshot!(val);
-	}
-
-	#[test]
-	fn test_vault_addresses_broker_api() {
-		use state_chain_runtime::runtime_apis::BtcDepositAddresses;
-		let val: VaultAddresses<String> = VaultAddresses {
-			ethereum_vault: "0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968".to_string(),
-			arbitrum_vault: "0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968".to_string(),
-			bitcoin_vault: BtcDepositAddresses {
-				previous: "bcrt1p3cexjsg0qgwp6cqvmdk7fs5fus9k2kht3aesfel6r5muxwftqaas3ppc90"
-					.to_string(),
-				current: "bcrt1p3cexjsg0qgwp6cqvmdk7fs5fus9k2kht3aesfel6r5muxwftqaas3ppc90"
-					.to_string(),
-			},
-			bitcoin_deposit_addresses: BTreeMap::from([(
-				ID_1.clone(),
-				BtcDepositAddresses {
-					previous: "bcrt1p3cexjsg0qgwp6cqvmdk7fs5fus9k2kht3aesfel6r5muxwftqaas3ppc90"
-						.to_string(),
-					current: "bcrt1p3cexjsg0qgwp6cqvmdk7fs5fus9k2kht3aesfel6r5muxwftqaas3ppc90"
-						.to_string(),
-				},
-			)]),
+		let val: VaultAddresses = VaultAddresses {
+			ethereum: EncodedAddress::Eth([0; 20]),
+			arbitrum: EncodedAddress::Arb([1; 20]),
+			bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
 		};
 		insta::assert_json_snapshot!(val);
 	}

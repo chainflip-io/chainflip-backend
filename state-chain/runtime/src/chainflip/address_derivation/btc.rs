@@ -51,28 +51,26 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 /// no active epoch key for Bitcoin.
 ///
 /// Returns a tuple of the previous and current BTC vault deposit addresses.
-/// Note: If there is no previous key, the current address is returned for both the previous and
-/// current addresses.
-pub fn derive_btc_vault_deposit_addresses(private_channel_id: u64) -> (String, String) {
+/// Note: If there is no previous key, we return `None` for the previous address.
+pub fn derive_btc_vault_deposit_addresses(private_channel_id: u64) -> (Option<String>, String) {
 	let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
 		.expect("We should always have a key for the current epoch.");
 
-	let current = DepositAddress::new(
-		key.current,
-		private_channel_id.try_into().expect("Private channel id out of bounds."),
-	)
-	.script_pubkey()
-	.to_address(&Environment::network_environment().into());
+	let private_channel_id: u32 =
+		private_channel_id.try_into().expect("Private channel id out of bounds.");
+
+	let current = DepositAddress::new(key.current, private_channel_id)
+		.script_pubkey()
+		.to_address(&Environment::network_environment().into());
 
 	let previous = if let Some(previous) = key.previous {
-		DepositAddress::new(
-			previous,
-			private_channel_id.try_into().expect("Private channel id out of bounds."),
+		Some(
+			DepositAddress::new(previous, private_channel_id)
+				.script_pubkey()
+				.to_address(&Environment::network_environment().into()),
 		)
-		.script_pubkey()
-		.to_address(&Environment::network_environment().into())
 	} else {
-		current.clone()
+		None
 	};
 
 	(previous, current)

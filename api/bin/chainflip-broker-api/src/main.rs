@@ -158,8 +158,8 @@ pub trait Rpc {
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail>;
 
-	#[method(name = "vault_addresses", aliases = ["broker_getVaultAddresses"])]
-	async fn vault_addresses(&self) -> RpcResult<VaultAddresses<String>>;
+	#[method(name = "get_vault_addresses", aliases = ["broker_getVaultAddresses"])]
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
 }
 
 pub struct RpcServerImpl {
@@ -347,7 +347,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(self.api.broker_api().affiliate_withdrawal_request(affiliate_account_id).await?)
 	}
 
-	async fn vault_addresses(&self) -> RpcResult<VaultAddresses<String>> {
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
 		let vault_addresses = self.api.raw_client().cf_vault_addresses(None).await?;
 		Ok(vault_addresses.into())
 	}

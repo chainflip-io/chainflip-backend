@@ -27,11 +27,10 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, BtcDepositAddresses, CcmData, ChannelActionType,
-		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvents,
-		ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
+		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2530,20 +2529,19 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_vault_addresses() -> VaultAddresses<EncodedAddress> {
-			// By passing 0 we get the acutal vault address.
-			let (previous, current) = derive_btc_vault_deposit_addresses(0);
+		fn cf_vault_addresses() -> VaultAddresses {
+			let mut btc_private_deposit_addresses = Vec::new();
+			for (account_id, channel_id) in BrokerPrivateBtcChannels::<Runtime>::iter() {
+				let (previous, current) = derive_btc_vault_deposit_addresses(channel_id);
+				if let Some(previous) = previous {
+					btc_private_deposit_addresses.push((account_id.clone(), EncodedAddress::Btc(previous.into())));
+				}
+				btc_private_deposit_addresses.push((account_id.clone(), EncodedAddress::Btc(current.into())));
+			}
 			VaultAddresses {
-				ethereum_vault: EncodedAddress::Eth(Environment::eth_vault_address().into()),
-				arbitrum_vault: EncodedAddress::Arb(Environment::arb_vault_address().into()),
-				bitcoin_vault: BtcDepositAddresses {
-					previous: EncodedAddress::Btc(previous.into()),
-					current: EncodedAddress::Btc(current.into()),
-				},
-				bitcoin_deposit_addresses: BrokerPrivateBtcChannels::<Runtime>::iter().map(|(k, v)| (k, BtcDepositAddresses {
-					previous: EncodedAddress::Btc(derive_btc_vault_deposit_addresses(v).0.into()),
-					current: EncodedAddress::Btc(derive_btc_vault_deposit_addresses(v).1.into()),
-				})).collect(),
+				ethereum: EncodedAddress::Eth(Environment::eth_vault_address().into()),
+				arbitrum: EncodedAddress::Arb(Environment::arb_vault_address().into()),
+				bitcoin: btc_private_deposit_addresses,
 			}
 		}
 	}
