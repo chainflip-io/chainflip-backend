@@ -43,11 +43,9 @@ fn deploy_strategy() -> AccountId {
 	));
 
 	// An entry for the trading agent is created:
-	let (strategy_id, strategy_entry) = Strategies::<Test>::iter().next().unwrap();
-	assert_eq!(
-		strategy_entry,
-		TradingStrategyEntry { base_asset: BASE_ASSET, strategy: STRATEGY, owner: LP }
-	);
+	let (lp_id, strategy_id, strategy_entry) = Strategies::<Test>::iter().next().unwrap();
+	assert_eq!(strategy_entry, TradingStrategyEntry { base_asset: BASE_ASSET, strategy: STRATEGY });
+	assert_eq!(lp_id, LP);
 
 	assert_event_sequence!(
 		Test,
@@ -173,12 +171,6 @@ fn closing_strategy() {
 			// Credit the strategy account so has a non-zero free balance:
 			MockBalance::credit_account(&LP, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
 			assert_eq!(get_balance(LP), (ADDITIONAL_BASE_AMOUNT, 0));
-
-			// Other LPs can't close our strategy
-			assert_err!(
-				TradingStrategyPallet::close_strategy(RuntimeOrigin::signed(OTHER_LP), strategy_id),
-				Error::<Test>::InvalidOwner
-			);
 
 			// Closing the strategy
 			assert_ok!(TradingStrategyPallet::close_strategy(

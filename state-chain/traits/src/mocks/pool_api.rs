@@ -86,7 +86,6 @@ impl PoolApi for MockPoolApi {
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
 		assert_eq!(quote_asset, STABLE_ASSET);
-		println!("[MockPoolApi]: update_limit_order");
 
 		Self::mutate_value(LIMIT_ORDERS, |limit_orders: &mut Option<LimitOrderStorage>| {
 			let limit_orders = limit_orders.get_or_insert_default();
@@ -115,16 +114,12 @@ impl PoolApi for MockPoolApi {
 							panic!("cannot decrease amount if order does not exist"),
 					};
 
-					println!("[MockPoolApi]: order did not exist");
-
 					Some(TickAndAmount { tick, amount })
 				},
 				Some(mut order) => {
 					if let Some(tick) = option_tick {
 						order.tick = tick;
 					}
-
-					println!("[MockPoolApi]: order exists");
 
 					match amount_change {
 						IncreaseOrDecrease::Increase(amount) => {
@@ -144,7 +139,6 @@ impl PoolApi for MockPoolApi {
 			};
 
 			if let Some(order) = maybe_order {
-				println!("[MockPoolApi]: Order is added");
 				limit_orders.insert(key, order);
 			}
 		});

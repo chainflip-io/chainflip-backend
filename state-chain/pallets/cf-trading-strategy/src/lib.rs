@@ -28,9 +28,8 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 const STRATEGY_ORDER_ID: OrderId = 0;
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
-struct TradingStrategyEntry<AccountId> {
+struct TradingStrategyEntry {
 	base_asset: Asset,
-	owner: AccountId,
 	strategy: TradingStrategy,
 }
 
@@ -79,10 +78,18 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	// Stores all deployed strategies by their id
+	// Stores all deployed strategies by the liquidity provider's id (owner) and
+	// the strategy id.
 	#[pallet::storage]
-	pub(super) type Strategies<T: Config> =
-		StorageMap<_, Identity, T::AccountId, TradingStrategyEntry<T::AccountId>, OptionQuery>;
+	pub(super) type Strategies<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		T::AccountId,
+		Identity,
+		T::AccountId,
+		TradingStrategyEntry,
+		OptionQuery,
+	>;
 
 	/// Stores thresholds used to determine whether a trading strategy for a given asset
 	/// has enough funds in "free balance" to make it worthwhile updating/creating a limit order
@@ -114,7 +121,7 @@ pub mod pallet {
 			// TODO: use correct weight from pools pallet
 			let limit_order_update_weight = Weight::zero();
 
-			for (strategy_id, TradingStrategyEntry { base_asset, strategy, .. }) in
+			for (_, strategy_id, TradingStrategyEntry { base_asset, strategy }) in
 				Strategies::<T>::iter()
 			{
 				match strategy {
@@ -191,7 +198,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		StrategyNotFound,
 		AmountBelowDeploymentThreshold,
-		InvalidOwner,
 	}
 
 	#[pallet::call]
@@ -240,8 +246,9 @@ pub mod pallet {
 				});
 
 				Strategies::<T>::insert(
+					lp,
 					strategy_id.clone(),
-					TradingStrategyEntry { base_asset, owner: lp.clone(), strategy },
+					TradingStrategyEntry { base_asset, strategy },
 				);
 
 				strategy_id
@@ -261,10 +268,8 @@ pub mod pallet {
 		pub fn close_strategy(origin: OriginFor<T>, strategy_id: T::AccountId) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			let TradingStrategyEntry { base_asset, owner, strategy } =
-				Strategies::<T>::take(&strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
-
-			ensure!(lp == &owner, Error::<T>::InvalidOwner);
+			let TradingStrategyEntry { base_asset, strategy } =
+				Strategies::<T>::take(lp, &strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
 
 			// TODO: instead of reading ticks from the strategy, we could extend PoolApi with
 			// a method to close all (limit) orders (which might be necessary for more complex
@@ -308,9 +313,7 @@ pub mod pallet {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			let strategy =
-				Strategies::<T>::get(&strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
-
-			ensure!(lp == &strategy.owner, Error::<T>::InvalidOwner);
+				Strategies::<T>::get(lp, &strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
 
 			Self::add_funds_to_existing_strategy(
 				lp,
