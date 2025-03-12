@@ -19,9 +19,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
-	FundingInfo, IngressEgressFeeApi, InitiateSolanaAltWitnessing, SwapLimitsProvider,
-	SwapOutputAction, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -460,8 +459,6 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Amount = <Self as Chainflip>::Amount,
 		>;
-
-		type SolanaAltWitnessingHandler: InitiateSolanaAltWitnessing;
 	}
 
 	#[pallet::pallet]
@@ -2056,17 +2053,14 @@ pub mod pallet {
 					asset.into(),
 				)
 				.ok()
-				.and_then(|decoded| {
-					match decoded {
+				.and_then(|decoded| match decoded {
 					DecodedCcmAdditionalData::Solana(sol_ccm_data)
 						if !sol_ccm_data.address_lookup_tables().is_empty() =>
-							Some(AnyChainCcmAuxDataLookupKey::from_alt_lookup_key(
-								swap_request_id,
-								T::SolanaAltWitnessingHandler::calculate_expiry_block_number_for_alt_election(
-									frame_system::Pallet::<T>::block_number().saturated_into::<u32>(),
-								))),
-						_ => None,
-					}
+						Some(AnyChainCcmAuxDataLookupKey::from_alt_lookup_key(
+							swap_request_id,
+							frame_system::Pallet::<T>::block_number().saturated_into::<u32>(),
+						)),
+					_ => None,
 				})
 			});
 

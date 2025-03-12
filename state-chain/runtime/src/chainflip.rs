@@ -64,14 +64,14 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
-	NetworkEnvironment, SwapRequestId,
+	SwapRequestId,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
-	KeyProvider, NetworkEnvironmentProvider, OnBroadcastReady, OnDeposit, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	ScheduledEgressDetails,
 };
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
@@ -608,12 +608,6 @@ impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTabl
 }
 
 impl SolanaEnvironment for SolEnvironment {}
-
-impl NetworkEnvironmentProvider for SolEnvironment {
-	fn get_network_environment() -> NetworkEnvironment {
-		Environment::network_environment()
-	}
-}
 
 pub struct TokenholderGovernanceBroadcaster;
 

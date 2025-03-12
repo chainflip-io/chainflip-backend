@@ -1184,9 +1184,7 @@ pub trait InitiateSolanaAltWitnessing {
 	) {
 	}
 
-	fn calculate_expiry_block_number_for_alt_election(
-		current_block_number: BlockNumber,
-	) -> BlockNumber {
-		current_block_number + cf_chains::sol::sol_tx_core::EXPIRY_TIME_FOR_ALT_ELECTIONS
+	fn max_wait_time_for_alt_witnessing() -> BlockNumber {
+		cf_chains::sol::sol_tx_core::EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
 }

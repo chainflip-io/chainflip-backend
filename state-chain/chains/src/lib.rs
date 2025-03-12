@@ -1163,13 +1163,13 @@ impl VaultSwapExtraParametersRpc {
 /// For handling conversions to and from the Generic Ccm Aux Data Lookup Key.
 pub trait CcmAuxDataLookupKeyConversion {
 	/// For solana Address Lookup table
-	fn expiry(&self) -> Option<u32>;
-	fn from_alt_lookup_key(swap_request_id: SwapRequestId, expiry: u32) -> Self;
+	fn created_at(&self) -> Option<u32>;
+	fn from_alt_lookup_key(swap_request_id: SwapRequestId, created_at: u32) -> Self;
 }
 
 impl CcmAuxDataLookupKeyConversion for () {
-	fn expiry(&self) -> Option<u32> {
+	fn created_at(&self) -> Option<u32> {
 		None
 	}
-	fn from_alt_lookup_key(_swap_request_id: SwapRequestId, _expiry: u32) -> Self {}
+	fn from_alt_lookup_key(_swap_request_id: SwapRequestId, _created_at: u32) -> Self {}
 }
