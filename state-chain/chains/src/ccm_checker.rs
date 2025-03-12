@@ -163,13 +163,13 @@ impl CcmValidityCheck for CcmValidityChecker {
 					// lookups.
 					(lookup_tables_length, extra_buffer, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION)
 				} else {
-					// Without lookup tables each new non-repeated account will take a full acocunt.
+					// Without lookup tables each new non-repeated account will take a full account.
 					(0, 0, ACCOUNT_KEY_LENGTH_IN_TRANSACTION)
 				};
 
 			// Technically it shouldn't be necessary to pass duplicated accounts as
 			// it will all be executed in the same instruction. However, when integrating
-			// with other protocols, many of the account's are part of a returned
+			// with other protocols, many of the accounts are part of a returned
 			// payload from an API and it makes it cumbersome to then deduplicate on the
 			// fly and then make it match with the receiver contract. It can be done
 			// but it then requires extra configuration bytes in the payload, which
@@ -178,7 +178,7 @@ impl CcmValidityCheck for CcmValidityChecker {
 			// within the additional accounts and with our accounts. Then we can
 			// calculate the length accordingly.
 			// The only Chainflip accounts that are relevant to the user for deduplication
-			// purposes are used when initializing the `seen_addresses set.
+			// purposes are used when initializing the `seen_addresses` set.
 			let mut seen_addresses = BTreeSet::from_iter([
 				SYSTEM_PROGRAM_ID,
 				SYS_VAR_INSTRUCTIONS,

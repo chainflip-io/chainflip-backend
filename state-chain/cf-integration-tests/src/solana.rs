@@ -971,7 +971,7 @@ fn vote_for_alt_election(election_identifier: u64, alts: Vec<SolAddressLookupTab
 	let mut vote = BoundedBTreeMap::new();
 	vote.try_insert(
 		ElectionIdentifier::new(
-			UniqueMonotonicIdentifier::from_u64(election_identifier),
+			UniqueMonotonicIdentifier::from(election_identifier),
 			CompositeElectionIdentifierExtra::GG(()),
 		),
 		AuthorityVote::Vote(CompositeVote::GG(AltConsensusResult::ValidConsensusAlts(alts))),

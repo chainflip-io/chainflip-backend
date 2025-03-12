@@ -30,17 +30,17 @@ use crate::{
 
 use cf_primitives::{EgressId, ForeignChain, GasAmount, SwapRequestId};
 
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ComputePrice;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct DurableNonce;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct AllNonceAccounts;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ApiEnvironment;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct CurrentAggKey;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct CurrentOnChainKey;
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
@@ -50,7 +50,7 @@ pub type DurableNonceAndAccount = (SolAddress, SolHash);
 	Encode,
 	Decode,
 	PartialEq,
-	Debug,
+	RuntimeDebug,
 	TypeInfo,
 	Copy,
 	Serialize,
@@ -128,7 +128,7 @@ pub trait RecoverDurableNonce {
 }
 
 /// Errors that can arise when building Solana Transactions.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum SolanaTransactionBuildingError {
 	CannotLookupApiEnvironment,
 	CannotLookupCurrentAggKey,
@@ -762,7 +762,17 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {}
 
 #[derive(
-	Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Ord, PartialOrd,
+	Serialize,
+	Deserialize,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	TypeInfo,
+	Ord,
+	PartialOrd,
 )]
 pub enum AltConsensusResult<T> {
 	ValidConsensusAlts(T),
