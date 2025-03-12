@@ -2,7 +2,7 @@ use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
-		balance_api::MockBalance,
+		balance_api::{MockBalance, MockLpRegistration},
 		pool_api::{MockLimitOrder, MockPoolApi},
 	},
 	BalanceApi, Side,
@@ -33,6 +33,9 @@ fn get_balance(account_id: AccountId) -> (AssetAmount, AssetAmount) {
 fn deploy_strategy() -> AccountId {
 	MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT);
 	MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT);
+
+	MockLpRegistration::register_refund_address(LP, BASE_ASSET);
+	MockLpRegistration::register_refund_address(LP, STABLE_ASSET);
 
 	assert_ok!(TradingStrategyPallet::deploy_trading_strategy(
 		RuntimeOrigin::signed(LP),
@@ -68,6 +71,37 @@ fn deploy_strategy() -> AccountId {
 	assert_eq!(get_balance(LP), (0, 0));
 
 	strategy_id
+}
+
+#[test]
+fn refund_addresses_are_required() {
+	new_test_ext().then_execute_at_next_block(|_| {
+		MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT);
+		MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT);
+
+		let deploy = || {
+			TradingStrategyPallet::deploy_trading_strategy(
+				RuntimeOrigin::signed(LP),
+				BASE_AMOUNT,
+				QUOTE_AMOUNT,
+				BASE_ASSET,
+				STRATEGY.clone(),
+			)
+		};
+
+		// Should fail since no assets are registered:
+		assert_err!(deploy(), DispatchError::Other("no refund address"));
+
+		// Registering a single asset should not be sufficient:
+		MockLpRegistration::register_refund_address(LP, BASE_ASSET);
+
+		assert_err!(deploy(), DispatchError::Other("no refund address"));
+
+		// Should be able to deploy a strategy after registering the second asset:
+		MockLpRegistration::register_refund_address(LP, STABLE_ASSET);
+
+		assert_ok!(deploy());
+	});
 }
 
 #[test]

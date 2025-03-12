@@ -1,5 +1,9 @@
 use crate as pallet_cf_trading_strategy;
-use cf_traits::{impl_mock_chainflip, mocks::pool_api::MockPoolApi, AccountRoleRegistry};
+use cf_traits::{
+	impl_mock_chainflip,
+	mocks::{balance_api::MockLpRegistration, pool_api::MockPoolApi},
+	AccountRoleRegistry,
+};
 use frame_support::derive_impl;
 
 // Configure a mock runtime to test the pallet.
@@ -22,6 +26,7 @@ impl pallet_cf_trading_strategy::Config for Test {
 	type WeightInfo = ();
 	type BalanceApi = cf_traits::mocks::balance_api::MockBalance;
 	type PoolApi = MockPoolApi;
+	type LpRegistrationApi = MockLpRegistration;
 }
 
 pub const LP: <Test as frame_system::Config>::AccountId = 123u64;

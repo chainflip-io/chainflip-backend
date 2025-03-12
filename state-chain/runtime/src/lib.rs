@@ -1027,6 +1027,7 @@ impl pallet_cf_trading_strategy::Config for Runtime {
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
 	type BalanceApi = AssetBalances;
 	type PoolApi = LiquidityPools;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 #[frame_support::runtime]

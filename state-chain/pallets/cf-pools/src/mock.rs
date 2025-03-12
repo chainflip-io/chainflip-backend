@@ -1,5 +1,6 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
 use cf_chains::Ethereum;
+use cf_primitives::{Asset, STABLE_ASSET};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -8,7 +9,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry,
 };
-use frame_support::derive_impl;
+use frame_support::{assert_ok, derive_impl};
 use frame_system as system;
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -45,11 +46,18 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
-		frame_support::assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
 			&ALICE,
 		));
-		frame_support::assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
 			&BOB,
 		));
+
+		for lp in [ALICE, BOB] {
+			for asset in Asset::all() {
+				MockLpRegistration::register_refund_address(lp, asset);
+			}
+		}
+
 	}
 }

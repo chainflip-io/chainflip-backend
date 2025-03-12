@@ -12,8 +12,10 @@ use crate::LpRegistration;
 
 pub struct MockBalance;
 
+type AccountId = u64;
+
 impl LpDepositHandler for MockBalance {
-	type AccountId = u64;
+	type AccountId = AccountId;
 
 	fn add_deposit(
 		who: &Self::AccountId,
@@ -31,10 +33,10 @@ impl MockPallet for MockBalance {
 const FREE_BALANCES: &[u8] = b"FREE_BALANCES";
 
 impl BalanceApi for MockBalance {
-	type AccountId = u64;
+	type AccountId = AccountId;
 
 	fn credit_account(who: &Self::AccountId, asset: Asset, amount_to_credit: AssetAmount) {
-		Self::mutate_storage::<(u64, cf_primitives::Asset), _, _, _, _>(
+		Self::mutate_storage::<(AccountId, cf_primitives::Asset), _, _, _, _>(
 			FREE_BALANCES,
 			&(*who, asset),
 			|amount| {
@@ -58,7 +60,7 @@ impl BalanceApi for MockBalance {
 		asset: Asset,
 		amount_to_debit: AssetAmount,
 	) -> DispatchResult {
-		Self::mutate_storage::<(u64, cf_primitives::Asset), _, _, _, _>(
+		Self::mutate_storage::<(AccountId, cf_primitives::Asset), _, _, _, _>(
 			FREE_BALANCES,
 			&(*who, asset),
 			|amount| {
@@ -85,16 +87,37 @@ impl BalanceApi for MockBalance {
 
 pub struct MockLpRegistration;
 
+impl MockPallet for MockLpRegistration {
+	const PREFIX: &'static [u8] = b"LP_REGISTRATION";
+}
+
+const REFUND_ADDRESS_REGISTRATION: &[u8] = b"IS_REGISTERED_FOR_ASSET";
+
+impl MockLpRegistration {
+	pub fn register_refund_address(account_id: AccountId, asset: Asset) {
+		Self::mutate_storage::<(AccountId, Asset), _, _, (), _>(
+			REFUND_ADDRESS_REGISTRATION,
+			&(account_id, asset),
+			|is_registered: &mut Option<()>| {
+				*is_registered = Some(());
+			},
+		);
+	}
+}
+
 impl LpRegistration for MockLpRegistration {
 	type AccountId = u64;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_liquidity_refund_address(_: &Self::AccountId, _: cf_chains::ForeignChainAddress) {}
 
-	fn ensure_has_refund_address_for_asset(
-		_who: &Self::AccountId,
-		_asset: Asset,
-	) -> DispatchResult {
-		Ok(())
+	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult {
+		if Self::get_storage::<(AccountId, Asset), ()>(REFUND_ADDRESS_REGISTRATION, (*who, asset))
+			.is_some()
+		{
+			Ok(())
+		} else {
+			Err(DispatchError::Other("no refund address"))
+		}
 	}
 }

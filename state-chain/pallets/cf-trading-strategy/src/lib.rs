@@ -16,7 +16,9 @@ use frame_system::pallet_prelude::*;
 use frame_support::sp_runtime::FixedU64;
 
 use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
-use cf_traits::{AccountRoleRegistry, BalanceApi, Chainflip, IncreaseOrDecrease, OrderId, Side};
+use cf_traits::{
+	AccountRoleRegistry, BalanceApi, Chainflip, IncreaseOrDecrease, LpRegistration, OrderId, Side,
+};
 
 pub use pallet::*;
 use weights::WeightInfo;
@@ -69,6 +71,9 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		type BalanceApi: BalanceApi<AccountId = Self::AccountId>;
+
+		/// LP address registration and verification.
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 
 		type PoolApi: PoolApi<AccountId = Self::AccountId>;
 	}
@@ -220,6 +225,9 @@ pub mod pallet {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			let quote_asset = STABLE_ASSET;
+
+			T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, base_asset)?;
+			T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, quote_asset)?;
 
 			let strategy_id = {
 				// Check that strategy is created with sufficient funds:
