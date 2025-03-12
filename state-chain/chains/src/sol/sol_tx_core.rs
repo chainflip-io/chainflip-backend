@@ -8,13 +8,6 @@ use crate::sol::SolAddress;
 
 pub use sol_prim::*;
 
-/// Maximum number of Accounts Lookup Tables user can pass in as part of CCM call.
-pub const MAX_CCM_USER_ALTS: u8 = 3u8;
-
-/// The maximum number of blocks we wait for external Aux data elections to finish
-/// before we fail to egress CCM messages. TODO Albert: come up with a reasonable number.
-pub const EXPIRY_TIME_FOR_ALT_ELECTIONS: u32 = 600u32;
-
 /// Provides alternative version of internal types that uses `Address` instead of Pubkey:
 ///
 /// |----------------------|
