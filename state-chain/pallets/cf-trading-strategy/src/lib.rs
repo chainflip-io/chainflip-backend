@@ -299,8 +299,7 @@ pub mod pallet {
 
 			for asset in [base_asset, STABLE_ASSET] {
 				let balance = T::BalanceApi::get_balance(&strategy_id, asset);
-				T::BalanceApi::try_debit_account(&strategy_id, asset, balance)?;
-				T::BalanceApi::credit_account(lp, asset, balance);
+				T::BalanceApi::transfer(&strategy_id, lp, asset, balance)?;
 			}
 
 			Self::deposit_event(Event::<T>::StrategyClosed { strategy_id: strategy_id.clone() });
@@ -341,13 +340,11 @@ impl<T: Config> Pallet<T> {
 		quote_asset_amount: AssetAmount,
 	) -> DispatchResult {
 		if base_asset_amount > 0 {
-			T::BalanceApi::try_debit_account(lp, base_asset, base_asset_amount)?;
-			T::BalanceApi::credit_account(strategy_id, base_asset, base_asset_amount);
+			T::BalanceApi::transfer(lp, strategy_id, base_asset, base_asset_amount)?;
 		}
 
 		if quote_asset_amount > 0 {
-			T::BalanceApi::try_debit_account(lp, STABLE_ASSET, quote_asset_amount)?;
-			T::BalanceApi::credit_account(strategy_id, STABLE_ASSET, quote_asset_amount);
+			T::BalanceApi::transfer(lp, strategy_id, STABLE_ASSET, quote_asset_amount)?;
 		}
 
 		Self::deposit_event(Event::<T>::FundsAddedToStrategy {

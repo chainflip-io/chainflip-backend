@@ -1409,7 +1409,7 @@ fn auto_sweeping() {
 			5_000
 		));
 
-		// Note: increase due to implicit sweeping above
+		// Note: increase due to implicit sweeping in `set_limit_order`
 		assert_eq!(get_balance(&ALICE), (0, 15_063));
 
 		// The amount in this swap is not sufficient to trigger auto sweeping:
