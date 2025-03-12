@@ -346,6 +346,7 @@ impl Chain for Polkadot {
 	type TransactionRef = PolkadotTransactionId;
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
+	type CcmAuxDataLookupKey = ();
 }
 
 pub type ResetProxyAccountNonce = bool;

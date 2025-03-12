@@ -1,14 +1,14 @@
 pub use cf_primitives::chains::Solana;
 
-use cf_primitives::ChannelId;
+use cf_primitives::{BlockNumber, ChannelId, SwapRequestId};
 use sp_core::ConstBool;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
 	address, assets,
 	sol::sol_tx_core::{AccountBump, SlotNumber},
-	DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator,
-	TypeInfo,
+	CcmAuxDataLookupKeyConversion, DepositChannel, DepositDetailsToTransactionInId,
+	FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{sp_runtime::RuntimeDebug, Parameter};
@@ -56,6 +56,13 @@ pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize + 32usize; // 694 bytes left + 32 empty source address
 pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize + 32usize; // 481 bytes left + 32 empty source address
 
+/// Maximum number of Accounts Lookup Tables user can pass in as part of CCM call.
+pub const MAX_CCM_USER_ALTS: u8 = 3u8;
+
+/// The maximum number of blocks we wait for external Aux data elections to finish
+/// before we fail to egress CCM messages.
+pub const EXPIRY_TIME_FOR_ALT_ELECTIONS: BlockNumber = 100u32;
+
 // Nonce management values
 pub const NONCE_NUMBER_CRITICAL_NONCES: usize = 1;
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER: usize = 1;
@@ -70,6 +77,24 @@ pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usi
 pub struct SolanaTransactionData {
 	pub serialized_transaction: Vec<u8>,
 	pub skip_preflight: bool,
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct SolanaAltLookup {
+	// Used to lookup ALT query result
+	pub swap_request_id: SwapRequestId,
+	// Blocknumber when this CCM was created. Used to calculate expiry.
+	pub created_at: u32,
+}
+
+impl CcmAuxDataLookupKeyConversion for SolanaAltLookup {
+	fn created_at(&self) -> Option<u32> {
+		Some(self.created_at)
+	}
+
+	fn from_alt_lookup_key(swap_request_id: SwapRequestId, created_at: u32) -> Self {
+		SolanaAltLookup { swap_request_id, created_at }
+	}
 }
 
 /// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
@@ -99,6 +124,7 @@ impl Chain for Solana {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 	type TransactionRef = SolSignature;
+	type CcmAuxDataLookupKey = SolanaAltLookup;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -27,9 +27,9 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
-	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
-	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
+	AllBatch, AllBatchError, CcmAdditionalData, CcmAuxDataLookupKeyConversion, CcmChannelMetadata,
+	CcmDepositMetadata, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks,
+	ChannelRefundParameters, ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall, SwapOrigin,
@@ -53,7 +53,7 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
-	sp_runtime::{traits::Zero, DispatchError, Permill, Saturating},
+	sp_runtime::{traits::Zero, DispatchError, Permill, SaturatedConversion, Saturating},
 	transactional,
 };
 use frame_system::pallet_prelude::*;
@@ -260,7 +260,8 @@ pub struct CrossChainMessage<C: Chain> {
 	// Where funds might be returned to if the message fails.
 	pub ccm_additional_data: CcmAdditionalData,
 	pub gas_budget: GasAmount,
-	pub swap_request_id: SwapRequestId,
+	// Contains information used to lookup for auxiliary data.
+	pub aux_data_lookup_key: Option<C::CcmAuxDataLookupKey>,
 }
 
 impl<C: Chain> CrossChainMessage<C> {
@@ -269,7 +270,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(20);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(21);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -372,7 +373,6 @@ pub mod pallet {
 	use cf_chains::{address::EncodedAddress, ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
 	use cf_traits::{OnDeposit, SwapLimitsProvider};
-	use core::marker::PhantomData;
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::{Percent, SaturatedConversion};
@@ -613,7 +613,7 @@ pub mod pallet {
 
 		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
 
-		type SolanaAltWitnessingHandler: InitiateSolanaAltWitnessing;
+		type CcmAuxDataWitnessingHandler: InitiateSolanaAltWitnessing;
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
@@ -660,7 +660,7 @@ pub mod pallet {
 	pub type ScheduledEgressFetchOrTransfer<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<FetchOrTransfer<T::TargetChain>>, ValueQuery>;
 
-	/// Scheduled cross chain messages for the Ethereum chain.
+	/// Scheduled cross chain messages to be egressed.
 	#[pallet::storage]
 	pub type ScheduledEgressCcm<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<CrossChainMessage<T::TargetChain>>, ValueQuery>;
@@ -929,6 +929,8 @@ pub mod pallet {
 			deduction_percent: Percent,
 		},
 		InvalidCcmRefunded {
+			ccm_egress_id: EgressId,
+			refund_transfer_egress_id: EgressId,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			destination_address: TargetChainAccount<T, I>,
@@ -976,6 +978,8 @@ pub mod pallet {
 		UnsupportedChain,
 		/// Transaction cannot be reported after being pre-witnessed or boosted.
 		TransactionAlreadyPrewitnessed,
+		/// Waited too long for a CCM's Auxiliary data.
+		ExceededMaxCcmAuxDataWaitTime,
 	}
 
 	#[pallet::hooks]
@@ -1736,6 +1740,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut maybe_no_of_transfers_remaining =
 			T::FetchesTransfersLimitProvider::maybe_ccm_limit();
 
+		let current_block: u32 = <frame_system::Pallet<T>>::block_number().saturated_into::<u32>();
+
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
@@ -1746,6 +1752,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.collect()
 			});
 		for ccm in ccms_to_send {
+			// If we waited for too long, fail the CCM and refund.
+			if let Some(created_at) =
+				ccm.aux_data_lookup_key.clone().and_then(|key| key.created_at())
+			{
+				if current_block >=
+					created_at +
+						T::CcmAuxDataWitnessingHandler::max_wait_time_for_alt_witnessing()
+				{
+					Self::refund_invalid_ccm(
+						ccm,
+						ExecutexSwapAndCallError::DispatchError(
+							Error::<T, I>::ExceededMaxCcmAuxDataWaitTime.into(),
+						),
+					);
+					continue;
+				}
+			};
+
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 				TransferAssetParams {
 					asset: ccm.asset,
@@ -1755,9 +1779,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.source_chain,
 				ccm.source_address.clone(),
 				ccm.gas_budget,
-				ccm.message.clone().to_vec(),
-				ccm.ccm_additional_data.clone().to_vec(),
-				ccm.swap_request_id,
+				ccm.message.to_vec(),
+				ccm.ccm_additional_data.to_vec(),
+				ccm.aux_data_lookup_key.clone(),
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -1773,39 +1797,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(ExecutexSwapAndCallError::TryAgainLater) =>
 					ScheduledEgressCcm::<T, I>::append(ccm),
 				Err(error) => {
-					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. swap_request_id: {:?}, Error: {:?}", ccm.swap_request_id, error);
-
-					Self::deposit_event(Event::<T, I>::CcmEgressInvalid {
-						egress_id: ccm.egress_id,
-						error,
-					});
-
-					if let Ok(decoded_data) = T::CcmValidityChecker::decode_unchecked(
-						ccm.ccm_additional_data.clone(),
-						T::TargetChain::get(),
-					) {
-						if let Some(fallback_address) =
-							decoded_data.refund_address::<T::TargetChain>()
-						{
-							match Self::schedule_egress(
-								ccm.asset,
-								ccm.amount,
-								fallback_address.clone(),
-								None,
-								None,
-
-							) {
-								Ok(egress_details) => Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
-									asset: ccm.asset,
-									amount: egress_details.egress_amount,
-									destination_address: fallback_address,
-								}),
-								Err(e) => log::warn!("Cannot refund failed Ccm: failed to Egress. swap_request_id: {:?}, Error: {:?}", ccm.swap_request_id, e),
-							};
-						}
-					} else {
-						log::warn!("Cannot refund failed Ccm: failed to decode `ccm_additional_data`. swap_request_id: {:?}", ccm.swap_request_id);
-					}
+					Self::refund_invalid_ccm(ccm, error);
 				},
 			};
 		}
@@ -1964,12 +1956,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						),
 						min_price: params.min_price,
 					}),
-					dca_params.clone(),
+					dca_params,
 					origin.into(),
 				);
 				if let Some(ccm_channel_metadata) = channel_metadata {
 					if ForeignChain::Solana == destination_asset.into() {
-						T::SolanaAltWitnessingHandler::initiate_alt_witnessing(
+						T::CcmAuxDataWitnessingHandler::initiate_alt_witnessing(
 							ccm_channel_metadata,
 							swap_request_id,
 						);
@@ -2841,6 +2833,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	fn refund_invalid_ccm(ccm: CrossChainMessage<T::TargetChain>, error: ExecutexSwapAndCallError) {
+		Self::deposit_event(Event::<T, I>::CcmEgressInvalid { egress_id: ccm.egress_id, error });
+		if let Ok(decoded_data) = T::CcmValidityChecker::decode_unchecked(
+			ccm.ccm_additional_data.clone(),
+			T::TargetChain::get(),
+		) {
+			if let Some(fallback_address) = decoded_data.refund_address::<T::TargetChain>() {
+				match Self::schedule_egress(
+					ccm.asset,
+					ccm.amount,
+					fallback_address.clone(),
+					None,
+					None
+				) {
+					Ok(egress_details) => Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
+						ccm_egress_id: ccm.egress_id,
+						refund_transfer_egress_id: egress_details.egress_id,
+						asset: ccm.asset,
+						amount: egress_details.egress_amount,
+						destination_address: fallback_address,
+					}),
+					Err(e) => log::warn!("Cannot refund failed Ccm: failed to Egress. aux_data_lookup_key: {:?}, Error: {:?}", ccm.aux_data_lookup_key, e),
+				};
+			}
+		} else {
+			// Ccm additional data is invalid - This should never happen.
+			log::warn!("Cannot refund failed Ccm: failed to decode `ccm_additional_data`. aux_data_lookup_key: {:?}", ccm.aux_data_lookup_key);
+		}
+	}
+
 	/// If a Ccm failed, we want to refund the user their assets.
 	/// This function will schedule a transfer to the fallback address, and emit an event on
 	/// success. IMPORTANT: Currently only used for Solana.
@@ -2848,8 +2870,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		broadcast_id: BroadcastId,
 		fallback: TransferAssetParams<T::TargetChain>,
 	) {
-		// let destination_address = fallback.to.clone();
-
 		match Self::schedule_egress(
 			fallback.asset,
 			fallback.amount,
@@ -2884,7 +2904,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
-		swap_request_id: Option<SwapRequestId>,
+		ccm_aux_data_lookup_key: Option<<T::TargetChain as Chain>::CcmAuxDataLookupKey>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
@@ -2921,7 +2941,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_chain,
 						source_address,
 						gas_budget,
-						swap_request_id: swap_request_id.unwrap_or_default(),
+						aux_data_lookup_key: ccm_aux_data_lookup_key,
 					});
 
 					Ok(egress_details)

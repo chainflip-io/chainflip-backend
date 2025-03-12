@@ -896,7 +896,7 @@ pub trait EgressApi<C: Chain> {
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
-		swap_request_id: Option<SwapRequestId>,
+		ccm_aux_data_lookup_key: Option<C::CcmAuxDataLookupKey>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
@@ -931,6 +931,7 @@ pub trait OnDeposit<C: Chain> {
 }
 
 pub trait NetworkEnvironmentProvider {
+	/// The type of Network the current chain is running on.
 	fn get_network_environment() -> NetworkEnvironment;
 }
 
@@ -1180,5 +1181,10 @@ pub trait InitiateSolanaAltWitnessing {
 	fn initiate_alt_witnessing(
 		_ccm_channel_metadata: CcmChannelMetadata,
 		_swap_request_id: SwapRequestId,
-	);
+	) {
+	}
+
+	fn max_wait_time_for_alt_witnessing() -> BlockNumber {
+		cf_chains::sol::EXPIRY_TIME_FOR_ALT_ELECTIONS
+	}
 }

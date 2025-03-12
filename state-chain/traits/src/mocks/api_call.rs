@@ -6,7 +6,7 @@ use cf_chains::{
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, RejectCall, RejectError,
 	TransferAssetParams, TransferFallback, TransferFallbackError,
 };
-use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount, SwapRequestId};
+use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount};
 use codec::{Decode, Encode};
 use frame_support::{sp_runtime::DispatchError, CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -15,6 +15,12 @@ pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
 pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
 pub const ETHEREUM_USDC_ADDRESS: [u8; 20] = [0x45; 20];
 pub const ETHEREUM_USDT_ADDRESS: [u8; 20] = [0xba; 20];
+
+thread_local! {
+	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = const { std::cell::RefCell::new(true) };
+	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 #[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
 pub struct MockEvmEnvironment;
 
@@ -87,11 +93,6 @@ impl MockEthAllBatch<MockEvmEnvironment> {
 	}
 }
 
-thread_local! {
-	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = const { std::cell::RefCell::new(true) };
-	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
@@ -151,7 +152,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
-		_swap_request_id: SwapRequestId,
+		_aux_data_lookup_key: Option<()>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
@@ -289,7 +290,7 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: Vec<u8>,
-		_swap_request_id: SwapRequestId,
+		_aux_data_lookup_key: Option<()>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockBtcEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))

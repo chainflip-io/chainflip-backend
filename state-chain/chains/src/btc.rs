@@ -255,6 +255,7 @@ impl Chain for Bitcoin {
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+	type CcmAuxDataLookupKey = ();
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]

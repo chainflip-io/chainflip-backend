@@ -103,8 +103,7 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	}
 }
 
-pub struct MockNetworkEnvironmentProvider {}
-
+pub struct MockNetworkEnvironmentProvider;
 impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
 		cf_primitives::NetworkEnvironment::Development
@@ -137,7 +136,7 @@ impl crate::Config for Test {
 	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
-	type SolanaAltWitnessingHandler = MockAltWitnessing;
+	type CcmAuxDataWitnessingHandler = MockAltWitnessing;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;
