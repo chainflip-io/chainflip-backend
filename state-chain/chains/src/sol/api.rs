@@ -688,7 +688,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			ccm_additional_data,
 		)
 		.map_err(|e| {
-			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {}", e);
+			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);
 			match e {
 				SolanaTransactionBuildingError::AltsNotYetWitnessed =>
 					ExecutexSwapAndCallError::TryAgainLater,
@@ -775,7 +775,17 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {}
 
 #[derive(
-	Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Ord, PartialOrd,
+	Serialize,
+	Deserialize,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	TypeInfo,
+	Ord,
+	PartialOrd,
 )]
 pub enum AltConsensusResult<T> {
 	ValidConsensusAlts(T),
