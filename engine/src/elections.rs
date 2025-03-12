@@ -23,7 +23,7 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	sync::Arc,
 };
-use tokio::sync::mpsc;
+use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 use voter_api::CompositeVoterApi;
 
@@ -43,7 +43,7 @@ pub struct Voter<
 {
 	state_chain_client: Arc<StateChainClient>,
 	voter: RetrierClient<VoterClient>,
-	sender: Option<mpsc::UnboundedSender<crate::btc::cached_rpc::RequestKey>>,
+	cache: Option<Arc<RwLock<HashMap<RequestKey, crate::btc::cached_rpc::RequestValue>>>>,
 	_phantom: core::marker::PhantomData<Instance>,
 }
 
@@ -62,7 +62,7 @@ where
 		scope: &Scope<'_, anyhow::Error>,
 		state_chain_client: Arc<StateChainClient>,
 		voter: VoterClient,
-		sender: Option<mpsc::UnboundedSender<RequestKey>>,
+		cache: Option<Arc<RwLock<HashMap<RequestKey, crate::btc::cached_rpc::RequestValue>>>> //Option<mpsc::UnboundedSender<(RequestKey)>>,
 	) -> Self {
 		Self {
 			state_chain_client,
@@ -74,7 +74,7 @@ where
 				INITIAL_VOTER_REQUEST_TIMEOUT,
 				MAXIMUM_CONCURRENT_VOTER_REQUESTS,
 			),
-			sender ,
+			cache ,
 			_phantom: Default::default(),
 		}
 	}
@@ -201,8 +201,9 @@ where
 
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
 					if electoral_data.contributing {
-						if let Some(sender) = &self.sender {
-							let _ = sender.send(RequestKey::ClearCache);
+						if let Some(cache) = &self.cache {
+							let mut cache = cache.write().await; //maybe using the channel to send a request and not block here is better?
+							cache.clear();
 						}
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {

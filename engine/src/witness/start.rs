@@ -19,7 +19,7 @@ use state_chain_runtime::{BitcoinInstance, SolanaInstance};
 
 use super::common::epoch_source::EpochSource;
 
-use crate::btc::cached_rpc::BtcCachingClient;
+use crate::btc::{cached_rpc::BtcCachingClient, rpc::BtcRpcClient};
 use anyhow::Result;
 
 /// Starts all the witnessing tasks.
@@ -31,7 +31,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
-	btc_client: BtcCachingClient,
+	btc_client: BtcCachingClient<BtcRpcClient>,
 	dot_client: DotRetryRpcClient,
 	sol_client: SolRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,

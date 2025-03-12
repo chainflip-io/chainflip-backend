@@ -43,6 +43,7 @@ use crate::{
 };
 use anyhow::Result;
 
+use crate::btc::rpc::{BtcRpcApi, BtcRpcClient};
 use sp_core::H256;
 use state_chain_runtime::chainflip::bitcoin_elections::{
 	BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinVaultDepositWitnessingES,
@@ -51,7 +52,7 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct BitcoinDepositChannelWitnessingVoter {
-	client: BtcCachingClient,
+	client: BtcCachingClient<BtcRpcClient>,
 }
 
 #[async_trait::async_trait]
@@ -73,7 +74,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 			tracing::info!("Checking block {:?}", block);
 
 			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
+			let block_hash = self.client.block_hash(block).await?;
 
 			let block = self.client.block(block_hash).await?;
 
@@ -90,7 +91,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 
 #[derive(Clone)]
 pub struct BitcoinVaultDepositWitnessingVoter {
-	client: BtcCachingClient,
+	client: BtcCachingClient<BtcRpcClient>,
 }
 
 #[async_trait::async_trait]
@@ -111,7 +112,7 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 			tracing::info!("Checking block {:?}", block);
 
 			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
+			let block_hash = self.client.block_hash(block).await?;
 
 			let block = self.client.block(block_hash).await?;
 
@@ -126,7 +127,7 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 
 #[derive(Clone)]
 pub struct BitcoinBlockHeightTrackingVoter {
-	client: BtcCachingClient,
+	client: BtcCachingClient<BtcRpcClient>,
 }
 
 #[async_trait::async_trait]
@@ -157,7 +158,8 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 
 		let get_header = |index: BlockNumber| {
 			async move {
-				let header = self.client.block_header(index).await?;
+				let block_hash = self.client.block_hash(index).await?;
+				let header = self.client.block_header(block_hash).await?;
 				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.
 				header_from_btc_header(header)
@@ -212,7 +214,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 
 #[derive(Clone)]
 pub struct BitcoinEgressWitnessingVoter {
-	client: BtcCachingClient,
+	client: BtcCachingClient<BtcRpcClient>,
 }
 
 #[async_trait::async_trait]
@@ -232,7 +234,7 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 			tracing::info!("Checking block {:?}", block);
 
 			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
+			let block_hash = self.client.block_hash(block).await?;
 
 			let block = self.client.block(block_hash).await?;
 
@@ -253,7 +255,7 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 
 #[derive(Clone)]
 pub struct BitcoinFeeVoter {
-	client: BtcCachingClient,
+	client: BtcCachingClient<BtcRpcClient>,
 }
 
 #[async_trait::async_trait]
@@ -263,7 +265,7 @@ impl VoterApi<BitcoinFeeTracking> for crate::witness::btc_e::BitcoinFeeVoter {
 		_settings: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinFeeTracking>>, anyhow::Error> {
-		if let Some(fee) = self.client.next_block_fee_rate().await {
+		if let Some(fee) = self.client.next_block_fee_rate().await? {
 			Ok(Some(fee))
 		} else {
 			Ok(None)
@@ -273,7 +275,7 @@ impl VoterApi<BitcoinFeeTracking> for crate::witness::btc_e::BitcoinFeeVoter {
 
 #[derive(Clone)]
 pub struct BitcoinLivenessVoter {
-	client: BtcCachingClient,
+	client: BtcCachingClient<BtcRpcClient>,
 }
 
 #[async_trait::async_trait]
@@ -283,13 +285,13 @@ impl VoterApi<BitcoinLiveness> for BitcoinLivenessVoter {
 		_settings: <BitcoinLiveness as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinLiveness as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinLiveness>>, anyhow::Error> {
-		Ok(Some(H256::from_slice(&self.client.block_hash(properties).await.to_byte_array())))
+		Ok(Some(H256::from_slice(&self.client.block_hash(properties).await?.to_byte_array())))
 	}
 }
 
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	client: BtcCachingClient,
+	client: BtcCachingClient<BtcRpcClient>,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>
 where
@@ -316,7 +318,7 @@ where
 						BitcoinFeeVoter { client: client.clone() },
 						BitcoinLivenessVoter { client: client.clone() },
 					)),
-					Some(client.sender),
+					Some(Arc::clone(&client.cache)),
 				)
 				.continuously_vote()
 				.await;
