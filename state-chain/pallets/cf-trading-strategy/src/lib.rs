@@ -92,78 +92,6 @@ fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
 
 type AssetToAmountMap = BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>;
 
-/// Add funds to a limit order from the strategy's balance.
-fn fund_limit_order_from_balance<T: Config>(
-	strategy_id: &T::AccountId,
-	base_asset: Asset,
-	side: Side,
-	tick: Tick,
-	order_update_thresholds: &AssetToAmountMap,
-	limit_order_update_weight: Weight,
-) -> Weight {
-	use cf_runtime_utilities::log_or_panic;
-
-	let sell_asset = if side == Side::Buy { STABLE_ASSET } else { base_asset };
-
-	let mut weight_used = T::DbWeight::get().reads(1);
-	let balance = T::BalanceApi::get_balance(strategy_id, sell_asset);
-
-	// Default to 1 to prevent updating with 0 amounts
-	let threshold = order_update_thresholds.get(&sell_asset).copied().unwrap_or(1);
-
-	if balance >= threshold {
-		weight_used += limit_order_update_weight;
-
-		if T::PoolApi::update_limit_order(
-			strategy_id,
-			base_asset,
-			STABLE_ASSET,
-			side,
-			STRATEGY_ORDER_ID,
-			Some(tick),
-			IncreaseOrDecrease::Increase(balance),
-		)
-		.is_err()
-		{
-			// Should be impossible to get an error since we just
-			// checked the balance above
-			log_or_panic!("Failed to update limit order for strategy {strategy_id:?}");
-		}
-	}
-
-	weight_used
-}
-
-fn extract_base_and_quote_amounts(
-	amounts: &[(Asset, AssetAmount)],
-	base_asset: Asset,
-) -> Result<(AssetAmount, AssetAmount), ()> {
-	match amounts.len() {
-		1 => {
-			let (asset, amount) = amounts[0];
-
-			if asset == base_asset {
-				Ok((amount, 0))
-			} else if asset == STABLE_ASSET {
-				Ok((0, amount))
-			} else {
-				Err(())
-			}
-		},
-		2 => {
-			let (asset1, amount1) = amounts[0];
-			let (asset2, amount2) = amounts[1];
-
-			match (asset1, asset2) {
-				(asset, STABLE_ASSET) if asset == base_asset => Ok((amount1, amount2)),
-				(STABLE_ASSET, asset) if asset == base_asset => Ok((amount2, amount1)),
-				_ => Err(()),
-			}
-		},
-		_ => Err(()),
-	}
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -243,23 +171,39 @@ pub mod pallet {
 							break;
 						}
 
-						weight_used += fund_limit_order_from_balance::<T>(
-							&strategy_id,
-							base_asset,
-							Side::Buy,
-							buy_tick,
-							&order_update_thresholds,
-							limit_order_update_weight,
-						);
+						for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
+							let sell_asset =
+								if side == Side::Buy { STABLE_ASSET } else { base_asset };
 
-						weight_used += fund_limit_order_from_balance::<T>(
-							&strategy_id,
-							base_asset,
-							Side::Sell,
-							sell_tick,
-							&order_update_thresholds,
-							limit_order_update_weight,
-						);
+							weight_used += T::DbWeight::get().reads(1);
+							let balance = T::BalanceApi::get_balance(&strategy_id, sell_asset);
+
+							// Default to 1 to prevent updating with 0 amounts
+							let threshold =
+								order_update_thresholds.get(&sell_asset).copied().unwrap_or(1);
+
+							if balance >= threshold {
+								weight_used += limit_order_update_weight;
+
+								if T::PoolApi::update_limit_order(
+									&strategy_id,
+									base_asset,
+									STABLE_ASSET,
+									side,
+									STRATEGY_ORDER_ID,
+									Some(tick),
+									IncreaseOrDecrease::Increase(balance),
+								)
+								.is_err()
+								{
+									// Should be impossible to get an error since we just
+									// checked the balance above
+									cf_runtime_utilities::log_or_panic!(
+										"Failed to update limit order for strategy {strategy_id:?}"
+									);
+								}
+							}
+						}
 					},
 				}
 			}
@@ -367,8 +311,7 @@ pub mod pallet {
 			// strategies).
 			let TradingStrategy::SellAndBuyAtTicks { buy_tick, sell_tick, base_asset } = strategy;
 
-			let cancel_limit_orders = |side, tick| {
-				// TODO: check if order cancellation is infallible?
+			for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
 				T::PoolApi::cancel_limit_order(
 					&strategy_id,
 					base_asset,
@@ -376,11 +319,8 @@ pub mod pallet {
 					side,
 					STRATEGY_ORDER_ID,
 					tick,
-				)
-			};
-
-			cancel_limit_orders(Side::Buy, buy_tick)?;
-			cancel_limit_orders(Side::Sell, sell_tick)?;
+				)?;
+			}
 
 			for asset in strategy.supported_assets() {
 				let balance = T::BalanceApi::get_balance(&strategy_id, asset);
