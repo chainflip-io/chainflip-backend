@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use subxt::{config::signed_extensions, Config};
+use subxt::{config::transaction_extensions, Config};
 
 pub enum StateChainConfig {}
 
@@ -27,17 +27,18 @@ impl Config for StateChainConfig {
 	type Hasher = subxt::config::substrate::BlakeTwo256;
 	type Header = subxt::config::substrate::SubstrateHeader<u32, Self::Hasher>;
 	type AssetId = u32; // Not used - we don't use pallet-assets
-	type ExtrinsicParams = signed_extensions::AnyOf<
+	type ExtrinsicParams = transaction_extensions::AnyOf<
 		Self,
 		(
-			signed_extensions::CheckSpecVersion,
-			signed_extensions::CheckTxVersion,
-			signed_extensions::CheckNonce,
-			signed_extensions::CheckGenesis<Self>,
-			signed_extensions::CheckMortality<Self>,
-			signed_extensions::ChargeAssetTxPayment<Self>,
-			signed_extensions::ChargeTransactionPayment,
-			signed_extensions::CheckMetadataHash,
+			transaction_extensions::VerifySignature<Self>,
+			transaction_extensions::CheckSpecVersion,
+			transaction_extensions::CheckTxVersion,
+			transaction_extensions::CheckNonce,
+			transaction_extensions::CheckGenesis<Self>,
+			transaction_extensions::CheckMortality<Self>,
+			transaction_extensions::ChargeAssetTxPayment<Self>,
+			transaction_extensions::ChargeTransactionPayment,
+			transaction_extensions::CheckMetadataHash,
 		),
 	>;
 }
