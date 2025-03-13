@@ -8,6 +8,11 @@ use cf_chains::{
 use cf_primitives::ChannelId;
 use cf_traits::KeyProvider;
 
+pub struct BtcDepositAddressesByChannelId {
+	pub previous: Option<String>,
+	pub current: String,
+}
+
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	fn generate_address(
 		source_asset: <Bitcoin as Chain>::ChainAsset,
@@ -50,9 +55,10 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 /// Note: This function will **panic** if the private channel id is out of bounds or if there is
 /// no active epoch key for Bitcoin.
 ///
-/// Returns a tuple of the previous and current BTC vault deposit addresses.
 /// Note: If there is no previous key, we return `None` for the previous address.
-pub fn derive_btc_vault_deposit_addresses(private_channel_id: u64) -> (Option<String>, String) {
+pub fn derive_btc_vault_deposit_addresses(
+	private_channel_id: u64,
+) -> BtcDepositAddressesByChannelId {
 	let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
 		.expect("We should always have a key for the current epoch.");
 
@@ -69,7 +75,7 @@ pub fn derive_btc_vault_deposit_addresses(private_channel_id: u64) -> (Option<St
 			.to_address(&Environment::network_environment().into())
 	});
 
-	(previous, current)
+	BtcDepositAddressesByChannelId { previous, current }
 }
 
 #[test]

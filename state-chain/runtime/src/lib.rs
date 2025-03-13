@@ -11,7 +11,9 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::{
-		address_derivation::btc::derive_btc_vault_deposit_addresses,
+		address_derivation::btc::{
+			derive_btc_vault_deposit_addresses, BtcDepositAddressesByChannelId,
+		},
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -2008,7 +2010,7 @@ impl_runtime_apis! {
 				earned_fees: Asset::all().map(|asset|
 					(asset, AssetBalances::get_balance(&account_id, asset))
 				).collect(),
-				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id).map(|channel| derive_btc_vault_deposit_addresses(channel).1),
+				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id).map(|channel| derive_btc_vault_deposit_addresses(channel).current),
 				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
 				bond: account_info.bond()
 			}
@@ -2532,7 +2534,7 @@ impl_runtime_apis! {
 		fn cf_vault_addresses() -> VaultAddresses {
 			let mut btc_private_deposit_addresses = Vec::new();
 			for (account_id, channel_id) in BrokerPrivateBtcChannels::<Runtime>::iter() {
-				let (previous, current) = derive_btc_vault_deposit_addresses(channel_id);
+				let BtcDepositAddressesByChannelId { previous, current } = derive_btc_vault_deposit_addresses(channel_id);
 				if let Some(previous) = previous {
 					btc_private_deposit_addresses.push((account_id.clone(), EncodedAddress::Btc(previous.into())));
 				}
