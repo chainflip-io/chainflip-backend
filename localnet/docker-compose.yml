@@ -243,7 +243,7 @@ services:
       start_period: 10s
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-dev-b7cc56fed1ed1fecd8460b59f43ed038edfe649e}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-release-pr-757396932a4126d76ae574e7dac4f4ed4595722c}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
@@ -257,8 +257,7 @@ services:
       - "/tmp/chainflip/data/deposit-monitor:/persistent_state"
     environment:
       - CFDM_RUNNING_IN_MOCK_ENVIRONMENT=true
-      - CFDM_BITCOIN_NETWORK=regtest
-      - CFDM_ETHEREUM_NETWORK=Mainnet
+      - CFDM_NETWORK=Localnet
       - CFDM_PERSISTENT_STATE_DIR=/persistent_state
       - CFDM_CRITICAL_ELLIPTIC_RISK_SCORE=8.0
       - CFDM_BROKER_API_URL=${CFDM_BROKER_API_URL}
@@ -276,8 +275,8 @@ services:
       - CFDM_BTC_MEMPOOL_POLLING_INTERVAL_MILLIS=500
       - CFDM_BTC_CHAIN_POLLING_INTERVAL_MILLIS=2000
       - CFDM_TRANSACTION_PROCESSOR_INCOMPLETE_ANALYSIS_TIMEOUT_SECS=120
-      - CFDM_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300
-      - CFDM_JUDGEMENT_PROCESSOR_ETH_CONFIRMATION_TIMEOUT_SECS=300
+      - CFDM_BTC_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300
+      - CFDM_ETH_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300
       - CFDM_ETH_RPC_WS_ENDPOINT=ws://geth:8546
       - CFDM_ETH_RPC_HTTP_ENDPOINT=http://geth:8545
       - CFDM_FLIP_ADDRESS=0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26
