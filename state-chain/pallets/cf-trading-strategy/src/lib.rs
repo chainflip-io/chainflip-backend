@@ -17,7 +17,8 @@ use frame_support::sp_runtime::FixedU64;
 
 use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
 use cf_traits::{
-	AccountRoleRegistry, BalanceApi, Chainflip, IncreaseOrDecrease, LpRegistration, OrderId, Side,
+	AccountRoleRegistry, BalanceApi, Chainflip, IncreaseOrDecrease, LpRegistration, OrderId,
+	PoolApi, Side,
 };
 
 pub use pallet::*;
@@ -52,11 +53,53 @@ fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
 	.unwrap()
 }
 
+type AssetToAmountMap = BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>;
+
+/// Add funds to a limit order from the strategy's balance.
+fn fund_limit_order_from_balance<T: Config>(
+	strategy_id: &T::AccountId,
+	base_asset: Asset,
+	side: Side,
+	tick: Tick,
+	order_update_thresholds: &AssetToAmountMap,
+	limit_order_update_weight: Weight,
+) -> Weight {
+	use cf_runtime_utilities::log_or_panic;
+
+	let sell_asset = if side == Side::Buy { STABLE_ASSET } else { base_asset };
+
+	let mut weight_used = T::DbWeight::get().reads(1);
+	let balance = T::BalanceApi::get_balance(strategy_id, sell_asset);
+
+	// Default to 1 to prevent updating with 0 amounts
+	let threshold = order_update_thresholds.get(&sell_asset).copied().unwrap_or(1);
+
+	if balance >= threshold {
+		weight_used += limit_order_update_weight;
+
+		if T::PoolApi::update_limit_order(
+			strategy_id,
+			base_asset,
+			STABLE_ASSET,
+			side,
+			STRATEGY_ORDER_ID,
+			Some(tick),
+			IncreaseOrDecrease::Increase(balance),
+		)
+		.is_err()
+		{
+			// Should be impossible to get an error since we just
+			// checked the balance above
+			log_or_panic!("Failed to update limit order for strategy {strategy_id:?}");
+		}
+	}
+
+	weight_used
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_runtime_utilities::log_or_panic;
-	use cf_traits::PoolApi;
 	use frame_support::sp_runtime::traits::One;
 
 	use super::*;
@@ -102,7 +145,7 @@ pub mod pallet {
 	/// read multiple assets at once (and this map is small).
 	#[pallet::storage]
 	pub(super) type LimitOrderUpdateThresholds<T: Config> =
-		StorageValue<_, BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>, ValueQuery>;
+		StorageValue<_, AssetToAmountMap, ValueQuery>;
 
 	/// Stores minimum amount per asset necessary to deploy a strategy if only one of the two
 	/// assets is provided. If both assets are provided, we allow splitting the requirement between
@@ -134,49 +177,27 @@ pub mod pallet {
 						let new_weight_estimate =
 							weight_used.saturating_add(limit_order_update_weight * 2);
 
-						let mut update_limit_order_from_balance = |side| {
-							let (tick, sell_asset) = if side == Side::Buy {
-								(buy_tick, STABLE_ASSET)
-							} else {
-								(sell_tick, base_asset)
-							};
-
-							weight_used += T::DbWeight::get().reads(1);
-							let balance = T::BalanceApi::get_balance(&strategy_id, sell_asset);
-
-							// Default to 1 to prevent updating with 0 amounts
-							let threshold =
-								order_update_thresholds.get(&sell_asset).copied().unwrap_or(1);
-
-							if balance >= threshold {
-								weight_used += limit_order_update_weight;
-
-								if T::PoolApi::update_limit_order(
-									&strategy_id,
-									base_asset,
-									STABLE_ASSET,
-									side,
-									STRATEGY_ORDER_ID,
-									Some(tick),
-									IncreaseOrDecrease::Increase(balance),
-								)
-								.is_err()
-								{
-									// Should be impossible to get an error since we just
-									// checked the balance above
-									log_or_panic!(
-										"Failed to update limit order for strategy {strategy_id:?}"
-									);
-								}
-							}
-						};
-
 						if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
 							break;
 						}
 
-						update_limit_order_from_balance(Side::Sell);
-						update_limit_order_from_balance(Side::Buy);
+						weight_used += fund_limit_order_from_balance::<T>(
+							&strategy_id,
+							base_asset,
+							Side::Buy,
+							buy_tick,
+							&order_update_thresholds,
+							limit_order_update_weight,
+						);
+
+						weight_used += fund_limit_order_from_balance::<T>(
+							&strategy_id,
+							base_asset,
+							Side::Sell,
+							sell_tick,
+							&order_update_thresholds,
+							limit_order_update_weight,
+						);
 					},
 				}
 			}
