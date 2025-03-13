@@ -2646,27 +2646,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
-		let destination_address = match T::AddressConverter::decode_and_validate_address_for_asset(
-			destination_address,
-			destination_asset,
-		) {
-			Ok(address) => address,
-			Err(_) => {
-				emit_deposit_failed_event(DepositFailedReason::InvalidDestinationAddress);
-				return;
-			},
-		};
-
-		let action = ChannelAction::Swap {
-			destination_asset,
-			destination_address,
-			broker_fees,
-			channel_metadata: channel_metadata.clone(),
-			refund_params: refund_params
-				.map_address(|address| address.into_foreign_chain_address()),
-			dca_params: dca_params.clone(),
-		};
-
 		match Self::process_full_witness_deposit_inner(
 			deposit_address.clone(),
 			source_asset,
@@ -2679,7 +2658,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChannelAction::Swap {
 				destination_asset,
 				destination_address: destination_address_internal,
-				broker_fees,
+				broker_fees: broker_fees.clone(),
 				channel_metadata: channel_metadata.clone(),
 				refund_params: refund_params
 					.map_address(|address| address.into_foreign_chain_address()),
