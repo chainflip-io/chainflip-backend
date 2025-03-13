@@ -78,13 +78,6 @@ impl TryFrom<AnyChainCcmAuxDataLookupKey> for SolanaAltLookup {
 }
 
 impl CcmAuxDataLookupKeyConversion for AnyChainCcmAuxDataLookupKey {
-	fn created_at(&self) -> Option<u32> {
-		if let AnyChainCcmAuxDataLookupKey::Solana(lookup) = self {
-			lookup.created_at()
-		} else {
-			None
-		}
-	}
 	fn from_alt_lookup_key(swap_request_id: SwapRequestId, created_at: u32) -> Self {
 		AnyChainCcmAuxDataLookupKey::Solana(SolanaAltLookup::from_alt_lookup_key(
 			swap_request_id,

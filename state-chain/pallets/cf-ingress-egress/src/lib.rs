@@ -27,9 +27,10 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
-	AllBatch, AllBatchError, CcmAdditionalData, CcmAuxDataLookupKeyConversion, CcmChannelMetadata,
-	CcmDepositMetadata, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks,
-	ChannelRefundParameters, ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
+	sol::api::SolanaTransactionBuildingError,
+	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
+	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
+	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall, SwapOrigin,
@@ -47,8 +48,8 @@ use cf_traits::{
 	AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	InitiateSolanaAltWitnessing, NetworkEnvironmentProvider, OnDeposit, PoolApi,
-	ScheduledEgressDetails, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
+	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails,
+	SolanaAltWitnessingHandler, SwapLimitsProvider, SwapOutputAction, SwapRequestHandler,
 	SwapRequestType,
 };
 use frame_support::{
@@ -613,7 +614,7 @@ pub mod pallet {
 
 		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
 
-		type CcmAuxDataWitnessingHandler: InitiateSolanaAltWitnessing;
+		type CcmAuxDataWitnessingHandler: SolanaAltWitnessingHandler;
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
@@ -1752,24 +1753,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.collect()
 			});
 		for ccm in ccms_to_send {
-			// If we waited for too long, fail the CCM and refund.
-			if let Some(created_at) =
-				ccm.aux_data_lookup_key.clone().and_then(|key| key.created_at())
-			{
-				if current_block >=
-					created_at +
-						T::CcmAuxDataWitnessingHandler::max_wait_time_for_alt_witnessing()
-				{
-					Self::refund_invalid_ccm(
-						ccm,
-						ExecutexSwapAndCallError::DispatchError(
-							Error::<T, I>::ExceededMaxCcmAuxDataWaitTime.into(),
-						),
-					);
-					continue;
-				}
-			};
-
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 				TransferAssetParams {
 					asset: ccm.asset,
@@ -1794,8 +1777,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						egress_id: ccm.egress_id,
 					});
 				},
-				Err(ExecutexSwapAndCallError::TryAgainLater) =>
-					ScheduledEgressCcm::<T, I>::append(ccm),
+				Err(ExecutexSwapAndCallError::FailedToBuildCcmForSolana(
+					SolanaTransactionBuildingError::AltsNotYetWitnessed { created_at },
+				)) => {
+					// If we waited for too long, fail the CCM and refund.
+					if current_block >
+						created_at +
+							T::CcmAuxDataWitnessingHandler::max_wait_time_for_alt_witnessing()
+					{
+						Self::refund_invalid_ccm(
+							ccm,
+							ExecutexSwapAndCallError::DispatchError(
+								Error::<T, I>::ExceededMaxCcmAuxDataWaitTime.into(),
+							),
+						);
+					} else {
+						// Otherwise put it back into storage and try again later.
+						ScheduledEgressCcm::<T, I>::append(ccm);
+					}
+				},
 				Err(error) => {
 					Self::refund_invalid_ccm(ccm, error);
 				},

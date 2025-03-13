@@ -583,8 +583,12 @@ pub enum ExecutexSwapAndCallError {
 	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
 	/// Some other DispatchError occurred.
 	DispatchError(DispatchError),
-	/// ALT witnessing is still not finished for solana ccms.
-	TryAgainLater,
+}
+
+impl From<SolanaTransactionBuildingError> for ExecutexSwapAndCallError {
+	fn from(err: SolanaTransactionBuildingError) -> Self {
+		ExecutexSwapAndCallError::FailedToBuildCcmForSolana(err)
+	}
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -1163,13 +1167,9 @@ impl VaultSwapExtraParametersRpc {
 /// For handling conversions to and from the Generic Ccm Aux Data Lookup Key.
 pub trait CcmAuxDataLookupKeyConversion {
 	/// For solana Address Lookup table
-	fn created_at(&self) -> Option<u32>;
 	fn from_alt_lookup_key(swap_request_id: SwapRequestId, created_at: u32) -> Self;
 }
 
 impl CcmAuxDataLookupKeyConversion for () {
-	fn created_at(&self) -> Option<u32> {
-		None
-	}
 	fn from_alt_lookup_key(_swap_request_id: SwapRequestId, _created_at: u32) -> Self {}
 }
