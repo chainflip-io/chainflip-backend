@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.11] - 2025-03-13
+
+### Fixes
+
+- Bump stuck sol egress.
+
 ## [1.7.10] - 2025-02-26
 
 ### Features
