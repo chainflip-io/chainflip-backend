@@ -26,19 +26,22 @@ mod benchmarking;
 mod mock;
 #[cfg(test)]
 mod tests;
-use frame_support::pallet_prelude::*;
-use frame_system::pallet_prelude::*;
-
-use frame_support::{sp_runtime::FixedU64, traits::HandleLifetime};
 
 use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
 use cf_traits::{
 	AccountRoleRegistry, BalanceApi, Chainflip, IncreaseOrDecrease, LpRegistration, OrderId,
 	PoolApi, Side,
 };
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{traits::One, FixedU64},
+	traits::HandleLifetime,
+};
+use frame_system::pallet_prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use weights::WeightInfo;
 
 pub use pallet::*;
-use weights::WeightInfo;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
@@ -49,6 +52,30 @@ const STRATEGY_ORDER_ID: OrderId = 0;
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum TradingStrategy {
 	SellAndBuyAtTicks { sell_tick: Tick, buy_tick: Tick, base_asset: Asset },
+}
+
+impl TradingStrategy {
+	pub fn validate_funding<T: Config>(
+		&self,
+		amounts: &BTreeMap<Asset, AssetAmount>,
+	) -> Result<(), Error<T>> {
+		if amounts.is_empty() {
+			return Err(Error::<T>::InvalidAssetsForStrategy);
+		}
+		let supported_assets = self.supported_assets();
+		if amounts.keys().all(|asset| supported_assets.contains(asset)) {
+			Ok(())
+		} else {
+			Err(Error::<T>::InvalidAssetsForStrategy)
+		}
+	}
+	pub fn supported_assets(&self) -> Vec<Asset> {
+		match self {
+			TradingStrategy::SellAndBuyAtTicks { base_asset, .. } => {
+				vec![*base_asset, STABLE_ASSET]
+			},
+		}
+	}
 }
 
 fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
@@ -139,9 +166,6 @@ fn extract_base_and_quote_amounts(
 
 #[frame_support::pallet]
 pub mod pallet {
-
-	use frame_support::sp_runtime::traits::One;
-
 	use super::*;
 
 	#[pallet::config]
@@ -265,6 +289,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		StrategyNotFound,
 		AmountBelowDeploymentThreshold,
+		InvalidAssetsForStrategy,
 	}
 
 	#[pallet::call]
@@ -274,20 +299,13 @@ pub mod pallet {
 		pub fn deploy_trading_strategy(
 			origin: OriginFor<T>,
 			strategy: TradingStrategy,
-			assets: Vec<(Asset, AssetAmount)>,
+			funding: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			let TradingStrategy::SellAndBuyAtTicks { base_asset, .. } = &strategy;
-
-			let base_asset = *base_asset;
-			let quote_asset = STABLE_ASSET;
-
-			let (base_asset_amount, quote_asset_amount) =
-				extract_base_and_quote_amounts(&assets, base_asset).unwrap();
-
-			T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, base_asset)?;
-			T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, quote_asset)?;
+			for asset in strategy.supported_assets() {
+				T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, asset)?;
+			}
 
 			let strategy_id = {
 				// Check that strategy is created with sufficient funds:
@@ -303,9 +321,15 @@ pub mod pallet {
 					};
 
 					ensure!(
-						fraction_of_required(base_asset, base_asset_amount) +
-							fraction_of_required(quote_asset, quote_asset_amount) >=
-							FixedU64::one(),
+						strategy.supported_assets().into_iter().fold(
+							FixedU64::default(),
+							|acc, asset| {
+								acc + fraction_of_required(
+									asset,
+									*funding.get(&asset).unwrap_or(&0),
+								)
+							}
+						) >= FixedU64::one(),
 						Error::<T>::AmountBelowDeploymentThreshold
 					);
 				}
@@ -327,13 +351,7 @@ pub mod pallet {
 				strategy_id
 			};
 
-			Self::add_funds_to_existing_strategy(
-				lp,
-				&strategy_id,
-				strategy,
-				base_asset_amount,
-				quote_asset_amount,
-			)
+			Self::add_funds_to_existing_strategy(lp, &strategy_id, strategy, funding)
 		}
 
 		#[pallet::call_index(2)]
@@ -364,9 +382,11 @@ pub mod pallet {
 			cancel_limit_orders(Side::Buy, buy_tick)?;
 			cancel_limit_orders(Side::Sell, sell_tick)?;
 
-			for asset in [base_asset, STABLE_ASSET] {
+			for asset in strategy.supported_assets() {
 				let balance = T::BalanceApi::get_balance(&strategy_id, asset);
-				T::BalanceApi::transfer(&strategy_id, lp, asset, balance)?;
+				if balance > 0 {
+					T::BalanceApi::transfer(&strategy_id, lp, asset, balance)?;
+				}
 			}
 
 			frame_system::Provider::<T>::killed(&strategy_id).unwrap_or_else(|e| {
@@ -388,22 +408,15 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())] // TODO: benchmark
 		pub fn add_funds_to_strategy(
 			origin: OriginFor<T>,
-			base_asset_amount: AssetAmount,
-			quote_asset_amount: AssetAmount,
 			strategy_id: T::AccountId,
+			funding: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			let strategy =
 				Strategies::<T>::get(lp, &strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
 
-			Self::add_funds_to_existing_strategy(
-				lp,
-				&strategy_id,
-				strategy,
-				base_asset_amount,
-				quote_asset_amount,
-			)
+			Self::add_funds_to_existing_strategy(lp, &strategy_id, strategy, funding)
 		}
 	}
 }
@@ -413,22 +426,17 @@ impl<T: Config> Pallet<T> {
 		lp: &T::AccountId,
 		strategy_id: &T::AccountId,
 		strategy: TradingStrategy,
-		base_asset_amount: AssetAmount,
-		quote_asset_amount: AssetAmount,
+		funding: BTreeMap<Asset, AssetAmount>,
 	) -> DispatchResult {
-		let TradingStrategy::SellAndBuyAtTicks { base_asset, .. } = strategy;
+		strategy.validate_funding::<T>(&funding)?;
 
-		if base_asset_amount > 0 {
-			T::BalanceApi::transfer(lp, strategy_id, base_asset, base_asset_amount)?;
-		}
-
-		if quote_asset_amount > 0 {
-			T::BalanceApi::transfer(lp, strategy_id, STABLE_ASSET, quote_asset_amount)?;
+		for (asset, amount) in &funding {
+			T::BalanceApi::transfer(lp, strategy_id, *asset, *amount)?;
 		}
 
 		Self::deposit_event(Event::<T>::FundsAddedToStrategy {
 			strategy_id: strategy_id.clone(),
-			amounts: vec![(base_asset, base_asset_amount), (STABLE_ASSET, quote_asset_amount)],
+			amounts: funding.into_iter().collect(),
 		});
 
 		Ok(())
