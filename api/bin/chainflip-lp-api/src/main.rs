@@ -28,8 +28,8 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LpApi, OpenSwapChannels, OrderIdJson,
-		RangeOrder, RangeOrderSizeJson, Side, Tick,
+		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositDetails, LpApi,
+		OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderSizeJson, Side, Tick,
 	},
 	primitives::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
@@ -70,7 +70,7 @@ pub trait Rpc {
 		asset: Asset,
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<ApiWaitForResult<String>>;
+	) -> RpcResult<ApiWaitForResult<LiquidityDepositDetails>>;
 
 	#[method(name = "register_liquidity_refund_address")]
 	async fn register_liquidity_refund_address(
@@ -250,13 +250,12 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<ApiWaitForResult<String>> {
+	) -> RpcResult<ApiWaitForResult<LiquidityDepositDetails>> {
 		Ok(self
 			.api
 			.lp_api()
 			.request_liquidity_deposit_address(asset, wait_for.unwrap_or_default(), boost_fee)
-			.await
-			.map(|result| result.map_details(|address| address.to_string()))?)
+			.await?)
 	}
 
 	async fn register_liquidity_refund_address(

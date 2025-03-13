@@ -30,6 +30,7 @@ use cf_chains::eth::Address as EthereumAddress;
 use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
+	lp::LiquidityDepositDetails,
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
 	rpc_types::RedemptionAmount,
 	BrokerApi,
@@ -83,7 +84,7 @@ async fn run_cli() -> Result<()> {
 							.broker_api()
 							.withdraw_fees(params.asset, params.destination_address)
 							.await?;
-						println!("Withdrawal request successfull submitted: {}", withdraw_details);
+						println!("Withdrawal request successful submitted: {}", withdraw_details);
 					},
 					BrokerSubcommands::RegisterAccount => {
 						api.broker_api().register_account().await?;
@@ -97,7 +98,7 @@ async fn run_cli() -> Result<()> {
 						asset,
 						boost_fee,
 					} => {
-						let address = api
+						let LiquidityDepositDetails { deposit_address, deposit_chain_expiry_block } = api
 							.lp_api()
 							.request_liquidity_deposit_address(
 								asset,
@@ -106,7 +107,7 @@ async fn run_cli() -> Result<()> {
 							)
 							.await?
 							.unwrap_details();
-						println!("Deposit Address: {address}");
+						println!("Deposit Address: {deposit_address}\nDeposit chain expire block: {deposit_chain_expiry_block}");
 					},
 
 					LiquidityProviderSubcommands::RegisterLiquidityRefundAddress {

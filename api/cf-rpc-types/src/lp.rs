@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::{Arbitrum, Solana};
+use cf_chains::{address::AddressString, Arbitrum, Solana};
 use cf_primitives::*;
 use sp_core::{
 	serde::{Deserialize, Serialize},
@@ -145,4 +145,10 @@ impl From<SwapRequestId> for SwapRequestResponse {
 	fn from(swap_request_id: SwapRequestId) -> Self {
 		SwapRequestResponse { swap_request_id }
 	}
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LiquidityDepositDetails {
+	pub deposit_address: AddressString,
+	pub deposit_chain_expiry_block: u64,
 }

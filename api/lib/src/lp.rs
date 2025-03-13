@@ -22,10 +22,7 @@ pub use cf_amm::{
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{
-	address::{AddressString, EncodedAddress},
-	ForeignChain,
-};
+use cf_chains::{address::AddressString, ForeignChain};
 use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
 use cf_primitives::{
 	AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId, Price,
@@ -42,8 +39,8 @@ use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
 
 pub use cf_rpc_types::lp::{
-	CloseOrderJson, LimitOrRangeOrder, LimitOrder, OpenSwapChannels, OrderIdJson, RangeOrder,
-	RangeOrderChange, RangeOrderSizeJson,
+	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositDetails, OpenSwapChannels,
+	OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
 };
 
 fn collect_range_order_returns(
@@ -173,7 +170,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		asset: Asset,
 		wait_for: WaitFor,
 		boost_fee: Option<BasisPoints>,
-	) -> Result<ApiWaitForResult<EncodedAddress>> {
+	) -> Result<ApiWaitForResult<LiquidityDepositDetails>> {
 		let wait_for_result = self
 			.submit_signed_extrinsic_wait_for(
 				pallet_cf_lp::Call::request_liquidity_deposit_address {
@@ -194,9 +191,13 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 						state_chain_runtime::RuntimeEvent::LiquidityProvider(
 							pallet_cf_lp::Event::LiquidityDepositAddressReady {
 								deposit_address,
+								deposit_chain_expiry_block,
 								..
 							},
-						) => Some(deposit_address),
+						) => Some(LiquidityDepositDetails {
+							deposit_address: AddressString::from_encoded_address(deposit_address),
+							deposit_chain_expiry_block,
+						}),
 						_ => None,
 					})
 					.ok_or_else(|| {
