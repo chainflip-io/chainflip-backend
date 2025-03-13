@@ -42,6 +42,7 @@ export async function buildAndSendBtcVaultSwap(
     account: string;
     bps: number;
   }[] = [],
+  confirmations: number = 1
 ) {
   await using chainflip = await getChainflipApi();
 
@@ -77,7 +78,9 @@ export async function buildAndSendBtcVaultSwap(
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
   );
-  await waitForBtcTransaction(logger, txid);
+  if (confirmations > 0) {
+    await waitForBtcTransaction(logger, txid, confirmations);
+  }
 
   return txid;
 }
