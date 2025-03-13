@@ -47,14 +47,8 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 const STRATEGY_ORDER_ID: OrderId = 0;
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
-struct TradingStrategyEntry {
-	base_asset: Asset,
-	strategy: TradingStrategy,
-}
-
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum TradingStrategy {
-	SellAndBuyAtTicks { sell_tick: Tick, buy_tick: Tick },
+	SellAndBuyAtTicks { sell_tick: Tick, buy_tick: Tick, base_asset: Asset },
 }
 
 fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
@@ -113,6 +107,36 @@ fn fund_limit_order_from_balance<T: Config>(
 	weight_used
 }
 
+fn extract_base_and_quote_amounts(
+	amounts: &[(Asset, AssetAmount)],
+	base_asset: Asset,
+) -> Result<(AssetAmount, AssetAmount), ()> {
+	match amounts.len() {
+		1 => {
+			let (asset, amount) = amounts[0];
+
+			if asset == base_asset {
+				Ok((amount, 0))
+			} else if asset == STABLE_ASSET {
+				Ok((0, amount))
+			} else {
+				Err(())
+			}
+		},
+		2 => {
+			let (asset1, amount1) = amounts[0];
+			let (asset2, amount2) = amounts[1];
+
+			match (asset1, asset2) {
+				(asset, STABLE_ASSET) if asset == base_asset => Ok((amount1, amount2)),
+				(STABLE_ASSET, asset) if asset == base_asset => Ok((amount2, amount1)),
+				_ => Err(()),
+			}
+		},
+		_ => Err(()),
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -151,7 +175,7 @@ pub mod pallet {
 		T::AccountId,
 		Identity,
 		T::AccountId,
-		TradingStrategyEntry,
+		TradingStrategy,
 		OptionQuery,
 	>;
 
@@ -185,11 +209,9 @@ pub mod pallet {
 			// TODO: use correct weight from pools pallet
 			let limit_order_update_weight = Weight::zero();
 
-			for (_, strategy_id, TradingStrategyEntry { base_asset, strategy }) in
-				Strategies::<T>::iter()
-			{
+			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {
-					TradingStrategy::SellAndBuyAtTicks { sell_tick, buy_tick } => {
+					TradingStrategy::SellAndBuyAtTicks { sell_tick, buy_tick, base_asset } => {
 						let new_weight_estimate =
 							weight_used.saturating_add(limit_order_update_weight * 2);
 
@@ -228,14 +250,11 @@ pub mod pallet {
 		StrategyDeployed {
 			account_id: T::AccountId,
 			strategy_id: T::AccountId,
-			base_asset: Asset,
 			strategy: TradingStrategy,
 		},
 		FundsAddedToStrategy {
 			strategy_id: T::AccountId,
-			base_asset: Asset,
-			base_asset_amount: AssetAmount,
-			quote_asset_amount: AssetAmount,
+			amounts: Vec<(Asset, AssetAmount)>,
 		},
 		StrategyClosed {
 			strategy_id: T::AccountId,
@@ -254,14 +273,18 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())] // TODO: benchmark
 		pub fn deploy_trading_strategy(
 			origin: OriginFor<T>,
-			base_asset_amount: AssetAmount,
-			quote_asset_amount: AssetAmount,
-			base_asset: Asset,
 			strategy: TradingStrategy,
+			assets: Vec<(Asset, AssetAmount)>,
 		) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+			let TradingStrategy::SellAndBuyAtTicks { base_asset, .. } = &strategy;
+
+			let base_asset = *base_asset;
 			let quote_asset = STABLE_ASSET;
+
+			let (base_asset_amount, quote_asset_amount) =
+				extract_base_and_quote_amounts(&assets, base_asset).unwrap();
 
 			T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, base_asset)?;
 			T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, quote_asset)?;
@@ -296,15 +319,10 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::StrategyDeployed {
 					account_id: lp.clone(),
 					strategy_id: strategy_id.clone(),
-					base_asset,
 					strategy: strategy.clone(),
 				});
 
-				Strategies::<T>::insert(
-					lp,
-					strategy_id.clone(),
-					TradingStrategyEntry { base_asset, strategy },
-				);
+				Strategies::<T>::insert(lp, strategy_id.clone(), strategy.clone());
 
 				strategy_id
 			};
@@ -312,7 +330,7 @@ pub mod pallet {
 			Self::add_funds_to_existing_strategy(
 				lp,
 				&strategy_id,
-				base_asset,
+				strategy,
 				base_asset_amount,
 				quote_asset_amount,
 			)
@@ -323,13 +341,13 @@ pub mod pallet {
 		pub fn close_strategy(origin: OriginFor<T>, strategy_id: T::AccountId) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			let TradingStrategyEntry { base_asset, strategy } =
+			let strategy =
 				Strategies::<T>::take(lp, &strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
 
 			// TODO: instead of reading ticks from the strategy, we could extend PoolApi with
 			// a method to close all (limit) orders (which might be necessary for more complex
 			// strategies).
-			let TradingStrategy::SellAndBuyAtTicks { buy_tick, sell_tick } = strategy;
+			let TradingStrategy::SellAndBuyAtTicks { buy_tick, sell_tick, base_asset } = strategy;
 
 			let cancel_limit_orders = |side, tick| {
 				// TODO: check if order cancellation is infallible?
@@ -382,7 +400,7 @@ pub mod pallet {
 			Self::add_funds_to_existing_strategy(
 				lp,
 				&strategy_id,
-				strategy.base_asset,
+				strategy,
 				base_asset_amount,
 				quote_asset_amount,
 			)
@@ -394,10 +412,12 @@ impl<T: Config> Pallet<T> {
 	fn add_funds_to_existing_strategy(
 		lp: &T::AccountId,
 		strategy_id: &T::AccountId,
-		base_asset: Asset,
+		strategy: TradingStrategy,
 		base_asset_amount: AssetAmount,
 		quote_asset_amount: AssetAmount,
 	) -> DispatchResult {
+		let TradingStrategy::SellAndBuyAtTicks { base_asset, .. } = strategy;
+
 		if base_asset_amount > 0 {
 			T::BalanceApi::transfer(lp, strategy_id, base_asset, base_asset_amount)?;
 		}
@@ -408,9 +428,7 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::FundsAddedToStrategy {
 			strategy_id: strategy_id.clone(),
-			base_asset,
-			base_asset_amount,
-			quote_asset_amount,
+			amounts: vec![(base_asset, base_asset_amount), (STABLE_ASSET, quote_asset_amount)],
 		});
 
 		Ok(())
