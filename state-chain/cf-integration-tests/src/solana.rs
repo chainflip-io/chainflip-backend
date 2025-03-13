@@ -198,7 +198,7 @@ fn can_build_solana_batch_all() {
 			witness_ethereum_rotation_broadcast(1);
 
 			register_refund_addresses(&DORIS);
-			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder, None);
 
 			testnet.move_to_the_next_epoch();
 
@@ -330,7 +330,7 @@ fn can_send_solana_ccm() {
 			witness_ethereum_rotation_broadcast(1);
 
 			register_refund_addresses(&DORIS);
-			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder, None);
 
 			testnet.move_to_the_next_epoch();
 
@@ -432,7 +432,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			witness_ethereum_rotation_broadcast(1);
 
 			register_refund_addresses(&DORIS);
-			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder, None);
 
 			testnet.move_to_the_next_epoch();
 
@@ -580,7 +580,7 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 			witness_ethereum_rotation_broadcast(1);
 
 			register_refund_addresses(&DORIS);
-			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder, None);
 
 			testnet.move_to_the_next_epoch();
 
@@ -642,7 +642,7 @@ fn solana_resigning() {
 
 			setup_sol_environments();
 			register_refund_addresses(&DORIS);
-			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder, None);
 
 			const CURRENT_SIGNER: [u8; 32] = [3u8; 32];
 
@@ -715,7 +715,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
 			)
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
-			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder, None);
 			testnet.move_to_the_next_epoch();
 
 			// Trigger a CCM swap

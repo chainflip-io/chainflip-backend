@@ -27,13 +27,13 @@ use cf_chains::{
 	ForeignChain,
 };
 use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
-use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
+use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId, OrderId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
 };
 use frame_support::{pallet_prelude::ConstU32, BoundedVec};
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, RangeOrderSize, MAX_ORDERS_DELETE};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
 use std::ops::Range;

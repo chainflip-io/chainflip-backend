@@ -23,9 +23,10 @@ use cf_amm::{
 	PoolState,
 };
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
 use cf_traits::{
-	impl_pallet_safe_mode, BalanceApi, Chainflip, PoolApi, SwapRequestHandler, SwappingApi,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, PoolApi, SwapRequestHandler,
+	SwappingApi,
 };
 use core::ops::Range;
 use frame_support::{
@@ -40,11 +41,10 @@ use cf_traits::HistoricalFeeMigration;
 
 use cf_traits::LpRegistration;
 use frame_system::pallet_prelude::OriginFor;
+pub use pallet::*;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{SaturatedConversion, Zero};
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
-
-pub use pallet::*;
 
 mod benchmarking;
 pub mod migrations;
@@ -181,7 +181,6 @@ pub mod pallet {
 		range_orders::{self, Liquidity},
 		NewError,
 	};
-	use cf_traits::AccountRoleRegistry;
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::collections::btree_map::BTreeMap;
 
@@ -206,8 +205,6 @@ pub mod pallet {
 		pub limit_orders_cache: PoolPairsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: PoolState<(T::AccountId, OrderId)>,
 	}
-
-	pub type OrderId = u64;
 
 	pub type AssetAmounts = PoolPairsMap<AssetAmount>;
 
@@ -356,10 +353,18 @@ pub mod pallet {
 	pub type HistoricalEarnedFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
+	#[pallet::storage]
+	pub type OrderModified<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, OrderId, u32, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+
+			// Clear call count every block.
+			let _ = OrderModified::<T>::clear(u32::MAX, None);
+
 			for LimitOrderUpdate { ref lp, id, call } in
 				ScheduledLimitOrderUpdates::<T>::take(current_block)
 			{
@@ -587,7 +592,11 @@ pub mod pallet {
 				T::SafeMode::get().range_order_update_enabled,
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
+
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			OrderModified::<T>::mutate(&lp, id, |count| *count += 1);
+
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
@@ -645,7 +654,6 @@ pub mod pallet {
 					}),
 					NoOpStatus::Error,
 				)?;
-
 				Ok(())
 			})
 		}
@@ -750,6 +758,9 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			OrderModified::<T>::mutate(&lp, id, |count| *count += 1);
+
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
 					pool.limit_orders_cache[side.to_sold_pair()]
@@ -1351,7 +1362,7 @@ enum NoOpStatus {
 
 impl<T: Config> Pallet<T> {
 	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
-		// Collect to avoid undefined behaviour (See StorsgeMap::iter_keys documentation)
+		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation)
 		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
 			let mut pool = Pools::<T>::get(asset_pair).unwrap();
 

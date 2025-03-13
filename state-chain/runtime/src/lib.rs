@@ -90,8 +90,8 @@ use monitoring_apis::MonitoringDataV2;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{IngressOrEgress, OwedAmount, TargetChainAsset};
 use pallet_cf_pools::{
-	AskBidMap, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
-	PoolPriceV2, UnidirectionalPoolDepth,
+	AskBidMap, HistoricalEarnedFees, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
+	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{
 	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
@@ -154,8 +154,8 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer,
-	SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, OrderId,
+	SemVer, SwapOutput,
 };
 pub use cf_traits::{
 	AccountInfo, BoostApi, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
@@ -698,6 +698,8 @@ impl pallet_cf_flip::Config for Runtime {
 	type OnAccountFunded = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
+	type TransactionFeeScaler = chainflip::CfTransactionFeeScaler;
+	type SpamPreventionUpfrontFee = sp_core::ConstU128<FLIPPERINOS_PER_FLIP>; // 1 Flip. TODO: Adjust to a reasonable number
 }
 
 impl pallet_cf_witnesser::Config for Runtime {

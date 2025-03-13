@@ -81,14 +81,14 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters,
+	DcaParameters, Multiplier, ScalableFeeCallInfo,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
 	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails,
+	ScheduledEgressDetails, TransactionFeeScaler,
 };
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
@@ -1017,6 +1017,35 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 				MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
 			ForeignChainAndAsset::Solana(asset) =>
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
+		}
+	}
+}
+
+pub struct CfTransactionFeeScaler;
+impl TransactionFeeScaler<RuntimeCall, AccountId> for CfTransactionFeeScaler {
+	fn call_info(call: &RuntimeCall, caller: &AccountId) -> ScalableFeeCallInfo<AccountId> {
+		match call {
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_limit_order {
+				id, ..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
+				id, ..
+			}) => ScalableFeeCallInfo::PoolPositionUpdates(caller.clone(), *id),
+			_ => ScalableFeeCallInfo::NoScaling,
+		}
+	}
+
+	fn get_fee_multiplier(call_info: ScalableFeeCallInfo<AccountId>) -> Multiplier {
+		match call_info {
+			ScalableFeeCallInfo::NoScaling => Multiplier::one(),
+			ScalableFeeCallInfo::PoolPositionUpdates(caller, order_id) =>
+				Multiplier::from_rational(
+					sp_std::cmp::max(
+						pallet_cf_pools::OrderModified::<Runtime>::get(caller, order_id),
+						1u32,
+					) as u128,
+					1u128,
+				),
 		}
 	}
 }

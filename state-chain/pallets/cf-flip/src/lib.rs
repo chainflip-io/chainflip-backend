@@ -33,6 +33,7 @@ pub use weights::WeightInfo;
 
 use cf_traits::{
 	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
+	TransactionFeeScaler,
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
@@ -95,6 +96,16 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			RuntimeCall = <Self as frame_system::Config>::RuntimeCall,
 		>;
+
+		type TransactionFeeScaler: TransactionFeeScaler<
+			<Self as frame_system::Config>::RuntimeCall,
+			Self::AccountId,
+		>;
+
+		/// For calls that are spam-able, the fee taken in pre-dispatch.
+		/// Excess fees taken are returned in post-dispatch
+		#[pallet::constant]
+		type SpamPreventionUpfrontFee: Get<Self::Balance>;
 	}
 
 	#[pallet::pallet]

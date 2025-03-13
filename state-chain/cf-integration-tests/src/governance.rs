@@ -35,7 +35,7 @@ fn governance_members_pay_no_fees_for_governance_extrinsics() {
 			5,
 			0,
 		);
-		assert!(ordinary.expect("we have a result").is_some(), "expected Some(Surplus)");
+		assert!(ordinary.expect("we have a result").imbalance.is_some(), "expected Some(Surplus)");
 		// Expect a successful gov call to work
 		let gov = FlipTransactionPayment::<Runtime>::withdraw_fee(
 			&ERIN.into(),
@@ -44,7 +44,7 @@ fn governance_members_pay_no_fees_for_governance_extrinsics() {
 			5000,
 			0,
 		);
-		assert!(gov.expect("we have a result").is_none(), "expected None");
+		assert!(gov.expect("we have a result").imbalance.is_none(), "expected None");
 		// Expect a non gov call to fail when it's executed by gov member
 		let gov_err = FlipTransactionPayment::<Runtime>::withdraw_fee(
 			&ERIN.into(),

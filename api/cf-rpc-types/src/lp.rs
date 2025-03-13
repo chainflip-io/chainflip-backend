@@ -23,10 +23,13 @@ use sp_core::{
 use std::ops::Range;
 
 use anyhow::anyhow;
-use cf_primitives::chains::{assets::any, Bitcoin, Ethereum, Polkadot};
+use cf_primitives::{
+	chains::{assets::any, Bitcoin, Ethereum, Polkadot},
+	OrderId,
+};
 use cf_utilities::rpc::NumberOrHex;
 
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, RangeOrderSize};
 
 use crate::SwapChannelInfo;
 pub use cf_amm::{
