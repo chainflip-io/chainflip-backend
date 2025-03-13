@@ -2,6 +2,7 @@
 name = "chainflip-api"
 version = "1.9.0"
 edition = "2021"
+license = "Apache-2.0"
 
 [lints]
 workspace = true

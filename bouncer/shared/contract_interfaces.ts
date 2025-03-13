@@ -1,12 +1,12 @@
 import fs from 'fs/promises';
 
-async function loadContract(abiPath: string): Promise<JSON> {
+async function loadContract(abiPath: string): Promise<ReturnType<typeof JSON.parse>> {
   const abi = await fs.readFile(abiPath, 'utf-8');
   return JSON.parse(abi);
 }
 
 function loadContractCached(abiPath: string) {
-  let cached: JSON | undefined;
+  let cached: ReturnType<typeof JSON.parse> | undefined;
   return async () => {
     cached ??= await loadContract(abiPath);
     return cached;

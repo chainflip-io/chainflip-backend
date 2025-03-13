@@ -4,6 +4,7 @@ build = "build.rs"
 edition = "2021"
 name = "chainflip-engine"
 version = "1.9.0"
+license = "Apache-2.0"
 
 [lib]
 crate-type = ["lib"]
