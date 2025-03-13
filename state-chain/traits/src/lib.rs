@@ -1177,7 +1177,7 @@ pub trait AffiliateRegistry {
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
 }
 
-pub trait InitiateSolanaAltWitnessing {
+pub trait SolanaAltWitnessingHandler {
 	fn initiate_alt_witnessing(
 		_ccm_channel_metadata: CcmChannelMetadata,
 		_swap_request_id: SwapRequestId,

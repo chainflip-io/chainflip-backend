@@ -107,13 +107,15 @@ pub trait SolanaEnvironment:
 
 	/// Get any user-defined Address lookup tables from the Environment.
 	fn get_address_lookup_tables(
-		id: SwapRequestId,
+		alt_lookup: SolanaAltLookup,
 	) -> Result<Vec<SolAddressLookupTableAccount>, SolanaTransactionBuildingError> {
-		match Self::lookup(id) {
+		match Self::lookup(alt_lookup.swap_request_id) {
 			Some(AltConsensusResult::ValidConsensusAlts(alts)) => Ok(alts),
 			Some(AltConsensusResult::AltsInvalidNoConsensus) =>
 				Err(SolanaTransactionBuildingError::AltsInvalid),
-			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed),
+			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed {
+				created_at: alt_lookup.created_at,
+			}),
 		}
 	}
 }
@@ -139,7 +141,12 @@ pub enum SolanaTransactionBuildingError {
 	InvalidCcm(CcmValidityError),
 	FailedToSerializeFinalTransaction,
 	FinalTransactionExceededMaxLength(u32),
-	AltsNotYetWitnessed,
+	/// The Address Lookup table is still not ready.
+	/// Return the `created_at` in the lookup key to calculate expiry and
+	/// refund the ccm if we have waited for too long.
+	AltsNotYetWitnessed {
+		created_at: u32,
+	},
 	AltsInvalid,
 }
 
@@ -368,7 +375,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: Option<SwapRequestId>,
+		aux_data_lookup_key: Option<SolanaAltLookup>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// For extra safety, re-verify the validity of the CCM message here
 		// and extract the decoded `ccm_accounts` from `ccm_additional_data`.
@@ -406,8 +413,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
 		let mut address_lookup_tables = vec![sol_api_environment.address_lookup_table_account];
-		if let Some(id) = swap_request_id {
-			address_lookup_tables.extend(Environment::get_address_lookup_tables(id)?);
+		if let Some(alt_lookup) = aux_data_lookup_key {
+			address_lookup_tables.extend(Environment::get_address_lookup_tables(alt_lookup)?);
 		}
 
 		// Ensure the CCM parameters do not contain blacklisted accounts.
@@ -671,16 +678,9 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			gas_budget,
 			message,
 			ccm_additional_data,
-			aux_data_lookup_key.map(|key| key.swap_request_id),
+			aux_data_lookup_key,
 		)
-		.map_err(|e| {
-			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);
-			match e {
-				SolanaTransactionBuildingError::AltsNotYetWitnessed =>
-					ExecutexSwapAndCallError::TryAgainLater,
-				_ => ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e),
-			}
-		})
+		.map_err(|e| e.into())
 	}
 }
 

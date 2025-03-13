@@ -88,10 +88,6 @@ pub struct SolanaAltLookup {
 }
 
 impl CcmAuxDataLookupKeyConversion for SolanaAltLookup {
-	fn created_at(&self) -> Option<u32> {
-		Some(self.created_at)
-	}
-
 	fn from_alt_lookup_key(swap_request_id: SwapRequestId, created_at: u32) -> Self {
 		SolanaAltLookup { swap_request_id, created_at }
 	}

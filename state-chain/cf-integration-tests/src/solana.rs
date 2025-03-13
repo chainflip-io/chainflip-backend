@@ -23,7 +23,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
-use cf_traits::InitiateSolanaAltWitnessing;
+use cf_traits::SolanaAltWitnessingHandler;
 use cf_utilities::bs58_array;
 use codec::Encode;
 use frame_support::{
@@ -45,7 +45,7 @@ use sp_runtime::{BoundedBTreeMap, SaturatedConversion};
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation,
-		solana_elections::{SolanaAltWitnessingHandler, TransactionSuccessDetails},
+		solana_elections::{CfSolanaAltWitnessingHandler, TransactionSuccessDetails},
 		ChainAddressConverter, SolEnvironment,
 		SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
 	},
@@ -1033,7 +1033,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 			};
 
 			let swap_request_id = SwapRequestId(1u64);
-
+			let alt_lookup = SolanaAltLookup{swap_request_id, created_at: System::block_number().saturated_into::<u32>()};
 			// Directly insert a CCM to be ingressed. 
 			pallet_cf_ingress_egress::ScheduledEgressCcm::<Runtime, SolanaInstance>::append(pallet_cf_ingress_egress::CrossChainMessage {
 				egress_id: (ForeignChain::Solana, 1u64),
@@ -1045,12 +1045,12 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 				source_address: None,
 				ccm_additional_data: ccm.ccm_additional_data,
 				gas_budget: ccm.gas_budget,
-				aux_data_lookup_key: Some(SolanaAltLookup{swap_request_id, created_at: System::block_number().saturated_into::<u32>()}),
+				aux_data_lookup_key: Some(alt_lookup.clone()),
 			});
 
-			assert!(SolEnvironment::get_address_lookup_tables(swap_request_id).is_err());
+			assert_eq!(SolEnvironment::get_address_lookup_tables(alt_lookup.clone()), Err(SolanaTransactionBuildingError::AltsNotYetWitnessed { created_at: alt_lookup.created_at }));
 
-			testnet.move_forward_blocks(SolanaAltWitnessingHandler::max_wait_time_for_alt_witnessing());
+			testnet.move_forward_blocks(CfSolanaAltWitnessingHandler::max_wait_time_for_alt_witnessing() + 1);
 
 			// Since we have waited for too long, treat the CCM as invalid and refund the asset via Transfer instead.
 			assert_eq!(assert_events_match!(Runtime,

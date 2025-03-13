@@ -12,12 +12,17 @@ mod weights;
 use crate::{
 	chainflip::{
 		address_derivation::btc::derive_btc_vault_deposit_address,
+		boost_api::IngressEgressBoostApi,
 		calculate_account_apy,
+		epoch_transition::ChainflipEpochTransitions,
+		evm_vault_activator::EvmVaultActivator,
 		solana_elections::{
-			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
-			SolanaNonceTrackingTrigger,
+			CfSolanaAltWitnessingHandler, SolanaChainTrackingProvider,
+			SolanaEgressWitnessingTrigger, SolanaIngress, SolanaNonceTrackingTrigger,
 		},
-		Offence,
+		BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
+		DotEnvironment, EvmEnvironment, EvmLimit, Offence, SolEnvironment, SolanaLimit,
+		TokenholderGovernanceBroadcaster,
 	},
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
@@ -28,8 +33,8 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, DispatchErrorWithMessage, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvents,
-		ValidatorInfo, VaultSwapDetails,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvent,
+		TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -83,8 +88,6 @@ use pallet_cf_swapping::{
 	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
 };
 use runtime_apis::ChainAccounts;
-
-use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::SwapLegInfo;
@@ -150,12 +153,6 @@ pub use cf_traits::{
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
 
-use chainflip::{
-	boost_api::IngressEgressBoostApi, epoch_transition::ChainflipEpochTransitions,
-	evm_vault_activator::EvmVaultActivator, solana_elections::SolanaAltWitnessingHandler,
-	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
-	DotEnvironment, EvmEnvironment, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
-};
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
 use constants::common::*;
@@ -392,7 +389,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
-	type CcmAuxDataWitnessingHandler = SolanaAltWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = CfSolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -421,7 +418,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
-	type CcmAuxDataWitnessingHandler = SolanaAltWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = CfSolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -450,7 +447,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
-	type CcmAuxDataWitnessingHandler = SolanaAltWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = CfSolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -479,7 +476,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
-	type CcmAuxDataWitnessingHandler = SolanaAltWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = CfSolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -508,7 +505,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
-	type CcmAuxDataWitnessingHandler = SolanaAltWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = CfSolanaAltWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
