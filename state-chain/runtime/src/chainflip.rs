@@ -65,6 +65,7 @@ use cf_chains::{
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
 };
+
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,

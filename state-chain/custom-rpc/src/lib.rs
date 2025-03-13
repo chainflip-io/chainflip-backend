@@ -64,7 +64,7 @@ use state_chain_runtime::{
 		ChannelActionType, CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
 		RuntimeApiPenalty, SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo,
-		VaultSwapDetails,
+		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -1055,6 +1055,12 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>>;
+
+	#[method(name = "get_vault_addresses")]
+	fn cf_vault_addresses(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultAddresses>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1321,6 +1327,7 @@ where
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>,
+		cf_vault_addresses() -> VaultAddresses,
 	}
 
 	pass_through_and_flatten! {
@@ -2172,6 +2179,8 @@ where
 mod test {
 	use std::collections::BTreeSet;
 
+	use cf_chains::address::EncodedAddress;
+
 	use super::*;
 	use cf_chains::{assets::sol, btc::ScriptPubkey};
 	use cf_primitives::{
@@ -2534,5 +2543,15 @@ mod test {
 			broker_commission: RpcFee { asset: Asset::Usdc, amount: 100u128.into() },
 		})
 		.unwrap());
+	}
+
+	#[test]
+	fn test_vault_addresses_custom_rpc() {
+		let val: VaultAddresses = VaultAddresses {
+			ethereum: EncodedAddress::Eth([0; 20]),
+			arbitrum: EncodedAddress::Arb([1; 20]),
+			bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
+		};
+		insta::assert_json_snapshot!(val);
 	}
 }

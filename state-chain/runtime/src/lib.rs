@@ -11,7 +11,9 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::{
-		address_derivation::btc::derive_btc_vault_deposit_address,
+		address_derivation::btc::{
+			derive_btc_vault_deposit_addresses, BitcoinPrivateBrokerDepositAddresses,
+		},
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -30,7 +32,7 @@ use crate::{
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
 		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
-		TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2009,7 +2011,7 @@ impl_runtime_apis! {
 					(asset, AssetBalances::get_balance(&account_id, asset))
 				).collect(),
 				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
-					.map(derive_btc_vault_deposit_address),
+					.map(|channel| derive_btc_vault_deposit_addresses(channel).current_address()),
 				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
 				bond: account_info.bond()
 			}
@@ -2527,6 +2529,21 @@ impl_runtime_apis! {
 					.collect()
 			} else {
 				pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&broker).collect()
+			}
+		}
+
+		fn cf_vault_addresses() -> VaultAddresses {
+			VaultAddresses {
+				ethereum: EncodedAddress::Eth(Environment::eth_vault_address().into()),
+				arbitrum: EncodedAddress::Arb(Environment::arb_vault_address().into()),
+				bitcoin: BrokerPrivateBtcChannels::<Runtime>::iter()
+					.flat_map(|(account_id, channel_id)| {
+						let BitcoinPrivateBrokerDepositAddresses { previous, current } = derive_btc_vault_deposit_addresses(channel_id)
+							.with_encoded_addresses();
+						previous.into_iter().chain(core::iter::once(current))
+							.map(move |address| (account_id.clone(), address))
+					})
+					.collect(),
 			}
 		}
 	}
