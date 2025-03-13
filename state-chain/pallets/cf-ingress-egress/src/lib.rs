@@ -2552,16 +2552,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let Some(broker_fees) =
 			Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone())
 		else {
-			// TODO:
-			// - Use AllBatch instead of transfer fallback.
-			// - Bitcoin utxo needs to be fetched
-			//   (T::DepositHandler::on_deposit_made(deposit_details);)
-			// - We need a link between broadcast_id and this deposit / rejection.
-			// - We also need to make sure that if the tx is marked, it can be rejected even if the
-			//   broker is invalid.
-			//
-			// Solution: add a new variant to ChannelAction that signals a refund instead of a swap.
-
 			match Self::process_full_witness_deposit_inner(
 				None,
 				source_asset,
