@@ -50,11 +50,12 @@ export async function executeEvmVaultSwap(
     accountAddress: string;
     commissionBps: number;
   }[] = [],
+  optionalRefundAddress?: string,
 ) {
   const srcChain = chainFromAsset(sourceAsset);
   const destChain = chainFromAsset(destAsset);
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
-  const refundAddress = await newAddress(sourceAsset, randomBytes(32).toString('hex'));
+  const refundAddress = optionalRefundAddress ?? await newAddress(sourceAsset, randomBytes(32).toString('hex'));
   const fokParams = fillOrKillParams ?? {
     retryDurationBlocks: 0,
     refundAddress,
