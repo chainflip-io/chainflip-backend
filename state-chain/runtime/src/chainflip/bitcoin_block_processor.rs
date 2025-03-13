@@ -8,7 +8,7 @@ use crate::{
 use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
 use cf_primitives::chains::Bitcoin;
 use codec::{Decode, Encode};
-use core::ops::RangeInclusive;
+use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::{
@@ -89,7 +89,7 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnes
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, RangeInclusive<u32>, BlockDataDepositChannel),
+		(block, age, block_data): (BlockNumber, Range<u32>, BlockDataDepositChannel),
 	) -> Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> {
 		let mut results: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> = vec![];
 		if age.contains(&0u32) {
@@ -118,7 +118,7 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDeposi
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDepositWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, RangeInclusive<u32>, BlockDataVaultDeposit),
+		(block, age, block_data): (BlockNumber, Range<u32>, BlockDataVaultDeposit),
 	) -> Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)> {
 		let mut results: Vec<(
 			BlockNumber,
@@ -150,7 +150,7 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDep
 impl Hook<HookTypeFor<TypesEgressWitnessing, RulesHook>> for TypesEgressWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, RangeInclusive<u32>, EgressBlockData),
+		(block, age, block_data): (BlockNumber, Range<u32>, EgressBlockData),
 	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
 		if age.contains(
 			&(u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0

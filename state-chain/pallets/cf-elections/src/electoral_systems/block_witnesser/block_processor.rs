@@ -1,4 +1,4 @@
-use core::{iter::Step, ops::RangeInclusive};
+use core::{iter::Step, ops::Range};
 
 use crate::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
@@ -142,8 +142,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 				for n in range {
 					let block_data = self.blocks_data.remove(&n);
 					if let Some((data, next_age)) = block_data {
-						let age_range: RangeInclusive<u32> =
-							RangeInclusive::new(0, next_age.saturating_sub(1) as u32);
+						let age_range: Range<u32> = 0..next_age;
 						let events = self
 							.process_rules_for_ages_and_block(n, age_range, &data)
 							.into_iter()
@@ -191,14 +190,14 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		let mut last_events: Vec<(T::ChainBlockNumber, T::Event)> = vec![];
 		for (block_height, (data, next_age_to_process)) in self.blocks_data.clone() {
 			let current_age = T::ChainBlockNumber::steps_between(&block_height, &last_height).0;
-			let age_range: RangeInclusive<u32> =
-				RangeInclusive::new(next_age_to_process, current_age as u32);
+			let age_range: Range<u32> = next_age_to_process..current_age.saturating_add(1) as u32;
 			last_events.extend(self.process_rules_for_ages_and_block(
 				block_height,
 				age_range,
 				&data,
 			));
-			self.blocks_data.insert(block_height, (data.clone(), current_age as u32 + 1));
+			self.blocks_data
+				.insert(block_height, (data.clone(), (current_age as u32).saturating_add(1)));
 		}
 		last_events
 	}
@@ -225,7 +224,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	fn process_rules_for_ages_and_block(
 		&mut self,
 		block: T::ChainBlockNumber,
-		age: RangeInclusive<u32>,
+		age: Range<u32>,
 		data: &T::BlockData,
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
 		let events: Vec<(T::ChainBlockNumber, T::Event)> =
@@ -274,7 +273,7 @@ pub(crate) mod test {
 		*,
 	};
 	use codec::{Decode, Encode};
-	use core::ops::RangeInclusive;
+	use core::ops::{Range, RangeInclusive};
 	use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 	use std::collections::BTreeMap;
 
@@ -303,20 +302,14 @@ pub(crate) mod test {
 	impl Hook<HookTypeFor<Types, RulesHook>> for Types {
 		fn run(
 			&mut self,
-			(block, age, block_data): (
-				cf_chains::btc::BlockNumber,
-				RangeInclusive<u32>,
-				MockBlockData,
-			),
+			(block, age, block_data): (cf_chains::btc::BlockNumber, Range<u32>, MockBlockData),
 		) -> Vec<(cf_chains::btc::BlockNumber, MockBtcEvent)> {
 			let mut results: Vec<(cf_chains::btc::BlockNumber, MockBtcEvent)> = vec![];
 			if age.contains(&0u32) {
 				results.extend(
 					block_data
 						.iter()
-						.map(|deposit_witness| {
-							(block, MockBtcEvent::PreWitness(deposit_witness.clone()))
-						})
+						.map(|deposit_witness| (block, MockBtcEvent::PreWitness(*deposit_witness)))
 						.collect::<Vec<_>>(),
 				)
 			}
@@ -324,9 +317,7 @@ pub(crate) mod test {
 				results.extend(
 					block_data
 						.iter()
-						.map(|deposit_witness| {
-							(block, MockBtcEvent::Witness(deposit_witness.clone()))
-						})
+						.map(|deposit_witness| (block, MockBtcEvent::Witness(*deposit_witness)))
 						.collect::<Vec<_>>(),
 				)
 			}
