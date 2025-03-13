@@ -323,6 +323,13 @@ pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
 }
 
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct VaultAddresses {
+	pub ethereum: EncodedAddress,
+	pub arbitrum: EncodedAddress,
+	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
+}
+
 // READ THIS BEFORE UPDATING THIS TRAIT:
 //
 // ## When changing an existing method:
@@ -491,6 +498,7 @@ decl_runtime_apis!(
 			broker: AccountId32,
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
+		fn cf_vault_addresses() -> VaultAddresses;
 	}
 );
 

@@ -23,7 +23,7 @@ use chainflip_api::{
 	self,
 	primitives::{
 		state_chain_runtime::runtime_apis::{
-			ChainAccounts, TransactionScreeningEvents, VaultSwapDetails,
+			ChainAccounts, TransactionScreeningEvents, VaultAddresses, VaultSwapDetails,
 		},
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
 		DcaParameters,
@@ -167,6 +167,9 @@ pub trait Rpc {
 		&self,
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "get_vault_addresses", aliases = ["broker_getVaultAddresses"])]
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
 }
 
 pub struct RpcServerImpl {
@@ -342,6 +345,10 @@ impl RpcServer for RpcServerImpl {
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().affiliate_withdrawal_request(affiliate_account_id).await?)
+	}
+
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
+		Ok(self.api.raw_client().cf_vault_addresses(None).await?)
 	}
 }
 
