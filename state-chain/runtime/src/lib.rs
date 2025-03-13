@@ -12,7 +12,7 @@ mod weights;
 use crate::{
 	chainflip::{
 		address_derivation::btc::{
-			derive_btc_vault_deposit_addresses, BtcDepositAddressesByChannelId,
+			derive_btc_vault_deposit_addresses, BitcoinPrivateBrokerDepositAddresses,
 		},
 		calculate_account_apy,
 		solana_elections::{
@@ -2010,7 +2010,8 @@ impl_runtime_apis! {
 				earned_fees: Asset::all().map(|asset|
 					(asset, AssetBalances::get_balance(&account_id, asset))
 				).collect(),
-				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id).map(|channel| derive_btc_vault_deposit_addresses(channel).current),
+				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
+					.map(|channel| derive_btc_vault_deposit_addresses(channel).current_address()),
 				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
 				bond: account_info.bond()
 			}
@@ -2532,18 +2533,17 @@ impl_runtime_apis! {
 		}
 
 		fn cf_vault_addresses() -> VaultAddresses {
-			let mut btc_private_deposit_addresses = Vec::new();
-			for (account_id, channel_id) in BrokerPrivateBtcChannels::<Runtime>::iter() {
-				let BtcDepositAddressesByChannelId { previous, current } = derive_btc_vault_deposit_addresses(channel_id);
-				if let Some(previous) = previous {
-					btc_private_deposit_addresses.push((account_id.clone(), EncodedAddress::Btc(previous.into())));
-				}
-				btc_private_deposit_addresses.push((account_id.clone(), EncodedAddress::Btc(current.into())));
-			}
 			VaultAddresses {
 				ethereum: EncodedAddress::Eth(Environment::eth_vault_address().into()),
 				arbitrum: EncodedAddress::Arb(Environment::arb_vault_address().into()),
-				bitcoin: btc_private_deposit_addresses,
+				bitcoin: BrokerPrivateBtcChannels::<Runtime>::iter()
+					.flat_map(|(account_id, channel_id)| {
+						let BitcoinPrivateBrokerDepositAddresses { previous, current } = derive_btc_vault_deposit_addresses(channel_id)
+							.with_encoded_addresses();
+						previous.into_iter().chain(core::iter::once(current))
+							.map(move |address| (account_id.clone(), address))
+					})
+					.collect(),
 			}
 		}
 	}

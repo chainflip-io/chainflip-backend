@@ -95,7 +95,7 @@ pub fn bitcoin_vault_swap(
 
 	Ok(VaultSwapDetails::Bitcoin {
 		nulldata_payload: encode_swap_params_in_nulldata_payload(params),
-		deposit_address: derive_btc_vault_deposit_addresses(private_channel_id).current,
+		deposit_address: derive_btc_vault_deposit_addresses(private_channel_id).current_address(),
 	})
 }
 
