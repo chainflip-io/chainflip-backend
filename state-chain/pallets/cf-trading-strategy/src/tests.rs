@@ -50,8 +50,11 @@ fn deploy_strategy() -> AccountId {
 	assert_eq!(strategy_entry, TradingStrategyEntry { base_asset: BASE_ASSET, strategy: STRATEGY });
 	assert_eq!(lp_id, LP);
 
+	assert!(frame_system::Account::<Test>::contains_key(strategy_id), "Account not created");
+
 	assert_event_sequence!(
 		Test,
+		RuntimeEvent::System(frame_system::Event::NewAccount { .. }),
 		RuntimeEvent::TradingStrategyPallet(Event::<Test>::StrategyDeployed {
 			account_id: LP,
 			strategy_id: id,
@@ -212,8 +215,14 @@ fn closing_strategy() {
 				strategy_id
 			));
 
+			assert!(
+				!frame_system::Account::<Test>::contains_key(strategy_id),
+				"Account not deleted"
+			);
+
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::System(frame_system::Event::KilledAccount { .. }),
 				RuntimeEvent::TradingStrategyPallet(Event::<Test>::StrategyClosed {
 					strategy_id: id,
 				}) if id == strategy_id,

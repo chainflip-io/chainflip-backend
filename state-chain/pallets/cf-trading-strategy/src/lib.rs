@@ -13,7 +13,7 @@ mod tests;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
-use frame_support::sp_runtime::FixedU64;
+use frame_support::{sp_runtime::FixedU64, traits::HandleLifetime};
 
 use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
 use cf_traits::{
@@ -273,6 +273,10 @@ pub mod pallet {
 
 				let strategy_id = derive_strategy_id::<T>(lp);
 
+				if !frame_system::Pallet::<T>::account_exists(&strategy_id) {
+					let _ = frame_system::Provider::<T>::created(&strategy_id);
+				}
+
 				Self::deposit_event(Event::<T>::StrategyDeployed {
 					account_id: lp.clone(),
 					strategy_id: strategy_id.clone(),
@@ -330,6 +334,16 @@ pub mod pallet {
 				let balance = T::BalanceApi::get_balance(&strategy_id, asset);
 				T::BalanceApi::transfer(&strategy_id, lp, asset, balance)?;
 			}
+
+			frame_system::Provider::<T>::killed(&strategy_id).unwrap_or_else(|e| {
+				// This shouldn't happen, and not much we can do if it does except fix it on a
+				// subsequent release. Consequences are minor.
+				log::error!(
+					"Unexpected reference count error while closing a strategy {:?}: {:?}.",
+					strategy_id,
+					e
+				);
+			});
 
 			Self::deposit_event(Event::<T>::StrategyClosed { strategy_id: strategy_id.clone() });
 
