@@ -17,7 +17,7 @@
 use anyhow::anyhow;
 use cf_primitives::{
 	chains::{Arbitrum, Solana},
-	BasisPoints, BlockNumber, EgressId,
+	BasisPoints, BlockNumber, DcaParameters, EgressId, Price, SwapRequestId,
 };
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
@@ -175,6 +175,18 @@ pub trait Rpc {
 		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
+
+	#[method(name = "on_chain_swap")]
+	async fn on_chain_swap(
+		&self,
+		amount: NumberOrHex,
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<SwapRequestId>>;
 }
 
 pub struct RpcServerImpl {
@@ -564,6 +576,31 @@ impl RpcServer for RpcServerImpl {
 					.collect::<Result<Vec<_>, _>>()?
 					.try_into()
 					.expect("Impossible to fail, given the same MAX_ORDERS_DELETE"),
+				wait_for.unwrap_or_default(),
+			)
+			.await?)
+	}
+
+	async fn on_chain_swap(
+		&self,
+		amount: NumberOrHex,
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<SwapRequestId>> {
+		Ok(self
+			.api
+			.lp_api()
+			.on_chain_swap(
+				try_parse_number_or_hex(amount)?,
+				input_asset,
+				output_asset,
+				retry_duration,
+				min_price,
+				dca_params,
 				wait_for.unwrap_or_default(),
 			)
 			.await?)

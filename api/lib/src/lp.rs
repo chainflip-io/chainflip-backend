@@ -27,7 +27,10 @@ use cf_chains::{
 	ForeignChain,
 };
 use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
-use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
+use cf_primitives::{
+	AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId, Price,
+	SwapRequestId,
+};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
@@ -421,5 +424,48 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			.await?,
 			collect_order_returns,
 		))
+	}
+
+	async fn on_chain_swap(
+		&self,
+		amount: AssetAmount,
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<SwapRequestId>> {
+		let wait_for_result = self
+			.submit_signed_extrinsic_wait_for(
+				pallet_cf_lp::Call::on_chain_swap {
+					amount,
+					input_asset,
+					output_asset,
+					retry_duration,
+					min_price,
+					dca_params,
+				},
+				wait_for,
+			)
+			.await?;
+
+		Ok(match wait_for_result {
+			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
+			WaitForResult::Details(details) => {
+				let (tx_hash, events, ..) = details;
+				let swap_request_id = events
+					.into_iter()
+					.find_map(|event| match event {
+						state_chain_runtime::RuntimeEvent::Swapping(
+							pallet_cf_swapping::Event::SwapRequested { swap_request_id, .. },
+						) => Some(swap_request_id),
+						_ => None,
+					})
+					.ok_or_else(|| anyhow::anyhow!("No SwapRequested event was found"))?;
+
+				ApiWaitForResult::TxDetails { tx_hash, response: swap_request_id }
+			},
+		})
 	}
 }
