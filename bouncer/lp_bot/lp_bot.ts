@@ -20,12 +20,21 @@ enum OrderStatus {
 }
 
 /**
+ * The type of an order.
+ */
+enum OrderType {
+    Limit = 'limit',
+    Range = 'range'
+}
+
+/**
  * An order.
  */
 class Order {
     constructor(
         public orderId: number,
         public status: OrderStatus,
+        public orderType: OrderType,
         public asset: Asset,
         public side: Side,
         public amount: number,
@@ -92,30 +101,6 @@ const tradingStrategy = (swap: Swap): TradeDecision => {
 };
 
 /**
- * Creates an order payload.
- * 
- * @param orderId - The order ID.
- * @param baseAsset - The base asset.
- * @param quoteAsset - The quote asset.
- * @param side - The side of the order.
- * @param amount - The amount of the order.
- * @returns The order payload.
- */
-const createOrderPayload = (orderId: number, baseAsset: Asset, side: Side, amount: number) => {
-    return {
-        orderId,
-        params: [
-            baseAsset,
-            { chain: 'Ethereum', asset: 'USDC' },
-            side,
-            orderId,
-            0,
-            amount,
-        ]
-    };
-};
-
-/**
  * Manages limit orders.
  * 
  * @param decision - The trade decision.
@@ -126,10 +111,10 @@ const manageLimitOrders = async (decision: TradeDecision) => {
     let orderPayload;
     let setOrUpdate = 'SET';
 
-    let currentOrderForAsset = Array.from(global.ORDER_BOOK.values()).find(order => order.asset === decision.asset);
+    const currentOpenOrderForAsset = Array.from(global.ORDER_BOOK.values()).find(order => order.asset === decision.asset && order.orderType === OrderType.Limit);
 
-    if (currentOrderForAsset) {
-        let order = global.ORDER_BOOK.get(currentOrderForAsset.orderId)!;
+    if (currentOpenOrderForAsset) {
+        let order = global.ORDER_BOOK.get(currentOpenOrderForAsset.orderId)!;
         let lastPrice = order.price;
         orderId = order.orderId;
         order.amount = decision.amount;
@@ -137,7 +122,7 @@ const manageLimitOrders = async (decision: TradeDecision) => {
         setOrUpdate = 'UPDATE';
     } else {
         orderId = Math.floor(Math.random() * 10000) + 1;
-        global.ORDER_BOOK.set(orderId, new Order(orderId, OrderStatus.Submitted, decision.asset, decision.side, decision.amount, decision.price));
+        global.ORDER_BOOK.set(orderId, new Order(orderId, OrderStatus.Submitted, OrderType.Limit, decision.asset, decision.side, decision.amount, decision.price));
     }
 
     try {
@@ -234,15 +219,21 @@ const createOrderFillStream = (wsConnection: any): Observable<any> => {
 };
 
 const manageRangeOrder = async (baseAsset: Asset, tick1: number, tick2: number, size: number) => {
+    logger.info(`Managing range order for ${baseAsset} with tick1: ${tick1}, tick2: ${tick2}, size: ${size}`);
     let orderId = Math.floor(Math.random() * 10000) + 1;
-    await lpApiRpc(logger, 'lp_set_range_order', [
-        baseAsset,
-        { chain: 'Ethereum', asset: 'USDC' },
-        orderId,
-        [tick1, tick2],
-        size,
-    ]);
-    return orderId;
+    global.ORDER_BOOK.set(orderId, new Order(orderId, OrderStatus.Submitted, OrderType.Range, baseAsset, Side.Sell, size, tick1));
+    try {
+        await lpApiRpc(logger, 'lp_set_range_order', [
+            baseAsset,
+            { chain: 'Ethereum', asset: 'USDC' },
+            orderId,
+            [tick1, tick2],
+            size,
+        ]);
+        logger.info(`Range order set: ${orderId}`);
+    } catch (error) {
+        logger.error(`Failed to execute order: ${error}`);
+    }
 }
 
 /** 
@@ -331,4 +322,4 @@ const initializeLiquidityProviderBot = () => {
     return [stateChainWsConnection, lpWsConnection];
 };
 
-export { initializeLiquidityProviderBot, depositUsdcLiquidity, cancelAllOrders };
+export { initializeLiquidityProviderBot, depositUsdcLiquidity, cancelAllOrders, manageRangeOrder };
