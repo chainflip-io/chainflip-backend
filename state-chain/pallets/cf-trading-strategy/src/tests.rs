@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
+use cf_primitives::{Asset, AssetAmount, Tick};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
@@ -28,6 +28,7 @@ use frame_support::{assert_err, assert_ok};
 use crate::{mock::*, *};
 
 const BASE_ASSET: Asset = Asset::Usdt;
+const QUOTE_ASSET: Asset = cf_primitives::STABLE_ASSET;
 const BASE_AMOUNT: AssetAmount = 100_000;
 const QUOTE_AMOUNT: AssetAmount = 50_000;
 
@@ -42,22 +43,26 @@ const STRATEGY: TradingStrategy = TradingStrategy::SellAndBuyAtTicks {
 	base_asset: BASE_ASSET,
 };
 
-fn get_balance(account_id: AccountId) -> (AssetAmount, AssetAmount) {
-	(
-		MockBalance::get_balance(&account_id, BASE_ASSET),
-		MockBalance::get_balance(&account_id, STABLE_ASSET),
-	)
+macro_rules! assert_balances {
+	($account_id:expr, $base_amount:expr, $quote_amount:expr) => {
+		assert_eq!(
+			(
+				MockBalance::get_balance(&$account_id, BASE_ASSET),
+				MockBalance::get_balance(&$account_id, QUOTE_ASSET)
+			),
+			($base_amount, $quote_amount)
+		);
+	};
 }
 
 fn deploy_strategy() -> AccountId {
-	MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT);
-	MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT);
-
-	MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
-	MockLpRegistration::register_refund_address(LP, STABLE_ASSET.into());
-
 	let initial_amounts: BTreeMap<_, _> =
-		[(BASE_ASSET, BASE_AMOUNT), (STABLE_ASSET, QUOTE_AMOUNT)].into();
+		[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
+
+	for (asset, amount) in initial_amounts.clone() {
+		MockLpRegistration::register_refund_address(LP, asset.into());
+		MockBalance::credit_account(&LP, asset, amount);
+	}
 
 	assert_ok!(TradingStrategyPallet::deploy_trading_strategy(
 		RuntimeOrigin::signed(LP),
@@ -88,48 +93,54 @@ fn deploy_strategy() -> AccountId {
 	);
 
 	// The funds are moved from the LP to the strategy:
-	assert_eq!(get_balance(strategy_id), (BASE_AMOUNT, QUOTE_AMOUNT));
-	assert_eq!(get_balance(LP), (0, 0));
+	assert_balances!(strategy_id, BASE_AMOUNT, QUOTE_AMOUNT);
+	assert_balances!(LP, 0, 0);
 
 	strategy_id
+}
+
+fn check_asset_validation(f: impl Fn(BTreeMap<Asset, u128>) -> DispatchResult) {
+	MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT * 10);
+	MockBalance::credit_account(&LP, QUOTE_ASSET, QUOTE_AMOUNT * 10);
+
+	// These attempts should fail due to invalid assets provided:
+	assert_err!(f(BTreeMap::from_iter([])), Error::<Test>::InvalidAssetsForStrategy);
+	assert_err!(
+		f(BTreeMap::from_iter([(Asset::Flip, 1000)])),
+		Error::<Test>::InvalidAssetsForStrategy
+	);
+	assert_err!(
+		f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT), (Asset::Flip, 1000)])),
+		Error::<Test>::InvalidAssetsForStrategy
+	);
+	assert_err!(
+		f(BTreeMap::from_iter([
+			(QUOTE_ASSET, QUOTE_AMOUNT),
+			(BASE_ASSET, BASE_AMOUNT),
+			(Asset::Flip, 1000)
+		])),
+		Error::<Test>::InvalidAssetsForStrategy
+	);
+
+	// Should be OK to provide one of &the assets (or both):
+	assert_ok!(f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT)])));
+	assert_ok!(f(BTreeMap::from_iter([(BASE_ASSET, BASE_AMOUNT)])));
+	assert_ok!(f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT)])));
 }
 
 #[test]
 fn asset_validation_on_deploy_strategy() {
 	new_test_ext().then_execute_at_next_block(|_| {
-		MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT * 10);
-		MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT * 10);
-
 		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
-		MockLpRegistration::register_refund_address(LP, STABLE_ASSET.into());
+		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
 
-		let deploy = |funding| {
+		check_asset_validation(|funding| {
 			TradingStrategyPallet::deploy_trading_strategy(
 				RuntimeOrigin::signed(LP),
 				STRATEGY.clone(),
 				funding,
 			)
-		};
-
-		// These attempts should fail due to invalid assets provided:
-		assert_err!(deploy([].into()), Error::<Test>::InvalidAssetsForStrategy);
-		assert_err!(deploy([(Asset::Flip, 1000)].into()), Error::<Test>::InvalidAssetsForStrategy);
-		assert_err!(
-			deploy([(STABLE_ASSET, QUOTE_AMOUNT), (Asset::Flip, 1000)].into()),
-			Error::<Test>::InvalidAssetsForStrategy
-		);
-		assert_err!(
-			deploy(
-				[(STABLE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT), (Asset::Flip, 1000)]
-					.into()
-			),
-			Error::<Test>::InvalidAssetsForStrategy
-		);
-
-		// Should be OK to provide one of the assets (or both):
-		assert_ok!(deploy([(STABLE_ASSET, QUOTE_AMOUNT)].into()));
-		assert_ok!(deploy([(BASE_ASSET, BASE_AMOUNT)].into()));
-		assert_ok!(deploy([(STABLE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT)].into()));
+		});
 	});
 }
 
@@ -138,39 +149,13 @@ fn asset_validation_on_adding_funds_to_strategy() {
 	new_test_ext().then_execute_at_next_block(|_| {
 		let strategy_id = deploy_strategy();
 
-		MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT * 10);
-		MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT * 10);
-
-		let add_funds = |funding| {
+		check_asset_validation(|funding| {
 			TradingStrategyPallet::add_funds_to_strategy(
 				RuntimeOrigin::signed(LP),
 				strategy_id,
 				funding,
 			)
-		};
-
-		// Should fail on invalid combinations of assets:
-		assert_err!(add_funds([].into()), Error::<Test>::InvalidAssetsForStrategy);
-		assert_err!(
-			add_funds([(Asset::Flip, 1000)].into()),
-			Error::<Test>::InvalidAssetsForStrategy
-		);
-		assert_err!(
-			add_funds([(STABLE_ASSET, QUOTE_AMOUNT), (Asset::Flip, 1000)].into()),
-			Error::<Test>::InvalidAssetsForStrategy
-		);
-		assert_err!(
-			add_funds(
-				[(STABLE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT), (Asset::Flip, 1000)]
-					.into()
-			),
-			Error::<Test>::InvalidAssetsForStrategy
-		);
-
-		// Should be OK to provide one of the assets (or both):
-		assert_ok!(add_funds([(STABLE_ASSET, QUOTE_AMOUNT)].into()));
-		assert_ok!(add_funds([(BASE_ASSET, BASE_AMOUNT)].into()));
-		assert_ok!(add_funds([(STABLE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT)].into()));
+		});
 	});
 }
 
@@ -182,7 +167,7 @@ fn refund_addresses_are_required() {
 		let base_asset = Asset::ArbUsdc;
 
 		MockBalance::credit_account(&LP, base_asset, BASE_AMOUNT);
-		MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT);
+		MockBalance::credit_account(&LP, QUOTE_ASSET, QUOTE_AMOUNT);
 
 		let deploy = || {
 			TradingStrategyPallet::deploy_trading_strategy(
@@ -192,7 +177,7 @@ fn refund_addresses_are_required() {
 					buy_tick: BUY_TICK,
 					base_asset,
 				},
-				[(base_asset, BASE_AMOUNT), (STABLE_ASSET, QUOTE_AMOUNT)].into(),
+				[(base_asset, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into(),
 			)
 		};
 
@@ -205,7 +190,7 @@ fn refund_addresses_are_required() {
 		assert_err!(deploy(), DispatchError::Other("no refund address"));
 
 		// Should be able to deploy a strategy after registering the second asset:
-		MockLpRegistration::register_refund_address(LP, STABLE_ASSET.into());
+		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
 
 		assert_ok!(deploy());
 	});
@@ -266,14 +251,14 @@ fn automated_strategy_basic_usage() {
 				thresholds.insert(BASE_ASSET, ADDITIONAL_BASE_AMOUNT * 2);
 			});
 
-			assert_eq!(get_balance(LP), (0, 0));
-			assert_eq!(get_balance(strategy_id), (ADDITIONAL_BASE_AMOUNT, 0));
+			assert_balances!(LP, 0, 0);
+			assert_balances!(strategy_id, ADDITIONAL_BASE_AMOUNT, 0);
 
 			strategy_id
 		})
 		.then_execute_at_next_block(|strategy_id| {
 			// The funds have not been added to the limit order yet
-			assert_eq!(get_balance(strategy_id), (ADDITIONAL_BASE_AMOUNT, 0));
+			assert_balances!(strategy_id, ADDITIONAL_BASE_AMOUNT, 0);
 
 			// This time we credit the strategy directly (which is what would happen
 			// if our limit order is executed in the pools pallet). Now the strategy
@@ -284,7 +269,7 @@ fn automated_strategy_basic_usage() {
 		})
 		.then_execute_at_next_block(|strategy_id| {
 			// The should now have been used to update the limit order:
-			assert_eq!(get_balance(strategy_id), (0, 0));
+			assert_balances!(strategy_id, 0, 0);
 
 			assert_eq!(
 				MockPoolApi::get_limit_orders(),
@@ -321,7 +306,7 @@ fn closing_strategy() {
 
 			// Credit the strategy account so has a non-zero free balance:
 			MockBalance::credit_account(&LP, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
-			assert_eq!(get_balance(LP), (ADDITIONAL_BASE_AMOUNT, 0));
+			assert_balances!(LP, ADDITIONAL_BASE_AMOUNT, 0);
 
 			// Closing the strategy
 			assert_ok!(TradingStrategyPallet::close_strategy(
@@ -345,7 +330,7 @@ fn closing_strategy() {
 			// Limit orders should be closed:
 			assert!(MockPoolApi::get_limit_orders().is_empty());
 			assert_eq!(Strategies::<Test>::iter().count(), 0);
-			assert_eq!(get_balance(strategy_id), (0, 0));
+			assert_balances!(strategy_id, 0, 0);
 		});
 }
 
@@ -356,13 +341,13 @@ fn strategy_deployment_threshold() {
 
 	new_test_ext().then_execute_at_next_block(|_| {
 		MockBalance::credit_account(&LP, BASE_ASSET, MIN_BASE_AMOUNT * 10);
-		MockBalance::credit_account(&LP, STABLE_ASSET, MIN_QUOTE_AMOUNT * 10);
+		MockBalance::credit_account(&LP, QUOTE_ASSET, MIN_QUOTE_AMOUNT * 10);
 
 		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
-		MockLpRegistration::register_refund_address(LP, STABLE_ASSET.into());
+		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
 
 		MinimumDeploymentAmountForStrategy::<Test>::insert(BASE_ASSET, MIN_BASE_AMOUNT);
-		MinimumDeploymentAmountForStrategy::<Test>::insert(STABLE_ASSET, MIN_QUOTE_AMOUNT);
+		MinimumDeploymentAmountForStrategy::<Test>::insert(QUOTE_ASSET, MIN_QUOTE_AMOUNT);
 
 		for (base_amount, quote_amount) in [
 			(MIN_BASE_AMOUNT - 1, 0),
@@ -374,7 +359,7 @@ fn strategy_deployment_threshold() {
 				TradingStrategyPallet::deploy_trading_strategy(
 					RuntimeOrigin::signed(LP),
 					STRATEGY.clone(),
-					[(BASE_ASSET, base_amount), (STABLE_ASSET, quote_amount)].into()
+					[(BASE_ASSET, base_amount), (QUOTE_ASSET, quote_amount)].into()
 				),
 				Error::<Test>::AmountBelowDeploymentThreshold
 			);
@@ -389,7 +374,7 @@ fn strategy_deployment_threshold() {
 			assert_ok!(TradingStrategyPallet::deploy_trading_strategy(
 				RuntimeOrigin::signed(LP),
 				STRATEGY.clone(),
-				[(BASE_ASSET, base_amount), (STABLE_ASSET, quote_amount)].into()
+				[(BASE_ASSET, base_amount), (QUOTE_ASSET, quote_amount)].into()
 			));
 		}
 	});
