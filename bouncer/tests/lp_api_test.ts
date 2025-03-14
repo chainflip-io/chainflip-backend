@@ -98,8 +98,8 @@ async function testLiquidityDeposit(logger: Logger) {
   ).event;
 
   const liquidityDepositAddress = (
-    await lpApiRpc(logger, `lp_liquidity_deposit`, [testRpcAsset, 'InBlock'])
-  ).tx_details.response;
+    await lpApiRpc(logger, `lp_liquidity_deposit_v2`, [testRpcAsset, 'InBlock'])
+  ).tx_details.response.deposit_address;
   const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
   assert.strictEqual(
