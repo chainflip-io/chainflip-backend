@@ -122,7 +122,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		&mut self,
 		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
 		block_data: Option<(T::ChainBlockNumber, T::BlockData)>,
-	) -> Vec<(T::ChainBlockNumber, T::Event)> {
+	) {
 		if let Some((block_number, block_data)) = block_data {
 			self.blocks_data.insert(block_number, (block_data, Default::default()));
 		}
@@ -155,9 +155,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			},
 		}
 		let events = self.process_rules(last_block);
-		let executed_events = self.execute.run(events.clone());
+		self.execute.run(events.clone());
 		self.clean_old(last_block);
-		executed_events
 	}
 
 	/// Processes the stored block data to generate events by applying the provided rules.
@@ -322,10 +321,7 @@ pub(crate) mod test {
 	}
 
 	impl Hook<HookTypeFor<Types, ExecuteHook>> for Types {
-		fn run(
-			&mut self,
-			events: Vec<(BlockNumber, MockBtcEvent)>,
-		) -> Vec<(BlockNumber, MockBtcEvent)> {
+		fn run(&mut self, events: Vec<(BlockNumber, MockBtcEvent)>) {
 			let mut chosen: BTreeMap<u8, (BlockNumber, MockBtcEvent)> = BTreeMap::new();
 
 			for (block, event) in events {
@@ -351,7 +347,6 @@ pub(crate) mod test {
 					},
 				}
 			}
-			chosen.into_values().collect::<Vec<_>>()
 		}
 	}
 
@@ -383,7 +378,7 @@ pub(crate) mod test {
 		);
 	}
 
-	/// temp test, checking large progress delta
+	///temp test, checking large progress delta
 	#[test]
 	fn temp_large_delta() {
 		let mut processor = BlockProcessor::<Types>::default();
@@ -411,21 +406,25 @@ pub(crate) mod test {
 	fn reorgs_events_saved_and_removed() {
 		let mut processor = BlockProcessor::<Types>::default();
 
-		let mut events: Vec<_> =
-			processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
-		events.extend(
-			processor
-				.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4, 5, 6]))),
-		);
-		events.extend(
-			processor
-				.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![7, 8, 9]))),
-		);
+		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
+		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4, 5, 6])));
+		processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![7, 8, 9])));
+
 		//when a reorg happens the block processor saves all the events it has processed so far for
 		// the reorged blocks
 		processor.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(9, 11)), None);
 		assert_eq!(
-			events,
+			vec![
+				(9, MockBtcEvent::PreWitness(1)),
+				(9, MockBtcEvent::PreWitness(2)),
+				(9, MockBtcEvent::PreWitness(3)),
+				(10, MockBtcEvent::PreWitness(4)),
+				(10, MockBtcEvent::PreWitness(5)),
+				(10, MockBtcEvent::PreWitness(6)),
+				(11, MockBtcEvent::PreWitness(7)),
+				(11, MockBtcEvent::PreWitness(8)),
+				(11, MockBtcEvent::PreWitness(9))
+			],
 			processor
 				.reorg_events
 				.iter()
@@ -434,65 +433,28 @@ pub(crate) mod test {
 				})
 				.collect::<Vec<_>>()
 		);
+		processor.process_block_data(ChainProgressInner::Progress(14), None);
+		assert!(processor.reorg_events.is_empty())
 	}
 
-	/// test that when a reorg happens the reorged events are used to avoid re-executing the same
-	/// action even if the deposit ends up in a different block,
+	///test that when a reorg happens the reorged events are used to avoid re-executing the same
+	///action even if the deposit ends up in a different block,
 	#[test]
 	fn already_executed_events_are_not_reprocessed_after_reorg() {
 		let mut processor = BlockProcessor::<Types>::default();
-
 		// We processed pre-witnessing (boost) for the followings deposit
 		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
 		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4, 5, 6])));
 		processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![7, 8, 9])));
+
 		processor.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(9, 11)), None);
+
 		// We reprocessed the reorged blocks, now all the deposit end up in block 11
-		let mut events =
-			processor.process_block_data(ChainProgressInner::Progress(11), Some((9, vec![])));
-		events.extend(
-			processor.process_block_data(ChainProgressInner::Progress(11), Some((10, vec![]))),
-		);
-		events.extend(processor.process_block_data(
-			ChainProgressInner::Progress(11),
-			Some((11, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
-		));
+		let result =
+			processor.process_rules_for_ages_and_block(11, 0..1, &vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 		// After reprocessing the reorged blocks we should have not re-emitted the same prewitness
 		// events for the same deposit, only the new detected deposit (10) is present
-		assert_eq!(events, vec![(11, MockBtcEvent::PreWitness(10))]);
-	}
-
-	/// test that in case we process multiple action for the same deposit simultaneously
-	/// (Pre-witness and Witness) we only dispactch the full deposit since it doesn't make sense to
-	/// make the user pay for boost if the block was effectivily not processed in advance
-	#[test]
-	fn no_boost_if_full_witness_in_same_block() {
-		let mut processor = BlockProcessor::<Types>::default();
-		let events =
-			processor.process_block_data(ChainProgressInner::Progress(15), Some((9, vec![4, 7])));
-
-		assert_eq!(events, vec![(9, MockBtcEvent::Witness(4)), (9, MockBtcEvent::Witness(7))])
-	}
-
-	/// test that the hook executing the events is called the correct number of times
-	#[test]
-	fn number_of_events_executed_is_correct() {
-		let mut processor = BlockProcessor::<Types>::default();
-
-		let mut events =
-			processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4])));
-		events.extend(
-			processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![6]))),
-		);
-		events.extend(
-			processor.process_block_data(ChainProgressInner::Progress(17), Some((16, vec![18]))),
-		);
-
-		assert_eq!(
-			events.len(),
-			5,
-			"Hook should have been called 5 times: 3 pre-witness deposit and 2 full deposit"
-		)
+		assert_eq!(result, vec![(11, MockBtcEvent::PreWitness(10))]);
 	}
 }
 
@@ -525,7 +487,9 @@ impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
 	}
 }
 #[allow(dead_code)]
-pub struct SMBlockProcessorOutput<T: BWProcessorTypes>(Vec<(T::ChainBlockNumber, T::Event)>);
+pub struct SMBlockProcessorOutput<T: BWProcessorTypes> {
+	phantom_data: PhantomData<T>,
+}
 impl<T: BWProcessorTypes> Validate for SMBlockProcessorOutput<T> {
 	type Error = ();
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -547,13 +511,10 @@ impl<T: BWProcessorTypes + 'static> StateMachine for SMBlockProcessor<T> {
 	fn step(s: &mut Self::State, i: Self::Input, _set: &Self::Settings) -> Self::Output {
 		match i {
 			SMBlockProcessorInput::NewBlockData(last_height, n, deposits) =>
-				SMBlockProcessorOutput(s.process_block_data(
-					ChainProgressInner::Progress(last_height),
-					Some((n, deposits)),
-				)),
-			SMBlockProcessorInput::ChainProgress(inner) =>
-				SMBlockProcessorOutput(s.process_block_data(inner, None)),
+				s.process_block_data(ChainProgressInner::Progress(last_height), Some((n, deposits))),
+			SMBlockProcessorInput::ChainProgress(inner) => s.process_block_data(inner, None),
 		}
+		SMBlockProcessorOutput { phantom_data: Default::default() }
 	}
 }
 

@@ -6,7 +6,11 @@ use crate::{
 	electoral_systems::{tests::utils::generate_votes, unsafe_median::*},
 };
 
-type SimpleUnsafeMedian = UnsafeMedian<u64, (), (), ()>;
+pub struct FeeHook;
+impl UpdateFeeHook<u64> for FeeHook {
+	fn update_fee(_fee: u64) {}
+}
+type SimpleUnsafeMedian = UnsafeMedian<u64, (), (), FeeHook, ()>;
 
 const INIT_UNSYNCHRONISED_STATE: u64 = 22;
 const NEW_UNSYNCHRONISED_STATE: u64 = 33;

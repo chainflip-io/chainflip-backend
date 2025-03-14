@@ -14,6 +14,10 @@ use frame_support::{
 use itertools::Itertools;
 use sp_std::vec::Vec;
 
+pub trait UpdateFeeHook<Value> {
+	fn update_fee(fee: Value);
+}
+
 /// This electoral system calculates the median of all the authorities votes and stores the latest
 /// median in the `ElectoralUnsynchronisedState`. Each time consensus is gained, everyone is asked
 /// to revote, to provide a new updated value. *IMPORTANT*: This is not the most secure method as
@@ -22,10 +26,6 @@ use sp_std::vec::Vec;
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-
-pub trait UpdateFeeHook<Value> {
-	fn update_fee(fee: Value);
-}
 pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId> {
 	_phantom:
 		core::marker::PhantomData<(Value, UnsynchronisedSettings, Settings, Hook, ValidatorId)>,

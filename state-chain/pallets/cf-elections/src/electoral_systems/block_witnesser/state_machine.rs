@@ -69,7 +69,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
 pub struct ExecuteHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
 	type Input = Vec<(T::ChainBlockNumber, T::Event)>;
-	type Output = Vec<(T::ChainBlockNumber, T::Event)>;
+	type Output = ();
 }
 
 pub struct SafetyMarginHook;
