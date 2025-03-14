@@ -28,6 +28,7 @@ mod mock;
 mod tests;
 
 use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	AccountRoleRegistry, BalanceApi, Chainflip, IncreaseOrDecrease, LpRegistration, OrderId,
 	PoolApi, Side,
@@ -90,7 +91,7 @@ fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
 	.unwrap()
 }
 
-type AssetToAmountMap = BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>;
+type AssetToAmountMap = BTreeMap<Asset, AssetAmount>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -139,10 +140,10 @@ pub mod pallet {
 	pub(super) type LimitOrderUpdateThresholds<T: Config> =
 		StorageValue<_, AssetToAmountMap, ValueQuery>;
 
-	/// Stores minimum amount per asset necessary to deploy a strategy if only one of the two
-	/// assets is provided. If both assets are provided, we allow splitting the requirement between
-	/// them: e.g. it is possible to start a strategy with only 30% of the required amount of asset
-	/// A, as long as there is at least 70% of the required amount of asset B.
+	/// Stores minimum amount per asset necessary to deploy a strategy if only one of the
+	/// assets is provided. If more then one asset is provided, we allow splitting the requirement
+	/// between them: e.g. it is possible to start a strategy with only 30% of the required amount
+	/// of asset A, as long as there is at least 70% of the required amount of asset B.
 	#[pallet::storage]
 	pub(super) type MinimumDeploymentAmountForStrategy<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
@@ -198,7 +199,7 @@ pub mod pallet {
 								{
 									// Should be impossible to get an error since we just
 									// checked the balance above
-									cf_runtime_utilities::log_or_panic!(
+									log_or_panic!(
 										"Failed to update limit order for strategy {strategy_id:?}"
 									);
 								}
@@ -222,7 +223,7 @@ pub mod pallet {
 		},
 		FundsAddedToStrategy {
 			strategy_id: T::AccountId,
-			amounts: Vec<(Asset, AssetAmount)>,
+			amounts: BTreeMap<Asset, AssetAmount>,
 		},
 		StrategyClosed {
 			strategy_id: T::AccountId,
@@ -324,9 +325,7 @@ pub mod pallet {
 
 			for asset in strategy.supported_assets() {
 				let balance = T::BalanceApi::get_balance(&strategy_id, asset);
-				if balance > 0 {
-					T::BalanceApi::transfer(&strategy_id, lp, asset, balance)?;
-				}
+				T::BalanceApi::transfer(&strategy_id, lp, asset, balance)?;
 			}
 
 			frame_system::Provider::<T>::killed(&strategy_id).unwrap_or_else(|e| {

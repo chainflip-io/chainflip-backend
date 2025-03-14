@@ -16,7 +16,7 @@
 
 use crate::{self as pallet_cf_pools, PalletSafeMode};
 use cf_chains::Ethereum;
-use cf_primitives::{Asset, STABLE_ASSET};
+use cf_primitives::Asset;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{

@@ -36,8 +36,11 @@ const SELL_TICK: Tick = 1;
 
 type AccountId = u64;
 
-const STRATEGY: TradingStrategy =
-	TradingStrategy::SellAndBuyAtTicks { sell_tick: SELL_TICK, buy_tick: BUY_TICK };
+const STRATEGY: TradingStrategy = TradingStrategy::SellAndBuyAtTicks {
+	sell_tick: SELL_TICK,
+	buy_tick: BUY_TICK,
+	base_asset: BASE_ASSET,
+};
 
 fn get_balance(account_id: AccountId) -> (AssetAmount, AssetAmount) {
 	(
@@ -53,17 +56,18 @@ fn deploy_strategy() -> AccountId {
 	MockLpRegistration::register_refund_address(LP, BASE_ASSET);
 	MockLpRegistration::register_refund_address(LP, STABLE_ASSET);
 
+	let initial_amounts: BTreeMap<_, _> =
+		[(BASE_ASSET, BASE_AMOUNT), (STABLE_ASSET, QUOTE_AMOUNT)].into();
+
 	assert_ok!(TradingStrategyPallet::deploy_trading_strategy(
 		RuntimeOrigin::signed(LP),
-		BASE_AMOUNT,
-		QUOTE_AMOUNT,
-		BASE_ASSET,
 		STRATEGY.clone(),
+		initial_amounts.clone(),
 	));
 
 	// An entry for the trading agent is created:
-	let (lp_id, strategy_id, strategy_entry) = Strategies::<Test>::iter().next().unwrap();
-	assert_eq!(strategy_entry, TradingStrategyEntry { base_asset: BASE_ASSET, strategy: STRATEGY });
+	let (lp_id, strategy_id, strategy) = Strategies::<Test>::iter().next().unwrap();
+	assert_eq!(strategy, STRATEGY);
 	assert_eq!(lp_id, LP);
 
 	assert!(frame_system::Account::<Test>::contains_key(strategy_id), "Account not created");
@@ -74,15 +78,13 @@ fn deploy_strategy() -> AccountId {
 		RuntimeEvent::TradingStrategyPallet(Event::<Test>::StrategyDeployed {
 			account_id: LP,
 			strategy_id: id,
-			base_asset: BASE_ASSET,
 			strategy: STRATEGY,
 		}) if id == strategy_id,
 		RuntimeEvent::TradingStrategyPallet(Event::<Test>::FundsAddedToStrategy {
-			base_asset: BASE_ASSET,
 			strategy_id: id,
-			base_asset_amount: BASE_AMOUNT,
-			quote_asset_amount: QUOTE_AMOUNT,
-		}) if id == strategy_id,
+			amounts: ref amounts_in_event
+
+		}) if id == strategy_id && amounts_in_event == &initial_amounts,
 	);
 
 	// The funds are moved from the LP to the strategy:
@@ -101,10 +103,8 @@ fn refund_addresses_are_required() {
 		let deploy = || {
 			TradingStrategyPallet::deploy_trading_strategy(
 				RuntimeOrigin::signed(LP),
-				BASE_AMOUNT,
-				QUOTE_AMOUNT,
-				BASE_ASSET,
 				STRATEGY.clone(),
+				[(BASE_ASSET, BASE_AMOUNT), (STABLE_ASSET, QUOTE_AMOUNT)].into(),
 			)
 		};
 
@@ -157,15 +157,14 @@ fn automated_strategy_basic_usage() {
 			MockBalance::credit_account(&LP, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
 			assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
 				RuntimeOrigin::signed(LP),
-				ADDITIONAL_BASE_AMOUNT,
-				0,
-				strategy_id
+				strategy_id,
+				[(BASE_ASSET, ADDITIONAL_BASE_AMOUNT)].into()
 			));
 
 			// Update the threshold to check that limit orders won't be updated
 			// if the threshold is not reached:
 			LimitOrderUpdateThresholds::<Test>::mutate(|thresholds| {
-				thresholds.try_insert(BASE_ASSET, ADDITIONAL_BASE_AMOUNT * 2).unwrap();
+				thresholds.insert(BASE_ASSET, ADDITIONAL_BASE_AMOUNT * 2);
 			});
 
 			assert_eq!(get_balance(LP), (0, 0));
@@ -272,10 +271,8 @@ fn strategy_deployment_threshold() {
 			assert_err!(
 				TradingStrategyPallet::deploy_trading_strategy(
 					RuntimeOrigin::signed(LP),
-					base_amount,
-					quote_amount,
-					BASE_ASSET,
 					STRATEGY.clone(),
+					[(BASE_ASSET, base_amount), (STABLE_ASSET, quote_amount)].into()
 				),
 				Error::<Test>::AmountBelowDeploymentThreshold
 			);
@@ -289,10 +286,8 @@ fn strategy_deployment_threshold() {
 		] {
 			assert_ok!(TradingStrategyPallet::deploy_trading_strategy(
 				RuntimeOrigin::signed(LP),
-				base_amount,
-				quote_amount,
-				BASE_ASSET,
 				STRATEGY.clone(),
+				[(BASE_ASSET, base_amount), (STABLE_ASSET, quote_amount)].into()
 			));
 		}
 	});

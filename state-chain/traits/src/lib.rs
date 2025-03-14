@@ -1096,8 +1096,10 @@ pub trait BalanceApi {
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult {
-		Self::try_debit_account(from, asset, amount)?;
-		Self::credit_account(to, asset, amount);
+		if amount > 0 {
+			Self::try_debit_account(from, asset, amount)?;
+			Self::credit_account(to, asset, amount);
+		}
 
 		Ok(())
 	}

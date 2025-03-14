@@ -1049,8 +1049,8 @@ impl<T: Config> SwappingApi for Pallet<T> {
 							let threshold = autosweeping_thresholds
 								.get(&asset_to_collect)
 								.copied()
-								// Default to 1 to prevent updating with 0 amounts
-								.unwrap_or(1)
+								// Default to not sweeping
+								.unwrap_or(AssetAmount::MAX)
 								.into();
 
 							if collected.bought_amount >= threshold {
