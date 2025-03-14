@@ -30,8 +30,8 @@ mod tests;
 use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AccountRoleRegistry, BalanceApi, Chainflip, IncreaseOrDecrease, LpRegistration, OrderId,
-	PoolApi, Side,
+	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, IncreaseOrDecrease,
+	LpRegistration, OrderId, PoolApi, Side,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -235,6 +235,8 @@ pub mod pallet {
 		StrategyNotFound,
 		AmountBelowDeploymentThreshold,
 		InvalidAssetsForStrategy,
+		/// The liquidity provider has active strategies and cannot be deregistered.
+		LpHasActiveStrategies,
 	}
 
 	#[pallet::call]
@@ -378,6 +380,18 @@ impl<T: Config> Pallet<T> {
 			amounts: funding.into_iter().collect(),
 		});
 
+		Ok(())
+	}
+}
+
+pub struct TradingStrategyDeregistrationCheck<T>(PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for TradingStrategyDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+	fn check(account_id: &T::AccountId) -> Result<(), Self::Error> {
+		use frame_support::StorageDoubleMap;
+		ensure!(!Strategies::<T>::contains_prefix(account_id), Error::<T>::LpHasActiveStrategies);
 		Ok(())
 	}
 }

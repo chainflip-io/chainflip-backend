@@ -96,6 +96,7 @@ use pallet_cf_pools::{
 use pallet_cf_swapping::{
 	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
 };
+use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
@@ -556,7 +557,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type DeregistrationCheck = Bonder<Self>;
+	type DeregistrationCheck = (Bonder<Self>, TradingStrategyDeregistrationCheck<Self>);
 	type WeightInfo = ();
 }
 
