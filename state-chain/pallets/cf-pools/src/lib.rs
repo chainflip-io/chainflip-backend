@@ -550,6 +550,10 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
+				&lp,
+				[base_asset, quote_asset],
+			)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
@@ -631,6 +635,10 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
+				&lp,
+				[base_asset, quote_asset],
+			)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
@@ -712,8 +720,12 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
+				&lp,
+				[base_asset, quote_asset],
+			)?;
 
-			Self::inner_update_limit_order_with_refund_address_checks(
+			Self::inner_update_limit_order(
 				&lp,
 				base_asset,
 				quote_asset,
@@ -748,6 +760,10 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
+				&lp,
+				[base_asset, quote_asset],
+			)?;
 
 			Self::inner_set_limit_order(
 				&lp,
@@ -1499,30 +1515,6 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	/// Same as `inner_update_limit_order` but with additional checks for refund addresses.
-	fn inner_update_limit_order_with_refund_address_checks(
-		lp: &T::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		id: OrderId,
-		option_tick: Option<Tick>,
-		amount_change: IncreaseOrDecrease<AssetAmount>,
-	) -> DispatchResult {
-		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, base_asset)?;
-		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, quote_asset)?;
-
-		Self::inner_update_limit_order(
-			lp,
-			base_asset,
-			quote_asset,
-			side,
-			id,
-			option_tick,
-			amount_change,
-		)
-	}
-
 	fn sweep_limit_order(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
@@ -1828,8 +1820,6 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		f: F,
 	) -> Result<R, DispatchError> {
-		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, base_asset)?;
-		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, quote_asset)?;
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)

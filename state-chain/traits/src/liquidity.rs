@@ -92,6 +92,17 @@ pub trait LpRegistration {
 
 	/// Ensure that the given account has a refund address set for the given asset.
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult;
+
+	/// Ensure that the given account has a refund address set for the given assets.
+	fn ensure_has_refund_address_for_assets(
+		who: &Self::AccountId,
+		assets: impl IntoIterator<Item = Asset>,
+	) -> DispatchResult {
+		for asset in assets {
+			Self::ensure_has_refund_address_for_asset(who, asset)?;
+		}
+		Ok(())
+	}
 }
 
 pub trait HistoricalFeeMigration {
