@@ -45,7 +45,7 @@ use sp_runtime::{BoundedBTreeMap, SaturatedConversion};
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation,
-		solana_elections::{CfSolanaAltWitnessingHandler, TransactionSuccessDetails},
+		solana_elections::{SolanaCcmAuxDataWitnessingHandler, TransactionSuccessDetails},
 		ChainAddressConverter, SolEnvironment,
 		SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
 	},
@@ -1050,7 +1050,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 
 			assert_eq!(SolEnvironment::get_address_lookup_tables(alt_lookup.clone()), Err(SolanaTransactionBuildingError::AltsNotYetWitnessed { created_at: alt_lookup.created_at }));
 
-			testnet.move_forward_blocks(CfSolanaAltWitnessingHandler::max_wait_time_for_alt_witnessing() + 1);
+			testnet.move_forward_blocks(SolanaCcmAuxDataWitnessingHandler::max_wait_time_for_alt_witnessing() + 1);
 
 			// Since we have waited for too long, treat the CCM as invalid and refund the asset via Transfer instead.
 			assert_eq!(assert_events_match!(Runtime,

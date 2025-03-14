@@ -1781,10 +1781,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					SolanaTransactionBuildingError::AltsNotYetWitnessed { created_at },
 				)) => {
 					// If we waited for too long, fail the CCM and refund.
-					if current_block >
-						created_at +
-							T::CcmAuxDataWitnessingHandler::max_wait_time_for_alt_witnessing()
-					{
+					if T::CcmAuxDataWitnessingHandler::should_expire(created_at, current_block) {
 						Self::refund_invalid_ccm(
 							ccm,
 							ExecutexSwapAndCallError::DispatchError(
@@ -1960,12 +1957,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					origin.into(),
 				);
 				if let Some(ccm_channel_metadata) = channel_metadata {
-					if ForeignChain::Solana == destination_asset.into() {
-						T::CcmAuxDataWitnessingHandler::initiate_alt_witnessing(
-							ccm_channel_metadata,
-							swap_request_id,
-						);
-					}
+					T::CcmAuxDataWitnessingHandler::initiate_alt_witnessing(
+						ccm_channel_metadata,
+						swap_request_id,
+					);
 				}
 				DepositAction::Swap { swap_request_id }
 			},

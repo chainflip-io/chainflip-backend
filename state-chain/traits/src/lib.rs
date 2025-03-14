@@ -1184,7 +1184,21 @@ pub trait SolanaAltWitnessingHandler {
 	) {
 	}
 
+	fn should_expire(created_at: u32, current: BlockNumber) -> bool {
+		current > created_at + Self::max_wait_time_for_alt_witnessing()
+	}
+
 	fn max_wait_time_for_alt_witnessing() -> BlockNumber {
 		cf_chains::sol::EXPIRY_TIME_FOR_ALT_ELECTIONS
+	}
+}
+pub struct NoOpAuxDataWitnessingHandler;
+impl SolanaAltWitnessingHandler for NoOpAuxDataWitnessingHandler {
+	fn should_expire(_created_at: u32, _current: BlockNumber) -> bool {
+		false
+	}
+
+	fn max_wait_time_for_alt_witnessing() -> BlockNumber {
+		Default::default()
 	}
 }
