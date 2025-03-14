@@ -39,8 +39,8 @@ use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
 
 pub use cf_rpc_types::lp::{
-	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositDetails, OpenSwapChannels,
-	OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
+	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
+	OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
 };
 
 fn collect_range_order_returns(
@@ -170,7 +170,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		asset: Asset,
 		wait_for: WaitFor,
 		boost_fee: Option<BasisPoints>,
-	) -> Result<ApiWaitForResult<LiquidityDepositDetails>> {
+	) -> Result<ApiWaitForResult<LiquidityDepositChannelDetails>> {
 		let wait_for_result = self
 			.submit_signed_extrinsic_wait_for(
 				pallet_cf_lp::Call::request_liquidity_deposit_address {
@@ -194,7 +194,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 								deposit_chain_expiry_block,
 								..
 							},
-						) => Some(LiquidityDepositDetails {
+						) => Some(LiquidityDepositChannelDetails {
 							deposit_address: AddressString::from_encoded_address(deposit_address),
 							deposit_chain_expiry_block,
 						}),
