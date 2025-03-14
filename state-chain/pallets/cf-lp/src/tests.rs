@@ -394,7 +394,7 @@ fn account_registration_and_deregistration() {
 }
 
 #[test]
-fn on_chain_swap_checks() {
+fn schedule_swap_checks() {
 	new_test_ext().execute_with(|| {
 
 		const NOT_LP_ACCOUNT: u64 = 11;
@@ -403,7 +403,7 @@ fn on_chain_swap_checks() {
 
 		// Must be above minimum deposit amount:
 		assert_noop!(
-			LiquidityProvider::on_chain_swap(
+			LiquidityProvider::schedule_swap(
 				RuntimeOrigin::signed(LP_ACCOUNT),
 				BELLOW_MINIMUM_AMOUNT,
 				Asset::Eth,
@@ -412,11 +412,11 @@ fn on_chain_swap_checks() {
 				Default::default(),
 				None,
 			),
-			Error::<Test>::OnChainSwapBelowMinimumDepositAmount
+			Error::<Test>::InternalSwapBelowMinimumDepositAmount
 		);
 
 		// Must be an LP:
-		LiquidityProvider::on_chain_swap(
+		LiquidityProvider::schedule_swap(
 			RuntimeOrigin::signed(NOT_LP_ACCOUNT),
 			INPUT_AMOUNT,
 			Asset::Eth,
@@ -432,7 +432,7 @@ fn on_chain_swap_checks() {
 		.expect("LP_ACCOUNT registered at genesis.");
 
 		// Must register a refund address
-		assert_noop!(LiquidityProvider::on_chain_swap(
+		assert_noop!(LiquidityProvider::schedule_swap(
 			RuntimeOrigin::signed(LP_ACCOUNT),
 			INPUT_AMOUNT,
 			Asset::Eth,
@@ -448,7 +448,7 @@ fn on_chain_swap_checks() {
 		));
 
 		// Must have sufficient balance:
-		assert_noop!(LiquidityProvider::on_chain_swap(
+		assert_noop!(LiquidityProvider::schedule_swap(
 			RuntimeOrigin::signed(LP_ACCOUNT),
 			INPUT_AMOUNT,
 			Asset::Eth,
@@ -461,7 +461,7 @@ fn on_chain_swap_checks() {
 		MockBalanceApi::credit_account(&LP_ACCOUNT, Asset::Eth, INPUT_AMOUNT);
 
 		// Now the extrinsic should succeed resulting in a swap request getting recorded:
-		assert_ok!(LiquidityProvider::on_chain_swap(
+		assert_ok!(LiquidityProvider::schedule_swap(
 			RuntimeOrigin::signed(LP_ACCOUNT),
 			INPUT_AMOUNT,
 			Asset::Eth,

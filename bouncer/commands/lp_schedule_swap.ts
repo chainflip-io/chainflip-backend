@@ -1,16 +1,16 @@
 #!/usr/bin/env -S pnpm tsx
 /**
- * Command: on_chain_swap
+ * Command: lp_schedule_swap
  *
  * Description:
- * Performs an on-chain swap (Swap using an LP's free balance) of a specified amount from one asset to another.
+ * Schedules an internal swap (Swap using an LP's free balance) of a specified amount from one asset to another.
  * The default LP account used is LP_1. Set `LP_URI` environment variable to use a different LP account.
  *
  * Usage:
- * on_chain_swap <inputAsset> <outputAsset> <amount>
+ * lp_schedule_swap <inputAsset> <outputAsset> <amount>
  *
  * Example:
- * ./commands/on_chain_swap.ts Eth Flip 20
+ * ./commands/lp_schedule_swap.ts Eth Flip 20
  */
 import { InternalAssets as Assets } from '@chainflip/cli';
 import {
@@ -26,7 +26,7 @@ import { depositLiquidity } from '../shared/deposit_liquidity';
 
 const args = process.argv.slice(2);
 if (args.length < 3) {
-  logger.error('Usage: on_chain_swap <inputAsset> <outputAsset> <amount>');
+  logger.error('Usage: lp_schedule_swap <inputAsset> <outputAsset> <amount>');
   process.exit(1);
 }
 
@@ -53,7 +53,7 @@ const swapEvent = observeEvent(logger, `swapping:CreditedOnChain`, {
 logger.info('Submitting on-chain swap extrinsic');
 await lpMutex.runExclusive(async () => {
   await chainflip.tx.liquidityProvider
-    .onChainSwap(
+    .scheduleSwap(
       amountToFineAmount(amount.toString(), assetDecimals(inputAsset)),
       inputAsset,
       outputAsset,

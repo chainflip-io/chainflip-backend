@@ -17,7 +17,7 @@
 use anyhow::anyhow;
 use cf_primitives::{
 	chains::{Arbitrum, Solana},
-	BasisPoints, BlockNumber, DcaParameters, EgressId, Price, SwapRequestId,
+	BasisPoints, BlockNumber, DcaParameters, EgressId, Price,
 };
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
@@ -35,9 +35,10 @@ use chainflip_api::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash,
 	},
+	rpc_types::{lp::SwapRequestResponse, RedemptionAmount},
 	settings::StateChain,
 	AccountId32, AddressString, ApiWaitForResult, BlockUpdate, ChainApi, EthereumAddress,
-	OperatorApi, RedemptionAmount, SignedExtrinsicApi, StateChainApi, WaitFor,
+	OperatorApi, SignedExtrinsicApi, StateChainApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::{order_fills::OrderFills, CustomApiClient};
@@ -176,8 +177,8 @@ pub trait Rpc {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 
-	#[method(name = "on_chain_swap")]
-	async fn on_chain_swap(
+	#[method(name = "schedule_swap")]
+	async fn schedule_swap(
 		&self,
 		amount: NumberOrHex,
 		input_asset: Asset,
@@ -186,7 +187,7 @@ pub trait Rpc {
 		min_price: Price,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<SwapRequestId>>;
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;
 }
 
 pub struct RpcServerImpl {
@@ -581,7 +582,7 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn on_chain_swap(
+	async fn schedule_swap(
 		&self,
 		amount: NumberOrHex,
 		input_asset: Asset,
@@ -590,11 +591,11 @@ impl RpcServer for RpcServerImpl {
 		min_price: Price,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<SwapRequestId>> {
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {
 		Ok(self
 			.api
 			.lp_api()
-			.on_chain_swap(
+			.schedule_swap(
 				try_parse_number_or_hex(amount)?,
 				input_asset,
 				output_asset,
@@ -603,7 +604,8 @@ impl RpcServer for RpcServerImpl {
 				dca_params,
 				wait_for.unwrap_or_default(),
 			)
-			.await?)
+			.await?
+			.map_details(Into::into))
 	}
 }
 

@@ -426,7 +426,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		))
 	}
 
-	async fn on_chain_swap(
+	async fn schedule_swap(
 		&self,
 		amount: AssetAmount,
 		input_asset: Asset,
@@ -438,7 +438,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	) -> Result<ApiWaitForResult<SwapRequestId>> {
 		let wait_for_result = self
 			.submit_signed_extrinsic_wait_for(
-				pallet_cf_lp::Call::on_chain_swap {
+				pallet_cf_lp::Call::schedule_swap {
 					amount,
 					input_asset,
 					output_asset,

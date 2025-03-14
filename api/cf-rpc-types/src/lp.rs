@@ -135,3 +135,14 @@ impl TryFrom<CloseOrderJson> for CloseOrder {
 		})
 	}
 }
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub struct SwapRequestResponse {
+	pub swap_request_id: SwapRequestId,
+}
+
+impl From<SwapRequestId> for SwapRequestResponse {
+	fn from(swap_request_id: SwapRequestId) -> Self {
+		SwapRequestResponse { swap_request_id }
+	}
+}

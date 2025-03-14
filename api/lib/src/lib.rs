@@ -22,6 +22,7 @@ pub use cf_chains::{address::AddressString, RefundParametersRpc};
 use cf_chains::{evm::to_evm_address, CcmChannelMetadata};
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
+use cf_rpc_types::RedemptionAmount;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::Serialize;
@@ -61,7 +62,8 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
-pub use cf_rpc_types::{broker::*, *};
+// TODO: consider exporting lp types under another alias to avoid shadowing this crate's lp module.
+pub use cf_rpc_types::{self as rpc_types, broker::*};
 
 use cf_utilities::task_scope::Scope;
 use chainflip_engine::state_chain_observer::client::{

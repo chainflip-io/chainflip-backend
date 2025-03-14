@@ -1510,7 +1510,7 @@ mod swap_batching {
 }
 
 #[cfg(test)]
-mod on_chain_swapping {
+mod internal_swaps {
 
 	use cf_traits::{mocks::balance_api::MockBalance, SwapOutputActionEncoded};
 
@@ -1531,7 +1531,7 @@ mod on_chain_swapping {
 
 		new_test_ext()
 			.execute_with(|| {
-				Swapping::init_on_chain_swap_request(
+				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
@@ -1608,7 +1608,7 @@ mod on_chain_swapping {
 		new_test_ext()
 			.execute_with(|| {
 				MinimumNetworkFeePerChunk::<Test>::set(MIN_NETWORK_FEE);
-				Swapping::init_on_chain_swap_request(
+				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,

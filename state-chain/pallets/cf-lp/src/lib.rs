@@ -141,7 +141,7 @@ pub mod pallet {
 		/// The account still has funds remaining in the boost pools
 		BoostedFundsRemaining,
 		/// The input amount of on-chain swaps must be at least the minimum deposit amount.
-		OnChainSwapBelowMinimumDepositAmount,
+		InternalSwapBelowMinimumDepositAmount,
 	}
 
 	#[pallet::event]
@@ -345,8 +345,8 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::on_chain_swap())]
-		pub fn on_chain_swap(
+		#[pallet::weight(T::WeightInfo::schedule_swap())]
+		pub fn schedule_swap(
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			input_asset: Asset,
@@ -359,7 +359,7 @@ pub mod pallet {
 
 			ensure!(
 				amount >= T::MinimumDeposit::get(input_asset),
-				Error::<T>::OnChainSwapBelowMinimumDepositAmount
+				Error::<T>::InternalSwapBelowMinimumDepositAmount
 			);
 
 			Self::ensure_has_refund_address_for_asset(&account_id, output_asset)?;
@@ -369,7 +369,7 @@ pub mod pallet {
 			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)
 				.map_err(|_| Error::<T>::InsufficientBalance)?;
 
-			T::SwapRequestHandler::init_on_chain_swap_request(
+			T::SwapRequestHandler::init_internal_swap_request(
 				input_asset,
 				amount,
 				output_asset,

@@ -23,8 +23,7 @@ use api::{
 	lp::LpApi,
 	primitives::{EpochIndex, FLIP_DECIMALS},
 	queries::QueryApi,
-	AccountId32, GovernanceApi, KeyPair, OperatorApi, RedemptionAmount, StateChainApi,
-	ValidatorApi,
+	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
 use cf_chains::eth::Address as EthereumAddress;
@@ -32,6 +31,7 @@ use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
+	rpc_types::RedemptionAmount,
 	BrokerApi,
 };
 use clap::Parser;
