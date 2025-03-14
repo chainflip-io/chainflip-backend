@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::pass_through;
-use crate::{BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringData, RpcResult};
+use crate::{BlockT, CustomRpc, RpcAccountInfoV2, RpcResult};
 use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
 use cf_utilities::rpc::NumberOrHex;
 use jsonrpsee::proc_macros::rpc;
@@ -23,14 +23,15 @@ use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
-	self,
 	chainflip::Offence,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
-		LastRuntimeUpgradeInfo, MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts,
-		PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
+		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, MonitoringRuntimeApi,
+		OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo,
+		SolanaNonces,
 	},
 };
+
 impl From<EpochState> for RpcEpochState {
 	fn from(rotation_state: EpochState) -> Self {
 		Self {
@@ -42,6 +43,80 @@ impl From<EpochState> for RpcEpochState {
 		}
 	}
 }
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RpcRedemptionsInfo {
+	pub total_balance: NumberOrHex,
+	pub count: u32,
+}
+impl From<RedemptionsInfo> for RpcRedemptionsInfo {
+	fn from(redemption_info: RedemptionsInfo) -> Self {
+		Self { total_balance: redemption_info.total_balance.into(), count: redemption_info.count }
+	}
+}
+
+pub type RpcFeeImbalance = FeeImbalance<NumberOrHex>;
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RpcFlipSupply {
+	pub total_supply: NumberOrHex,
+	pub offchain_supply: NumberOrHex,
+}
+impl From<FlipSupply> for RpcFlipSupply {
+	fn from(flip_supply: FlipSupply) -> Self {
+		Self {
+			total_supply: flip_supply.total_supply.into(),
+			offchain_supply: flip_supply.offchain_supply.into(),
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RpcMonitoringData {
+	pub external_chains_height: ExternalChainsBlockHeight,
+	pub btc_utxos: BtcUtxos,
+	pub epoch: RpcEpochState,
+	pub pending_redemptions: RpcRedemptionsInfo,
+	pub pending_broadcasts: PendingBroadcasts,
+	pub pending_tss: PendingTssCeremonies,
+	pub open_deposit_channels: OpenDepositChannels,
+	pub fee_imbalance: RpcFeeImbalance,
+	pub authorities: AuthoritiesInfo,
+	pub build_version: LastRuntimeUpgradeInfo,
+	pub suspended_validators: Vec<(Offence, u32)>,
+	pub pending_swaps: u32,
+	pub dot_aggkey: PolkadotAccountId,
+	pub flip_supply: RpcFlipSupply,
+	pub sol_aggkey: SolAddress,
+	pub sol_onchain_key: SolAddress,
+	pub sol_nonces: SolanaNonces,
+	pub activating_key_broadcast_ids: ActivateKeysBroadcastIds,
+}
+impl From<MonitoringDataV2> for RpcMonitoringData {
+	fn from(monitoring_data: MonitoringDataV2) -> Self {
+		Self {
+			epoch: monitoring_data.epoch.into(),
+			pending_redemptions: monitoring_data.pending_redemptions.into(),
+			fee_imbalance: monitoring_data.fee_imbalance.map(|i| (*i).into()),
+			external_chains_height: monitoring_data.external_chains_height,
+			btc_utxos: monitoring_data.btc_utxos,
+			pending_broadcasts: monitoring_data.pending_broadcasts,
+			pending_tss: monitoring_data.pending_tss,
+			open_deposit_channels: monitoring_data.open_deposit_channels,
+			authorities: monitoring_data.authorities,
+			build_version: monitoring_data.build_version,
+			suspended_validators: monitoring_data.suspended_validators,
+			pending_swaps: monitoring_data.pending_swaps,
+			dot_aggkey: monitoring_data.dot_aggkey,
+			flip_supply: monitoring_data.flip_supply.into(),
+			sol_aggkey: monitoring_data.sol_aggkey,
+			sol_onchain_key: monitoring_data.sol_onchain_key,
+			sol_nonces: monitoring_data.sol_nonces,
+			activating_key_broadcast_ids: monitoring_data.activating_key_broadcast_ids,
+		}
+	}
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochState {
 	pub epoch_duration: u32,
