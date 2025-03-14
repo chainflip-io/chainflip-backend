@@ -66,16 +66,51 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
 	type Output = Vec<(T::ChainBlockNumber, T::Event)>;
 }
 
-pub struct ExecuteHook;
+// pub struct ExecuteHook;
+// impl<T> HookType for HookTypeFor<T, ExecuteHook> {
+// 	type Input = Vec<(T::ChainBlockNumber, AnyEvent<T>)>;
+// 	type Output = ();
+// }
+
+pub struct ExecuteHook<PreWitnessHook, WitnessHook>;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
-	type Input = Vec<(T::ChainBlockNumber, T::Event)>;
-	type Output = ();
+	type Input = Vec<(T::ChainBlockNumber, AnyEvent<T::Data>)>; // Generic BlockNumber + AnyEvent
+	type Output = (); // Hook produces no output
+}
+
+impl<T: BWProcessorTypes> Hook<HookTypeFor<T, ExecuteHook>> for ExecuteHook {
+	fn run(&mut self, events: Vec<(T::ChainBlockNumber, AnyEvent<T::Data>)>) {
+		for (block, event) in events {
+			match event {
+				AnyEvent::PreWitness(data) => {
+					println!("Processing PreWitness at block {:?}: {:?}", block, data);
+				},
+				AnyEvent::Witness(data) => {
+					println!("Processing Witness at block {:?}: {:?}", block, data);
+				},
+			}
+		}
+	}
 }
 
 pub struct SafetyMarginHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, SafetyMarginHook> {
 	type Input = ();
 	type Output = u32;
+}
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub enum AnyEvent<T> {
+	PreWitness(T),
+	Witness(T),
+}
+impl<T> AnyEvent<T> {
+	pub fn inner(&self) -> &T {
+		match self {
+			AnyEvent::PreWitness(dw) | AnyEvent::Witness(dw) => dw,
+		}
+	}
 }
 
 pub trait BWProcessorTypes: Sized {
@@ -88,9 +123,10 @@ pub trait BWProcessorTypes: Sized {
 		+ BlockZero
 		+ Debug
 		+ 'static;
+	type Data: PartialEq + Clone + Debug + Eq + Serde + 'static;
 	type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
 
-	type Event: Serde + Debug + Clone + Eq;
+	type Event: Serde + Debug + Clone + Eq = AnyEvent<Self::Data>;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
 	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + Serde + Debug + Clone + Eq;
 

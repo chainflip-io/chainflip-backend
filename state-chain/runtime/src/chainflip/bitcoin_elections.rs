@@ -31,7 +31,7 @@ use pallet_cf_elections::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
 			state_machine::{
-				BWProcessorTypes, BWSettings, BWState, BWStateMachine, BWTypes,
+				AnyEvent, BWProcessorTypes, BWSettings, BWState, BWStateMachine, BWTypes,
 				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
 			},
 		},
@@ -56,7 +56,7 @@ use scale_info::TypeInfo;
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
 use sp_std::vec::Vec;
 
-use super::{bitcoin_block_processor::BtcEvent, elections::TypesFor};
+use super::elections::TypesFor;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(
@@ -156,9 +156,10 @@ impls! {
 	/// Associating BW processor types
 	BWProcessorTypes {
 		type ChainBlockNumber = btc::BlockNumber;
+		type Data = DepositWitness<Bitcoin>;
 		type BlockData = BlockDataDepositChannel;
 
-		type Event = BtcEvent<DepositWitness<Bitcoin>>;
+		type Event = AnyEvent<DepositWitness<Bitcoin>>;
 		type Rules = Self;
 		type Execute = Self;
 		type SafetyMargin = Self;
@@ -252,9 +253,10 @@ impls! {
 	/// Associating BW processor types
 	BWProcessorTypes {
 		type ChainBlockNumber = BlockNumber;
+		type Data = VaultDepositWitness<Runtime, BitcoinInstance>;
 		type BlockData = BlockDataVaultDeposit;
 
-		type Event = BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>;
+		type Event = AnyEvent<VaultDepositWitness<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
 		type SafetyMargin = Self;
@@ -358,9 +360,10 @@ impls! {
 	/// Associating BW processor types
 	BWProcessorTypes {
 		type ChainBlockNumber = BlockNumber;
+		type Data = TransactionConfirmation<Runtime, BitcoinInstance>;
 		type BlockData = EgressBlockData;
 
-		type Event = BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>;
+		type Event = AnyEvent<TransactionConfirmation<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
 		type SafetyMargin = Self;
