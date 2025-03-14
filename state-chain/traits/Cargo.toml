@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 log = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Internal
 cf-chains = { workspace = true }
@@ -30,7 +31,6 @@ sp-std = { workspace = true }
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
-serde = { workspace = true, features = ["derive", "alloc"] }
 
 [features]
 default = ["std"]

@@ -98,6 +98,7 @@ use pallet_cf_pools::{
 use pallet_cf_swapping::{
 	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
 };
+use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
@@ -558,7 +559,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type DeregistrationCheck = Bonder<Self>;
+	type DeregistrationCheck = (Bonder<Self>, TradingStrategyDeregistrationCheck<Self>);
 	type WeightInfo = ();
 }
 
@@ -1040,6 +1041,14 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
+impl pallet_cf_trading_strategy::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
+	type BalanceApi = AssetBalances;
+	type PoolApi = LiquidityPools;
+	type LpRegistrationApi = LiquidityProvider;
+}
+
 #[frame_support::runtime]
 mod runtime {
 	#[runtime::runtime]
@@ -1155,6 +1164,9 @@ mod runtime {
 
 	#[runtime::pallet_index(47)]
 	pub type AssetBalances = pallet_cf_asset_balances;
+
+	#[runtime::pallet_index(48)]
+	pub type TradingStrategy = pallet_cf_trading_strategy;
 }
 
 /// The address format for describing accounts.
@@ -1251,6 +1263,8 @@ pub type PalletExecutionOrder = (
 	SolanaIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
+	// Miscellaneous
+	TradingStrategy,
 );
 
 /// Contains:
@@ -1311,6 +1325,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
+	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 );
 
 macro_rules! instanced_migrations {
@@ -1389,6 +1404,7 @@ mod benches {
 		[pallet_cf_cfe_interface, CfeInterface]
 		[pallet_cf_asset_balances, AssetBalances]
 		[pallet_cf_elections, SolanaElections]
+		[pallet_cf_trading_strategy, TradingStrategy]
 	);
 }
 
@@ -2835,6 +2851,14 @@ mod test {
 	use super::*;
 
 	const CALL_ENUM_MAX_SIZE: usize = 320;
+
+	#[test]
+	fn account_id_size() {
+		assert!(
+			core::mem::size_of::<AccountId>() <= 32,
+			r"Our use of blake2_256 to derive account ids requires that account ids are no larger than 32 bytes"
+		);
+	}
 
 	// Introduced from polkadot
 	#[test]
