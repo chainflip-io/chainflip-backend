@@ -143,21 +143,8 @@ async function setMockmode(mode: Mockmode) {
  * @param txid Hash of the transaction we want to report.
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
-async function setTxRiskScore(chain: SupportedChain, txid: string, score: number) {
-  let endpoint;
-  switch (chain) {
-    case 'Bitcoin':
-      endpoint = ':6070/riskscore';
-      break;
-
-    case 'Ethereum':
-      endpoint = ':6070/riskscore_eth';
-      break;
-
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
-  }
-  await postToDepositMonitor(endpoint, [
+async function setTxRiskScore(txid: string, score: number) {
+  await postToDepositMonitor(':6070/riskscore', [
     txid,
     {
       risk_score: { Score: score },
@@ -447,7 +434,7 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
   let btcRefundAddress = await newAssetAddress('Btc');
 
   await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, async (txId) =>
-    setTxRiskScore('Bitcoin', txId, 9.0),
+    setTxRiskScore(txId, 9.0),
   );
 
   await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
@@ -465,7 +452,7 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
     btcRefundAddress = await newAssetAddress('Btc');
 
     await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, async (txId) =>
-      setTxRiskScore('Bitcoin', txId, 9.0),
+      setTxRiskScore(txId, 9.0),
     );
     await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
@@ -512,26 +499,26 @@ async function main() {
   // test rejection of swaps by the responsible broker
   await Promise.all([
     testBrokerLevelScreeningBitcoin(),
-    testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
-    testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore('Ethereum', txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
   // test rejection of LP deposits, this requires the rejecting broker to be whitelisted:
   await setWhitelistedBroker(broker.addressRaw);
   await Promise.all([
     testBrokerLevelScreeningEthereumLiquidityDeposit('Eth', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
+      setTxRiskScore(txId, 9.0),
     ),
     testBrokerLevelScreeningEthereumLiquidityDeposit('Usdt', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
+      setTxRiskScore(txId, 9.0),
     ),
     testBrokerLevelScreeningEthereumLiquidityDeposit('Flip', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
+      setTxRiskScore(txId, 9.0),
     ),
     testBrokerLevelScreeningEthereumLiquidityDeposit('Usdc', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
+      setTxRiskScore(txId, 9.0),
     ),
   ]);
 
