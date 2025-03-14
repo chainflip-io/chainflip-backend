@@ -27,76 +27,27 @@ impl Config for StateChainConfig {
 	>;
 }
 
-/// This macro generates a strongly typed API from a WASM file. All cf types are substituted with
-/// new corresponding types that implement some extra traits, allowing subxt to scale encode/decode
-/// these cf types. However, this makes it challenging to convert from the newly generated subxt
-/// types to cf types, especially for complex hierarchical types. The trick is use the
-/// `substitute_type` directive to instruct the subxt macro to use certain types in place of the
-/// default generated types. For example:
-/// ```ignore
-/// substitute_type(
-///     path = "cf_chains::ChannelRefundParameters<A>",
-///     with = "::subxt::utils::Static<cf_chains::ChannelRefundParameters<A>>"
-/// )
-/// ```
-/// * This will generate: ::subxt::utils::Static<cf_chains::ChannelRefundParameters<A>> in place of
-///   the default runtime_types::cf_chains::ChannelRefundParameters<A>
-/// * The `::subxt::utils::Static` is required to wrap the type and implement the necessary
-///   `EncodeAsType` and `DecodeAsType` traits.
-/// * Any cf type that needs to be substituted must be defined in the `substitute_type` directive.
-/// * For any other complex types with multiple hierarchies or generics, please add manual
-///   conversion functions below.
-#[cfg(not(debug_assertions))]
-#[subxt::subxt(
-	runtime_path = "../../target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm",
-	substitute_type(
-		path = "primitive_types::U256",
-		with = "::subxt::utils::Static<sp_core::U256>"
-	),
-	substitute_type(
-		path = "cf_chains::address::EncodedAddress",
-		with = "::subxt::utils::Static<cf_chains::address::EncodedAddress>"
-	),
-	substitute_type(
-		path = "cf_primitives::chains::assets::any::Asset",
-		with = "::subxt::utils::Static<cf_primitives::chains::assets::any::Asset>"
-	),
-	substitute_type(
-		path = "cf_primitives::chains::ForeignChain",
-		with = "::subxt::utils::Static<cf_primitives::chains::ForeignChain>"
-	),
-	substitute_type(
-		path = "cf_amm::common::Side",
-		with = "::subxt::utils::Static<cf_amm::common::Side>"
-	)
-)]
-pub mod cf_static_runtime {}
+// The subxt macro (defined in the build script), generates a strongly typed API from a WASM file.
+// All cf types are substituted with new corresponding types that implement some extra traits,
+// allowing subxt to scale encode/decode these cf types. However, this makes it challenging to
+// convert from the newly generated subxt types to cf types, especially for complex hierarchical
+// types. The trick is use the `substitute_type` directive to instruct the subxt macro to use
+// certain types in place of the default generated types. For example:
+// ```ignore
+// substitute_type(
+// 	 path = "cf_chains::address::EncodedAddress",
+//   with = "::subxt::utils::Static<cf_chains::address::EncodedAddress>"
+// ),
+// ```
+// * This will generate: ::subxt::utils::Static<cf_chains::address::EncodedAddress> in place of the
+//   default runtime_types::cf_chains::address::EncodedAddress
+// * The `::subxt::utils::Static` is required to wrap the type and implement the necessary
+//   `EncodeAsType` and `DecodeAsType` traits.
+// * Any cf type that needs to be substituted must be defined in the `substitute_type` directive.
+// * For any other complex types with multiple hierarchies or generics, please add manual conversion
+//   functions below.
 
-#[cfg(debug_assertions)]
-#[subxt::subxt(
-	runtime_path = "../../target/debug/wbuild/state-chain-runtime/state_chain_runtime.wasm",
-	substitute_type(
-		path = "primitive_types::U256",
-		with = "::subxt::utils::Static<sp_core::U256>"
-	),
-	substitute_type(
-		path = "cf_chains::address::EncodedAddress",
-		with = "::subxt::utils::Static<cf_chains::address::EncodedAddress>"
-	),
-	substitute_type(
-		path = "cf_primitives::chains::assets::any::Asset",
-		with = "::subxt::utils::Static<cf_primitives::chains::assets::any::Asset>"
-	),
-	substitute_type(
-		path = "cf_primitives::chains::ForeignChain",
-		with = "::subxt::utils::Static<cf_primitives::chains::ForeignChain>"
-	),
-	substitute_type(
-		path = "cf_amm::common::Side",
-		with = "::subxt::utils::Static<cf_amm::common::Side>"
-	)
-)]
-pub mod cf_static_runtime {}
+include!(concat!(env!("OUT_DIR"), "/cf_static_runtime.rs"));
 
 // Conversions from cf_static_runtime::runtime_types
 impl<T> From<cf_static_runtime::runtime_types::cf_chains::ChannelRefundParameters<T>>
