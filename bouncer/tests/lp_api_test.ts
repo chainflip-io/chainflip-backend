@@ -1,6 +1,5 @@
 import { InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
-import Keyring from '../polkadot/keyring';
 import {
   isValidHexHash,
   isValidEthAddress,
@@ -408,11 +407,9 @@ async function testLimitOrder(logger: Logger) {
 
 async function testOnChainSwap(logger: Logger) {
   const lp = createStateChainKeypair('//LP_API');
-  const observeSwappingCreditedOnChainEvent = observeEvent(logger, 'swapping:CreditedOnChain', {
-    test: (event) => event.data.accountId === lp.address,
-  }).event;
 
-  const RequestId = (
+  // Start an on chain swap
+  const swapRequestId = (
     await lpApiRpc(logger, `lp_on_chain_swap`, [
       testAssetAmount,
       testRpcAsset,
@@ -421,10 +418,16 @@ async function testOnChainSwap(logger: Logger) {
       '0x0', // minimum price
     ])
   ).tx_details.response;
-  logger.debug(`On chain swap request id: ${RequestId}`);
-  assert(RequestId > 0, 'Unexpected on chain swap request id');
+  logger.debug(`On chain swap request id: ${swapRequestId}`);
+  assert(swapRequestId > 0, 'Unexpected on chain swap request id');
 
-  await observeSwappingCreditedOnChainEvent;
+  // Wait for the swap to complete
+  await observeEvent(logger, 'swapping:CreditedOnChain', {
+    test: (event) =>
+      event.data.accountId === lp.address &&
+      Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
+    historicalCheckBlocks: 3,
+  });
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
