@@ -460,13 +460,15 @@ export enum TransactionOrigin {
   VaultSwapEvm = 'VaultSwapEvm',
   VaultSwapSolana = 'VaultSwapSolana',
   VaultSwapBitcoin = 'VaultSwapBitcoin',
+  OnChainAccount = 'OnChainAccount',
 }
 
 export type TransactionOriginId =
   | { type: TransactionOrigin.DepositChannel; channelId: number }
   | { type: TransactionOrigin.VaultSwapEvm; txHash: string }
   | { type: TransactionOrigin.VaultSwapSolana; addressAndSlot: [string, number] }
-  | { type: TransactionOrigin.VaultSwapBitcoin; txId: string };
+  | { type: TransactionOrigin.VaultSwapBitcoin; txId: string }
+  | { type: TransactionOrigin.OnChainAccount; accountId: string };
 
 function checkRequestTypeMatches(actual: object | string, expected: SwapRequestType) {
   if (typeof actual === 'object') {
@@ -501,6 +503,12 @@ function checkTransactionInMatches(actual: any, expected: TransactionOriginId): 
             [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
               .map((x) => x.toString(16).padStart(2, '0'))
               .join(''))
+    );
+  }
+  if ('OnChainAccount' in actual) {
+    return (
+      expected.type === TransactionOrigin.OnChainAccount &&
+      actual.OnChainAccount.accountId === expected.accountId
     );
   }
   throw new Error(`Unsupported transaction origin type ${actual}`);

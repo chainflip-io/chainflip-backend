@@ -1,6 +1,5 @@
 import { InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
-import Keyring from '../polkadot/keyring';
 import {
   isValidHexHash,
   isValidEthAddress,
@@ -15,6 +14,7 @@ import {
   handleSubstrateError,
   shortChainFromAsset,
   newAddress,
+  createStateChainKeypair,
 } from '../shared/utils';
 import { lpApiRpc } from '../shared/json_rpc';
 import { depositLiquidity } from '../shared/deposit_liquidity';
@@ -155,10 +155,8 @@ async function testTransferAsset(logger: Logger) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ((await chainflip.query.assetBalances.freeBalances(account, testAsset)) as any).toBigInt();
 
-  const keyring = new Keyring({ type: 'sr25519' });
-
-  const sourceLpAccount = keyring.createFromUri('//LP_API');
-  const destinationLpAccount = keyring.createFromUri('//LP_2');
+  const sourceLpAccount = createStateChainKeypair('//LP_API');
+  const destinationLpAccount = createStateChainKeypair('//LP_2');
 
   // Destination account needs a refund address too.
   const chain = shortChainFromAsset(testAsset);
@@ -407,6 +405,31 @@ async function testLimitOrder(logger: Logger) {
   assert.strictEqual(matchBurn, true, `Expected burn of limit order to decrease liquidity to 0`);
 }
 
+async function testOnChainSwap(logger: Logger) {
+  const lp = createStateChainKeypair('//LP_API');
+
+  // Start an on chain swap
+  const swapRequestId = (
+    await lpApiRpc(logger, `lp_on_chain_swap`, [
+      testAssetAmount,
+      testRpcAsset,
+      'USDC',
+      0, // retry duration
+      '0x0', // minimum price
+    ])
+  ).tx_details.response;
+  logger.debug(`On chain swap request id: ${swapRequestId}`);
+  assert(swapRequestId > 0, 'Unexpected on chain swap request id');
+
+  // Wait for the swap to complete
+  await observeEvent(logger, 'swapping:CreditedOnChain', {
+    test: (event) =>
+      event.data.accountId === lp.address &&
+      Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
+    historicalCheckBlocks: 3,
+  });
+}
+
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
 export async function testLpApi(testContext: TestContext) {
   // Provide the amount of liquidity needed for the tests
@@ -420,6 +443,7 @@ export async function testLpApi(testContext: TestContext) {
     testRangeOrder(testContext.logger),
     testLimitOrder(testContext.logger),
     testGetOpenSwapChannels(testContext.logger),
+    testOnChainSwap(testContext.logger),
   ]);
 
   await testTransferAsset(testContext.logger);
