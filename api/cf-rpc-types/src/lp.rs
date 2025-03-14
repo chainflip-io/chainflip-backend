@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::{address::AddressString, Arbitrum, Solana};
+use cf_chains::{address::AddressString, AnyChain, Arbitrum, Chain, Solana};
 use cf_primitives::*;
 use sp_core::{
 	serde::{Deserialize, Serialize},
@@ -137,7 +137,7 @@ impl TryFrom<CloseOrderJson> for CloseOrder {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct LiquidityDepositDetails {
+pub struct LiquidityDepositChannelDetails {
 	pub deposit_address: AddressString,
-	pub deposit_chain_expiry_block: u64,
+	pub deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 }
