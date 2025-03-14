@@ -158,7 +158,8 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcFeeImbalance> {
-		self.with_runtime_api::<_, _>(at, |api, hash| api.cf_fee_imbalance(hash))
+		self.rpc_backend
+			.with_runtime_api::<_, _>(at, |api, hash| api.cf_fee_imbalance(hash))
 			.map(|imbalance| imbalance.map(|i| (*i).into()))
 	}
 
@@ -167,8 +168,9 @@ where
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>> {
-		let accounts_info =
-			self.with_runtime_api(at, |api, hash| api.cf_accounts_info(hash, accounts))?;
+		let accounts_info = self
+			.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_accounts_info(hash, accounts))?;
 		Ok(accounts_info
 			.into_iter()
 			.map(|account_info| RpcAccountInfoV2 {

@@ -14,7 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{boost_pool_rpc::BoostPoolFeesRpc, monitoring::RpcEpochState};
+use crate::{
+	backend::{CustomRpcBackend, NotificationBehaviour},
+	boost_pool_rpc::BoostPoolFeesRpc,
+	monitoring::RpcEpochState,
+};
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
 	common::{PoolPairsMap, Side},
@@ -35,7 +39,6 @@ use cf_primitives::{
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
-use futures::{stream, stream::StreamExt, FutureExt};
 use jsonrpsee::{
 	core::async_trait,
 	proc_macros::rpc,
@@ -43,7 +46,7 @@ use jsonrpsee::{
 		error::{ErrorObject, ErrorObjectOwned},
 		ErrorCode,
 	},
-	PendingSubscriptionSink, RpcModule,
+	PendingSubscriptionSink,
 };
 use order_fills::OrderFills;
 use pallet_cf_governance::GovCallHash;
@@ -56,14 +59,11 @@ use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
 };
-use sc_rpc_spec_v2::chain_head::{
-	api::ChainHeadApiServer, ChainHead, ChainHeadConfig, FollowEvent,
-};
 use serde::{Deserialize, Serialize};
 use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
+	traits::{Block as BlockT, UniqueSaturatedInto},
 	AccountId32, Percent, Permill,
 };
 use sp_state_machine::InspectState;
@@ -90,6 +90,7 @@ use std::{
 	sync::Arc,
 };
 
+pub mod backend;
 pub mod monitoring;
 pub mod order_fills;
 
@@ -1052,10 +1053,7 @@ pub trait CustomApi {
 
 /// An RPC extension for the state chain node.
 pub struct CustomRpc<C, B, BE> {
-	pub client: Arc<C>,
-	pub backend: Arc<BE>,
-	pub executor: Arc<dyn sp_core::traits::SpawnNamed>,
-	pub _phantom: PhantomData<B>,
+	pub rpc_backend: CustomRpcBackend<C, B, BE>,
 }
 
 impl<C, B, BE> CustomRpc<C, B, BE>
@@ -1063,25 +1061,12 @@ where
 	B: BlockT<Hash = state_chain_runtime::Hash>,
 	C: Send + Sync + 'static + HeaderBackend<B>,
 {
-	fn unwrap_or_best(&self, from_rpc: Option<<B as BlockT>::Hash>) -> B::Hash {
-		from_rpc.unwrap_or_else(|| self.client.info().best_hash)
-	}
-}
-
-impl<C, B, BE> CustomRpc<C, B, BE>
-where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: Send + Sync + 'static + HeaderBackend<B> + sp_api::ProvideRuntimeApi<B>,
-{
-	fn with_runtime_api<E, R>(
-		&self,
-		at: Option<Hash>,
-		f: impl FnOnce(&C::Api, Hash) -> Result<R, E>,
-	) -> RpcResult<R>
-	where
-		CfApiError: From<E>,
-	{
-		Ok(f(&*self.client.runtime_api(), self.unwrap_or_best(at))?)
+	pub fn new(
+		client: Arc<C>,
+		backend: Arc<BE>,
+		executor: Arc<dyn sp_core::traits::SpawnNamed>,
+	) -> Self {
+		Self { rpc_backend: CustomRpcBackend::new(client, backend, executor) }
 	}
 }
 
@@ -1213,7 +1198,7 @@ macro_rules! pass_through {
 	($( $name:ident ( $( $arg:ident: $argt:ty ),* $(,)? ) -> $result_type:ty $([map: $mapping:expr])? ),+ $(,)?) => {
 		$(
 			fn $name(&self, $( $arg: $argt, )* at: Option<state_chain_runtime::Hash>,) -> RpcResult<$result_type> {
-				self.with_runtime_api(at, |api, hash| api.$name(hash, $($arg),* ))
+				self.rpc_backend.with_runtime_api(at, |api, hash| api.$name(hash, $($arg),* ))
 					$(.map($mapping))?
 			}
 		)+
@@ -1226,7 +1211,7 @@ macro_rules! pass_through_and_flatten {
 		$(
 			fn $name(&self, $( $arg: $argt, )* at: Option<state_chain_runtime::Hash>,) -> RpcResult<$result_type> {
 				flatten_into_error(
-					self.with_runtime_api(at, |api, hash| api.$name(hash, $($arg),* ))
+					self.rpc_backend.with_runtime_api(at, |api, hash| api.$name(hash, $($arg),* ))
 						$(.map($mapping))?
 				)
 			}
@@ -1333,11 +1318,13 @@ where
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
 		#[allow(deprecated)]
-		self.with_runtime_api(None, |api, hash| api.cf_current_compatibility_version(hash))
+		self.rpc_backend
+			.with_runtime_api(None, |api, hash| api.cf_current_compatibility_version(hash))
 	}
 
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>> {
-		self.with_runtime_api(None, |api, hash| api.cf_max_swap_amount(hash, asset))
+		self.rpc_backend
+			.with_runtime_api(None, |api, hash| api.cf_max_swap_amount(hash, asset))
 	}
 
 	fn cf_tx_fee_multiplier(&self, _at: Option<Hash>) -> RpcResult<u64> {
@@ -1350,7 +1337,7 @@ where
 		epoch_index: Option<EpochIndex>,
 		at: Option<Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>> {
-		self.with_runtime_api(at, |api, block_hash| {
+		self.rpc_backend.with_runtime_api(at, |api, block_hash| {
 			api.cf_witness_count(
 				block_hash,
 				pallet_cf_witnesser::CallHash(call_hash.into()),
@@ -1367,7 +1354,7 @@ where
 		filled_orders: Option<bool>,
 		at: Option<Hash>,
 	) -> RpcResult<PoolOrders<state_chain_runtime::Runtime>> {
-		flatten_into_error(self.with_runtime_api(at, |api, hash| {
+		flatten_into_error(self.rpc_backend.with_runtime_api(at, |api, hash| {
 			api.cf_pool_orders(hash, base_asset, quote_asset, lp, filled_orders.unwrap_or_default())
 		}))
 	}
@@ -1377,7 +1364,7 @@ where
 		quote_asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolPriceV2> {
-		self.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(PoolPriceV2 {
 				base_asset,
 				quote_asset,
@@ -1391,7 +1378,7 @@ where
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfo> {
-		self.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			let balance = api.cf_account_flip_balance(hash, &account_id)?;
 			let asset_balances = api.cf_free_balances(hash, account_id.clone())?;
 
@@ -1435,8 +1422,9 @@ where
 		account_id: state_chain_runtime::AccountId,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<RpcAccountInfoV2> {
-		let account_info =
-			self.with_runtime_api(at, |api, hash| api.cf_validator_info(hash, &account_id))?;
+		let account_info = self
+			.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_validator_info(hash, &account_id))?;
 
 		Ok(RpcAccountInfoV2 {
 			balance: account_info.balance.into(),
@@ -1542,7 +1530,7 @@ where
 				})
 				.collect()
 		});
-		self.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(
 				api.cf_pool_simulate_swap(
 					hash,
@@ -1566,7 +1554,7 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<IngressEgressEnvironment> {
-		self.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			let mut witness_safety_margins = HashMap::new();
 			let mut channel_opening_fees = HashMap::new();
 
@@ -1598,7 +1586,7 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<SwappingEnvironment> {
-		self.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			let swap_limits = api.cf_swap_limits(hash)?;
 			Ok::<_, CfApiError>(SwappingEnvironment {
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
@@ -1619,7 +1607,7 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<FundingEnvironment> {
-		self.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(FundingEnvironment {
 				redemption_tax: api.cf_redemption_tax(hash)?.into(),
 				minimum_funding_amount: api.cf_min_funding(hash)?.into(),
@@ -1631,7 +1619,7 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment> {
-		self.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(PoolsEnvironment {
 				fees: {
 					let mut map = AssetMap::default();
@@ -1662,16 +1650,17 @@ where
 		from_asset: Asset,
 		to_asset: Asset,
 	) {
-		self.new_subscription(
-			Default::default(), /* notification_behaviour */
-			true,               /* only_on_changes */
-			false,              /* end_on_error */
-			pending_sink,
-			move |client, hash| {
-				Ok((*client.runtime_api()).cf_pool_price(hash, from_asset, to_asset)?)
-			},
-		)
-		.await
+		self.rpc_backend
+			.new_subscription(
+				Default::default(), /* notification_behaviour */
+				true,               /* only_on_changes */
+				false,              /* end_on_error */
+				pending_sink,
+				move |client, hash| {
+					Ok((*client.runtime_api()).cf_pool_price(hash, from_asset, to_asset)?)
+				},
+			)
+			.await
 	}
 
 	async fn cf_subscribe_pool_price_v2(
@@ -1680,38 +1669,42 @@ where
 		base_asset: Asset,
 		quote_asset: Asset,
 	) {
-		self.new_subscription(
-			Default::default(), /* notification_behaviour */
-			false,              /* only_on_changes */
-			true,               /* end_on_error */
-			pending_sink,
-			move |client, hash| {
-				Ok(PoolPriceV2 {
-					base_asset,
-					quote_asset,
-					price: (*client.runtime_api()).cf_pool_price_v2(
-						hash,
+		self.rpc_backend
+			.new_subscription(
+				Default::default(), /* notification_behaviour */
+				false,              /* only_on_changes */
+				true,               /* end_on_error */
+				pending_sink,
+				move |client, hash| {
+					Ok(PoolPriceV2 {
 						base_asset,
 						quote_asset,
-					)??,
-				})
-			},
-		)
-		.await
+						price: (*client.runtime_api()).cf_pool_price_v2(
+							hash,
+							base_asset,
+							quote_asset,
+						)??,
+					})
+				},
+			)
+			.await
 	}
 
 	async fn cf_subscribe_transaction_screening_events(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 	) {
-		self.new_subscription(
-			NotificationBehaviour::Finalized, /* only_finalized */
-			false,                            /* only_on_changes */
-			true,                             /* end_on_error */
-			pending_sink,
-			move |client, hash| Ok((*client.runtime_api()).cf_transaction_screening_events(hash)?),
-		)
-		.await;
+		self.rpc_backend
+			.new_subscription(
+				NotificationBehaviour::Finalized, /* only_finalized */
+				false,                            /* only_on_changes */
+				true,                             /* end_on_error */
+				pending_sink,
+				move |client, hash| {
+					Ok((*client.runtime_api()).cf_transaction_screening_events(hash)?)
+				},
+			)
+			.await;
 	}
 
 	async fn cf_subscribe_scheduled_swaps(
@@ -1721,8 +1714,8 @@ where
 		quote_asset: Asset,
 	) {
 		// Check that the requested pool exists:
-		let Ok(Ok(_)) = self.client.runtime_api().cf_pool_info(
-			self.client.info().best_hash,
+		let Ok(Ok(_)) = self.rpc_backend.client.runtime_api().cf_pool_info(
+			self.rpc_backend.client.info().best_hash,
 			base_asset,
 			quote_asset,
 		) else {
@@ -1730,22 +1723,23 @@ where
 			return;
 		};
 
-		self.new_subscription(
-			Default::default(), /* notification_behaviour */
-			false,              /* only_on_changes */
-			true,               /* end_on_error */
-			pending_sink,
-			move |client, hash| {
-				Ok(SwapResponse {
-					swaps: (*client.runtime_api())
-						.cf_scheduled_swaps(hash, base_asset, quote_asset)?
-						.into_iter()
-						.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
-						.collect(),
-				})
-			},
-		)
-		.await;
+		self.rpc_backend
+			.new_subscription(
+				Default::default(), /* notification_behaviour */
+				false,              /* only_on_changes */
+				true,               /* end_on_error */
+				pending_sink,
+				move |client, hash| {
+					Ok(SwapResponse {
+						swaps: (*client.runtime_api())
+							.cf_scheduled_swaps(hash, base_asset, quote_asset)?
+							.into_iter()
+							.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
+							.collect(),
+					})
+				},
+			)
+			.await;
 	}
 
 	fn cf_scheduled_swaps(
@@ -1755,13 +1749,14 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<ScheduledSwap>> {
 		// Check that the requested pool exists:
-		let _ = (*self.client.runtime_api()).cf_pool_info(
-			self.client.info().best_hash,
+		let _ = (*self.rpc_backend.client.runtime_api()).cf_pool_info(
+			self.rpc_backend.client.info().best_hash,
 			base_asset,
 			quote_asset,
 		)?;
 
-		self.with_runtime_api(at, |api, hash| api.cf_scheduled_swaps(hash, base_asset, quote_asset))
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_scheduled_swaps(hash, base_asset, quote_asset))
 			.map(|swaps| {
 				swaps
 					.into_iter()
@@ -1771,14 +1766,15 @@ where
 	}
 
 	async fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
-		self.new_subscription(
-			NotificationBehaviour::Finalized,
-			false,
-			true,
-			sink,
-			move |client, hash| order_fills::order_fills_for_block(client, hash),
-		)
-		.await
+		self.rpc_backend
+			.new_subscription(
+				NotificationBehaviour::Finalized,
+				false,
+				true,
+				sink,
+				move |client, hash| order_fills::order_fills_for_block(client, hash),
+			)
+			.await
 	}
 
 	fn cf_lp_get_order_fills(
@@ -1786,8 +1782,8 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BlockUpdate<OrderFills>> {
 		order_fills::order_fills_for_block(
-			self.client.as_ref(),
-			at.unwrap_or_else(|| self.client.info().finalized_hash),
+			self.rpc_backend.client.as_ref(),
+			at.unwrap_or_else(|| self.rpc_backend.client.info().finalized_hash),
 		)
 	}
 
@@ -1801,7 +1797,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BoostPoolDetailsResponse> {
 		execute_for_all_or_one_asset(asset, |asset| {
-			self.with_runtime_api(at, |api, hash| {
+			self.rpc_backend.with_runtime_api(at, |api, hash| {
 				api.cf_boost_pool_details(hash, asset).map(|details_for_each_pool| {
 					details_for_each_pool
 						.into_iter()
@@ -1818,7 +1814,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BoostPoolFeesResponse> {
 		execute_for_all_or_one_asset(asset, |asset| {
-			self.with_runtime_api(at, |api, hash| {
+			self.rpc_backend.with_runtime_api(at, |api, hash| {
 				api.cf_boost_pool_details(hash, asset).map(|details_for_each_pool| {
 					details_for_each_pool
 						.into_iter()
@@ -1830,7 +1826,7 @@ where
 	}
 
 	fn cf_available_pools(&self, at: Option<Hash>) -> RpcResult<Vec<PoolPairsMap<Asset>>> {
-		self.with_runtime_api(at, |api, hash| api.cf_pools(hash))
+		self.rpc_backend.with_runtime_api(at, |api, hash| api.cf_pools(hash))
 	}
 
 	fn cf_solana_electoral_data(
@@ -1838,7 +1834,8 @@ where
 		validator: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
-		self.with_runtime_api(at, |api, hash| api.cf_electoral_data(hash, validator))
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_electoral_data(hash, validator))
 	}
 
 	fn cf_solana_filter_votes(
@@ -1847,7 +1844,8 @@ where
 		proposed_votes: Vec<u8>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
-		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
 	}
 
 	fn cf_request_swap_parameter_encoding(
@@ -1864,7 +1862,7 @@ where
 		dca_parameters: Option<DcaParameters>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapDetails<AddressString>> {
-		self.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(
 				api.cf_request_swap_parameter_encoding(
 					hash,
@@ -1888,208 +1886,8 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TransactionScreeningEvents> {
-		self.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
-	}
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum NotificationBehaviour {
-	/// Subscription will return finalized blocks.
-	Finalized,
-	/// Subscription will return best blocks. In the case of a re-org it might drop events.
-	#[default]
-	Best,
-	/// Subscription will return all new blocks. In the case of a re-org it might duplicate events.
-	///
-	/// The caller is responsible for de-duplicating events.
-	New,
-}
-
-impl<C, B, BE> CustomRpc<C, B, BE>
-where
-	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
-	B::Header: Unpin,
-	BE: Send + Sync + 'static + Backend<B>,
-	C: sp_api::ProvideRuntimeApi<B>
-		+ Send
-		+ Sync
-		+ 'static
-		+ BlockBackend<B>
-		+ ExecutorProvider<B>
-		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
-		+ BlockchainEvents<B>
-		+ CallApiAt<B>
-		+ StorageProvider<B, BE>,
-	C::Api: CustomRuntimeApi<B>,
-{
-	fn chain_head_api(&self) -> RpcModule<ChainHead<BE, B, C>> {
-		ChainHead::new(
-			self.client.clone(),
-			self.backend.clone(),
-			self.executor.clone(),
-			ChainHeadConfig::default(),
-		)
-		.into_rpc()
-	}
-
-	async fn new_subscription<
-		T: Serialize + Send + Clone + Eq + 'static,
-		F: Fn(&C, state_chain_runtime::Hash) -> Result<T, CfApiError> + Send + Clone + 'static,
-	>(
-		&self,
-		notification_behaviour: NotificationBehaviour,
-		only_on_changes: bool,
-		end_on_error: bool,
-		sink: PendingSubscriptionSink,
-		f: F,
-	) {
-		self.new_subscription_with_state(
-			notification_behaviour,
-			only_on_changes,
-			end_on_error,
-			sink,
-			move |client, hash, _state| f(client, hash).map(|res| (res, ())),
-		)
-		.await
-	}
-
-	/// The subscription will return the first value immediately and then either return new values
-	/// only when it changes, or every new block.
-	/// Note depending on the notification_behaviour blocks can be skipped. Also this
-	/// subscription can either filter out, or end the stream if the provided async closure returns
-	/// an error.
-	async fn new_subscription_with_state<
-		T: Serialize + Send + Clone + Eq + 'static,
-		// State to carry forward between calls to the closure.
-		S: 'static + Clone + Send,
-		F: Fn(&C, state_chain_runtime::Hash, Option<&S>) -> Result<(T, S), CfApiError>
-			+ Send
-			+ Clone
-			+ 'static,
-	>(
-		&self,
-		notification_behaviour: NotificationBehaviour,
-		only_on_changes: bool,
-		end_on_error: bool,
-		pending_sink: PendingSubscriptionSink,
-		f: F,
-	) {
-		// subscribe to the chain head
-		let Ok(subscription) =
-			self.chain_head_api().subscribe_unbounded("chainHead_v1_follow", [false]).await
-		else {
-			pending_sink
-				.reject(internal_error("chainHead_v1_follow subscription failed"))
-				.await;
-			return;
-		};
-
-		// construct either best, new or finalized blocks stream from the chain head subscription
-		let blocks_stream = stream::unfold(subscription, move |mut sub| async move {
-			match sub.next::<FollowEvent<Hash>>().await {
-				Some(Ok((event, _subs_id))) => Some((event, sub)),
-				Some(Err(e)) => {
-					log::warn!("ChainHead subscription error {:?}", e);
-					None
-				},
-				_ => None,
-			}
-		})
-		.filter_map(move |event| async move {
-			// When NotificationBehaviour is:
-			// * NotificationBehaviour::Finalized: listen to initialized and finalized events
-			// * NotificationBehaviour::Best: listen to just bestBlockChanged events
-			// * NotificationBehaviour::New: listen to just newBlock events
-			// See: https://paritytech.github.io/json-rpc-interface-spec/api/chainHead_v1_follow.html
-			match (notification_behaviour, event) {
-				(
-					// Always start from the most recent finalized block hash
-					NotificationBehaviour::Finalized,
-					FollowEvent::Initialized(sc_rpc_spec_v2::chain_head::Initialized {
-						mut finalized_block_hashes,
-						..
-					}),
-				) => Some(vec![finalized_block_hashes
-					.pop()
-					.expect("Guaranteed to have at least one element.")]),
-				(
-					NotificationBehaviour::Finalized,
-					FollowEvent::Finalized(sc_rpc_spec_v2::chain_head::Finalized {
-						finalized_block_hashes,
-						..
-					}),
-				) => Some(finalized_block_hashes),
-				(
-					NotificationBehaviour::Best,
-					FollowEvent::BestBlockChanged(sc_rpc_spec_v2::chain_head::BestBlockChanged {
-						best_block_hash,
-					}),
-				) => Some(vec![best_block_hash]),
-				(
-					NotificationBehaviour::New,
-					FollowEvent::NewBlock(sc_rpc_spec_v2::chain_head::NewBlock {
-						block_hash, ..
-					}),
-				) => Some(vec![block_hash]),
-				_ => None,
-			}
-		})
-		.map(stream::iter)
-		.flatten();
-
-		let stream = blocks_stream
-			.filter_map({
-				let client = self.client.clone();
-
-				let mut previous_item = None;
-				let mut previous_state = None;
-
-				move |hash| {
-					futures::future::ready(match f(&client, hash, previous_state.as_ref()) {
-						Ok((new_item, new_state))
-							if !only_on_changes || Some(&new_item) != previous_item.as_ref() =>
-						{
-							previous_item = Some(new_item.clone());
-							previous_state = Some(new_state);
-
-							if let Ok(Some(header)) = client.header(hash) {
-								Some(Ok(BlockUpdate {
-									block_hash: hash,
-									block_number: *header.number(),
-									data: new_item,
-								}))
-							} else if end_on_error {
-								Some(Err(internal_error(format!(
-									"Could not fetch block header for block {:?}",
-									hash
-								))))
-							} else {
-								None
-							}
-						},
-						Err(error) => {
-							log::warn!("Subscription Error: {error}.");
-							if end_on_error {
-								log::warn!("Closing Subscription.");
-								Some(Err(ErrorObjectOwned::from(error)))
-							} else {
-								None
-							}
-						},
-						_ => None,
-					})
-				}
-			})
-			.take_while(|item| futures::future::ready(item.is_ok()))
-			.map(Result::unwrap)
-			.boxed();
-
-		self.executor.spawn(
-			"cf-rpc-update-subscription",
-			Some("rpc"),
-			sc_rpc::utils::pipe_from_stream(pending_sink, stream).boxed(),
-		);
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
 	}
 }
 
