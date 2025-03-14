@@ -123,7 +123,7 @@ pub trait SwapRequestHandler {
 		)
 	}
 
-	fn init_on_chain_swap_request(
+	fn init_internal_swap_request(
 		input_asset: Asset,
 		input_amount: AssetAmount,
 		output_asset: Asset,

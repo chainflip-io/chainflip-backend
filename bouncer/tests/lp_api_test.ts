@@ -405,12 +405,12 @@ async function testLimitOrder(logger: Logger) {
   assert.strictEqual(matchBurn, true, `Expected burn of limit order to decrease liquidity to 0`);
 }
 
-async function testOnChainSwap(logger: Logger) {
+async function testInternalSwap(logger: Logger) {
   const lp = createStateChainKeypair('//LP_API');
 
   // Start an on chain swap
   const swapRequestId = (
-    await lpApiRpc(logger, `lp_on_chain_swap`, [
+    await lpApiRpc(logger, `lp_schedule_swap`, [
       testAssetAmount,
       testRpcAsset,
       'USDC',
@@ -443,7 +443,7 @@ export async function testLpApi(testContext: TestContext) {
     testRangeOrder(testContext.logger),
     testLimitOrder(testContext.logger),
     testGetOpenSwapChannels(testContext.logger),
-    testOnChainSwap(testContext.logger),
+    testInternalSwap(testContext.logger),
   ]);
 
   await testTransferAsset(testContext.logger);

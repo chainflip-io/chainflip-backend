@@ -177,8 +177,8 @@ pub trait Rpc {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 
-	#[method(name = "on_chain_swap")]
-	async fn on_chain_swap(
+	#[method(name = "schedule_swap")]
+	async fn schedule_swap(
 		&self,
 		amount: NumberOrHex,
 		input_asset: Asset,
@@ -582,7 +582,7 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn on_chain_swap(
+	async fn schedule_swap(
 		&self,
 		amount: NumberOrHex,
 		input_asset: Asset,
@@ -595,7 +595,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(self
 			.api
 			.lp_api()
-			.on_chain_swap(
+			.schedule_swap(
 				try_parse_number_or_hex(amount)?,
 				input_asset,
 				output_asset,
