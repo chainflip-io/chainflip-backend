@@ -358,6 +358,9 @@ fn strategy_deployment_threshold() {
 		MockBalance::credit_account(&LP, BASE_ASSET, MIN_BASE_AMOUNT * 10);
 		MockBalance::credit_account(&LP, STABLE_ASSET, MIN_QUOTE_AMOUNT * 10);
 
+		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
+		MockLpRegistration::register_refund_address(LP, STABLE_ASSET.into());
+
 		MinimumDeploymentAmountForStrategy::<Test>::insert(BASE_ASSET, MIN_BASE_AMOUNT);
 		MinimumDeploymentAmountForStrategy::<Test>::insert(STABLE_ASSET, MIN_QUOTE_AMOUNT);
 
