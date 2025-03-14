@@ -95,6 +95,86 @@ fn deploy_strategy() -> AccountId {
 }
 
 #[test]
+fn asset_validation_on_deploy_strategy() {
+	new_test_ext().then_execute_at_next_block(|_| {
+		MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT * 10);
+		MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT * 10);
+
+		MockLpRegistration::register_refund_address(LP, BASE_ASSET);
+		MockLpRegistration::register_refund_address(LP, STABLE_ASSET);
+
+		let deploy = |funding| {
+			TradingStrategyPallet::deploy_trading_strategy(
+				RuntimeOrigin::signed(LP),
+				STRATEGY.clone(),
+				funding,
+			)
+		};
+
+		// These attempts should fail due to invalid assets provided:
+		assert_err!(deploy([].into()), Error::<Test>::InvalidAssetsForStrategy);
+		assert_err!(deploy([(Asset::Flip, 1000)].into()), Error::<Test>::InvalidAssetsForStrategy);
+		assert_err!(
+			deploy([(STABLE_ASSET, QUOTE_AMOUNT), (Asset::Flip, 1000)].into()),
+			Error::<Test>::InvalidAssetsForStrategy
+		);
+		assert_err!(
+			deploy(
+				[(STABLE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT), (Asset::Flip, 1000)]
+					.into()
+			),
+			Error::<Test>::InvalidAssetsForStrategy
+		);
+
+		// Should be OK to provide one of the assets (or both):
+		assert_ok!(deploy([(STABLE_ASSET, QUOTE_AMOUNT)].into()));
+		assert_ok!(deploy([(BASE_ASSET, BASE_AMOUNT)].into()));
+		assert_ok!(deploy([(STABLE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT)].into()));
+	});
+}
+
+#[test]
+fn asset_validation_on_adding_funds_to_strategy() {
+	new_test_ext().then_execute_at_next_block(|_| {
+		let strategy_id = deploy_strategy();
+
+		MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT * 10);
+		MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT * 10);
+
+		let add_funds = |funding| {
+			TradingStrategyPallet::add_funds_to_strategy(
+				RuntimeOrigin::signed(LP),
+				strategy_id,
+				funding,
+			)
+		};
+
+		// Should fail on invalid combinations of assets:
+		assert_err!(add_funds([].into()), Error::<Test>::InvalidAssetsForStrategy);
+		assert_err!(
+			add_funds([(Asset::Flip, 1000)].into()),
+			Error::<Test>::InvalidAssetsForStrategy
+		);
+		assert_err!(
+			add_funds([(STABLE_ASSET, QUOTE_AMOUNT), (Asset::Flip, 1000)].into()),
+			Error::<Test>::InvalidAssetsForStrategy
+		);
+		assert_err!(
+			add_funds(
+				[(STABLE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT), (Asset::Flip, 1000)]
+					.into()
+			),
+			Error::<Test>::InvalidAssetsForStrategy
+		);
+
+		// Should be OK to provide one of the assets (or both):
+		assert_ok!(add_funds([(STABLE_ASSET, QUOTE_AMOUNT)].into()));
+		assert_ok!(add_funds([(BASE_ASSET, BASE_AMOUNT)].into()));
+		assert_ok!(add_funds([(STABLE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT)].into()));
+	});
+}
+
+#[test]
 fn refund_addresses_are_required() {
 	new_test_ext().then_execute_at_next_block(|_| {
 		MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT);
@@ -153,13 +233,24 @@ fn automated_strategy_basic_usage() {
 				]
 			);
 
+			let amounts_to_add: BTreeMap<_, _> = [(BASE_ASSET, ADDITIONAL_BASE_AMOUNT)].into();
+
 			// Add additional funds by calling the add funds extrinsic.
 			MockBalance::credit_account(&LP, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
 			assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
 				RuntimeOrigin::signed(LP),
 				strategy_id,
-				[(BASE_ASSET, ADDITIONAL_BASE_AMOUNT)].into()
+				amounts_to_add.clone()
 			));
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::TradingStrategyPallet(Event::<Test>::FundsAddedToStrategy {
+					strategy_id: id,
+					amounts: ref amounts_in_event
+
+				}) if id == strategy_id && amounts_in_event == &amounts_to_add,
+			);
 
 			// Update the threshold to check that limit orders won't be updated
 			// if the threshold is not reached:
