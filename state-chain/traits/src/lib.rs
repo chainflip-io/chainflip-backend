@@ -1178,16 +1178,19 @@ pub trait AffiliateRegistry {
 }
 
 pub trait SolanaAltWitnessingHandler {
+	/// Start witnessing for ALT supplied by the user.
 	fn initiate_alt_witnessing(
 		_ccm_channel_metadata: CcmChannelMetadata,
 		_swap_request_id: SwapRequestId,
 	) {
 	}
 
+	/// Checks if we have already waited past the maximum waiting time to witness user ALTs.
 	fn should_expire(created_at: u32, current: BlockNumber) -> bool {
 		current > created_at + Self::max_wait_time_for_alt_witnessing()
 	}
 
+	/// The maximum amount of time we will wait for
 	fn max_wait_time_for_alt_witnessing() -> BlockNumber {
 		cf_chains::sol::EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
