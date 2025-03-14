@@ -26,7 +26,7 @@ frame-metadata = { workspace = true, default-features = true, features = [
     "current",
 ] }
 frame-metadata-hash-extension = { workspace = true }
-subxt = { workspace = true, features = ["runtime-metadata-path"] }
+subxt = { workspace = true, features = ["runtime-wasm-path"] }
 
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true }

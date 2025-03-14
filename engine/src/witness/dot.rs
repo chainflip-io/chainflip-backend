@@ -81,7 +81,7 @@ use polkadot::{
 };
 
 pub fn filter_map_events(
-	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::ext::subxt_core::error::Error>,
+	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::Error>,
 ) -> Option<(Phase, EventWrapper)> {
 	match res_event_details {
 		Ok(event_details) => match (event_details.pallet_name(), event_details.variant_name()) {
