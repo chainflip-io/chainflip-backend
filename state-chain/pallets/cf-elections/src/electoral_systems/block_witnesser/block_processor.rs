@@ -433,6 +433,21 @@ pub(crate) mod test {
 				})
 				.collect::<Vec<_>>()
 		);
+		processor.process_block_data(ChainProgressInner::Progress(13), None);
+		assert_eq!(
+			vec![
+				(11, MockBtcEvent::PreWitness(7)),
+				(11, MockBtcEvent::PreWitness(8)),
+				(11, MockBtcEvent::PreWitness(9))
+			],
+			processor
+				.reorg_events
+				.iter()
+				.flat_map(|(block_number, events)| {
+					events.iter().map(|event| (*block_number, event.clone()))
+				})
+				.collect::<Vec<_>>()
+		);
 		processor.process_block_data(ChainProgressInner::Progress(14), None);
 		assert!(processor.reorg_events.is_empty())
 	}
