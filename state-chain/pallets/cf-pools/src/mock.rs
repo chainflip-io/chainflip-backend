@@ -15,8 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{self as pallet_cf_pools, PalletSafeMode};
-use cf_chains::Ethereum;
-use cf_primitives::Asset;
+use cf_chains::{Ethereum, ForeignChain};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -70,8 +69,8 @@ cf_test_utilities::impl_test_helpers! {
 		));
 
 		for lp in [ALICE, BOB] {
-			for asset in Asset::all() {
-				MockLpRegistration::register_refund_address(lp, asset);
+			for chain in ForeignChain::iter() {
+				MockLpRegistration::register_refund_address(lp, chain);
 			}
 		}
 

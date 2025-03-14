@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{BalanceApi, LpDepositHandler};
-use cf_chains::assets::any::{Asset, AssetMap};
+use cf_chains::{
+	assets::any::{Asset, AssetMap},
+	ForeignChain,
+};
 use cf_primitives::AssetAmount;
 use frame_support::sp_runtime::{
 	traits::{CheckedSub, Saturating},
@@ -110,10 +113,10 @@ impl MockPallet for MockLpRegistration {
 const REFUND_ADDRESS_REGISTRATION: &[u8] = b"IS_REGISTERED_FOR_ASSET";
 
 impl MockLpRegistration {
-	pub fn register_refund_address(account_id: AccountId, asset: Asset) {
-		Self::mutate_storage::<(AccountId, Asset), _, _, (), _>(
+	pub fn register_refund_address(account_id: AccountId, chain: ForeignChain) {
+		Self::mutate_storage::<(AccountId, ForeignChain), _, _, (), _>(
 			REFUND_ADDRESS_REGISTRATION,
-			&(account_id, asset),
+			&(account_id, chain),
 			|is_registered: &mut Option<()>| {
 				*is_registered = Some(());
 			},
@@ -125,11 +128,19 @@ impl LpRegistration for MockLpRegistration {
 	type AccountId = u64;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(_: &Self::AccountId, _: cf_chains::ForeignChainAddress) {}
+	fn register_liquidity_refund_address(
+		who: &Self::AccountId,
+		address: cf_chains::ForeignChainAddress,
+	) {
+		Self::register_refund_address(*who, address.chain());
+	}
 
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult {
-		if Self::get_storage::<(AccountId, Asset), ()>(REFUND_ADDRESS_REGISTRATION, (*who, asset))
-			.is_some()
+		if Self::get_storage::<(AccountId, ForeignChain), ()>(
+			REFUND_ADDRESS_REGISTRATION,
+			(*who, asset.into()),
+		)
+		.is_some()
 		{
 			Ok(())
 		} else {

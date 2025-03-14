@@ -53,8 +53,8 @@ fn deploy_strategy() -> AccountId {
 	MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT);
 	MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT);
 
-	MockLpRegistration::register_refund_address(LP, BASE_ASSET);
-	MockLpRegistration::register_refund_address(LP, STABLE_ASSET);
+	MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
+	MockLpRegistration::register_refund_address(LP, STABLE_ASSET.into());
 
 	let initial_amounts: BTreeMap<_, _> =
 		[(BASE_ASSET, BASE_AMOUNT), (STABLE_ASSET, QUOTE_AMOUNT)].into();
@@ -100,8 +100,8 @@ fn asset_validation_on_deploy_strategy() {
 		MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT * 10);
 		MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT * 10);
 
-		MockLpRegistration::register_refund_address(LP, BASE_ASSET);
-		MockLpRegistration::register_refund_address(LP, STABLE_ASSET);
+		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
+		MockLpRegistration::register_refund_address(LP, STABLE_ASSET.into());
 
 		let deploy = |funding| {
 			TradingStrategyPallet::deploy_trading_strategy(
@@ -177,14 +177,22 @@ fn asset_validation_on_adding_funds_to_strategy() {
 #[test]
 fn refund_addresses_are_required() {
 	new_test_ext().then_execute_at_next_block(|_| {
-		MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT);
+		// Using base asset that's on a different chain to make sure that
+		// two different refund addresses are required:
+		let base_asset = Asset::ArbUsdc;
+
+		MockBalance::credit_account(&LP, base_asset, BASE_AMOUNT);
 		MockBalance::credit_account(&LP, STABLE_ASSET, QUOTE_AMOUNT);
 
 		let deploy = || {
 			TradingStrategyPallet::deploy_trading_strategy(
 				RuntimeOrigin::signed(LP),
-				STRATEGY.clone(),
-				[(BASE_ASSET, BASE_AMOUNT), (STABLE_ASSET, QUOTE_AMOUNT)].into(),
+				TradingStrategy::SellAndBuyAtTicks {
+					sell_tick: SELL_TICK,
+					buy_tick: BUY_TICK,
+					base_asset,
+				},
+				[(base_asset, BASE_AMOUNT), (STABLE_ASSET, QUOTE_AMOUNT)].into(),
 			)
 		};
 
@@ -192,12 +200,12 @@ fn refund_addresses_are_required() {
 		assert_err!(deploy(), DispatchError::Other("no refund address"));
 
 		// Registering a single asset should not be sufficient:
-		MockLpRegistration::register_refund_address(LP, BASE_ASSET);
+		MockLpRegistration::register_refund_address(LP, base_asset.into());
 
 		assert_err!(deploy(), DispatchError::Other("no refund address"));
 
 		// Should be able to deploy a strategy after registering the second asset:
-		MockLpRegistration::register_refund_address(LP, STABLE_ASSET);
+		MockLpRegistration::register_refund_address(LP, STABLE_ASSET.into());
 
 		assert_ok!(deploy());
 	});
