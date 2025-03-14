@@ -17,7 +17,7 @@
 use anyhow::anyhow;
 use cf_primitives::{
 	chains::{Arbitrum, Solana},
-	BasisPoints, BlockNumber, DcaParameters, EgressId, Price, SwapRequestId,
+	BasisPoints, BlockNumber, DcaParameters, EgressId, Price,
 };
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
@@ -35,9 +35,10 @@ use chainflip_api::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash,
 	},
+	rpc_types::{lp::SwapRequestResponse, RedemptionAmount},
 	settings::StateChain,
 	AccountId32, AddressString, ApiWaitForResult, BlockUpdate, ChainApi, EthereumAddress,
-	OperatorApi, RedemptionAmount, SignedExtrinsicApi, StateChainApi, WaitFor,
+	OperatorApi, SignedExtrinsicApi, StateChainApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::{order_fills::OrderFills, CustomApiClient};
@@ -186,7 +187,7 @@ pub trait Rpc {
 		min_price: Price,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<SwapRequestId>>;
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;
 }
 
 pub struct RpcServerImpl {
@@ -590,7 +591,7 @@ impl RpcServer for RpcServerImpl {
 		min_price: Price,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<SwapRequestId>> {
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {
 		Ok(self
 			.api
 			.lp_api()
@@ -603,7 +604,8 @@ impl RpcServer for RpcServerImpl {
 				dca_params,
 				wait_for.unwrap_or_default(),
 			)
-			.await?)
+			.await?
+			.map_details(Into::into))
 	}
 }
 

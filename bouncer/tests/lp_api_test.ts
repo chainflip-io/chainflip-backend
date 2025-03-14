@@ -417,7 +417,7 @@ async function testOnChainSwap(logger: Logger) {
       0, // retry duration
       '0x0', // minimum price
     ])
-  ).tx_details.response;
+  ).tx_details.response.swap_request_id;
   logger.debug(`On chain swap request id: ${swapRequestId}`);
   assert(swapRequestId > 0, 'Unexpected on chain swap request id');
 
