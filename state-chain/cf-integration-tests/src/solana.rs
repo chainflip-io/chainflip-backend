@@ -15,7 +15,7 @@ use cf_chains::{
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolAddressLookupTableAccount, SolCcmAccounts, SolCcmAddress, SolHash,
-		SolPubkey, SolanaCrypto, SolanaAltLookup,
+		SolPubkey, SolanaAltLookup, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
@@ -1018,7 +1018,6 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 			let asset = SolAsset::Sol;
 			let amount = 1_000_000_000_000u64;
 
-			// Construct a Ccm that when built will exceed the maximum length.
 			let ccm = CcmChannelMetadata {
 				message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 				gas_budget: 1_000_000_000u128,
@@ -1026,7 +1025,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 					cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x10; 32]), is_writable: true },
 					additional_accounts: vec![],
 					fallback_address: FALLBACK_ADDRESS.into(),
-				}, alts: vec![]}
+				}, alts: vec![SolAddress([0xff; 32])]}
 				.encode()
 				.try_into()
 				.unwrap(),
@@ -1058,7 +1057,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 					egress_id: (ForeignChain::Solana, 1u64), 
 					error,
 				}) if error == cf_chains::ExecutexSwapAndCallError::DispatchError(pallet_cf_ingress_egress::Error::<Runtime, SolanaInstance>::ExceededMaxCcmAuxDataWaitTime.into()) => true,
-				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::InvalidCcmRefunded { 
+				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::InvalidCcmRefunded {
 				asset, 
 				destination_address,
 				..
@@ -1074,5 +1073,145 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 				call_type: SolanaTransactionType::Transfer,
 				..
 			})));
+		});
+}
+
+#[test]
+fn after_aux_data_expiry_ccm_will_try_once_more_before_refund() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			setup_sol_environments();
+
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_ok!(RuntimeCall::SolanaVault(
+				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
+			)
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+			testnet.move_to_the_next_epoch();
+
+			let destination_address = SolAddress([0xcf; 32]);
+			let asset = SolAsset::Sol;
+			let amount = 1_000_000_000_000u64;
+			let user_alt = SolAddress([0xff; 32]);
+
+			let ccm = CcmChannelMetadata {
+				message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
+				gas_budget: 1_000_000_000u128,
+				ccm_additional_data: VersionedSolanaCcmAdditionalData::V1 {
+					ccm_accounts: SolCcmAccounts {
+						cf_receiver: SolCcmAddress {
+							pubkey: SolPubkey([0x10; 32]),
+							is_writable: true,
+						},
+						additional_accounts: vec![],
+						fallback_address: FALLBACK_ADDRESS.into(),
+					},
+					alts: vec![user_alt],
+				}
+				.encode()
+				.try_into()
+				.unwrap(),
+			};
+
+			let swap_request_id = SwapRequestId(1u64);
+			let alt_lookup = SolanaAltLookup {
+				swap_request_id,
+				created_at: System::block_number().saturated_into::<u32>(),
+			};
+			let egress_id = (ForeignChain::Solana, 1u64);
+			// Directly insert a CCM to be ingressed.
+			pallet_cf_ingress_egress::ScheduledEgressCcm::<Runtime, SolanaInstance>::append(
+				pallet_cf_ingress_egress::CrossChainMessage {
+					egress_id,
+					asset,
+					amount,
+					destination_address,
+					message: ccm.message,
+					source_chain: ForeignChain::Ethereum,
+					source_address: None,
+					ccm_additional_data: ccm.ccm_additional_data,
+					gas_budget: ccm.gas_budget,
+					aux_data_lookup_key: Some(alt_lookup.clone()),
+				},
+			);
+
+			// Block the CCM from being egressed via Governance.
+			assert_ok!(RuntimeCall::SolanaIngressEgress(pallet_cf_ingress_egress::Call::<
+				Runtime,
+				SolanaInstance,
+			>::enable_or_disable_egress {
+				asset,
+				set_disabled: true,
+			})
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+
+			// CCM cannot be egressed since it's blocked.
+			testnet.move_forward_blocks(1);
+			assert!(pallet_cf_ingress_egress::ScheduledEgressCcm::<Runtime, SolanaInstance>::get()
+				.into_iter()
+				.any(|ccm| ccm.egress_id == egress_id));
+
+			// Move pass the expiry time
+			testnet.move_forward_blocks(
+				SolanaCcmAuxDataWitnessingHandler::max_wait_time_for_alt_witnessing() + 10,
+			);
+
+			// Unblock the CCM from being egressed via Governance.
+			assert_ok!(RuntimeCall::SolanaIngressEgress(pallet_cf_ingress_egress::Call::<
+				Runtime,
+				SolanaInstance,
+			>::enable_or_disable_egress {
+				asset,
+				set_disabled: false,
+			})
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+
+			// Ready the Aux data
+			pallet_cf_environment::SolanaCcmSwapAlts::<Runtime>::insert(
+				swap_request_id,
+				AltConsensusResult::ValidConsensusAlts(vec![SolAddressLookupTableAccount {
+					key: user_alt.into(),
+					addresses: vec![SolPubkey([0x00; 32])],
+				}]),
+			);
+
+			// Attempt to egress the CCM once more before refund.
+			testnet.move_forward_blocks(1);
+			assert_eq!(
+				pallet_cf_ingress_egress::ScheduledEgressCcm::<Runtime, SolanaInstance>::decode_len(
+				),
+				Some(0)
+			);
+
+			// Ccm is egressed successfully even after expiry.
+			let broadcast_id =
+				pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id,
+					egress_id,
+				},
+			));
+
+			// Give enough time to schedule, egress and threshold-sign the ccm.
+			testnet.move_forward_blocks(4);
+
+			// Transfer transaction should be created against the refund address.
+			assert!(pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get()
+				.contains(&broadcast_id));
+			assert!(matches!(
+				pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::get(broadcast_id),
+				Some(SolanaApi { call_type: SolanaTransactionType::CcmTransfer { .. }, .. })
+			));
 		});
 }
