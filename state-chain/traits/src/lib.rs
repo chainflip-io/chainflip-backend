@@ -1187,21 +1187,12 @@ pub trait SolanaAltWitnessingHandler {
 
 	/// Checks if we have already waited past the maximum waiting time to witness user ALTs.
 	fn should_expire(created_at: u32, current: BlockNumber) -> bool {
-		current > created_at + Self::max_wait_time_for_alt_witnessing()
-	}
-
-	/// The maximum amount of time we will wait for
-	fn max_wait_time_for_alt_witnessing() -> BlockNumber {
-		cf_chains::sol::EXPIRY_TIME_FOR_ALT_ELECTIONS
+		current > created_at + cf_chains::sol::EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
 }
 pub struct NoOpAuxDataWitnessingHandler;
 impl SolanaAltWitnessingHandler for NoOpAuxDataWitnessingHandler {
 	fn should_expire(_created_at: u32, _current: BlockNumber) -> bool {
 		false
-	}
-
-	fn max_wait_time_for_alt_witnessing() -> BlockNumber {
-		Default::default()
 	}
 }

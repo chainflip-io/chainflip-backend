@@ -1049,7 +1049,9 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 
 			assert_eq!(SolEnvironment::get_address_lookup_tables(alt_lookup.clone()), Err(SolanaTransactionBuildingError::AltsNotYetWitnessed { created_at: alt_lookup.created_at }));
 
-			testnet.move_forward_blocks(SolanaCcmAuxDataWitnessingHandler::max_wait_time_for_alt_witnessing() + 1);
+			while !SolanaCcmAuxDataWitnessingHandler::should_expire(alt_lookup.created_at, System::block_number()) {
+				testnet.move_forward_blocks(1);
+			}
 
 			// Since we have waited for too long, treat the CCM as invalid and refund the asset via Transfer instead.
 			assert_eq!(assert_events_match!(Runtime,
@@ -1161,10 +1163,14 @@ fn after_aux_data_expiry_ccm_will_try_once_more_before_refund() {
 				.into_iter()
 				.any(|ccm| ccm.egress_id == egress_id));
 
-			// Move pass the expiry time
-			testnet.move_forward_blocks(
-				SolanaCcmAuxDataWitnessingHandler::max_wait_time_for_alt_witnessing() + 10,
-			);
+			// Move pass the expiry time and then some more.
+			while !SolanaCcmAuxDataWitnessingHandler::should_expire(
+				alt_lookup.created_at,
+				System::block_number(),
+			) {
+				testnet.move_forward_blocks(1);
+			}
+			testnet.move_forward_blocks(10);
 
 			// Unblock the CCM from being egressed via Governance.
 			assert_ok!(RuntimeCall::SolanaIngressEgress(pallet_cf_ingress_egress::Call::<
