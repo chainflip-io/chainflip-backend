@@ -226,7 +226,9 @@ mod test {
 
 	use super::*;
 	use crate::sol::{
-		sol_tx_core::sol_test_values::{self, ccm_accounts, ccm_parameter_v1, user_alt},
+		sol_tx_core::sol_test_values::{
+			self, ccm_accounts, ccm_parameter, ccm_parameter_v1, user_alt,
+		},
 		SolCcmAddress, SolPubkey, MAX_CCM_BYTES_SOL,
 	};
 
@@ -238,7 +240,7 @@ mod test {
 
 	#[test]
 	fn can_verify_valid_ccm() {
-		let ccm = sol_test_values::ccm_parameter().channel_metadata;
+		let ccm = ccm_parameter().channel_metadata;
 		assert_eq!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, DEST_ADDR),
 			Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(
@@ -341,7 +343,7 @@ mod test {
 
 	#[test]
 	fn can_check_for_redundant_data() {
-		let ccm = sol_test_values::ccm_parameter().channel_metadata;
+		let ccm = ccm_parameter().channel_metadata;
 
 		// Ok for Solana Chain
 		assert_ok!(CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, DEST_ADDR));
@@ -367,7 +369,7 @@ mod test {
 
 	#[test]
 	fn only_check_against_solana_chain() {
-		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
+		let mut ccm = ccm_parameter().channel_metadata;
 
 		// Only fails for Solana chain.
 		ccm.message = [0x00; MAX_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
@@ -605,7 +607,7 @@ mod test {
 
 	#[test]
 	fn can_verify_destination_address() {
-		let ccm = sol_test_values::ccm_parameter().channel_metadata;
+		let ccm = ccm_parameter().channel_metadata;
 		assert_eq!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, INVALID_DEST_ADDR),
 			Err(CcmValidityError::InvalidDestinationAddress)
@@ -614,11 +616,16 @@ mod test {
 
 	#[test]
 	fn can_decode_unchecked() {
-		let ccm = sol_test_values::ccm_parameter().channel_metadata;
-		assert_ok!(CcmValidityChecker::decode_unchecked(
-			ccm.ccm_additional_data.clone(),
-			ForeignChain::Solana
-		));
+		let ccm = ccm_parameter().channel_metadata;
+		assert_eq!(
+			CcmValidityChecker::decode_unchecked(
+				ccm.ccm_additional_data.clone(),
+				ForeignChain::Solana
+			),
+			Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(
+				ccm_accounts()
+			)))
+		);
 		assert_eq!(
 			CcmValidityChecker::decode_unchecked(
 				ccm.ccm_additional_data.clone(),
@@ -649,10 +656,16 @@ mod test {
 	#[test]
 	fn can_decode_unchecked_ccm_v1() {
 		let ccm = sol_test_values::ccm_parameter_v1().channel_metadata;
-		assert_ok!(CcmValidityChecker::decode_unchecked(
-			ccm.ccm_additional_data.clone(),
-			ForeignChain::Solana
-		));
+		assert_eq!(
+			CcmValidityChecker::decode_unchecked(
+				ccm.ccm_additional_data.clone(),
+				ForeignChain::Solana
+			),
+			Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V1 {
+				ccm_accounts: ccm_accounts(),
+				alts: vec![user_alt().key.into()],
+			}))
+		);
 		assert_eq!(
 			CcmValidityChecker::decode_unchecked(
 				ccm.ccm_additional_data.clone(),
