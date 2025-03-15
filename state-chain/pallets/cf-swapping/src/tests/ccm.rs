@@ -1,6 +1,15 @@
+#![cfg(test)]
+
 use super::*;
+use cf_chains::{
+	ccm_checker::VersionedSolanaCcmAdditionalData,
+	sol::{SolAddress, SolCcmAccounts, SolCcmAddress, SolPubkey, SolanaAltLookup},
+};
 use cf_primitives::GasAmount;
-use cf_traits::SwapOutputActionEncoded;
+use cf_traits::{
+	mocks::egress_handler::{MockEgressHandler, MockEgressParameter},
+	SwapOutputAction, SwapOutputActionEncoded,
+};
 use sp_core::H256;
 
 #[track_caller]
@@ -206,5 +215,89 @@ fn ccm_principal_swap_only() {
 
 			assert_eq!(CollectedRejectedFunds::<Test>::get(INPUT_ASSET), 0);
 			assert_eq!(CollectedRejectedFunds::<Test>::get(OUTPUT_ASSET), 0);
+		});
+}
+
+#[test]
+fn can_process_aux_data_lookup_key() {
+	const PRINCIPAL_SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+	const ASSET: Asset = Asset::Sol;
+	const AMOUNT: u128 = 1_000_000_000_000u128;
+	const DEST_ADDR: ForeignChainAddress = ForeignChainAddress::Sol(SolAddress([0x00; 32]));
+
+	new_test_ext()
+		.execute_with(|| {
+			let generate_ccm = |alts| CcmDepositMetadata {
+				channel_metadata: CcmChannelMetadata {
+					message: vec![0x01].try_into().unwrap(),
+					gas_budget: 1_000_000,
+					ccm_additional_data: codec::Encode::encode(
+						&VersionedSolanaCcmAdditionalData::V1 {
+							ccm_accounts: SolCcmAccounts {
+								cf_receiver: SolCcmAddress {
+									pubkey: SolPubkey([0x00; 32]),
+									is_writable: true,
+								},
+								additional_accounts: vec![],
+								fallback_address: SolPubkey([0x00; 32]),
+							},
+							alts,
+						},
+					)
+					.try_into()
+					.unwrap(),
+				},
+				source_chain: ForeignChain::Ethereum,
+				source_address: None,
+			};
+
+			let ccm_with_alt = generate_ccm(vec![SolAddress([0x00; 32])]);
+			let ccm_with_empty_alt = generate_ccm(vec![]);
+
+			// Can process CCM via Swap deposit
+			let swap_id_with_alt = Swapping::init_swap_request(
+				Asset::Eth,
+				AMOUNT,
+				ASSET,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						ccm_deposit_metadata: Some(ccm_with_alt),
+						output_address: DEST_ADDR,
+					},
+				},
+				Default::default(),
+				None,
+				None,
+				SwapOrigin::Internal,
+			);
+			let _ = Swapping::init_swap_request(
+				Asset::Eth,
+				AMOUNT,
+				ASSET,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						ccm_deposit_metadata: Some(ccm_with_empty_alt),
+						output_address: DEST_ADDR,
+					},
+				},
+				Default::default(),
+				None,
+				None,
+				SwapOrigin::Internal,
+			);
+			swap_id_with_alt
+		})
+		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
+		.then_execute_with(|swap_id_with_alt| {
+			let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+			assert_eq!(
+				egresses[0].maybe_aux_data_lookup_key(),
+				Some(AnyChainCcmAuxDataLookupKey::Solana(SolanaAltLookup {
+					swap_request_id: swap_id_with_alt,
+					created_at: System::block_number() as u32,
+				}))
+			);
+			assert_eq!(egresses[1].maybe_aux_data_lookup_key(), None);
 		});
 }
