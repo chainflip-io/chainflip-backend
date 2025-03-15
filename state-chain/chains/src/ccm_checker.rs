@@ -661,6 +661,24 @@ mod test {
 	}
 
 	#[test]
+	fn can_handle_invalid_ccm() {
+		assert_eq!(
+			CcmValidityChecker::decode_unchecked(
+				vec![0x01, 0x02, 0x03, 0x04, 0x05].try_into().unwrap(),
+				ForeignChain::Solana
+			),
+			Err(CcmValidityError::CannotDecodeCcmAdditionalData)
+		);
+		assert_eq!(
+			CcmValidityChecker::decode_unchecked(
+				vec![0x01, 0x02, 0x03, 0x04, 0x05].try_into().unwrap(),
+				ForeignChain::Ethereum
+			),
+			Ok(DecodedCcmAdditionalData::NotRequired)
+		);
+	}
+
+	#[test]
 	fn can_decode_unchecked_ccm_v1() {
 		let ccm = sol_test_values::ccm_parameter_v1().channel_metadata;
 		assert_ok!(CcmValidityChecker::decode_unchecked(
