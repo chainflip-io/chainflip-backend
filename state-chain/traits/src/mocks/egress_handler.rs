@@ -43,6 +43,13 @@ impl<C: Chain> MockEgressParameter<C> {
 		}
 		.into()
 	}
+
+	pub fn maybe_aux_data_lookup_key(&self) -> Option<C::CcmAuxDataLookupKey> {
+		match self {
+			MockEgressParameter::Ccm { aux_data_lookup_key, .. } => aux_data_lookup_key.clone(),
+			_ => None,
+		}
+	}
 }
 
 impl<C: Chain> PartialOrd for MockEgressParameter<C> {
