@@ -1,6 +1,7 @@
 use crate::{
-	address::ForeignChainAddress, none::NoneChainCrypto, sol::SolanaAltLookup,
-	CcmAuxDataLookupKeyConversion, Chain, DepositDetailsToTransactionInId, FeeRefundCalculator,
+	address::ForeignChainAddress, ccm_checker::DecodedCcmAdditionalData, none::NoneChainCrypto,
+	sol::SolanaAltLookup, CcmAuxDataLookupKeyConversion, Chain, DepositDetailsToTransactionInId,
+	FeeRefundCalculator,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
@@ -53,26 +54,35 @@ impl DepositDetailsToTransactionInId<NoneChainCrypto> for () {}
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum AnyChainCcmAuxDataLookupKey {
 	Solana(SolanaAltLookup),
-	Others,
 }
 
-impl TryFrom<AnyChainCcmAuxDataLookupKey> for () {
-	type Error = ();
-	fn try_from(value: AnyChainCcmAuxDataLookupKey) -> Result<(), Self::Error> {
+impl From<AnyChainCcmAuxDataLookupKey> for () {
+	fn from(_value: AnyChainCcmAuxDataLookupKey) {}
+}
+
+impl From<AnyChainCcmAuxDataLookupKey> for SolanaAltLookup {
+	fn from(value: AnyChainCcmAuxDataLookupKey) -> SolanaAltLookup {
 		match value {
-			AnyChainCcmAuxDataLookupKey::Solana(_) => Err(()),
-			AnyChainCcmAuxDataLookupKey::Others => Ok(()),
+			AnyChainCcmAuxDataLookupKey::Solana(lookup) => lookup,
 		}
 	}
 }
 
-impl TryFrom<AnyChainCcmAuxDataLookupKey> for SolanaAltLookup {
-	type Error = ();
-	fn try_from(value: AnyChainCcmAuxDataLookupKey) -> Result<SolanaAltLookup, Self::Error> {
-		if let AnyChainCcmAuxDataLookupKey::Solana(lookup) = value {
-			Ok(lookup)
+impl AnyChainCcmAuxDataLookupKey {
+	pub fn into_lookup_key(
+		decoded_ccm_data: DecodedCcmAdditionalData,
+		swap_request_id: SwapRequestId,
+		created_at: u32,
+	) -> Option<Self> {
+		if let DecodedCcmAdditionalData::Solana(sol_ccm_data) = decoded_ccm_data {
+			(!sol_ccm_data.address_lookup_tables().is_empty()).then_some(
+				AnyChainCcmAuxDataLookupKey::Solana(SolanaAltLookup::from_alt_lookup_key(
+					swap_request_id,
+					created_at,
+				)),
+			)
 		} else {
-			Err(())
+			None
 		}
 	}
 }
@@ -83,37 +93,5 @@ impl CcmAuxDataLookupKeyConversion for AnyChainCcmAuxDataLookupKey {
 			swap_request_id,
 			created_at,
 		))
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use cf_primitives::{chains::*, SwapRequestId};
-
-	#[test]
-	fn alt_lookup_can_be_converted_correctly() {
-		let swap_request_id = SwapRequestId(3);
-		let created_at = 100;
-		let sol = AnyChainCcmAuxDataLookupKey::Solana(SolanaAltLookup::from_alt_lookup_key(
-			swap_request_id,
-			created_at,
-		));
-		let others = AnyChainCcmAuxDataLookupKey::Others;
-
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Ethereum as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Err(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Ethereum as Chain>::CcmAuxDataLookupKey>>::try_into(others.clone()), Ok(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Arbitrum as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Err(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Arbitrum as Chain>::CcmAuxDataLookupKey>>::try_into(others.clone()), Ok(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Polkadot as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Err(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Polkadot as Chain>::CcmAuxDataLookupKey>>::try_into(others.clone()), Ok(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Bitcoin as Chain>::CcmAuxDataLookupKey>>::try_into(sol.clone()), Err(()));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Bitcoin as Chain>::CcmAuxDataLookupKey>>::try_into(others.clone()), Ok(()));
-
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Solana as Chain>::CcmAuxDataLookupKey>>::try_into(sol), Ok(SolanaAltLookup {
-			swap_request_id,
-			created_at,
-		}));
-		assert_eq!(<AnyChainCcmAuxDataLookupKey as TryInto::<<Solana as Chain>::CcmAuxDataLookupKey>>::try_into(others), Err(()));
 	}
 }
