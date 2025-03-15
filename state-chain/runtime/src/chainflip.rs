@@ -755,7 +755,7 @@ macro_rules! impl_egress_api_for_anychain {
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 							maybe_ccm_deposit_metadata,
-							ccm_aux_data_lookup_key.and_then(|lookup| lookup.try_into().ok()),
+							ccm_aux_data_lookup_key.map(|lookup|lookup.into()),
 						)
 						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
 						.map_err(Into::into),
