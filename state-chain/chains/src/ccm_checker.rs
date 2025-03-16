@@ -5,8 +5,8 @@ use crate::{
 			ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
 			SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 		},
-		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_USER_CCM_BYTES_SOL,
-		MAX_USER_CCM_BYTES_USDC, MAX_CCM_USER_ALTS,
+		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_USER_ALTS, MAX_USER_CCM_BYTES_SOL,
+		MAX_USER_CCM_BYTES_USDC,
 	},
 	CcmAdditionalData, CcmChannelMetadata, Chain, ForeignChainAddress,
 };
