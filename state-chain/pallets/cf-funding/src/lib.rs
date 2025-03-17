@@ -380,7 +380,12 @@ pub mod pallet {
 				}
 			}
 
-			let redemption_fee = RedemptionTax::<T>::get();
+			// If we are redeeming the max amount, we don't charge a fee.
+			let redemption_fee = if amount == RedemptionAmount::Max {
+				T::Amount::zero()
+			} else {
+				RedemptionTax::<T>::get()
+			};
 
 			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
 				ensure!(
@@ -409,8 +414,7 @@ pub mod pallet {
 			));
 
 			let (debit_amount, redeem_amount) = match amount {
-				RedemptionAmount::Max =>
-					(liquid_balance, liquid_balance.saturating_sub(redemption_fee)),
+				RedemptionAmount::Max => (liquid_balance, liquid_balance),
 				RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
 			};
 
