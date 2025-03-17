@@ -120,12 +120,6 @@ pub struct BoostOutput<C: Chain> {
 	total_fee: C::ChainAmount,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum VaultSwapStage {
-	Prewitnessed,
-	Deposit,
-}
-
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
 pub enum FetchOrTransfer<C: Chain> {
