@@ -138,6 +138,8 @@ pub trait PoolApi {
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult;
 
+	fn cancel_all_limit_orders(account: &Self::AccountId) -> DispatchResult;
+
 	fn cancel_limit_order(
 		account: &Self::AccountId,
 		base_asset: Asset,

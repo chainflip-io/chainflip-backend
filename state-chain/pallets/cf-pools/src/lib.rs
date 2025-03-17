@@ -1147,6 +1147,31 @@ impl<T: Config> PoolApi for Pallet<T> {
 		Pools::<T>::iter_keys().map(|asset_pair| asset_pair.assets()).collect()
 	}
 
+	fn cancel_all_limit_orders(account: &Self::AccountId) -> DispatchResult {
+		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation)
+		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
+			let pool = Pools::<T>::get(asset_pair).unwrap();
+
+			for (asset, orders) in
+				pool.limit_orders_cache.as_ref().into_iter().filter_map(|(asset, cache)| {
+					cache.get(account).cloned().map(|orders| (asset, orders))
+				}) {
+				for (id, tick) in orders {
+					Self::cancel_limit_order(
+						account,
+						asset_pair.assets().base,
+						asset_pair.assets().quote,
+						asset.sell_order(),
+						id,
+						tick,
+					)?;
+				}
+			}
+		}
+
+		Ok(())
+	}
+
 	fn update_limit_order(
 		account: &Self::AccountId,
 		base_asset: Asset,
