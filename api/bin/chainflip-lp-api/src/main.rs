@@ -64,17 +64,17 @@ pub trait Rpc {
 	#[method(name = "register_account")]
 	async fn register_account(&self) -> RpcResult<Hash>;
 
-	#[deprecated(note = "Use `request_liquidity_deposit_address_v2` instead")]
+	#[deprecated(note = "Use `request_liquidity_deposit_address` instead")]
 	#[method(name = "liquidity_deposit")]
-	async fn request_liquidity_deposit_address(
+	async fn request_liquidity_deposit_address_legacy(
 		&self,
 		asset: Asset,
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<AddressString>>;
 
-	#[method(name = "liquidity_deposit_v2")]
-	async fn request_liquidity_deposit_address_v2(
+	#[method(name = "request_liquidity_deposit_address")]
+	async fn request_liquidity_deposit_address(
 		&self,
 		asset: Asset,
 		wait_for: Option<WaitFor>,
@@ -253,7 +253,7 @@ impl From<LpApiError> for ErrorObjectOwned {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn request_liquidity_deposit_address(
+	async fn request_liquidity_deposit_address_legacy(
 		&self,
 		asset: Asset,
 		wait_for: Option<WaitFor>,
@@ -264,14 +264,12 @@ impl RpcServer for RpcServerImpl {
 			.lp_api()
 			.request_liquidity_deposit_address(asset, wait_for.unwrap_or_default(), boost_fee)
 			.await
-			.map(|wait_for_result| match wait_for_result {
-				ApiWaitForResult::TxDetails { tx_hash, response } =>
-					ApiWaitForResult::TxDetails { tx_hash, response: response.deposit_address },
-				ApiWaitForResult::TxHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+			.map(|wait_for_result| {
+				wait_for_result.map_details(|response| response.deposit_address)
 			})?)
 	}
 
-	async fn request_liquidity_deposit_address_v2(
+	async fn request_liquidity_deposit_address(
 		&self,
 		asset: Asset,
 		wait_for: Option<WaitFor>,

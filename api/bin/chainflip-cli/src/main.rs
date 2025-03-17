@@ -84,7 +84,7 @@ async fn run_cli() -> Result<()> {
 							.broker_api()
 							.withdraw_fees(params.asset, params.destination_address)
 							.await?;
-						println!("Withdrawal request successful submitted: {}", withdraw_details);
+						println!("Withdrawal request successfully submitted: {}", withdraw_details);
 					},
 					BrokerSubcommands::RegisterAccount => {
 						api.broker_api().register_account().await?;

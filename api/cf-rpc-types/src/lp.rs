@@ -147,7 +147,7 @@ impl From<SwapRequestId> for SwapRequestResponse {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LiquidityDepositChannelDetails {
 	pub deposit_address: AddressString,
 	pub deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
