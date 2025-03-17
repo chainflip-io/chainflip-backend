@@ -88,7 +88,7 @@ async function testRegisterLiquidityRefundAddress(parentLogger: Logger) {
   // TODO: Check that the correct address is now set on the SC
 }
 
-async function testLiquidityDeposit(logger: Logger) {
+async function testLiquidityDepositLegacy(logger: Logger) {
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     logger,
     'liquidityProvider:LiquidityDepositAddressReady',
@@ -128,6 +128,51 @@ async function testLiquidityDeposit(logger: Logger) {
     String(testAmount),
   );
   await observeAccountCreditedEvent;
+}
+
+async function testLiquidityDeposit(logger: Logger) {
+  const observeLiquidityDepositAddressReadyEvent = observeEvent(
+    logger,
+    'liquidityProvider:LiquidityDepositAddressReady',
+    {
+      test: (event) => event.data.depositAddress.Eth,
+    },
+  ).event;
+
+  const liquidityDepositAddress = (
+    await lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'InBlock'])
+  ).tx_details.response.deposit_address;
+  const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
+
+  assert.strictEqual(
+    liquidityDepositEvent.data.depositAddress.Eth,
+    liquidityDepositAddress,
+    `Incorrect deposit address`,
+  );
+  assert(
+    isValidEthAddress(liquidityDepositAddress),
+    `Invalid deposit address: ${liquidityDepositAddress}`,
+  );
+
+  // Send funds to the deposit address and watch for deposit event
+  const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {
+    test: (event) =>
+      event.data.asset === testAsset &&
+      isWithinOnePercent(
+        BigInt(event.data.amountCredited.replace(/,/g, '')),
+        BigInt(testAssetAmount),
+      ),
+  }).event;
+  await sendEvmNative(
+    logger,
+    chainFromAsset(testAsset),
+    liquidityDepositAddress,
+    String(testAmount),
+  );
+  await observeAccountCreditedEvent;
+
+  // Also test the old liquidity deposit RPC (must be tested sequentially)
+  await testLiquidityDepositLegacy(logger);
 }
 
 async function testWithdrawAsset(logger: Logger) {

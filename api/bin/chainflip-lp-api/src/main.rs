@@ -28,8 +28,8 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LpApi, OpenSwapChannels, OrderIdJson,
-		RangeOrder, RangeOrderSizeJson, Side, Tick,
+		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails, LpApi,
+		OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderSizeJson, Side, Tick,
 	},
 	primitives::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
@@ -64,13 +64,22 @@ pub trait Rpc {
 	#[method(name = "register_account")]
 	async fn register_account(&self) -> RpcResult<Hash>;
 
+	#[deprecated(note = "Use `request_liquidity_deposit_address` instead")]
 	#[method(name = "liquidity_deposit")]
+	async fn request_liquidity_deposit_address_legacy(
+		&self,
+		asset: Asset,
+		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<ApiWaitForResult<AddressString>>;
+
+	#[method(name = "request_liquidity_deposit_address")]
 	async fn request_liquidity_deposit_address(
 		&self,
 		asset: Asset,
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<ApiWaitForResult<String>>;
+	) -> RpcResult<ApiWaitForResult<LiquidityDepositChannelDetails>>;
 
 	#[method(name = "register_liquidity_refund_address")]
 	async fn register_liquidity_refund_address(
@@ -244,19 +253,33 @@ impl From<LpApiError> for ErrorObjectOwned {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	/// Returns a deposit address
-	async fn request_liquidity_deposit_address(
+	async fn request_liquidity_deposit_address_legacy(
 		&self,
 		asset: Asset,
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<ApiWaitForResult<String>> {
+	) -> RpcResult<ApiWaitForResult<AddressString>> {
 		Ok(self
 			.api
 			.lp_api()
 			.request_liquidity_deposit_address(asset, wait_for.unwrap_or_default(), boost_fee)
 			.await
-			.map(|result| result.map_details(|address| address.to_string()))?)
+			.map(|wait_for_result| {
+				wait_for_result.map_details(|response| response.deposit_address)
+			})?)
+	}
+
+	async fn request_liquidity_deposit_address(
+		&self,
+		asset: Asset,
+		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<ApiWaitForResult<LiquidityDepositChannelDetails>> {
+		Ok(self
+			.api
+			.lp_api()
+			.request_liquidity_deposit_address(asset, wait_for.unwrap_or_default(), boost_fee)
+			.await?)
 	}
 
 	async fn register_liquidity_refund_address(
@@ -267,7 +290,6 @@ impl RpcServer for RpcServerImpl {
 		Ok(self.api.lp_api().register_liquidity_refund_address(chain, address).await?)
 	}
 
-	/// Returns an egress id
 	async fn withdraw_asset(
 		&self,
 		amount: NumberOrHex,
@@ -287,7 +309,6 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	/// Returns an egress id
 	async fn transfer_asset(
 		&self,
 		amount: U256,
