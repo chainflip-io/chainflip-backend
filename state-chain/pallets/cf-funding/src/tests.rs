@@ -267,7 +267,7 @@ fn cannot_double_redeem() {
 fn redemption_cannot_occur_without_funding_first() {
 	new_test_ext().execute_with(|| {
 		const FUNDING_AMOUNT: u128 = 45;
-		const REDEEMED_AMOUNT: u128 = FUNDING_AMOUNT - REDEMPTION_TAX;
+		const REDEEMED_AMOUNT: u128 = FUNDING_AMOUNT;
 
 		// Account doesn't exist yet.
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -594,17 +594,23 @@ fn restore_restricted_balance_when_redemption_expires() {
 				Default::default()
 			));
 
+			// We ignore the redemption tax if we claim the max amount.
+			let (total_funds, restricted_amount) = if redeem_amount == RedemptionAmount::Max {
+				(TOTAL_FUNDS, RESTRICTED_AMOUNT)
+			} else {
+				(TOTAL_FUNDS - REDEMPTION_TAX, RESTRICTED_AMOUNT - REDEMPTION_TAX)
+			};
+
 			assert_eq!(
 				Flip::total_balance_of(&ALICE),
-				TOTAL_FUNDS - REDEMPTION_TAX,
+				total_funds,
 				"Expected the full balance, minus redemption tax, to be restored to the account"
 			);
 			let new_restricted_balance = *RestrictedBalances::<Test>::get(&ALICE)
 				.get(&RESTRICTED_ADDRESS)
 				.expect("Expected the restricted balance to be restored to the restricted address");
 			assert_eq!(
-				new_restricted_balance,
-				RESTRICTED_AMOUNT - REDEMPTION_TAX,
+				new_restricted_balance, restricted_amount,
 				"Expected the restricted balance to be restored excluding the redemption tax",
 			);
 		});
@@ -1478,9 +1484,9 @@ fn max_redemption_is_net_exact_is_gross() {
 	}
 
 	// Redeem as many unrestricted funds as possible.
-	do_test(UNRESTRICTED_ADDRESS, RedemptionAmount::Max, UNRESTRICTED_AMOUNT - REDEMPTION_TAX);
+	do_test(UNRESTRICTED_ADDRESS, RedemptionAmount::Max, UNRESTRICTED_AMOUNT);
 	// Redeem as many restricted funds as possible.
-	do_test(RESTRICTED_ADDRESS, RedemptionAmount::Max, TOTAL_BALANCE - REDEMPTION_TAX);
+	do_test(RESTRICTED_ADDRESS, RedemptionAmount::Max, TOTAL_BALANCE);
 	// Redeem exact amounts, should be reflected in the event.
 	do_test(UNRESTRICTED_ADDRESS, RedemptionAmount::Exact(50), 50);
 	do_test(RESTRICTED_ADDRESS, RedemptionAmount::Exact(150), 150);
@@ -1561,7 +1567,6 @@ fn skip_redemption_of_zero_flip() {
 	}
 
 	inner_test(100, RedemptionAmount::Exact(0));
-	inner_test(REDEMPTION_TAX, RedemptionAmount::Max);
 }
 
 #[test]
