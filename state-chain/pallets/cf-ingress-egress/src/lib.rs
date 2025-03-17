@@ -493,7 +493,6 @@ pub mod pallet {
 			refund_address: ForeignChainAddress,
 		},
 		Refund {
-			channel_id: Option<ChannelId>,
 			asset: Asset,
 			refund_address: ForeignChainAddress,
 		},
@@ -521,7 +520,6 @@ pub mod pallet {
 		},
 		Refund {
 			egress_id: Option<EgressId>,
-			channel_id: Option<ChannelId>,
 			refund_success: bool,
 			amount: TargetChainAmount<T, I>,
 		},
@@ -949,13 +947,6 @@ pub mod pallet {
 		},
 		NetworkFeeDeductionFromBoostSet {
 			deduction_percent: Percent,
-		},
-		VaultSwapRefundRequested {
-			channel_id: Option<ChannelId>,
-			asset: TargetChainAsset<T, I>,
-			amount: TargetChainAmount<T, I>,
-			refund_address: TargetChainAccount<T, I>,
-			egress_id: EgressId,
 		},
 	}
 
@@ -1953,14 +1944,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 				DepositAction::Swap { swap_request_id }
 			},
-			ChannelAction::Refund { asset, refund_address, channel_id } => {
+			ChannelAction::Refund { asset, refund_address } => {
 				match (asset.try_into(), refund_address.try_into()) {
 					(Ok(asset), Ok(address)) => {
 						let egress_id =
 							match Self::schedule_egress(asset, amount_after_fees, address, None) {
 								Ok(egress_details) => Some(egress_details.egress_id),
 								Err(e) => {
-									log_or_panic!(
+									log::warn!(
 										"Failed to schedule egress for vault swap refund: {:?}",
 										e
 									);
@@ -1970,16 +1961,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						DepositAction::Refund {
 							egress_id,
 							amount: amount_after_fees,
-							channel_id,
 							refund_success: egress_id.is_some(),
 						}
 					},
 					_ => {
-						log_or_panic!("Refund action with invalid asset or address.");
+						log_or_panic!("Refund action with invalid asset or address!");
 						DepositAction::Refund {
 							egress_id: None,
 							amount: amount_after_fees,
-							channel_id,
 							refund_success: false,
 						}
 					},
@@ -2558,7 +2547,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				boost_fee,
 				channel_id,
 				ChannelAction::Refund {
-					channel_id,
 					asset: source_asset.into(),
 					refund_address: refund_params.refund_address.into_foreign_chain_address(),
 				},
