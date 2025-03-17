@@ -47,6 +47,37 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 mod benchmarks {
 	use super::*;
 
+	// Create some orders so the cost of sweeping is taken into account
+	fn create_some_orders<T: Config>(caller: T::AccountId) {
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000_000);
+
+		for i in 1..=3 {
+			assert_ok!(Pallet::<T>::set_range_order(
+				RawOrigin::Signed(caller.clone()).into(),
+				Asset::Eth,
+				Asset::Usdc,
+				i as u64,
+				Some(-i..i),
+				RangeOrderSize::AssetAmounts {
+					maximum: AssetAmounts { base: 1_000_000, quote: 1_000_000 },
+					minimum: AssetAmounts { base: 500_000, quote: 500_000 },
+				},
+			));
+		}
+		for i in 1_u64..=10 {
+			assert_ok!(Pallet::<T>::set_limit_order(
+				RawOrigin::Signed(caller.clone()).into(),
+				Asset::Eth,
+				Asset::Usdc,
+				Side::Buy,
+				i,
+				Some(0),
+				1_000,
+			));
+		}
+	}
+
 	#[benchmark]
 	fn new_pool() {
 		let call = Call::<T>::new_pool {
@@ -79,9 +110,11 @@ mod benchmarks {
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 
+		create_some_orders::<T>(caller.clone());
+
 		#[extrinsic_call]
 		update_range_order(
-			RawOrigin::Signed(caller.clone()),
+			RawOrigin::Signed(caller),
 			Asset::Eth,
 			Asset::Usdc,
 			0,
@@ -106,9 +139,11 @@ mod benchmarks {
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 
+		create_some_orders::<T>(caller.clone());
+
 		#[extrinsic_call]
 		set_range_order(
-			RawOrigin::Signed(caller.clone()),
+			RawOrigin::Signed(caller),
 			Asset::Eth,
 			Asset::Usdc,
 			0,
