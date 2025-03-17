@@ -1148,7 +1148,8 @@ impl<T: Config> PoolApi for Pallet<T> {
 	}
 
 	fn cancel_all_limit_orders(account: &Self::AccountId) -> DispatchResult {
-		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation)
+		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation).
+		// Note that we read one pool at a time to optimise memory usage.
 		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
 			let pool = Pools::<T>::get(asset_pair).unwrap();
 
@@ -1338,7 +1339,8 @@ enum NoOpStatus {
 
 impl<T: Config> Pallet<T> {
 	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
-		// Collect to avoid undefined behaviour (See StorsgeMap::iter_keys documentation)
+		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation).
+		// Note that we read one pool at a time to optimise memory usage.
 		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
 			let mut pool = Pools::<T>::get(asset_pair).unwrap();
 
