@@ -633,40 +633,42 @@ async function main() {
   await openPrivateBtcChannel('//BROKER_1');
 
   // test rejection of swaps by the responsible broker
-  // await Promise.all([
-  //   testBrokerLevelScreeningBitcoin(),
-  //   testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   testBrokerLevelScreeningEthereum('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   testBrokerLevelScreeningEthereum('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
-  // ]);
+  await Promise.all([
+    testBrokerLevelScreeningBitcoin(),
+    testBrokerLevelScreeningEthereum('Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+  ]);
 
   // test rejection of LP deposits, this requires the rejecting broker to be whitelisted:
   await setWhitelistedBroker(broker.addressRaw);
   await Promise.all([
-
     testBrokerLevelScreeningEthereumVaultSwap('Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereumVaultSwap('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereumVaultSwap('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereumVaultSwap('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
 
-    // testBrokerLevelScreeningEthereumLiquidityDeposit('Eth', async (txId) =>
-    //   setTxRiskScore(txId, 9.0),
-    // ),
-    // testBrokerLevelScreeningEthereumLiquidityDeposit('Usdt', async (txId) =>
-    //   setTxRiskScore(txId, 9.0),
-    // ),
-    // testBrokerLevelScreeningEthereumLiquidityDeposit('Flip', async (txId) =>
-    //   setTxRiskScore(txId, 9.0),
-    // ),
-    // testBrokerLevelScreeningEthereumLiquidityDeposit('Usdc', async (txId) =>
-    //   setTxRiskScore(txId, 9.0),
-    // ),
-    // testBrokerLevelScreeningEthereumLiquidityDeposit('ArbEth', async (txId) =>
-    //   setTxRiskScore(txId, 9.0),
-    // ),
-    // testBrokerLevelScreeningEthereumLiquidityDeposit('ArbUsdc', async (txId) =>
-    //   setTxRiskScore(txId, 9.0),
-    // ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('Eth', async (txId) =>
+      setTxRiskScore(txId, 9.0),
+    ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('Usdt', async (txId) =>
+      setTxRiskScore(txId, 9.0),
+    ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('Flip', async (txId) =>
+      setTxRiskScore(txId, 9.0),
+    ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('Usdc', async (txId) =>
+      setTxRiskScore(txId, 9.0),
+    ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('ArbEth', async (txId) =>
+      setTxRiskScore(txId, 9.0),
+    ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('ArbUsdc', async (txId) =>
+      setTxRiskScore(txId, 9.0),
+    ),
   ]);
 
   await setMockmode(previousMockmode);
