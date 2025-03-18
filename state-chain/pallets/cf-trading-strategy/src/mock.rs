@@ -42,6 +42,7 @@ impl pallet_cf_trading_strategy::Config for Test {
 	type WeightInfo = ();
 	type BalanceApi = cf_traits::mocks::balance_api::MockBalance;
 	type PoolApi = MockPoolApi;
+	type LpOrdersWeights = MockPoolApi;
 	type LpRegistrationApi = MockLpRegistration;
 }
 

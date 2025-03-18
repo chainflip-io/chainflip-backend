@@ -1044,6 +1044,7 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 impl pallet_cf_trading_strategy::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
+	type LpOrdersWeights = LiquidityPools;
 	type BalanceApi = AssetBalances;
 	type PoolApi = LiquidityPools;
 	type LpRegistrationApi = LiquidityProvider;

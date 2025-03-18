@@ -31,7 +31,7 @@ use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, IncreaseOrDecrease,
-	LpRegistration, OrderId, PoolApi, Side,
+	LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -103,15 +103,16 @@ pub mod pallet {
 		/// The event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Benchmark weights
-		type WeightInfo: WeightInfo;
-
 		type BalanceApi: BalanceApi<AccountId = Self::AccountId>;
 
 		/// LP address registration and verification.
 		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 
 		type PoolApi: PoolApi<AccountId = Self::AccountId>;
+
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
+		type LpOrdersWeights: LpOrdersWeightsProvider;
 	}
 
 	#[pallet::pallet]
@@ -159,8 +160,7 @@ pub mod pallet {
 
 			weight_used += T::DbWeight::get().reads(1);
 
-			// TODO: use correct weight from pools pallet
-			let limit_order_update_weight = Weight::zero();
+			let limit_order_update_weight = T::LpOrdersWeights::update_limit_order_weight();
 
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {
@@ -242,7 +242,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(1)]
-		#[pallet::weight(Weight::zero())] // TODO: benchmark
+		#[pallet::weight(T::WeightInfo::deploy_trading_strategy())]
 		pub fn deploy_trading_strategy(
 			origin: OriginFor<T>,
 			strategy: TradingStrategy,
@@ -302,7 +302,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight(Weight::zero())] // TODO: benchmark
+		#[pallet::weight(T::WeightInfo::close_strategy())]
 		pub fn close_strategy(origin: OriginFor<T>, strategy_id: T::AccountId) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -332,7 +332,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(3)]
-		#[pallet::weight(Weight::zero())] // TODO: benchmark
+		#[pallet::weight(T::WeightInfo::add_funds_to_strategy())]
 		pub fn add_funds_to_strategy(
 			origin: OriginFor<T>,
 			strategy_id: T::AccountId,
