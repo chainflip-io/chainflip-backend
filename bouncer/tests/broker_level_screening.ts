@@ -367,6 +367,8 @@ async function testBrokerLevelScreeningEthereumVaultSwap(
   await reportFunction(txHash);
   testBrokerLevelScreening.log(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
+  // Currently this event cannot be decoded correctly, so we don't wait for it,
+  // just wait for the funds to arrive at the refund address
   await observeEvent(`${ingressEgressPallet}:TransactionRejectedByBroker`).event;
 
   let receivedRefund = false;
@@ -612,6 +614,8 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
     setTxRiskScore(txId, 9.0),
   );
 
+  // Currently this event cannot be decoded correctly, so we don't wait for it,
+  // just wait for the funds to arrive at the refund address
   await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
