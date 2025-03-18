@@ -168,6 +168,8 @@ mod benchmarks {
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
 
+		create_some_orders::<T>(caller.clone());
+
 		#[extrinsic_call]
 		update_limit_order(
 			RawOrigin::Signed(caller.clone()),
@@ -192,6 +194,8 @@ mod benchmarks {
 		));
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
+
+		create_some_orders::<T>(caller.clone());
 
 		#[extrinsic_call]
 		set_limit_order(

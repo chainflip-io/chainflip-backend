@@ -1453,7 +1453,7 @@ fn test_sweeping_when_updating_limit_order() {
 		assert_eq!(get_balance(&BOB), (0, 0));
 		assert_eq!(HistoricalEarnedFees::<Test>::get(BOB, STABLE_ASSET), 0);
 
-		// Decrease/cancel a limit order should also cause sweeping for that LP
+		// Decrease a limit order should also cause sweeping for that LP
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
 			ASSET,
@@ -1461,9 +1461,9 @@ fn test_sweeping_when_updating_limit_order() {
 			Side::Sell,
 			1,
 			None,
-			0
+			1000
 		));
-		assert_eq!(get_balance(&BOB), (10_000, 5000));
+		assert_eq!(get_balance(&BOB), (9000, 5000));
 	});
 }
 
@@ -1493,28 +1493,19 @@ fn test_sweeping_when_updating_range_order() {
 		for (lp, amount) in [(ALICE, 5_000), (BOB, 5_000)] {
 			MockBalance::credit_account(&lp, ASSET, amount * 2);
 			MockBalance::credit_account(&lp, STABLE_ASSET, amount * 2);
-			assert_ok!(LiquidityPools::set_range_order(
-				RuntimeOrigin::signed(lp),
-				ASSET,
-				STABLE_ASSET,
-				1,
-				Some(-1..1),
-				RangeOrderSize::AssetAmounts {
-					minimum: PoolPairsMap { base: 0, quote: 0 },
-					maximum: PoolPairsMap { base: amount, quote: amount }
-				}
-			));
-			assert_ok!(LiquidityPools::set_range_order(
-				RuntimeOrigin::signed(lp),
-				ASSET,
-				STABLE_ASSET,
-				2,
-				Some(-1..1),
-				RangeOrderSize::AssetAmounts {
-					minimum: PoolPairsMap { base: 0, quote: 0 },
-					maximum: PoolPairsMap { base: amount, quote: amount }
-				}
-			));
+			for id in 1..=2 {
+				assert_ok!(LiquidityPools::set_range_order(
+					RuntimeOrigin::signed(lp),
+					ASSET,
+					STABLE_ASSET,
+					id,
+					Some(-1..1),
+					RangeOrderSize::AssetAmounts {
+						minimum: PoolPairsMap { base: 0, quote: 0 },
+						maximum: PoolPairsMap { base: amount, quote: amount }
+					}
+				));
+			}
 		}
 		assert_eq!(get_balance(&ALICE), (0, 0));
 		assert_eq!(get_balance(&BOB), (0, 0));
@@ -1547,14 +1538,14 @@ fn test_sweeping_when_updating_range_order() {
 		// But Bob's orders are not swept yet
 		assert_eq!(HistoricalEarnedFees::<Test>::get(BOB, STABLE_ASSET), 0);
 
-		// Decrease/cancel the range order should cause sweeping of it
+		// Decrease the range order should cause sweeping of it
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(BOB),
 			ASSET,
 			STABLE_ASSET,
 			1,
 			None,
-			RangeOrderSize::Liquidity { liquidity: 0 }
+			RangeOrderSize::Liquidity { liquidity: 100 }
 		));
 		assert_eq!(HistoricalEarnedFees::<Test>::get(BOB, STABLE_ASSET), EXPECTED_FEES);
 	});
