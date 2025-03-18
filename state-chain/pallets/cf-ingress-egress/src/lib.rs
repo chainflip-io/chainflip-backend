@@ -2513,7 +2513,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn validate_vault_swap_request(
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) -> Result<
-		(BrokerFees, Option<ChannelMetadata>, Option<ForeignChainAddress>, ForeignChainAddress),
+		(
+			BoundedVec<Beneficiary<T::AccountId>, ConstU32<6>>,
+			Option<CcmChannelMetadata>,
+			Option<ForeignChainAddress>,
+			ForeignChainAddress,
+		),
 		RefundReason,
 	> {
 		let VaultDepositWitness {
@@ -2532,6 +2537,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			dca_params,
 			boost_fee,
 		} = vault_deposit_witness.clone();
+
 		let Some(broker_fees) =
 			Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone())
 		else {
@@ -2610,23 +2616,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			boost_fee,
 		} = vault_deposit_witness.clone();
 
-		let emit_deposit_failed_event = move |reason: DepositFailedReason| {
-			Self::deposit_event(Event::<T, I>::DepositFailed {
-				block_height,
-				reason,
-				details: DepositFailedDetails::Vault {
-					vault_witness: Box::new(vault_deposit_witness),
-				},
-			});
-		};
-
-		let deposit_origin = DepositOrigin::vault(
-			tx_id.clone(),
-			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
-		);
-
 		let (action, source_address) =
-			match Self::validate_vault_swap_request(vault_deposit_witness) {
+			match Self::validate_vault_swap_request(vault_deposit_witness.clone()) {
 				Ok((
 					broker_fees,
 					channel_metadata,
@@ -2647,7 +2638,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(reason) => {
 					Self::deposit_event(Event::<T, I>::ScheduleVaultSwapRefund {
 						block_height,
-						reason: RefundReason::InvalidBrokerFees,
+						reason,
 					});
 					(
 						ChannelAction::Refund {
@@ -2682,7 +2673,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				BoostedVaultTransactions::<T, I>::remove(&tx_id);
 			},
 			Err(reason) => {
-				emit_deposit_failed_event(reason);
+				Self::deposit_event(Event::<T, I>::DepositFailed {
+					block_height,
+					reason,
+					details: DepositFailedDetails::Vault {
+						vault_witness: Box::new(vault_deposit_witness),
+					},
+				});
 			},
 			Ok(FullWitnessDepositOutcome::DepositActionPerformed) => {
 				// Nothing to do.
