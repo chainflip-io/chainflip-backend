@@ -7,10 +7,16 @@ use cf_amm::{
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{Asset, AssetAmount, STABLE_ASSET};
 use codec::{Decode, Encode};
-use frame_support::sp_runtime::{DispatchError, DispatchResult};
+use frame_support::{
+	sp_runtime::{DispatchError, DispatchResult},
+	weights::Weight,
+};
 use scale_info::TypeInfo;
 
-use crate::{mocks::balance_api::MockBalance, BalanceApi, IncreaseOrDecrease, OrderId, PoolApi};
+use crate::{
+	mocks::balance_api::MockBalance, BalanceApi, IncreaseOrDecrease, LpOrdersWeightsProvider,
+	OrderId, PoolApi,
+};
 
 use super::{MockPallet, MockPalletStorage};
 
@@ -154,5 +160,11 @@ impl PoolApi for MockPoolApi {
 		});
 
 		Ok(())
+	}
+}
+
+impl LpOrdersWeightsProvider for MockPoolApi {
+	fn update_limit_order_weight() -> Weight {
+		Weight::zero()
 	}
 }

@@ -31,7 +31,7 @@ use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, IncreaseOrDecrease,
-	LpRegistration, OrderId, PoolApi, Side,
+	LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -106,6 +106,8 @@ pub mod pallet {
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 
+		type LpOrdersWeights: LpOrdersWeightsProvider;
+
 		type BalanceApi: BalanceApi<AccountId = Self::AccountId>;
 
 		/// LP address registration and verification.
@@ -159,8 +161,7 @@ pub mod pallet {
 
 			weight_used += T::DbWeight::get().reads(1);
 
-			// TODO: use correct weight from pools pallet
-			let limit_order_update_weight = Weight::zero();
+			let limit_order_update_weight = T::LpOrdersWeights::update_limit_order_weight();
 
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {

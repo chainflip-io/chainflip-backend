@@ -26,7 +26,8 @@ use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, BalanceApi, Chainflip, PoolApi, SwapRequestHandler, SwappingApi,
+	impl_pallet_safe_mode, BalanceApi, Chainflip, LpOrdersWeightsProvider, PoolApi,
+	SwapRequestHandler, SwappingApi,
 };
 
 pub use cf_traits::{IncreaseOrDecrease, OrderId};
@@ -2233,5 +2234,11 @@ pub struct DeleteHistoricalEarnedFees<T: Config>(sp_std::marker::PhantomData<T>)
 impl<T: Config> OnKilledAccount<T::AccountId> for DeleteHistoricalEarnedFees<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
+	}
+}
+
+impl<T: Config> LpOrdersWeightsProvider for Pallet<T> {
+	fn update_limit_order_weight() -> Weight {
+		T::WeightInfo::update_limit_order()
 	}
 }
