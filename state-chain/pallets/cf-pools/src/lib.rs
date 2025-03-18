@@ -495,7 +495,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			Self::do_create_pool(base_asset, quote_asset, fee_hundredth_pips, initial_price)
+			Self::create_pool(base_asset, quote_asset, fee_hundredth_pips, initial_price)
 		}
 
 		/// Optionally move the order to a different range and then increase or decrease its amount
@@ -1170,7 +1170,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 		fee_hundredth_pips: u32,
 		initial_price: cf_primitives::Price,
 	) -> DispatchResult {
-		Self::do_create_pool(base_asset, quote_asset, fee_hundredth_pips, initial_price)
+		Self::create_pool(base_asset, quote_asset, fee_hundredth_pips, initial_price)
 	}
 }
 
@@ -1318,7 +1318,7 @@ enum NoOpStatus {
 }
 
 impl<T: Config> Pallet<T> {
-	fn do_create_pool(
+	fn create_pool(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		fee_hundredth_pips: u32,
