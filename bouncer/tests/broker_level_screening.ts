@@ -369,7 +369,7 @@ async function testBrokerLevelScreeningEthereumVaultSwap(
 
   // Currently this event cannot be decoded correctly, so we don't wait for it,
   // just wait for the funds to arrive at the refund address
-  await observeEvent(`${ingressEgressPallet}:TransactionRejectedByBroker`).event;
+  // await observeEvent(`${ingressEgressPallet}:TransactionRejectedByBroker`).event;
 
   let receivedRefund = false;
   for (let i = 0; i < MAX_RETRIES; i++) {
@@ -543,10 +543,6 @@ async function setWhitelistedBroker(brokerAddress: Uint8Array) {
 async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = false) {
   const MILLI_SECS_PER_BLOCK = 6000;
 
-  // 0. -- Ensure that deposit monitor is running with manual mocking mode --
-  await ensureHealth();
-  const previousMockmode = (await setMockmode('Manual')).previous;
-
   // 1. -- Test no boost and early tx report --
   testBrokerLevelScreening.log('Testing broker level screening for Bitcoin with no boost...');
   let btcRefundAddress = await newAssetAddress('Btc');
@@ -605,8 +601,10 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
 
     testBrokerLevelScreening.log(`Bitcoin swap was executed and transaction was not refunded 👍.`);
   }
+}
 
-  // 4. -- Test vault swap rejection --
+async function testBrokerLevelScreeningBitcoinVaultSwap(testBoostedDeposits: boolean = false) {
+  // -- Test vault swap rejection --
   testBrokerLevelScreening.log('Testing broker level screening for Bitcoin vault swap...');
   btcRefundAddress = await newAssetAddress('Btc');
 
@@ -616,21 +614,17 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
 
   // Currently this event cannot be decoded correctly, so we don't wait for it,
   // just wait for the funds to arrive at the refund address
-  await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
+  // await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
 
   testBrokerLevelScreening.log(`Bitcoin vault swap was rejected and refunded 👍.`);
-
-  // 4. -- Restore mockmode --
-  await setMockmode(previousMockmode);
 }
 
 async function main() {
   await ensureHealth();
   const previousMockmode = (await setMockmode('Manual')).previous;
-  await openPrivateBtcChannel('//BROKER_1');
 
   // test rejection of swaps by the responsible broker
   await Promise.all([
@@ -646,11 +640,6 @@ async function main() {
   // test rejection of LP deposits, this requires the rejecting broker to be whitelisted:
   await setWhitelistedBroker(broker.addressRaw);
   await Promise.all([
-    testBrokerLevelScreeningEthereumVaultSwap('Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereumVaultSwap('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereumVaultSwap('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereumVaultSwap('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-
     testBrokerLevelScreeningEthereumLiquidityDeposit('Eth', async (txId) =>
       setTxRiskScore(txId, 9.0),
     ),
@@ -670,6 +659,16 @@ async function main() {
       setTxRiskScore(txId, 9.0),
     ),
   ]);
+
+  // test vault swaps
+  await openPrivateBtcChannel('//BROKER_1');
+  await Promise.all([
+    testBrokerLevelScreeningBitcoinVaultSwap(),
+    testBrokerLevelScreeningEthereumVaultSwap('Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereumVaultSwap('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereumVaultSwap('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereumVaultSwap('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+  ])
 
   await setMockmode(previousMockmode);
 }
