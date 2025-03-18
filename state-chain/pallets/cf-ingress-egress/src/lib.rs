@@ -162,6 +162,16 @@ pub enum DepositFailedReason {
 	CcmInvalidMetadata,
 }
 
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+pub enum RefundReason {
+	InvalidBrokerFees,
+	InvalidRefundParameters,
+	InvalidDcaParameters,
+	CcmUnsupportedForTargetChain,
+	CcmInvalidMetadata,
+	InvalidDestinationAddress,
+}
+
 enum FullWitnessDepositOutcome {
 	BoostFinalised,
 	DepositActionPerformed,
@@ -947,6 +957,10 @@ pub mod pallet {
 		},
 		NetworkFeeDeductionFromBoostSet {
 			deduction_percent: Percent,
+		},
+		ScheduleVaultSwapRefund {
+			block_height: TargetChainBlockNumber<T, I>,
+			reason: RefundReason,
 		},
 	}
 
@@ -2496,6 +2510,85 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	fn validate_vault_swap_request(
+		vault_deposit_witness: VaultDepositWitness<T, I>,
+	) -> Result<
+		(BrokerFees, Option<ChannelMetadata>, Option<ForeignChainAddress>, ForeignChainAddress),
+		RefundReason,
+	> {
+		let VaultDepositWitness {
+			input_asset: source_asset,
+			deposit_address,
+			channel_id,
+			deposit_amount,
+			deposit_details,
+			output_asset: destination_asset,
+			destination_address,
+			deposit_metadata,
+			tx_id,
+			broker_fee,
+			affiliate_fees,
+			refund_params,
+			dca_params,
+			boost_fee,
+		} = vault_deposit_witness.clone();
+		let Some(broker_fees) =
+			Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone())
+		else {
+			return Err(RefundReason::InvalidBrokerFees);
+		};
+
+		if T::SwapLimitsProvider::validate_broker_fees(&broker_fees).is_err() {
+			return Err(RefundReason::InvalidBrokerFees);
+		}
+
+		let (channel_metadata, source_address) = if let Some(metadata) = deposit_metadata.clone() {
+			if T::CcmValidityChecker::check_and_decode(
+				&metadata.channel_metadata,
+				destination_asset,
+				destination_address.clone(),
+			)
+			.is_err()
+			{
+				return Err(RefundReason::CcmInvalidMetadata);
+			}
+
+			let destination_chain: ForeignChain = (destination_asset).into();
+			if !destination_chain.ccm_support() {
+				return Err(RefundReason::CcmUnsupportedForTargetChain);
+			}
+
+			(Some(metadata.channel_metadata), metadata.source_address)
+		} else {
+			(None, None)
+		};
+
+		if let Err(_err) =
+			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
+		{
+			return Err(RefundReason::InvalidRefundParameters);
+		}
+
+		if let Some(params) = &dca_params {
+			if T::SwapLimitsProvider::validate_dca_params(params).is_err() {
+				return Err(RefundReason::InvalidDcaParameters);
+			}
+		}
+
+		let destination_address_internal =
+			match T::AddressConverter::decode_and_validate_address_for_asset(
+				destination_address.clone(),
+				destination_asset,
+			) {
+				Ok(address) => address,
+				Err(_) => {
+					return Err(RefundReason::InvalidDestinationAddress);
+				},
+			};
+
+		Ok((broker_fees, channel_metadata, source_address, destination_address_internal))
+	}
+
 	pub fn process_vault_swap_request_full_witness(
 		block_height: TargetChainBlockNumber<T, I>,
 		vault_deposit_witness: VaultDepositWitness<T, I>,
@@ -2532,91 +2625,41 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
 		);
 
-		let Some(broker_fees) =
-			Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone())
-		else {
-			match Self::process_full_witness_deposit_inner(
-				None,
-				source_asset,
-				deposit_amount,
-				deposit_details.clone(),
-				None,
-				BoostStatus::NotBoosted, /* We immeditly abort the prewitness processing if the
-				                          * broker fees are invalid. In this case the depoist
-				                          * can never be boosted. */
-				boost_fee,
-				channel_id,
-				ChannelAction::Refund {
-					asset: source_asset.into(),
-					refund_address: refund_params.refund_address.into_foreign_chain_address(),
-				},
-				block_height,
-				deposit_origin,
-			) {
+		let (action, source_address) =
+			match Self::validate_vault_swap_request(vault_deposit_witness) {
+				Ok((
+					broker_fees,
+					channel_metadata,
+					source_address,
+					destination_address_internal,
+				)) => (
+					ChannelAction::Swap {
+						destination_asset,
+						destination_address: destination_address_internal,
+						broker_fees: broker_fees.clone(),
+						channel_metadata: channel_metadata.clone(),
+						refund_params: refund_params
+							.map_address(|address| address.into_foreign_chain_address()),
+						dca_params: dca_params.clone(),
+					},
+					source_address,
+				),
 				Err(reason) => {
-					emit_deposit_failed_event(reason);
-				},
-				_ => {
-					// Nothing to do.
-				},
-			}
-
-			return;
-		};
-
-		let destination_address_internal =
-			match T::AddressConverter::decode_and_validate_address_for_asset(
-				destination_address.clone(),
-				destination_asset,
-			) {
-				Ok(address) => address,
-				Err(_) => {
-					emit_deposit_failed_event(DepositFailedReason::InvalidDestinationAddress);
-					return;
+					Self::deposit_event(Event::<T, I>::ScheduleVaultSwapRefund {
+						block_height,
+						reason: RefundReason::InvalidBrokerFees,
+					});
+					(
+						ChannelAction::Refund {
+							asset: source_asset.into(),
+							refund_address: refund_params
+								.refund_address
+								.into_foreign_chain_address(),
+						},
+						None,
+					)
 				},
 			};
-
-		if T::SwapLimitsProvider::validate_broker_fees(&broker_fees).is_err() {
-			emit_deposit_failed_event(DepositFailedReason::InvalidBrokerFees);
-			return;
-		}
-
-		let (channel_metadata, source_address) = if let Some(metadata) = deposit_metadata.clone() {
-			if T::CcmValidityChecker::check_and_decode(
-				&metadata.channel_metadata,
-				destination_asset,
-				destination_address.clone(),
-			)
-			.is_err()
-			{
-				emit_deposit_failed_event(DepositFailedReason::CcmInvalidMetadata);
-				return;
-			}
-
-			let destination_chain: ForeignChain = (destination_asset).into();
-			if !destination_chain.ccm_support() {
-				emit_deposit_failed_event(DepositFailedReason::CcmUnsupportedForTargetChain);
-				return;
-			}
-
-			(Some(metadata.channel_metadata), metadata.source_address)
-		} else {
-			(None, None)
-		};
-
-		if let Err(_err) =
-			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
-		{
-			emit_deposit_failed_event(DepositFailedReason::InvalidRefundParameters);
-			return;
-		}
-
-		if let Some(params) = &dca_params {
-			if T::SwapLimitsProvider::validate_dca_params(params).is_err() {
-				emit_deposit_failed_event(DepositFailedReason::InvalidDcaParameters);
-				return;
-			}
-		}
 
 		match Self::process_full_witness_deposit_inner(
 			deposit_address.clone(),
@@ -2627,15 +2670,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			BoostedVaultTransactions::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted),
 			boost_fee,
 			channel_id,
-			ChannelAction::Swap {
-				destination_asset,
-				destination_address: destination_address_internal,
-				broker_fees: broker_fees.clone(),
-				channel_metadata: channel_metadata.clone(),
-				refund_params: refund_params
-					.map_address(|address| address.into_foreign_chain_address()),
-				dca_params: dca_params.clone(),
-			},
+			action,
 			block_height,
 			DepositOrigin::vault(
 				tx_id.clone(),
