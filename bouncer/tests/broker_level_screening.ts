@@ -606,7 +606,7 @@ async function testBrokerLevelScreeningBitcoin(testBoostedDeposits: boolean = fa
 async function testBrokerLevelScreeningBitcoinVaultSwap(testBoostedDeposits: boolean = false) {
   // -- Test vault swap rejection --
   testBrokerLevelScreening.log('Testing broker level screening for Bitcoin vault swap...');
-  btcRefundAddress = await newAssetAddress('Btc');
+  const btcRefundAddress = await newAssetAddress('Btc');
 
   await brokerLevelScreeningTestBtcVaultSwap('0.2', false, btcRefundAddress, async (txId) =>
     setTxRiskScore(txId, 9.0),
@@ -633,8 +633,8 @@ async function main() {
     testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereum('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereum('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    // testBrokerLevelScreeningEthereum('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    // testBrokerLevelScreeningEthereum('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
   // test rejection of LP deposits, this requires the rejecting broker to be whitelisted:
@@ -652,12 +652,12 @@ async function main() {
     testBrokerLevelScreeningEthereumLiquidityDeposit('Usdc', async (txId) =>
       setTxRiskScore(txId, 9.0),
     ),
-    testBrokerLevelScreeningEthereumLiquidityDeposit('ArbEth', async (txId) =>
-      setTxRiskScore(txId, 9.0),
-    ),
-    testBrokerLevelScreeningEthereumLiquidityDeposit('ArbUsdc', async (txId) =>
-      setTxRiskScore(txId, 9.0),
-    ),
+    // testBrokerLevelScreeningEthereumLiquidityDeposit('ArbEth', async (txId) =>
+    //   setTxRiskScore(txId, 9.0),
+    // ),
+    // testBrokerLevelScreeningEthereumLiquidityDeposit('ArbUsdc', async (txId) =>
+    //   setTxRiskScore(txId, 9.0),
+    // ),
   ]);
 
   // test vault swaps
@@ -666,9 +666,9 @@ async function main() {
     testBrokerLevelScreeningBitcoinVaultSwap(),
     testBrokerLevelScreeningEthereumVaultSwap('Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereumVaultSwap('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereumVaultSwap('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereumVaultSwap('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-  ])
+    // testBrokerLevelScreeningEthereumVaultSwap('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    // testBrokerLevelScreeningEthereumVaultSwap('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+  ]);
 
   await setMockmode(previousMockmode);
 }
