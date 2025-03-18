@@ -161,6 +161,16 @@ impl PoolApi for MockPoolApi {
 
 		Ok(())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn create_pool(
+		_base_asset: Asset,
+		_quote_asset: Asset,
+		_fee_hundredth_pips: u32,
+		_initial_price: cf_primitives::Price,
+	) -> DispatchResult {
+		unimplemented!()
+	}
 }
 
 impl LpOrdersWeightsProvider for MockPoolApi {

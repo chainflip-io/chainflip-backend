@@ -243,7 +243,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(1)]
-		#[pallet::weight(Weight::zero())] // TODO: benchmark
+		#[pallet::weight(T::WeightInfo::deploy_trading_strategy())]
 		pub fn deploy_trading_strategy(
 			origin: OriginFor<T>,
 			strategy: TradingStrategy,
@@ -303,7 +303,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight(Weight::zero())] // TODO: benchmark
+		#[pallet::weight(T::WeightInfo::close_strategy())]
 		pub fn close_strategy(origin: OriginFor<T>, strategy_id: T::AccountId) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -333,7 +333,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(3)]
-		#[pallet::weight(Weight::zero())] // TODO: benchmark
+		#[pallet::weight(T::WeightInfo::add_funds_to_strategy())]
 		pub fn add_funds_to_strategy(
 			origin: OriginFor<T>,
 			strategy_id: T::AccountId,

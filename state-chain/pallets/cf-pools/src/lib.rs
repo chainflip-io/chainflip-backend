@@ -180,10 +180,8 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::{
-		limit_orders,
 		math::Tick,
 		range_orders::{self, Liquidity},
-		NewError,
 	};
 	use cf_traits::AccountRoleRegistry;
 	use frame_system::pallet_prelude::BlockNumberFor;
@@ -497,36 +495,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
-			Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
-				ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
-
-				*maybe_pool = Some(Pool {
-					range_orders_cache: Default::default(),
-					limit_orders_cache: Default::default(),
-					pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(|e| {
-						match e {
-							NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
-								Error::<T>::InvalidFeeAmount,
-							NewError::RangeOrders(range_orders::NewError::InvalidFeeAmount) =>
-								Error::<T>::InvalidFeeAmount,
-							NewError::RangeOrders(range_orders::NewError::InvalidInitialPrice) =>
-								Error::<T>::InvalidInitialPrice,
-						}
-					})?,
-				});
-
-				Ok::<_, Error<T>>(())
-			})?;
-
-			Self::deposit_event(Event::<T>::NewPoolCreated {
-				base_asset,
-				quote_asset,
-				fee_hundredth_pips,
-				initial_price,
-			});
-
-			Ok(())
+			Self::do_create_pool(base_asset, quote_asset, fee_hundredth_pips, initial_price)
 		}
 
 		/// Optionally move the order to a different range and then increase or decrease its amount
@@ -1193,6 +1162,16 @@ impl<T: Config> PoolApi for Pallet<T> {
 			amount_change,
 		)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn create_pool(
+		base_asset: Asset,
+		quote_asset: Asset,
+		fee_hundredth_pips: u32,
+		initial_price: cf_primitives::Price,
+	) -> DispatchResult {
+		Self::do_create_pool(base_asset, quote_asset, fee_hundredth_pips, initial_price)
+	}
 }
 
 #[derive(
@@ -1339,6 +1318,46 @@ enum NoOpStatus {
 }
 
 impl<T: Config> Pallet<T> {
+	fn do_create_pool(
+		base_asset: any::Asset,
+		quote_asset: any::Asset,
+		fee_hundredth_pips: u32,
+		initial_price: Price,
+	) -> DispatchResult {
+		use cf_amm::NewError;
+
+		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
+			ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
+
+			*maybe_pool = Some(Pool {
+				range_orders_cache: Default::default(),
+				limit_orders_cache: Default::default(),
+				pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(
+					|e| match e {
+						NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
+							Error::<T>::InvalidFeeAmount,
+						NewError::RangeOrders(range_orders::NewError::InvalidFeeAmount) =>
+							Error::<T>::InvalidFeeAmount,
+						NewError::RangeOrders(range_orders::NewError::InvalidInitialPrice) =>
+							Error::<T>::InvalidInitialPrice,
+					},
+				)?,
+			});
+
+			Ok::<_, Error<T>>(())
+		})?;
+
+		Self::deposit_event(Event::<T>::NewPoolCreated {
+			base_asset,
+			quote_asset,
+			fee_hundredth_pips,
+			initial_price,
+		});
+
+		Ok(())
+	}
+
 	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
 		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation).
 		// Note that we read one pool at a time to optimise memory usage.
