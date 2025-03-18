@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/lib.rs
+assertion_line: 2187
 expression: broker
 ---
 {
@@ -29,8 +30,8 @@ expression: broker
     },
     "Assethub": {
       "DOT": "0x0",
-      "USDC": "0x0",
-      "USDT": "0x0"
+      "USDT": "0x0",
+      "USDC": "0x0"
     }
   },
   "affiliates": [

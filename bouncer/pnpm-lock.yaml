@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.8.0-assethub.6
-        version: 1.8.0-assethub.6(axios@1.7.9)(bufferutil@4.0.8)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.7.2)(utf-8-validate@5.0.10)
+        specifier: 1.9.0-assethub.0
+        version: 1.9.0-assethub.0(axios@1.7.9)(bufferutil@4.0.8)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.7.2)(utf-8-validate@5.0.10)
       '@chainflip/utils':
         specifier: ^0.4.12
         version: 0.4.12
@@ -151,11 +151,11 @@ packages:
     resolution: {integrity: sha512-aA63XwOkcl4xxQa3HjPMqOP6LiK0ZDv3mUPYEFXkpHbaFjtGggE1A61FjFzJnB+p7/oy2gA8E+rcBNl/zC1tMg==}
     engines: {node: '>=6.9.0'}
 
-  '@chainflip/bitcoin@1.1.1':
-    resolution: {integrity: sha512-Jr6X/0QTSFYpTp23ZPhyioL6wL9x3Xpj6OGjadQKZyhobRN4BZkhLogv20HDYTJcRzVphzrTJArbEaNie04XVA==}
+  '@chainflip/bitcoin@1.2.4':
+    resolution: {integrity: sha512-bAVP4GSPnAOLWc0XVMXV4Mn5bsOlaa2KKhQCd7XKCYy4+e8JawZFxECywGQFCg8ZVeJMqy54RFGyLsMIx74+Iw==}
 
-  '@chainflip/cli@1.8.0-assethub.6':
-    resolution: {integrity: sha512-XTqZac8a5DHZ5cGJd81FJa7N9UFxeaj7oVgqQM/pgGuSGHcNZH7nQgOAWKG+kAJFpUSoDPR8NheuYU06nHUgFg==}
+  '@chainflip/cli@1.9.0-assethub.0':
+    resolution: {integrity: sha512-FKeUzB3+u9pLN5BuIrVGtHnzEBrqMqZ/H9tlXJ8EtyQilgHI+qoRtTYx6X+q0CCoR7Pr4mVY1c8bx/KVTvbIRg==}
     hasBin: true
     peerDependencies:
       axios: ^1.x
@@ -164,14 +164,14 @@ packages:
   '@chainflip/extrinsics@1.6.1':
     resolution: {integrity: sha512-sm3v2QguNW4/RiIZYHd+VRSxup2q4cVBY0VjbQJw6xYqhNCzZlt+Hl38Kni+TCHQu3hP/WgIF72yvvSs7/PBdg==}
 
-  '@chainflip/rpc@1.8.7':
-    resolution: {integrity: sha512-ixvNrK9IHGZpajcJW4P5r1v3prSVLDHgTdzfE2wKTFekidL2pYk7duAW2windW/OXPG63ii6cmHqLQ8IGlF7dg==}
+  '@chainflip/rpc@1.9.0-assethub.2':
+    resolution: {integrity: sha512-mQNOBwjeY/DIABrDLjcUsYS6kyYnfZjP+EnuLGpmyPmluJap+tkWNqg+NBkPiKewShD7qjTpDdSautP4NXCaEg==}
 
-  '@chainflip/solana@1.0.3':
-    resolution: {integrity: sha512-IirKI5Q/PUILAYliq0FbacqGL/u52iHWysIRn0iHf4qJg++o2kdLJnhHDNj6/aUtKZksBjyrPRG8JrUjHaF0NA==}
+  '@chainflip/scale@1.8.0':
+    resolution: {integrity: sha512-66bT2DQi0kNFZRva0phBuMWCWKamOyfROlKovxcBd6wzZVGFxVqgi73iG1nExaUPlOLJnYc8gQ/blwHidgjvrg==}
 
-  '@chainflip/utils@0.4.0':
-    resolution: {integrity: sha512-OuMFlgbIbyJ1Kt39zytfGh4HZ5dVY25/a3qb0c1K137+QmhdOuF+R7QSkFPqYAfDG4KhGRqo0rgUtEpaEEcSKA==}
+  '@chainflip/solana@2.1.4':
+    resolution: {integrity: sha512-v1ccjDPDci9QvtZeiBxf0Z8VIUFBWK6OC8eTA7AGibAYhOVB7FusmLl+dkCB5qdrpI8PfBz8gcwqgFFvkMDXTw==}
 
   '@chainflip/utils@0.4.12':
     resolution: {integrity: sha512-yxMj6F/8MAxebuEPxYRYFOZr4dwELoM3i9hgQHmztjjR6ljChC/zuBRnJjJMprOdNJLF/qYLY7RUf/562ZOEpQ==}
@@ -179,22 +179,42 @@ packages:
   '@chainflip/utils@0.6.0':
     resolution: {integrity: sha512-ZwyNKv3FVVJw5aOcRf/4rTxCclP+prerxPnTGBrFcBYEYSrPlyx4eI1dc7J35xmKD2yq+vQgwNjCx1h6oJuoPA==}
 
-  '@chainflip/utils@1.8.0-assethub.1':
-    resolution: {integrity: sha512-htxgXa4sfqho9OJC8fcZ4+/zl/EzPEodzYn222AVf3iEwpBT9zJTdUd3YH7oOWknrEztscRu2EWCYelLx+9Clw==}
+  '@chainflip/utils@0.7.0':
+    resolution: {integrity: sha512-aTrtmpPkbqojP5wsrpfCgx8uskv9SD1gmq7hWwjfRQT1ucwYGAuUzL9LdREBtiMNB4pfS/J42dRWjbbLmx0j5w==}
+
+  '@chainflip/utils@0.7.2':
+    resolution: {integrity: sha512-DJ37gbbNVEy/YFcK9oQ19Ro83hUwCFyP2fA//Vatit1Z4nWPKgBmyQtYQLdjfcwrOhvQeYi7DcxfVU0YwOaP2g==}
+
+  '@chainflip/utils@0.7.2-assethub.2':
+    resolution: {integrity: sha512-x6AvEPx8hmZ5niWo/j+bt2PWL+Tyou6MeYoUZnydp6DmzVTXV6KCTOMfwTDd5i28TTaSVULdCaLyOMrFdthiGw==}
 
   '@coral-xyz/anchor-errors@0.30.1':
     resolution: {integrity: sha512-9Mkradf5yS5xiLWrl9WrpjqOrAV+/W2RQHDlbnAZBivoGpOs1ECjoDCkVk4aRG8ZdiFiB8zQEVlxf+8fKkmSfQ==}
+    engines: {node: '>=10'}
+
+  '@coral-xyz/anchor-errors@0.31.0':
+    resolution: {integrity: sha512-SUERksFSQ+4F11hkROIwHq4mcoSMXJxwVWLoklefi4dU679zVWFVcTq6O7otvjY8wlUaRXeE+iYcQWZTw2ll6w==}
     engines: {node: '>=10'}
 
   '@coral-xyz/anchor@0.30.1':
     resolution: {integrity: sha512-gDXFoF5oHgpriXAaLpxyWBHdCs8Awgf/gLHIo6crv7Aqm937CNdY+x+6hoj7QR5vaJV7MxWSQ0NGFzL3kPbWEQ==}
     engines: {node: '>=11'}
 
+  '@coral-xyz/anchor@0.31.0':
+    resolution: {integrity: sha512-Yb1NwP1s4cWhAw7wL7vOLHSWWw3cD5D9pRCVSeJpdqPaI+w7sfRLScnVJL6ViYMZynB7nAG/5HcUPKUnY0L9rw==}
+    engines: {node: '>=17'}
+
   '@coral-xyz/borsh@0.30.1':
     resolution: {integrity: sha512-aaxswpPrCFKl8vZTbxLssA2RvwX2zmKLlRCIktJOwW+VpVwYtXRtlWiIP+c2pPRKneiTiWCN2GEMSH9j1zTlWQ==}
     engines: {node: '>=10'}
     peerDependencies:
       '@solana/web3.js': ^1.68.0
+
+  '@coral-xyz/borsh@0.31.0':
+    resolution: {integrity: sha512-DwdQ5fuj+rGQCTKRnxnW1W2lvcpBaFc9m9M1TcGGlm+bwCcggmDgbLKLgF+LjIrKnc7Nd+bCACx5RA9YTK2I4Q==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      '@solana/web3.js': ^1.69.0
 
   '@date-fns/utc@2.1.0':
     resolution: {integrity: sha512-176grgAgU2U303rD2/vcOmNg0kGPbhzckuH1TEP2al7n0AQipZIy9P15usd2TKQCG1g+E1jX/ZVQSzs4sUDwgA==}
@@ -3052,6 +3072,9 @@ packages:
   scale-ts@1.6.0:
     resolution: {integrity: sha512-Ja5VCjNZR8TGKhUumy9clVVxcDpM+YFjAnkMuwQy68Hixio3VRRvWdE3g8T/yC+HXA0ZDQl2TGyUmtmbcVl40Q==}
 
+  scale-ts@1.6.1:
+    resolution: {integrity: sha512-PBMc2AWc6wSEqJYBDPcyCLUj9/tMKnLX70jLOSndMtcUoLQucP/DM0vnQo1wJAYjTrQiq8iG9rD0q6wFzgjH7g==}
+
   scrypt-js@3.0.1:
     resolution: {integrity: sha512-cdwTTnqPu0Hyvf5in5asVdZocVDTNRmR7XEcJuIzMjJeSHybHl7vpB66AzwTaIg6CLSbtjcxc8fqcySfnTkccA==}
 
@@ -3749,20 +3772,23 @@ snapshots:
     dependencies:
       regenerator-runtime: 0.14.1
 
-  '@chainflip/bitcoin@1.1.1(typescript@5.7.2)':
+  '@chainflip/bitcoin@1.2.4(typescript@5.7.2)':
     dependencies:
-      '@chainflip/utils': 0.4.12
+      '@chainflip/utils': 0.7.2
+      bignumber.js: 9.1.2
       bitcoinjs-lib: 7.0.0-rc.0(typescript@5.7.2)
+      scale-ts: 1.6.1
+      zod: 3.24.2
     transitivePeerDependencies:
       - typescript
 
-  '@chainflip/cli@1.8.0-assethub.6(axios@1.7.9)(bufferutil@4.0.8)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.7.2)(utf-8-validate@5.0.10)':
+  '@chainflip/cli@1.9.0-assethub.0(axios@1.7.9)(bufferutil@4.0.8)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.7.2)(utf-8-validate@5.0.10)':
     dependencies:
-      '@chainflip/bitcoin': 1.1.1(typescript@5.7.2)
+      '@chainflip/bitcoin': 1.2.4(typescript@5.7.2)
       '@chainflip/extrinsics': 1.6.1
-      '@chainflip/rpc': 1.8.7
-      '@chainflip/solana': 1.0.3(bufferutil@4.0.8)(utf-8-validate@5.0.10)
-      '@chainflip/utils': 1.8.0-assethub.1
+      '@chainflip/rpc': 1.9.0-assethub.2
+      '@chainflip/solana': 2.1.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      '@chainflip/utils': 0.7.2-assethub.2
       axios: 1.7.9
       ethers: 6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       ioredis: 5.4.1
@@ -3777,21 +3803,29 @@ snapshots:
 
   '@chainflip/extrinsics@1.6.1': {}
 
-  '@chainflip/rpc@1.8.7':
+  '@chainflip/rpc@1.9.0-assethub.2':
     dependencies:
-      '@chainflip/utils': 0.6.0
+      '@chainflip/utils': 0.7.0
       zod: 3.24.2
 
-  '@chainflip/solana@1.0.3(bufferutil@4.0.8)(utf-8-validate@5.0.10)':
+  '@chainflip/scale@1.8.0':
     dependencies:
-      '@chainflip/utils': 0.4.0
+      '@chainflip/utils': 0.6.0
+      scale-ts: 1.6.1
+
+  '@chainflip/solana@2.1.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)':
+    dependencies:
+      '@chainflip/scale': 1.8.0
+      '@chainflip/utils': 0.7.2
+      '@coral-xyz/anchor': 0.31.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       '@solana/web3.js': 1.98.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      bn.js: 5.2.1
+      scale-ts: 1.6.1
+      zod: 3.24.2
     transitivePeerDependencies:
       - bufferutil
       - encoding
       - utf-8-validate
-
-  '@chainflip/utils@0.4.0': {}
 
   '@chainflip/utils@0.4.12':
     dependencies:
@@ -3805,13 +3839,27 @@ snapshots:
       bignumber.js: 9.1.2
       date-fns: 4.1.0
 
-  '@chainflip/utils@1.8.0-assethub.1':
+  '@chainflip/utils@0.7.0':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.1.2
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.7.2':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.1.2
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.7.2-assethub.2':
     dependencies:
       '@date-fns/utc': 2.1.0
       bignumber.js: 9.1.2
       date-fns: 4.1.0
 
   '@coral-xyz/anchor-errors@0.30.1': {}
+
+  '@coral-xyz/anchor-errors@0.31.0': {}
 
   '@coral-xyz/anchor@0.30.1(bufferutil@4.0.8)(utf-8-validate@5.0.10)':
     dependencies:
@@ -3835,7 +3883,33 @@ snapshots:
       - encoding
       - utf-8-validate
 
+  '@coral-xyz/anchor@0.31.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)':
+    dependencies:
+      '@coral-xyz/anchor-errors': 0.31.0
+      '@coral-xyz/borsh': 0.31.0(@solana/web3.js@1.98.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))
+      '@noble/hashes': 1.6.1
+      '@solana/web3.js': 1.98.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      bn.js: 5.2.1
+      bs58: 4.0.1
+      buffer-layout: 1.2.2
+      camelcase: 6.3.0
+      cross-fetch: 3.1.8
+      eventemitter3: 4.0.7
+      pako: 2.1.0
+      superstruct: 0.15.5
+      toml: 3.0.0
+    transitivePeerDependencies:
+      - bufferutil
+      - encoding
+      - utf-8-validate
+
   '@coral-xyz/borsh@0.30.1(@solana/web3.js@1.98.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))':
+    dependencies:
+      '@solana/web3.js': 1.98.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      bn.js: 5.2.1
+      buffer-layout: 1.2.2
+
+  '@coral-xyz/borsh@0.31.0(@solana/web3.js@1.98.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))':
     dependencies:
       '@solana/web3.js': 1.98.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       bn.js: 5.2.1
@@ -7192,6 +7266,8 @@ snapshots:
   safer-buffer@2.1.2: {}
 
   scale-ts@1.6.0: {}
+
+  scale-ts@1.6.1: {}
 
   scrypt-js@3.0.1: {}
 
