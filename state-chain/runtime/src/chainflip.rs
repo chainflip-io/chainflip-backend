@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
 pub mod backup_node_rewards;
@@ -49,6 +65,9 @@ use cf_chains::{
 		EvmCrypto, Transaction,
 	},
 	hub::{api::AssethubApi, OutputAccountId},
+	instances::{
+		ArbitrumInstance, AssethubInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+	},
 	sol::{
 		api::{
 			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
@@ -64,8 +83,10 @@ use cf_chains::{
 	Solana, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
+	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
+	DcaParameters,
 };
+
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
@@ -765,7 +786,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints,
-				refund_parameters: Option<ChannelRefundParametersDecoded>,
+				refund_parameters: ChannelRefundParametersDecoded,
 				dca_parameters: Option<DcaParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
@@ -1057,5 +1078,26 @@ impl FetchesTransfersLimitProvider for EvmLimit {
 
 	fn maybe_fetches_limit() -> Option<usize> {
 		Some(20)
+	}
+}
+
+pub struct MinimumDepositProvider;
+impl cf_traits::MinimumDeposit for MinimumDepositProvider {
+	fn get(asset: Asset) -> AssetAmount {
+		use pallet_cf_ingress_egress::MinimumDeposit;
+		match asset.into() {
+			ForeignChainAndAsset::Ethereum(asset) =>
+				MinimumDeposit::<Runtime, EthereumInstance>::get(asset),
+			ForeignChainAndAsset::Polkadot(asset) =>
+				MinimumDeposit::<Runtime, PolkadotInstance>::get(asset),
+			ForeignChainAndAsset::Bitcoin(asset) =>
+				MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
+			ForeignChainAndAsset::Arbitrum(asset) =>
+				MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
+			ForeignChainAndAsset::Solana(asset) =>
+				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
+			ForeignChainAndAsset::Assethub(asset) =>
+				MinimumDeposit::<Runtime, AssethubInstance>::get(asset),
+		}
 	}
 }

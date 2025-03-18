@@ -10,13 +10,14 @@
 
 import { runWithTimeoutAndExit, getContractAddress } from '../shared/utils';
 import { sendErc20 } from '../shared/send_erc20';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
   const ethereumAddress = process.argv[2];
   const flipAmount = process.argv[3].trim();
 
   const contractAddress = getContractAddress('Ethereum', 'Flip');
-  await sendErc20('Ethereum', ethereumAddress, contractAddress, flipAmount);
+  await sendErc20(globalLogger, 'Ethereum', ethereumAddress, contractAddress, flipAmount);
 }
 
 await runWithTimeoutAndExit(main(), 50);

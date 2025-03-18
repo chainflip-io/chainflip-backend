@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use cf_primitives::{
 	EpochIndex, PolkadotBlockNumber, ASSETHUB_USDC_ASSET_ID, ASSETHUB_USDT_ASSET_ID,
 };
@@ -8,18 +24,17 @@ use state_chain_runtime::AssethubInstance;
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
-use crate::witness::{
-	common::{
-		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
-		RuntimeHasChain,
+use crate::{
+	dot::PolkadotHash,
+	witness::{
+		common::{
+			chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
+			RuntimeCallHasChain, RuntimeHasChain,
+		},
+		hub::EventWrapper,
 	},
-	hub::EventWrapper,
 };
-use cf_chains::{
-	assets::hub::Asset,
-	dot::{PolkadotAccountId, PolkadotHash},
-	Assethub,
-};
+use cf_chains::{assets::hub::Asset, dot::PolkadotAccountId, Assethub};
 use subxt::events::Phase;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {

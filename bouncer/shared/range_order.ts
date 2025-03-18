@@ -7,8 +7,15 @@ import {
   createStateChainKeypair,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { Logger } from './utils/logger';
 
-export async function rangeOrder(ccy: Asset, amount: number, lpKey?: string, orderId?: number) {
+export async function rangeOrder(
+  logger: Logger,
+  ccy: Asset,
+  amount: number,
+  lpKey?: string,
+  orderId?: number,
+) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 
@@ -22,8 +29,8 @@ export async function rangeOrder(ccy: Asset, amount: number, lpKey?: string, ord
   ).toJSON();
   const currentSqrtPrice = currentPools!.poolState.rangeOrders.currentSqrtPrice;
   const liquidity = BigInt(Math.round((currentSqrtPrice / 2 ** 96) * Number(fineAmount)));
-  console.log('Setting up ' + ccy + ' range order');
-  const orderCreatedEvent = observeEvent('liquidityPools:RangeOrderUpdated', {
+  logger.debug('Setting up ' + ccy + ' range order');
+  const orderCreatedEvent = observeEvent(logger, 'liquidityPools:RangeOrderUpdated', {
     test: (event) =>
       event.data.lp === lp.address &&
       event.data.baseAsset === ccy &&

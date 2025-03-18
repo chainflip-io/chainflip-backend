@@ -4,7 +4,9 @@ import {
   chainFromAsset,
   stateChainAssetFromAsset,
   isPolkadotAsset,
+  newAddress,
 } from './utils';
+import { Logger } from './utils/logger';
 
 const defaultCommissionBps = 100; // 1%
 
@@ -15,6 +17,7 @@ export type FillOrKillParamsX128 = NonNullable<RequestDepositChannelParams['fill
 export type DcaParams = NonNullable<RequestDepositChannelParams['dcaParams']>;
 
 export async function newSwap(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -29,6 +32,14 @@ export async function newSwap(
     : destAddress;
   const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
 
+  const defaultRefundAddress = await newAddress(sourceAsset, 'DEFAULT_REFUND');
+
+  const defaultFillOrKillParams: FillOrKillParamsX128 = {
+    retryDurationBlocks: 0,
+    refundAddress: defaultRefundAddress,
+    minPriceX128: '0',
+  };
+
   // If the dry_run of the extrinsic fails on the broker-api then it won't retry. So we retry here to
   // avoid flakiness on CI.
   let retryCount = 0;
@@ -42,13 +53,13 @@ export async function newSwap(
           destAddress: destinationAddress,
           destChain: chainFromAsset(destAsset) as Chain,
           ccmParams: messageMetadata && {
-            message: messageMetadata.message as `0x${string}`,
+            message: messageMetadata.message,
             gasBudget: messageMetadata.gasBudget.toString(),
-            ccmAdditionalData: messageMetadata.ccmAdditionalData as `0x${string}`,
+            ccmAdditionalData: messageMetadata.ccmAdditionalData,
           },
           commissionBps: brokerCommissionBps,
           maxBoostFeeBps: boostFeeBps,
-          fillOrKillParams,
+          fillOrKillParams: fillOrKillParams || defaultFillOrKillParams,
           dcaParams,
         },
         {
@@ -59,7 +70,7 @@ export async function newSwap(
       break; // Exit the loop on success
     } catch (error) {
       retryCount++;
-      console.error(
+      logger.error(
         `Request swap deposit address for ${sourceAsset} attempt: ${retryCount} failed: ${error}`,
       );
     }

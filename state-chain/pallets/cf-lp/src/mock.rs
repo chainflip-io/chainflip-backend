@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate as pallet_cf_lp;
 use crate::PalletSafeMode;
 use cf_chains::{
@@ -5,16 +21,16 @@ use cf_chains::{
 	assets::any::Asset,
 	AnyChain, Chain, Ethereum,
 };
-use cf_primitives::{chains::assets, AccountId, AssetAmount, ChannelId};
+use cf_primitives::{chains::assets, AssetAmount, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler,
+		egress_handler::MockEgressHandler, swap_request_api::MockSwapRequestHandler,
 	},
-	AccountRoleRegistry, BalanceApi, BoostApi, HistoricalFeeMigration,
+	AccountRoleRegistry, BalanceApi, BoostApi, HistoricalFeeMigration, MinimumDeposit,
 };
 use frame_support::{
 	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -24,6 +40,8 @@ use sp_runtime::{traits::IdentityLookup, Permill};
 use std::{cell::RefCell, collections::BTreeMap};
 
 use sp_std::str::FromStr;
+
+type AccountId = u64;
 
 pub struct MockAddressDerivation;
 
@@ -73,6 +91,14 @@ impl HistoricalFeeMigration for MockMigrationHelper {
 	}
 }
 
+pub const MINIMUM_DEPOSIT: u128 = 100;
+pub struct MockMinimumDepositProvider;
+impl MinimumDeposit for MockMinimumDepositProvider {
+	fn get(_asset: Asset) -> AssetAmount {
+		MINIMUM_DEPOSIT
+	}
+}
+
 pub struct MockBalanceApi;
 
 impl BalanceApi for MockBalanceApi {
@@ -81,7 +107,7 @@ impl BalanceApi for MockBalanceApi {
 	fn credit_account(who: &Self::AccountId, _asset: Asset, amount: AssetAmount) {
 		BALANCE_MAP.with(|balance_map| {
 			let mut balance_map = balance_map.borrow_mut();
-			*balance_map.entry(who.to_owned()).or_default() += amount;
+			*balance_map.entry(*who).or_default() += amount;
 		});
 	}
 
@@ -161,7 +187,9 @@ impl crate::Config for Test {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
 	type BoostApi = MockIngressEgressBoostApi;
+	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type MigrationHelper = MockMigrationHelper;
+	type MinimumDeposit = MockMinimumDepositProvider;
 }
 
 pub struct MockIngressEgressBoostApi;
@@ -188,22 +216,22 @@ impl MockIngressEgressBoostApi {
 	}
 }
 
-pub const LP_ACCOUNT: [u8; 32] = [1u8; 32];
-pub const LP_ACCOUNT_2: [u8; 32] = [3u8; 32];
-pub const NON_LP_ACCOUNT: [u8; 32] = [2u8; 32];
+pub const LP_ACCOUNT: AccountId = 1;
+pub const LP_ACCOUNT_2: AccountId = 3;
+pub const NON_LP_ACCOUNT: AccountId = 2;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
-			&LP_ACCOUNT.into(),
+			&LP_ACCOUNT,
 		));
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
-			&LP_ACCOUNT_2.into(),
+			&LP_ACCOUNT_2,
 		));
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&NON_LP_ACCOUNT.into(),
+			&NON_LP_ACCOUNT,
 		));
 	}
 }

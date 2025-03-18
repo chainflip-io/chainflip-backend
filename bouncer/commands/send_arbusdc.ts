@@ -10,12 +10,13 @@
 
 import { runWithTimeoutAndExit, getContractAddress } from '../shared/utils';
 import { sendErc20 } from '../shared/send_erc20';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
   const arbitrumAddress = process.argv[2];
   const arbusdcAmount = process.argv[3].trim();
 
   const contractAddress = getContractAddress('Arbitrum', 'ArbUsdc');
-  await sendErc20('Arbitrum', arbitrumAddress, contractAddress, arbusdcAmount);
+  await sendErc20(globalLogger, 'Arbitrum', arbitrumAddress, contractAddress, arbusdcAmount);
 }
 await runWithTimeoutAndExit(main(), 20);

@@ -1,11 +1,25 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 pub mod base_rpc_api;
 pub mod chain_api;
 pub mod electoral_api;
-pub mod error_decoder;
 pub mod extrinsic_api;
 pub mod storage_api;
 pub mod stream_api;
-pub mod subxt_state_chain_config;
 
 use async_trait::async_trait;
 
@@ -13,6 +27,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use cf_primitives::{AccountRole, SemVer};
 use futures::{StreamExt, TryStreamExt};
 
+use cf_node_client::{signer, subxt_state_chain_config::StateChainConfig, WaitFor, WaitForResult};
 use cf_primitives::CfeCompatibility;
 use futures_core::future::BoxFuture;
 use futures_util::FutureExt;
@@ -20,8 +35,9 @@ use jsonrpsee::core::ClientError;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
-use subxt::{backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder, OnlineClient};
-use subxt_state_chain_config::StateChainConfig;
+use subxt::{
+	backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder, ext::subxt_rpcs, OnlineClient,
+};
 use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{info, warn};
@@ -43,10 +59,7 @@ use crate::{
 use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
-	extrinsic_api::{
-		signed::{signer, SignedExtrinsicApi, WaitFor, WaitForResult},
-		unsigned,
-	},
+	extrinsic_api::{signed::SignedExtrinsicApi, unsigned},
 	storage_api::{BlockCompatibility, StorageApi},
 	stream_api::{StateChainStream, StreamApi, FINALIZED, UNFINALIZED},
 };
@@ -101,7 +114,7 @@ impl DefaultRpcClient {
 
 #[derive(Error, Debug)]
 pub enum CreateStateChainClientError {
-	#[error("Compatibilty error")]
+	#[error("Compatibility error")]
 	CompatibilityError(BlockCompatibility),
 }
 
@@ -767,7 +780,6 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		};
 
 		if self.submit_cfe_version {
-			use crate::state_chain_observer::client::subxt_state_chain_config::StateChainConfig;
 			use subxt::tx::Signer;
 
 			let rpc_client = RpcClient::new(SubxtInterface(base_rpc_client.clone()));
@@ -781,10 +793,6 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				impl subxt::tx::Signer<StateChainConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {
 					fn account_id(&self) -> <StateChainConfig as subxt::Config>::AccountId {
 						self.0.clone()
-					}
-
-					fn address(&self) -> <StateChainConfig as subxt::Config>::Address {
-						subxt::utils::MultiAddress::Id(self.0.clone())
 					}
 
 					fn sign(&self, bytes: &[u8]) -> <StateChainConfig as subxt::Config>::Signature {
@@ -814,9 +822,6 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				const MAX_UPDATE_VERSION_RETRIES: usize = 10;
 				let mut update_successful = false;
 				for retry in 1..=MAX_UPDATE_VERSION_RETRIES {
-					let block_hash = finalized_block_stream.cache().hash;
-					let block_number = finalized_block_stream.cache().number;
-
 					// Submitting transaction with subxt sometimes gets stuck without returning any
 					// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
 					// so we use a timeout to ensure we can recover:
@@ -824,7 +829,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 						let current_nonce = rpc_client
 							.request::<u32>(
 								"system_accountNextIndex",
-								subxt::rpc_params![&subxt_signer.account_id()],
+								subxt_rpcs::rpc_params![&subxt_signer.account_id()],
 							)
 							.await?;
 
@@ -845,11 +850,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 								),
 								&subxt_signer,
 								DefaultExtrinsicParamsBuilder::new()
-									.mortal_unchecked(
-										block_number.into(),
-										block_hash,
-										SIGNED_EXTRINSIC_LIFETIME.into(),
-									)
+									.mortal(SIGNED_EXTRINSIC_LIFETIME.into())
 									.nonce(current_nonce.into())
 									.build(),
 							)
@@ -1063,14 +1064,10 @@ pub mod mocks {
 	use state_chain_runtime::AccountId;
 
 	use super::{
-		extrinsic_api::{
-			self,
-			signed::{WaitFor, WaitForResult},
-			unsigned,
-		},
+		extrinsic_api::{self, unsigned},
 		storage_api,
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
-		BlockInfo,
+		BlockInfo, WaitFor, WaitForResult,
 	};
 
 	mock! {

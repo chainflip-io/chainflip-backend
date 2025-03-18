@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
 use cf_amm::{
 	common::{PoolPairsMap, Side},
@@ -10,9 +26,9 @@ use cf_chains::{
 	VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
-	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount,
-	NetworkEnvironment, PrewitnessedDepositId, SemVer,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount, NetworkEnvironment,
+	PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -191,12 +207,23 @@ pub struct LiquidityProviderInfo {
 	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, TypeInfo, Default)]
 pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 	pub btc_vault_deposit_address: Option<String>,
-	pub affiliates: Vec<(AffiliateShortId, AccountId32)>,
+	pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
 	pub bond: AssetAmount,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct BrokerInfoLegacy {
+	pub earned_fees: Vec<(Asset, AssetAmount)>,
+}
+
+impl From<BrokerInfoLegacy> for BrokerInfo {
+	fn from(legacy: BrokerInfoLegacy) -> Self {
+		BrokerInfo { earned_fees: legacy.earned_fees, ..Default::default() }
+	}
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
@@ -296,6 +323,13 @@ pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
 }
 
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct VaultAddresses {
+	pub ethereum: EncodedAddress,
+	pub arbitrum: EncodedAddress,
+	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
+}
+
 // READ THIS BEFORE UPDATING THIS TRAIT:
 //
 // ## When changing an existing method:
@@ -312,7 +346,7 @@ pub struct TransactionScreeningEvents {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(3)]
+	#[api_version(4)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -404,16 +438,13 @@ decl_runtime_apis!(
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount;
-		fn cf_prewitness_swaps(
-			base_asset: Asset,
-			quote_asset: Asset,
-			side: Side,
-		) -> Vec<AssetAmount>;
 		fn cf_scheduled_swaps(
 			base_asset: Asset,
 			quote_asset: Asset,
 		) -> Vec<(SwapLegInfo, BlockNumber)>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
+		#[changed_in(3)]
+		fn cf_broker_info(account_id: AccountId32) -> BrokerInfoLegacy;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
@@ -467,6 +498,7 @@ decl_runtime_apis!(
 			broker: AccountId32,
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
+		fn cf_vault_addresses() -> VaultAddresses;
 	}
 );
 

@@ -5,7 +5,7 @@ authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 description = "FRAME pallet for managing transfer of funds to and from the State Chain Gateway contract."
 edition = "2021"
 homepage = "https://chainflip.io"
-license = "<TODO>"
+license = "Apache-2.0"
 publish = false
 repository = "https://github.com/chainflip-io/chainflip-backend"
 
@@ -38,6 +38,7 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 [dev-dependencies]
 pallet-cf-flip = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }

@@ -1,5 +1,5 @@
-import { InternalAsset as Asset, approveVault, Asset as SCAsset, Chains } from '@chainflip/cli';
-import { HDNodeWallet } from 'ethers';
+import { InternalAsset as Asset, Chains } from '@chainflip/cli';
+import { Contract, HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import BigNumber from 'bignumber.js';
 import Web3 from 'web3';
@@ -18,6 +18,8 @@ import {
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 import { getChainflipApi } from './utils/substrate';
 import { ChannelRefundParameters } from './sol_vault_swap';
+import { Logger } from './utils/logger';
+import { getErc20abi } from './contract_interfaces';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
@@ -35,6 +37,7 @@ interface EvmVaultSwapExtraParameters {
 }
 
 export async function executeEvmVaultSwap(
+  logger: Logger,
   brokerAddress: string,
   sourceAsset: Asset,
   destAsset: Asset,
@@ -61,7 +64,7 @@ export async function executeEvmVaultSwap(
     minPriceX128: '0',
   };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
-  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(logger, sourceAsset));
 
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.
@@ -87,6 +90,7 @@ export async function executeEvmVaultSwap(
     refund_parameters: refundParams,
   };
 
+  logger.trace('Requesting vault swap parameter encoding');
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     brokerAddress,
@@ -119,6 +123,7 @@ export async function executeEvmVaultSwap(
     gas: srcChain === 'Arbitrum' ? 32000000 : 5000000,
   };
 
+  logger.trace('Signing and Sending EVM vault swap transaction');
   const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
   const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
 
@@ -134,23 +139,16 @@ export async function approveEvmTokenVault(
     throw new Error(`Unsupported asset, not an ERC20: ${sourceAsset}`);
   }
 
-  const chain = chainFromAsset(sourceAsset as Asset);
+  const erc20abi = await getErc20abi();
+  const chain = chainFromAsset(sourceAsset);
+  const tokenContractAddress = getContractAddress(chain, sourceAsset);
+  const sourceTokenContract = new Contract(tokenContractAddress, erc20abi, wallet);
 
-  await approveVault(
-    {
-      amount,
-      srcChain: chain,
-      srcAsset: stateChainAssetFromAsset(sourceAsset) as SCAsset,
-    },
-    {
-      signer: wallet,
-      network: 'localnet',
-      vaultContractAddress: getContractAddress(chain, 'VAULT'),
-      srcTokenContractAddress: getContractAddress(chain, sourceAsset),
-    },
+  const approvalTx = await sourceTokenContract.approve(
+    getContractAddress(chain, 'VAULT'),
+    amount,
     // This is run with fresh addresses to prevent nonce issues
-    {
-      nonce: 0,
-    },
+    { nonce: 0 },
   );
+  await approvalTx.wait();
 }

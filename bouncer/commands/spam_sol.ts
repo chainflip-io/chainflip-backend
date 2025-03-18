@@ -15,6 +15,7 @@ import BigNumber from 'bignumber.js';
 import { sendSol } from '../shared/send_sol';
 import { assetDecimals, runWithTimeoutAndExit } from '../shared/utils';
 import { sendSolUsdc } from '../shared/send_solusdc';
+import { globalLogger, globalLogger as logger } from '../shared/utils/logger';
 
 async function main() {
   const asset = process.argv[2].trim() as 'Sol' | 'SolUsdc';
@@ -22,17 +23,7 @@ async function main() {
   let solAmount = new BigNumber(process.argv[4].trim());
   const numberOfDeposits = Number(process.argv[5].trim());
 
-  console.log(
-    'Transferring ' +
-      solAmount +
-      ' ' +
-      asset +
-      ' to ' +
-      solanaAddress +
-      ' ' +
-      numberOfDeposits +
-      ' times',
-  );
+  logger.info(`Transferring ${solAmount} ${asset} to ${solanaAddress} ${numberOfDeposits} times`);
 
   const txPromises = [];
   const decimals = assetDecimals(asset);
@@ -43,10 +34,10 @@ async function main() {
     solAmount = solAmount.plus(new BigNumber(1).div(10 ** decimals));
     switch (asset) {
       case 'Sol':
-        txPromises.push(sendSol(solanaAddress, solAmount.toString(), false));
+        txPromises.push(sendSol(globalLogger, solanaAddress, solAmount.toString()));
         break;
       case 'SolUsdc':
-        txPromises.push(sendSolUsdc(solanaAddress, solAmount.toString(), false));
+        txPromises.push(sendSolUsdc(globalLogger, solanaAddress, solAmount.toString()));
         break;
       default:
         throw new Error('Unsupported asset');
@@ -54,7 +45,7 @@ async function main() {
   }
 
   const txs = await Promise.all(txPromises);
-  txs.forEach((tx) => console.log('tx: ', tx?.transaction?.signatures[0]));
+  txs.forEach((tx) => logger.info('tx: ', tx?.transaction?.signatures[0]));
 }
 
 await runWithTimeoutAndExit(main(), 10);

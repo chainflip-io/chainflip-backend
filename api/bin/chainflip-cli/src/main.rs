@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
 	LiquidityProviderSubcommands, ValidatorSubcommands,
@@ -5,7 +21,7 @@ use crate::settings::{
 use anyhow::{Context, Result};
 use api::{
 	lp::LpApi,
-	primitives::{EpochIndex, RedemptionAmount, FLIP_DECIMALS},
+	primitives::{EpochIndex, FLIP_DECIMALS},
 	queries::QueryApi,
 	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
@@ -15,6 +31,7 @@ use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
+	rpc_types::RedemptionAmount,
 	BrokerApi,
 };
 use clap::Parser;

@@ -1,19 +1,20 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use std::sync::Arc;
-
-use anyhow::Result;
-use async_trait::async_trait;
-use cf_utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, UnwrapOrCancel};
-use futures::StreamExt;
-use futures_util::FutureExt;
-use serde::{Deserialize, Serialize};
-use sp_core::H256;
-use state_chain_runtime::{AccountId, Nonce};
-use tokio::sync::{mpsc, oneshot};
-use tracing::trace;
-
-use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
-
-use self::submission_watcher::ExtrinsicDetails;
 
 use super::{
 	super::{
@@ -23,7 +24,19 @@ use super::{
 	common::send_request,
 };
 
-pub mod signer;
+use anyhow::Result;
+use async_trait::async_trait;
+use cf_node_client::{signer, WaitFor, WaitForResult};
+use cf_utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, UnwrapOrCancel};
+use futures::StreamExt;
+use futures_util::FutureExt;
+use sp_core::H256;
+use state_chain_runtime::{AccountId, Nonce};
+use tokio::sync::{mpsc, oneshot};
+use tracing::trace;
+
+use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
+
 mod submission_watcher;
 
 // Wrapper type to avoid await.await on submits/finalize calls being possible
@@ -77,24 +90,6 @@ impl UntilInBlock for UntilInBlockFuture {
 	async fn until_in_block(self) -> submission_watcher::InBlockResult {
 		self.0.unwrap_or_cancel().await
 	}
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
-pub enum WaitFor {
-	// Return immediately after the extrinsic is submitted
-	NoWait,
-	// Wait until the extrinsic is included in a block
-	InBlock,
-	// Wait until the extrinsic is in a finalized block
-	#[default]
-	Finalized,
-}
-
-#[derive(Debug)]
-pub enum WaitForResult {
-	// The hash of the SC transaction that was submitted.
-	TransactionHash(H256),
-	Details(ExtrinsicDetails),
 }
 
 // Note 'static on the generics in this trait are only required for mockall to mock it

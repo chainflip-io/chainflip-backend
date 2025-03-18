@@ -1,7 +1,23 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /// Allows the composition of multiple ElectoralSystems while allowing the ability to configure the
 /// `on_finalize` behaviour without exposing the internal composite types.
-pub struct CompositeRunner<T, ValidatorId, StorageAccess, H> {
-	_phantom: core::marker::PhantomData<(T, ValidatorId, StorageAccess, H)>,
+pub struct CompositeRunner<T, ValidatorId, StateChainBlockNumber, StorageAccess, H> {
+	_phantom: core::marker::PhantomData<(T, ValidatorId, StateChainBlockNumber, StorageAccess, H)>,
 }
 
 /// The access wrappers need to impl the access traits once for each variant,
@@ -92,7 +108,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 $($electoral_system($electoral_system),)*
             }
 
-            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H> {
+            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, H> {
                 pub fn with_identifiers<R, F: for<'a> FnOnce(
                     ($(
                         Vec<ElectionIdentifierOf<$electoral_system>>,
@@ -117,8 +133,9 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
             }
 
-            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> ElectoralSystemTypes for CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H> {
+            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> ElectoralSystemTypes for CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, H> {
                 type ValidatorId = ValidatorId;
+                type StateChainBlockNumber = StateChainBlockNumber;
                 type ElectoralUnsynchronisedState = ($(<$electoral_system as ElectoralSystemTypes>::ElectoralUnsynchronisedState,)*);
                 type ElectoralUnsynchronisedStateMapKey = CompositeElectoralUnsynchronisedStateMapKey<$(<$electoral_system as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,)*>;
                 type ElectoralUnsynchronisedStateMapValue = CompositeElectoralUnsynchronisedStateMapValue<$(<$electoral_system as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue,)*>;
@@ -134,13 +151,14 @@ macro_rules! generate_electoral_system_tuple_impls {
                 type OnFinalizeReturn = ();
             }
 
-            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> ElectoralSystemRunner for CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H> {
+            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = Self> + 'static, H: Hooks<$($electoral_system),*> + 'static> ElectoralSystemRunner for CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, H> {
                 fn is_vote_desired(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
                     current_vote: Option<(
                         VotePropertiesOf<Self>,
                         AuthorityVoteOf<Self>,
                     )>,
+                    state_chain_block_number: Self::StateChainBlockNumber,
                 ) -> Result<bool, CorruptStorageError> {
                     match *election_identifier.extra() {
                         $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
@@ -159,6 +177,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                                         },
                                     ))
                                 }).transpose()?,
+                                state_chain_block_number,
                             )
                         },)*
                     }
@@ -310,7 +329,7 @@ macro_rules! generate_electoral_system_tuple_impls {
     (@ $($previous:ident,)*;: $($electoral_system:ident,)*) => {};
     (@ $($previous:ident,)*; $current:ident, $($remaining:ident,)*: $($electoral_system:ident,)*) => {
 
-        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectionReadAccess for DerivedElectionAccess<tags::$current, $current, StorageAccess> {
+        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize, H: Hooks<$($electoral_system),*> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, H>> + 'static> ElectionReadAccess for DerivedElectionAccess<tags::$current, $current, StorageAccess> {
             type ElectoralSystem = $current;
 
             fn settings(&self) -> Result<$current::ElectoralSettings, CorruptStorageError> {
@@ -339,7 +358,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
         }
 
-        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectionWriteAccess for DerivedElectionAccess<tags::$current, $current, StorageAccess> {
+        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize, H: Hooks<$($electoral_system),*> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, H>> + 'static> ElectionWriteAccess for DerivedElectionAccess<tags::$current, $current, StorageAccess> {
             fn set_state(&self, state: $current::ElectionState) -> Result<(), CorruptStorageError> {
                 StorageAccess::set_election_state(*self.id.unique_monotonic(), CompositeElectionState::$current(state))
             }
@@ -378,7 +397,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
         }
 
-        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectoralReadAccess for DerivedElectoralAccess<tags::$current, $current, StorageAccess> {
+        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize, H: Hooks<$($electoral_system),*> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, H>> + 'static> ElectoralReadAccess for DerivedElectoralAccess<tags::$current, $current, StorageAccess> {
             type ElectoralSystem = $current;
             type ElectionReadAccess = DerivedElectionAccess<tags::$current, $current, StorageAccess>;
 
@@ -408,7 +427,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
         }
 
-        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectoralWriteAccess for DerivedElectoralAccess<tags::$current, $current, StorageAccess> {
+        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize, H: Hooks<$($electoral_system),*> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, H>> + 'static> ElectoralWriteAccess for DerivedElectoralAccess<tags::$current, $current, StorageAccess> {
             type ElectionWriteAccess = DerivedElectionAccess<tags::$current, $current, StorageAccess>;
 
             fn new_election(

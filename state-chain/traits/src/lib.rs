@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;
@@ -8,7 +24,10 @@ pub mod safe_mode;
 pub use safe_mode::*;
 mod swapping;
 
-pub use swapping::{SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType};
+pub use swapping::{
+	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType,
+};
 
 pub mod mocks;
 pub mod offence_reporting;
@@ -748,7 +767,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParametersDecoded>,
+		refund_params: ChannelRefundParametersDecoded,
 		dca_params: Option<DcaParameters>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
@@ -985,6 +1004,17 @@ pub trait AssetConverter {
 		input_asset: C::ChainAsset,
 		required_gas: C::ChainAmount,
 	) -> Option<C::ChainAmount>;
+
+	/// Calculate the amount that is required to receive the given amount of a different asset after
+	/// a swap.
+	///
+	/// Use this for transaction fees only.
+	fn calculate_input_for_desired_output(
+		input_asset: Asset,
+		output_asset: Asset,
+		desired_output_amount: AssetAmount,
+		with_network_fee: bool,
+	) -> Option<AssetAmount>;
 }
 
 pub trait IngressEgressFeeApi<C: Chain> {
@@ -1078,23 +1108,30 @@ pub trait IngressSink {
 
 pub trait IngressSource {
 	type Chain: Chain;
+	type StateChainBlockNumber;
 
 	fn open_channel(
 		channel: <Self::Chain as Chain>::ChainAccount,
 		asset: <Self::Chain as Chain>::ChainAsset,
 		close_block: <Self::Chain as Chain>::ChainBlockNumber,
+		current_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> DispatchResult;
 }
-pub struct DummyIngressSource<TargetChain: Chain> {
-	_phantom: core::marker::PhantomData<TargetChain>,
+pub struct DummyIngressSource<TargetChain: Chain, StateChainBlockNumber> {
+	_phantom: core::marker::PhantomData<(TargetChain, StateChainBlockNumber)>,
 }
-impl<TargetChain: Chain> IngressSource for DummyIngressSource<TargetChain> {
+
+impl<TargetChain: Chain, StateChainBlockNumber> IngressSource
+	for DummyIngressSource<TargetChain, StateChainBlockNumber>
+{
 	type Chain = TargetChain;
+	type StateChainBlockNumber = StateChainBlockNumber;
 
 	fn open_channel(
 		_channel: <Self::Chain as Chain>::ChainAccount,
 		_asset: <Self::Chain as Chain>::ChainAsset,
 		_close_block: <Self::Chain as Chain>::ChainBlockNumber,
+		_current_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> DispatchResult {
 		Ok(())
 	}
@@ -1163,4 +1200,8 @@ pub trait AffiliateRegistry {
 
 	/// Return the reverse mapping from account id to affiliate short id.
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
+}
+
+pub trait MinimumDeposit {
+	fn get(asset: Asset) -> AssetAmount;
 }

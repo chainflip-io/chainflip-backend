@@ -7,8 +7,10 @@ import {
   createStateChainKeypair,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { Logger } from './utils/logger';
 
 export async function limitOrder(
+  logger: Logger,
   ccy: Asset,
   amount: number,
   orderId: number,
@@ -20,8 +22,8 @@ export async function limitOrder(
 
   const lp = createStateChainKeypair(lpKey ?? (process.env.LP_URI || '//LP_1'));
 
-  console.log('Setting up ' + ccy + ' limit order');
-  const orderCreatedEvent = observeEvent('liquidityPools:LimitOrderUpdated', {
+  logger.debug('Setting up ' + ccy + ' limit order');
+  const orderCreatedEvent = observeEvent(logger, 'liquidityPools:LimitOrderUpdated', {
     test: (event) =>
       event.data.lp === lp.address && event.data.baseAsset === ccy && event.data.id === String(0),
   }).event;

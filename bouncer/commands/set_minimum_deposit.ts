@@ -11,11 +11,12 @@
 
 import { runWithTimeoutAndExit, parseAssetString, amountToFineAmountBigInt } from '../shared/utils';
 import { setMinimumDeposit } from '../shared/set_minimum_deposit';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main() {
   const asset = parseAssetString(process.argv[2]);
   const amount = amountToFineAmountBigInt(process.argv[3].trim(), asset);
-  await setMinimumDeposit(asset, amount);
+  await setMinimumDeposit(globalLogger, asset, amount);
 }
 
 await runWithTimeoutAndExit(main(), 120);

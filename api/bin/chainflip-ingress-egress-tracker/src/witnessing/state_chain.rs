@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
 	store::{Storable, Store},
 	utils::get_broadcast_id,
@@ -293,10 +309,8 @@ where
 				.collect::<Vec<Beneficiary<AccountId32>>>()
 				.try_into()
 				.expect("We collect into the same Affiliates type we started with, so the Vec bound is the same."),
-			refund_params: self.refund_params.map(
-				|params| params.map_address(
-					|a| TrackerAddress::from(a.into_foreign_chain_address().to_encoded_address(network))
-				)
+			refund_params: Some(self.refund_params.map_address(
+					|a| TrackerAddress::from(a.into_foreign_chain_address().to_encoded_address(network)))
 			),
 			dca_params: self.dca_params,
 			max_boost_fee: self.boost_fee,
@@ -1001,11 +1015,11 @@ mod tests {
 						bps: 10
 					}])
 					.unwrap(),
-					refund_params: Some(ChannelRefundParameters {
+					refund_params: ChannelRefundParameters {
 						refund_address: eth_address,
 						retry_duration: Default::default(),
 						min_price: Default::default(),
-					}),
+					},
 					dca_params: Some(DcaParameters { number_of_chunks: 5, chunk_interval: 100 }),
 					boost_fee: 5,
 				},

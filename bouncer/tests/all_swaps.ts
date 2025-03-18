@@ -1,5 +1,4 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { ExecutableTest } from '../shared/executable_test';
 import { SwapParams } from '../shared/perform_swap';
 import {
   newCcmMetadata,
@@ -15,12 +14,10 @@ import {
   vaultSwapSupportedChains,
 } from '../shared/utils';
 import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
-
-// This timeout needs to be increased when running 3-nodes
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1200);
+import { TestContext } from '../shared/utils/test_context';
 
 export async function initiateSwap(
+  testContext: TestContext,
   sourceAsset: Asset,
   destAsset: Asset,
   functionCall: typeof testSwap | typeof testVaultSwap,
@@ -37,23 +34,33 @@ export async function initiateSwap(
   if (destAsset === 'Btc') {
     const btcAddressTypesArray = Object.values(btcAddressTypes);
     return functionCall(
+      testContext.logger,
       sourceAsset,
       destAsset,
       btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
       ccmSwapMetadata,
-      testAllSwaps.swapContext,
+      testContext.swapContext,
     );
   }
-  return functionCall(sourceAsset, destAsset, undefined, ccmSwapMetadata, testAllSwaps.swapContext);
+  return functionCall(
+    testContext.logger,
+    sourceAsset,
+    destAsset,
+    undefined,
+    ccmSwapMetadata,
+    testContext.swapContext,
+  );
 }
 
-async function main() {
+export async function testAllSwaps(textContext: TestContext) {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
   let finished: number = 0;
   let total: number = 0;
 
   // Open a private BTC channel to be used for btc vault swaps
-  await openPrivateBtcChannel('//BROKER_1');
+  await openPrivateBtcChannel(textContext.logger, '//BROKER_1');
+
+  textContext.logger.info(`🧪 Private broker channel opened`);
 
   function appendSwap(
     sourceAsset: Asset,
@@ -61,7 +68,7 @@ async function main() {
     functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
-    allSwaps.push(initiateSwap(sourceAsset, destAsset, functionCall, ccmSwap));
+    allSwaps.push(initiateSwap(textContext, sourceAsset, destAsset, functionCall, ccmSwap));
   }
 
   function randomElement<Value>(items: Value[]): Value {
@@ -109,6 +116,6 @@ async function main() {
   appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
   appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
 
-
+  textContext.logger.info(`🧪 All swaps appended`);
   await Promise.all(allSwaps);
 }

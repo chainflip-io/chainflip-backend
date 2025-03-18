@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 mod boost;
 mod screening;
 
@@ -18,8 +34,12 @@ use cf_chains::{
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
 	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
-	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
+	ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin, TransactionInIdForAnyChain,
+	TransferAssetParams,
 };
+
+use cf_chains::eth::Address as EthereumAddress;
+
 use cf_primitives::{
 	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,
 	DcaParameters, ForeignChain, MAX_AFFILIATES,
@@ -41,8 +61,12 @@ use cf_traits::{
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
 	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
-	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapRequestType,
+	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapOutputAction, SwapRequestType,
 };
+
+#[cfg(test)]
+use cf_utilities::assert_matches;
+
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	traits::{Hooks, OriginTrait},
@@ -267,14 +291,14 @@ fn can_schedule_deposit_fetch() {
 		request_address_and_deposit(2u64, EthAsset::Eth);
 		request_address_and_deposit(3u64, EthAsset::Flip);
 
-		assert!(matches!(
+		assert_matches!(
 			&ScheduledEgressFetchOrTransfer::<Test, ()>::get()[..],
 			&[
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_FLIP, .. },
 			]
-		));
+		);
 
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(Event::DepositFetchesScheduled {
 			channel_id: 1,
@@ -283,7 +307,7 @@ fn can_schedule_deposit_fetch() {
 
 		request_address_and_deposit(4u64, EthAsset::Eth);
 
-		assert!(matches!(
+		assert_matches!(
 			&ScheduledEgressFetchOrTransfer::<Test, ()>::get()[..],
 			&[
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
@@ -291,7 +315,7 @@ fn can_schedule_deposit_fetch() {
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_FLIP, .. },
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
 			]
-		));
+		);
 	});
 }
 
@@ -476,7 +500,7 @@ fn reused_address_channel_id_matches() {
 			EthAsset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
-				refund_address: Some(ForeignChainAddress::Eth([0u8; 20].into())),
+				refund_address: ForeignChainAddress::Eth([0u8; 20].into()),
 			},
 			0,
 		)
@@ -771,10 +795,10 @@ fn multi_use_deposit_same_block() {
 				"Expected one AllBatch apicall to be scheduled for address deployment, got {:?}.",
 				pending_api_calls
 			);
-			assert!(matches!(
+			assert_matches!(
 				pending_callbacks.last().unwrap(),
 				RuntimeCall::IngressEgress(PalletCall::finalise_ingress { .. })
-			));
+			);
 		})
 		.then_execute_at_next_block(|ctx| {
 			MockEgressBroadcaster::dispatch_all_success_callbacks();
@@ -1428,7 +1452,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 			EthAsset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: CHANNEL_REQUESTER,
-				refund_address: Some(ForeignChainAddress::Eth(Default::default())),
+				refund_address: ForeignChainAddress::Eth(Default::default()),
 			},
 			0
 		));
@@ -1445,7 +1469,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 				EthAsset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: CHANNEL_REQUESTER,
-					refund_address: Some(ForeignChainAddress::Eth(Default::default())),
+					refund_address: ForeignChainAddress::Eth(Default::default()),
 				},
 				0
 			),
@@ -1622,7 +1646,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			EthAsset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
-				refund_address: Some(ForeignChainAddress::Eth(Default::default()))
+				refund_address: ForeignChainAddress::Eth(Default::default())
 			},
 			0,
 		));
@@ -1642,7 +1666,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 				EthAsset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: 0,
-					refund_address: Some(ForeignChainAddress::Eth(Default::default()))
+					refund_address: ForeignChainAddress::Eth(Default::default())
 				},
 				0,
 			),
@@ -1887,7 +1911,7 @@ fn submit_vault_swap_request(
 			tx_id,
 			broker_fee: Some(broker_fee),
 			affiliate_fees,
-			refund_params: Some(refund_params),
+			refund_params,
 			dca_params,
 			boost_fee,
 		}),
@@ -1925,7 +1949,12 @@ fn can_request_swap_via_extrinsic() {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular { output_address, ccm_deposit_metadata: None },
+				swap_type: SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address,
+						ccm_deposit_metadata: None
+					}
+				},
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
 					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
@@ -1985,7 +2014,12 @@ fn vault_swaps_support_affiliate_fees() {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular { output_address, ccm_deposit_metadata: None },
+				swap_type: SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address,
+						ccm_deposit_metadata: None
+					}
+				},
 				broker_fees: bounded_vec![
 					Beneficiary { account: BROKER, bps: BROKER_FEE },
 					// Only one affiliate is used (short id for affiliate 2 has not been
@@ -2042,7 +2076,12 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular { output_address, ccm_deposit_metadata: None },
+				swap_type: SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address,
+						ccm_deposit_metadata: None
+					}
+				},
 				broker_fees: Default::default(),
 				origin: SwapOrigin::Vault {
 					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
@@ -2100,8 +2139,10 @@ fn can_request_ccm_swap_via_extrinsic() {
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular {
-					output_address,
-					ccm_deposit_metadata: Some(ccm_deposit_metadata)
+					output_action: SwapOutputAction::Egress {
+						output_address,
+						ccm_deposit_metadata: Some(ccm_deposit_metadata)
+					}
 				},
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
@@ -2238,7 +2279,10 @@ fn private_and_regular_channel_ids_do_not_overlap() {
 			let (channel_id, ..) = IngressEgress::open_channel(
 				&ALICE,
 				EthAsset::Eth,
-				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				ChannelAction::LiquidityProvision {
+					lp_account: 0,
+					refund_address: ForeignChainAddress::Eth(Default::default()),
+				},
 				0,
 			)
 			.unwrap();
@@ -2313,7 +2357,10 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 				BoostStatus::NotBoosted,
 				0,
 				None,
-				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				ChannelAction::LiquidityProvision {
+					lp_account: 0,
+					refund_address: ForeignChainAddress::Eth(Default::default()),
+				},
 				0,
 				DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
 			)
@@ -2334,7 +2381,10 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 			},
 			0,
 			None,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			ChannelAction::LiquidityProvision {
+				lp_account: 0,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+			},
 			0,
 			DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
 		)

@@ -19,14 +19,13 @@ import { requestNewSwap } from '../shared/perform_swap';
 import { createBoostPools } from '../shared/setup_boost_pools';
 import { jsonRpc } from '../shared/json_rpc';
 import { observeEvent, Event, getChainflipApi } from '../shared/utils/substrate';
-import { ExecutableTest } from '../shared/executable_test';
-
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testBoostingSwap = new ExecutableTest('Boosting-For-Asset', main, 120);
+import { TestContext } from '../shared/utils/test_context';
+import { Logger, throwError } from '../shared/utils/logger';
 
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function stopBoosting<T = any>(
+  logger: Logger,
   asset: Asset,
   boostTier: number,
   lpUri = '//LP_BOOST',
@@ -39,6 +38,7 @@ export async function stopBoosting<T = any>(
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
   const observeStoppedBoosting = observeEvent(
+    logger,
     `${chainFromAsset(asset).toLowerCase()}IngressEgress:StoppedBoosting`,
     {
       test: (event) =>
@@ -56,15 +56,16 @@ export async function stopBoosting<T = any>(
     errorOnFail,
   );
   if (!extrinsicResult?.dispatchError) {
-    console.log('waiting for stop boosting event');
+    logger.debug('waiting for stop boosting event');
     return observeStoppedBoosting;
   }
-  console.log('Already stopped boosting');
+  logger.debug('Already stopped boosting');
   return undefined;
 }
 
 /// Adds existing funds to the boost pool of the given tier and returns the BoostFundsAdded event.
 export async function addBoostFunds(
+  logger: Logger,
   asset: Asset,
   boostTier: number,
   amount: number,
@@ -77,6 +78,7 @@ export async function addBoostFunds(
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
   const observeBoostFundsAdded = observeEvent(
+    logger,
     `${chainFromAsset(asset).toLowerCase()}IngressEgress:BoostFundsAdded`,
     {
       test: (event) =>
@@ -87,7 +89,7 @@ export async function addBoostFunds(
   );
 
   // Add funds to the boost pool
-  console.log(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
+  logger.debug(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
   await extrinsicSubmitter.submit(
     chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].addBoostFunds(
       shortChainFromAsset(asset).toUpperCase(),
@@ -100,11 +102,18 @@ export async function addBoostFunds(
 }
 
 /// Adds boost funds to the boost pool and does a swap with boosting enabled, then stops boosting and checks the fees collected are correct.
-async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: string, amount: number) {
-  testBoostingSwap.log(`Testing boosting for ${asset} at ${boostFee}bps`);
+async function testBoostingForAsset(
+  asset: Asset,
+  boostFee: number,
+  lpUri: string,
+  amount: number,
+  testContext: TestContext,
+) {
+  const logger = testContext.logger.child({ boostAsset: asset, boostFee });
+  logger.debug(`Testing boosting`);
 
   // Start with a clean slate by stopping boosting before the test
-  const preTestStopBoostingEvent = await stopBoosting(asset, boostFee, lpUri, false);
+  const preTestStopBoostingEvent = await stopBoosting(logger, asset, boostFee, lpUri, false);
   assert.strictEqual(
     preTestStopBoostingEvent?.data?.pendingBoosts?.length ?? 0,
     0,
@@ -112,7 +121,7 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
   );
 
   const boostPoolDetails = (
-    (await jsonRpc('cf_boost_pool_details', [Assets.Btc.toUpperCase()])) as any
+    (await jsonRpc(logger, 'cf_boost_pool_details', [Assets.Btc.toUpperCase()])) as any
   )[0];
   assert.strictEqual(boostPoolDetails.fee_tier, boostFee, 'Unexpected lowest fee tier');
   assert.strictEqual(
@@ -122,54 +131,55 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
   );
 
   // Add boost funds
-  await depositLiquidity(asset, amount * 1.01, false, lpUri);
-  await addBoostFunds(asset, boostFee, amount, lpUri);
+  await depositLiquidity(logger, asset, amount * 1.01, false, lpUri);
+  await addBoostFunds(logger, asset, boostFee, amount, lpUri);
 
   // Do a swap
   const swapAsset = asset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const destAddress = await newAddress(swapAsset, 'LP_BOOST');
-  testBoostingSwap.debugLog(`Swap destination address: ${destAddress}`);
+  logger.debug(`Swap destination address: ${destAddress}`);
   const swapRequest = await requestNewSwap(
+    logger,
     asset,
     swapAsset,
     destAddress,
     undefined,
-    undefined,
     0,
-    false,
     boostFee,
   );
 
   const observeDepositFinalised = observeEvent(
+    logger,
     `${chainFromAsset(asset).toLowerCase()}IngressEgress:DepositFinalised`,
     {
       test: (event) => event.data.channelId === swapRequest.channelId.toString(),
     },
   ).event;
   const observeSwapBoosted = observeEvent(
+    logger,
     `${chainFromAsset(asset).toLowerCase()}IngressEgress:DepositBoosted`,
     {
       test: (event) => event.data.channelId === swapRequest.channelId.toString(),
     },
   ).event;
 
-  await send(asset, swapRequest.depositAddress, amount.toString());
-  testBoostingSwap.log(`Sent ${amount} ${asset} to ${swapRequest.depositAddress}`);
+  await send(logger, asset, swapRequest.depositAddress, amount.toString());
+  logger.debug(`Sent ${amount} ${asset} to ${swapRequest.depositAddress}`);
 
   // Check that the swap was boosted
   const depositEvent = await Promise.race([observeSwapBoosted, observeDepositFinalised]);
   if (depositEvent.name.method === 'DepositFinalised') {
-    throw new Error('Deposit was finalised without seeing the DepositBoosted event');
+    throwError(logger, new Error('Deposit was finalised without seeing the DepositBoosted event'));
   } else if (depositEvent.name.method !== 'DepositBoosted') {
-    throw new Error(`Unexpected event ${depositEvent.name.method}`);
+    throwError(logger, new Error(`Unexpected event ${depositEvent.name.method}`));
   }
 
   const depositFinalisedEvent = await observeDepositFinalised;
-  testBoostingSwap.debugLog('DepositFinalised event:', JSON.stringify(depositFinalisedEvent));
+  logger.trace('DepositFinalised event:', JSON.stringify(depositFinalisedEvent));
 
   // Stop boosting
-  const stoppedBoostingEvent = await stopBoosting(asset, boostFee, lpUri)!;
-  testBoostingSwap.debugLog('StoppedBoosting event:', JSON.stringify(stoppedBoostingEvent));
+  const stoppedBoostingEvent = await stopBoosting(logger, asset, boostFee, lpUri)!;
+  logger.trace('StoppedBoosting event:', JSON.stringify(stoppedBoostingEvent));
   assert.strictEqual(
     stoppedBoostingEvent?.data.pendingBoosts.length,
     0,
@@ -180,7 +190,7 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
   const boostFeesCollected =
     BigInt(stoppedBoostingEvent?.data.unlockedAmount.replaceAll(',', '')) -
     amountToFineAmountBigInt(amount, asset);
-  testBoostingSwap.log('Boost fees collected:', boostFeesCollected);
+  logger.debug('Boost fees collected:', boostFeesCollected);
   const expectedIncrease = calculateFeeWithBps(amountToFineAmountBigInt(amount, asset), boostFee);
   assert.strictEqual(
     boostFeesCollected,
@@ -189,7 +199,7 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
   );
 }
 
-export async function main() {
+export async function testBoostingSwap(testContext: TestContext) {
   await using chainflip = await getChainflipApi();
 
   // To make the test easier, we use a new boost pool tier that is lower than the ones that already exist so we are the only booster.
@@ -201,9 +211,11 @@ export async function main() {
 
   // Create the boost pool if it doesn't exist
   if (!boostPool?.feeBps) {
-    await createBoostPools([{ asset: Assets.Btc, tier: boostPoolTier }]);
+    await createBoostPools(testContext.logger, [{ asset: Assets.Btc, tier: boostPoolTier }]);
+  } else {
+    testContext.trace(`Boost pool already exists for tier ${boostPoolTier}`);
   }
 
   // Pre-witnessing is only enabled for btc at the moment. Add the other assets here when it's enabled for them.
-  await testBoostingForAsset(Assets.Btc, boostPoolTier, '//LP_1', 0.1);
+  await testBoostingForAsset(Assets.Btc, boostPoolTier, '//LP_1', 0.1, testContext);
 }

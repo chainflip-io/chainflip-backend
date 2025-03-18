@@ -12,8 +12,9 @@ import {
   getSolConnection,
   getSolWhaleKeyPair,
 } from './utils';
+import { Logger } from './utils/logger';
 
-export async function signAndSendTxSol(transaction: Transaction, log = true) {
+export async function signAndSendTxSol(logger: Logger, transaction: Transaction) {
   const connection = getSolConnection();
   const whaleKeypair = getSolWhaleKeyPair();
   const tx = transaction;
@@ -25,17 +26,16 @@ export async function signAndSendTxSol(transaction: Transaction, log = true) {
 
   const receipt = await connection.getParsedTransaction(txHash);
 
-  if (log) {
-    console.log('Transaction complete, tx_hash: ' + txHash + ' at slot: ' + receipt!.slot);
-  }
+  logger.debug(`Transaction complete, tx_hash: ${txHash} at slot: ${receipt!.slot}`);
+
   return receipt;
 }
 
 export async function signAndSendIxsSol(
+  logger: Logger,
   instructions: TransactionInstruction[],
   prioFee = 0,
   limitCU = 0,
-  log = true,
 ) {
   const transaction = new Transaction();
 
@@ -60,10 +60,10 @@ export async function signAndSendIxsSol(
     transaction.add(item);
   });
 
-  return signAndSendTxSol(transaction, log);
+  return signAndSendTxSol(logger, transaction);
 }
 
-export async function sendSol(solAddress: string, solAmount: string, log = true) {
+export async function sendSol(logger: Logger, solAddress: string, solAmount: string) {
   const lamportsAmount = amountToFineAmount(solAmount, assetDecimals('Sol'));
 
   const transaction = new Transaction().add(
@@ -73,5 +73,5 @@ export async function sendSol(solAddress: string, solAmount: string, log = true)
       lamports: BigInt(lamportsAmount),
     }),
   );
-  return signAndSendTxSol(transaction, log);
+  return signAndSendTxSol(logger, transaction);
 }

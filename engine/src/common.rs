@@ -1,3 +1,20 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+use cf_utilities::assert_matches;
 use std::ops::{Deref, DerefMut};
 
 struct MutexStateAndPoisonFlag<T> {
@@ -93,10 +110,10 @@ pub struct Signaller<T> {
 }
 impl<T: Clone + Send + 'static> Signaller<T> {
 	pub fn signal(self, t: T) {
-		assert!(matches!(
+		assert_matches!(
 			self.sender.try_broadcast(t),
 			Ok(None) | Err(async_broadcast::TrySendError::Closed(_))
-		));
+		);
 	}
 }
 

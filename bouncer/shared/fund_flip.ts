@@ -13,10 +13,12 @@ import {
 import { amountToFineAmount } from '../shared/utils';
 import { approveErc20 } from './approve_erc20';
 import { observeEvent } from './utils/substrate';
+import { Logger } from './utils/logger';
 
-export async function fundFlip(scAddress: string, flipAmount: string) {
+export async function fundFlip(logger: Logger, scAddress: string, flipAmount: string) {
   // Doing effectively infinite approvals to prevent race conditions between tests
   await approveErc20(
+    logger,
     'Flip',
     getContractAddress('Ethereum', 'GATEWAY'),
     '100000000000000000000000000',
@@ -29,7 +31,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   const gatewayContractAddress = getContractAddress('Ethereum', 'GATEWAY');
 
   const whaleKey = getWhaleKey('Ethereum');
-  console.log('Approving ' + flipAmount + ' Flip to State Chain Gateway');
+  logger.debug('Approving ' + flipAmount + ' Flip to State Chain Gateway');
 
   const wallet = new Wallet(whaleKey, ethers.getDefaultProvider(getEvmEndpoint('Ethereum')));
 
@@ -43,7 +45,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
     nonce: await getNextEvmNonce('Ethereum'),
   } as const;
 
-  console.log('Funding ' + flipAmount + ' Flip to ' + scAddress);
+  logger.debug('Funding ' + flipAmount + ' Flip to ' + scAddress);
   let pubkey = decodeFlipAddressForContract(scAddress);
 
   if (pubkey.substr(0, 2) !== '0x') {
@@ -56,7 +58,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
     txOptions,
   );
 
-  console.log(
+  logger.debug(
     'Transaction complete, tx_hash: ' +
       receipt2.hash +
       ' blockNumber: ' +
@@ -64,7 +66,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
       ' blockHash: ' +
       receipt2.blockHash,
   );
-  await observeEvent('funding:Funded', {
+  await observeEvent(logger, 'funding:Funded', {
     test: (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,
   }).event;
 }

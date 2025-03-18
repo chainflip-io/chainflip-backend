@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
@@ -28,17 +44,21 @@ pub trait MedianChangeHook<Value> {
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct MonotonicMedian<Value, Settings, Hook, ValidatorId> {
-	_phantom: core::marker::PhantomData<(Value, Settings, Hook, ValidatorId)>,
+pub struct MonotonicMedian<Value, Settings, Hook, ValidatorId, StateChainBlockNumber> {
+	_phantom:
+		core::marker::PhantomData<(Value, Settings, Hook, ValidatorId, StateChainBlockNumber)>,
 }
 impl<
 		Value: MaybeSerializeDeserialize + Member + Parameter + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: MedianChangeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystemTypes for MonotonicMedian<Value, Settings, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystemTypes
+	for MonotonicMedian<Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = Value;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -59,7 +79,8 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: MedianChangeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for MonotonicMedian<Value, Settings, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for MonotonicMedian<Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,

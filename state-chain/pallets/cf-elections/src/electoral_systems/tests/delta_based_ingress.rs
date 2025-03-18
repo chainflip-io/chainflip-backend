@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::ConsensusStatus, electoral_systems::blockchain::delta_based_ingress::*,
@@ -18,6 +34,7 @@ thread_local! {
 type AccountId = u32;
 type Amount = u64;
 type BlockNumber = u64;
+type StateChainBlockNumber = u32;
 
 struct MockIngressSink;
 impl IngressSink for MockIngressSink {
@@ -48,7 +65,8 @@ impl IngressSink for MockIngressSink {
 	}
 }
 
-type SimpleDeltaBasedIngress = DeltaBasedIngress<MockIngressSink, (), AccountId>;
+type SimpleDeltaBasedIngress =
+	DeltaBasedIngress<MockIngressSink, (), AccountId, StateChainBlockNumber>;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encode, Decode)]
 struct DepositChannel {
@@ -78,11 +96,15 @@ impl Default for DepositChannel {
 
 impl DepositChannel {
 	pub fn open(&self) {
+		self.open_at(Default::default());
+	}
+	pub fn open_at(&self, sc_block_number: StateChainBlockNumber) {
 		assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
 			TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 			self.account,
 			self.asset,
-			self.close_block
+			self.close_block,
+			sc_block_number,
 		));
 	}
 }
@@ -121,27 +143,38 @@ fn to_state_map(
 		.collect::<BTreeMap<_, _>>()
 }
 
+#[allow(clippy::type_complexity)]
 fn to_properties(
 	channels: impl IntoIterator<Item = DepositChannel>,
-) -> BTreeMap<
-	AccountId,
-	(OpenChannelDetailsFor<MockIngressSink>, ChannelTotalIngressedFor<MockIngressSink>),
-> {
-	channels
-		.into_iter()
-		.map(|channel| {
-			(
-				channel.account,
+	last_channel_opened_at: StateChainBlockNumber,
+) -> (
+	BTreeMap<
+		AccountId,
+		(OpenChannelDetailsFor<MockIngressSink>, ChannelTotalIngressedFor<MockIngressSink>),
+	>,
+	u32,
+) {
+	(
+		channels
+			.into_iter()
+			.map(|channel| {
 				(
-					OpenChannelDetails { asset: channel.asset, close_block: channel.close_block },
-					ChannelTotalIngressed {
-						amount: channel.total_ingressed,
-						block_number: channel.block_number,
-					},
-				),
-			)
-		})
-		.collect::<BTreeMap<_, _>>()
+					channel.account,
+					(
+						OpenChannelDetails {
+							asset: channel.asset,
+							close_block: channel.close_block,
+						},
+						ChannelTotalIngressed {
+							amount: channel.total_ingressed,
+							block_number: channel.block_number,
+						},
+					),
+				)
+			})
+			.collect::<BTreeMap<_, _>>(),
+		last_channel_opened_at,
+	)
 }
 
 const INITIAL_CHANNEL_STATE: [DepositChannel; 2] = [
@@ -211,13 +244,17 @@ const CHANNEL_STATE_CLOSED: [DepositChannel; 2] = [
 	},
 ];
 
+const BACKOFF_SETTINGS: BackoffSettings<StateChainBlockNumber> =
+	BackoffSettings { backoff_after_blocks: 100, backoff_frequency: 100 };
+
 fn with_default_setup() -> TestSetup<SimpleDeltaBasedIngress> {
 	TestSetup::<_>::default()
 		.with_initial_election_state(
 			1u32,
-			to_properties(INITIAL_CHANNEL_STATE),
+			to_properties(INITIAL_CHANNEL_STATE, 0),
 			to_state(INITIAL_CHANNEL_STATE),
 		)
+		.with_electoral_settings(((), BACKOFF_SETTINGS))
 		.with_initial_state_map(to_state_map(INITIAL_CHANNEL_STATE).into_iter().collect::<Vec<_>>())
 }
 
@@ -512,6 +549,8 @@ mod channel_closure {
 					Check::channel_closed_once(DEFAULT_CHANNEL_ACCOUNT),
 					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
 					Check::all_elections_deleted(),
+					// Channel state cleaned up.
+					Check::ended_at_state_map_state([]),
 				],
 			);
 	}
@@ -527,6 +566,8 @@ mod channel_closure {
 					Check::channel_closed_once(DEFAULT_CHANNEL_ACCOUNT),
 					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
 					Check::all_elections_deleted(),
+					// Channel state cleaned up.
+					Check::ended_at_state_map_state([]),
 				],
 			);
 	}
@@ -551,6 +592,12 @@ mod channel_closure {
 						block_number: DEPOSIT_BLOCK,
 						..DEFAULT_CHANNEL
 					}]),
+					// Channel state not cleaned up yet, since the channel is not yet closed.
+					Check::ended_at_state_map_state([DepositChannel {
+						total_ingressed: DEPOSIT_AMOUNT,
+						block_number: DEPOSIT_BLOCK,
+						..DEFAULT_CHANNEL
+					}]),
 				],
 			)
 			// Chain tracking reaches close block, channel is closed.
@@ -561,147 +608,11 @@ mod channel_closure {
 					Check::channel_closed_once(DEFAULT_CHANNEL_ACCOUNT),
 					Check::ingressed(vec![(DEFAULT_CHANNEL_ACCOUNT, Asset::Sol, DEPOSIT_AMOUNT)]),
 					Check::all_elections_deleted(),
+					// Channel state cleaned up.
+					Check::ended_at_state_map_state([]),
 				],
 			);
 	}
-}
-
-#[test]
-fn test_deposit_channel_recycling() {
-	let channel_state_recycled_same_asset = vec![
-		DepositChannel {
-			account: 1u32,
-			asset: Asset::Sol,
-			total_ingressed: 20_000u64,
-			block_number: 4_000u64,
-			close_block: 4_000u64,
-		},
-		DepositChannel {
-			account: 2u32,
-			asset: Asset::SolUsdc,
-			total_ingressed: 30_000u64,
-			block_number: 4_000u64,
-			close_block: 4_000u64,
-		},
-	];
-
-	let channel_state_recycled_different_asset = vec![
-		DepositChannel {
-			account: 1u32,
-			asset: Asset::SolUsdc,
-			total_ingressed: 100_000u64,
-			block_number: 5_000u64,
-			close_block: 5_000u64,
-		},
-		DepositChannel {
-			account: 2u32,
-			asset: Asset::Sol,
-			total_ingressed: 200_000u64,
-			block_number: 5_000u64,
-			close_block: 5_000u64,
-		},
-	];
-
-	let initial_close_block = CHANNEL_STATE_CLOSED[1].close_block;
-	let recycled_same_asset_close_block = channel_state_recycled_same_asset[0].close_block;
-	let recycled_diff_asset_close_block = channel_state_recycled_different_asset[0].close_block;
-
-	with_default_setup()
-		.build()
-		.then(|| {
-			for deposit_channel in INITIAL_CHANNEL_STATE {
-				assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
-					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
-					deposit_channel.account,
-					deposit_channel.asset,
-					deposit_channel.close_block
-				));
-			}
-		})
-		.force_consensus_update(ConsensusStatus::Gained {
-			most_recent: None,
-			new: to_state(CHANNEL_STATE_CLOSED),
-		})
-		.test_on_finalize(
-			&initial_close_block,
-			|_| (),
-			vec![
-				Check::ended_at_state_map_state(CHANNEL_STATE_CLOSED),
-				Check::ingressed(vec![
-					(1u32, Asset::Sol, 4_000u64),
-					(2u32, Asset::SolUsdc, 6_000u64),
-				]),
-				Check::channels_closed_matches(vec![1u32, 2u32]),
-			],
-		)
-		.then(|| {
-			// Channels are recycled using the same asset. Only the difference in total amount is
-			// counted as ingressed
-			for deposit_channel in channel_state_recycled_same_asset.clone() {
-				assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
-					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
-					deposit_channel.account,
-					deposit_channel.asset,
-					deposit_channel.close_block
-				));
-			}
-		})
-		.force_consensus_update(ConsensusStatus::Gained {
-			most_recent: None,
-			new: to_state(channel_state_recycled_same_asset.clone()),
-		})
-		.test_on_finalize(
-			&recycled_same_asset_close_block,
-			|_| (),
-			vec![
-				Check::ended_at_state_map_state(channel_state_recycled_same_asset.clone()),
-				Check::ingressed(vec![
-					(1u32, Asset::Sol, 4_000u64),
-					(2u32, Asset::SolUsdc, 6_000u64),
-					// On recycled channels, only the diff amount is counted as ingress
-					(1u32, Asset::Sol, 16_000u64),
-					(2u32, Asset::SolUsdc, 24_000u64),
-				]),
-				Check::channels_closed_matches(vec![1u32, 2u32, 1u32, 2u32]),
-			],
-		)
-		.then(|| {
-			// Channels are recycled using the same asset. Only the difference in total amount is
-			// counted as ingressed
-			for deposit_channel in channel_state_recycled_different_asset.clone() {
-				assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
-					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
-					deposit_channel.account,
-					deposit_channel.asset,
-					deposit_channel.close_block
-				));
-			}
-		})
-		.force_consensus_update(ConsensusStatus::Gained {
-			most_recent: None,
-			new: to_state(channel_state_recycled_different_asset.clone()),
-		})
-		.test_on_finalize(
-			&recycled_diff_asset_close_block,
-			|_| (),
-			vec![
-				Check::ended_at_state_map_state(
-					[channel_state_recycled_different_asset, channel_state_recycled_same_asset]
-						.into_iter()
-						.flatten(),
-				),
-				Check::ingressed(vec![
-					(1u32, Asset::Sol, 4_000u64),
-					(2u32, Asset::SolUsdc, 6_000u64),
-					(1u32, Asset::Sol, 16_000u64),
-					(2u32, Asset::SolUsdc, 24_000u64),
-					// Total amount ingressed are accumulated per `(Account, Asset)` pair
-					(1u32, Asset::SolUsdc, 100_000u64),
-					(2u32, Asset::Sol, 200_000u64),
-				]),
-				Check::channels_closed_matches(vec![1u32, 2u32, 1u32, 2u32, 1u32, 2u32]),
-			],
-		);
 }
 
 #[test]
@@ -798,7 +709,8 @@ fn test_open_channel_with_existing_election() {
 					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 					deposit_channel.account,
 					deposit_channel.asset,
-					deposit_channel.close_block
+					deposit_channel.close_block,
+					Default::default()
 				));
 			}
 		})
@@ -825,7 +737,8 @@ fn test_open_channel_with_existing_election() {
 					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 					deposit_channel.account,
 					deposit_channel.asset,
-					deposit_channel.close_block
+					deposit_channel.close_block,
+					Default::default()
 				));
 			}
 		})
@@ -837,7 +750,8 @@ fn test_open_channel_with_existing_election() {
 			&channel_close_block,
 			|_| (),
 			vec![
-				Check::ended_at_state_map_state(combined_state_closed),
+				// All channels are close, their state should be deleted.
+				Check::ended_at_state_map_state([]),
 				Check::ingressed(vec![
 					(1u32, Asset::Sol, 1_000u64),
 					(2u32, Asset::SolUsdc, 2_000u64),
@@ -871,7 +785,8 @@ fn start_new_election_if_too_many_channels_in_current_election() {
 				TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 				deposit_channel.account,
 				deposit_channel.asset,
-				deposit_channel.close_block
+				deposit_channel.close_block,
+				Default::default()
 			));
 		}
 		assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
@@ -879,6 +794,7 @@ fn start_new_election_if_too_many_channels_in_current_election() {
 			51u32,
 			Asset::Sol,
 			channel_close_block,
+			Default::default()
 		));
 
 		assert_eq!(
@@ -1121,4 +1037,53 @@ mod multiple_deposits {
 				[Check::ingressed(vec![(DEPOSIT_ADDRESS, Asset::Sol, TOTAL_2.amount)])],
 			);
 	}
+}
+
+#[test]
+fn is_vote_desired_backs_off_as_expected() {
+	// No chain progress, and we defaulted properties to have 0 as last_channel_opened_at.
+
+	const STILL_YOUNG_ELECTION: StateChainBlockNumber = 10;
+
+	// allows us to make the tests a little simpler.
+	#[allow(clippy::assertions_on_constants)]
+	{
+		assert!(BACKOFF_SETTINGS.backoff_after_blocks % BACKOFF_SETTINGS.backoff_frequency == 0);
+		assert!(STILL_YOUNG_ELECTION < BACKOFF_SETTINGS.backoff_after_blocks);
+	}
+
+	with_default_setup()
+		.build_with_initial_election()
+		.expect_is_voted_desired(true, 0)
+		.expect_is_voted_desired(true, STILL_YOUNG_ELECTION)
+		.expect_is_voted_desired(false, BACKOFF_SETTINGS.backoff_after_blocks + 1)
+		.expect_is_voted_desired(
+			true,
+			BACKOFF_SETTINGS.backoff_after_blocks + BACKOFF_SETTINGS.backoff_frequency,
+		)
+		.expect_is_voted_desired(
+			false,
+			BACKOFF_SETTINGS.backoff_after_blocks + BACKOFF_SETTINGS.backoff_frequency + 1,
+		)
+		.then(|| {
+			// Open a channel after the backoff period has elapsed - meaning the election properties
+			// should be updated to have the last_channel_opened_at set to the block number of the
+			// channel.
+			DepositChannel {
+				account: 1,
+				asset: Asset::Sol,
+				close_block: 100,
+				total_ingressed: 0,
+				block_number: 0,
+			}
+			.open_at(BACKOFF_SETTINGS.backoff_after_blocks);
+		})
+		.expect_is_voted_desired(true, BACKOFF_SETTINGS.backoff_after_blocks)
+		.expect_is_voted_desired(true, BACKOFF_SETTINGS.backoff_after_blocks + STILL_YOUNG_ELECTION)
+		// beyond the backoff period, but not a multiple of the backoff point
+		.expect_is_voted_desired(false, BACKOFF_SETTINGS.backoff_after_blocks * 2 + 1)
+		.expect_is_voted_desired(
+			true,
+			BACKOFF_SETTINGS.backoff_after_blocks * 2 + BACKOFF_SETTINGS.backoff_frequency,
+		);
 }

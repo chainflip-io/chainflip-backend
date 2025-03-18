@@ -1,6 +1,22 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
 	chainflip::{
-		address_derivation::btc::derive_btc_vault_deposit_address, AddressConverter,
+		address_derivation::btc::derive_btc_vault_deposit_addresses, AddressConverter,
 		ChainAddressConverter, EvmEnvironment, SolEnvironment,
 	},
 	runtime_apis::{DispatchErrorWithMessage, EvmVaultSwapDetails, VaultSwapDetails},
@@ -95,7 +111,7 @@ pub fn bitcoin_vault_swap(
 
 	Ok(VaultSwapDetails::Bitcoin {
 		nulldata_payload: encode_swap_params_in_nulldata_payload(params),
-		deposit_address: derive_btc_vault_deposit_address(private_channel_id),
+		deposit_address: derive_btc_vault_deposit_addresses(private_channel_id).current_address(),
 	})
 }
 
@@ -113,9 +129,11 @@ pub fn evm_vault_swap<A>(
 	channel_metadata: Option<cf_chains::CcmChannelMetadata>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	let refund_params = refund_params.try_map_address(|addr| {
-		ChainAddressConverter::try_from_encoded_address(addr)
-			.and_then(|addr| addr.try_into().map_err(|_| ()))
-			.map_err(|_| "Invalid refund address".into())
+		Ok::<_, DispatchErrorWithMessage>(
+			ChainAddressConverter::try_from_encoded_address(addr)
+				.and_then(|addr| addr.try_into().map_err(|_| ()))
+				.map_err(|_| "Invalid refund address")?,
+		)
 	})?;
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
 		.try_into()
@@ -250,9 +268,11 @@ pub fn solana_vault_swap<A>(
 
 	let from = SolPubkey::try_from(from).map_err(|_| "Invalid Solana Address: from")?;
 	let refund_parameters = refund_parameters.try_map_address(|addr| {
-		ChainAddressConverter::try_from_encoded_address(addr)
-			.and_then(|addr| addr.try_into().map_err(|_| ()))
-			.map_err(|_| "Invalid refund address".into())
+		Ok::<_, DispatchErrorWithMessage>(
+			ChainAddressConverter::try_from_encoded_address(addr)
+				.and_then(|addr| addr.try_into().map_err(|_| ()))
+				.map_err(|_| "Invalid refund address")?,
+		)
 	})?;
 	let event_data_account = SolPubkey::try_from(event_data_account)
 		.map_err(|_| "Invalid Solana Address: event_data_account")?;

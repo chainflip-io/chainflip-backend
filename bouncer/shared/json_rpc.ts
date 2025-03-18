@@ -1,11 +1,14 @@
+import { Logger, throwError } from './utils/logger';
+
 let id = 0;
 export async function jsonRpc(
+  logger: Logger,
   method: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: any[],
   endpoint?: string,
 ): Promise<JSON> {
-  console.log('Sending json RPC', method);
+  logger.debug('Sending json RPC', method);
 
   id++;
   const request = JSON.stringify({
@@ -27,19 +30,18 @@ export async function jsonRpc(
 
   const data = await response.json();
   if (data.error) {
-    throw new Error(`JSON Rpc request ${request} failed: ${data.error.message}`);
-  } else {
-    return data.result;
+    throwError(logger, new Error(`JSON Rpc request ${request} failed: ${data.error.message}`));
   }
+  return data.result;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function lpApiRpc(method: string, params: any[]): Promise<any> {
+export async function lpApiRpc(logger: Logger, method: string, params: any[]): Promise<any> {
   // The port for the lp api is defined in `chainflip-lp-api.service`
-  return jsonRpc(method, params, 'http://127.0.0.1:10589');
+  return jsonRpc(logger, method, params, 'http://127.0.0.1:10589');
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function brokerApiRpc(method: string, params: any[]): Promise<any> {
-  return jsonRpc(method, params, 'http://127.0.0.1:10997');
+export async function brokerApiRpc(logger: Logger, method: string, params: any[]): Promise<any> {
+  return jsonRpc(logger, method, params, 'http://127.0.0.1:10997');
 }

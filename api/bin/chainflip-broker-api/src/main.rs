@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
@@ -7,7 +23,7 @@ use chainflip_api::{
 	self,
 	primitives::{
 		state_chain_runtime::runtime_apis::{
-			ChainAccounts, TransactionScreeningEvents, VaultSwapDetails,
+			ChainAccounts, TransactionScreeningEvents, VaultAddresses, VaultSwapDetails,
 		},
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
 		DcaParameters,
@@ -91,7 +107,7 @@ pub trait Rpc {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParametersRpc>,
+		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress>;
 
@@ -143,7 +159,7 @@ pub trait Rpc {
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
 	async fn get_affiliates(
 		&self,
-		affilate: Option<AccountId32>,
+		affiliate: Option<AccountId32>,
 	) -> RpcResult<Vec<(AccountId32, AffiliateDetails)>>;
 
 	#[method(name = "affiliate_withdrawal_request", aliases = ["broker_affiliateWithdrawalRequest"])]
@@ -151,6 +167,9 @@ pub trait Rpc {
 		&self,
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "get_vault_addresses", aliases = ["broker_getVaultAddresses"])]
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
 }
 
 pub struct RpcServerImpl {
@@ -189,7 +208,7 @@ impl RpcServer for RpcServerImpl {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParametersRpc>,
+		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
 		Ok(self
@@ -326,6 +345,10 @@ impl RpcServer for RpcServerImpl {
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().affiliate_withdrawal_request(affiliate_account_id).await?)
+	}
+
+	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
+		Ok(self.api.raw_client().cf_vault_addresses(None).await?)
 	}
 }
 

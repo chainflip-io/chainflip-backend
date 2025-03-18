@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(step_trait)]
 #![cfg_attr(any(feature = "test-utils", test), feature(closure_track_caller))]
@@ -30,6 +46,13 @@ macro_rules! assert_ok {
 macro_rules! assert_err {
 	($result:expr) => {
 		$result.unwrap_err()
+	};
+}
+
+#[macro_export]
+macro_rules! assert_matches {
+	($left:expr, $pattern:pat $(if $guard:expr)?$(,)?) => {
+		assert!(matches!($left, $pattern $(if $guard)?))
 	};
 }
 
@@ -294,5 +317,25 @@ mod test_asserts {
 	#[test]
 	fn test_assert_ok_err() {
 		assert_panics!(assert_ok!(Err::<u32, u32>(1)));
+	}
+
+	#[test]
+	fn test_assert_matches() {
+		#[allow(dead_code)]
+		struct Foo {
+			pub a: u8,
+			pub b: u8,
+		}
+		#[allow(dead_code)]
+		enum Bar {
+			A(u8),
+			B(String),
+		}
+		assert_panics!(assert_matches!(Some(Bar::A(6u8)), Some(Bar::B(..))));
+		assert_panics!(assert_matches!(Some(Bar::A(6u8)), Some(Bar::A(value)) if value == 5u8));
+
+		assert_matches!(Some(vec![0x01]), Some(..));
+
+		assert_matches!(Some(Foo { a: 1u8, b: 2u8 }), Some(Foo { a: 1u8, .. }));
 	}
 }

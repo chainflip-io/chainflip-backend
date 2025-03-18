@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
 	AccountId, Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
 	SolanaIngressEgress, SolanaThresholdSigner,
@@ -30,6 +46,7 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		self,
+		blockchain::delta_based_ingress::BackoffSettings,
 		composite::{tuple_6_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
@@ -62,6 +79,7 @@ pub type SolanaElectoralSystemRunner = CompositeRunner<
 		SolanaVaultSwapTracking,
 	),
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 	RunnerStorageAccess<Runtime, SolanaInstance>,
 	SolanaElectionHooks,
 >;
@@ -88,7 +106,10 @@ pub fn initial_state(
 		unsynchronised_settings: ((), (), (), (), (), ()),
 		settings: (
 			(),
-			SolanaIngressSettings { vault_program, usdc_token_mint_pubkey },
+			(
+				SolanaIngressSettings { vault_program, usdc_token_mint_pubkey },
+				BackoffSettings { backoff_after_blocks: 600, backoff_frequency: 100 },
+			),
 			(),
 			(),
 			LIVENESS_CHECK_DURATION,
@@ -102,6 +123,7 @@ pub type SolanaBlockHeightTracking = electoral_systems::monotonic_median::Monoto
 	(),
 	SolanaBlockHeightTrackingHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub type SolanaIngressTracking =
@@ -109,6 +131,7 @@ pub type SolanaIngressTracking =
 		pallet_cf_ingress_egress::Pallet<Runtime, Instance>,
 		SolanaIngressSettings,
 		<Runtime as Chainflip>::ValidatorId,
+		BlockNumberFor<Runtime>,
 	>;
 
 pub type SolanaNonceTracking = electoral_systems::monotonic_change::MonotonicChange<
@@ -118,6 +141,7 @@ pub type SolanaNonceTracking = electoral_systems::monotonic_change::MonotonicCha
 	(),
 	SolanaNonceTrackingHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSuccess<
@@ -126,6 +150,7 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	(),
 	SolanaEgressWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub type SolanaLiveness = electoral_systems::liveness::Liveness<
@@ -134,6 +159,7 @@ pub type SolanaLiveness = electoral_systems::liveness::Liveness<
 	cf_primitives::BlockNumber,
 	OnCheckCompleteHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub struct OnCheckCompleteHook;
@@ -420,11 +446,13 @@ impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
 pub struct SolanaIngress;
 impl IngressSource for SolanaIngress {
 	type Chain = Solana;
+	type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
 	fn open_channel(
 		channel: <Self::Chain as Chain>::ChainAccount,
 		asset: <Self::Chain as Chain>::ChainAsset,
 		close_block: <Self::Chain as Chain>::ChainBlockNumber,
+		current_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> DispatchResult {
 		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_election_identifiers(
 			|composite_election_identifiers| {
@@ -438,7 +466,13 @@ impl IngressSource for SolanaIngress {
 								SolanaIngressTracking,
 								RunnerStorageAccess<Runtime, SolanaInstance>,
 							>,
-						>(election_identifiers, channel, asset, close_block)
+						>(
+							election_identifiers,
+							channel,
+							asset,
+							close_block,
+							current_state_chain_block_number,
+						)
 					},
 				)
 			},
@@ -547,7 +581,7 @@ impl
 				broker_fee: Some(swap_details.broker_fee),
 				affiliate_fees: swap_details.affiliate_fees,
 				dca_params: swap_details.dca_params,
-				refund_params: Some(swap_details.refund_params),
+				refund_params: swap_details.refund_params,
 				boost_fee: swap_details.boost_fee.into(),
 			},
 		);

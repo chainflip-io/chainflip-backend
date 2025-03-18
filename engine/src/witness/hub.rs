@@ -1,11 +1,27 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 mod hub_chain_tracking;
 mod hub_deposits;
 mod hub_source;
 
 use cf_chains::{
 	dot::{
-		PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash,
-		PolkadotSignature, PolkadotTransactionId,
+		PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotSignature,
+		PolkadotTransactionId,
 	},
 	hub::AssethubUncheckedExtrinsic,
 };
@@ -27,7 +43,10 @@ use cf_utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
+	dot::{
+		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
+		PolkadotHash,
+	},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi,
 		storage_api::StorageApi,
@@ -83,7 +102,7 @@ use assethub::{
 };
 
 pub fn filter_map_events(
-	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::ext::subxt_core::error::Error>,
+	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::Error>,
 ) -> Option<(Phase, EventWrapper)> {
 	match res_event_details {
 		Ok(event_details) => match (event_details.pallet_name(), event_details.variant_name()) {

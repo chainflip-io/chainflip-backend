@@ -1,4 +1,19 @@
-use anyhow::Context;
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use cf_chains::{Chain, Ethereum};
 use cf_utilities::task_scope;
 use chainflip_api::primitives::{
@@ -10,8 +25,6 @@ use chainflip_engine::{
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},
 	settings::NodeContainer,
 	state_chain_observer::client::{
-		chain_api::ChainApi,
-		storage_api::StorageApi,
 		stream_api::{StreamApi, UNFINALIZED},
 		StateChainClient,
 	},
@@ -76,7 +89,7 @@ where
 			witness_call.clone(),
 			eth_client.clone(),
 			EthAsset::Usdc,
-			env_params.usdc_contract_address,
+			env_params.eth_usdc_contract_address,
 		)
 		.await?
 		.logging("witnessing USDCDeposits")
@@ -88,7 +101,7 @@ where
 			witness_call.clone(),
 			eth_client.clone(),
 			EthAsset::Flip,
-			env_params.flip_contract_address,
+			env_params.eth_flip_contract_address,
 		)
 		.await?
 		.logging("witnessing FlipDeposits")
@@ -100,7 +113,7 @@ where
 			witness_call.clone(),
 			eth_client.clone(),
 			EthAsset::Usdt,
-			env_params.usdt_contract_address,
+			env_params.eth_usdt_contract_address,
 		)
 		.await?
 		.logging("witnessing USDTDeposits")
@@ -127,21 +140,18 @@ where
 			env_params.eth_vault_address,
 			Asset::Eth,
 			ForeignChain::Ethereum,
-			env_params.supported_erc20_tokens.clone(),
+			env_params.eth_supported_erc20_tokens.clone(),
 		)
 		.logging("witnessing Vault")
 		.spawn(scope);
 
-	let key_manager_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_unfinalized_block().hash,
-		)
-		.await
-		.context("Failed to get KeyManager address from SC")?;
-
 	eth_source
 		.clone()
-		.key_manager_witnessing(witness_call.clone(), eth_client.clone(), key_manager_address)
+		.key_manager_witnessing(
+			witness_call.clone(),
+			eth_client.clone(),
+			env_params.eth_key_manager_address,
+		)
 		.logging("witnessing KeyManager")
 		.spawn(scope);
 

@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![feature(path_add_extension)]
 use std::{
 	env,
@@ -59,9 +75,9 @@ fn download_old_dylib(dest_folder: &Path, is_mainnet: bool) -> Result<(), Box<dy
 		// We want to download the sig file and verify the downloaded dylib only for mainnet.
 		if is_mainnet {
 			let mut dylib_sig_location = dylib_location.clone();
-			dylib_sig_location.add_extension("sig");
+			dylib_sig_location.add_extension("asc");
 
-			download_file(format!("{download_dylib}.sig"), dylib_sig_location.clone())?;
+			download_file(format!("{download_dylib}.asc"), dylib_sig_location.clone())?;
 			gpg_verify_signature(dylib_location, dylib_sig_location)?;
 		}
 

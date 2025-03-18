@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use cf_primitives::AuthorityCount;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -39,6 +55,8 @@ impl<ES: ElectoralSystemTypes> ConsensusVotes<ES> {
 /// A trait for defining all relevant types of an electoral system.
 pub trait ElectoralSystemTypes: 'static + Sized {
 	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
+
+	type StateChainBlockNumber: Parameter + Member + Ord + MaybeSerializeDeserialize;
 
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
 	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
@@ -147,6 +165,7 @@ pub trait ElectoralSystem: ElectoralSystemTypes {
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(current_vote.is_none())
 	}

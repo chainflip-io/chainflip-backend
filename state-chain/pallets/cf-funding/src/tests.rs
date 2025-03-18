@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
 	mock::*, pallet, BoundExecutorAddress, Error, EthereumAddress, Event, PendingRedemptions,
 	RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
@@ -1013,6 +1029,7 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 
 #[cfg(test)]
 mod test_restricted_balances {
+	use cf_utilities::assert_matches;
 	use sp_core::H160;
 
 	use super::*;
@@ -1070,13 +1087,13 @@ mod test_restricted_balances {
 					));
 					let expected_redeemed_amount =
 						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
-					assert!(matches!(
+					assert_matches!(
 						cf_test_utilities::last_event::<Test>(),
 						RuntimeEvent::Funding(Event::RedemptionRequested {
 							account_id,
 							amount,
 							..
-						}) if account_id == ALICE && amount == expected_redeemed_amount));
+						}) if account_id == ALICE && amount == expected_redeemed_amount);
 				},
 				Some(e) => {
 					assert_noop!(

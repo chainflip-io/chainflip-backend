@@ -1,14 +1,26 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![feature(iterator_try_collect)]
 
 use anyhow::Context;
 use cf_utilities::{dynamic_events::EventDecoder, scale_json::ext::JsonValue};
 use env_logger::Env;
 use std::str::FromStr;
-use subxt::{
-	backend::BackendExt,
-	ext::{futures::TryStreamExt, sp_core::H256},
-	SubstrateConfig,
-};
+use subxt::{backend::BackendExt, ext::futures::TryStreamExt, utils::H256, SubstrateConfig};
 
 const HELP: &str = r#"
 Usage: scale-json-event-logger <network> <latest|follow|0xhash> [path...]

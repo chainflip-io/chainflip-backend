@@ -4,6 +4,7 @@ import { submitGovernanceExtrinsic } from './cf_governance';
 import { decodeModuleError } from '../shared/utils';
 import { tryRuntimeUpgrade } from './try_runtime_upgrade';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { Logger } from './utils/logger';
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
   return compactAddLength(new Uint8Array(await fs.readFile(filePath)));
@@ -11,6 +12,7 @@ async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
 
 // By default we don't want to restrict that any of the nodes need to be upgraded.
 export async function submitRuntimeUpgradeWithRestrictions(
+  logger: Logger,
   wasmPath: string,
   semverRestriction?: Record<string, number>,
   percentNodesUpgraded = 0,
@@ -24,7 +26,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
   const networkUrl = process.env.CF_NODE_ENDPOINT ?? 'ws://localhost:9944';
 
   if (tryRuntime) {
-    console.log('Running try-runtime before submitting the runtime upgrade.');
+    logger.info('Running try-runtime before submitting the runtime upgrade.');
     await tryRuntimeUpgrade('last-n', networkUrl, wasmPath);
   }
 
@@ -35,16 +37,16 @@ export async function submitRuntimeUpgradeWithRestrictions(
     versionPercentRestriction = undefined;
   }
 
-  console.log('Submitting runtime upgrade.');
+  logger.info('Submitting runtime upgrade.');
   await submitGovernanceExtrinsic((api) =>
     api.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );
 
-  console.log('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
+  logger.info('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
 
   const event = await Promise.race([
-    observeEvent('system:CodeUpdated').event,
-    observeEvent('governance:FailedExecution').event,
+    observeEvent(logger, 'system:CodeUpdated').event,
+    observeEvent(logger, 'governance:FailedExecution').event,
   ]);
 
   if (event.name.method === 'FailedExecution') {
@@ -52,16 +54,21 @@ export async function submitRuntimeUpgradeWithRestrictions(
     throw Error(`Runtime upgrade failed: ${error}`);
   }
 
-  console.log('Runtime upgrade completed.');
+  logger.info('Runtime upgrade completed.');
 }
 
-export async function submitRuntimeUpgradeWasmPath(wasmPath: string) {
-  await submitRuntimeUpgradeWithRestrictions(wasmPath);
+export async function submitRuntimeUpgradeWasmPath(logger: Logger, wasmPath: string) {
+  await submitRuntimeUpgradeWithRestrictions(logger, wasmPath);
 }
 
 // Restrictions not provided.
-export async function submitRuntimeUpgrade(projectRoot: string, tryRuntime = false) {
+export async function submitRuntimeUpgrade(
+  logger: Logger,
+  projectRoot: string,
+  tryRuntime = false,
+) {
   await submitRuntimeUpgradeWithRestrictions(
+    logger,
     `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
     undefined,
     0,

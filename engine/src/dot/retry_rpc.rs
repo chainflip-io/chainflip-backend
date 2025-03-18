@@ -1,18 +1,30 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
 	common::option_inner,
 	retrier::{Attempt, RetryLimitReturn},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
-use cf_chains::{
-	dot::{PolkadotHash, RuntimeVersion},
-	Polkadot,
-};
+use cf_chains::{dot::RuntimeVersion, Polkadot};
 use cf_primitives::PolkadotBlockNumber;
 use cf_utilities::task_scope::Scope;
 use core::time::Duration;
 use futures_core::Stream;
-use sp_core::H256;
 use std::pin::Pin;
 use subxt::{
 	backend::legacy::rpc_methods::Bytes, config::Header as SubxtHeader, events::Events,
@@ -21,12 +33,8 @@ use subxt::{
 
 use crate::retrier::{RequestLog, RetrierClient};
 
+use super::{http_rpc::DotHttpRpcClient, rpc::DotSubClient, PolkadotHash, PolkadotHeader};
 use anyhow::{anyhow, Result};
-
-use super::{
-	http_rpc::DotHttpRpcClient,
-	rpc::{DotSubClient, PolkadotHeader},
-};
 
 use crate::dot::rpc::DotRpcApi;
 
@@ -102,7 +110,7 @@ pub trait DotRetryRpcApi: Clone {
 		retry_limit: R,
 	) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
 
-	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
+	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
 
 	async fn submit_raw_encoded_extrinsic(
 		&self,
@@ -158,7 +166,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion {
+	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new("runtime_version".to_string(), None),
@@ -304,7 +312,7 @@ pub mod mocks {
 
 			async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, parent_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
 
-			async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
+			async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> RuntimeVersion;
 
 			async fn submit_raw_encoded_extrinsic(
 				&self,

@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
@@ -159,11 +175,11 @@ pub fn try_extract_vault_swap_witness(
 			.collect_vec()
 			.try_into()
 			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
-		refund_params: Some(ChannelRefundParameters {
+		refund_params: ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration.into(),
 			refund_address,
 			min_price,
-		}),
+		},
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks.into(),
 			chunk_interval: data.parameters.chunk_interval.into(),
@@ -326,14 +342,14 @@ mod tests {
 				}),
 				affiliate_fees: bounded_vec![MOCK_SWAP_PARAMS.parameters.affiliates[0].into()],
 				deposit_metadata: None,
-				refund_params: Some(ChannelRefundParameters {
+				refund_params: ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
 					refund_address: refund_pubkey,
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),
 					)),
-				}),
+				},
 				dca_params: Some(DcaParameters {
 					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks.into(),
 					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval.into(),

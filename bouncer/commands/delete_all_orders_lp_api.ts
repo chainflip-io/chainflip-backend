@@ -6,9 +6,10 @@
 
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { DeleteAllOrdersLpApi } from '../shared/delete_all_orders_lp_api';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
-  await DeleteAllOrdersLpApi();
+  await DeleteAllOrdersLpApi(globalLogger);
 }
 
 await runWithTimeoutAndExit(main(), 240);

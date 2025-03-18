@@ -1,11 +1,27 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
+use cf_chains::{address::AddressConverter, AccountOrAddress, AnyChain, ForeignChainAddress};
+use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostApi, Chainflip, DepositApi,
-	EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails,
+	EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
 };
 
 use sp_std::vec;
@@ -33,20 +49,11 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::Chain;
-	use cf_primitives::{ChannelId, EgressId};
-	use cf_traits::HistoricalFeeMigration;
+	use cf_chains::{AccountOrAddress, Chain};
+	use cf_primitives::{BlockNumber, ChannelId, EgressId, Price};
+	use cf_traits::{HistoricalFeeMigration, MinimumDeposit};
 
 	use super::*;
-
-	/// AccountOrAddress is a enum that can represent an internal account or an external address.
-	/// This is used to represent the destination address for an egress during a withdrawal or an
-	/// internal account to move funds internally.
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
-	pub enum AccountOrAddress<AccountId> {
-		Internal(AccountId),
-		External(EncodedAddress),
-	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -84,6 +91,8 @@ pub mod pallet {
 			AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>,
 		>;
 
+		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 
@@ -97,6 +106,9 @@ pub mod pallet {
 		type MigrationHelper: HistoricalFeeMigration<
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
+
+		/// The interface to access the minimum deposit amount for each asset
+		type MinimumDeposit: MinimumDeposit;
 	}
 
 	#[pallet::error]
@@ -128,6 +140,8 @@ pub mod pallet {
 		CannotTransferToOriginAccount,
 		/// The account still has funds remaining in the boost pools
 		BoostedFundsRemaining,
+		/// The input amount of on-chain swaps must be at least the minimum deposit amount.
+		InternalSwapBelowMinimumDepositAmount,
 	}
 
 	#[pallet::event]
@@ -234,7 +248,7 @@ pub mod pallet {
 				origin,
 				amount,
 				asset,
-				AccountOrAddress::External(destination_address),
+				AccountOrAddress::ExternalAddress(destination_address),
 			)
 		}
 
@@ -326,8 +340,46 @@ pub mod pallet {
 				origin,
 				amount,
 				asset,
-				AccountOrAddress::Internal(destination),
+				AccountOrAddress::InternalAccount(destination),
 			)
+		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::schedule_swap())]
+		pub fn schedule_swap(
+			origin: OriginFor<T>,
+			amount: AssetAmount,
+			input_asset: Asset,
+			output_asset: Asset,
+			retry_duration: BlockNumber,
+			min_price: Price,
+			dca_params: Option<DcaParameters>,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			ensure!(
+				amount >= T::MinimumDeposit::get(input_asset),
+				Error::<T>::InternalSwapBelowMinimumDepositAmount
+			);
+
+			Self::ensure_has_refund_address_for_asset(&account_id, output_asset)?;
+
+			T::PoolApi::sweep(&account_id)?;
+
+			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)
+				.map_err(|_| Error::<T>::InsufficientBalance)?;
+
+			T::SwapRequestHandler::init_internal_swap_request(
+				input_asset,
+				amount,
+				output_asset,
+				retry_duration,
+				min_price,
+				dca_params,
+				account_id,
+			);
+
+			Ok(())
 		}
 	}
 }
@@ -337,14 +389,14 @@ impl<T: Config> Pallet<T> {
 		origin: OriginFor<T>,
 		amount: AssetAmount,
 		asset: Asset,
-		destination: AccountOrAddress<T::AccountId>,
+		destination: AccountOrAddress<EncodedAddress, T::AccountId>,
 	) -> DispatchResult {
 		ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
 		let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 		if amount > 0 {
 			match destination {
-				AccountOrAddress::Internal(destination_account) => {
+				AccountOrAddress::InternalAccount(destination_account) => {
 					ensure!(
 						account_id != destination_account,
 						Error::<T>::CannotTransferToOriginAccount
@@ -380,7 +432,7 @@ impl<T: Config> Pallet<T> {
 						amount,
 					});
 				},
-				AccountOrAddress::External(destination_address) => {
+				AccountOrAddress::ExternalAddress(destination_address) => {
 					let destination_address_internal =
 						T::AddressConverter::try_from_encoded_address(destination_address.clone())
 							.map_err(|_| Error::<T>::InvalidEgressAddress)?;
@@ -431,17 +483,12 @@ impl<T: Config> LpRegistration for Pallet<T> {
 		LiquidityRefundAddress::<T>::insert(account_id, address.chain(), address);
 	}
 
-	fn ensure_has_refund_address_for_pair(
+	fn ensure_has_refund_address_for_asset(
 		account_id: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset: Asset,
 	) -> DispatchResult {
 		ensure!(
-			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
-				LiquidityRefundAddress::<T>::contains_key(
-					account_id,
-					ForeignChain::from(quote_asset)
-				),
+			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(asset)),
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);
 		Ok(())

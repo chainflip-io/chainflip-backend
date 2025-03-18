@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{
 	collections::{BTreeMap, VecDeque},
 	sync::Arc,
@@ -11,7 +27,7 @@ use cf_utilities::{
 	UnendingStream,
 };
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
+use frame_support::pallet_prelude::InvalidTransaction;
 use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::H256;
@@ -24,17 +40,16 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, warn};
 
+use cf_node_client::{error_decoder, signer, ExtrinsicDetails};
+
 use crate::state_chain_observer::client::{
 	base_rpc_api,
-	error_decoder::{DispatchError, ErrorDecoder},
 	extrinsic_api::common::invalid_err_obj,
 	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
 use futures::StreamExt;
 use jsonrpsee::{core::ClientError, types::ErrorObjectOwned};
-
-use super::signer;
 
 #[cfg(test)]
 mod tests;
@@ -46,7 +61,7 @@ pub enum ExtrinsicError<OtherError> {
 	#[error(transparent)]
 	Other(OtherError),
 	#[error(transparent)]
-	Dispatch(DispatchError),
+	Dispatch(error_decoder::DispatchError),
 }
 
 #[derive(Error, Debug)]
@@ -58,7 +73,7 @@ pub enum DryRunError {
 	#[error("The transaction is invalid: {0}")]
 	InvalidTransaction(#[from] TransactionValidityError),
 	#[error("The transaction failed: {0}")]
-	Dispatch(#[from] DispatchError),
+	Dispatch(#[from] error_decoder::DispatchError),
 	#[error(transparent)]
 	RpcError(ClientError),
 }
@@ -71,9 +86,6 @@ impl From<ClientError> for DryRunError {
 		}
 	}
 }
-
-pub type ExtrinsicDetails =
-	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
 
 pub type ExtrinsicResult<OtherError> = Result<ExtrinsicDetails, ExtrinsicError<OtherError>>;
 
@@ -150,7 +162,7 @@ pub struct SubmissionWatcher<
 		)>,
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
-	error_decoder: ErrorDecoder,
+	error_decoder: error_decoder::ErrorDecoder,
 }
 
 pub enum SubmissionLogicError {

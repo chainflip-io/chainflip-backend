@@ -10,13 +10,14 @@
 
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { sendEvmNative } from '../shared/send_evm';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main() {
   const ethereumAddress = process.argv[2];
   const ethAmount = process.argv[3].trim();
 
-  console.log('Transferring ' + ethAmount + ' Eth to ' + ethereumAddress);
-  await sendEvmNative('Ethereum', ethereumAddress, ethAmount);
+  globalLogger.info(`Transferring ${ethAmount} Eth to ${ethereumAddress}`);
+  await sendEvmNative(globalLogger, 'Ethereum', ethereumAddress, ethAmount);
 }
 
 await runWithTimeoutAndExit(main(), 20);

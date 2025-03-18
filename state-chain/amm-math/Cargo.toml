@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Chainflip <https://chainflip.io>"]
 edition = "2021"
 description = "Chainflip AMM Math Primitives"
+license = "Apache-2.0"
 
 [dependencies]
 cf-primitives = { workspace = true }

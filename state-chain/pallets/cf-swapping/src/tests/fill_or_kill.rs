@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use frame_support::assert_err;
 
 use super::*;
@@ -43,10 +59,9 @@ fn both_fok_and_regular_swaps_succeed_first_try(is_ccm: bool) {
 				min_output: (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE,
 			};
 
-			let refund_parameters_encoded =
-				REFUND_PARAMS.into_channel_params(INPUT_AMOUNT).map_address(|refund_address| {
-					MockAddressConverter::to_encoded_address(refund_address)
-				});
+			let refund_parameters_encoded = REFUND_PARAMS
+				.into_extended_params(INPUT_AMOUNT)
+				.to_encoded::<MockAddressConverter>();
 
 			insert_swaps(&vec![fok_swap(None, is_ccm), fok_swap(Some(REFUND_PARAMS), is_ccm)]);
 

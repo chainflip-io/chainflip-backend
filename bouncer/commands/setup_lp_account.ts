@@ -8,13 +8,14 @@
 
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { setupLpAccount } from '../shared/setup_account';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main() {
   const lpKey = process.argv[2];
   if (!lpKey) {
     throw new Error('No LP key provided');
   }
-  await setupLpAccount(lpKey);
+  await setupLpAccount(globalLogger, lpKey);
 }
 
 await runWithTimeoutAndExit(main(), 120);

@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 //! Chainflip Primitives
@@ -10,7 +26,7 @@ use frame_support::sp_runtime::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::ConstU32;
+use sp_core::{ConstU32, U256};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
 	fmt,
@@ -94,6 +110,20 @@ pub type GasAmount = u128;
 pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
+
+// TODO: Consider alternative representation for Price:
+//
+// increasing Price to U512 or switch to a f64 (f64 would only be for the external
+// price representation), as at low ticks the precision in the price is VERY LOW, but this does not
+// cause any problems for the AMM code in terms of correctness
+
+/// This is the ratio of equivalently valued amounts of asset One and asset Zero.
+///
+/// The price is always measured in amount of asset One per unit of asset Zero. Therefore as asset
+/// zero becomes more valuable relative to asset one the price's literal value goes up, and vice
+/// versa. This ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional
+/// bits.
+pub type Price = U256;
 
 define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
 

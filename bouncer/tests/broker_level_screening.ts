@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { randomBytes } from 'crypto';
 import { InternalAsset } from '@chainflip/cli';
-import { ExecutableTest } from '../shared/executable_test';
 import { sendBtc } from '../shared/send_btc';
 import {
   newAddress,
@@ -15,12 +14,11 @@ import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { getBtcBalance } from '../shared/get_btc_balance';
+import { TestContext } from '../shared/utils/test_context';
+import { Logger } from '../shared/utils/logger';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
-
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testBrokerLevelScreening = new ExecutableTest('Broker-Level-Screening', main, 300);
 
 /**
  * Observes the balance of a BTC address and returns true if the balance changes. Times out after 100 seconds and returns false if the balance does not change.
@@ -151,6 +149,7 @@ async function ensureHealth() {
  * @returns - The the channel id of the deposit channel.
  */
 async function brokerLevelScreeningTestScenario(
+  logger: Logger,
   amount: string,
   doBoost: boolean,
   refundAddress: string,
@@ -163,17 +162,16 @@ async function brokerLevelScreeningTestScenario(
     minPriceX128: '0',
   };
   const swapParams = await requestNewSwap(
+    logger.child({ tag: 'brokerLevelScreeningTest' }),
     'Btc',
     'Usdc',
     destinationAddressForUsdc,
-    'brokerLevelScreeningTest',
     undefined,
     0,
-    true,
     doBoost ? 100 : 0,
     refundParameters,
   );
-  const txId = await sendBtc(swapParams.depositAddress, amount, 0);
+  const txId = await sendBtc(logger, swapParams.depositAddress, amount, 0);
   await reportFunction(txId);
   return swapParams.channelId.toString();
 }
@@ -185,7 +183,11 @@ async function brokerLevelScreeningTestScenario(
 // 1. No boost and early tx report -> tx is reported early and the swap is refunded.
 // 2. Boost and early tx report -> tx is reported early and the swap is refunded.
 // 3. Boost and late tx report -> tx is reported late and the swap is not refunded.
-async function main(testBoostedDeposits: boolean = false) {
+export async function testBrokerLevelScreening(
+  testContext: TestContext,
+  testBoostedDeposits: boolean = false,
+) {
+  const logger = testContext.logger;
   const MILLI_SECS_PER_BLOCK = 6000;
 
   // 0. -- Ensure that deposit monitor is running with manual mocking mode --
@@ -193,45 +195,43 @@ async function main(testBoostedDeposits: boolean = false) {
   const previousMockmode = (await setMockmode('Manual')).previous;
 
   // 1. -- Test no boost and early tx report --
-  testBrokerLevelScreening.log('Testing broker level screening with no boost...');
+  logger.debug('Testing broker level screening with no boost...');
   let btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, async (txId) =>
+  await brokerLevelScreeningTestScenario(logger, '0.2', false, btcRefundAddress, async (txId) =>
     setTxRiskScore(txId, 9.0),
   );
 
-  await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
+  await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
 
-  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
+  logger.debug(`Marked transaction was rejected and refunded 👍.`);
 
+  // 2. -- Test boost and early tx report --
   if (testBoostedDeposits) {
     // 2. -- Test boost and early tx report --
-    testBrokerLevelScreening.log(
-      'Testing broker level screening with boost and a early tx report...',
-    );
+    logger.debug('Testing broker level screening with boost and a early tx report...');
     btcRefundAddress = await newAssetAddress('Btc');
 
-    await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, async (txId) =>
+    await brokerLevelScreeningTestScenario(logger, '0.2', true, btcRefundAddress, async (txId) =>
       setTxRiskScore(txId, 9.0),
     );
-    await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
+    await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
     if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
       throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
     }
-    testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
+    logger.debug(`Marked transaction was rejected and refunded 👍.`);
 
     // 3. -- Test boost and late tx report --
     // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
-    testBrokerLevelScreening.log(
-      'Testing broker level screening with boost and a late tx report...',
-    );
+    logger.debug('Testing broker level screening with boost and a late tx report...');
     btcRefundAddress = await newAssetAddress('Btc');
 
     const channelId = await brokerLevelScreeningTestScenario(
+      logger,
       '0.2',
       true,
       btcRefundAddress,
@@ -244,11 +244,11 @@ async function main(testBoostedDeposits: boolean = false) {
       },
     );
 
-    await observeEvent('bitcoinIngressEgress:DepositFinalised', {
+    await observeEvent(logger, 'bitcoinIngressEgress:DepositFinalised', {
       test: (event) => event.data.channelId === channelId,
     }).event;
 
-    testBrokerLevelScreening.log(`Swap was executed and transaction was not refunded 👍.`);
+    logger.debug(`Swap was executed and transaction was not refunded 👍.`);
   }
 
   // 4. -- Restore mockmode --

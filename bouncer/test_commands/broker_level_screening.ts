@@ -15,6 +15,8 @@
 //  - reject a boosted deposit
 //  - don't reject a boosted deposit which was reported too late
 
+import { TestContext } from '../shared/utils/test_context';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { testBrokerLevelScreening } from '../tests/broker_level_screening';
 
 let testBoostedDeposits = false;
@@ -22,4 +24,4 @@ if (process.argv.length > 1) {
   testBoostedDeposits = process.argv[2] === 'testBoostedDeposits';
 }
 
-await testBrokerLevelScreening.run(testBoostedDeposits);
+await runWithTimeoutAndExit(testBrokerLevelScreening(new TestContext(), testBoostedDeposits), 300);

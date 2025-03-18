@@ -1,54 +1,45 @@
 import { requestNewSwap, doPerformSwap } from '../shared/perform_swap';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { observeEvent } from '../shared/utils/substrate';
-import { ExecutableTest } from '../shared/executable_test';
 import { prepareSwap, testSwap } from '../shared/swapping';
+import { TestContext } from '../shared/utils/test_context';
 
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testRotatesThroughBtcSwap = new ExecutableTest('Rotates-Through-BTC-Swap', main, 360);
-
-async function rotatesThroughBtcSwap() {
+async function rotatesThroughBtcSwap(testContext: TestContext) {
   const sourceAsset = 'Btc';
   const destAsset = 'Dot';
 
   const { destAddress, tag } = await prepareSwap(
+    testContext.logger,
     sourceAsset,
     destAsset,
     undefined,
     undefined,
     'through rotation',
-    true,
-    testRotatesThroughBtcSwap.swapContext,
+    testContext.swapContext,
   );
+  const logger = testContext.logger.child({ tag });
 
-  testRotatesThroughBtcSwap.log('Generated Dot address: ' + destAddress);
+  logger.debug('Generated Dot address: ' + destAddress);
 
-  const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
+  const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress);
 
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
-  testRotatesThroughBtcSwap.log(`Vault rotation initiated. Awaiting new epoch.`);
-  await observeEvent('validator:NewEpoch').event;
-  testRotatesThroughBtcSwap.log('Vault rotated!');
+  logger.info(`Vault rotation initiated. Awaiting new epoch.`);
+  await observeEvent(logger, 'validator:NewEpoch').event;
+  logger.info('Vault rotated!');
 
-  await doPerformSwap(
-    swapParams,
-    tag,
-    undefined,
-    undefined,
-    undefined,
-    true,
-    testRotatesThroughBtcSwap.swapContext,
-  );
+  await doPerformSwap(logger, swapParams, undefined, undefined, undefined, testContext.swapContext);
 }
 
-async function main() {
-  await rotatesThroughBtcSwap();
+export async function testRotatesThroughBtcSwap(testContext: TestContext) {
+  await rotatesThroughBtcSwap(testContext);
   await testSwap(
+    testContext.logger,
     'Dot',
     'Btc',
     undefined,
     undefined,
-    testRotatesThroughBtcSwap.swapContext,
+    testContext.swapContext,
     'after rotation',
   );
 }

@@ -4,6 +4,7 @@ build = "build.rs"
 edition = "2021"
 name = "chainflip-engine"
 version = "1.9.0"
+license = "Apache-2.0"
 
 [lib]
 crate-type = ["lib"]
@@ -46,7 +47,7 @@ serde = { workspace = true, default-features = true, features = [
 ] }
 serde_json = { workspace = true }
 sha2 = { workspace = true, default-features = true }
-subxt = { workspace = true, features = ["substrate-compat"] }
+subxt = { workspace = true }
 thiserror = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-stream = { workspace = true, features = ["sync"] }
@@ -64,12 +65,12 @@ tracing = { workspace = true }
 x25519-dalek = { workspace = true, features = ["serde"] }
 warp = { workspace = true }
 regex = { workspace = true }
-lazy_format = { workspace = true }
 zmq = { workspace = true, features = ["vendored"] }
 
 # Local deps
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
+cf-node-client = { workspace = true }
 chainflip-node = { workspace = true }
 custom-rpc = { workspace = true }
 engine-upgrade-utils = { workspace = true }
@@ -126,7 +127,6 @@ rocksdb = { workspace = true, features = ["lz4"] }
 mockall = { workspace = true, features = ["nightly"], optional = true }
 
 [dev-dependencies]
-csv = { workspace = true }
 ethereum = { workspace = true, default-features = true }
 mockall = { workspace = true, features = ["nightly"] }
 multisig = { workspace = true, features = ["test"] }

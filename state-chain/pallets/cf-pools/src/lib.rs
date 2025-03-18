@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
 	common::{PoolPairsMap, Side},
@@ -991,7 +1007,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::cancel_orders_batch())]
+		#[pallet::weight(T::WeightInfo::cancel_orders_batch(orders.len() as u32))]
 		pub fn cancel_orders_batch(
 			origin: OriginFor<T>,
 			orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
@@ -1698,7 +1714,8 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		f: F,
 	) -> Result<R, DispatchError> {
-		T::LpRegistrationApi::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
+		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, base_asset)?;
+		T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, quote_asset)?;
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)

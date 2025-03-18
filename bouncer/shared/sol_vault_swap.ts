@@ -30,6 +30,8 @@ import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.1-
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
 import { getBalance } from './get_balance';
+import { TestContext } from './utils/test_context';
+import { Logger, throwError } from './utils/logger';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
 
@@ -62,6 +64,7 @@ export type ChannelRefundParameters = {
 };
 
 export async function executeSolVaultSwap(
+  logger: Logger,
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -110,6 +113,7 @@ export async function executeSolVaultSwap(
     from_token_account: undefined,
   };
 
+  logger.trace('Requesting vault swap parameter encoding');
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     brokerFees.account,
@@ -121,9 +125,9 @@ export async function executeSolVaultSwap(
     brokerFees.commissionBps,
     extraParameters,
     messageMetadata && {
-      message: messageMetadata.message as `0x${string}`,
+      message: messageMetadata.message,
       gas_budget: messageMetadata.gasBudget,
-      ccm_additional_data: messageMetadata.ccmAdditionalData as `0x${string}`,
+      ccm_additional_data: messageMetadata.ccmAdditionalData,
     },
     boostFeeBps ?? 0,
     affiliateFees,
@@ -158,6 +162,7 @@ export async function executeSolVaultSwap(
 
   transaction.add(instruction);
 
+  logger.trace('Sending Solana vault swap transaction');
   const txHash = await sendAndConfirmTransaction(
     connection,
     transaction,
@@ -167,16 +172,17 @@ export async function executeSolVaultSwap(
 
   const transactionData = await connection.getTransaction(txHash, { commitment: 'confirmed' });
   if (transactionData === null) {
-    throw new Error('Solana TransactionData is empty');
+    throwError(logger, new Error('Solana TransactionData is empty'));
   }
   return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountKeypair.publicKey };
 }
 
 const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES = 5;
 export async function checkSolEventAccountsClosure(
+  testContext: TestContext,
   eventAccounts: [PublicKey, boolean][] = createdEventAccounts,
 ) {
-  console.log('=== Checking Solana Vault Swap Account Closure ===');
+  testContext.info('Checking Solana Vault Swap Account Closure');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();

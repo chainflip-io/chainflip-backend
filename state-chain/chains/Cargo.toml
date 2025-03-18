@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Chainflip <https://chainflip.io>"]
 edition = "2021"
 description = "Shared Chain-specific functionality for use in the substrate runtime."
+license = "Apache-2.0"
 
 [lints]
 workspace = true
@@ -37,7 +38,6 @@ borsh = { workspace = true, features = [
   "unstable__schema",
   "hashbrown",
 ] }
-serde_with = { workspace = true, features = ["macros"] }
 generic-array = { workspace = true, features = ["serde"] }
 bs58 = { workspace = true, features = ["alloc"] }
 
@@ -54,7 +54,6 @@ anyhow = { workspace = true, optional = true }
 hex = { workspace = true, features = ["serde"] }
 hex-literal = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
-serde_bytes = { workspace = true }
 log = { workspace = true }
 itertools = { workspace = true }
 arrayref = { workspace = true }
@@ -113,8 +112,6 @@ std = [
   "cf-runtime-utilities/std",
   "digest/std",
   "ethabi/std",
-  "serde_bytes/std",
-  "serde_with/std",
   "sha2/std",
   "sol-prim/std",
   "itertools/use_std",
@@ -131,4 +128,9 @@ try-runtime = [
   "cf-runtime-utilities/try-runtime",
 ]
 
-runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core", "sol-prim/runtime-integration-tests"]
+runtime-integration-tests = [
+  "std",
+  "dep:rand",
+  "ed25519-dalek/rand_core",
+  "sol-prim/runtime-integration-tests",
+]

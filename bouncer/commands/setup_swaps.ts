@@ -7,5 +7,6 @@
 
 import { setupSwaps } from '../shared/setup_swaps';
 import { runWithTimeoutAndExit } from '../shared/utils';
+import { globalLogger } from '../shared/utils/logger';
 
-await runWithTimeoutAndExit(setupSwaps(), 240);
+await runWithTimeoutAndExit(setupSwaps(globalLogger), 240);

@@ -4,10 +4,16 @@ import { amountToFineAmount, chainFromAsset, getEvmEndpoint } from '../shared/ut
 import { getContractAddress } from './utils';
 import { signAndSendTxEvm } from './send_evm';
 import { getErc20abi } from './contract_interfaces';
+import { Logger } from './utils/logger';
 
 const erc20abi = await getErc20abi();
 
-export async function approveErc20(asset: Asset, toAddress: string, amount: string) {
+export async function approveErc20(
+  logger: Logger,
+  asset: Asset,
+  toAddress: string,
+  amount: string,
+) {
   const chain = chainFromAsset(asset);
 
   const web3 = new Web3(getEvmEndpoint(chain));
@@ -21,7 +27,7 @@ export async function approveErc20(asset: Asset, toAddress: string, amount: stri
 
   const txData = tokenContract.methods.approve(toAddress, tokenAmount).encodeABI();
 
-  console.log('Approving ' + amount + ' ' + asset + ' to ' + toAddress);
+  logger.debug('Approving ' + amount + ' ' + asset + ' to ' + toAddress);
 
-  await signAndSendTxEvm(chain, tokenContractAddress, '0', txData);
+  await signAndSendTxEvm(logger, chain, tokenContractAddress, '0', txData);
 }

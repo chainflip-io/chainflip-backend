@@ -10,6 +10,7 @@
 
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { BoostPoolId, createBoostPools } from '../shared/setup_boost_pools';
+import { globalLogger } from '../shared/utils/logger';
 
 const newPools: BoostPoolId[] = JSON.parse(process.argv[2]);
-await runWithTimeoutAndExit(createBoostPools(newPools), 30);
+await runWithTimeoutAndExit(createBoostPools(globalLogger, newPools), 30);

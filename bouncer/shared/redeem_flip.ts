@@ -17,6 +17,7 @@ import {
   createStateChainKeypair,
 } from './utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { Logger } from './utils/logger';
 
 export type RedeemAmount = 'Max' | { Exact: string };
 
@@ -31,6 +32,7 @@ function intoFineAmount(amount: RedeemAmount): RedeemAmount {
 const gatewayAbi = await getGatewayAbi();
 
 export async function redeemFlip(
+  logger: Logger,
   flipSeed: string,
   ethAddress: HexString,
   flipAmount: RedeemAmount,
@@ -57,8 +59,8 @@ export async function redeemFlip(
     `A redemption is already in progress for this account: ${accountIdHex}, amount: ${pendingRedemption}`,
   );
 
-  console.log('Requesting redemption');
-  const redemptionRequestHandle = observeEvent('funding:RedemptionRequested', {
+  logger.debug('Requesting redemption');
+  const redemptionRequestHandle = observeEvent(logger, 'funding:RedemptionRequested', {
     test: (event) => event.data.accountId === flipWallet.address,
   }).event;
   const flipperinoRedeemAmount = intoFineAmount(flipAmount);
@@ -67,9 +69,9 @@ export async function redeemFlip(
     .signAndSend(flipWallet, { nonce: -1 }, handleSubstrateError(chainflip));
 
   const redemptionRequestEvent = await redemptionRequestHandle;
-  console.log('Redemption requested: ', redemptionRequestEvent.data.amount);
+  logger.debug('Redemption requested: ', redemptionRequestEvent.data.amount);
 
-  console.log('Waiting for redemption to be registered');
+  logger.debug('Waiting for redemption to be registered');
   const observeEventAmount = flipperinoRedeemAmount === 'Max' ? '*' : flipperinoRedeemAmount.Exact;
   await observeEVMEvent(
     chainFromAsset(Assets.Flip),
@@ -80,20 +82,20 @@ export async function redeemFlip(
   );
 
   const delay = await getRedemptionDelay(networkOptions);
-  console.log(`Waiting for ${delay}s before we can execute redemption`);
+  logger.debug(`Waiting for ${delay}s before we can execute redemption`);
   await sleep(Number(delay) * 1000);
 
-  console.log(`Executing redemption`);
+  logger.debug(`Executing redemption`);
 
   const nonce = await getNextEvmNonce('Ethereum');
 
-  const redemptionExecutedHandle = observeEvent('funding:RedemptionSettled', {
+  const redemptionExecutedHandle = observeEvent(logger, 'funding:RedemptionSettled', {
     test: (event) => event.data[0] === flipWallet.address,
   }).event;
 
   await executeRedemption(accountIdHex, networkOptions, { nonce });
   const redemptionExecutedAmount = (await redemptionExecutedHandle).data[1];
-  console.log('Observed RedemptionSettled event: ', redemptionExecutedAmount);
+  logger.debug('Observed RedemptionSettled event: ', redemptionExecutedAmount);
   assert.strictEqual(
     redemptionExecutedAmount,
     redemptionRequestEvent.data.amount,

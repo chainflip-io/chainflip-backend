@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 mod ccm;
 mod config;
 mod dca;
@@ -68,7 +84,7 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<ChannelRefundParametersDecoded>,
+	refund_params: Option<RefundParametersExtended<u64>>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
@@ -84,7 +100,7 @@ impl TestSwapParams {
 			input_asset: INPUT_ASSET,
 			output_asset: OUTPUT_ASSET,
 			input_amount: INPUT_AMOUNT,
-			refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
+			refund_params: refund_params.map(|params| params.into_extended_params(INPUT_AMOUNT)),
 			dca_params,
 			output_address: (*EVM_OUTPUT_ADDRESS).clone(),
 			is_ccm,
@@ -101,12 +117,14 @@ struct TestRefundParams {
 }
 
 impl TestRefundParams {
-	fn into_channel_params(self, input_amount: AssetAmount) -> ChannelRefundParametersDecoded {
+	fn into_extended_params(self, input_amount: AssetAmount) -> RefundParametersExtended<u64> {
 		use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 
-		ChannelRefundParametersDecoded {
+		RefundParametersExtended {
 			retry_duration: self.retry_duration,
-			refund_address: ForeignChainAddress::Eth([10; 20].into()),
+			refund_destination: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
+				[10; 20].into(),
+			)),
 			min_price: sqrt_price_to_price(bounded_sqrt_price(
 				self.min_output.into(),
 				input_amount.into(),
@@ -129,11 +147,13 @@ fn create_test_swap(
 			id: id.into(),
 			input_asset,
 			output_asset,
-			refund_params: None,
 			state: SwapRequestState::UserSwap {
-				output_address: ForeignChainAddress::Eth(H160::zero()),
+				refund_params: None,
+				output_action: SwapOutputAction::Egress {
+					ccm_deposit_metadata: None,
+					output_address: ForeignChainAddress::Eth(H160::zero()),
+				},
 				dca_state: DcaState::create_with_first_chunk(amount, dca_params).0,
-				ccm_deposit_metadata: None,
 				broker_fees: Default::default(),
 			},
 		},
@@ -201,8 +221,10 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 		let ccm_deposit_metadata = if swap.is_ccm { Some(generate_ccm_deposit()) } else { None };
 
 		let request_type = SwapRequestType::Regular {
-			output_address: swap.output_address.clone(),
-			ccm_deposit_metadata,
+			output_action: SwapOutputAction::Egress {
+				ccm_deposit_metadata,
+				output_address: swap.output_address.clone(),
+			},
 		};
 
 		Swapping::init_swap_request(
@@ -236,6 +258,12 @@ fn generate_ccm_deposit() -> CcmDepositMetadata {
 	}
 }
 
+const REFUND_PARAMS: ChannelRefundParametersEncoded = ChannelRefundParametersEncoded {
+	retry_duration: 100,
+	refund_address: EncodedAddress::Eth([1; 20]),
+	min_price: U256::zero(),
+};
+
 fn get_broker_balance<T: Config>(who: &T::AccountId, asset: Asset) -> AssetAmount {
 	T::BalanceApi::get_balance(who, asset)
 }
@@ -257,8 +285,10 @@ fn swap_with_custom_broker_fee(
 		amount,
 		to,
 		SwapRequestType::Regular {
-			output_address: ForeignChainAddress::Eth(Default::default()),
-			ccm_deposit_metadata: None,
+			output_action: SwapOutputAction::Egress {
+				output_address: ForeignChainAddress::Eth(Default::default()),
+				ccm_deposit_metadata: None,
+			},
 		},
 		broker_fees,
 		None,
@@ -286,7 +316,7 @@ fn request_swap_success_with_valid_parameters() {
 			None,
 			0,
 			Default::default(),
-			None,
+			REFUND_PARAMS,
 			None,
 		));
 	});
@@ -342,8 +372,10 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			10,
 			Asset::Dot,
 			SwapRequestType::Regular {
-				output_address: ForeignChainAddress::Eth([2; 20].into()),
-				ccm_deposit_metadata: None,
+				output_action: SwapOutputAction::Egress {
+					output_address: ForeignChainAddress::Eth([2; 20].into()),
+					ccm_deposit_metadata: None,
+				},
 			},
 			Default::default(),
 			None,
@@ -374,7 +406,7 @@ fn expect_swap_id_to_be_emitted() {
 				None,
 				0,
 				Default::default(),
-				None,
+				REFUND_PARAMS,
 				None,
 			));
 
@@ -436,7 +468,7 @@ fn rejects_invalid_swap_deposit() {
 				Some(ccm.clone()),
 				0,
 				Default::default(),
-				None,
+				REFUND_PARAMS,
 				None,
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
@@ -452,7 +484,7 @@ fn rejects_invalid_swap_deposit() {
 				Some(ccm),
 				0,
 				Default::default(),
-				None,
+				REFUND_PARAMS,
 				None,
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
@@ -519,8 +551,10 @@ fn process_all_into_stable_swaps_first() {
 					AMOUNT,
 					Asset::Eth,
 					SwapRequestType::Regular {
-						output_address: ForeignChainAddress::Eth([1; 20].into()),
-						ccm_deposit_metadata: None,
+						output_action: SwapOutputAction::Egress {
+							output_address: ForeignChainAddress::Eth([1; 20].into()),
+							ccm_deposit_metadata: None,
+						},
 					},
 					Default::default(),
 					None,
@@ -657,8 +691,10 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				PRINCIPAL_AMOUNT,
 				OUTPUT_ASSET,
 				SwapRequestType::Regular {
-					ccm_deposit_metadata: Some(ccm.clone()),
-					output_address: eth_address,
+					output_action: SwapOutputAction::Egress {
+						ccm_deposit_metadata: Some(ccm.clone()),
+						output_address: eth_address,
+					},
 				},
 				Default::default(),
 				None,
@@ -1028,13 +1064,9 @@ fn swaps_get_retried_after_failure() {
 #[test]
 fn deposit_address_ready_event_contains_correct_parameters() {
 	new_test_ext().execute_with(|| {
-		let refund_parameters = ChannelRefundParametersEncoded {
-			retry_duration: 10,
-			refund_address: EncodedAddress::Eth([10; 20]),
-			min_price: 100.into(),
-		};
-
 		let dca_parameters = DcaParameters { number_of_chunks: 5, chunk_interval: 2 };
+
+		let refund_parameters = REFUND_PARAMS;
 
 		const BOOST_FEE: u16 = 100;
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
@@ -1046,17 +1078,17 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 			None,
 			BOOST_FEE,
 			Default::default(),
-			Some(refund_parameters.clone()),
+			REFUND_PARAMS,
 			Some(dca_parameters.clone()),
 		));
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
 				boost_fee: BOOST_FEE,
-				refund_parameters: Some(ref refund_params_in_event),
+				refund_parameters: ref refund_parameters_in_event,
 				dca_parameters: Some(ref dca_params_in_event),
 				..
-			}) if *refund_params_in_event == refund_parameters && dca_params_in_event == &dca_parameters
+			}) if *refund_parameters_in_event == refund_parameters && dca_params_in_event == &dca_parameters
 		);
 	});
 }
@@ -1282,164 +1314,6 @@ fn broker_deregistration_checks_private_channels() {
 	});
 }
 
-#[test]
-fn swap_output_amounts_correctly_account_for_fees() {
-	for (from, to) in
-		// non-stable to non-stable, non-stable to stable, stable to non-stable
-		[(Asset::Btc, Asset::Eth), (Asset::Btc, Asset::Usdc), (Asset::Usdc, Asset::Eth)]
-	{
-		new_test_ext().execute_with(|| {
-			const INPUT_AMOUNT: AssetAmount = 1000;
-
-			let network_fee = Permill::from_percent(1);
-			NetworkFee::set(network_fee);
-
-			let expected_output: AssetAmount = {
-				let usdc_amount = if from == Asset::Usdc {
-					INPUT_AMOUNT
-				} else {
-					INPUT_AMOUNT * DEFAULT_SWAP_RATE
-				};
-
-				let usdc_after_network_fees = usdc_amount - network_fee * usdc_amount;
-
-				if to == Asset::Usdc {
-					usdc_after_network_fees
-				} else {
-					usdc_after_network_fees * DEFAULT_SWAP_RATE
-				}
-			};
-
-			{
-				Swapping::init_swap_request(
-					from,
-					INPUT_AMOUNT,
-					to,
-					SwapRequestType::Regular {
-						output_address: ForeignChainAddress::Eth(H160::zero()),
-						ccm_deposit_metadata: None,
-					},
-					Default::default(),
-					None,
-					None,
-					SwapOrigin::Vault {
-						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-						broker_id: Some(BROKER),
-					},
-				);
-
-				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
-
-				assert_eq!(
-					MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
-					vec![MockEgressParameter::Swap {
-						asset: to,
-						amount: expected_output,
-						fee: 0,
-						destination_address: ForeignChainAddress::Eth(H160::zero()),
-					},]
-				);
-			}
-		});
-	}
-}
-
-#[test]
-fn test_buy_back_flip() {
-	new_test_ext().execute_with(|| {
-		const INTERVAL: BlockNumberFor<Test> = 5;
-		const SWAP_AMOUNT: AssetAmount = 1000;
-		const NETWORK_FEE: Permill = Permill::from_percent(2);
-
-		NetworkFee::set(NETWORK_FEE);
-
-		// Get some network fees, just like we did a swap.
-		let FeeTaken { remaining_amount, fee: network_fee } =
-			Swapping::take_network_fee(SWAP_AMOUNT, false);
-
-		// Sanity check the network fee.
-		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
-		assert_eq!(network_fee, 20);
-		assert_eq!(remaining_amount + network_fee, SWAP_AMOUNT);
-
-		// The default buy interval is zero. Check that buy back is disabled & on_initialize does
-		// not panic.
-		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
-		Swapping::on_initialize(1);
-		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
-
-		// Set a non-zero buy interval
-		FlipBuyInterval::<Test>::set(INTERVAL);
-
-		// Nothing is bought if we're not at the interval.
-		Swapping::on_initialize(INTERVAL * 3 - 1);
-		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
-
-		// If we're at an interval, we should buy flip.
-		Swapping::on_initialize(INTERVAL * 3);
-		assert_eq!(0, CollectedNetworkFee::<Test>::get());
-
-		// Note that the network fee will not be charged in this case:
-		assert_eq!(
-			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
-				.first()
-				.expect("Should have scheduled a swap usdc -> flip"),
-			&Swap::new(1.into(), 1.into(), STABLE_ASSET, Asset::Flip, network_fee, None, [],)
-		);
-	});
-}
-
-#[test]
-fn test_calculate_input_for_gas_output() {
-	use cf_chains::assets::eth::Asset as EthereumAsset;
-	const FLIP: EthereumAsset = EthereumAsset::Flip;
-
-	new_test_ext().execute_with(|| {
-		// If swap simulation fails -> no conversion.
-		MockSwappingApi::set_swaps_should_fail(true);
-		assert!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000).is_none());
-
-		// Set swap rate to 2 and turn swaps back on.
-		SwapRate::set(2_f64);
-		MockSwappingApi::set_swaps_should_fail(false);
-
-		// Desired output is zero -> trivially ok.
-		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 0), Some(0));
-
-		// Desired output requires 2 swap legs, each with a swap rate of 2. So output should be
-		// 1/4th of input.
-		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000), Some(250));
-
-		// Desired output is gas asset, requires 1 swap leg. So output should be 1/2 of input.
-		assert_eq!(
-			Swapping::calculate_input_for_gas_output::<Ethereum>(EthereumAsset::Usdc, 1000),
-			Some(500)
-		);
-
-		// Input is gas asset -> trivially ok.
-		assert_eq!(
-			Swapping::calculate_input_for_gas_output::<Ethereum>(
-				cf_chains::assets::eth::GAS_ASSET,
-				1000
-			),
-			Some(1000)
-		);
-	});
-}
-
-#[test]
-fn test_fee_estimation_basis() {
-	for asset in Asset::all() {
-		if !asset.is_gas_asset() {
-			assert!(
-				utilities::fee_estimation_basis(asset).is_some(),
-	             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_basis function definition.",
-	             asset,
-	         );
-		}
-	}
-}
-
 #[cfg(test)]
 mod swap_batching {
 
@@ -1635,6 +1509,193 @@ mod swap_batching {
 	}
 }
 
+#[cfg(test)]
+mod internal_swaps {
+
+	use cf_traits::{mocks::balance_api::MockBalance, SwapOutputActionEncoded};
+
+	use super::*;
+
+	const INPUT_ASSET: Asset = Asset::Eth;
+	const OUTPUT_ASSET: Asset = Asset::Flip;
+
+	const INPUT_AMOUNT: AssetAmount = 1000;
+
+	#[test]
+	fn swap_into_internal_balance() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
+			INPUT_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+
+		let min_price = U256::from(DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS;
+
+		new_test_ext()
+			.execute_with(|| {
+				Swapping::init_internal_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					0,
+					min_price,
+					None,
+					LP_ACCOUNT,
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequested {
+						input_asset: INPUT_ASSET,
+						input_amount: INPUT_AMOUNT,
+						output_asset: OUTPUT_ASSET,
+						origin: SwapOrigin::OnChainAccount(LP_ACCOUNT),
+						request_type: SwapRequestTypeEncoded::Regular {
+							output_action: SwapOutputActionEncoded::CreditOnChain {
+								account_id: LP_ACCOUNT
+							}
+						},
+						..
+					})
+				);
+
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						swap_request_id: SWAP_REQUEST_ID,
+						..
+					}),
+					RuntimeEvent::Swapping(Event::CreditedOnChain {
+						swap_request_id: SWAP_REQUEST_ID,
+						account_id: LP_ACCOUNT,
+						asset: OUTPUT_ASSET,
+						amount: EXPECTED_OUTPUT_AMOUNT,
+					}),
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID
+					}),
+				);
+
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(
+					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
+					EXPECTED_OUTPUT_AMOUNT
+				);
+			});
+	}
+
+	#[test]
+	fn swap_on_chain_with_refund() {
+		const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const MIN_NETWORK_FEE: u128 = 10;
+		const NEW_SWAP_RATE: f64 = DEFAULT_SWAP_RATE as f64 / 2.0;
+		const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
+
+		// We require the minimum network fee to be non-zero for the refund fee to work, so this
+		// must be taken into account in the min_price calculation.
+		// Note that the `NetworkFee` is set to 0 by default, so the minimum network fee will be
+		// charged instead.
+		let min_price = U256::from(
+			(DEFAULT_SWAP_RATE as f64 *
+				DEFAULT_SWAP_RATE as f64 *
+				(((CHUNK_AMOUNT - MIN_NETWORK_FEE) as f64) / CHUNK_AMOUNT as f64)) as u128,
+		) << PRICE_FRACTIONAL_BITS;
+
+		new_test_ext()
+			.execute_with(|| {
+				MinimumNetworkFeePerChunk::<Test>::set(MIN_NETWORK_FEE);
+				Swapping::init_internal_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					0,
+					min_price,
+					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
+					LP_ACCOUNT,
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequested {
+						input_asset: INPUT_ASSET,
+						input_amount: INPUT_AMOUNT,
+						output_asset: OUTPUT_ASSET,
+						origin: SwapOrigin::OnChainAccount(LP_ACCOUNT),
+						request_type: SwapRequestTypeEncoded::Regular {
+							output_action: SwapOutputActionEncoded::CreditOnChain {
+								account_id: LP_ACCOUNT
+							}
+						},
+						..
+					})
+				);
+
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
+			})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted { .. }),
+				);
+
+				// Now we adjust execution price so that the next chunk gets refunded:
+				SwapRate::set(NEW_SWAP_RATE);
+			})
+			.then_process_blocks_until_block(CHUNK_2_BLOCK)
+			.then_execute_with(|_| {
+				const REFUND_FEE: AssetAmount = MIN_NETWORK_FEE / NEW_SWAP_RATE as u128;
+				// Only one chunk is expected to be swapped:
+				const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
+					(CHUNK_AMOUNT * DEFAULT_SWAP_RATE - MIN_NETWORK_FEE) * DEFAULT_SWAP_RATE;
+				const EXPECTED_REFUND_AMOUNT: AssetAmount = CHUNK_AMOUNT - REFUND_FEE;
+
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequested {
+						request_type: SwapRequestTypeEncoded::NetworkFee,
+						input_amount: REFUND_FEE,
+						..
+					}),
+					RuntimeEvent::Swapping(Event::SwapScheduled {
+						swap_type: SwapType::NetworkFee,
+						input_amount: REFUND_FEE,
+						..
+					}),
+					RuntimeEvent::Swapping(Event::RefundedOnChain {
+						swap_request_id: SWAP_REQUEST_ID,
+						account_id: LP_ACCOUNT,
+						asset: INPUT_ASSET,
+						amount: EXPECTED_REFUND_AMOUNT,
+					}),
+					RuntimeEvent::Swapping(Event::CreditedOnChain {
+						swap_request_id: SWAP_REQUEST_ID,
+						account_id: LP_ACCOUNT,
+						asset: OUTPUT_ASSET,
+						amount: EXPECTED_OUTPUT_AMOUNT
+					}),
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID
+					}),
+				);
+
+				assert_eq!(
+					MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET),
+					EXPECTED_REFUND_AMOUNT
+				);
+				assert_eq!(
+					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
+					EXPECTED_OUTPUT_AMOUNT
+				);
+			});
+	}
+}
+
 mod private_channels {
 
 	use super::*;
@@ -1769,10 +1830,15 @@ mod affiliates {
 				let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
 					.expect("Affiliate must be registered!");
 
+				assert!(
+					frame_system::Account::<Test>::contains_key(affiliate_account_id),
+					"Account not created"
+				);
 				System::assert_has_event(RuntimeEvent::Swapping(
 					Event::<Test>::AffiliateRegistration {
 						broker_id: BROKER,
 						short_id: SHORT_ID,
+						withdrawal_address,
 						affiliate_id: affiliate_account_id,
 					},
 				));
@@ -1805,6 +1871,7 @@ mod affiliates {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::System(frame_system::Event::NewAccount { .. }),
 				RuntimeEvent::Swapping(Event::AffiliateRegistration { .. }),
 				RuntimeEvent::Swapping(Event::WithdrawalRequested { .. }),
 			);
@@ -1886,6 +1953,10 @@ mod affiliates {
 			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
 				.expect("Affiliate must be registered!");
 
+			assert!(
+				frame_system::Account::<Test>::contains_key(affiliate_account_id),
+				"Account not created"
+			);
 			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
 
 			assert_noop!(
@@ -1899,6 +1970,10 @@ mod affiliates {
 
 			assert!(AffiliateAccountDetails::<Test>::get(BROKER, affiliate_account_id).is_none());
 			assert!(AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID).is_none());
+			assert!(
+				!frame_system::Account::<Test>::contains_key(affiliate_account_id),
+				"Account not deleted"
+			);
 		});
 	}
 }

@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH and Anza Maintainers <maintainers@anza.xyz>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg(feature = "pda")]
 
 #[cfg(test)]
@@ -7,12 +23,13 @@ mod failures {
 		pda::{Pda, PdaError},
 		Address, PdaAndBump,
 	};
+	use cf_utilities::assert_matches;
 
 	#[test]
 	fn seed_too_long() {
 		let public_key: Address =
 			"J4mK4RXAuizk5aMZw8Vz8W3y7mrCy6dcgniZ4qwZimZE".parse().expect("public key");
-		assert!(matches!(
+		assert_matches!(
 			Pda::from_address(public_key)
 				.expect("derive")
 				.chain_seed("01234567890123456789012345678912")
@@ -20,7 +37,7 @@ mod failures {
 				.chain_seed("012345678901234567890123456789123")
 				.expect_err("33 should be too much"),
 			PdaError::SeedTooLarge
-		));
+		);
 	}
 
 	#[test]
@@ -31,13 +48,13 @@ mod failures {
 			.map(|i| [i])
 			.try_fold(Pda::from_address(public_key).expect("derive"), Pda::chain_seed)
 			.expect("15 should be okay");
-		assert!(matches!(
+		assert_matches!(
 			(1..=consts::SOLANA_PDA_MAX_SEEDS)
 				.map(|i| [i])
 				.try_fold(Pda::from_address(public_key).expect("derive"), Pda::chain_seed)
 				.expect_err("16 should be too many"),
 			PdaError::TooManySeeds
-		));
+		);
 	}
 
 	#[test]
@@ -46,10 +63,10 @@ mod failures {
 			"J4mK4RXAuizk5aMZw8Vz8W3y7mrCy6dcgniZ4qwZimZE".parse().expect("public key");
 		let PdaAndBump { address, .. } =
 			Pda::from_address(public_key).expect("derive").finish().expect("finish");
-		assert!(matches!(
+		assert_matches!(
 			Pda::from_address(address).expect_err("PDA can't be a valid point on a curve"),
 			PdaError::NotAValidPoint,
-		))
+		);
 	}
 }
 

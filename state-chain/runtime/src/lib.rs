@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
 pub mod chainflip;
@@ -11,7 +27,9 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::{
-		address_derivation::btc::derive_btc_vault_deposit_address,
+		address_derivation::btc::{
+			derive_btc_vault_deposit_addresses, BitcoinPrivateBrokerDepositAddresses,
+		},
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -29,11 +47,11 @@ use crate::{
 		BoostPoolDetails, BrokerInfo, CcmData, DispatchErrorWithMessage, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvents,
-		ValidatorInfo, VaultSwapDetails,
+		ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
-	common::{PoolPairsMap, Side},
+	common::PoolPairsMap,
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
@@ -64,7 +82,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
-	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit, SwapLimits,
+	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, MinimumDeposit, NoLimit, SwapLimits,
 	SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
@@ -73,11 +91,9 @@ use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{
-	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
-};
+use pallet_cf_ingress_egress::{IngressOrEgress, OwedAmount, TargetChainAsset};
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
+	AskBidMap, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{
@@ -109,7 +125,7 @@ pub use frame_support::{
 	},
 	StorageValue,
 };
-use frame_system::offchain::SendTransactionTypes;
+use frame_system::{offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
 use pallet_cf_funding::MinimumFunding;
 use pallet_cf_pools::{PoolInfo, PoolOrders};
 use pallet_grandpa::AuthorityId as GrandpaId;
@@ -155,7 +171,7 @@ use chainflip::{
 	boost_api::IngressEgressBoostApi, epoch_transition::ChainflipEpochTransitions,
 	multi_vault_activator::MultiVaultActivator, BroadcastReadyProvider, BtcEnvironment,
 	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment, HubEnvironment,
-	SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
+	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -213,7 +229,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 190,
+	spec_version: 1_09_00,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -391,7 +407,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Ethereum>;
+	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Runtime>>;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
@@ -419,7 +435,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Polkadot>;
+	type IngressSource = DummyIngressSource<Polkadot, BlockNumberFor<Runtime>>;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
@@ -447,7 +463,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Bitcoin>;
+	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Runtime>>;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
@@ -475,7 +491,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Arbitrum>;
+	type IngressSource = DummyIngressSource<Arbitrum, BlockNumberFor<Runtime>>;
 	type TargetChain = Arbitrum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
@@ -531,7 +547,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Assethub>;
+	type IngressSource = DummyIngressSource<Assethub, BlockNumberFor<Runtime>>;
 	type TargetChain = Assethub;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
@@ -573,10 +589,12 @@ impl pallet_cf_lp::Config for Runtime {
 	type PoolApi = LiquidityPools;
 	type BalanceApi = AssetBalances;
 	type BoostApi = IngressEgressBoostApi;
+	type SwapRequestHandler = Swapping;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type MigrationHelper = LiquidityPools;
+	type MinimumDeposit = MinimumDepositProvider;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -1386,7 +1404,6 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-#[allow(unused)]
 macro_rules! instanced_migrations {
 	(
 		module: $module:ident,
@@ -1419,7 +1436,17 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_9 = ();
+use frame_support::migrations::VersionedMigration;
+type MigrationsForV1_9 = (
+	instanced_migrations!(
+		module: pallet_cf_elections,
+		migration: migrations::backoff_settings_migration::SolanaBackoffSettingsMigration,
+		from: 5,
+		to: 6,
+		include_instances: [SolanaInstance],
+		exclude_instances: [],
+	),
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -1886,15 +1913,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
-			use pallet_cf_ingress_egress::MinimumDeposit;
-			match asset.into() {
-				ForeignChainAndAsset::Ethereum(asset) => MinimumDeposit::<Runtime, EthereumInstance>::get(asset),
-				ForeignChainAndAsset::Polkadot(asset) => MinimumDeposit::<Runtime, PolkadotInstance>::get(asset),
-				ForeignChainAndAsset::Bitcoin(asset) => MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
-				ForeignChainAndAsset::Arbitrum(asset) => MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
-				ForeignChainAndAsset::Solana(asset) => MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
-				ForeignChainAndAsset::Assethub(asset) => MinimumDeposit::<Runtime, AssethubInstance>::get(asset),
-			}
+			chainflip::MinimumDepositProvider::get(asset)
 		}
 
 		fn cf_egress_dust_limit(generic_asset: Asset) -> AssetAmount {
@@ -2027,8 +2046,8 @@ impl_runtime_apis! {
 					(asset, AssetBalances::get_balance(&account_id, asset))
 				).collect(),
 				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
-					.map(derive_btc_vault_deposit_address),
-				affiliates: pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&account_id).collect(),
+					.map(|channel| derive_btc_vault_deposit_addresses(channel).current_address()),
+				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
 				bond: account_info.bond()
 			}
 		}
@@ -2051,66 +2070,6 @@ impl_runtime_apis! {
 
 		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount {
 			Swapping::minimum_chunk_size(asset)
-		}
-
-		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
-		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
-		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Side) -> Vec<AssetAmount> {
-			let (from, to) = AssetPair::to_swap(base_asset, quote_asset, side);
-
-			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>
-				where Runtime: pallet_cf_ingress_egress::Config<I>,
-				C: cf_chains::Chain<ChainAccount = <<Runtime as pallet_cf_ingress_egress::Config<I>>::TargetChain as cf_chains::Chain>::ChainAccount>
-			{
-				let mut filtered_swaps = Vec::new();
-				for deposit in deposit_witnesses {
-					let Some(details) = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, I>::get(
-						deposit.deposit_address,
-					) else {
-						continue
-					};
-					let channel_asset: Asset = details.deposit_channel.asset.into();
-
-					match details.action {
-						ChannelAction::Swap { destination_asset, channel_metadata, .. }
-							// Ignoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
-							if destination_asset == to && channel_asset == from && channel_metadata.is_none() =>
-						{
-							filtered_swaps.push(deposit.amount.into());
-						},
-						_ => {
-							// ignore other deposit actions
-						}
-					}
-				}
-				filtered_swaps
-			}
-
-			let mut all_prewitnessed_swaps = Vec::new();
-			let current_block_events = System::read_events_no_consensus();
-
-			for event in current_block_events {
-				#[allow(clippy::collapsible_match)]
-				match *event {
-					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
-						match call {
-							RuntimeCall::BitcoinIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
-								deposit_witnesses, ..
-							}) => {
-								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Bitcoin, BitcoinInstance>(from, to, deposit_witnesses));
-							},
-							_ => {
-								// ignore, we only care about calls that trigger swaps.
-							},
-						}
-					}
-					_ => {
-						// ignore, we only care about Prewitnessed calls
-					}
-				}
-			}
-
-			all_prewitnessed_swaps
 		}
 
 		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
@@ -2474,6 +2433,21 @@ impl_runtime_apis! {
 					.collect()
 			} else {
 				pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&broker).collect()
+			}
+		}
+
+		fn cf_vault_addresses() -> VaultAddresses {
+			VaultAddresses {
+				ethereum: EncodedAddress::Eth(Environment::eth_vault_address().into()),
+				arbitrum: EncodedAddress::Arb(Environment::arb_vault_address().into()),
+				bitcoin: BrokerPrivateBtcChannels::<Runtime>::iter()
+					.flat_map(|(account_id, channel_id)| {
+						let BitcoinPrivateBrokerDepositAddresses { previous, current } = derive_btc_vault_deposit_addresses(channel_id)
+							.with_encoded_addresses();
+						previous.into_iter().chain(core::iter::once(current))
+							.map(move |address| (account_id.clone(), address))
+					})
+					.collect(),
 			}
 		}
 	}

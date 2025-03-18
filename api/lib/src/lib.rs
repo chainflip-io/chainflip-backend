@@ -1,42 +1,57 @@
-use std::{fmt, sync::Arc};
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
-use cf_chains::{
-	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParameters,
-	ChannelRefundParametersEncoded, ForeignChain,
-};
+use cf_chains::{evm::to_evm_address, CcmChannelMetadata};
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
+use cf_rpc_types::RedemptionAmount;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
 pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
 pub mod primitives {
-	pub use cf_primitives::*;
-	pub use pallet_cf_governance::ProposalId;
-	pub use pallet_cf_swapping::AffiliateDetails;
-	pub use state_chain_runtime::{self, BlockNumber, Hash};
-	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
 		CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	};
+	pub use cf_primitives::*;
+	pub use pallet_cf_governance::ProposalId;
+	pub use pallet_cf_swapping::AffiliateDetails;
+	pub use state_chain_runtime::{self, BlockNumber, Hash};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
+pub use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
+
 pub use chainflip_engine::{
 	settings,
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcApi, RawRpcApi},
 		chain_api::ChainApi,
-		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, WaitFor, WaitForResult},
+		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 		storage_api::StorageApi,
 		BlockInfo,
 	},
@@ -47,7 +62,10 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
-use cf_utilities::{rpc::NumberOrHex, task_scope::Scope};
+// TODO: consider exporting lp types under another alias to avoid shadowing this crate's lp module.
+pub use cf_rpc_types::{self as rpc_types, broker::*};
+
+use cf_utilities::task_scope::Scope;
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
@@ -205,7 +223,7 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
 	async fn request_redemption(
 		&self,
-		amount: primitives::RedemptionAmount,
+		amount: RedemptionAmount,
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
@@ -309,45 +327,6 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SwapDepositAddress {
-	pub address: AddressString,
-	pub issued_block: state_chain_runtime::BlockNumber,
-	pub channel_id: ChannelId,
-	pub source_chain_expiry_block: NumberOrHex,
-	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<RefundParametersRpc>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct WithdrawFeesDetail {
-	pub tx_hash: H256,
-	pub egress_id: (ForeignChain, u64),
-	pub egress_amount: U256,
-	pub egress_fee: U256,
-	pub destination_address: AddressString,
-}
-
-impl fmt::Display for WithdrawFeesDetail {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(
-			f,
-			"\
-			Tx hash: {:?}\n\
-			Egress id: {:?}\n\
-			Egress amount: {}\n\
-			Egress fee: {}\n\
-			Destination address: {}\n\
-			",
-			self.tx_hash,
-			self.egress_id,
-			self.egress_amount,
-			self.egress_fee,
-			self.destination_address,
-		)
-	}
-}
-
 macro_rules! extract_event {
     ($events:expr, $runtime_event_variant:path, $pallet_event_variant:path, $pattern:tt, $result:expr) => {
         if let Some($runtime_event_variant($pallet_event_variant $pattern)) = $events.iter().find(|event| {
@@ -373,33 +352,23 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParametersRpc>,
+		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
-		let destination_address = destination_address
-			.try_parse_to_encoded_address(destination_asset.into())
-			.map_err(anyhow::Error::msg)?;
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
 					destination_asset,
-					destination_address,
+					destination_address: destination_address
+						.try_parse_to_encoded_address(destination_asset.into())?,
 					broker_commission,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees: affiliate_fees.unwrap_or_default(),
-					refund_parameters: refund_parameters
-						.map(|rpc_params: ChannelRefundParameters<AddressString>| {
-							Ok::<_, anyhow::Error>(ChannelRefundParametersEncoded {
-								retry_duration: rpc_params.retry_duration,
-								refund_address: rpc_params
-									.refund_address
-									.try_parse_to_encoded_address(source_asset.into())?,
-								min_price: rpc_params.min_price,
-							})
-						})
-						.transpose()?,
+					refund_parameters: refund_parameters.try_map_address(|addr| {
+						addr.try_parse_to_encoded_address(source_asset.into())
+					})?,
 					dca_parameters,
 				},
 			)
@@ -425,11 +394,10 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				channel_id: *channel_id,
 				source_chain_expiry_block: (*source_chain_expiry_block).into(),
 				channel_opening_fee: (*channel_opening_fee).into(),
-				refund_parameters: refund_parameters.as_ref().map(|params| {
-					params.map_address(|refund_address| {
+				refund_parameters: refund_parameters
+					.map_address(|refund_address| {
 						AddressString::from_encoded_address(&refund_address)
-					})
-				}),
+					}),
 			}
 		)
 	}
@@ -581,14 +549,6 @@ pub trait SimpleSubmissionApi: SignedExtrinsicApi {
 #[async_trait]
 impl<T: SignedExtrinsicApi + Sized + Send + Sync + 'static> SimpleSubmissionApi for T {}
 
-pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
-
-#[derive(Serialize, Deserialize)]
-pub enum TransactionInId {
-	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
-	// other variants reserved for other chains.
-}
-
 #[async_trait]
 pub trait DepositMonitorApi:
 	SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static
@@ -711,7 +671,7 @@ mod tests {
 	mod key_generation {
 
 		use super::*;
-		use cf_chains::address::clean_foreign_chain_address;
+		use cf_chains::{address::clean_foreign_chain_address, ForeignChain};
 		use sp_core::crypto::Ss58Codec;
 
 		#[test]

@@ -12,8 +12,9 @@ import {
   getSolWhaleKeyPair,
 } from './utils';
 import { signAndSendTxSol } from './send_sol';
+import { Logger } from './utils/logger';
 
-export async function sendSolUsdc(solAddress: string, usdcAmount: string, log = true) {
+export async function sendSolUsdc(logger: Logger, solAddress: string, usdcAmount: string) {
   const usdcMintPubKey = new PublicKey(getContractAddress('Solana', 'SolUsdc'));
 
   const whaleKeypair = getSolWhaleKeyPair();
@@ -37,5 +38,5 @@ export async function sendSolUsdc(solAddress: string, usdcAmount: string, log = 
       BigInt(usdcFineAmount),
     ),
   );
-  return signAndSendTxSol(transaction, log);
+  return signAndSendTxSol(logger, transaction);
 }

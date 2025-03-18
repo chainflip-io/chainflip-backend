@@ -5,7 +5,7 @@ description = "Chainflip ingress and egress pallet"
 authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 homepage = "https://chainflip.io"
 edition = "2021"
-license = "<TODO>"
+license = "Apache-2.0"
 publish = false
 repository = "https://github.com/chainflip-io/chainflip-backend"
 
@@ -41,6 +41,7 @@ sp-core = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 pallet-cf-governance = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
 
 [features]
 default = ["std"]

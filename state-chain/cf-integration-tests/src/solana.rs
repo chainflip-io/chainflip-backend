@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg(test)]
 
 use std::{collections::BTreeMap, marker::PhantomData};
@@ -20,7 +36,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
-use cf_utilities::bs58_array;
+use cf_utilities::{assert_matches, bs58_array};
 use codec::Encode;
 use frame_support::{
 	assert_err,
@@ -58,9 +74,9 @@ const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
-const REFUND_PARAMS: ChannelRefundParameters<SolAddress> = ChannelRefundParameters {
+const REFUND_PARAMS: ChannelRefundParameters<EncodedAddress> = ChannelRefundParameters {
 	retry_duration: 0,
-	refund_address: FALLBACK_ADDRESS,
+	refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
 	min_price: sp_core::U256::zero(),
 };
 
@@ -110,7 +126,7 @@ fn schedule_deposit_to_swap(
 		ccm,
 		0u16,
 		Default::default(),
-		None,
+		REFUND_PARAMS,
 		None,
 	));
 
@@ -257,10 +273,10 @@ fn can_rotate_solana_vault() {
 			testnet.move_forward_blocks(10);
 
 			// Assert the RotateKey call is built, signed and broadcasted.
-			assert!(matches!(
+			assert_matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::ActivatingKeys(..)
-			));
+			);
 			System::assert_has_event(RuntimeEvent::SolanaThresholdSigner(
 				pallet_cf_threshold_signature::Event::<Runtime, SolanaInstance>::ThresholdSignatureSuccess {
 					request_id: 3,
@@ -380,7 +396,11 @@ fn vault_swap_deposit_witness(
 		deposit_details: (),
 		broker_fee: None,
 		affiliate_fees: Default::default(),
-		refund_params: Some(REFUND_PARAMS),
+		refund_params: ChannelRefundParameters {
+			retry_duration: REFUND_PARAMS.retry_duration,
+			refund_address: FALLBACK_ADDRESS,
+			min_price: REFUND_PARAMS.min_price,
+		},
 		dca_params: None,
 		boost_fee: 0,
 		deposit_address: Some(SolAddress([2u8; 32])),
@@ -437,7 +457,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					Some(invalid_ccm.channel_metadata.clone()),
 					0u16,
 					Default::default(),
-					None,
+					REFUND_PARAMS,
 					None,
 				),
 				pallet_cf_swapping::Error::<Runtime>::InvalidCcm,
@@ -451,6 +471,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					0,
 					Some(invalid_ccm.channel_metadata.clone()),
 					0u16,
+					REFUND_PARAMS,
 				),
 				pallet_cf_swapping::Error::<Runtime>::InvalidCcm,
 			);
@@ -763,14 +784,14 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			// on_finalize: reach consensus on the egress vote and trigger the fallback mechanism.
 			SolanaElections::on_finalize(System::block_number() + 1);
 			assert_eq!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::decode_len(), Some(1));
-			assert!(matches!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::get()[0],
+			assert_matches!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::get()[0],
 				FetchOrTransfer::Transfer {
 					egress_id: (ForeignChain::Solana, 2),
 					asset: SolAsset::SolUsdc,
 					destination_address: FALLBACK_ADDRESS,
 					..
 				}
-			));
+			);
 
 			// Ensure the previous broadcast data has been cleaned up.
 			assert!(!pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().contains(&ccm_broadcast_id));

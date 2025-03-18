@@ -1,12 +1,29 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 pub use crate::{self as pallet_cf_ingress_egress};
 use crate::{DepositWitness, PalletSafeMode};
 
-use cf_chains::eth::EthereumTrackedData;
-pub use cf_chains::{
+use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
-	eth::Address as EthereumAddress,
-	CcmDepositMetadata, Chain,
+	eth::EthereumTrackedData,
+	evm::U256,
+	ChannelRefundParametersDecoded,
 };
+pub use cf_chains::{CcmDepositMetadata, Chain};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -32,7 +49,7 @@ use cf_traits::{
 	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
-use frame_system as system;
+use frame_system::{self as system, pallet_prelude::BlockNumberFor};
 use sp_core::{ConstBool, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
 
@@ -116,7 +133,7 @@ impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	type IngressSource = DummyIngressSource<Ethereum>;
+	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Test>>;
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
@@ -276,7 +293,11 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						BROKER,
 						None,
 						0,
-						None,
+						ChannelRefundParametersDecoded {
+							retry_duration: 100,
+							refund_address: ForeignChainAddress::Eth([1; 20].into()),
+							min_price: U256::from(0),
+						},
 						None,
 					)
 					.map(|(channel_id, deposit_address, ..)| {

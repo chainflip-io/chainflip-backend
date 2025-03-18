@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
@@ -8,6 +24,7 @@ use pallet_session::Config as SessionConfig;
 
 use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode};
+use cf_utilities::assert_matches;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -98,7 +115,7 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 		bond: 100u32.into(),
 	}));
 
-	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
+	assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..));
 }
 
 #[allow(clippy::multiple_bound_locations)]
@@ -243,7 +260,7 @@ mod benchmarks {
 			Pallet::<T>::start_authority_rotation();
 		}
 
-		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
+		assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..));
 	}
 
 	#[benchmark]
@@ -255,8 +272,8 @@ mod benchmarks {
 			Pallet::<T>::start_authority_rotation();
 		}
 
-		assert!(matches!(<T as Config>::SafeMode::get(), SafeMode::CODE_RED));
-		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle));
+		assert_matches!(<T as Config>::SafeMode::get(), SafeMode::CODE_RED);
+		assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle);
 	}
 
 	/**** 2. RotationPhase::KeygensInProgress *** */
@@ -288,10 +305,10 @@ mod benchmarks {
 			Pallet::<T>::on_initialize(1u32.into());
 		}
 
-		assert!(matches!(
+		assert_matches!(
 			CurrentRotationPhase::<T>::get(),
 			RotationPhase::KeyHandoversInProgress(..)
-		));
+		);
 	}
 
 	#[benchmark]
@@ -302,16 +319,16 @@ mod benchmarks {
 
 		let block = frame_system::Pallet::<T>::current_block_number();
 
-		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
+		assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..));
 
 		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete));
 
 		Pallet::<T>::on_initialize(block);
 
-		assert!(matches!(
+		assert_matches!(
 			CurrentRotationPhase::<T>::get(),
 			RotationPhase::KeyHandoversInProgress(..)
-		));
+		);
 
 		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete));
 
@@ -324,7 +341,7 @@ mod benchmarks {
 			Pallet::<T>::on_initialize(1u32.into());
 		}
 
-		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::NewKeysActivated(..)));
+		assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::NewKeysActivated(..));
 	}
 
 	#[benchmark]

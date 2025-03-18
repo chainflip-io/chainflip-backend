@@ -33,6 +33,8 @@ import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 import { execWithLog } from './utils/exec_with_log';
 import { send } from './send';
+import { TestContext } from './utils/test_context';
+import { Logger, throwError } from './utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -47,6 +49,8 @@ export const snowWhiteMutex = new Mutex();
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];
 export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
+
+export const testInfoFile = '/tmp/chainflip/test_info.csv';
 
 export type Asset = SDKAsset;
 export type Chain = SDKChain;
@@ -267,50 +271,6 @@ export function chainGasAsset(chain: Chain): Asset {
   }
 }
 
-/// Simplified color logging with reset, so only a single line will be colored.
-/// Example: console.log(ConsoleLogColors.Red, 'message');
-export enum ConsoleLogColors {
-  WhiteBold = '\x1b[1m%s\x1b[0m',
-  DarkGrey = '\x1b[2m%s\x1b[0m',
-  Underline = '\x1b[4m%s\x1b[0m',
-  Grey = '\x1b[30m%s\x1b[0m',
-  Green = '\x1b[32m%s\x1b[0m',
-  Red = '\x1b[31m%s\x1b[0m',
-  Yellow = '\x1b[33m%s\x1b[0m',
-  Blue = '\x1b[34m%s\x1b[0m',
-  Purple = '\x1b[35m%s\x1b[0m',
-  LightBlue = '\x1b[36m%s\x1b[0m',
-  RedSolid = '\x1b[41m%s\x1b[0m',
-}
-
-export const ConsoleColors = {
-  Reset: '\x1b[0m',
-  Bright: '\x1b[1m',
-  Dim: '\x1b[2m',
-  Underscore: '\x1b[4m',
-  Blink: '\x1b[5m',
-  Reverse: '\x1b[7m',
-  Hidden: '\x1b[8m',
-
-  FgBlack: '\x1b[30m',
-  FgRed: '\x1b[31m',
-  FgGreen: '\x1b[32m',
-  FgYellow: '\x1b[33m',
-  FgBlue: '\x1b[34m',
-  FgMagenta: '\x1b[35m',
-  FgCyan: '\x1b[36m',
-  FgWhite: '\x1b[37m',
-
-  BgBlack: '\x1b[40m',
-  BgRed: '\x1b[41m',
-  BgGreen: '\x1b[42m',
-  BgYellow: '\x1b[43m',
-  BgBlue: '\x1b[44m',
-  BgMagenta: '\x1b[45m',
-  BgCyan: '\x1b[46m',
-  BgWhite: '\x1b[47m',
-};
-
 export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
   const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
   return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
@@ -347,10 +307,7 @@ export async function runWithTimeoutAndExit<T>(
   const executionTime = (Date.now() - start) / 1000;
 
   if (executionTime > seconds * 0.9) {
-    console.warn(
-      ConsoleLogColors.Yellow,
-      `Warning: Execution time was close to the timeout: ${executionTime}/${seconds}s`,
-    );
+    console.warn(`Warning: Execution time was close to the timeout: ${executionTime}/${seconds}s`);
   } else {
     console.log(`Execution time: ${executionTime}/${seconds}s`);
   }
@@ -415,9 +372,9 @@ export type EgressId = [Chain, number];
 type BroadcastChainAndId = [Chain, number];
 // Observe multiple events related to the same swap that could be emitted in the same block
 export async function observeSwapEvents(
+  logger: Logger,
   { sourceAsset, destAsset, depositAddress, channelId }: SwapParams,
   api: ApiPromise,
-  tag?: string,
   finalized = false,
 ): Promise<BroadcastChainAndId | undefined> {
   let broadcastEventFound = false;
@@ -478,21 +435,21 @@ export async function observeSwapEvents(
         case swapExecutedEvent:
           if (data.swapId === swapId) {
             expectedEvent = swapEgressScheduled;
-            console.log(`${tag} swap executed, with id: ${swapId}`);
+            logger.trace(`Swap executed, with id: ${swapId}`);
           }
           break;
         case swapEgressScheduled:
           if (data.swapRequestId === swapRequestId) {
             expectedEvent = batchBroadcastRequested;
             egressId = data.egressId as EgressId;
-            console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
+            logger.trace(`Swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
           }
           break;
         case batchBroadcastRequested:
           for (const eventEgressId of data.egressIds) {
             if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
               broadcastId = [egressId[0], Number(data.broadcastId)] as BroadcastChainAndId;
-              console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
+              logger.trace(`Broadcast requested, with id: (${broadcastId})`);
               broadcastEventFound = true;
               unsubscribe();
               break;
@@ -530,13 +487,15 @@ export enum TransactionOrigin {
   VaultSwapEvm = 'VaultSwapEvm',
   VaultSwapSolana = 'VaultSwapSolana',
   VaultSwapBitcoin = 'VaultSwapBitcoin',
+  OnChainAccount = 'OnChainAccount',
 }
 
 export type TransactionOriginId =
   | { type: TransactionOrigin.DepositChannel; channelId: number }
   | { type: TransactionOrigin.VaultSwapEvm; txHash: string }
   | { type: TransactionOrigin.VaultSwapSolana; addressAndSlot: [string, number] }
-  | { type: TransactionOrigin.VaultSwapBitcoin; txId: string };
+  | { type: TransactionOrigin.VaultSwapBitcoin; txId: string }
+  | { type: TransactionOrigin.OnChainAccount; accountId: string };
 
 function checkRequestTypeMatches(actual: object | string, expected: SwapRequestType) {
   if (typeof actual === 'object') {
@@ -573,17 +532,24 @@ function checkTransactionInMatches(actual: any, expected: TransactionOriginId): 
               .join(''))
     );
   }
+  if ('OnChainAccount' in actual) {
+    return (
+      expected.type === TransactionOrigin.OnChainAccount &&
+      actual.OnChainAccount.accountId === expected.accountId
+    );
+  }
   throw new Error(`Unsupported transaction origin type ${actual}`);
 }
 
 export async function observeSwapRequested(
+  logger: Logger,
   sourceAsset: Asset,
   destAsset: Asset,
   id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
   // need to await this to prevent the chainflip api from being disposed prematurely
-  return observeEvent('swapping:SwapRequested', {
+  return observeEvent(logger, 'swapping:SwapRequested', {
     test: (event) => {
       const data = event.data;
 
@@ -601,16 +567,15 @@ export async function observeSwapRequested(
   }).event;
 }
 
-export async function observeBroadcastSuccess(broadcastId: BroadcastChainAndId, testTag?: string) {
+export async function observeBroadcastSuccess(logger: Logger, broadcastId: BroadcastChainAndId) {
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
-  const observeBroadcastFailure = observeBadEvent(`${broadcaster}:BroadcastAborted`, {
+  const observeBroadcastFailure = observeBadEvent(logger, `${broadcaster}:BroadcastAborted`, {
     test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
-    label: testTag ? `observe BroadcastSuccess test tag: ${testTag}` : 'observe BroadcastSuccess',
   });
 
-  await observeEvent(`${broadcaster}:BroadcastSuccess`, {
+  await observeEvent(logger, `${broadcaster}:BroadcastSuccess`, {
     test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
   }).event;
 
@@ -713,10 +678,12 @@ export function getWhaleKey(chain: Chain): string {
 }
 
 export async function observeBalanceIncrease(
+  logger: Logger,
   dstCcy: Asset,
   address: string,
   oldBalance: string,
 ): Promise<number> {
+  logger.debug(`Observing balance increase of ${dstCcy} at ${address}`);
   for (let i = 0; i < 2400; i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > Number(oldBalance)) {
@@ -726,7 +693,7 @@ export async function observeBalanceIncrease(
     await sleep(3000);
   }
 
-  return Promise.reject(new Error('Failed to observe balance increase'));
+  return throwError(logger, new Error('Failed to observe balance increase'));
 }
 
 export async function observeFetch(asset: Asset, address: string): Promise<void> {
@@ -1182,14 +1149,18 @@ export async function startEngines(
   console.log('Starting all the engines');
 
   const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
-  execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
-    INIT_RUN: 'false',
-    LOG_SUFFIX: '-pre-upgrade',
-    NODE_COUNT: nodeCount,
-    SELECTED_NODES,
-    LOCALNET_INIT_DIR: localnetInitPath,
-    BINARY_ROOT_PATH: binaryPath,
-  });
+  await execWithLog(
+    `${localnetInitPath}/scripts/start-all-engines.sh`,
+    'start-all-engines-pre-upgrade',
+    {
+      INIT_RUN: 'false',
+      LOG_SUFFIX: '-pre-upgrade',
+      NODE_COUNT: nodeCount,
+      SELECTED_NODES,
+      LOCALNET_INIT_DIR: localnetInitPath,
+      BINARY_ROOT_PATH: binaryPath,
+    },
+  );
 
   await sleep(7000);
 
@@ -1197,8 +1168,8 @@ export async function startEngines(
 }
 
 // Check that all Solana Nonces are available
-export async function checkAvailabilityAllSolanaNonces() {
-  console.log('=== Checking Solana Nonce Availability ===');
+export async function checkAvailabilityAllSolanaNonces(testContext: TestContext) {
+  testContext.info('Checking Solana Nonce Availability');
 
   // Check that all Solana nonces are available
   await using chainflip = await getChainflipApi();
@@ -1245,7 +1216,7 @@ export function getTimeStamp(): string {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-export async function createEvmWalletAndFund(asset: Asset): Promise<HDNodeWallet> {
+export async function createEvmWalletAndFund(logger: Logger, asset: Asset): Promise<HDNodeWallet> {
   const chain = chainFromAsset(asset);
 
   const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
@@ -1253,7 +1224,50 @@ export async function createEvmWalletAndFund(asset: Asset): Promise<HDNodeWallet
     throw new Error('Failed to create random mnemonic');
   }
   const wallet = Wallet.fromPhrase(mnemonic).connect(getDefaultProvider(getEvmEndpoint(chain)));
-  await send(chainGasAsset(chain) as SDKAsset, wallet.address, undefined, false);
-  await send(asset, wallet.address, undefined, false);
+  await send(logger, chainGasAsset(chain) as SDKAsset, wallet.address, undefined);
+  await send(logger, asset, wallet.address, undefined);
   return wallet;
+}
+
+/**
+ * Executes an RPC call with automatic retries and timeout handling.
+ *
+ * This function attempts to execute the provided RPC call function, and if it fails,
+ * will retry up to the specified maximum number of attempts. Each attempt is also
+ * subject to a timeout, after which the attempt is considered failed.
+ *
+ * @param rpcCall - A function that returns a Promise with the RPC call result
+ * @param options - Configuration options:
+ *   - maxAttempts: Maximum number of retry attempts
+ *   - timeoutMs: Timeout in milliseconds for each attempt
+ *   - operation: Description of the operation for logging purposes
+ * @returns A Promise that resolves with the result of the RPC call
+ * @throws Error if all retry attempts fail or timeout
+ */
+export async function retryRpcCall<T>(
+  rpcCall: () => Promise<T>,
+  options: { maxAttempts: number; timeoutMs: number; operation: string },
+): Promise<T> {
+  const { maxAttempts, timeoutMs, operation } = options;
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    try {
+      // Use Promise.race to handle timeout
+      return await Promise.race([
+        rpcCall(),
+        new Promise<T>((_, reject) => {
+          setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
+        }),
+      ]);
+    } catch (error) {
+      attempt++;
+      console.warn(`Attempt ${attempt} failed for ${operation}: ${error}`);
+      if (attempt >= maxAttempts) {
+        throw new Error(`Failed to complete ${operation} after ${maxAttempts} attempts`);
+      }
+    }
+  }
+
+  throw new Error(`Failed to complete ${operation} after ${maxAttempts} attempts`);
 }

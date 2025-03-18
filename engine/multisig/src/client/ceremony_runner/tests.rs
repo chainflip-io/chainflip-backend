@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
 	client::{
 		ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
@@ -15,6 +31,7 @@ use crate::{
 	Rng,
 };
 
+use cf_utilities::assert_matches;
 use rand::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::mpsc;
@@ -169,7 +186,7 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 	// Process a stage 1 message. This will cause the ceremony to progress to stage 2 and process
 	// the delayed message. The processing of the delayed message will cause the completion of stage
 	// 2 and therefore fail with BroadcastFailure because the data we used was invalid.
-	assert!(matches!(
+	assert_matches!(
 		ceremony_runner
 			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1(1))
 			.await,
@@ -180,7 +197,7 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 				SigningStageName::VerifyCommitmentsBroadcast2
 			)
 		)))
-	));
+	);
 }
 
 // Note: Clippy seems to throw a false positive without this.

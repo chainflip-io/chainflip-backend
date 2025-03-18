@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
@@ -11,7 +27,6 @@ use frame_support::{
 	traits::{EnsureOrigin, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
-use sp_std::vec;
 
 fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 	let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
@@ -269,7 +284,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn cancel_orders_batch() {
+	fn cancel_orders_batch(n: Linear<1, 100>) {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
@@ -280,28 +295,25 @@ mod benchmarks {
 		));
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000_000);
-		let mut orders_to_delete: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>> =
-			vec![].try_into().unwrap();
-		for i in 1..101i32 {
-			assert_ok!(Pallet::<T>::set_range_order(
-				RawOrigin::Signed(caller.clone()).into(),
-				Asset::Eth,
-				Asset::Usdc,
-				i as u64,
-				Some(-i..i),
-				RangeOrderSize::AssetAmounts {
-					maximum: AssetAmounts { base: 1_000_000, quote: 1_000_000 },
-					minimum: AssetAmounts { base: 500_000, quote: 500_000 },
-				},
-			));
-			orders_to_delete
-				.try_push(CloseOrder::Range {
-					base_asset: Asset::Eth,
-					quote_asset: Asset::Usdc,
-					id: i as u64,
-				})
-				.expect("cannot fail");
-		}
+
+		let orders_to_delete = (1i32..=n as i32)
+			.map(|i| {
+				assert_ok!(Pallet::<T>::set_range_order(
+					RawOrigin::Signed(caller.clone()).into(),
+					Asset::Eth,
+					Asset::Usdc,
+					i as u64,
+					Some(-i..i),
+					RangeOrderSize::AssetAmounts {
+						maximum: AssetAmounts { base: 1_000_000, quote: 1_000_000 },
+						minimum: AssetAmounts { base: 500_000, quote: 500_000 },
+					},
+				));
+				CloseOrder::Range { base_asset: Asset::Eth, quote_asset: Asset::Usdc, id: i as u64 }
+			})
+			.collect::<Vec<_>>()
+			.try_into()
+			.unwrap();
 
 		#[extrinsic_call]
 		crate::benchmarking::benchmarks::cancel_orders_batch(

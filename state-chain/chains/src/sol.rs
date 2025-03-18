@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 pub use cf_primitives::chains::Solana;
 
 use cf_primitives::ChannelId;
@@ -473,7 +489,7 @@ impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::sol::compute_units_costs::*;
+	use crate::{sol::compute_units_costs::*, ChannelLifecycleHooks};
 
 	#[test]
 	fn can_calculate_gas_limit() {
@@ -509,5 +525,14 @@ mod test {
 			let tx_compute_limit = SolTrackedData::calculate_ccm_compute_limit(0, *asset);
 			assert_eq!(tx_compute_limit, default_compute_limit);
 		}
+	}
+
+	#[test]
+	fn solana_channel_recycling_is_assumed_to_be_deactivated() {
+		assert!(
+			<<Solana as Chain>::DepositChannelState as ChannelLifecycleHooks>::maybe_recycle(0).is_none(),
+			"It looks like Solana channel recycling is active. If this is intentional, ensure that the corresponding
+			unsynchronised state map in the delta_based_ingress election is not deleted when channels are closed."
+		);
 	}
 }

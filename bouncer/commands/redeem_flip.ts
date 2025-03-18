@@ -13,6 +13,7 @@
 import { HexString } from '@polkadot/util/types';
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { RedeemAmount, redeemFlip } from '../shared/redeem_flip';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
   const flipSeed = process.argv[2];
@@ -22,7 +23,7 @@ async function main(): Promise<void> {
   const cleanFlipAmount: RedeemAmount =
     flipAmount === 'Max' ? 'Max' : { Exact: flipAmount.toString() };
 
-  await redeemFlip(flipSeed, ethAddress, cleanFlipAmount);
+  await redeemFlip(globalLogger, flipSeed, ethAddress, cleanFlipAmount);
 }
 
 await runWithTimeoutAndExit(main(), 600);

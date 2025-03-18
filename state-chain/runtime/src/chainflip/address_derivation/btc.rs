@@ -1,12 +1,60 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use super::AddressDerivation;
 use crate::{BitcoinThresholdSigner, Environment, EpochKey, String};
 use cf_chains::{
-	address::{AddressDerivationApi, AddressDerivationError},
-	btc::deposit_address::DepositAddress,
+	address::{AddressDerivationApi, AddressDerivationError, EncodedAddress},
+	btc::{deposit_address::DepositAddress, AggKey, ScriptPubkey},
 	Bitcoin, Chain,
 };
 use cf_primitives::ChannelId;
 use cf_traits::KeyProvider;
+
+pub struct BitcoinPrivateBrokerDepositAddresses<Address> {
+	pub previous: Option<Address>,
+	pub current: Address,
+}
+
+impl<A> BitcoinPrivateBrokerDepositAddresses<A> {
+	pub fn map_address<B, F>(self, f: F) -> BitcoinPrivateBrokerDepositAddresses<B>
+	where
+		F: Fn(A) -> B,
+	{
+		BitcoinPrivateBrokerDepositAddresses {
+			previous: self.previous.map(&f),
+			current: f(self.current),
+		}
+	}
+}
+
+impl BitcoinPrivateBrokerDepositAddresses<ScriptPubkey> {
+	pub fn with_encoded_addresses(self) -> BitcoinPrivateBrokerDepositAddresses<EncodedAddress> {
+		self.map_address(|script_pubkey| {
+			EncodedAddress::from_chain_account::<Bitcoin>(
+				script_pubkey,
+				Environment::network_environment(),
+			)
+		})
+	}
+
+	pub fn current_address(&self) -> String {
+		self.current.to_address(&Environment::network_environment().into())
+	}
+}
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	fn generate_address(
@@ -46,18 +94,23 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 
 /// ONLY FOR USE IN RPC CALLS.
 ///
-/// Derives the BTC vault deposit address from the private channel id.
+/// Derives the current and previous BTC vault deposit addresses from the private channel id.
 /// Note: This function will **panic** if the private channel id is out of bounds or if there is
 /// no active epoch key for Bitcoin.
-pub(crate) fn derive_btc_vault_deposit_address(private_channel_id: u64) -> String {
-	let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
-		.expect("We should always have a key for the current epoch.");
-	DepositAddress::new(
-		key.current,
-		private_channel_id.try_into().expect("Private channel id out of bounds."),
-	)
-	.script_pubkey()
-	.to_address(&Environment::network_environment().into())
+///
+/// Note: If there is no previous key, we return `None` for the previous address.
+pub fn derive_btc_vault_deposit_addresses(
+	private_channel_id: u64,
+) -> BitcoinPrivateBrokerDepositAddresses<ScriptPubkey> {
+	let EpochKey { key: AggKey { previous, current }, .. } =
+		BitcoinThresholdSigner::active_epoch_key()
+			.expect("We should always have a key for the current epoch.");
+
+	let private_channel_id: u32 =
+		private_channel_id.try_into().expect("Private channel id out of bounds.");
+
+	BitcoinPrivateBrokerDepositAddresses { previous, current }
+		.map_address(|key| DepositAddress::new(key, private_channel_id).script_pubkey())
 }
 
 #[test]

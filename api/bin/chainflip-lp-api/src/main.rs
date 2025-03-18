@@ -1,6 +1,24 @@
-use crate::rpc_types::CloseOrderJson;
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::anyhow;
-use cf_primitives::{BasisPoints, BlockNumber, EgressId};
+use cf_primitives::{
+	chains::{Arbitrum, Solana},
+	BasisPoints, BlockNumber, DcaParameters, EgressId, Price,
+};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -10,16 +28,17 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		types::{LimitOrRangeOrder, LimitOrder, RangeOrder},
-		ApiWaitForResult, LpApi, Side, Tick,
+		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LpApi, OpenSwapChannels, OrderIdJson,
+		RangeOrder, RangeOrderSizeJson, Side, Tick,
 	},
 	primitives::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
-		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
+		AccountRole, Asset, ForeignChain, Hash,
 	},
+	rpc_types::{lp::SwapRequestResponse, RedemptionAmount},
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
-	SignedExtrinsicApi, StateChainApi, WaitFor,
+	AccountId32, AddressString, ApiWaitForResult, BlockUpdate, ChainApi, EthereumAddress,
+	OperatorApi, SignedExtrinsicApi, StateChainApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::{order_fills::OrderFills, CustomApiClient};
@@ -31,8 +50,7 @@ use jsonrpsee::{
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
 	PendingSubscriptionSink,
 };
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
-use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
 use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
 use std::{
 	ops::Range,
@@ -40,81 +58,6 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::log;
-
-/// Contains RPC interface types that differ from internal types.
-pub mod rpc_types {
-	use super::*;
-	use anyhow::anyhow;
-	use cf_primitives::chains::assets::any;
-	use cf_utilities::rpc::NumberOrHex;
-	use chainflip_api::{lp::PoolPairsMap, queries::SwapChannelInfo};
-	use serde::{Deserialize, Serialize};
-
-	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-	pub struct OrderIdJson(NumberOrHex);
-	impl TryFrom<OrderIdJson> for OrderId {
-		type Error = anyhow::Error;
-
-		fn try_from(value: OrderIdJson) -> Result<Self, Self::Error> {
-			value.0.try_into().map_err(|_| anyhow!("Failed to convert order id to u64"))
-		}
-	}
-
-	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-	pub enum RangeOrderSizeJson {
-		AssetAmounts { maximum: PoolPairsMap<NumberOrHex>, minimum: PoolPairsMap<NumberOrHex> },
-		Liquidity { liquidity: NumberOrHex },
-	}
-	impl TryFrom<RangeOrderSizeJson> for RangeOrderSize {
-		type Error = anyhow::Error;
-
-		fn try_from(value: RangeOrderSizeJson) -> Result<Self, Self::Error> {
-			Ok(match value {
-				RangeOrderSizeJson::AssetAmounts { maximum, minimum } =>
-					RangeOrderSize::AssetAmounts {
-						maximum: maximum
-							.try_map(TryInto::try_into)
-							.map_err(|_| anyhow!("Failed to convert maximums to u128"))?,
-						minimum: minimum
-							.try_map(TryInto::try_into)
-							.map_err(|_| anyhow!("Failed to convert minimums to u128"))?,
-					},
-				RangeOrderSizeJson::Liquidity { liquidity } => RangeOrderSize::Liquidity {
-					liquidity: liquidity
-						.try_into()
-						.map_err(|_| anyhow!("Failed to convert liquidity to u128"))?,
-				},
-			})
-		}
-	}
-
-	#[derive(Serialize, Deserialize, Clone)]
-	pub struct OpenSwapChannels {
-		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
-		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
-		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
-	}
-
-	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-	#[serde(untagged)]
-	pub enum CloseOrderJson {
-		Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderIdJson },
-		Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderIdJson },
-	}
-
-	impl TryFrom<CloseOrderJson> for CloseOrder {
-		type Error = anyhow::Error;
-
-		fn try_from(value: CloseOrderJson) -> Result<Self, Self::Error> {
-			Ok(match value {
-				CloseOrderJson::Limit { base_asset, quote_asset, side, id } =>
-					CloseOrder::Limit { base_asset, quote_asset, side, id: id.try_into()? },
-				CloseOrderJson::Range { base_asset, quote_asset, id } =>
-					CloseOrder::Range { base_asset, quote_asset, id: id.try_into()? },
-			})
-		}
-	}
-}
 
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
@@ -205,7 +148,7 @@ pub trait Rpc {
 	async fn free_balances(&self) -> RpcResult<AssetMap<U256>>;
 
 	#[method(name = "get_open_swap_channels")]
-	async fn get_open_swap_channels(&self) -> RpcResult<OpenSwapChannels>;
+	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels>;
 
 	#[method(name = "request_redemption")]
 	async fn request_redemption(
@@ -233,6 +176,18 @@ pub trait Rpc {
 		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
+
+	#[method(name = "schedule_swap")]
+	async fn schedule_swap(
+		&self,
+		amount: NumberOrHex,
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;
 }
 
 pub struct RpcServerImpl {
@@ -473,15 +428,17 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn get_open_swap_channels(&self) -> RpcResult<OpenSwapChannels> {
+	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels> {
 		let api = self.api.query_api();
 
-		let (ethereum, bitcoin, polkadot) = tokio::try_join!(
-			api.get_open_swap_channels::<Ethereum>(None),
-			api.get_open_swap_channels::<Bitcoin>(None),
-			api.get_open_swap_channels::<Polkadot>(None),
+		let (ethereum, bitcoin, polkadot, arbitrum, solana) = tokio::try_join!(
+			api.get_open_swap_channels::<Ethereum>(at),
+			api.get_open_swap_channels::<Bitcoin>(at),
+			api.get_open_swap_channels::<Polkadot>(at),
+			api.get_open_swap_channels::<Arbitrum>(at),
+			api.get_open_swap_channels::<Solana>(at),
 		)?;
-		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
+		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot, arbitrum, solana })
 	}
 
 	async fn request_redemption(
@@ -623,6 +580,32 @@ impl RpcServer for RpcServerImpl {
 				wait_for.unwrap_or_default(),
 			)
 			.await?)
+	}
+
+	async fn schedule_swap(
+		&self,
+		amount: NumberOrHex,
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {
+		Ok(self
+			.api
+			.lp_api()
+			.schedule_swap(
+				try_parse_number_or_hex(amount)?,
+				input_asset,
+				output_asset,
+				retry_duration,
+				min_price,
+				dca_params,
+				wait_for.unwrap_or_default(),
+			)
+			.await?
+			.map_details(Into::into))
 	}
 }
 

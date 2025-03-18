@@ -5,14 +5,8 @@ import { limitOrder } from '../shared/limit_order';
 import { rangeOrder } from '../shared/range_order';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { deposits } from '../shared/setup_swaps';
-import { ExecutableTest } from '../shared/executable_test';
-
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testCancelOrdersBatch = new ExecutableTest(
-  'Cancel-Orders-Batch',
-  createAndDeleteMultipleOrders,
-  240,
-);
+import { TestContext } from '../shared/utils/test_context';
+import { Logger } from '../shared/utils/logger';
 
 const DEFAULT_LP: string = '//LP_3';
 
@@ -34,7 +28,11 @@ async function countOpenOrders(baseAsset: string, quoteAsset: string, lp: string
   return openOrders;
 }
 
-export async function createAndDeleteMultipleOrders(numberOfLimitOrders = 30, lpKey?: string) {
+export async function createAndDeleteMultipleOrders(
+  logger: Logger,
+  numberOfLimitOrders = 30,
+  lpKey?: string,
+) {
   await using chainflip = await getChainflipApi();
 
   const lpUri = lpKey || DEFAULT_LP;
@@ -42,16 +40,16 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders = 30, lp
 
   await Promise.all([
     // provide liquidity to LP_3
-    depositLiquidity('Usdc', 10000, false, lpUri),
-    depositLiquidity('Eth', deposits.get('Eth')!, false, lpUri),
-    depositLiquidity('Dot', deposits.get('Dot')!, false, lpUri),
-    depositLiquidity('Btc', deposits.get('Btc')!, false, lpUri),
-    depositLiquidity('Flip', deposits.get('Flip')!, false, lpUri),
-    depositLiquidity('Usdt', deposits.get('Usdt')!, false, lpUri),
-    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, lpUri),
-    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, lpUri),
-    depositLiquidity('Sol', deposits.get('Sol')!, false, lpUri),
-    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
+    depositLiquidity(logger, 'Usdc', 10000, false, lpUri),
+    depositLiquidity(logger, 'Eth', deposits.get('Eth')!, false, lpUri),
+    depositLiquidity(logger, 'Dot', deposits.get('Dot')!, false, lpUri),
+    depositLiquidity(logger, 'Btc', deposits.get('Btc')!, false, lpUri),
+    depositLiquidity(logger, 'Flip', deposits.get('Flip')!, false, lpUri),
+    depositLiquidity(logger, 'Usdt', deposits.get('Usdt')!, false, lpUri),
+    depositLiquidity(logger, 'ArbEth', deposits.get('ArbEth')!, false, lpUri),
+    depositLiquidity(logger, 'ArbUsdc', deposits.get('ArbUsdc')!, false, lpUri),
+    depositLiquidity(logger, 'Sol', deposits.get('Sol')!, false, lpUri),
+    depositLiquidity(logger, 'SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
   ]);
 
   // create a series of limit_order and save their info to delete them later on
@@ -62,33 +60,33 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders = 30, lp
   }[] = [];
 
   for (let i = 0; i < numberOfLimitOrders; i++) {
-    promises.push(limitOrder('Btc', 0.00000001, i, i, lpUri));
+    promises.push(limitOrder(logger, 'Btc', 0.00000001, i, i, lpUri));
     orderToDelete.push({ Limit: { base_asset: 'BTC', quote_asset: 'USDC', side: 'sell', id: i } });
   }
   for (let i = 0; i < numberOfLimitOrders; i++) {
-    promises.push(limitOrder('Eth', 0.000000000000000001, i, i, lpUri));
+    promises.push(limitOrder(logger, 'Eth', 0.000000000000000001, i, i, lpUri));
     orderToDelete.push({ Limit: { base_asset: 'ETH', quote_asset: 'USDC', side: 'sell', id: i } });
   }
 
-  promises.push(rangeOrder('Btc', 0.1, lpUri, 0));
+  promises.push(rangeOrder(logger, 'Btc', 0.1, lpUri, 0));
   orderToDelete.push({
     Range: { base_asset: 'BTC', quote_asset: 'USDC', id: 0 },
   });
-  promises.push(rangeOrder('Eth', 0.01, lpUri, 0));
+  promises.push(rangeOrder(logger, 'Eth', 0.01, lpUri, 0));
   orderToDelete.push({
     Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
   });
 
-  testCancelOrdersBatch.log('Submitting orders');
+  logger.debug('Submitting orders');
   await Promise.all(promises);
-  testCancelOrdersBatch.log('Orders successfully submitted');
+  logger.debug('Orders successfully submitted');
 
   let openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  testCancelOrdersBatch.log(`Number of open orders: ${openOrders}`);
+  logger.debug(`Number of open orders: ${openOrders}`);
 
-  testCancelOrdersBatch.log('Deleting opened orders...');
-  const orderDeleteEvent = observeEvent('liquidityPools:RangeOrderUpdated', {
+  logger.debug('Deleting opened orders...');
+  const orderDeleteEvent = observeEvent(logger, 'liquidityPools:RangeOrderUpdated', {
     test: (event) => event.data.lp === lp.address && event.data.baseAsset === 'Btc',
   }).event;
   await lpMutex.runExclusive(async () => {
@@ -97,11 +95,15 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders = 30, lp
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
   await orderDeleteEvent;
-  testCancelOrdersBatch.log('All orders successfully deleted');
+  logger.debug('All orders successfully deleted');
 
   openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  testCancelOrdersBatch.log(`Number of open orders: ${openOrders}`);
+  logger.debug(`Number of open orders: ${openOrders}`);
 
   assert.strictEqual(openOrders, 0, 'Number of open orders should be 0');
+}
+
+export async function testCancelOrdersBatch(testContext: TestContext) {
+  await createAndDeleteMultipleOrders(testContext.logger);
 }

@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 pub mod api;
 pub mod benchmarking;
 pub mod deposit_address;
@@ -1298,10 +1314,10 @@ mod test {
 		];
 
 		for (invalid_address, intended_btc_net) in invalid_addresses {
-			assert!(matches!(
+			cf_utilities::assert_matches!(
 				ScriptPubkey::try_from_address(invalid_address, &intended_btc_net,),
 				Err(Error::InvalidAddress)
-			));
+			);
 		}
 
 		// Test cases from: https://rosettacode.org/wiki/Bitcoin/address_validation

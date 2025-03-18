@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
@@ -15,8 +31,15 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// This electoral system detects if something occurred or not. Voters simply vote if something
 /// happened, and if they haven't seen it happen, they don't vote.
-pub struct EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId> {
-	_phantom: core::marker::PhantomData<(Identifier, Value, Settings, Hook, ValidatorId)>,
+pub struct EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber> {
+	_phantom: core::marker::PhantomData<(
+		Identifier,
+		Value,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+	)>,
 }
 
 pub trait OnEgressSuccess<Identifier, Value> {
@@ -29,7 +52,8 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	pub fn watch_for_egress<
 		ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
@@ -47,9 +71,12 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystemTypes for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystemTypes
+	for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -71,7 +98,9 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem
+	for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -84,6 +113,7 @@ impl<
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(true)
 	}

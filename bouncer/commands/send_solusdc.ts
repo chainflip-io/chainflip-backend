@@ -13,13 +13,14 @@
 
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { sendSolUsdc } from '../shared/send_solusdc';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main() {
   const solanaAddress = process.argv[2];
   const usdcAmount = process.argv[3].trim();
 
   console.log('Transferring ' + usdcAmount + ' SolUsdc to the ATA of ' + solanaAddress);
-  await sendSolUsdc(solanaAddress, usdcAmount);
+  await sendSolUsdc(globalLogger, solanaAddress, usdcAmount);
 }
 
 await runWithTimeoutAndExit(main(), 20);

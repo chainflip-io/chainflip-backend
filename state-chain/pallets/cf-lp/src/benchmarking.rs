@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
@@ -95,6 +111,33 @@ mod benchmarks {
 		assert_eq!(
 			LiquidityRefundAddress::<T>::get(caller, ForeignChain::Ethereum),
 			Some(ForeignChainAddress::Eth([0x01; 20].into()))
+		);
+	}
+
+	#[benchmark]
+	fn schedule_swap() {
+		let lp_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::LiquidityProvider)
+				.unwrap();
+
+		let caller = RawOrigin::Signed(lp_id.clone());
+
+		assert_ok!(Pallet::<T>::register_liquidity_refund_address(
+			caller.clone().into(),
+			EncodedAddress::Eth(Default::default()),
+		));
+
+		T::BalanceApi::credit_account(&lp_id, Asset::Eth, 1000);
+
+		#[extrinsic_call]
+		Pallet::<T>::schedule_swap(
+			caller,
+			1000,
+			Asset::Eth,
+			Asset::Flip,
+			0,
+			Default::default(),
+			None,
 		);
 	}
 

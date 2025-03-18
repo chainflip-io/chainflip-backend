@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{limit_orders, range_orders};
 use cf_amm_math::{
 	mul_div, sqrt_price_at_tick, test_utilities::rng_u256_inclusive_bound, tick_at_sqrt_price,
@@ -6,7 +22,7 @@ use cf_amm_math::{
 
 use super::*;
 
-use cf_utilities::{assert_ok, assert_panics};
+use cf_utilities::{assert_matches, assert_ok, assert_panics};
 use rand::{Rng, SeedableRng};
 
 type LiquidityProvider = cf_primitives::AccountId;
@@ -276,7 +292,7 @@ fn test_float() {
 #[test]
 fn fee_hundredth_pips() {
 	for bad in [u32::MAX, ONE_IN_HUNDREDTH_PIPS, (ONE_IN_HUNDREDTH_PIPS / 2) + 1] {
-		assert!(matches!(PoolState::new(bad), Err(NewError::InvalidFeeAmount)));
+		assert_matches!(PoolState::new(bad), Err(NewError::InvalidFeeAmount));
 	}
 
 	for good in [0, 1, ONE_IN_HUNDREDTH_PIPS / 2] {
@@ -390,14 +406,14 @@ fn mint() {
 
 		for bad in [MIN_TICK - 1, MAX_TICK + 1] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert!(matches!(
+			assert_matches!(
 				pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
 					bad,
 					1000.into()
 				),
 				Err(PositionError::InvalidTick)
-			));
+			);
 		}
 
 		for good in [MAX_FIXED_POOL_LIQUIDITY, MAX_FIXED_POOL_LIQUIDITY - 1, 1.into()] {
@@ -414,10 +430,10 @@ fn mint() {
 
 		for bad in [MAX_FIXED_POOL_LIQUIDITY + 1, MAX_FIXED_POOL_LIQUIDITY + 2] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert!(matches!(
+			assert_matches!(
 				pool_state.collect_and_mint::<SD>(&LiquidityProvider::from([0; 32]), 0, bad),
 				Err(PositionError::Other(MintError::MaximumLiquidity))
-			));
+			);
 		}
 	}
 
@@ -430,33 +446,33 @@ fn burn() {
 	fn inner<SD: SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection>() {
 		{
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert!(matches!(
+			assert_matches!(
 				pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
 					MIN_TICK - 1,
 					1000.into()
 				),
 				Err(PositionError::InvalidTick)
-			));
-			assert!(matches!(
+			);
+			assert_matches!(
 				pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
 					MAX_TICK + 1,
 					1000.into()
 				),
 				Err(PositionError::InvalidTick)
-			));
+			);
 		}
 		{
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert!(matches!(
+			assert_matches!(
 				pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
 					120,
 					1000.into()
 				),
 				Err(PositionError::NonExistent)
-			));
+			);
 		}
 		{
 			let mut pool_state = PoolState::new(0).unwrap();

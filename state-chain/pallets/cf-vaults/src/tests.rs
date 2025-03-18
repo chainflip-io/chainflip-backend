@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg(test)]
 
 use crate::{
@@ -9,6 +25,7 @@ use cf_traits::{
 	mocks::block_height_provider::BlockHeightProvider, AsyncResult, EpochInfo,
 	EpochTransitionHandler, VaultActivator,
 };
+use cf_utilities::assert_matches;
 use frame_support::assert_noop;
 use std::collections::BTreeSet;
 
@@ -45,10 +62,10 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 
 		VaultsPallet::start_key_activation(NEW_AGG_PUBKEY, Some(Default::default()));
 
-		assert!(matches!(
+		assert_matches!(
 			PendingVaultActivation::<Test, _>::get().unwrap(),
 			VaultActivationStatus::Complete
-		))
+		);
 	});
 }
 
@@ -66,10 +83,10 @@ fn vault_start_block_number_is_set_correctly() {
 			.unwrap(),
 			1001
 		);
-		assert!(matches!(
+		assert_matches!(
 			PendingVaultActivation::<Test, _>::get().unwrap(),
 			VaultActivationStatus::Complete
-		));
+		);
 		assert_last_event!(Event::VaultActivationCompleted);
 	});
 }
@@ -83,10 +100,10 @@ fn vault_start_block_number_not_set_when_chain_not_initialized() {
 		VaultsPallet::start_key_activation(NEW_AGG_PUBKEY, Some(Default::default()));
 		VaultsPallet::activate_key();
 		assert!(VaultStartBlockNumbers::<Test, _>::iter_keys().next().is_none());
-		assert!(matches!(
+		assert_matches!(
 			PendingVaultActivation::<Test, _>::get().unwrap(),
 			VaultActivationStatus::Complete
-		));
+		);
 	});
 }
 

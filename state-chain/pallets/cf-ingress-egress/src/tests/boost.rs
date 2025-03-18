@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 
 use cf_chains::{DepositOriginType, FeeEstimationApi};
@@ -1017,7 +1033,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 		let (_, address, _, _) = IngressEgress::open_channel(
 			&ALICE,
 			EthAsset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()) },
 			TIER_5_BPS,
 		)
 		.unwrap();
@@ -1151,6 +1167,7 @@ fn taking_network_fee_from_boost_fee() {
 mod vault_swaps {
 
 	use cf_chains::ChannelRefundParameters;
+	use cf_traits::SwapOutputAction;
 
 	use crate::BoostedVaultTransactions;
 
@@ -1202,11 +1219,11 @@ mod vault_swaps {
 				tx_id,
 				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
 				affiliate_fees: Default::default(),
-				refund_params: Some(ChannelRefundParameters {
+				refund_params: ChannelRefundParameters {
 					retry_duration: 2,
 					refund_address: [2; 20].into(),
 					min_price: Default::default(),
-				}),
+				},
 				dca_params: None,
 				boost_fee: 5,
 			};
@@ -1231,8 +1248,10 @@ mod vault_swaps {
 						output_asset: OUTPUT_ASSET,
 						input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 						swap_type: SwapRequestType::Regular {
-							output_address,
-							ccm_deposit_metadata: None
+							output_action: SwapOutputAction::Egress {
+								output_address,
+								ccm_deposit_metadata: None
+							}
 						},
 						broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 5 }],
 						origin: SwapOrigin::Vault {

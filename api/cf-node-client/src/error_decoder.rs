@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use codec::Decode;
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -136,10 +152,10 @@ mod tests {
 		let dispatch_error = sp_runtime::DispatchError::decode(&mut &encoded_error[..]).unwrap();
 
 		// Message should be erased.
-		assert!(matches!(
+		cf_utilities::assert_matches!(
 			dispatch_error,
 			sp_runtime::DispatchError::Module(ModuleError { message: None, .. })
-		));
+		);
 
 		match ErrorDecoder::default().decode_dispatch_error(dispatch_error) {
 			super::DispatchError::KnownModuleError { pallet, name, error } => {

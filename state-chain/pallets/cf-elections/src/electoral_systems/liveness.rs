@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{
@@ -18,13 +34,21 @@ use frame_support::{
 use itertools::Itertools;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-pub struct Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, ValidatorId> {
+pub struct Liveness<
+	ChainBlockNumber,
+	ChainBlockHash,
+	BlockNumber,
+	Hook,
+	ValidatorId,
+	StateChainBlockNumber,
+> {
 	_phantom: core::marker::PhantomData<(
 		ChainBlockNumber,
 		ChainBlockHash,
 		BlockNumber,
 		Hook,
 		ValidatorId,
+		StateChainBlockNumber,
 	)>,
 }
 
@@ -44,10 +68,19 @@ impl<
 			+ Copy,
 		Hook: OnCheckComplete<ValidatorId> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystemTypes
-	for Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, ValidatorId>
+	for Liveness<
+		ChainBlockNumber,
+		ChainBlockHash,
+		BlockNumber,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+	>
 {
 	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -81,7 +114,16 @@ impl<
 			+ Copy,
 		Hook: OnCheckComplete<ValidatorId> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, ValidatorId>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem
+	for Liveness<
+		ChainBlockNumber,
+		ChainBlockHash,
+		BlockNumber,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+	>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -94,6 +136,7 @@ impl<
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_access: &ElectionAccess,
 		current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_state_chain_block_number: Self::StateChainBlockNumber,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(current_vote.is_none())
 	}

@@ -15,18 +15,22 @@ import { send } from '../shared/send';
 import { getBalance } from '../shared/get_balance';
 import { observeEvent } from '../shared/utils/substrate';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
-import { ExecutableTest } from '../shared/executable_test';
-
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testFillOrKill = new ExecutableTest('FoK', main, 600);
+import { TestContext } from '../shared/utils/test_context';
+import { Logger } from '../shared/utils/logger';
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
-async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVault = false) {
+async function testMinPriceRefund(
+  parentLogger: Logger,
+  inputAsset: Asset,
+  amount: number,
+  swapViaVault = false,
+) {
+  const logger = parentLogger.child({ tag: `FoK_${inputAsset}_${amount}` });
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const refundAddress = await newAddress(inputAsset, randomBytes(32).toString('hex'));
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
-  testFillOrKill.debugLog(`Swap destination address: ${destAddress}`);
-  testFillOrKill.debugLog(`Refund address: ${refundAddress}`);
+  logger.debug(`Swap destination address: ${destAddress}`);
+  logger.debug(`Refund address: ${refundAddress}`);
 
   const refundBalanceBefore = await getBalance(inputAsset, refundAddress);
 
@@ -44,22 +48,20 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
   let swapRequestedHandle;
 
   if (!swapViaVault) {
-    testFillOrKill.log(
-      `Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`,
-    );
+    logger.debug(`Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`);
     const swapRequest = await requestNewSwap(
+      logger,
       inputAsset,
       destAsset,
       destAddress,
-      'FoK_Test',
       undefined, // messageMetadata
       0, // brokerCommissionBps
-      false, // log
       0, // boostFeeBps
       refundParameters,
     );
     const depositAddress = swapRequest.depositAddress;
     swapRequestedHandle = observeSwapRequested(
+      logger,
       inputAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: swapRequest.channelId },
@@ -67,24 +69,26 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
     );
 
     // Deposit the asset
-    await send(inputAsset, depositAddress, amount.toString());
-    testFillOrKill.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
+    await send(logger, inputAsset, depositAddress, amount.toString());
+    logger.debug(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
   } else {
-    testFillOrKill.log(
+    logger.debug(
       `Swapping via vault from ${inputAsset} to ${destAsset} with unrealistic min price`,
     );
 
     const { transactionId } = await executeVaultSwap(
+      logger,
       inputAsset,
       destAsset,
       destAddress,
-      undefined,
+      undefined, // messageMetadata
       amount.toString(),
-      undefined,
+      undefined, // boostFeeBps
       refundParameters,
     );
 
     swapRequestedHandle = observeSwapRequested(
+      logger,
       inputAsset,
       destAsset,
       transactionId,
@@ -94,9 +98,9 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
 
   const swapRequestedEvent = await swapRequestedHandle;
   const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
-  testFillOrKill.log(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
+  logger.debug(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
-  const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {
+  const observeSwapExecuted = observeEvent(logger, `swapping:SwapExecuted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
     historicalCheckBlocks: 10,
   }).event;
@@ -104,7 +108,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
   // Wait for the swap to execute or get refunded
   const executeOrRefund = await Promise.race([
     observeSwapExecuted,
-    observeBalanceIncrease(inputAsset, refundAddress, refundBalanceBefore),
+    observeBalanceIncrease(logger, inputAsset, refundAddress, refundBalanceBefore),
   ]);
 
   if (typeof executeOrRefund !== 'number') {
@@ -114,19 +118,19 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
   }
 }
 
-async function main() {
+export async function testFillOrKill(testContext: TestContext) {
   await Promise.all([
-    testMinPriceRefund(Assets.Flip, 500),
-    testMinPriceRefund(Assets.Eth, 1),
-    testMinPriceRefund(Assets.Dot, 100),
-    testMinPriceRefund(Assets.Btc, 0.1),
-    testMinPriceRefund(Assets.Usdc, 1000),
-    testMinPriceRefund(Assets.Sol, 10),
-    testMinPriceRefund(Assets.SolUsdc, 1000),
-    testMinPriceRefund(Assets.Flip, 500, true),
-    testMinPriceRefund(Assets.Eth, 1, true),
-    testMinPriceRefund(Assets.ArbEth, 5, true),
-    testMinPriceRefund(Assets.Sol, 10, true),
-    testMinPriceRefund(Assets.Sol, 1000, true),
+    testMinPriceRefund(testContext.logger, Assets.Flip, 500),
+    testMinPriceRefund(testContext.logger, Assets.Eth, 1),
+    testMinPriceRefund(testContext.logger, Assets.Dot, 100),
+    testMinPriceRefund(testContext.logger, Assets.Btc, 0.1),
+    testMinPriceRefund(testContext.logger, Assets.Usdc, 1000),
+    testMinPriceRefund(testContext.logger, Assets.Sol, 10),
+    testMinPriceRefund(testContext.logger, Assets.SolUsdc, 1000),
+    testMinPriceRefund(testContext.logger, Assets.Flip, 500, true),
+    testMinPriceRefund(testContext.logger, Assets.Eth, 1, true),
+    testMinPriceRefund(testContext.logger, Assets.ArbEth, 5, true),
+    testMinPriceRefund(testContext.logger, Assets.Sol, 10, true),
+    testMinPriceRefund(testContext.logger, Assets.Sol, 1000, true),
   ]);
 }

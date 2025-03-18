@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use cf_chains::Chain;
 use cf_primitives::{Asset, AssetAmount};
 use frame_support::sp_runtime::traits::{UniqueSaturatedInto, Zero};
@@ -25,22 +41,35 @@ impl MockAssetConverter {
 impl AssetConverter for MockAssetConverter {
 	fn calculate_input_for_gas_output<C: Chain>(
 		input_asset: C::ChainAsset,
-		desired_output_amount: C::ChainAmount,
+		required_gas: C::ChainAmount,
 	) -> Option<C::ChainAmount> {
-		// The following check is copied from the implementation in the pool pallet
+		Self::calculate_input_for_desired_output(
+			input_asset.into(),
+			C::GAS_ASSET.into(),
+			required_gas.into(),
+			true,
+		)
+		.and_then(|amount| C::ChainAmount::try_from(amount).ok())
+	}
+
+	fn calculate_input_for_desired_output(
+		input_asset: Asset,
+		output_asset: Asset,
+		desired_output_amount: AssetAmount,
+		_with_network_fee: bool,
+	) -> Option<AssetAmount> {
+		// The following check is copied from the implementation in the swapping pallet
 		if desired_output_amount.is_zero() {
 			return Some(Zero::zero())
 		}
-
-		let input_asset = input_asset.into();
-		let output_asset = C::GAS_ASSET.into();
 
 		if input_asset == output_asset {
 			return Some(desired_output_amount)
 		}
 
+		// Note: the network fee is not taken into account.
 		let required_input = Self::get_price(input_asset, output_asset)
-			.map(|price| desired_output_amount.into() * price)?;
+			.map(|price| desired_output_amount * price)?;
 
 		Some(required_input.unique_saturated_into())
 	}

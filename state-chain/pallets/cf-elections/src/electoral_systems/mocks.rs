@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{collections::BTreeMap, vec::Vec};
 
 use crate::{
@@ -220,6 +236,21 @@ where
 		assert_eq!(
 			MockStorageAccess::election_properties::<ES>(self.only_election_id()),
 			expected_properties
+		);
+		self
+	}
+
+	#[track_caller]
+	pub fn expect_is_voted_desired(
+		self,
+		expected_is_voted_desired: bool,
+		current_state_chain_block_number: ES::StateChainBlockNumber,
+	) -> Self {
+		// TODO: allow testing for more than one election.
+		let election = MockAccess::<ES>::election(self.only_election_id());
+		assert_eq!(
+			ES::is_vote_desired(&election, None, current_state_chain_block_number).unwrap(),
+			expected_is_voted_desired,
 		);
 		self
 	}

@@ -11,7 +11,8 @@
 
 import { runWithTimeoutAndExit } from '../shared/utils';
 import { fundFlip } from '../shared/fund_flip';
+import { globalLogger } from '../shared/utils/logger';
 
 const address = process.argv[2];
 const flipAmount = process.argv[3].trim();
-await runWithTimeoutAndExit(fundFlip(address, flipAmount), 120);
+await runWithTimeoutAndExit(fundFlip(globalLogger, address, flipAmount), 120);

@@ -4,8 +4,8 @@ network=$1
 
 runtime_spec_version_file="state-chain/runtime/src/lib.rs"
 
-# Extract the spec_version from the Rust file
-spec_version=$(grep -F '#[sp_version::runtime_version]' -A 10 $runtime_spec_version_file | grep 'spec_version' | awk '{print $2}' | tr -d ',')
+# Extract the spec_version from the Rust file and convert it to a comparable number
+spec_version=$(grep -F '#[sp_version::runtime_version]' -A 10 $runtime_spec_version_file | grep 'spec_version' | awk '{print $2}' | tr -d ',' | tr -d '_')
 
 if [ -z $network ]; then
     echo "Network not specified"
@@ -13,7 +13,7 @@ if [ -z $network ]; then
 fi
 
 if [ $network == "berghain" ]; then
-    RPC_ENDPOINT="https://mainnet-archive.chainflip.io"
+    RPC_ENDPOINT="https://rpc.mainnet.chainflip.io"
 elif [ $network == "perseverance" ]; then
     RPC_ENDPOINT="https://archive.perseverance.chainflip.io"
 elif [ $network == "sisyphos" ]; then
