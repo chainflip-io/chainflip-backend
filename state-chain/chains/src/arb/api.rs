@@ -19,7 +19,6 @@ pub enum ArbitrumApi<Environment: 'static> {
 	AllBatch(EvmTransactionBuilder<all_batch::AllBatch>),
 	ExecutexSwapAndCall(EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>),
 	TransferFallback(EvmTransactionBuilder<transfer_fallback::TransferFallback>),
-	RejectCall(EvmTransactionBuilder<all_batch::AllBatch>),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -162,7 +161,7 @@ where
 		asset: <Arbitrum as Chain>::ChainAsset,
 		deposit_fetch_id: <Arbitrum as Chain>::DepositFetchId,
 	) -> Result<Self, RejectError> {
-		Ok(Self::RejectCall(evm_all_batch_builder::<Arbitrum, _>(
+		Ok(Self::AllBatch(evm_all_batch_builder::<Arbitrum, _>(
 			vec![FetchAssetParams { deposit_fetch_id, asset }],
 			vec![TransferAssetParams { asset, amount: refund_amount, to: refund_address }],
 			E::token_address,
@@ -178,7 +177,6 @@ macro_rules! map_over_api_variants {
 			ArbitrumApi::AllBatch($var) => $var_method,
 			ArbitrumApi::ExecutexSwapAndCall($var) => $var_method,
 			ArbitrumApi::TransferFallback($var) => $var_method,
-			ArbitrumApi::RejectCall($var) => $var_method,
 			ArbitrumApi::_Phantom(..) => unreachable!(),
 		}
 	};
