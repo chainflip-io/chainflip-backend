@@ -1437,3 +1437,64 @@ fn auto_sweeping() {
 		assert_eq!(get_balance(&ALICE), (5000, 15_063));
 	});
 }
+
+#[test]
+fn cancel_all_limit_orders_for_account() {
+	const ASSET_1: Asset = Asset::Usdt;
+	const ASSET_2: Asset = Asset::Btc;
+	const ORDER_ID: u64 = 1;
+
+	new_test_ext().execute_with(|| {
+		for asset in [ASSET_1, ASSET_2] {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				asset,
+				STABLE_ASSET,
+				0,
+				price_at_tick(0).unwrap(),
+			));
+		}
+
+		for (lp, base_asset, side) in [
+			(ALICE, ASSET_1, Side::Sell),
+			(ALICE, ASSET_1, Side::Buy),
+			(ALICE, ASSET_2, Side::Buy),
+			(BOB, ASSET_1, Side::Sell),
+		] {
+			const AMOUNT: AssetAmount = 1000;
+			MockBalance::credit_account(&lp, base_asset, AMOUNT);
+			MockBalance::credit_account(&lp, STABLE_ASSET, AMOUNT);
+
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(lp),
+				base_asset,
+				STABLE_ASSET,
+				side,
+				ORDER_ID,
+				Some(100),
+				AMOUNT
+			));
+		}
+
+		let count_orders = |base_asset, lp| {
+			let orders = LiquidityPools::pool_orders(base_asset, STABLE_ASSET, Some(lp), false)
+				.unwrap()
+				.limit_orders;
+
+			(orders.asks.len(), orders.bids.len())
+		};
+
+		// Alice has two orders in asset_1 (in each direction) and one order in asset 2,
+		// Bob also has one order:
+		assert_eq!(count_orders(ASSET_1, ALICE), (1, 1));
+		assert_eq!(count_orders(ASSET_2, ALICE), (0, 1));
+		assert_eq!(count_orders(ASSET_1, BOB), (1, 0));
+
+		assert_ok!(LiquidityPools::cancel_all_limit_orders(&ALICE));
+
+		// All Alice's orders must be closed, Bob's order is untouched:
+		assert_eq!(count_orders(ASSET_1, ALICE), (0, 0));
+		assert_eq!(count_orders(ASSET_2, ALICE), (0, 0));
+		assert_eq!(count_orders(ASSET_1, BOB), (1, 0));
+	});
+}

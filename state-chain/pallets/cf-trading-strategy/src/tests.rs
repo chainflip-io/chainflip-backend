@@ -380,22 +380,22 @@ fn strategy_deployment_threshold() {
 	});
 }
 
-// #[test]
-// fn deregistration_check() {
-// 	new_test_ext()
-// 		.then_execute_with(|_| deploy_strategy())
-// 		.then_execute_with_keep_context(|_| {
-// 			assert!(matches!(
-// 				TradingStrategyDeregistrationCheck::<Test>::check(&LP),
-// 				Err(Error::<Test>::LpHasActiveStrategies)
-// 			));
-// 		})
-// 		.then_execute_with_keep_context(|strategy_id| {
-// 			assert_ok!(TradingStrategyPallet::close_strategy(
-// 				RuntimeOrigin::signed(LP),
-// 				*strategy_id
-// 			));
+#[test]
+fn deregistration_check() {
+	new_test_ext()
+		.then_execute_with(|_| deploy_strategy())
+		.then_execute_with_keep_context(|_| {
+			assert!(matches!(
+				TradingStrategyDeregistrationCheck::<Test>::check(&LP),
+				Err(Error::<Test>::LpHasActiveStrategies)
+			));
+		})
+		.then_execute_with_keep_context(|strategy_id| {
+			assert_ok!(TradingStrategyPallet::close_strategy(
+				RuntimeOrigin::signed(LP),
+				*strategy_id
+			));
 
-// 			assert_ok!(TradingStrategyDeregistrationCheck::<Test>::check(&LP));
-// 		});
-// }
+			assert_ok!(TradingStrategyDeregistrationCheck::<Test>::check(&LP));
+		});
+}

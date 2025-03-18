@@ -76,6 +76,16 @@ impl PoolApi for MockPoolApi {
 		vec![]
 	}
 
+	fn cancel_all_limit_orders(who: &Self::AccountId) -> frame_support::dispatch::DispatchResult {
+		Self::mutate_value(LIMIT_ORDERS, |limit_orders: &mut Option<LimitOrderStorage>| {
+			if let Some(limit_orders) = limit_orders {
+				limit_orders.retain(|(_, account, _, _), _| account != who);
+			}
+
+			Ok(())
+		})
+	}
+
 	fn update_limit_order(
 		account: &Self::AccountId,
 		base_asset: Asset,
