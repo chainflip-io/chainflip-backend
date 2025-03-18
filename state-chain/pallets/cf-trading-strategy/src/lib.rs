@@ -309,21 +309,7 @@ pub mod pallet {
 			let strategy =
 				Strategies::<T>::take(lp, &strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
 
-			// TODO: instead of reading ticks from the strategy, we could extend PoolApi with
-			// a method to close all (limit) orders (which might be necessary for more complex
-			// strategies).
-			let TradingStrategy::SellAndBuyAtTicks { buy_tick, sell_tick, base_asset } = strategy;
-
-			for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
-				T::PoolApi::cancel_limit_order(
-					&strategy_id,
-					base_asset,
-					STABLE_ASSET,
-					side,
-					STRATEGY_ORDER_ID,
-					tick,
-				)?;
-			}
+			T::PoolApi::cancel_all_limit_orders(&strategy_id)?;
 
 			for asset in strategy.supported_assets() {
 				let balance = T::BalanceApi::get_balance(&strategy_id, asset);
