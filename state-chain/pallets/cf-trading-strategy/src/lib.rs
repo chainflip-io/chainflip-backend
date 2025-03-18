@@ -103,17 +103,16 @@ pub mod pallet {
 		/// The event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Benchmark weights
-		type WeightInfo: WeightInfo;
-
-		type LpOrdersWeights: LpOrdersWeightsProvider;
-
 		type BalanceApi: BalanceApi<AccountId = Self::AccountId>;
 
 		/// LP address registration and verification.
 		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 
 		type PoolApi: PoolApi<AccountId = Self::AccountId>;
+
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
+		type LpOrdersWeights: LpOrdersWeightsProvider;
 	}
 
 	#[pallet::pallet]
