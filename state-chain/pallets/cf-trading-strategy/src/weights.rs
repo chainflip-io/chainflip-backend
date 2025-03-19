@@ -48,7 +48,7 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_trading_strategy.
 pub trait WeightInfo {
-	fn deploy_trading_strategy() -> Weight;
+	fn deploy_strategy() -> Weight;
 	fn close_strategy() -> Weight;
 	fn add_funds_to_strategy() -> Weight;
 }
@@ -68,7 +68,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `TradingStrategy::Strategies` (r:0 w:1)
 	/// Proof: `TradingStrategy::Strategies` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn deploy_trading_strategy() -> Weight {
+	fn deploy_strategy() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1083`
 		//  Estimated: `11973`
@@ -147,7 +147,7 @@ impl WeightInfo for () {
 	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `TradingStrategy::Strategies` (r:0 w:1)
 	/// Proof: `TradingStrategy::Strategies` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn deploy_trading_strategy() -> Weight {
+	fn deploy_strategy() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1083`
 		//  Estimated: `11973`

@@ -45,7 +45,7 @@ mod benchmarks {
 	const ASSET: Asset = Asset::Usdt;
 
 	#[benchmark]
-	fn deploy_trading_strategy() {
+	fn deploy_strategy() {
 		let caller = new_lp_account::<T>();
 
 		T::BalanceApi::credit_account(&caller, ASSET, 1000);
@@ -56,7 +56,7 @@ mod benchmarks {
 		assert_ok!(T::PoolApi::create_pool(ASSET, STABLE_ASSET, 0, 12345.into()));
 
 		#[extrinsic_call]
-		deploy_trading_strategy(
+		deploy_strategy(
 			RawOrigin::Signed(caller.clone()),
 			TradingStrategy::SellAndBuyAtTicks { sell_tick: 1, buy_tick: -1, base_asset: ASSET },
 			BTreeMap::from_iter([(Asset::Usdt, 1000), (STABLE_ASSET, 1000)]),
@@ -74,7 +74,7 @@ mod benchmarks {
 
 		assert_ok!(T::PoolApi::create_pool(ASSET, STABLE_ASSET, 0, 12345.into()));
 
-		assert_ok!(Pallet::<T>::deploy_trading_strategy(
+		assert_ok!(Pallet::<T>::deploy_strategy(
 			RawOrigin::Signed(caller.clone()).into(),
 			TradingStrategy::SellAndBuyAtTicks { sell_tick: 1, buy_tick: -1, base_asset: ASSET },
 			BTreeMap::from_iter([(ASSET, 1000), (STABLE_ASSET, 1000)]),
@@ -100,7 +100,7 @@ mod benchmarks {
 
 		assert_ok!(T::PoolApi::create_pool(ASSET, STABLE_ASSET, 0, 12345.into()));
 
-		assert_ok!(Pallet::<T>::deploy_trading_strategy(
+		assert_ok!(Pallet::<T>::deploy_strategy(
 			RawOrigin::Signed(caller.clone()).into(),
 			TradingStrategy::SellAndBuyAtTicks { sell_tick: 1, buy_tick: -1, base_asset: ASSET },
 			BTreeMap::from_iter([(ASSET, 1000), (STABLE_ASSET, 1000)]),

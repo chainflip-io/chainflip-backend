@@ -64,7 +64,7 @@ fn deploy_strategy() -> AccountId {
 		MockBalance::credit_account(&LP, asset, amount);
 	}
 
-	assert_ok!(TradingStrategyPallet::deploy_trading_strategy(
+	assert_ok!(TradingStrategyPallet::deploy_strategy(
 		RuntimeOrigin::signed(LP),
 		STRATEGY.clone(),
 		initial_amounts.clone(),
@@ -135,7 +135,7 @@ fn asset_validation_on_deploy_strategy() {
 		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
 
 		check_asset_validation(|funding| {
-			TradingStrategyPallet::deploy_trading_strategy(
+			TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
 				STRATEGY.clone(),
 				funding,
@@ -170,7 +170,7 @@ fn refund_addresses_are_required() {
 		MockBalance::credit_account(&LP, QUOTE_ASSET, QUOTE_AMOUNT);
 
 		let deploy = || {
-			TradingStrategyPallet::deploy_trading_strategy(
+			TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
 				TradingStrategy::SellAndBuyAtTicks {
 					sell_tick: SELL_TICK,
@@ -356,7 +356,7 @@ fn strategy_deployment_threshold() {
 			(MIN_BASE_AMOUNT / 10 - 1, (MIN_QUOTE_AMOUNT * 9) / 10),
 		] {
 			assert_err!(
-				TradingStrategyPallet::deploy_trading_strategy(
+				TradingStrategyPallet::deploy_strategy(
 					RuntimeOrigin::signed(LP),
 					STRATEGY.clone(),
 					[(BASE_ASSET, base_amount), (QUOTE_ASSET, quote_amount)].into()
@@ -371,7 +371,7 @@ fn strategy_deployment_threshold() {
 			(MIN_BASE_AMOUNT / 2, MIN_QUOTE_AMOUNT / 2),
 			(MIN_BASE_AMOUNT / 10, (MIN_QUOTE_AMOUNT * 9) / 10),
 		] {
-			assert_ok!(TradingStrategyPallet::deploy_trading_strategy(
+			assert_ok!(TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
 				STRATEGY.clone(),
 				[(BASE_ASSET, base_amount), (QUOTE_ASSET, quote_amount)].into()
