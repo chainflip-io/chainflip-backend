@@ -2951,4 +2951,65 @@ mod evm_transaction_rejection {
 				assert!(deposit_ids.contains(&&TAINTED_TX_ID_2));
 			});
 	}
+
+	#[test]
+	fn schedule_vault_swap_to_be_not_fetched_if_marked_for_rejection() {
+		new_test_ext().execute_with(|| {
+			let tx_id = H256::from_str(
+				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			)
+			.unwrap();
+
+			assert_ok!(submit_vault_swap_request(
+				Asset::Eth,
+				Asset::Flip,
+				DEFAULT_DEPOSIT_AMOUNT,
+				Default::default(),
+				MockAddressConverter::to_encoded_address(ForeignChainAddress::Eth(
+					ALICE_ETH_ADDRESS
+				)),
+				None,
+				tx_id,
+				DepositDetails { tx_hashes: Some(vec![tx_id]) },
+				Beneficiary { account: BROKER, bps: 0 },
+				bounded_vec![],
+				ETH_REFUND_PARAMS,
+				None,
+				0
+			));
+
+			assert_ok!(IngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+
+			IngressEgress::process_vault_swap_request_full_witness(
+				1,
+				VaultDepositWitness {
+					deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
+					deposit_address: Default::default(),
+					input_asset: Asset::Eth.try_into().unwrap(),
+					channel_id: Default::default(),
+					deposit_amount: DEFAULT_DEPOSIT_AMOUNT,
+					output_asset: Asset::Flip.try_into().unwrap(),
+					destination_address: MockAddressConverter::to_encoded_address(
+						ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+					),
+					deposit_metadata: None,
+					tx_id,
+					broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+					affiliate_fees: bounded_vec![],
+					refund_params: ETH_REFUND_PARAMS,
+					dca_params: None,
+					boost_fee: 0,
+				},
+			);
+
+			let scheduled_txs = ScheduledTransactionsForRejection::<Test, ()>::get();
+
+			assert_eq!(scheduled_txs.len(), 1);
+			assert_eq!(scheduled_txs[0].deposit_details.deposit_ids().unwrap(), vec![tx_id]);
+			assert_eq!(scheduled_txs[0].should_fetch, false);
+		});
+	}
 }
