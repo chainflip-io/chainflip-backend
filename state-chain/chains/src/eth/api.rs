@@ -247,10 +247,16 @@ where
 		refund_address: <Ethereum as Chain>::ChainAccount,
 		refund_amount: <Ethereum as Chain>::ChainAmount,
 		asset: <Ethereum as Chain>::ChainAsset,
-		deposit_fetch_id: <Ethereum as Chain>::DepositFetchId,
+		deposit_fetch_id: Option<<Ethereum as Chain>::DepositFetchId>,
 	) -> Result<Self, RejectError> {
+		let fetches = if let Some(deposit_fetch_id) = deposit_fetch_id {
+			vec![FetchAssetParams { deposit_fetch_id, asset }]
+		} else {
+			vec![]
+		};
+
 		Ok(Self::RejectCall(evm_all_batch_builder::<Ethereum, _>(
-			vec![FetchAssetParams { deposit_fetch_id, asset }],
+			fetches,
 			vec![TransferAssetParams { asset, amount: refund_amount, to: refund_address }],
 			E::token_address,
 			E::replay_protection(E::vault_address()),

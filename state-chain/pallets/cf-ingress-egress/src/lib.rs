@@ -242,6 +242,7 @@ pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
 	pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
+	pub should_fetch: bool,
 }
 
 /// Cross-chain messaging requests.
@@ -1141,76 +1142,38 @@ pub mod pallet {
 					if let Some(Ok(refund_address)) =
 						tx.refund_address.clone().map(TryInto::try_into)
 					{
-						let deposit_fetch_id =
-							tx.deposit_address.as_ref().and_then(|deposit_address| {
-								DepositChannelLookup::<T, I>::mutate(deposit_address, |details| {
-									details.as_mut().and_then(|details| {
-										let can_fetch = details.deposit_channel.state.can_fetch();
+						if tx.should_fetch {
+							if let Some(deposit_fetch_id) =
+								tx.deposit_address.as_ref().and_then(|deposit_address| {
+									DepositChannelLookup::<T, I>::mutate(
+										deposit_address,
+										|details| {
+											details.as_mut().and_then(|details| {
+												let can_fetch =
+													details.deposit_channel.state.can_fetch();
 
-										if can_fetch {
-											let fetch_id = details.deposit_channel.fetch_id();
-											details.deposit_channel.state.on_fetch_scheduled();
-											Some(fetch_id)
-										} else {
-											None
-										}
-									})
-								})
-							});
-						if let Some(deposit_fetch_id) = deposit_fetch_id {
-							let AmountAndFeesWithheld {
-								amount_after_fees: amount_after_ingress_fees,
-								fees_withheld: _,
-							} = Self::withhold_ingress_or_egress_fee(
-								IngressOrEgress::IngressDepositChannel,
-								tx.asset,
-								tx.amount,
-							);
-							let AmountAndFeesWithheld {
-								amount_after_fees: amount_to_refund,
-								fees_withheld: _,
-							} = Self::withhold_ingress_or_egress_fee(
-								IngressOrEgress::Egress,
-								tx.asset,
-								amount_after_ingress_fees,
-							);
-							if let Ok(api_call) =
-								<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
-									tx.deposit_details.clone(),
-									refund_address,
-									amount_to_refund,
-									tx.asset,
-									deposit_fetch_id,
-								) {
-								let broadcast_id =
-									T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-										api_call,
-										tx.deposit_address.map(|deposit_address| {
-											Call::finalise_ingress {
-												addresses: vec![deposit_address],
-											}
-											.into()
-										}),
-										|_| None,
-									);
-								Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
-									broadcast_id,
-									tx_id: tx.deposit_details,
-								});
+												if can_fetch {
+													let fetch_id =
+														details.deposit_channel.fetch_id();
+													details
+														.deposit_channel
+														.state
+														.on_fetch_scheduled();
+													Some(fetch_id)
+												} else {
+													None
+												}
+											})
+										},
+									)
+								}) {
+								Self::send_refund(tx, refund_address, Some(deposit_fetch_id));
 							} else {
-								FailedRejections::<T, I>::append(tx.clone());
-								Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-									tx_id: tx.deposit_details,
-								});
+								deferred_rejections.push(tx);
 							}
 						} else {
-							deferred_rejections.push(tx);
+							Self::send_refund(tx, refund_address, None);
 						}
-					} else {
-						FailedRejections::<T, I>::append(tx.clone());
-						Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-							tx_id: tx.deposit_details,
-						});
 					}
 				}
 				ScheduledTransactionsForRejection::<T, I>::put(deferred_rejections);
@@ -1667,6 +1630,51 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount,
 				})
 			}
+		}
+	}
+
+	fn send_refund(
+		tx: TransactionRejectionDetails<T, I>,
+		refund_address: <T::TargetChain as Chain>::ChainAccount,
+		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
+	) {
+		let AmountAndFeesWithheld {
+			amount_after_fees: amount_after_ingress_fees,
+			fees_withheld: _,
+		} = Self::withhold_ingress_or_egress_fee(
+			IngressOrEgress::IngressDepositChannel,
+			tx.asset,
+			tx.amount,
+		);
+		let AmountAndFeesWithheld { amount_after_fees: amount_to_refund, fees_withheld: _ } =
+			Self::withhold_ingress_or_egress_fee(
+				IngressOrEgress::Egress,
+				tx.asset,
+				amount_after_ingress_fees,
+			);
+		if let Ok(api_call) = <T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+			tx.deposit_details.clone(),
+			refund_address,
+			amount_to_refund,
+			tx.asset,
+			deposit_fetch_id,
+		) {
+			let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+				api_call,
+				tx.deposit_address.map(|deposit_address| {
+					Call::finalise_ingress { addresses: vec![deposit_address] }.into()
+				}),
+				|_| None,
+			);
+			Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
+				broadcast_id,
+				tx_id: tx.deposit_details.clone(),
+			});
+		} else {
+			FailedRejections::<T, I>::append(tx.clone());
+			Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+				tx_id: tx.deposit_details.clone(),
+			});
 		}
 	}
 
@@ -2443,6 +2451,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								refund_address.clone(),
 						};
 
+						let is_vault_swap = matches!(origin, DepositOrigin::Vault { .. });
+
 						ScheduledTransactionsForRejection::<T, I>::append(
 							TransactionRejectionDetails {
 								deposit_address: deposit_address.clone(),
@@ -2450,6 +2460,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								amount: deposit_amount,
 								asset,
 								deposit_details: deposit_details.clone(),
+								should_fetch: !is_vault_swap,
 							},
 						);
 
