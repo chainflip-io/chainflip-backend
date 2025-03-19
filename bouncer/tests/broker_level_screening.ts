@@ -340,13 +340,15 @@ async function testBrokerLevelScreeningEthereumVaultSwap(
   const destinationAddressForBtc = await newAssetAddress('Btc');
   const ethereumRefundAddress = await newAssetAddress('Eth');
 
-  const refundParameters: FillOrKillParamsX128 = {
-    retryDurationBlocks: 0,
-    refundAddress: ethereumRefundAddress,
-    minPriceX128: '0',
-  };
+  testBrokerLevelScreening.log(`Refund address for ${sourceAsset} is ${ethereumRefundAddress}...`);
 
-  testBrokerLevelScreening.log(`Sending ${sourceAsset} tx to reject...`);
+  // const refundParameters: FillOrKillParamsX128 = {
+  //   retryDurationBlocks: 0,
+  //   refundAddress: ethereumRefundAddress,
+  //   minPriceX128: '0',
+  // };
+
+  testBrokerLevelScreening.log(`Sending ${sourceAsset} (vault swap) tx to reject...`);
   const txHash = await executeEvmVaultSwap(
     broker.address,
     sourceAsset,
@@ -362,10 +364,10 @@ async function testBrokerLevelScreeningEthereumVaultSwap(
     [],
     ethereumRefundAddress
   );
-  testBrokerLevelScreening.log(`Sent ${sourceAsset} tx...`);
+  testBrokerLevelScreening.log(`Sent ${sourceAsset} (vault swap) tx...`);
 
   await reportFunction(txHash);
-  testBrokerLevelScreening.log(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
+  testBrokerLevelScreening.log(`Marked ${sourceAsset} (vault swap) ${txHash} for rejection. Awaiting refund.`);
 
   // Currently this event cannot be decoded correctly, so we don't wait for it,
   // just wait for the funds to arrive at the refund address
@@ -633,8 +635,8 @@ async function main() {
     testBrokerLevelScreeningEthereum('Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereum('Flip', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereum('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    // testBrokerLevelScreeningEthereum('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    // testBrokerLevelScreeningEthereum('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    testBrokerLevelScreeningEthereum('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
   // test rejection of LP deposits, this requires the rejecting broker to be whitelisted:
@@ -652,23 +654,23 @@ async function main() {
     testBrokerLevelScreeningEthereumLiquidityDeposit('Usdc', async (txId) =>
       setTxRiskScore(txId, 9.0),
     ),
-    // testBrokerLevelScreeningEthereumLiquidityDeposit('ArbEth', async (txId) =>
-    //   setTxRiskScore(txId, 9.0),
-    // ),
-    // testBrokerLevelScreeningEthereumLiquidityDeposit('ArbUsdc', async (txId) =>
-    //   setTxRiskScore(txId, 9.0),
-    // ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('ArbEth', async (txId) =>
+      setTxRiskScore(txId, 9.0),
+    ),
+    testBrokerLevelScreeningEthereumLiquidityDeposit('ArbUsdc', async (txId) =>
+      setTxRiskScore(txId, 9.0),
+    ),
   ]);
 
   // test vault swaps
-  await openPrivateBtcChannel('//BROKER_1');
-  await Promise.all([
-    testBrokerLevelScreeningBitcoinVaultSwap(),
-    testBrokerLevelScreeningEthereumVaultSwap('Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereumVaultSwap('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    // testBrokerLevelScreeningEthereumVaultSwap('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
-    // testBrokerLevelScreeningEthereumVaultSwap('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-  ]);
+  // await openPrivateBtcChannel('//BROKER_1');
+  // await Promise.all([
+  //   // testBrokerLevelScreeningBitcoinVaultSwap(),
+  //   // testBrokerLevelScreeningEthereumVaultSwap('Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+  //   // testBrokerLevelScreeningEthereumVaultSwap('Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+  //   // testBrokerLevelScreeningEthereumVaultSwap('ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+  //   // testBrokerLevelScreeningEthereumVaultSwap('ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+  // ]);
 
   await setMockmode(previousMockmode);
 }
