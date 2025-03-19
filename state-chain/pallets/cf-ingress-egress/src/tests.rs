@@ -2953,7 +2953,7 @@ mod evm_transaction_rejection {
 	}
 
 	#[test]
-	fn schedule_vault_swap_to_be_not_fetched_if_marked_for_rejection() {
+	fn schedule_vault_swap_should_be_not_fetched_if_marked_for_rejection() {
 		new_test_ext().execute_with(|| {
 			let tx_id = H256::from_str(
 				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
