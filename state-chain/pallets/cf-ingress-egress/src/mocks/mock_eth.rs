@@ -23,6 +23,7 @@ use cf_traits::{
 		asset_withholding::MockAssetWithholding,
 		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
+		ccm_aux_witnessing_handler::MockCcmAuxWitnessingHandler,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
