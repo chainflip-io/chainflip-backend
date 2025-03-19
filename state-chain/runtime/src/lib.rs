@@ -68,8 +68,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
-	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit,
-	NoOpAuxDataWitnessingHandler, SwapLimits, SwapLimitsProvider,
+	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit, SwapLimits,
+	SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -389,7 +389,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
-	type CcmAuxDataWitnessingHandler = NoOpAuxDataWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = SolanaCcmAuxDataWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -418,7 +418,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
-	type CcmAuxDataWitnessingHandler = NoOpAuxDataWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = SolanaCcmAuxDataWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -447,7 +447,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
-	type CcmAuxDataWitnessingHandler = NoOpAuxDataWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = SolanaCcmAuxDataWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -476,7 +476,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
-	type CcmAuxDataWitnessingHandler = NoOpAuxDataWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = SolanaCcmAuxDataWitnessingHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;

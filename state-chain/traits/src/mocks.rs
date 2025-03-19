@@ -13,6 +13,7 @@ pub mod balance_api;
 pub mod block_height_provider;
 pub mod bonding;
 pub mod broadcaster;
+pub mod ccm_aux_witnessing_handler;
 pub mod ceremony_id_provider;
 pub mod cfe_interface_mock;
 pub mod chain_tracking;

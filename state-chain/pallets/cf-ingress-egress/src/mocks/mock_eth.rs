@@ -29,8 +29,7 @@ use cf_traits::{
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, NoOpAuxDataWitnessingHandler,
-	OnDeposit,
+	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
 use frame_system::{self as system, pallet_prelude::BlockNumberFor};
@@ -136,7 +135,7 @@ impl crate::Config for Test {
 	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
-	type CcmAuxDataWitnessingHandler = NoOpAuxDataWitnessingHandler;
+	type CcmAuxDataWitnessingHandler = MockCcmAuxWitnessingHandler;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;

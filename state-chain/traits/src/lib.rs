@@ -1190,9 +1190,3 @@ pub trait SolanaAltWitnessingHandler {
 		current > created_at + cf_chains::sol::EXPIRY_TIME_FOR_ALT_ELECTIONS
 	}
 }
-pub struct NoOpAuxDataWitnessingHandler;
-impl SolanaAltWitnessingHandler for NoOpAuxDataWitnessingHandler {
-	fn should_expire(_created_at: u32, _current: BlockNumber) -> bool {
-		false
-	}
-}

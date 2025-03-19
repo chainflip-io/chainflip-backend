@@ -1957,10 +1957,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					origin.into(),
 				);
 				if let Some(ccm_channel_metadata) = channel_metadata {
-					T::CcmAuxDataWitnessingHandler::initiate_alt_witnessing(
-						ccm_channel_metadata,
-						swap_request_id,
-					);
+					if ForeignChain::Solana == destination_asset.into() {
+						T::CcmAuxDataWitnessingHandler::initiate_alt_witnessing(
+							ccm_channel_metadata,
+							swap_request_id,
+						);
+					}
 				}
 				DepositAction::Swap { swap_request_id }
 			},
