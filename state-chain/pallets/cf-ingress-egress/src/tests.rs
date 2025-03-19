@@ -1,5 +1,5 @@
 mod boost;
-mod screening;
+pub mod screening;
 
 use crate::{
 	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,

@@ -2,6 +2,7 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 use crate::Pallet;
+mod added_fetch_flag;
 pub mod deposit_channel_details_migration;
 pub mod rename_scheduled_tx_for_reject;
 pub mod scheduled_egress_ccm_migration;
@@ -79,5 +80,12 @@ pub type PalletMigration<T, I> = (
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<22, Pallet<T, I>>,
+	VersionedMigration<
+		22,
+		23,
+		added_fetch_flag::RenameScheduledTxForReject<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<23, Pallet<T, I>>,
 );
