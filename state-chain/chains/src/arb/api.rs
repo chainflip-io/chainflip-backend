@@ -161,14 +161,10 @@ where
 		asset: <Arbitrum as Chain>::ChainAsset,
 		deposit_fetch_id: Option<<Arbitrum as Chain>::DepositFetchId>,
 	) -> Result<Self, RejectError> {
-		let fetches = if let Some(deposit_fetch_id) = deposit_fetch_id {
-			vec![FetchAssetParams { deposit_fetch_id, asset }]
-		} else {
-			vec![]
-		};
-
 		Ok(Self::AllBatch(evm_all_batch_builder::<Arbitrum, _>(
-			fetches,
+			deposit_fetch_id
+				.map(|id| vec![FetchAssetParams { deposit_fetch_id: id, asset }])
+				.unwrap_or_default(),
 			vec![TransferAssetParams { asset, amount: refund_amount, to: refund_address }],
 			E::token_address,
 			E::replay_protection(E::vault_address()),

@@ -1143,7 +1143,7 @@ pub mod pallet {
 						tx.refund_address.clone().map(TryInto::try_into)
 					{
 						if tx.should_fetch {
-							if let Some(deposit_fetch_id) =
+							let maybe_fetch_id =
 								tx.deposit_address.as_ref().and_then(|deposit_address| {
 									DepositChannelLookup::<T, I>::mutate(
 										deposit_address,
@@ -1166,10 +1166,12 @@ pub mod pallet {
 											})
 										},
 									)
-								}) {
-								Self::send_refund(tx, refund_address, Some(deposit_fetch_id));
-							} else {
-								deferred_rejections.push(tx);
+								});
+
+							match maybe_fetch_id {
+								Some(fetch_id) =>
+									Self::send_refund(tx, refund_address, Some(fetch_id)),
+								None => deferred_rejections.push(tx),
 							}
 						} else {
 							Self::send_refund(tx, refund_address, None);
