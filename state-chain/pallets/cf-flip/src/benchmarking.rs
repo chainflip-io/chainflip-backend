@@ -28,9 +28,11 @@ mod benchmarks {
 	use super::*;
 
 	#[benchmark]
-	fn set_slashing_rate() {
+	fn update_pallet_config() {
 		let slashing_rate: Permill = Permill::one();
-		let call = Call::<T>::set_slashing_rate { slashing_rate };
+		let call = Call::<T>::update_pallet_config {
+			updates: vec![PalletConfigUpdate::SetSlashingRate(slashing_rate)].try_into().unwrap(),
+		};
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
 		#[block]
