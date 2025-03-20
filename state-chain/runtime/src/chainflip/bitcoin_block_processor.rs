@@ -65,10 +65,7 @@ fn dedup_events<T: Ord + Clone>(
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 	for TypesDepositChannelWitnessing
 {
-	fn run(
-		&mut self,
-		events: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)>,
-	) -> Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> {
+	fn run(&mut self, events: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)>) {
 		let deduped_events = dedup_events(events);
 		for (block, event) in &deduped_events {
 			match event {
@@ -86,14 +83,13 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 				},
 			}
 		}
-		deduped_events
 	}
 }
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
 	fn run(
 		&mut self,
 		events: Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)>,
-	) -> Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)> {
+	) {
 		let deduped_events = dedup_events(events);
 
 		for (block, event) in &deduped_events {
@@ -112,14 +108,13 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 				},
 			}
 		}
-		deduped_events
 	}
 }
 impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnessing {
 	fn run(
 		&mut self,
 		events: Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)>,
-	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
+	) {
 		let deduped_events = dedup_events(events);
 		for (_, event) in &deduped_events {
 			match event {
@@ -129,7 +124,6 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnes
 				},
 			}
 		}
-		deduped_events
 	}
 }
 
@@ -235,6 +229,30 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, SafetyMarginHook>> for TypesEgressW
 
 #[cfg(test)]
 mod tests {
+	use crate::chainflip::bitcoin_block_processor::{dedup_events, BtcEvent};
+
+	#[test]
+	fn dedup_events_test() {
+		let events = vec![
+			(10, BtcEvent::<u8>::Witness(9)),
+			(8, BtcEvent::<u8>::PreWitness(9)),
+			(10, BtcEvent::<u8>::Witness(10)),
+			(10, BtcEvent::<u8>::Witness(11)),
+			(8, BtcEvent::<u8>::PreWitness(11)),
+			(10, BtcEvent::<u8>::PreWitness(12)),
+		];
+		let deduped_events = dedup_events(events);
+
+		assert_eq!(
+			deduped_events,
+			vec![
+				(10, BtcEvent::<u8>::Witness(9)),
+				(10, BtcEvent::<u8>::Witness(10)),
+				(10, BtcEvent::<u8>::Witness(11)),
+				(10, BtcEvent::<u8>::PreWitness(12)),
+			]
+		)
+	}
 	/*
 	   use cf_chains::btc::BlockNumber;
 	   use std::collections::BTreeMap;
