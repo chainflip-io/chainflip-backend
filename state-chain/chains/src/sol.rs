@@ -72,6 +72,9 @@ pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 pub const MAX_USER_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 418usize; // 814 bytes left
 pub const MAX_USER_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 507usize; // 725 bytes left
 
+/// Maximum number of Accounts Lookup Tables user can pass in as part of CCM call.
+pub const MAX_CCM_USER_ALTS: u8 = 3u8;
+
 // Nonce management values
 pub const NONCE_NUMBER_CRITICAL_NONCES: usize = 1;
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER: usize = 1;

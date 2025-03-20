@@ -75,6 +75,3 @@ pub const NONCE_ACCOUNT_LENGTH: u64 = 80u64;
 pub const SOL_USDC_DECIMAL: u8 = 6u8;
 pub const ACCOUNT_KEY_LENGTH_IN_TRANSACTION: usize = 32usize;
 pub const ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION: usize = 1usize;
-
-pub const MAX_CCM_USER_ALTS: u8 = 3u8;
-pub const EXPIRY_TIME_FOR_ALT_ELECTIONS: BlockNumber = 100u32;
