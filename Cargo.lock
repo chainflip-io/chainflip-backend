@@ -1505,6 +1505,7 @@ dependencies = [
  "pallet-cf-reputation",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
+ "pallet-cf-trading-strategy",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
