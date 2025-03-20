@@ -1223,12 +1223,13 @@ pub trait MinimumDeposit {
 	fn get(asset: Asset) -> AssetAmount;
 }
 
+use frame_support::sp_runtime::FixedU64;
 pub trait TransactionFeeScaler<Call, AccountId, Balance> {
 	fn call_info(_call: &Call, _caller: &AccountId) -> Option<PoolTouched<AccountId>> {
 		None
 	}
 
-	fn scale_fee(pre_scaled_fee: Balance, scale_factor: u32, exp_base: u128) -> Balance {
+	fn scale_fee(pre_scaled_fee: Balance, _scale_factor: u32, _exp_base: FixedU64) -> Balance {
 		pre_scaled_fee
 	}
 }

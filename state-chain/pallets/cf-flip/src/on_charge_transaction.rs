@@ -100,6 +100,10 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 				surplus.peek()
 			};
 
+			// TODO: Test that when there's not config set, fees scale at 1x.
+			let crate::ExponentBufferFeeConfig { buffer, exp_base } =
+				crate::FeeScalingRateConfig::<T>::get();
+
 			let to_burn = T::TransactionFeeScaler::scale_fee(
 				pre_scaled_fee_to_burn,
 				if let Some(pool_touched) = escrow.pool_touched {
@@ -108,10 +112,11 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 						*count += 1;
 						before_count
 					})
+					.saturating_sub(buffer)
 				} else {
 					0u32
 				},
-				2,
+				exp_base,
 			);
 
 			// If there is a difference this will be reconciled when the result goes out of scope.
