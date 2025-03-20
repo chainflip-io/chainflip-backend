@@ -39,7 +39,7 @@ use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_block_builder::runtime_decl_for_block_builder::BlockBuilderV6;
 use sp_consensus_aura::SlotDuration;
 use sp_keyring::test::AccountKeyring;
-use sp_runtime::{generic::Era, MultiSignature};
+use sp_runtime::{generic::Era, transaction_validity, MultiSignature};
 use sp_std::collections::btree_set::BTreeSet;
 
 use state_chain_runtime::{
@@ -889,8 +889,10 @@ pub fn register_refund_addresses(account_id: &AccountId) {
 	}
 }
 
-#[track_caller]
-pub fn apply_extrinsic_and_calculate_gas_fee(caller: AccountKeyring, call: RuntimeCall) -> Balance {
+pub fn apply_extrinsic_and_calculate_gas_fee(
+	caller: AccountKeyring,
+	call: RuntimeCall,
+) -> Result<(Balance, Balance), transaction_validity::TransactionValidityError> {
 	let caller_account_id = caller.to_account_id();
 	let before = Flip::total_balance_of(&caller_account_id);
 
@@ -902,7 +904,6 @@ pub fn apply_extrinsic_and_calculate_gas_fee(caller: AccountKeyring, call: Runti
 		frame_system::CheckEra::<Runtime>::from(Era::Immortal),
 		frame_system::CheckNonce::<Runtime>::from(System::account_nonce(&caller_account_id)),
 		frame_system::CheckWeight::<Runtime>::new(),
-		// CfChargeTransactionPayment,
 		pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(0u128),
 		frame_metadata_hash_extension::CheckMetadataHash::<Runtime>::new(false),
 	);
@@ -916,9 +917,9 @@ pub fn apply_extrinsic_and_calculate_gas_fee(caller: AccountKeyring, call: Runti
 		extra,
 	);
 
-	assert_ok!(Runtime::apply_extrinsic(ext));
+	let _ = Runtime::apply_extrinsic(ext)?;
 
 	let after = Flip::total_balance_of(&caller_account_id);
 
-	before - after
+	Ok((before - after, after))
 }
