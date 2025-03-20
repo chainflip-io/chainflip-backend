@@ -1170,11 +1170,19 @@ pub mod pallet {
 
 							match maybe_fetch_id {
 								Some(fetch_id) =>
-									Self::send_refund(tx, refund_address, Some(fetch_id)),
+									Self::try_broadcast_rejection_refund_or_store_tx_details(
+										tx,
+										refund_address,
+										Some(fetch_id),
+									),
 								None => deferred_rejections.push(tx),
 							}
 						} else {
-							Self::send_refund(tx, refund_address, None);
+							Self::try_broadcast_rejection_refund_or_store_tx_details(
+								tx,
+								refund_address,
+								None,
+							);
 						}
 					}
 				}
@@ -1635,7 +1643,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn send_refund(
+	fn try_broadcast_rejection_refund_or_store_tx_details(
 		tx: TransactionRejectionDetails<T, I>,
 		refund_address: <T::TargetChain as Chain>::ChainAccount,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
