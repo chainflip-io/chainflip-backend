@@ -20,6 +20,10 @@ pub mod old {
 	#[frame_support::storage_alias]
 	pub type ScheduledTransactionsForRejection<T: Config<I>, I: 'static> =
 		StorageValue<Pallet<T, I>, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
+
+	#[frame_support::storage_alias]
+	pub(crate) type FailedRejections<T: Config<I>, I: 'static> =
+		StorageValue<Pallet<T, I>, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 }
 
 pub struct RenameScheduledTxForReject<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
@@ -45,6 +49,22 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for RenameScheduledTxFo
 			});
 		}
 		crate::ScheduledTransactionsForRejection::<T, I>::put(translated_scheduled_txs);
+
+		let failed_rejections = old::FailedRejections::<T, I>::take();
+		let mut translated_failed_rejections: Vec<_> = Vec::new();
+
+		for tx in failed_rejections {
+			translated_failed_rejections.push(crate::TransactionRejectionDetails::<T, I> {
+				deposit_address: tx.deposit_address,
+				refund_address: tx.refund_address,
+				asset: tx.asset,
+				amount: tx.amount,
+				deposit_details: tx.deposit_details,
+				should_fetch: true,
+			});
+		}
+
+		crate::FailedRejections::<T, I>::put(translated_failed_rejections);
 		Weight::zero()
 	}
 
