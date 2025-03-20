@@ -58,6 +58,22 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 pub use pallet::*;
 
 #[derive(
+	CloneNoBound,
+	RuntimeDebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+)]
+pub enum PalletConfigUpdate {
+	SetSlashingRate(Permill),
+	// Set fee scaling rate for any calls that are scaled.
+	SetFeeScalingRate(ExponentBufferFeeConfig),
+}
+
+#[derive(
 	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
 )]
 pub struct ExponentBufferFeeConfig {
@@ -183,6 +199,9 @@ pub mod pallet {
 		SlashingRateUpdated {
 			slashing_rate: Permill,
 		},
+		FeeScalingRateUpdated {
+			fee_scaling_rate: ExponentBufferFeeConfig,
+		},
 	}
 
 	#[pallet::error]
@@ -210,54 +229,35 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Set the PER BLOCK slashing rate.
+		/// Apply a list of configuration updates to the pallet.
 		///
-		/// The dispatch origin of this function must be governance
-		///
-		/// ## Events
-		///
-		/// - [SlashingRateUpdated]
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		///
-		/// ## Dependencies
-		///
-		/// - [EnsureGovernance]
+		/// Requires Governance.
 		#[pallet::call_index(0)]
+		// TODO: update benchmark
 		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
-		pub fn set_slashing_rate(origin: OriginFor<T>, slashing_rate: Permill) -> DispatchResult {
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+		) -> DispatchResult {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			// Set the slashing rate
-			SlashingRate::<T>::set(slashing_rate);
-			Self::deposit_event(Event::SlashingRateUpdated { slashing_rate });
-			Ok(())
-		}
-
-		// TODO: Update pallet config, setting fee scaling config.
-
-		// Fee scaling rate
-		#[pallet::call_index(1)]
-		//TODO:  #[pallet::weight(T::WeightInfo::set_fee_scaling_rate())]
-		#[pallet::weight(100_000_000)]
-		pub fn set_fee_scaling_rate(
-			origin: OriginFor<T>,
-			buffer: u32,
-			// You can used FixedU64::from_rational or from_float to convert the input number to
-			// FixedU64.
-			// The range is: [0.000000000, 18446744073.709551615]
-			// i.e. there are 9 decimal places.
-			exp_base: FixedU64,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			// Set it - update pallet config extrinsic.
-			FeeScalingRateConfig::<T>::set(ExponentBufferFeeConfig { buffer, exp_base });
-			// Self::deposit_event(Event::FeeScalingRateUpdated { buffer, exp_base: fixed_exp_base
-			// });
+			for update in updates {
+				match update {
+					PalletConfigUpdate::SetSlashingRate(slashing_rate) => {
+						SlashingRate::<T>::set(slashing_rate);
+						Self::deposit_event(Event::SlashingRateUpdated { slashing_rate });
+					},
+					// You can used FixedU64::from_rational or from_float to convert the input
+					// number to FixedU64.
+					// The range is: [0.000000000, 18446744073.709551615]
+					// i.e. there are 9 decimal places.
+					PalletConfigUpdate::SetFeeScalingRate(fee_scaling_rate) => {
+						FeeScalingRateConfig::<T>::set(fee_scaling_rate);
+						Self::deposit_event(Event::FeeScalingRateUpdated { fee_scaling_rate });
+					},
+				}
+			}
 			Ok(())
 		}
 	}
