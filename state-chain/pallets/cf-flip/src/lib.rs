@@ -73,14 +73,20 @@ pub enum PalletConfigUpdate {
 	SetFeeScalingRate(ExponentBufferFeeConfig),
 }
 
-#[derive(
-	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
-)]
+// See `state-chain/pallets/cf-flip/src/on_charge_transaction.rs` for how this is used.
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 pub struct ExponentBufferFeeConfig {
 	// Number of calls before fee scaling is applied.
 	pub buffer: u32,
 	// Base for the fee scaling exponent.
 	pub exp_base: FixedU64,
+}
+
+impl Default for ExponentBufferFeeConfig {
+	fn default() -> Self {
+		// Default to no scaling. 1^x = 1.
+		Self { buffer: 0, exp_base: FixedU64::from_rational(1, 1) }
+	}
 }
 
 #[frame_support::pallet]
