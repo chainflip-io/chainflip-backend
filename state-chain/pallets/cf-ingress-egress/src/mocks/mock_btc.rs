@@ -108,7 +108,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
-	type CcmAuxDataWitnessingHandler = MockCcmAuxWitnessingHandler;
+	type SolanaAltWitnessingHandler = MockCcmAuxWitnessingHandler;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;

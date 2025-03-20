@@ -686,8 +686,8 @@ impl FromSolOrNot for SolanaVaultSwapDetails {
 	}
 }
 
-pub struct SolanaCcmAuxDataWitnessingHandler;
-impl SolanaAltWitnessingHandler for SolanaCcmAuxDataWitnessingHandler {
+pub struct SolanaAltElectionsAdapter;
+impl SolanaAltWitnessingHandler for SolanaAltElectionsAdapter {
 	fn initiate_alt_witnessing(
 		ccm_channel_metadata: CcmChannelMetadata,
 		swap_request_id: SwapRequestId,

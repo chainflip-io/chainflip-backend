@@ -614,7 +614,7 @@ pub mod pallet {
 
 		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
 
-		type CcmAuxDataWitnessingHandler: SolanaAltWitnessingHandler;
+		type SolanaAltWitnessingHandler: SolanaAltWitnessingHandler;
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
@@ -1781,7 +1781,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					SolanaTransactionBuildingError::AltsNotYetWitnessed { created_at },
 				)) => {
 					// If we waited for too long, fail the CCM and refund.
-					if T::CcmAuxDataWitnessingHandler::should_expire(created_at, current_block) {
+					if T::SolanaAltWitnessingHandler::should_expire(created_at, current_block) {
 						Self::refund_invalid_ccm(
 							ccm,
 							ExecutexSwapAndCallError::DispatchError(
@@ -1958,7 +1958,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 				if let Some(ccm_channel_metadata) = channel_metadata {
 					if ForeignChain::Solana == destination_asset.into() {
-						T::CcmAuxDataWitnessingHandler::initiate_alt_witnessing(
+						T::SolanaAltWitnessingHandler::initiate_alt_witnessing(
 							ccm_channel_metadata,
 							swap_request_id,
 						);

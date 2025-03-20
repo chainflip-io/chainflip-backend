@@ -45,7 +45,7 @@ use sp_runtime::{BoundedBTreeMap, SaturatedConversion};
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation,
-		solana_elections::{SolanaCcmAuxDataWitnessingHandler, TransactionSuccessDetails},
+		solana_elections::{SolanaAltElectionsAdapter, TransactionSuccessDetails},
 		ChainAddressConverter, SolEnvironment,
 		SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
 	},
@@ -1049,7 +1049,7 @@ fn solana_ccm_can_trigger_refund_transfer_after_waiting_too_long_for_aux_data() 
 
 			assert_eq!(SolEnvironment::get_address_lookup_tables(alt_lookup.clone()), Err(SolanaTransactionBuildingError::AltsNotYetWitnessed { created_at: alt_lookup.created_at }));
 
-			while !SolanaCcmAuxDataWitnessingHandler::should_expire(alt_lookup.created_at, System::block_number()) {
+			while !SolanaAltElectionsAdapter::should_expire(alt_lookup.created_at, System::block_number()) {
 				testnet.move_forward_blocks(1);
 			}
 
@@ -1164,7 +1164,7 @@ fn after_aux_data_expiry_ccm_will_try_once_more_before_refund() {
 				.any(|ccm| ccm.egress_id == egress_id));
 
 			// Move pass the expiry time and then some more.
-			while !SolanaCcmAuxDataWitnessingHandler::should_expire(
+			while !SolanaAltElectionsAdapter::should_expire(
 				alt_lookup.created_at,
 				System::block_number(),
 			) {

@@ -1182,8 +1182,7 @@ pub trait SolanaAltWitnessingHandler {
 	fn initiate_alt_witnessing(
 		_ccm_channel_metadata: CcmChannelMetadata,
 		_swap_request_id: SwapRequestId,
-	) {
-	}
+	);
 
 	/// Checks if we have already waited past the maximum waiting time to witness user ALTs.
 	fn should_expire(created_at: u32, current: BlockNumber) -> bool {
