@@ -34,8 +34,8 @@ use crate::{
 			address_derivation::derive_associated_token_account, consts::SOL_USDC_DECIMAL,
 		},
 		transaction_builder::SolanaTransactionBuilder,
-		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolAsset, SolHash,
-		SolTrackedData, SolVersionedTransaction, SolanaCrypto,
+		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolHash, SolTrackedData,
+		SolVersionedTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
@@ -44,7 +44,7 @@ use crate::{
 	TransferFallbackError,
 };
 
-use cf_primitives::{EgressId, ForeignChain, GasAmount, SwapRequestId};
+use cf_primitives::{EgressId, ForeignChain, GasAmount};
 
 #[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ComputePrice;
@@ -89,7 +89,6 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
-	+ ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
 	+ RecoverDurableNonce
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
@@ -120,18 +119,6 @@ pub trait SolanaEnvironment:
 			.map(|nonces| nonces.into_iter().map(|(addr, _hash)| addr).collect::<Vec<_>>())
 			.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
 	}
-
-	/// Get any user-defined Address lookup tables from the Environment.
-	fn get_address_lookup_tables(
-		id: SwapRequestId,
-	) -> Result<Vec<SolAddressLookupTableAccount>, SolanaTransactionBuildingError> {
-		match Self::lookup(id) {
-			Some(AltConsensusResult::ValidConsensusAlts(alts)) => Ok(alts),
-			Some(AltConsensusResult::AltsInvalidNoConsensus) =>
-				Err(SolanaTransactionBuildingError::AltsInvalid),
-			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed),
-		}
-	}
 }
 
 /// IMPORTANT: This should only be used if the nonce has not been used to sign a transaction.
@@ -155,8 +142,6 @@ pub enum SolanaTransactionBuildingError {
 	InvalidCcm(CcmValidityError),
 	FailedToSerializeFinalTransaction,
 	FinalTransactionExceededMaxLength(u32),
-	AltsNotYetWitnessed,
-	AltsInvalid,
 }
 
 impl sp_std::fmt::Display for SolanaTransactionBuildingError {
@@ -384,7 +369,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: SwapRequestId,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// For extra safety, re-verify the validity of the CCM message here
 		// and extract the decoded `ccm_accounts` from `ccm_additional_data`.
@@ -419,13 +403,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		let sol_api_environment = Environment::api_environment()?;
 		let agg_key = Environment::current_agg_key()?;
-
-		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
-		// TODO roy: Coordinate with Ramiz on the interface for getting ALTS
-		let address_lookup_tables =
-			sp_std::iter::once(sol_api_environment.address_lookup_table_account)
-				.chain(Environment::get_address_lookup_tables(swap_request_id)?)
-				.collect::<Vec<_>>();
 
 		// Ensure the CCM parameters do not contain blacklisted accounts.
 		check_ccm_for_blacklisted_accounts(
@@ -462,7 +439,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					durable_nonce,
 					compute_price,
 					compute_limit,
-					address_lookup_tables,
+					vec![sol_api_environment.address_lookup_table_account],
 				),
 				SolAsset::SolUsdc => SolanaTransactionBuilder::ccm_transfer_token(
 					derive_associated_token_account(
@@ -487,7 +464,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					compute_price,
 					SOL_USDC_DECIMAL,
 					compute_limit,
-					address_lookup_tables,
+					vec![sol_api_environment.address_lookup_table_account],
 				),
 			}
 			.inspect_err(|e| {
@@ -677,7 +654,6 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: SwapRequestId,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		Self::ccm_transfer(
 			transfer_param,
@@ -688,15 +664,10 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			gas_budget,
 			message,
 			ccm_additional_data,
-			swap_request_id,
 		)
 		.map_err(|e| {
 			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);
-			match e {
-				SolanaTransactionBuildingError::AltsNotYetWitnessed =>
-					ExecutexSwapAndCallError::TryAgainLater,
-				_ => ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e),
-			}
+			ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e)
 		})
 	}
 }
@@ -776,21 +747,3 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 }
 
 impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {}
-
-#[derive(
-	Serialize,
-	Deserialize,
-	RuntimeDebug,
-	PartialEq,
-	Eq,
-	Clone,
-	Encode,
-	Decode,
-	TypeInfo,
-	Ord,
-	PartialOrd,
-)]
-pub enum AltConsensusResult<T> {
-	ValidConsensusAlts(T),
-	AltsInvalidNoConsensus,
-}

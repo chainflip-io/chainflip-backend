@@ -21,27 +21,24 @@ use crate::{
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, sol::Asset as SolAsset},
-	ccm_checker::{CcmValidityCheck, CcmValidityChecker},
 	instances::{ChainInstanceAlias, SolanaInstance},
 	sol::{
 		api::{
-			AltConsensusResult, SolanaApi, SolanaTransactionBuildingError, SolanaTransactionType,
+			SolanaApi, SolanaTransactionBuildingError, SolanaTransactionType,
 			VaultSwapAccountAndSender,
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
-		sol_tx_core::{consts::EXPIRY_TIME_FOR_ALT_ELECTIONS, SlotNumber},
-		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
-		SolanaCrypto,
+		sol_tx_core::SlotNumber,
+		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
+	CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
 	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
 };
-use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, SwapRequestId};
+use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
-	ElectionEgressWitnesser, GetBlockHeight, IngressSource, InitiateSolanaAltWitnessing,
-	SolanaNonceWatch,
+	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -50,8 +47,8 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		self,
 		blockchain::delta_based_ingress::BackoffSettings,
-		composite::{tuple_7_impls::Hooks, CompositeRunner},
-		exact_value::ExactValueHook,
+		composite::{tuple_6_impls::Hooks, CompositeRunner},
+		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
@@ -80,7 +77,6 @@ pub type SolanaElectoralSystemRunner = CompositeRunner<
 		SolanaEgressWitnessing,
 		SolanaLiveness,
 		SolanaVaultSwapTracking,
-		SolanaAltWitnessing,
 	),
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
@@ -106,9 +102,8 @@ pub fn initial_state(
 			(),
 			(),
 			0u32,
-			(),
 		),
-		unsynchronised_settings: ((), (), (), (), (), (), ()),
+		unsynchronised_settings: ((), (), (), (), (), ()),
 		settings: (
 			(),
 			(
@@ -119,7 +114,6 @@ pub fn initial_state(
 			(),
 			LIVENESS_CHECK_DURATION,
 			SolanaVaultSwapsSettings { swap_endpoint_data_account_address, usdc_token_mint_pubkey },
-			(),
 		),
 	}
 }
@@ -150,7 +144,7 @@ pub type SolanaNonceTracking = electoral_systems::monotonic_change::MonotonicCha
 	BlockNumberFor<Runtime>,
 >;
 
-pub type SolanaEgressWitnessing = electoral_systems::exact_value::ExactValue<
+pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSuccess<
 	SolSignature,
 	TransactionSuccessDetails,
 	(),
@@ -186,57 +180,6 @@ pub type SolanaVaultSwapTracking =
 		SolanaTransactionBuildingError,
 	>;
 
-#[derive(
-	Serialize,
-	Deserialize,
-	Default,
-	Debug,
-	PartialEq,
-	Eq,
-	Clone,
-	Encode,
-	Decode,
-	TypeInfo,
-	Ord,
-	PartialOrd,
-)]
-pub struct SolanaAltWitnessingIdentifier {
-	pub swap_request_id: SwapRequestId,
-	pub alt_addresses: Vec<SolAddress>,
-	pub election_expiry_block_number: BlockNumberFor<Runtime>,
-}
-
-pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
-	SolanaAltWitnessingIdentifier,
-	// We also want to allow for the election to come to consensus on the fact that one or more
-	// alts provided were invalid and so we cant witness all alts.
-	AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
-	(),
-	SolanaAltWitnessingHook,
-	<Runtime as Chainflip>::ValidatorId,
-	BlockNumberFor<Runtime>,
->;
-
-pub struct SolanaAltWitnessingHook;
-
-impl
-	ExactValueHook<
-		SolanaAltWitnessingIdentifier,
-		AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
-	> for SolanaAltWitnessingHook
-{
-	fn on_consensus(
-		alt_identifier: SolanaAltWitnessingIdentifier,
-		alts: AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
-	) {
-		Environment::add_sol_ccm_swap_alts(alt_identifier.swap_request_id, alts);
-	}
-
-	fn should_expire_election(alt_identifier: SolanaAltWitnessingIdentifier) -> bool {
-		crate::System::block_number() >= alt_identifier.election_expiry_block_number
-	}
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
@@ -247,8 +190,8 @@ pub struct TransactionSuccessDetails {
 
 pub struct SolanaEgressWitnessingHook;
 
-impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
-	fn on_consensus(
+impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
+	fn on_egress_success(
 		signature: SolSignature,
 		TransactionSuccessDetails { tx_fee, transaction_successful }: TransactionSuccessDetails,
 	) {
@@ -282,10 +225,6 @@ impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWit
 				err
 			)
 		}
-	}
-
-	fn should_expire_election(_: SolSignature) -> bool {
-		false
 	}
 }
 
@@ -322,7 +261,6 @@ impl
 		SolanaEgressWitnessing,
 		SolanaLiveness,
 		SolanaVaultSwapTracking,
-		SolanaAltWitnessing,
 	> for SolanaElectionHooks
 {
 	fn on_finalize(
@@ -333,7 +271,6 @@ impl
 			egress_witnessing_identifiers,
 			liveness_identifiers,
 			vault_swap_identifiers,
-			alt_witnessing_identifiers,
 		): (
 			Vec<
 				ElectionIdentifier<
@@ -363,11 +300,6 @@ impl
 			Vec<
 				ElectionIdentifier<
 					<SolanaVaultSwapTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
-				>,
-			>,
-			Vec<
-				ElectionIdentifier<
-					<SolanaAltWitnessing as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 		),
@@ -411,13 +343,6 @@ impl
 				RunnerStorageAccess<Runtime, SolanaInstance>,
 			>,
 		>(vault_swap_identifiers, &current_sc_block_number)?;
-		SolanaAltWitnessing::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				SolanaAltWitnessing,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
-		>(alt_witnessing_identifiers, &())?;
 		Ok(())
 	}
 }
@@ -438,7 +363,7 @@ impl BenchmarkValue for SolanaIngressSettings {
 	}
 }
 
-use pallet_cf_elections::electoral_systems::composite::tuple_7_impls::DerivedElectoralAccess;
+use pallet_cf_elections::electoral_systems::composite::tuple_6_impls::DerivedElectoralAccess;
 
 pub struct SolanaChainTrackingProvider;
 impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
@@ -581,7 +506,7 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 
 	fn watch_for_egress_success(signature: SolSignature) -> DispatchResult {
 		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
-			SolanaEgressWitnessing::witness_exact_value::<
+			SolanaEgressWitnessing::watch_for_egress::<
 				DerivedElectoralAccess<
 					_,
 					SolanaEgressWitnessing,
@@ -699,47 +624,5 @@ impl BenchmarkValue for SolanaVaultSwapsSettings {
 impl FromSolOrNot for SolanaVaultSwapDetails {
 	fn sol_or_not(s: &SolanaVaultSwapDetails) -> bool {
 		s.from == SolAsset::Sol
-	}
-}
-
-pub struct SolanaAltWitnessingHandler;
-impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
-	fn initiate_alt_witnessing(
-		ccm_channel_metadata: CcmChannelMetadata,
-		swap_request_id: SwapRequestId,
-	) {
-		use sp_std::vec;
-		match CcmValidityChecker::decode_unchecked(
-			ccm_channel_metadata.ccm_additional_data,
-			ForeignChain::Solana,
-		) {
-			Ok(crate::DecodedCcmAdditionalData::Solana(versioned_ccm_data)) => {
-				let alt_addresses = versioned_ccm_data.address_lookup_tables();
-				if !alt_addresses.is_empty() {
-					pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(
-						|| {
-							SolanaAltWitnessing::witness_exact_value::<
-								DerivedElectoralAccess<
-									_,
-									SolanaAltWitnessing,
-									RunnerStorageAccess<Runtime, SolanaInstance>,
-								>,
-							>(SolanaAltWitnessingIdentifier {
-								alt_addresses,
-								swap_request_id,
-								election_expiry_block_number: crate::System::block_number() + EXPIRY_TIME_FOR_ALT_ELECTIONS,
-							})
-						},
-					)
-					.unwrap_or_else(|e| {log::error!("Cannot start Solana ALT witnessing election: {:?}", e);}) //The error should not happen as long as the election identifiers dont overflow and
-					 // the electoral system is initialized
-				} else {
-					Environment::add_sol_ccm_swap_alts(swap_request_id, AltConsensusResult::ValidConsensusAlts(vec![]));
-				}
-			},
-			// This should never happen since the same ccm validity check has been done while opening the channel.
-			Err(e) => log::error!("Ccm Check failed while decoding ccm_additional_data while initiating Solana ALT witnessing: {:?}", e),
-			_ => {},
-		}
 	}
 }

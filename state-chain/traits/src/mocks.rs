@@ -22,7 +22,6 @@ use frame_support::{storage, StorageHasher, Twox64Concat};
 pub mod account_role_registry;
 pub mod address_converter;
 pub mod affiliate_registry;
-pub mod alt_witnessing;
 pub mod api_call;
 pub mod asset_converter;
 pub mod asset_withholding;

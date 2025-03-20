@@ -23,7 +23,7 @@ use cf_chains::{
 	eth,
 	sol::{
 		api::{
-			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey,
 			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
 			SolanaApi, SolanaEnvironment,
 		},
@@ -202,14 +202,6 @@ impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for MockSol
 impl RecoverDurableNonce for MockSolEnvironment {
 	fn recover_durable_nonce(_nonce_account: SolAddress) {
 		unimplemented!();
-	}
-}
-
-impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
-	for MockSolEnvironment
-{
-	fn lookup(_s: SwapRequestId) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
-		None
 	}
 }
 

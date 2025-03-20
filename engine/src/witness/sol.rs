@@ -15,10 +15,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod egress_witnessing;
-mod lookup_table_witnessing;
 mod nonce_witnessing;
-mod sol_deposits;
 mod vault_swaps_witnessing;
+mod sol_deposits;
 
 use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
@@ -44,9 +43,9 @@ use pallet_cf_elections::{
 };
 use state_chain_runtime::{
 	chainflip::solana_elections::{
-		SolanaAltWitnessing, SolanaBlockHeightTracking, SolanaEgressWitnessing,
-		SolanaElectoralSystemRunner, SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking,
-		SolanaVaultSwapTracking, TransactionSuccessDetails,
+		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystemRunner,
+		SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking, SolanaVaultSwapTracking,
+		TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
@@ -217,30 +216,6 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 	}
 }
 
-#[derive(Clone)]
-struct SolanaAltWitnessingVoter {
-	client: SolRetryRpcClient,
-}
-
-#[async_trait::async_trait]
-impl VoterApi<SolanaAltWitnessing> for SolanaAltWitnessingVoter {
-	async fn vote(
-		&self,
-		_settings: <SolanaAltWitnessing as ElectoralSystemTypes>::ElectoralSettings,
-		alt_witnessing_identifier: <SolanaAltWitnessing as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<Option<VoteOf<SolanaAltWitnessing>>, anyhow::Error> {
-		lookup_table_witnessing::get_lookup_table_state(
-			&self.client,
-			alt_witnessing_identifier.alt_addresses,
-		)
-		.await
-		// We wrap the vote in a Some here since the vote is always valid if there was no error in
-		// rpc while querying. This is so we come to consensus on "None" if the lookup table is not
-		// found.
-		.map(Some)
-	}
-}
-
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: SolRetryRpcClient,
@@ -267,8 +242,7 @@ where
 						SolanaNonceTrackingVoter { client: client.clone() },
 						SolanaEgressWitnessingVoter { client: client.clone() },
 						SolanaLivenessVoter { client: client.clone() },
-						SolanaVaultSwapsVoter { client: client.clone() },
-						SolanaAltWitnessingVoter { client },
+						SolanaVaultSwapsVoter { client },
 					)),
 				)
 				.continuously_vote()

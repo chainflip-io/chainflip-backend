@@ -325,9 +325,8 @@ impl ExtBuilder {
 						(),
 						(),
 						Default::default(),
-						(),
 					),
-					unsynchronised_settings: ((), (), (), (), (), (), ()),
+					unsynchronised_settings: ((), (), (), (), (), ()),
 					settings: (
 						(),
 						(
@@ -345,7 +344,6 @@ impl ExtBuilder {
 								sol_test_values::SWAP_ENDPOINT_DATA_ACCOUNT_ADDRESS,
 							usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 						},
-						(),
 					),
 				}),
 			},

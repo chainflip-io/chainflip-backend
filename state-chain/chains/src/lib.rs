@@ -41,8 +41,7 @@ use address::{
 };
 use cf_amm_math::Price;
 use cf_primitives::{
-	AssetAmount, BlockNumber, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount,
-	SwapRequestId, TxId,
+	AssetAmount, BlockNumber, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -597,8 +596,6 @@ pub enum ExecutexSwapAndCallError {
 	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
 	/// Some other DispatchError occurred.
 	DispatchError(DispatchError),
-	/// ALT witnessing is still not finished for solana ccms.
-	TryAgainLater,
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -609,7 +606,6 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: SwapRequestId,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
