@@ -71,9 +71,12 @@ impl TradingStrategy {
 		}
 	}
 	pub fn supported_assets(&self) -> Vec<Asset> {
+		self.supported_asset_pairs().into_iter().flat_map(|(a, b)| vec![a, b]).collect()
+	}
+	pub fn supported_asset_pairs(&self) -> Vec<(Asset, Asset)> {
 		match self {
 			TradingStrategy::SellAndBuyAtTicks { base_asset, .. } => {
-				vec![*base_asset, STABLE_ASSET]
+				vec![(*base_asset, STABLE_ASSET)]
 			},
 		}
 	}
@@ -186,7 +189,7 @@ pub mod pallet {
 							if balance >= threshold {
 								weight_used += limit_order_update_weight;
 
-								if T::PoolApi::update_limit_order(
+								if let Err(e) = T::PoolApi::update_limit_order(
 									&strategy_id,
 									base_asset,
 									STABLE_ASSET,
@@ -194,14 +197,10 @@ pub mod pallet {
 									STRATEGY_ORDER_ID,
 									Some(tick),
 									IncreaseOrDecrease::Increase(balance),
-								)
-								.is_err()
-								{
+								) {
 									// Should be impossible to get an error since we just
 									// checked the balance above
-									log_or_panic!(
-										"Failed to update limit order for strategy {strategy_id:?}"
-									);
+									log_or_panic!("Failed to update limit order for strategy {strategy_id:?}, {e:?}");
 								}
 							}
 						}
@@ -237,6 +236,8 @@ pub mod pallet {
 		InvalidAssetsForStrategy,
 		/// The liquidity provider has active strategies and cannot be deregistered.
 		LpHasActiveStrategies,
+		/// One or more of the supported pools does not exist.
+		PoolDoesNotExist,
 	}
 
 	#[pallet::call]
@@ -250,6 +251,14 @@ pub mod pallet {
 		) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+			// Check that the pools exist
+			for (base, quote) in strategy.supported_asset_pairs() {
+				if !T::PoolApi::pool_exists(base, quote) {
+					return Err(Error::<T>::PoolDoesNotExist.into());
+				}
+			}
+
+			// Check that the LP has a refund address for each asset
 			for asset in strategy.supported_assets() {
 				T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, asset)?;
 			}
