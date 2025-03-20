@@ -1228,7 +1228,7 @@ pub trait TransactionFeeScaler<Call, AccountId, Balance> {
 		None
 	}
 
-	fn scale_fee(pre_scaled_fee: Balance, _scale_factor: u32) -> Balance {
+	fn scale_fee(pre_scaled_fee: Balance, scale_factor: u32, exp_base: u128) -> Balance {
 		pre_scaled_fee
 	}
 }
