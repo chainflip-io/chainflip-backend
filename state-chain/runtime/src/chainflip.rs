@@ -1025,6 +1025,8 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 	}
 }
 
+use sp_runtime::Saturating;
+
 pub struct CfTransactionFeeScaler;
 impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransactionFeeScaler {
 	fn call_info(call: &RuntimeCall, caller: &AccountId) -> Option<PoolTouched<AccountId>> {
@@ -1049,8 +1051,11 @@ impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransaction
 		}
 	}
 
-	fn scale_fee(pre_scaled_fee: FlipBalance, scale_factor: u32) -> FlipBalance {
-		// We substract from the scale factor to create a buffer until scaling starts.
-		pre_scaled_fee * 2u128.pow(scale_factor.saturating_sub(2))
+	// scale factor can include the buffer.
+	fn scale_fee(pre_scaled_fee: FlipBalance, scale_factor: u32, exp_base: u128) -> FlipBalance {
+		// Calculate fee scaling using exponentiation: fee * (base/1000)^scale_factor
+		let fixed_base = FixedU64::from_rational(exp_base, 1000);
+		let multiplier = fixed_base.saturating_pow(scale_factor as usize);
+		multiplier.saturating_mul_int(pre_scaled_fee)
 	}
 }

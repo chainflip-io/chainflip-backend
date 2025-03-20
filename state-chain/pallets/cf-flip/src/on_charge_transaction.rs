@@ -111,6 +111,7 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 				} else {
 					0u32
 				},
+				2,
 			);
 
 			// If there is a difference this will be reconciled when the result goes out of scope.
