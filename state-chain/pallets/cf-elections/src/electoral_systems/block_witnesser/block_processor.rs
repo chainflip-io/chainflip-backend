@@ -465,8 +465,11 @@ pub(crate) mod test {
 		processor.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(9, 11)), None);
 
 		// We reprocessed the reorged blocks, now all the deposit end up in block 11
-		let result =
-			processor.process_rules_for_ages_and_block(11, 0..1, &vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+		let result = processor.process_rules_for_ages_and_block(
+			11,
+			0..1,
+			&vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+		);
 		// After reprocessing the reorged blocks we should have not re-emitted the same prewitness
 		// events for the same deposit, only the new detected deposit (10) is present
 		assert_eq!(result, vec![(11, MockBtcEvent::PreWitness(10))]);

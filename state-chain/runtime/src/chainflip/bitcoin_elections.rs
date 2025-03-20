@@ -330,7 +330,7 @@ impls! {
 						})
 						.ok()
 						.into_iter()
-						.flat_map(|addresses| addresses)
+						.flatten()
 						.map(move |address| (address, broker_id.clone(), channel_id))
 				})
 				.collect::<Vec<_>>()
@@ -345,7 +345,6 @@ pub type BitcoinVaultDepositWitnessingES =
 
 // ------------------------ egress witnessing ---------------------------
 /// The electoral system for egress witnessing
-
 pub struct BitcoinEgressWitnessing;
 
 type ElectionPropertiesEgressWitnessing = Vec<Hash>;

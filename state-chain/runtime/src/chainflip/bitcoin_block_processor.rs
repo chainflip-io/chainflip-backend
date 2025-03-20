@@ -242,9 +242,16 @@ mod tests {
 			(10, BtcEvent::<u8>::PreWitness(12)),
 		];
 		let deduped_events = dedup_events(events);
-		assert_eq!(deduped_events.len(), 4);
-		assert!(!deduped_events.contains(&(8, BtcEvent::<u8>::PreWitness(9))));
-		assert!(!deduped_events.contains(&(8, BtcEvent::<u8>::PreWitness(11))));
+
+		assert_eq!(
+			deduped_events,
+			vec![
+				(10, BtcEvent::<u8>::Witness(9)),
+				(10, BtcEvent::<u8>::Witness(10)),
+				(10, BtcEvent::<u8>::Witness(11)),
+				(10, BtcEvent::<u8>::PreWitness(12)),
+			]
+		)
 	}
 	/*
 	   use cf_chains::btc::BlockNumber;
