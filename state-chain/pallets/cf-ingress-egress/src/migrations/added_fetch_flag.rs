@@ -26,9 +26,9 @@ pub mod old {
 		StorageValue<Pallet<T, I>, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 }
 
-pub struct RenameScheduledTxForReject<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
+pub struct AddedFetchFlag<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
 
-impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for RenameScheduledTxForReject<T, I> {
+impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for AddedFetchFlag<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let count = old::ScheduledTransactionsForRejection::<T, I>::get().len() as u64;
@@ -106,7 +106,7 @@ mod migration_tests {
 				},
 			]);
 
-			RenameScheduledTxForReject::<Test, ()>::on_runtime_upgrade();
+			AddedFetchFlag::<Test, ()>::on_runtime_upgrade();
 
 			assert_eq!(
 				ScheduledTransactionsForRejection::<Test, ()>::get(),

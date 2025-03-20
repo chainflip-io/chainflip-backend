@@ -83,7 +83,7 @@ pub type PalletMigration<T, I> = (
 	VersionedMigration<
 		22,
 		23,
-		added_fetch_flag::RenameScheduledTxForReject<T, I>,
+		added_fetch_flag::AddedFetchFlag<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,

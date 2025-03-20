@@ -24,6 +24,7 @@ use cf_chains::{
 
 use cf_chains::eth::Address as EthereumAddress;
 
+use crate::FailedRejections;
 use cf_primitives::{
 	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,
 	DcaParameters, ForeignChain, MAX_AFFILIATES,
@@ -2501,10 +2502,36 @@ mod evm_transaction_rejection {
 			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
 			assert_eq!(scheduled_tx_for_reject.len(), 1);
 
+			assert_eq!(
+				scheduled_tx_for_reject[0].deposit_details.deposit_ids().unwrap(),
+				vec![tx_id]
+			);
+			assert!(scheduled_tx_for_reject[0].should_fetch);
+
 			IngressEgress::on_finalize(2);
 
 			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
 			assert_eq!(scheduled_tx_for_reject.len(), 0);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(
+					crate::Event::<Test, ()>::TransactionRejectedByBroker { tx_id, .. }
+				) if tx_id == tx_id
+			);
+
+			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
+
+			assert_eq!(pending_api_calls.len(), 1);
+			let api_call = pending_api_calls[0].clone();
+
+			match api_call {
+				MockEthereumApiCall::RejectCall { deposit_details, deposit_fetch_id, .. } => {
+					assert_eq!(deposit_details.deposit_ids().unwrap(), vec![tx_id]);
+					assert!(deposit_fetch_id.is_some());
+				},
+				_ => panic!("Expected a RejectCall"),
+			}
 		});
 	}
 
@@ -2960,6 +2987,11 @@ mod evm_transaction_rejection {
 			)
 			.unwrap();
 
+			assert_ok!(IngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+
 			assert_ok!(submit_vault_swap_request(
 				Asset::Eth,
 				Asset::Flip,
@@ -2983,33 +3015,37 @@ mod evm_transaction_rejection {
 				tx_id,
 			));
 
-			IngressEgress::process_vault_swap_request_full_witness(
-				1,
-				VaultDepositWitness {
-					deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
-					deposit_address: Default::default(),
-					input_asset: Asset::Eth.try_into().unwrap(),
-					channel_id: Default::default(),
-					deposit_amount: DEFAULT_DEPOSIT_AMOUNT,
-					output_asset: Asset::Flip.try_into().unwrap(),
-					destination_address: MockAddressConverter::to_encoded_address(
-						ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
-					),
-					deposit_metadata: None,
-					tx_id,
-					broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
-					affiliate_fees: bounded_vec![],
-					refund_params: ETH_REFUND_PARAMS,
-					dca_params: None,
-					boost_fee: 0,
-				},
-			);
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 			let scheduled_txs = ScheduledTransactionsForRejection::<Test, ()>::get();
 
 			assert_eq!(scheduled_txs.len(), 1);
 			assert_eq!(scheduled_txs[0].deposit_details.deposit_ids().unwrap(), vec![tx_id]);
-			assert_eq!(scheduled_txs[0].should_fetch, false);
+			assert!(!scheduled_txs[0].should_fetch);
+
+			IngressEgress::on_finalize(1);
+
+			assert!(FailedRejections::<Test, ()>::get().is_empty());
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(
+					crate::Event::<Test, ()>::TransactionRejectedByBroker { tx_id, .. }
+				) if tx_id == tx_id
+			);
+
+			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
+
+			assert_eq!(pending_api_calls.len(), 1);
+			let api_call = pending_api_calls[0].clone();
+
+			match api_call {
+				MockEthereumApiCall::RejectCall { deposit_details, deposit_fetch_id, .. } => {
+					assert_eq!(deposit_details.deposit_ids().unwrap(), vec![tx_id]);
+					assert!(deposit_fetch_id.is_none());
+				},
+				_ => panic!("Expected a RejectCall"),
+			}
 		});
 	}
 }

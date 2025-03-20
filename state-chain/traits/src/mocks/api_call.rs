@@ -41,7 +41,7 @@ pub enum MockEthereumApiCall<MockEvmEnvironment> {
 		refund_address: <Ethereum as Chain>::ChainAccount,
 		refund_amount: <Ethereum as Chain>::ChainAmount,
 		asset: <Ethereum as Chain>::ChainAsset,
-		deposit_fetch_id: <Ethereum as Chain>::DepositFetchId,
+		deposit_fetch_id: Option<<Ethereum as Chain>::DepositFetchId>,
 	},
 }
 
@@ -369,7 +369,7 @@ impl RejectCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 			refund_address,
 			refund_amount,
 			asset,
-			deposit_fetch_id: deposit_fetch_id.unwrap(),
+			deposit_fetch_id,
 		})
 	}
 }
