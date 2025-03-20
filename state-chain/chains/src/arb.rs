@@ -45,6 +45,7 @@ impl Chain for Arbitrum {
 	type TransactionRef = H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = evm::api::EvmReplayProtection;
+	type CcmAuxDataLookupKey = ();
 }
 
 #[derive(

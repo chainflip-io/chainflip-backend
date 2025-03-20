@@ -13,9 +13,9 @@ use cf_chains::{
 			VaultSwapAccountAndSender,
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
-		sol_tx_core::{consts::EXPIRY_TIME_FOR_ALT_ELECTIONS, SlotNumber},
+		sol_tx_core::SlotNumber,
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
-		SolanaCrypto,
+		SolanaCrypto, EXPIRY_TIME_FOR_ALT_ELECTIONS,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
 	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
@@ -24,7 +24,7 @@ use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, Sw
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
-	ElectionEgressWitnesser, GetBlockHeight, IngressSource, InitiateSolanaAltWitnessing,
+	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaAltWitnessingHandler,
 	SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
@@ -686,8 +686,8 @@ impl FromSolOrNot for SolanaVaultSwapDetails {
 	}
 }
 
-pub struct SolanaAltWitnessingHandler;
-impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
+pub struct SolanaAltElectionsAdapter;
+impl SolanaAltWitnessingHandler for SolanaAltElectionsAdapter {
 	fn initiate_alt_witnessing(
 		ccm_channel_metadata: CcmChannelMetadata,
 		swap_request_id: SwapRequestId,

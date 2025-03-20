@@ -290,6 +290,8 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
+
+	type CcmAuxDataLookupKey: Member + Parameter + Clone + CcmAuxDataLookupKeyConversion;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -581,8 +583,12 @@ pub enum ExecutexSwapAndCallError {
 	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
 	/// Some other DispatchError occurred.
 	DispatchError(DispatchError),
-	/// ALT witnessing is still not finished for solana ccms.
-	TryAgainLater,
+}
+
+impl From<SolanaTransactionBuildingError> for ExecutexSwapAndCallError {
+	fn from(err: SolanaTransactionBuildingError) -> Self {
+		ExecutexSwapAndCallError::FailedToBuildCcmForSolana(err)
+	}
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -593,7 +599,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
-		swap_request_id: SwapRequestId,
+		aux_data_lookup_key: Option<C::CcmAuxDataLookupKey>,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
@@ -1156,4 +1162,14 @@ impl VaultSwapExtraParametersRpc {
 			u128::try_from(n).map_err(|_| "Cannot convert number input into u128".into())
 		})
 	}
+}
+
+/// For handling conversions to and from the Generic Ccm Aux Data Lookup Key.
+pub trait CcmAuxDataLookupKeyConversion {
+	/// For solana Address Lookup table
+	fn from_alt_lookup_key(swap_request_id: SwapRequestId, created_at: u32) -> Self;
+}
+
+impl CcmAuxDataLookupKeyConversion for () {
+	fn from_alt_lookup_key(_swap_request_id: SwapRequestId, _created_at: u32) -> Self {}
 }

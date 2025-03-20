@@ -1,7 +1,7 @@
 use core::cell::Cell;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
-use cf_chains::{ccm_checker::CcmValidityCheck, AnyChain};
+use cf_chains::{ccm_checker::CcmValidityChecker, AnyChain};
 use cf_primitives::{Asset, AssetAmount, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
@@ -155,9 +155,6 @@ impl WeightInfo for MockWeightInfo {
 	}
 }
 
-pub struct AlwaysValid;
-impl CcmValidityCheck for AlwaysValid {}
-
 pub struct MockChannelIdAllocator {}
 
 impl ChannelIdAllocator for MockChannelIdAllocator {
@@ -180,7 +177,7 @@ impl pallet_cf_swapping::Config for Test {
 	type FeePayment = MockFeePayment<Self>;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
 	type BalanceApi = MockBalance;
-	type CcmValidityChecker = AlwaysValid;
+	type CcmValidityChecker = CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type ChannelIdAllocator = MockChannelIdAllocator;
 	type Bonder = MockBonderFor<Self>;

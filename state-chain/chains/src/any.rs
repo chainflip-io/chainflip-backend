@@ -1,15 +1,17 @@
 use crate::{
-	address::ForeignChainAddress, none::NoneChainCrypto, Chain, DepositDetailsToTransactionInId,
+	address::ForeignChainAddress, ccm_checker::DecodedCcmAdditionalData, none::NoneChainCrypto,
+	sol::SolanaAltLookup, CcmAuxDataLookupKeyConversion, Chain, DepositDetailsToTransactionInId,
 	FeeRefundCalculator,
 };
-use codec::{FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
-use sp_runtime::traits::Member;
+use scale_info::TypeInfo;
+use sp_runtime::{traits::Member, RuntimeDebug};
 
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
 	chains::{assets, AnyChain},
-	AssetAmount, ChannelId,
+	AssetAmount, ChannelId, SwapRequestId,
 };
 
 impl Chain for AnyChain {
@@ -35,6 +37,7 @@ impl Chain for AnyChain {
 	type TransactionRef = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+	type CcmAuxDataLookupKey = AnyChainCcmAuxDataLookupKey;
 }
 
 impl FeeRefundCalculator<AnyChain> for () {
@@ -47,3 +50,48 @@ impl FeeRefundCalculator<AnyChain> for () {
 }
 
 impl DepositDetailsToTransactionInId<NoneChainCrypto> for () {}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum AnyChainCcmAuxDataLookupKey {
+	Solana(SolanaAltLookup),
+}
+
+impl From<AnyChainCcmAuxDataLookupKey> for () {
+	fn from(_value: AnyChainCcmAuxDataLookupKey) {}
+}
+
+impl From<AnyChainCcmAuxDataLookupKey> for SolanaAltLookup {
+	fn from(value: AnyChainCcmAuxDataLookupKey) -> SolanaAltLookup {
+		match value {
+			AnyChainCcmAuxDataLookupKey::Solana(lookup) => lookup,
+		}
+	}
+}
+
+impl AnyChainCcmAuxDataLookupKey {
+	pub fn into_lookup_key(
+		decoded_ccm_data: DecodedCcmAdditionalData,
+		swap_request_id: SwapRequestId,
+		created_at: u32,
+	) -> Option<Self> {
+		if let DecodedCcmAdditionalData::Solana(sol_ccm_data) = decoded_ccm_data {
+			(!sol_ccm_data.address_lookup_tables().is_empty()).then_some(
+				AnyChainCcmAuxDataLookupKey::Solana(SolanaAltLookup::from_alt_lookup_key(
+					swap_request_id,
+					created_at,
+				)),
+			)
+		} else {
+			None
+		}
+	}
+}
+
+impl CcmAuxDataLookupKeyConversion for AnyChainCcmAuxDataLookupKey {
+	fn from_alt_lookup_key(swap_request_id: SwapRequestId, created_at: u32) -> Self {
+		AnyChainCcmAuxDataLookupKey::Solana(SolanaAltLookup::from_alt_lookup_key(
+			swap_request_id,
+			created_at,
+		))
+	}
+}

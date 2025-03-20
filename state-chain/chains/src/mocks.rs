@@ -113,6 +113,7 @@ impl Chain for MockEthereum {
 	type TransactionRef = u32;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
+	type CcmAuxDataLookupKey = ();
 }
 
 impl ToHumanreadableAddress for u64 {

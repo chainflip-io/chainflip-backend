@@ -4,6 +4,7 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
+	any::AnyChainCcmAuxDataLookupKey,
 	ccm_checker::CcmValidityCheck,
 	eth::Address as EthereumAddress,
 	AccountOrAddress, CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersEncoded,
@@ -2046,12 +2047,27 @@ pub mod pallet {
 		) {
 			let is_ccm_swap = maybe_ccm_metadata.is_some();
 
+			let aux_lookup_key = maybe_ccm_metadata.as_ref().and_then(|ccm| {
+				T::CcmValidityChecker::decode_unchecked(
+					ccm.channel_metadata.ccm_additional_data.clone(),
+					asset.into(),
+				)
+				.ok()
+				.and_then(|decoded| {
+					AnyChainCcmAuxDataLookupKey::into_lookup_key(
+						decoded,
+						swap_request_id,
+						frame_system::Pallet::<T>::block_number().saturated_into::<u32>(),
+					)
+				})
+			});
+
 			match T::EgressHandler::schedule_egress(
 				asset,
 				amount,
 				address,
 				maybe_ccm_metadata,
-				Some(swap_request_id),
+				aux_lookup_key,
 			) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
 					if is_refund {

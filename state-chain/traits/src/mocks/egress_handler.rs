@@ -1,7 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::{EgressApi, ScheduledEgressDetails};
 use cf_chains::{CcmAdditionalData, CcmDepositMetadata, CcmMessage, Chain};
-use cf_primitives::{AssetAmount, EgressCounter, GasAmount, SwapRequestId};
+use cf_primitives::{AssetAmount, EgressCounter, GasAmount};
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::{
 	traits::{Saturating, Zero},
@@ -31,7 +31,7 @@ pub enum MockEgressParameter<C: Chain> {
 		message: CcmMessage,
 		ccm_additional_data: CcmAdditionalData,
 		gas_budget: GasAmount,
-		swap_request_id: SwapRequestId,
+		aux_data_lookup_key: Option<C::CcmAuxDataLookupKey>,
 	},
 }
 
@@ -42,6 +42,13 @@ impl<C: Chain> MockEgressParameter<C> {
 			Self::Ccm { amount, .. } => *amount,
 		}
 		.into()
+	}
+
+	pub fn maybe_aux_data_lookup_key(&self) -> Option<C::CcmAuxDataLookupKey> {
+		match self {
+			MockEgressParameter::Ccm { aux_data_lookup_key, .. } => aux_data_lookup_key.clone(),
+			_ => None,
+		}
 	}
 }
 
@@ -77,7 +84,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
-		swap_request_id: Option<SwapRequestId>,
+		ccm_aux_data_lookup_key: Option<C::CcmAuxDataLookupKey>,
 	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
 		if amount.is_zero() && maybe_ccm_deposit_metadata.is_none() {
 			return Err(DispatchError::from("Ignoring zero egress amount."))
@@ -99,7 +106,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 						message: message.channel_metadata.message.clone(),
 						ccm_additional_data: message.channel_metadata.ccm_additional_data.clone(),
 						gas_budget: message.channel_metadata.gas_budget,
-						swap_request_id: swap_request_id.unwrap_or_default(),
+						aux_data_lookup_key: ccm_aux_data_lookup_key,
 					},
 					None => MockEgressParameter::<C>::Swap {
 						asset,

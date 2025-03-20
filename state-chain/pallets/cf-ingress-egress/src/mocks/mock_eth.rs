@@ -18,12 +18,12 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		affiliate_registry::MockAffiliateRegistry,
-		alt_witnessing::MockAltWitnessing,
 		api_call::{MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
 		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
+		ccm_aux_witnessing_handler::MockCcmAuxWitnessingHandler,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
@@ -103,8 +103,7 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	}
 }
 
-pub struct MockNetworkEnvironmentProvider {}
-
+pub struct MockNetworkEnvironmentProvider;
 impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
 		cf_primitives::NetworkEnvironment::Development
@@ -137,7 +136,7 @@ impl crate::Config for Test {
 	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
-	type SolanaAltWitnessingHandler = MockAltWitnessing;
+	type SolanaAltWitnessingHandler = MockCcmAuxWitnessingHandler;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;

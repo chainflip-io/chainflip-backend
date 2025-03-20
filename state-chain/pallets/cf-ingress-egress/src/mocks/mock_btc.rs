@@ -14,12 +14,12 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		affiliate_registry::MockAffiliateRegistry,
-		alt_witnessing::MockAltWitnessing,
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
 		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
+		ccm_aux_witnessing_handler::MockCcmAuxWitnessingHandler,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		swap_limits_provider::MockSwapLimitsProvider,
@@ -74,7 +74,7 @@ impl AddressDerivationApi<Bitcoin> for MockAddressDerivation {
 	}
 }
 
-pub struct MockNetworkEnvironmentProvider {}
+pub struct MockNetworkEnvironmentProvider;
 
 impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
@@ -108,7 +108,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
-	type SolanaAltWitnessingHandler = MockAltWitnessing;
+	type SolanaAltWitnessingHandler = MockCcmAuxWitnessingHandler;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;
