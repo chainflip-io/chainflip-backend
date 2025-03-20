@@ -1051,11 +1051,12 @@ impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransaction
 		}
 	}
 
-	// scale factor can include the buffer.
-	fn scale_fee(pre_scaled_fee: FlipBalance, scale_factor: u32, exp_base: u128) -> FlipBalance {
-		// Calculate fee scaling using exponentiation: fee * (base/1000)^scale_factor
-		let fixed_base = FixedU64::from_rational(exp_base, 1000);
-		let multiplier = fixed_base.saturating_pow(scale_factor as usize);
+	fn scale_fee(
+		pre_scaled_fee: FlipBalance,
+		scale_factor: u32,
+		exp_base: FixedU64,
+	) -> FlipBalance {
+		let multiplier = exp_base.saturating_pow(scale_factor as usize);
 		multiplier.saturating_mul_int(pre_scaled_fee)
 	}
 }

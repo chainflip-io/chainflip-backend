@@ -37,6 +37,7 @@ use cf_traits::{
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
+use sp_runtime::FixedU64;
 
 use frame_support::{
 	ensure,
@@ -55,6 +56,16 @@ use frame_system::pallet_prelude::*;
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
+
+#[derive(
+	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
+)]
+pub struct ExponentBufferFeeConfig {
+	// Number of calls before fee scaling is applied.
+	pub buffer: u32,
+	// Base for the fee scaling exponent.
+	pub exp_base: FixedU64,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -150,6 +161,9 @@ pub mod pallet {
 	pub type CallCounter<T: Config> =
 		StorageMap<_, Identity, PoolTouched<T::AccountId>, u32, ValueQuery>;
 
+	#[pallet::storage]
+	pub type FeeScalingRateConfig<T: Config> = StorageValue<_, ExponentBufferFeeConfig, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -216,9 +230,34 @@ pub mod pallet {
 		pub fn set_slashing_rate(origin: OriginFor<T>, slashing_rate: Permill) -> DispatchResult {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
+
 			// Set the slashing rate
 			SlashingRate::<T>::set(slashing_rate);
 			Self::deposit_event(Event::SlashingRateUpdated { slashing_rate });
+			Ok(())
+		}
+
+		// TODO: Update pallet config, setting fee scaling config.
+
+		// Fee scaling rate
+		#[pallet::call_index(1)]
+		//TODO:  #[pallet::weight(T::WeightInfo::set_fee_scaling_rate())]
+		#[pallet::weight(100_000_000)]
+		pub fn set_fee_scaling_rate(
+			origin: OriginFor<T>,
+			buffer: u32,
+			// You can used FixedU64::from_rational or from_float to convert the input number to
+			// FixedU64.
+			// The range is: [0.000000000, 18446744073.709551615]
+			// i.e. there are 9 decimal places.
+			exp_base: FixedU64,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			// Set it - update pallet config extrinsic.
+			FeeScalingRateConfig::<T>::set(ExponentBufferFeeConfig { buffer, exp_base });
+			// Self::deposit_event(Event::FeeScalingRateUpdated { buffer, exp_base: fixed_exp_base
+			// });
 			Ok(())
 		}
 	}
