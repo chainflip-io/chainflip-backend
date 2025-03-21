@@ -97,7 +97,7 @@ export async function sendEvmNative(
   ethAmount: string,
 ) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals('Eth'));
-  await signAndSendTxEvm(logger, chain, evmAddress, weiAmount, undefined, undefined);
+  return signAndSendTxEvm(logger, chain, evmAddress, weiAmount, undefined, undefined);
 }
 
 export async function spamEvm(
