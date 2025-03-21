@@ -34,7 +34,7 @@ use crate::{
 		},
 		mocks::ElectoralSystemState,
 		state_machine::{
-			core::{hook_test_utils::MockHook, ConstantIndex, Hook, HookType, TypesFor},
+			core::{hook_test_utils::MockHook, ConstantIndex, Hook, TypesFor},
 			state_machine_es::{StateMachineES, StateMachineESInstance},
 		},
 	},
