@@ -17,6 +17,8 @@
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
 
+use cf_primitives::{AccountRole, Asset};
+use cf_traits::{AccountRoleRegistry, PoolTouched};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -26,6 +28,31 @@ use frame_support::{
 #[benchmarks]
 mod benchmarks {
 	use super::*;
+
+	#[benchmark]
+	fn on_initialize() {
+		let whitelisted_callers = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::LiquidityProvider,
+			50,
+		)
+		.unwrap();
+
+		for account in whitelisted_callers {
+			for _ in 0..50 {
+				CallCounter::<T>::mutate(
+					PoolTouched { account: account.clone(), base_asset: Asset::Eth },
+					|count| {
+						*count += 1;
+					},
+				);
+			}
+		}
+
+		#[block]
+		{
+			Pallet::<T>::on_initialize(0u32.into());
+		}
+	}
 
 	#[benchmark]
 	fn update_pallet_config() {
