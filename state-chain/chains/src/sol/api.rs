@@ -27,15 +27,15 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	ccm_checker::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker, CcmValidityError,
-		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
+		DecodedCcmAdditionalData,
 	},
 	sol::{
 		sol_tx_core::{
 			address_derivation::derive_associated_token_account, consts::SOL_USDC_DECIMAL,
 		},
 		transaction_builder::SolanaTransactionBuilder,
-		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolHash, SolLegacyTransaction,
-		SolTrackedData, SolanaCrypto,
+		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolHash, SolTrackedData,
+		SolVersionedTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
@@ -46,17 +46,17 @@ use crate::{
 
 use cf_primitives::{EgressId, ForeignChain, GasAmount};
 
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ComputePrice;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct DurableNonce;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct AllNonceAccounts;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ApiEnvironment;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct CurrentAggKey;
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct CurrentOnChainKey;
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
@@ -66,7 +66,7 @@ pub type DurableNonceAndAccount = (SolAddress, SolHash);
 	Encode,
 	Decode,
 	PartialEq,
-	Debug,
+	RuntimeDebug,
 	TypeInfo,
 	Copy,
 	Serialize,
@@ -131,7 +131,7 @@ pub trait RecoverDurableNonce {
 }
 
 /// Errors that can arise when building Solana Transactions.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum SolanaTransactionBuildingError {
 	CannotLookupApiEnvironment,
 	CannotLookupCurrentAggKey,
@@ -178,7 +178,7 @@ pub enum SolanaTransactionType {
 #[scale_info(skip_type_params(Environment))]
 pub struct SolanaApi<Environment: 'static> {
 	pub call_type: SolanaTransactionType,
-	pub transaction: SolLegacyTransaction,
+	pub transaction: SolVersionedTransaction,
 	pub signer: Option<SolAddress>,
 	#[doc(hidden)]
 	#[codec(skip)]
@@ -301,6 +301,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							durable_nonce,
 							compute_price,
 							SOL_USDC_DECIMAL,
+							vec![sol_api_environment.address_lookup_table_account.clone()],
 						)
 					},
 				}?;
@@ -333,8 +334,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			sol_api_environment.vault_program,
 			sol_api_environment.vault_program_data_account,
 			agg_key,
+			sol_api_environment.alt_manager_program,
 			durable_nonce,
 			compute_price,
+			vec![sol_api_environment.address_lookup_table_account],
 		)
 		.inspect_err(|e| {
 			// Vault Rotation call building NOT transactional - meaning when this fails,
@@ -391,9 +394,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let ccm_accounts = if let DecodedCcmAdditionalData::Solana(versioned_sol_data) =
 			decoded_ccm_additional_data
 		{
-			match versioned_sol_data {
-				VersionedSolanaCcmAdditionalData::V0(ccm_accounts) => Ok(ccm_accounts),
-			}
+			Ok(versioned_sol_data.ccm_accounts())
 		} else {
 			Err(SolanaTransactionBuildingError::InvalidCcm(
 				CcmValidityError::CannotDecodeCcmAdditionalData,
@@ -413,40 +414,40 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 		let durable_nonce = Environment::nonce_account()?;
 
-		let fallback = TransferAssetParams {
-			asset: transfer_param.asset,
-			amount: transfer_param.amount,
-			to: ccm_accounts.fallback_address.into(),
-		};
-
 		let compute_limit =
 			SolTrackedData::calculate_ccm_compute_limit(gas_budget, transfer_param.asset);
 
-		// Build the transaction
-		let transaction = match transfer_param.asset {
-			SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
-				transfer_param.amount,
-				transfer_param.to,
-				source_chain,
-				source_address,
-				message,
-				ccm_accounts,
-				sol_api_environment.vault_program,
-				sol_api_environment.vault_program_data_account,
-				agg_key,
-				durable_nonce,
-				compute_price,
-				compute_limit,
-			),
-			SolAsset::SolUsdc => {
-				let ata = derive_associated_token_account(
+		Ok(Self {
+			call_type: SolanaTransactionType::CcmTransfer {
+				fallback: TransferAssetParams {
+					asset: transfer_param.asset,
+					amount: transfer_param.amount,
+					to: ccm_accounts.fallback_address.into(),
+				},
+			},
+			transaction: match transfer_param.asset {
+				SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
+					transfer_param.amount,
 					transfer_param.to,
-					sol_api_environment.usdc_token_mint_pubkey,
-				)
-				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-
-				SolanaTransactionBuilder::ccm_transfer_token(
-					ata.address,
+					source_chain,
+					source_address,
+					message,
+					ccm_accounts,
+					sol_api_environment.vault_program,
+					sol_api_environment.vault_program_data_account,
+					agg_key,
+					durable_nonce,
+					compute_price,
+					compute_limit,
+					vec![sol_api_environment.address_lookup_table_account],
+				),
+				SolAsset::SolUsdc => SolanaTransactionBuilder::ccm_transfer_token(
+					derive_associated_token_account(
+						transfer_param.to,
+						sol_api_environment.usdc_token_mint_pubkey,
+					)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?
+					.address,
 					transfer_param.amount,
 					transfer_param.to,
 					source_chain,
@@ -463,27 +464,23 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					compute_price,
 					SOL_USDC_DECIMAL,
 					compute_limit,
-				)
-			},
-		}
-		.inspect_err(|e| {
-			// CCM call building is NOT transactional - meaning when this fails,
-			// storage is not rolled back. We must recover the durable nonce here,
-			// since it has been taken from storage but not actually used.
-			log::error!(
-				"CCM building failed. Nonce recovered. Error: {:?}
-				Transfer param: {:?}
-				Nonce recovered: {:?}",
-				e,
-				transfer_param,
-				durable_nonce
-			);
-			Environment::recover_durable_nonce(durable_nonce.0);
-		})?;
-
-		Ok(Self {
-			call_type: SolanaTransactionType::CcmTransfer { fallback },
-			transaction,
+					vec![sol_api_environment.address_lookup_table_account],
+				),
+			}
+			.inspect_err(|e| {
+				// CCM call building is NOT transactional - meaning when this fails,
+				// storage is not rolled back. We must recover the durable nonce here,
+				// since it has been taken from storage but not actually used.
+				log::error!(
+					"CCM building failed. Nonce recovered. Error: {:?}
+					Transfer param: {:?}
+					Nonce recovered: {:?}",
+					e,
+					transfer_param,
+					durable_nonce
+				);
+				Environment::recover_durable_nonce(durable_nonce.0);
+			})?,
 			signer: None,
 			_phantom: Default::default(),
 		})
@@ -507,6 +504,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			agg_key,
 			durable_nonce,
 			compute_price,
+			vec![sol_api_environment.address_lookup_table_account],
 		)?;
 
 		Ok(Self {
@@ -544,6 +542,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			agg_key,
 			durable_nonce,
 			compute_price,
+			vec![sol_api_environment.address_lookup_table_account],
 		)?;
 
 		Ok(Self {
@@ -574,6 +573,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			agg_key,
 			durable_nonce,
 			compute_price,
+			vec![sol_api_environment.address_lookup_table_account],
 		)?;
 
 		Ok(Self {
@@ -658,8 +658,8 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		Self::ccm_transfer(
 			transfer_param,
 			source_chain,
-			// Hardcoding this to None to gain extra bytes in Solana.
-			// Revert this when we implement versioned Transactions.
+			// Hardcoding this to None to gain extra bytes in Solana. Consider
+			// reverting this when we implement versioned Transactions. PRO-2046.
 			None,
 			gas_budget,
 			message,
@@ -722,6 +722,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 			agg_key,
 			durable_nonce,
 			compute_price,
+			vec![sol_api_environment.address_lookup_table_account],
 		)
 		.map_err(|e| {
 			// SetGovKeyWithAggKey call building NOT transactional - meaning when this fails,

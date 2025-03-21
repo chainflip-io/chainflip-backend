@@ -27,8 +27,7 @@ use cf_chains::{
 		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
-		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
-		SolanaCrypto,
+		SolAddress, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
@@ -92,15 +91,7 @@ type SolanaElectionVote = BoundedBTreeMap<
 
 fn setup_sol_environments() {
 	// Environment::SolanaApiEnvironment
-	pallet_cf_environment::SolanaApiEnvironment::<Runtime>::set(SolApiEnvironment {
-		vault_program: sol_test_values::VAULT_PROGRAM,
-		vault_program_data_account: sol_test_values::VAULT_PROGRAM_DATA_ACCOUNT,
-		token_vault_pda_account: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT,
-		usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
-		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
-		swap_endpoint_program: sol_test_values::SWAP_ENDPOINT_PROGRAM,
-		swap_endpoint_program_data_account: sol_test_values::SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
-	});
+	pallet_cf_environment::SolanaApiEnvironment::<Runtime>::set(sol_test_values::api_env());
 
 	// Environment::AvailableDurableNonces
 	pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
@@ -557,7 +548,7 @@ fn solana_ccm_fails_with_invalid_input() {
 }
 
 #[test]
-fn failed_ccm_does_not_consume_durable_nonce() {
+fn failed_rotation_does_not_consume_durable_nonce() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
@@ -590,7 +581,7 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 
 			// Failed Rotate Key message does not consume DurableNonce
 			// Add extra Durable nonces to make RotateAggkey too long
-			let available_nonces = (0..20)
+			let available_nonces = (0..100)
 				.map(|x| (SolAddress([x as u8; 32]), SolHash::default()))
 				.collect::<Vec<_>>();
 			pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
@@ -655,11 +646,11 @@ fn solana_resigning() {
 			).unwrap();
 			transaction.signatures = vec![[1u8; 64].into()];
 
-			let original_account_keys = transaction.message.account_keys.clone();
+			let original_account_keys = transaction.message.static_account_keys();
 
 			let apicall = SolanaApi {
 				call_type: cf_chains::sol::api::SolanaTransactionType::Transfer,
-				transaction,
+				transaction: transaction.clone(),
 				signer: Some(CURRENT_SIGNER.into()),
 				_phantom: PhantomData::<SolEnvironment>,
 			};
@@ -672,7 +663,7 @@ fn solana_resigning() {
 			if let RequiresSignatureRefresh::True(call) = modified_call {
 				let agg_key = <SolEnvironment as SolanaEnvironment>::current_agg_key().unwrap();
 				let transaction = call.clone().unwrap().transaction;
-				for (modified_key, original_key) in transaction.message.account_keys.iter().zip(original_account_keys.iter()) {
+				for (modified_key, original_key) in transaction.message.static_account_keys().iter().zip(original_account_keys.iter()) {
 					if *original_key != SolPubkey::from(CURRENT_SIGNER) {
 						assert_eq!(modified_key, original_key);
 						assert_ne!(*modified_key, SolPubkey::from(agg_key));
@@ -686,7 +677,8 @@ fn solana_resigning() {
 
 				// Compare against a manually crafted transaction that works with the current test values and
 				// agg_key. Not the signature itself
-				let expected_serialized_tx = hex_literal::hex!("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000306f68d61e8d834034cf583f486f2a08ef53ce4134ed41c4d88f4720c39518745b617eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192cf1dd130e0341d60a0771ac40ea7900106a423354d2ecd6e609bd5e2ed833dec00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090380969800000000000400050284030000030200020c020000008096980000000000").to_vec();
+				let expected_serialized_tx = hex_literal::hex!("01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008001000306f68d61e8d834034cf583f486f2a08ef53ce4134ed41c4d88f4720c39518745b617eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192cf1dd130e0341d60a0771ac40ea7900106a423354d2ecd6e609bd5e2ed833dec00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090380969800000000000400050284030000030200020c02000000809698000000000000").to_vec();
+
 				assert_eq!(&serialized_tx[1+64..], &expected_serialized_tx[1+64..]);
 				assert_eq!(&serialized_tx[0], &expected_serialized_tx[0]);
 			} else {
