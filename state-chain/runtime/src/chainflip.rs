@@ -83,6 +83,7 @@ use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
 	DcaParameters,
 };
+use cf_traits::CallInfoId;
 
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
@@ -1029,7 +1030,7 @@ use sp_runtime::Saturating;
 
 pub struct CfTransactionFeeScaler;
 impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransactionFeeScaler {
-	fn call_info(call: &RuntimeCall, caller: &AccountId) -> Option<PoolTouched<AccountId>> {
+	fn call_info(call: &RuntimeCall, caller: &AccountId) -> Option<CallInfoId<AccountId>> {
 		match call {
 			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_limit_order {
 				base_asset,
@@ -1046,7 +1047,10 @@ impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransaction
 			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
 				base_asset,
 				..
-			}) => Some(PoolTouched { account: caller.clone(), base_asset: *base_asset }),
+			}) => Some(CallInfoId::Pool(PoolTouched {
+				account: caller.clone(),
+				base_asset: *base_asset,
+			})),
 			_ => None,
 		}
 	}

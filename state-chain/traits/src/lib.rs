@@ -1229,9 +1229,14 @@ pub struct PoolTouched<AccountId> {
 	pub base_asset: Asset,
 }
 
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+pub enum CallInfoId<AccountId> {
+	Pool(PoolTouched<AccountId>),
+}
+
 use frame_support::sp_runtime::FixedU64;
 pub trait TransactionFeeScaler<Call, AccountId, Balance> {
-	fn call_info(_call: &Call, _caller: &AccountId) -> Option<PoolTouched<AccountId>> {
+	fn call_info(_call: &Call, _caller: &AccountId) -> Option<CallInfoId<AccountId>> {
 		None
 	}
 

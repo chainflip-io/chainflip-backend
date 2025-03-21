@@ -40,7 +40,10 @@ mod benchmarks {
 		for account in whitelisted_callers {
 			for _ in 0..50 {
 				CallCounter::<T>::mutate(
-					PoolTouched { account: account.clone(), base_asset: Asset::Eth },
+					CallInfoId::Pool(PoolTouched {
+						account: account.clone(),
+						base_asset: Asset::Eth,
+					}),
 					|count| {
 						*count += 1;
 					},

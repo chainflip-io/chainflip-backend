@@ -20,7 +20,7 @@
 //! 'good' behaviour and (b) to ensure that only funded actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
-use cf_traits::{PoolTouched, TransactionFeeScaler, WaivedFees};
+use cf_traits::{CallInfoId, TransactionFeeScaler, WaivedFees};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
 	sp_runtime::{
@@ -44,7 +44,7 @@ pub struct FlipTransactionPayment<T>(PhantomData<T>);
 #[derive(DefaultNoBound, RuntimeDebug)]
 pub struct TransactionPaymentLiquidityInfo<T: crate::Config + FlipConfig> {
 	pub imbalance: Option<Surplus<T>>,
-	pub pool_touched: Option<PoolTouched<T::AccountId>>,
+	pub call_info_id: Option<CallInfoId<T::AccountId>>,
 }
 
 impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransactionPayment<T> {
@@ -62,9 +62,9 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			return Ok(Default::default())
 		}
 
-		let pool_touched = T::TransactionFeeScaler::call_info(call, who);
+		let call_info_id = T::TransactionFeeScaler::call_info(call, who);
 
-		if pool_touched.is_some() {
+		if call_info_id.is_some() {
 			fee = sp_std::cmp::max(fee, T::SpamPreventionUpfrontFee::get());
 		};
 
@@ -72,7 +72,7 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			Ok(if surplus.peek().is_zero() {
 				Default::default()
 			} else {
-				TransactionPaymentLiquidityInfo { imbalance: Some(surplus), pool_touched }
+				TransactionPaymentLiquidityInfo { imbalance: Some(surplus), call_info_id }
 			})
 		} else {
 			Err(InvalidTransaction::Payment.into())
@@ -100,19 +100,23 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 				surplus.peek()
 			};
 
-			let to_burn = if let Some(pool_touched) = escrow.pool_touched {
-				let crate::ExponentBufferFeeConfig { buffer, exp_base } =
-					crate::FeeScalingRateConfig::<T>::get();
-				T::TransactionFeeScaler::scale_fee(
-					pre_scaled_fee_to_burn,
-					crate::CallCounter::<T>::mutate(&pool_touched, |count| {
-						let before_count = *count;
-						*count += 1;
-						before_count
-					})
-					.saturating_sub(buffer),
-					exp_base,
-				)
+			let to_burn = if let Some(call_info_id) = escrow.call_info_id {
+				let before_count = crate::CallCounter::<T>::mutate(&call_info_id, |count| {
+					let before_count = *count;
+					*count += 1;
+					before_count
+				});
+				match call_info_id {
+					CallInfoId::Pool(_) => {
+						let crate::ExponentBufferFeeConfig { buffer, exp_base } =
+							crate::FeeScalingRateConfig::<T>::get();
+						T::TransactionFeeScaler::scale_fee(
+							pre_scaled_fee_to_burn,
+							before_count.saturating_sub(buffer),
+							exp_base,
+						)
+					},
+				}
 			} else {
 				pre_scaled_fee_to_burn
 			};

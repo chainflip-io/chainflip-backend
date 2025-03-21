@@ -32,8 +32,8 @@ use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
-	TransactionFeeScaler,
+	AccountInfo, Bonding, CallInfoId, DeregistrationCheck, FeePayment, FundingInfo,
+	OnAccountFunded, Slashing, TransactionFeeScaler,
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
@@ -92,7 +92,7 @@ impl Default for ExponentBufferFeeConfig {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, OnAccountFunded, PoolTouched, WaivedFees};
+	use cf_traits::{Chainflip, OnAccountFunded, WaivedFees};
 
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
@@ -177,11 +177,10 @@ pub mod pallet {
 	#[pallet::getter(fn offchain_funds)]
 	pub type OffchainFunds<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
-	// The number of times a pool has been touched by a particular LP in a particular block.
-	// This is used to determine the fees the LP needs to pay.
+	// Counts the number of calls within a block against a particular call info id.
 	#[pallet::storage]
 	pub type CallCounter<T: Config> =
-		StorageMap<_, Identity, PoolTouched<T::AccountId>, u16, ValueQuery>;
+		StorageMap<_, Identity, CallInfoId<T::AccountId>, u16, ValueQuery>;
 
 	#[pallet::storage]
 	pub type FeeScalingRateConfig<T: Config> = StorageValue<_, ExponentBufferFeeConfig, ValueQuery>;
