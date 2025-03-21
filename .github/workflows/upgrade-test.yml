@@ -178,7 +178,7 @@ jobs:
           ./localnet/manage.sh
           git reset --hard
 
-      # TODO: This is a temporary workaround to insert the image nonces for versioned transactions. Remove after it's is released.
+      # TODO: This is a temporary workaround to insert the image nonces for versioned transactions. Remove after 1.9 is released.
       - name: Nonce workaround
         if: inputs.run-job
         run: |
@@ -197,6 +197,16 @@ jobs:
           cd bouncer
           pnpm install --frozen-lockfile
           ./run.sh
+
+      # TODO: This is a temporary workaround to do the initial setup for the additional nonces. Remove after 1.9 is released.
+      - name: Setup additional nonces
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./commands/setup_additional_nonces.ts
 
       - name: Upgrade network 🚀
         if: inputs.run-job
