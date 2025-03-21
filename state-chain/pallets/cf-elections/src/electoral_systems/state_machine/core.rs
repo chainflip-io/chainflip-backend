@@ -1,6 +1,5 @@
 use codec::{Decode, Encode};
 use derive_where::derive_where;
-use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
@@ -77,106 +76,18 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
-	pub struct ConstantHook<T: HookType> {
-		pub state: T::Output,
-		pub _phantom: sp_std::marker::PhantomData<T>,
-	}
-
-	impl<T: HookType> ConstantHook<T> {
-		pub fn new(b: T::Output) -> Self {
-			Self { state: b, _phantom: Default::default() }
-		}
-	}
-
-	impl<T: HookType> Default for ConstantHook<T>
-	where
-		T::Output: Default,
-	{
-		fn default() -> Self {
-			Self::new(Default::default())
-		}
-	}
-
-	impl<T: HookType> Hook<T> for ConstantHook<T>
-	where
-		T::Output: Clone,
-	{
-		fn run(&mut self, _input: T::Input) -> T::Output {
-			self.state.clone()
-		}
-	}
-
-	#[derive(
-		Clone,
-		PartialEq,
-		Eq,
-		PartialOrd,
-		Ord,
-		Debug,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Serialize,
-		Deserialize,
-	)]
-	pub struct IncreasingHook<T: HookType> {
-		pub counter: u32,
-		pub state: T::Output,
-		pub _phantom: sp_std::marker::PhantomData<T>,
-	}
-
-	impl<T: HookType> IncreasingHook<T> {
-		pub fn new(counter_value: u32, state: T::Output) -> Self {
-			Self { counter: counter_value, state, _phantom: Default::default() }
-		}
-	}
-
-	impl<T: HookType> Default for IncreasingHook<T>
-	where
-		T::Output: Default,
-	{
-		fn default() -> Self {
-			Self::new(Default::default(), Default::default())
-		}
-	}
-
-	impl<T: HookType> Hook<T> for IncreasingHook<T>
-	where
-		T::Output: Clone,
-	{
-		fn run(&mut self, _input: T::Input) -> T::Output {
-			self.counter += 1;
-			self.state.clone()
-		}
-	}
-
-	#[derive(
-		Clone,
-		PartialEq,
-		Eq,
-		PartialOrd,
-		Ord,
-		Debug,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Serialize,
-		Deserialize,
-	)]
 	#[serde(bound = "T::Input: Serde, T::Output: Serde")]
-	pub struct MockHook<const NAME: &'static str, T: HookType> {
+	pub struct MockHook<T: HookType, const NAME: &'static str = ""> {
 		pub state: T::Output,
 		pub call_history: Vec<T::Input>,
 		pub _phantom: sp_std::marker::PhantomData<T>,
 	}
 
 	impls! {
-		for MockHook<NAME,T> where
+		for MockHook<T, NAME> where
 		(
+			T: HookType,
 			const NAME: &'static str,
-			T: HookType
 		):
 
 		impl {
@@ -196,7 +107,9 @@ pub mod hook_test_utils {
 		{
 			fn run(&mut self, input: T::Input) -> T::Output {
 				#[cfg(test)]
-				println!("{} called for {input:?}", NAME);
+				if NAME != "" {
+					println!("{} called for {input:?}", NAME);
+				}
 				self.call_history.push(input);
 				self.state.clone()
 			}
@@ -204,81 +117,12 @@ pub mod hook_test_utils {
 	}
 }
 
-/// A type which has an associated index type.
-/// This effectively models types families.
-pub trait Indexed {
-	type Index;
-	fn has_index(&self, index: &Self::Index) -> bool;
-}
-
-pub type IndexOf<Ixd> = <Ixd as Indexed>::Index;
-
-//--- instances ---
-impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for Either<A, B> {
-	type Index = A::Index;
-
-	fn has_index(&self, index: &Self::Index) -> bool {
-		match self {
-			Either::Left(a) => a.has_index(index),
-			Either::Right(b) => b.has_index(index),
-		}
-	}
-}
-
-impl<A: Indexed, B: Indexed<Index = A::Index>> Indexed for (A, B) {
-	type Index = A::Index;
-
-	fn has_index(&self, index: &Self::Index) -> bool {
-		self.0.has_index(index) && self.1.has_index(index)
-	}
-}
-
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-pub struct ConstantIndex<Idx, A> {
-	pub data: A,
-	_phantom: sp_std::marker::PhantomData<Idx>,
-}
-impl<Idx, A> ConstantIndex<Idx, A> {
-	pub fn new(data: A) -> Self {
-		ConstantIndex { data, _phantom: Default::default() }
-	}
-}
-impl<Idx, A> Indexed for ConstantIndex<Idx, A> {
-	type Index = Vec<Idx>;
-
-	fn has_index(&self, _index: &Self::Index) -> bool {
-		true
-	}
-}
-impl<Idx, A> Validate for ConstantIndex<Idx, A> {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-pub struct MultiIndexAndValue<Idx, A>(pub Idx, pub A);
-
-impl<Idx: PartialEq, A> Indexed for MultiIndexAndValue<Idx, A> {
-	type Index = Vec<Idx>;
-
-	fn has_index(&self, indices: &Self::Index) -> bool {
-		indices.contains(&self.0)
-	}
-}
-
-impl<Idx, A> Validate for MultiIndexAndValue<Idx, A> {
-	type Error = &'static str;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
+/// Dedicated `Validate` trait for cases where a value
+/// has to be validate with respect to an index, as is
+/// the case for the input type of state machines.
+pub trait IndexedValidate<Index, Value> {
+	type Error;
+	fn validate(index: &Index, value: &Value) -> Result<(), Self::Error>;
 }
 
 /// A type which can be validated.

@@ -11,10 +11,9 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
 		block_height_tracking::{
-			primitives::Header, state_machine::InputHeaders, BlockHeightTrackingProperties,
-			BlockHeightTrackingTypes,
+			primitives::Header, state_machine::InputHeaders, HWTypes, HeightWitnesserProperties,
 		},
-		state_machine::core::ConstantIndex,
+		block_witnesser::state_machine::BWElectionProperties,
 	},
 	VoteOf,
 };
@@ -62,9 +61,13 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 	async fn vote(
 		&self,
 		_settings: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		deposit_addresses: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
+		properties: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessingES>>, anyhow::Error> {
-		let (witness_range, deposit_addresses, _extra) = deposit_addresses;
+		let BWElectionProperties {
+			block_height: witness_range,
+			properties: deposit_addresses,
+			reorg_id: _,
+		} = properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range)
 			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
 		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
@@ -87,7 +90,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 
 		let witnesses = deposit_witnesses(&txs, &deposit_addresses);
 
-		Ok(Some(ConstantIndex::new(witnesses)))
+		Ok(Some(witnesses))
 	}
 }
 
@@ -103,7 +106,11 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 		_settings: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinVaultDepositWitnessingES>>, anyhow::Error> {
-		let (witness_range, vaults, _extra) = properties;
+		let BWElectionProperties {
+			block_height: witness_range,
+			properties: vaults,
+			reorg_id: _,
+		} = properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range)
 			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
 
@@ -122,8 +129,7 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 		}
 
 		let witnesses = vault_deposits(&txs, &vaults);
-
-		Ok(Some(ConstantIndex::new(witnesses)))
+		Ok(Some(witnesses))
 	}
 }
 
@@ -141,7 +147,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 		properties: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightTrackingES>>, anyhow::Error> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
-		let BlockHeightTrackingProperties { witness_from_index: election_property } = properties;
+		let HeightWitnesserProperties { witness_from_index: election_property } = properties;
 
 		let mut headers = VecDeque::new();
 
@@ -225,7 +231,11 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 		_settings: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinEgressWitnessingES>>, anyhow::Error> {
-		let (witness_range, tx_hashes, _extra) = properties;
+		let BWElectionProperties {
+			block_height: witness_range,
+			properties: tx_hashes,
+			reorg_id: _,
+		} = properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
 
 		let mut txs = vec![];
@@ -250,7 +260,7 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
 		}
 
-		Ok(Some(ConstantIndex::new(witnesses)))
+		Ok(Some(witnesses))
 	}
 }
 

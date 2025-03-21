@@ -5,11 +5,7 @@ use super::{
 use crate::electoral_systems::{
 	block_height_tracking::ChainProgress,
 	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
-	state_machine::{
-		core::{IndexOf, MultiIndexAndValue, Validate},
-		state_machine::StateMachine,
-		state_machine_es::SMInput,
-	},
+	state_machine::{core::Validate, state_machine::Statemachine, state_machine_es::SMInput},
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
@@ -32,16 +28,6 @@ pub struct HookTypeFor<Tag1, Tag2> {
 }
 
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {
-	// type ChainBlockNumber: Serde
-	// 	+ Copy
-	// 	+ Eq
-	// 	+ Ord
-	// 	+ SaturatingStep
-	// 	+ Step
-	// 	+ BlockZero
-	// 	+ Debug
-	// 	+ 'static;
-	// type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
 	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>>;
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>>;
@@ -165,28 +151,59 @@ where
 	}
 }
 
+#[derive_where(Debug, Clone, PartialEq, Eq;
+	T::ChainBlockNumber: Debug + Clone + Eq,
+	T::ElectionProperties: Debug + Clone + Eq,
+)]
+#[derive_where(Default;
+	T::ChainBlockNumber: Default,
+	T::ElectionProperties: Default,
+)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[codec(encode_bound(
+	T::ChainBlockNumber: Encode,
+	T::ElectionProperties: Encode,
+))]
+pub struct BWElectionProperties<T: BWTypes> {
+	pub block_height: T::ChainBlockNumber,
+	pub properties: T::ElectionProperties,
+	pub reorg_id: u8,
+}
+
+impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, T::BlockData> for BWStateMachine<T> {
+	type Error = ();
+
+	fn validate(
+		_index: &BWElectionProperties<T>,
+		_value: &T::BlockData,
+	) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+#[derive(Debug)]
 pub struct BWStateMachine<Types: BWTypes> {
 	_phantom: sp_std::marker::PhantomData<Types>,
 }
 
-impl<T: BWTypes> StateMachine for BWStateMachine<T> {
-	type Input = SMInput<
-		MultiIndexAndValue<
-			(T::ChainBlockNumber, T::ElectionProperties, u8),
-			ConstantIndex<(T::ChainBlockNumber, T::ElectionProperties, u8), T::BlockData>,
-		>,
-		ChainProgress<T::ChainBlockNumber>,
-	>;
+impl<T: BWTypes> Statemachine for BWStateMachine<T> {
+	type Input =
+		SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>;
+	type InputIndex = Vec<BWElectionProperties<T>>;
 	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
 	type State = BlockWitnesserState<T>;
 
-	fn input_index(s: &mut Self::State) -> IndexOf<Self::Input> {
+	fn input_index(s: &mut Self::State) -> Self::InputIndex {
 		s.elections
 			.ongoing
 			.clone()
 			.into_iter()
-			.map(|(height, extra)| (height, s.generate_election_properties_hook.run(height), extra))
+			.map(|(block_height, reorg_id)| BWElectionProperties {
+				properties: s.generate_election_properties_hook.run(block_height.clone()),
+				block_height,
+				reorg_id,
+			})
 			.collect()
 	}
 
@@ -214,12 +231,12 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 
 			SMInput::Context(ChainProgress::None) => {},
 
-			SMInput::Vote(blockdata) => {
-				s.elections.mark_election_done(blockdata.0 .0);
-				log::info!("got block data: {:?}", blockdata.1);
+			SMInput::Consensus((properties, blockdata)) => {
+				s.elections.mark_election_done(properties.block_height);
+				log::info!("got block data: {:?}", blockdata);
 				s.block_processor.process_block_data(
 					ChainProgressInner::Progress(s.elections.next_witnessed.saturating_backward(1)),
-					Some((blockdata.0 .0, blockdata.1.data)),
+					Some((properties.block_height, blockdata)),
 				);
 			},
 		};
@@ -304,7 +321,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 		// TODO: make sure that the number of outstanding elections does not grow
 
 		match input {
-			Vote(MultiIndexAndValue((height, _, _), _)) => {
+			Consensus((BWElectionProperties { block_height: height, .. }, _)) => {
 				let next_election = if safemode_enabled {
 					before.elections.next_priority_election
 				} else {
@@ -400,8 +417,8 @@ mod tests {
 
 	fn generate_state<
 		T: BWTypes<
-			SafeModeEnabledHook = ConstantHook<HookTypeFor<T, SafeModeEnabledHook>>,
-			SafetyMargin = ConstantHook<HookTypeFor<T, SafetyMarginHook>>,
+			SafeModeEnabledHook = MockHook<HookTypeFor<T, SafeModeEnabledHook>>,
+			SafetyMargin = MockHook<HookTypeFor<T, SafetyMarginHook>>,
 		>,
 	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
@@ -430,13 +447,13 @@ mod tests {
 					reorg_id
 				},
 				generate_election_properties_hook: Default::default(),
-				safemode_enabled: ConstantHook::new(safemode_enabled),
+				safemode_enabled: MockHook::new(safemode_enabled),
 				block_processor: BlockProcessor {
 					blocks_data: Default::default(),
 					reorg_events: Default::default(),
 					rules: Default::default(),
 					execute: Default::default(),
-					safety_margin: ConstantHook::new(1),
+					safety_margin: MockHook::new(1),
 				},
 				_phantom: core::marker::PhantomData,
 			})
@@ -444,14 +461,14 @@ mod tests {
 	}
 
 	fn generate_input<T: BWTypes<BlockData = ()>>(
-		indices: IndexOf<<BWStateMachine<T> as StateMachine>::Input>,
-	) -> BoxedStrategy<<BWStateMachine<T> as StateMachine>::Input>
+		indices: <BWStateMachine<T> as Statemachine>::InputIndex,
+	) -> BoxedStrategy<<BWStateMachine<T> as Statemachine>::Input>
 	where
 		T::ChainBlockNumber: Arbitrary,
 	{
 		let generate_input = |index| {
 			prop_oneof![
-				Just(SMInput::Vote(MultiIndexAndValue(index, ConstantIndex::new(())))),
+				Just(SMInput::Consensus((index, ()))),
 				prop_oneof![
 					Just(ChainProgress::None),
 					(any::<T::ChainBlockNumber>(), 0..20usize)
@@ -481,17 +498,17 @@ mod tests {
 		type ChainBlockNumber = N;
 		type BlockData = ();
 		type Event = ();
-		type Rules = ConstantHook<HookTypeFor<Self, RulesHook>>;
-		type Execute = ConstantHook<HookTypeFor<Self, ExecuteHook>>;
-		type SafetyMargin = ConstantHook<HookTypeFor<Self, SafetyMarginHook>>;
+		type Rules = MockHook<HookTypeFor<Self, RulesHook>>;
+		type Execute = MockHook<HookTypeFor<Self, ExecuteHook>>;
+		type SafetyMargin = MockHook<HookTypeFor<Self, SafetyMarginHook>>;
 	}
 
 	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
 		BWTypes for N
 	{
 		type ElectionProperties = ();
-		type ElectionPropertiesHook = ConstantHook<HookTypeFor<Self, ElectionPropertiesHook>>;
-		type SafeModeEnabledHook = ConstantHook<HookTypeFor<Self, SafeModeEnabledHook>>;
+		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;
+		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 	}
 
 	#[test]
