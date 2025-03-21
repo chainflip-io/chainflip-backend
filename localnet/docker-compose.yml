@@ -256,6 +256,7 @@ services:
     volumes:
       - "/tmp/chainflip/data/deposit-monitor:/persistent_state"
     environment:
+      - CFDM_ENABLE_VAULT_SWAP_MONITORING=true
       - CFDM_RUNNING_IN_MOCK_ENVIRONMENT=true
       - CFDM_NETWORK=Localnet
       - CFDM_PERSISTENT_STATE_DIR=/persistent_state
