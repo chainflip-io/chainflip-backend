@@ -31,6 +31,7 @@ impl_runtime_safe_mode! {
 	liquidity_provider: pallet_cf_lp::PalletSafeMode,
 	validator: pallet_cf_validator::PalletSafeMode,
 	pools: pallet_cf_pools::PalletSafeMode,
+	trading_strategies: pallet_cf_trading_strategy::PalletSafeMode,
 	reputation: pallet_cf_reputation::PalletSafeMode,
 	asset_balances: pallet_cf_asset_balances::PalletSafeMode,
 	threshold_signature_evm: pallet_cf_threshold_signature::PalletSafeMode<Instance16>,
