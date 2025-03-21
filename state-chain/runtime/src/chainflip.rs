@@ -1053,10 +1053,10 @@ impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransaction
 
 	fn scale_fee(
 		pre_scaled_fee: FlipBalance,
-		scale_factor: u32,
+		scale_factor: u16,
 		exp_base: FixedU64,
 	) -> FlipBalance {
-		let multiplier = exp_base.saturating_pow(scale_factor as usize);
+		let multiplier = exp_base.saturating_pow(scale_factor.into());
 		multiplier.saturating_mul_int(pre_scaled_fee)
 	}
 }
