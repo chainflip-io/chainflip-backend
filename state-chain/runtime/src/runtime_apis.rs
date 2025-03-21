@@ -41,6 +41,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
+use pallet_cf_trading_strategy::TradingStrategy;
 use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
@@ -330,6 +331,14 @@ pub struct VaultAddresses {
 	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
 }
 
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct TradingStrategyInfo<Amount> {
+	pub lp_id: AccountId32,
+	pub strategy_id: AccountId32,
+	pub strategy: TradingStrategy,
+	pub balance: Vec<(Asset, Amount)>,
+}
+
 // READ THIS BEFORE UPDATING THIS TRAIT:
 //
 // ## When changing an existing method:
@@ -499,6 +508,9 @@ decl_runtime_apis!(
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
 		fn cf_vault_addresses() -> VaultAddresses;
+		fn cf_get_trading_strategies(
+			lp_id: Option<AccountId32>,
+		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 	}
 );
 
