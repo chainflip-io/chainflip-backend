@@ -88,8 +88,8 @@ use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
-	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails,
+	KeyProvider, OnBroadcastReady, OnDeposit, PoolTouched, QualifyNode, RewardsDistribution,
+	RuntimeUpgrade, ScheduledEgressDetails, TransactionFeeScaler,
 };
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
@@ -1022,5 +1022,35 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 			ForeignChainAndAsset::Solana(asset) =>
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 		}
+	}
+}
+
+pub struct CfTransactionFeeScaler;
+impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransactionFeeScaler {
+	fn call_info(call: &RuntimeCall, caller: &AccountId) -> Option<PoolTouched<AccountId>> {
+		match call {
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_limit_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_limit_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_range_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
+				base_asset,
+				..
+			}) => Some(PoolTouched { account: caller.clone(), base_asset: *base_asset }),
+			_ => None,
+		}
+	}
+
+	fn scale_fee(pre_scaled_fee: FlipBalance, scale_factor: u32) -> FlipBalance {
+		// We substract from the scale factor to create a buffer until scaling starts.
+		pre_scaled_fee * 2u128.pow(scale_factor.saturating_sub(2))
 	}
 }

@@ -20,8 +20,8 @@ use std::vec;
 use crate::{
 	genesis,
 	network::{
-		fund_authorities_and_join_auction, new_account, register_refund_addresses,
-		setup_account_and_peer_mapping, Cli, Network,
+		apply_extrinsic_and_calculate_gas_fee, fund_authorities_and_join_auction, new_account,
+		register_refund_addresses, setup_account_and_peer_mapping, Cli, Network,
 	},
 	witness_call, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts,
 };
@@ -43,7 +43,9 @@ use cf_primitives::{
 	FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
-use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, SwapType};
+use cf_traits::{
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, OrderId, SwapType,
+};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
@@ -54,9 +56,10 @@ use pallet_cf_broadcast::{
 	RequestSuccessCallbacks,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepositWitness};
-use pallet_cf_pools::{HistoricalEarnedFees, OrderId, RangeOrderSize};
+use pallet_cf_pools::{HistoricalEarnedFees, IncreaseOrDecrease, RangeOrderSize};
 use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::{H160, U256};
+use sp_keyring::test::AccountKeyring;
 
 use state_chain_runtime::{
 	chainflip::{
@@ -976,5 +979,45 @@ fn can_handle_failed_vault_transfer() {
 			assert!(PendingApiCalls::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
+		});
+}
+
+#[test]
+fn fees_scales_with_weight() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	let lp = AccountKeyring::Alice;
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(lp.to_account_id(), AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) =
+				crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			setup_pool_and_accounts(
+				vec![Asset::Eth],
+				OrderType::RangeOrder,
+			);
+			testnet.move_to_the_next_epoch();
+
+			let call = RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
+				base_asset: Asset::Eth,
+				quote_asset: Asset::Usdc,
+				id: 0,
+				option_tick_range: Some(-10..10),
+				size_change: IncreaseOrDecrease::Decrease(RangeOrderSize::Liquidity {
+					liquidity: 1_000u128,
+				}),
+			});
+
+			for i in 1..100 {
+				let gas = apply_extrinsic_and_calculate_gas_fee(lp, call.clone());
+				println!("{:?}: {:?}", i, gas);
+			}
 		});
 }

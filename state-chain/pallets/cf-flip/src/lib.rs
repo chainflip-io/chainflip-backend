@@ -33,6 +33,7 @@ pub use weights::WeightInfo;
 
 use cf_traits::{
 	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
+	TransactionFeeScaler,
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
@@ -58,7 +59,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, OnAccountFunded, WaivedFees};
+	use cf_traits::{Chainflip, OnAccountFunded, PoolTouched, WaivedFees};
 
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
@@ -95,6 +96,17 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			RuntimeCall = <Self as frame_system::Config>::RuntimeCall,
 		>;
+
+		type TransactionFeeScaler: TransactionFeeScaler<
+			<Self as frame_system::Config>::RuntimeCall,
+			Self::AccountId,
+			Self::Balance,
+		>;
+
+		/// For calls that are spam-able, the fee taken in pre-dispatch.
+		/// Excess fees taken are returned in post-dispatch
+		#[pallet::constant]
+		type SpamPreventionUpfrontFee: Get<Self::Balance>;
 	}
 
 	#[pallet::pallet]
@@ -132,6 +144,12 @@ pub mod pallet {
 	#[pallet::getter(fn offchain_funds)]
 	pub type OffchainFunds<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
+	// The number of times a pool has been touched by a particular LP in a particular block.
+	// This is used to determine the fees the LP needs to pay.
+	#[pallet::storage]
+	pub type CallCounter<T: Config> =
+		StorageMap<_, Identity, PoolTouched<T::AccountId>, u32, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -163,6 +181,17 @@ pub mod pallet {
 		NoPendingRedemptionForThisID,
 		/// Account is bonded.
 		AccountBonded,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_current_block: BlockNumberFor<T>) -> Weight {
+			// Clear the call counter on every block. Do it in on_initialize (instead of
+			// `on_finalize`) so it's inspectable.
+			let _ = CallCounter::<T>::clear(u32::MAX, None);
+			// TODO: benchmark.
+			Weight::default()
+		}
 	}
 
 	#[pallet::call]
