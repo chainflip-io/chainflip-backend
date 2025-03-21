@@ -16,8 +16,8 @@
 
 mod egress_witnessing;
 mod nonce_witnessing;
-mod vault_swaps_witnessing;
 mod sol_deposits;
+mod vault_swaps_witnessing;
 
 use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},

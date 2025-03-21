@@ -67,12 +67,12 @@ use cf_chains::{
 	instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance, SolanaInstance},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey,
-			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
-			SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
+			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
+			SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto,
-		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
+		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
+		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,

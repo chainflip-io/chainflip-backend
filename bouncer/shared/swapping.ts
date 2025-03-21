@@ -54,8 +54,6 @@ function newSolanaCcmAdditionalData(maxBytes: number) {
     // We will only use one ALT
     bytesAvailable -= BYTES_PER_ALT;
     // We are passing cfTester in the ALT so we have extra bytes available.
-    // TODO: If we update the solana image we could also include the cfReceiverAddress.
-    // It's an issue with that image that is incorrectly adding CfReceiver programId instead.
     const usedAccountsInAlt = 1;
     bytesAvailable += usedAccountsInAlt * 32 - usedAccountsInAlt * 1;
   }

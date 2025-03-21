@@ -25,8 +25,7 @@ use cf_chains::{
 	ccm_checker::{CcmValidityError, VersionedSolanaCcmAdditionalData},
 	sol::{
 		api::{
-			SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError,
-			SolanaTransactionType,
+			SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError, SolanaTransactionType,
 		},
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,

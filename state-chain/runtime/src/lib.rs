@@ -169,7 +169,7 @@ pub use pallet_cf_validator::SetSizeParameters;
 
 use chainflip::{
 	boost_api::IngressEgressBoostApi, epoch_transition::ChainflipEpochTransitions,
-	evm_vault_activator::EvmVaultActivator,  solana_elections::SolanaAltWitnessingHandler, BroadcastReadyProvider, BtcEnvironment,
+	evm_vault_activator::EvmVaultActivator, BroadcastReadyProvider, BtcEnvironment,
 	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment,
 	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
 };

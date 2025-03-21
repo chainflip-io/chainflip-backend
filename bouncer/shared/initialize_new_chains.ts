@@ -163,7 +163,7 @@ export async function initializeSolanaPrograms(
       programId: solanaVaultProgramId,
     }),
   );
-  await signAndSendTxSol(logger, tx, false);
+  await signAndSendTxSol(logger, tx);
 
   // Set nonce authority to the new AggKey
   for (const [nonceNumber, prefix] of [
@@ -185,7 +185,7 @@ export async function initializeSolanaPrograms(
           newAuthorizedPubkey: newAggKey,
         }),
       );
-      await signAndSendTxSol(logger, tx, false);
+      await signAndSendTxSol(logger, tx);
     }
   }
 
@@ -226,7 +226,7 @@ export async function initializeSolanaPrograms(
       programId: solanaVaultProgramId,
     }),
   );
-  await signAndSendTxSol(logger, tx, false);
+  await signAndSendTxSol(logger, tx);
 
   // Set Governance authority to the new AggKey (State Chain)
   const setGovKeyWithGovKeyDiscriminatorString = vaultIdl.instructions.find(
@@ -248,5 +248,5 @@ export async function initializeSolanaPrograms(
       programId: solanaVaultProgramId,
     }),
   );
-  await signAndSendTxSol(logger, tx, false);
+  await signAndSendTxSol(logger, tx);
 }
