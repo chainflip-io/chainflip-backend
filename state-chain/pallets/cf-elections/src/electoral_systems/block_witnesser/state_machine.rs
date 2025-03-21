@@ -116,7 +116,7 @@ pub trait BWProcessorTypes: Sized {
 	PartialOrd,
 	Default,
 )]
-pub struct BWSettings {
+pub struct BlockWitnesserSettings {
 	pub max_concurrent_elections: u16,
 }
 
@@ -133,15 +133,15 @@ pub struct BWSettings {
 
 	BlockProcessor<T>: Encode,
 ))]
-pub struct BWState<T: BWTypes> {
+pub struct BlockWitnesserState<T: BWTypes> {
 	pub elections: ElectionTracker<T::ChainBlockNumber>,
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
 	pub safemode_enabled: T::SafeModeEnabledHook,
 	pub block_processor: BlockProcessor<T>,
-	_phantom: sp_std::marker::PhantomData<T>,
+	pub _phantom: sp_std::marker::PhantomData<T>,
 }
 
-impl<T: BWTypes> Validate for BWState<T> {
+impl<T: BWTypes> Validate for BlockWitnesserState<T> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -149,7 +149,7 @@ impl<T: BWTypes> Validate for BWState<T> {
 	}
 }
 
-impl<T: BWTypes> Default for BWState<T>
+impl<T: BWTypes> Default for BlockWitnesserState<T>
 where
 	T::ElectionPropertiesHook: Default,
 	T::SafeModeEnabledHook: Default,
@@ -177,9 +177,9 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 		>,
 		ChainProgress<T::ChainBlockNumber>,
 	>;
-	type Settings = BWSettings;
+	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
-	type State = BWState<T>;
+	type State = BlockWitnesserState<T>;
 
 	fn input_index(s: &mut Self::State) -> IndexOf<Self::Input> {
 		s.elections
@@ -194,14 +194,14 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 		// log::warn!("BW: input {i:?}");
 		match i {
 			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
-				s.elections.highest_election = range.start().saturating_backward(1);
+				s.elections.next_election = *range.start();
 				s.elections.schedule_range(range.clone());
 				s.block_processor
 					.process_block_data(ChainProgressInner::Progress(*range.start()), None);
 			},
 
 			SMInput::Context(ChainProgress::Range(range)) => {
-				if *range.start() <= s.elections.highest_witnessed {
+				if *range.start() < s.elections.next_witnessed {
 					//Reorg
 					s.block_processor
 						.process_block_data(ChainProgressInner::Reorg(range.clone()), None);
@@ -218,7 +218,7 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 				s.elections.mark_election_done(blockdata.0 .0);
 				log::info!("got block data: {:?}", blockdata.1);
 				s.block_processor.process_block_data(
-					ChainProgressInner::Progress(s.elections.highest_witnessed),
+					ChainProgressInner::Progress(s.elections.next_witnessed.saturating_backward(1)),
 					Some((blockdata.0 .0, blockdata.1.data)),
 				);
 			},
@@ -278,17 +278,17 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 
 		// ensure that as long as we are in safemode, `highest_priority` can increase only once
 		asserts! {
-			let could_increase = |s: &Self::State| s.elections.highest_election > s.elections.highest_priority;
+			let could_increase = |s: &Self::State| s.elections.next_election > s.elections.next_priority_election;
 			let is_first_consensus = matches!(input,Context(FirstConsensus(..)));
-			let is_reorg = matches!(input, Context(Range(range)) if *range.start() <= before.elections.highest_election);
-			let scheduled = |s: &Self::State| T::ChainBlockNumber::steps_between(&s.elections.highest_election,&s.elections.highest_priority).0 ;
+			let is_reorg = matches!(input, Context(Range(range)) if *range.start() <= before.elections.next_election);
+			let scheduled = |s: &Self::State| T::ChainBlockNumber::steps_between(&s.elections.next_election,&s.elections.next_priority_election).0 ;
 			let outstanding = |s: &Self::State| scheduled(s) + s.elections.ongoing.len();
 
 			"an increase of `highest_priority` can only happen if `could_increase` holds before"
-			in (before.elections.highest_priority < after.elections.highest_priority).implies(could_increase(before));
+			in (before.elections.next_priority_election < after.elections.next_priority_election).implies(could_increase(before));
 
 			"if safemode is enabled, if an increase happens, afterwards no increase can happen"
-			in (before.elections.highest_priority < after.elections.highest_priority && safemode_enabled).implies(!could_increase(after));
+			in (before.elections.next_priority_election < after.elections.next_priority_election && safemode_enabled).implies(!could_increase(after));
 
 			"if no increase can happen, then as long as we have safemode, it can't happen in the future as well"
 			in (!could_increase(before) && safemode_enabled && !is_first_consensus).implies(!could_increase(after));
@@ -305,14 +305,13 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 
 		match input {
 			Vote(MultiIndexAndValue((height, _, _), _)) => {
-				let highest_election = if safemode_enabled {
-					before.elections.highest_priority
+				let next_election = if safemode_enabled {
+					before.elections.next_priority_election
 				} else {
-					before.elections.highest_witnessed
+					before.elections.next_witnessed
 				};
 
-				let new_elections = (before.elections.highest_election.saturating_forward(1)..=
-					highest_election)
+				let new_elections = (before.elections.next_election..next_election)
 					.take(
 						(settings.max_concurrent_elections as usize + 1)
 							.saturating_sub(before.elections.ongoing.len()),
@@ -334,21 +333,24 @@ impl<T: BWTypes> StateMachine for BWStateMachine<T> {
 			Context(Range(range) | FirstConsensus(range)) => {
 				// we always track the highest seen block
 				assert_eq!(
-					after.elections.highest_witnessed,
-					std::cmp::max(*range.end(), before.elections.highest_witnessed),
+					after.elections.next_witnessed,
+					std::cmp::max(
+						range.end().saturating_forward(1),
+						before.elections.next_witnessed
+					),
 					"the highest seen block should always be tracked"
 				);
 
 				// if the input is `FirstConsensus`, we use the beginning of the range
 				// as the first block we ought to emit an election for.
-				let before_highest_election = if let Context(FirstConsensus(_)) = input {
-					range.start().saturating_backward(1)
+				let before_next_election = if let Context(FirstConsensus(_)) = input {
+					*range.start()
 				} else {
-					before.elections.highest_election
+					before.elections.next_election
 				};
 
 				// if !safemode_enabled {
-				if *range.start() <= before_highest_election {
+				if *range.start() < before_next_election {
 					assert!(
 							!before.elections.ongoing.values().contains(&after.elections.reorg_id),
 							"if there is a reorg, the new reorg_id must be different than the ids of the previously ongoing elections"
@@ -401,29 +403,29 @@ mod tests {
 			SafeModeEnabledHook = ConstantHook<HookTypeFor<T, SafeModeEnabledHook>>,
 			SafetyMargin = ConstantHook<HookTypeFor<T, SafetyMarginHook>>,
 		>,
-	>() -> impl Strategy<Value = BWState<T>>
+	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
 		T::ChainBlockNumber: Arbitrary,
 		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
 		T::BlockData: Default + Clone + Debug + Eq,
 	{
 		prop_do! {
-			let (highest_election, highest_witnessed,
-				 highest_priority, reorg_id,
+			let (next_election, next_witnessed,
+				 next_priority_election, reorg_id,
 				safemode_enabled) in (
-				 any::<T::ChainBlockNumber>(),
+				any::<T::ChainBlockNumber>(),
 				any::<T::ChainBlockNumber>(),
 				any::<T::ChainBlockNumber>(),
 				any::<u8>(),
 				any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else {SafeModeStatus::Disabled})
 			);
 
-			let ongoing in proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<u8>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height <= highest_election));
-			LazyJust::new(move || BWState {
+			let ongoing in proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<u8>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election));
+			LazyJust::new(move || BlockWitnesserState {
 				elections: ElectionTracker {
-					highest_election,
-					highest_witnessed,
-					highest_priority,
+					next_election,
+					next_witnessed,
+					next_priority_election,
 					ongoing: BTreeMap::from_iter(ongoing.clone()),
 					reorg_id
 				},
@@ -499,7 +501,7 @@ mod tests {
 			generate_state(),
 			prop_do! {
 				let max_concurrent_elections in 0..10u16;
-				return BWSettings { max_concurrent_elections }
+				return BlockWitnesserSettings { max_concurrent_elections }
 			},
 			generate_input::<u32>,
 		);
@@ -518,7 +520,7 @@ mod tests {
 			generate_state(),
 			prop_do! {
 				let max_concurrent_elections in 0..10u16;
-				return BWSettings { max_concurrent_elections }
+				return BlockWitnesserSettings { max_concurrent_elections }
 			},
 			generate_input::<BlockWitnessRange<TestChain>>,
 		);

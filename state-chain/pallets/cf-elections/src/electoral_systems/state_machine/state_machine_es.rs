@@ -161,7 +161,7 @@ where
 		}
 
 		// step for each election that reached consensus
-		log::debug!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
+		log::info!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
 		for election_identifier in &election_identifiers {
 			let election_access = ElectoralAccess::election_mut(*election_identifier);
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
@@ -172,8 +172,7 @@ where
 		}
 
 		// gather the input indices after all state transitions
-		let input_indices: Vec<_> =
-			Bounds::StateMachine::input_index(&mut state).into_iter().collect();
+		let input_indices: Vec<_> = Bounds::StateMachine::input_index(&mut state);
 		let mut open_elections = Vec::new();
 
 		// delete elections which are no longer in the input indices
