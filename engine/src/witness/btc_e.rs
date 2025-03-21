@@ -31,30 +31,28 @@ use state_chain_runtime::{
 };
 
 use crate::{
-	btc::{retry_rpc::BtcRetryRpcApi, rpc::BlockHeader},
+	btc::{cached_rpc::BtcCachingClient, rpc::BlockHeader},
 	elections::voter_api::{CompositeVoter, VoterApi},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
-	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
+	witness::btc::deposits::{
+		deposit_witnesses, egress_witnessing, map_script_addresses, vault_deposits,
+	},
 };
 use anyhow::Result;
-
 use sp_core::H256;
 use state_chain_runtime::chainflip::bitcoin_elections::{
 	BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinVaultDepositWitnessingES,
 };
 use std::sync::Arc;
 
-use crate::{
-	btc::retry_rpc::BtcRetryRpcClient,
-	witness::btc::deposits::{egress_witnessing, vault_deposits},
-};
+use crate::btc::rpc::BtcRpcApi;
 
 #[derive(Clone)]
 pub struct BitcoinDepositChannelWitnessingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -75,8 +73,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
 			tracing::info!("Checking block {:?}", block);
 
-			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
+			let block_hash = self.client.block_hash(block).await?;
 
 			let block = self.client.block(block_hash).await?;
 
@@ -93,7 +90,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 
 #[derive(Clone)]
 pub struct BitcoinVaultDepositWitnessingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -113,8 +110,7 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
 			tracing::info!("Checking block {:?}", block);
 
-			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
+			let block_hash = self.client.block_hash(block).await?;
 
 			let block = self.client.block(block_hash).await?;
 
@@ -129,7 +125,7 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 
 #[derive(Clone)]
 pub struct BitcoinBlockHeightTrackingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -160,15 +156,20 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 
 		let get_header = |index: BlockNumber| {
 			async move {
-				let header = self.client.block_header(index).await?;
+				let block_hash = self.client.block_hash(index).await?;
+				let header = self.client.block_header(block_hash).await?;
 				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.
 				header_from_btc_header(header)
 			}
 		};
 
-		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
-
+		let best_block_hash = self.client.best_block_hash().await?;
+		let best_block_header = self.client.block_header(best_block_hash).await?;
+		if best_block_hash != best_block_header.hash {
+			return Err(anyhow::anyhow!("best_block_hash do not match best header hash"))
+		}
+		let best_block_header = header_from_btc_header(best_block_header)?;
 		if best_block_header.block_height <= election_property {
 			tracing::info!("btc: no new blocks found since best block height is {} for witness_from={election_property}", best_block_header.block_height);
 			return Ok(None)
@@ -215,7 +216,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 
 #[derive(Clone)]
 pub struct BitcoinEgressWitnessingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -234,8 +235,7 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
 			tracing::info!("Checking block {:?}", block);
 
-			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
+			let block_hash = self.client.block_hash(block).await?;
 
 			let block = self.client.block(block_hash).await?;
 
@@ -256,7 +256,7 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 
 #[derive(Clone)]
 pub struct BitcoinFeeVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -266,17 +266,18 @@ impl VoterApi<BitcoinFeeTracking> for crate::witness::btc_e::BitcoinFeeVoter {
 		_settings: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinFeeTracking>>, anyhow::Error> {
-		if let Some(fee) = self.client.next_block_fee_rate().await {
+		if let Some(fee) = self.client.next_block_fee_rate().await? {
 			Ok(Some(fee))
 		} else {
-			Ok(None)
+			let hash = self.client.best_block_hash().await?;
+			Ok(Some(self.client.average_block_fee_rate(hash).await?))
 		}
 	}
 }
 
 #[derive(Clone)]
 pub struct BitcoinLivenessVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -286,13 +287,13 @@ impl VoterApi<BitcoinLiveness> for BitcoinLivenessVoter {
 		_settings: <BitcoinLiveness as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinLiveness as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinLiveness>>, anyhow::Error> {
-		Ok(Some(H256::from_slice(&self.client.block_hash(properties).await.to_byte_array())))
+		Ok(Some(H256::from_slice(&self.client.block_hash(properties).await?.to_byte_array())))
 	}
 }
 
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>
 where
@@ -317,8 +318,9 @@ where
 						BitcoinVaultDepositWitnessingVoter { client: client.clone() },
 						BitcoinEgressWitnessingVoter { client: client.clone() },
 						BitcoinFeeVoter { client: client.clone() },
-						BitcoinLivenessVoter { client },
+						BitcoinLivenessVoter { client: client.clone() },
 					)),
+					Some(client.cache),
 				)
 				.continuously_vote()
 				.await;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cf_utilities::task_scope::Scope;
 use chainflip_api::primitives::EpochIndex;
 use chainflip_engine::{
-	btc::retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
+	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcApi},
 	settings::NodeContainer,
 	state_chain_observer::client::{
 		stream_api::{StreamApi, UNFINALIZED},
