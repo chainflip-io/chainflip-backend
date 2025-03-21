@@ -61,6 +61,7 @@ pallet-cf-witnesser = { workspace = true, default-features = true }
 pallet-session = { workspace = true, default-features = true, features = [
     "historical",
 ] }
+pallet-cf-trading-strategy = { workspace = true, default-features = true }
 
 # Substrate dependencies
 codec = { workspace = true, default-features = true, features = ["derive"] }

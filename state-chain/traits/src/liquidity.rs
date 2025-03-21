@@ -166,6 +166,8 @@ pub trait PoolApi {
 		fee_hundredth_pips: u32,
 		initial_price: cf_primitives::Price,
 	) -> DispatchResult;
+
+	fn pool_exists(base_asset: Asset, quote_asset: Asset) -> bool;
 }
 
 pub trait SwappingApi {

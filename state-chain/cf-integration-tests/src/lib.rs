@@ -30,6 +30,7 @@ mod governance;
 mod new_epoch;
 mod solana;
 mod swapping;
+mod trading_strategy;
 mod witnessing;
 
 use cf_chains::{

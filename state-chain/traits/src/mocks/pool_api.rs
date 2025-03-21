@@ -171,6 +171,10 @@ impl PoolApi for MockPoolApi {
 	) -> DispatchResult {
 		unimplemented!()
 	}
+
+	fn pool_exists(_base_asset: Asset, _quote_asset: Asset) -> bool {
+		true
+	}
 }
 
 impl LpOrdersWeightsProvider for MockPoolApi {
