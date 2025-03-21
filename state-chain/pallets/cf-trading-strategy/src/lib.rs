@@ -30,8 +30,8 @@ mod tests;
 use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, IncreaseOrDecrease,
-	LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
+	IncreaseOrDecrease, LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -49,6 +49,8 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 // Note that strategies can only create one order per asset/side so we can just
 // have a fixed order id (at least until we develop more advanced strategies).
 const STRATEGY_ORDER_ID: OrderId = 0;
+
+impl_pallet_safe_mode!(PalletSafeMode; trading_strategies_enabled);
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum TradingStrategy {
@@ -110,6 +112,9 @@ pub mod pallet {
 
 		type PoolApi: PoolApi<AccountId = Self::AccountId>;
 
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 		type LpOrdersWeights: LpOrdersWeightsProvider;
@@ -154,8 +159,11 @@ pub mod pallet {
 		fn on_idle(_current_block: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
 
-			// TODO: use safe mode here checking if auto strategies are enabled
+			if !T::SafeMode::get().trading_strategies_enabled {
+				return weight_used
+			}
 
+			weight_used += T::DbWeight::get().reads(1);
 			let order_update_thresholds = LimitOrderUpdateThresholds::<T>::get();
 
 			weight_used += T::DbWeight::get().reads(1);
@@ -237,6 +245,8 @@ pub mod pallet {
 		InvalidAssetsForStrategy,
 		/// The liquidity provider has active strategies and cannot be deregistered.
 		LpHasActiveStrategies,
+		/// Strategies are disabled due to safe mode
+		TradingStrategiesDisabled,
 	}
 
 	#[pallet::call]
@@ -248,6 +258,11 @@ pub mod pallet {
 			strategy: TradingStrategy,
 			funding: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
+			ensure!(
+				T::SafeMode::get().trading_strategies_enabled,
+				Error::<T>::TradingStrategiesDisabled
+			);
+
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			for asset in strategy.supported_assets() {
@@ -304,6 +319,11 @@ pub mod pallet {
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::close_strategy())]
 		pub fn close_strategy(origin: OriginFor<T>, strategy_id: T::AccountId) -> DispatchResult {
+			ensure!(
+				T::SafeMode::get().trading_strategies_enabled,
+				Error::<T>::TradingStrategiesDisabled
+			);
+
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			let strategy =
@@ -338,6 +358,10 @@ pub mod pallet {
 			strategy_id: T::AccountId,
 			funding: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
+			ensure!(
+				T::SafeMode::get().trading_strategies_enabled,
+				Error::<T>::TradingStrategiesDisabled
+			);
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			let strategy =

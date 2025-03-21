@@ -1046,6 +1046,7 @@ impl pallet_cf_trading_strategy::Config for Runtime {
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
 	type LpOrdersWeights = LiquidityPools;
 	type BalanceApi = AssetBalances;
+	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type LpRegistrationApi = LiquidityProvider;
 }
