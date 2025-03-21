@@ -228,8 +228,7 @@ pub mod pallet {
 			// Clear the call counter on every block. Do it in on_initialize (instead of
 			// `on_finalize`) so it's inspectable.
 			let _ = CallCounter::<T>::clear(u32::MAX, None);
-			// TODO: benchmark.
-			Weight::default()
+			T::WeightInfo::on_initialize()
 		}
 	}
 
@@ -239,8 +238,7 @@ pub mod pallet {
 		///
 		/// Requires Governance.
 		#[pallet::call_index(0)]
-		// TODO: update benchmark
-		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
+		#[pallet::weight(T::WeightInfo::update_pallet_config())]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
 			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
