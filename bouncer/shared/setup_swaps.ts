@@ -86,6 +86,8 @@ export async function setupSwaps(logger: Logger): Promise<void> {
     depositLiquidity(logger, 'HubUsdt', 1000, false, '//LP_API'),
   ]);
 
+  await Promise.all([lpApiDeposits, lp1Deposits]);
+
   await Promise.all([
     rangeOrder(logger, 'Eth', deposits.get('Eth')! * 0.9999),
     rangeOrder(logger, 'Dot', deposits.get('Dot')! * 0.9999),

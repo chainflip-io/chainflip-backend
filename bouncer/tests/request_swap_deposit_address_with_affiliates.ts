@@ -20,6 +20,8 @@ function toEncodedAddress(chain: Chain, address: string) {
       return { Eth: hexToBytes(address) };
     case 'Polkadot':
       return { Dot: isHex(address) ? hexToBytes(address) : ss58.decode(address).data };
+    case 'Assethub':
+      return { Hub: isHex(address) ? hexToBytes(address) : ss58.decode(address).data };
     case 'Solana':
       return { Sol: isHex(address) ? hexToBytes(address) : base58.decode(address) };
     case 'Bitcoin':

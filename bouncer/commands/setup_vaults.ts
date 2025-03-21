@@ -32,7 +32,7 @@ import {
   DisposableApiPromise,
 } from '../shared/utils/substrate';
 
-async function createPolkadotVault(api: DisposableApiPromise) {
+async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
     vaultAddress: AddressOrPair;
     vaultExtrinsicIndex: number;
@@ -153,12 +153,12 @@ async function main(): Promise<void> {
 
   // Step 4
   logger.info('Requesting Polkadot Vault creation');
-  const { vaultAddress: dotVaultAddress } = await createPolkadotVault(polkadot);
-  const dotProxyAdded = observeEvent('proxy:ProxyAdded', { chain: 'polkadot' }).event;
+  const { vaultAddress: dotVaultAddress } = await createPolkadotVault(logger, polkadot);
+  const dotProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', { chain: 'polkadot' }).event;
 
   logger.info('Requesting Assethub Vault creation');
-  const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
-  const hubProxyAdded = observeEvent('proxy:ProxyAdded', { chain: 'assethub' }).event;
+  const { vaultAddress: hubVaultAddress } = await createPolkadotVault(logger, assethub);
+  const hubProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', { chain: 'assethub' }).event;
 
   // Step 5
   logger.info('Rotating Proxy and Funding Accounts on Polkadot and Assethub');

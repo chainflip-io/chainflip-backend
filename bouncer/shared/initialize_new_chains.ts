@@ -36,7 +36,7 @@ export async function initializeSolanaChain(logger: Logger) {
 
 export async function initializeAssethubChain(logger: Logger) {
   logger.info('Initializing Assethub');
-  const hubInitializationRequest = observeEvent('assethubVault:ChainInitialized').event;
+  const hubInitializationRequest = observeEvent(logger, 'assethubVault:ChainInitialized').event;
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.assethubVault.initializeChain());
   await hubInitializationRequest;
 }

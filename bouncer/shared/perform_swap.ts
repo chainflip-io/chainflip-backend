@@ -200,10 +200,8 @@ export async function performSwap(
   brokerCommissionBps?: number,
   swapContext?: SwapContext,
 ) {
-  const tag = swapTag ?? '';
-
   logger.trace(
-    `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
+    `The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
       messageMetadata
         ? messageMetadata.message.substring(0, 6) +
           '...' +
