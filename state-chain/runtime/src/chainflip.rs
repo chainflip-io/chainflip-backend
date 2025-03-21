@@ -83,13 +83,14 @@ use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
 	DcaParameters,
 };
+use cf_traits::CallInfoId;
 
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
-	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails,
+	KeyProvider, OnBroadcastReady, OnDeposit, PoolTouched, QualifyNode, RewardsDistribution,
+	RuntimeUpgrade, ScheduledEgressDetails, TransactionFeeScaler,
 };
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
@@ -1022,5 +1023,44 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 			ForeignChainAndAsset::Solana(asset) =>
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 		}
+	}
+}
+
+use sp_runtime::Saturating;
+
+pub struct CfTransactionFeeScaler;
+impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransactionFeeScaler {
+	fn call_info(call: &RuntimeCall, caller: &AccountId) -> Option<CallInfoId<AccountId>> {
+		match call {
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_limit_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_limit_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_range_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
+				base_asset,
+				..
+			}) => Some(CallInfoId::Pool(PoolTouched {
+				account: caller.clone(),
+				base_asset: *base_asset,
+			})),
+			_ => None,
+		}
+	}
+
+	fn scale_fee(
+		pre_scaled_fee: FlipBalance,
+		scale_factor: u16,
+		exp_base: FixedU64,
+	) -> FlipBalance {
+		let multiplier = exp_base.saturating_pow(scale_factor.into());
+		multiplier.saturating_mul_int(pre_scaled_fee)
 	}
 }

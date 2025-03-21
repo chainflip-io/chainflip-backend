@@ -1223,6 +1223,34 @@ pub trait MinimumDeposit {
 	fn get(asset: Asset) -> AssetAmount;
 }
 
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+pub struct PoolTouched<AccountId> {
+	pub account: AccountId,
+	pub base_asset: Asset,
+}
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+pub enum CallInfoId<AccountId> {
+	Pool(PoolTouched<AccountId>),
+}
+
+use frame_support::sp_runtime::FixedU64;
+pub trait TransactionFeeScaler<Call, AccountId, Balance> {
+	fn call_info(_call: &Call, _caller: &AccountId) -> Option<CallInfoId<AccountId>> {
+		None
+	}
+
+	fn scale_fee(pre_scaled_fee: Balance, _scale_factor: u16, _exp_base: FixedU64) -> Balance {
+		pre_scaled_fee
+	}
+}
+
+pub struct NoTransactionFeeScaling;
+impl<Call, AccountId, Balance> TransactionFeeScaler<Call, AccountId, Balance>
+	for NoTransactionFeeScaling
+{
+}
+
 // Used for exposing weights from the Pools pallet
 pub trait LpOrdersWeightsProvider {
 	fn update_limit_order_weight() -> Weight;
