@@ -504,6 +504,7 @@ pub mod pallet {
 		},
 		Refund {
 			asset: Asset,
+			reason: RefundReason,
 			refund_address: ForeignChainAddress,
 		},
 	}
@@ -530,6 +531,7 @@ pub mod pallet {
 		},
 		Refund {
 			egress_id: Option<EgressId>,
+			reason: RefundReason,
 			refund_success: bool,
 			amount: TargetChainAmount<T, I>,
 		},
@@ -1958,7 +1960,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 				DepositAction::Swap { swap_request_id }
 			},
-			ChannelAction::Refund { asset, refund_address } => {
+			ChannelAction::Refund { asset, refund_address, reason } => {
 				match (asset.try_into(), refund_address.try_into()) {
 					(Ok(asset), Ok(address)) => {
 						let egress_id =
@@ -1976,6 +1978,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							egress_id,
 							amount: amount_after_fees,
 							refund_success: egress_id.is_some(),
+							reason,
 						}
 					},
 					_ => {
@@ -1984,6 +1987,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							egress_id: None,
 							amount: amount_after_fees,
 							refund_success: false,
+							reason,
 						}
 					},
 				}
@@ -2638,11 +2642,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(reason) => {
 					Self::deposit_event(Event::<T, I>::ScheduleVaultSwapRefund {
 						block_height,
-						reason,
+						reason: reason.clone(),
 					});
 					(
 						ChannelAction::Refund {
 							asset: source_asset.into(),
+							reason: reason.clone(),
 							refund_address: refund_params
 								.refund_address
 								.into_foreign_chain_address(),

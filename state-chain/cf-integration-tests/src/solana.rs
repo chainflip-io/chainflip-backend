@@ -46,7 +46,8 @@ use pallet_cf_elections::{
 	AuthorityVoteOf, ElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{
-	DepositFailedReason, DepositWitness, FetchOrTransfer, VaultDepositWitness,
+	DepositAction, DepositFailedReason, DepositWitness, FetchOrTransfer, RefundReason,
+	VaultDepositWitness,
 };
 use pallet_cf_validator::RotationPhase;
 use sp_core::ConstU32;
@@ -483,8 +484,8 @@ fn solana_ccm_fails_with_invalid_input() {
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
 					Runtime,
 					SolanaInstance,
-				>::DepositFailed {
-					reason: DepositFailedReason::CcmInvalidMetadata,
+				>::DepositFinalised {
+					action: DepositAction::Refund { reason: RefundReason::CcmInvalidMetadata, .. },
 					..
 				}),
 			);
@@ -530,6 +531,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			Swapping::on_finalize(block_number);
 			SolanaIngressEgress::on_finalize(block_number);
 
+			// TODO: Figure out why this is not working and with what we have to replace it.
 			assert_has_matching_event!(
 				Runtime,
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<

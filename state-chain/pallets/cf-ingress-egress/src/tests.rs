@@ -38,6 +38,8 @@ use cf_chains::{
 	TransferAssetParams,
 };
 
+use crate::RefundReason;
+
 use cf_chains::eth::Address as EthereumAddress;
 
 use cf_primitives::{
@@ -2218,8 +2220,11 @@ fn failed_ccm_deposit_can_deposit_event() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(Event::DepositFailed {
-				reason: DepositFailedReason::CcmUnsupportedForTargetChain,
+			RuntimeEvent::IngressEgress(Event::DepositFinalised {
+				action: DepositAction::Refund {
+					reason: RefundReason::CcmUnsupportedForTargetChain,
+					..
+				},
 				..
 			})
 		);
@@ -2427,6 +2432,7 @@ fn gets_refunded_if_vault_transaction_was_aborted() {
 					egress_id: _,
 					refund_success: true,
 					amount: DEPOSIT_AMOUNT,
+					reason: _,
 				},
 				..
 			})
