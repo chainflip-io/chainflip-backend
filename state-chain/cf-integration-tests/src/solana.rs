@@ -24,17 +24,14 @@ use cf_chains::{
 	assets::{any::Asset, sol::Asset as SolAsset},
 	ccm_checker::{CcmValidityError, VersionedSolanaCcmAdditionalData},
 	sol::{
-		api::{
-			SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError, SolanaTransactionType,
-		},
+		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
-		SolAddress, SolAddressLookupTableAccount, SolCcmAccounts, SolCcmAddress, SolHash,
-		SolPubkey, SolanaCrypto,
+		SolAddress, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
-	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder, TransferAssetParams,
+	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -45,10 +42,8 @@ use frame_support::{
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
 use pallet_cf_elections::{
-	electoral_systems::composite::tuple_7_impls::CompositeElectionIdentifierExtra,
-	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
-	AuthorityVoteOf, ElectionIdentifier, ElectionIdentifierOf, UniqueMonotonicIdentifier,
-	MAXIMUM_VOTES_PER_EXTRINSIC,
+	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote},
+	AuthorityVoteOf, ElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{
 	DepositFailedReason, DepositWitness, FetchOrTransfer, VaultDepositWitness,

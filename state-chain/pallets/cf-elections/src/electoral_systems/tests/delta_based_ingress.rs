@@ -800,8 +800,8 @@ fn start_new_election_if_too_many_channels_in_current_election() {
 		assert_eq!(
 			TestContext::<SimpleDeltaBasedIngress>::identifiers(),
 			vec![
-				ElectionIdentifier::new(UniqueMonotonicIdentifier::from(0), 49),
-				ElectionIdentifier::new(UniqueMonotonicIdentifier::from(1), 0),
+				ElectionIdentifier::new(UniqueMonotonicIdentifier::from_u64(0), 49),
+				ElectionIdentifier::new(UniqueMonotonicIdentifier::from_u64(1), 0),
 			]
 		);
 	});

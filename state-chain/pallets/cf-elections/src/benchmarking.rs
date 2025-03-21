@@ -500,7 +500,7 @@ mod benchmarks {
 		(0..a).for_each(|i| {
 			SharedDataReferenceCount::<T, I>::insert(
 				SharedDataHash::of(&i),
-				UniqueMonotonicIdentifier::from(i as u64),
+				UniqueMonotonicIdentifier::from_u64(i as u64),
 				reference_details.clone(),
 			);
 		});
@@ -514,7 +514,7 @@ mod benchmarks {
 		(0..c).for_each(|i| {
 			ElectionBitmapComponents::<T, I>::with(
 				epoch,
-				UniqueMonotonicIdentifier::from(i as u64),
+				UniqueMonotonicIdentifier::from_u64(i as u64),
 				|_a| Ok(i),
 			)
 			.unwrap();
@@ -522,7 +522,7 @@ mod benchmarks {
 
 		(0..d).for_each(|i| {
 			IndividualComponents::<T, I>::insert(
-				UniqueMonotonicIdentifier::from(i as u64),
+				UniqueMonotonicIdentifier::from_u64(i as u64),
 				T::ValidatorId::from(validators[i as usize].clone()),
 				(
 					VotePropertiesOf::<T::ElectoralSystemRunner>::benchmark_value(),
@@ -533,7 +533,7 @@ mod benchmarks {
 
 		(0..e).for_each(|i| {
 			ElectionConsensusHistoryUpToDate::<T, I>::insert(
-				UniqueMonotonicIdentifier::from(i as u64),
+				UniqueMonotonicIdentifier::from_u64(i as u64),
 				epoch,
 			);
 		});
