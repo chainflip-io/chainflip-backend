@@ -50,7 +50,9 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 // have a fixed order id (at least until we develop more advanced strategies).
 const STRATEGY_ORDER_ID: OrderId = 0;
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, serde::Serialize, serde::Deserialize, PartialEq, Eq,
+)]
 pub enum TradingStrategy {
 	SellAndBuyAtTicks { sell_tick: Tick, buy_tick: Tick, base_asset: Asset },
 }
@@ -123,7 +125,7 @@ pub mod pallet {
 	// Stores all deployed strategies by the liquidity provider's id (owner) and
 	// the strategy id.
 	#[pallet::storage]
-	pub(super) type Strategies<T: Config> = StorageDoubleMap<
+	pub type Strategies<T: Config> = StorageDoubleMap<
 		_,
 		Identity,
 		T::AccountId,

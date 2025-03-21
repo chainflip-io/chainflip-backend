@@ -71,8 +71,8 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-		VaultSwapDetails,
+		SimulatedSwapInformation, TradingStrategyInfo, TransactionScreeningEvents, ValidatorInfo,
+		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -975,6 +975,13 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultAddresses>;
+
+	#[method(name = "get_trading_strategies")]
+	fn cf_get_trading_strategies(
+		&self,
+		lp: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<TradingStrategyInfo<NumberOrHex>>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1815,6 +1822,31 @@ where
 	) -> RpcResult<TransactionScreeningEvents> {
 		self.rpc_backend
 			.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
+	}
+
+	fn cf_get_trading_strategies(
+		&self,
+		lp: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<TradingStrategyInfo<NumberOrHex>>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			let strategies = api
+				.cf_get_trading_strategies(hash, lp)?
+				.into_iter()
+				.map(|info| TradingStrategyInfo {
+					lp_id: info.lp_id,
+					strategy_id: info.strategy_id,
+					strategy: info.strategy,
+					balance: info
+						.balance
+						.into_iter()
+						.map(|(asset, amount)| (asset, amount.into()))
+						.collect(),
+				})
+				.collect();
+
+			RpcResult::Ok(strategies)
+		})
 	}
 }
 
