@@ -186,7 +186,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./shared/force_sol_nonces.ts
+          ./commands/force_sol_nonces.ts
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
