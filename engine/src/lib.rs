@@ -290,7 +290,7 @@ async fn run_main(
 					BtcRetryRpcClient::new(scope, settings.btc.nodes.clone(), expected_btc_network)
 						.await?
 				};
-				BtcCachingClient::new(scope, btc_client).await
+				BtcCachingClient::new(scope, btc_client)
 			};
 			let dot_client = {
 				let expected_dot_genesis_hash = PolkadotHash::from(

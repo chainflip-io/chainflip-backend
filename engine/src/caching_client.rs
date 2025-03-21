@@ -20,7 +20,7 @@ pub struct CachingClient<Key, Client> {
 impl<Key: Eq + Hash + Clone + Send + 'static, Client: Clone + Send + Sync + 'static>
 	CachingClient<Key, Client>
 {
-	pub async fn new(scope: &Scope<'_, anyhow::Error>, client: Client) -> Self {
+	pub fn new(scope: &Scope<'_, anyhow::Error>, client: Client) -> Self {
 		let (sender_request, mut receiver_request) =
 			mpsc::unbounded_channel::<(Key, FutureAnyGenerator<Client>, oneshot::Sender<ArcAny>)>();
 		let (cache_invalidation_sender, mut cache_invalidation_receiver) = mpsc::channel::<()>(1);
@@ -90,5 +90,74 @@ impl<Key: Eq + Hash + Clone + Send + 'static, Client: Clone + Send + Sync + 'sta
 		self.sender.send((key, future_any_fn, tx)).unwrap();
 		let result = timeout(Duration::from_secs(30), rx).await.map_err(anyhow::Error::new)??;
 		Ok(result.downcast_ref::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error.").clone())
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use anyhow::Error;
+	use futures_util::FutureExt;
+	use rand::random;
+	use std::time::Duration;
+	// use tokio::time::sleep;
+	use crate::caching_client::CachingClient;
+	use cf_utilities::task_scope::{task_scope, Scope};
+
+	#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+	enum Key {
+		KeyA,
+	}
+
+	trait Rpc {
+		async fn a(&self) -> anyhow::Result<u32>;
+		// async fn b(&self, value: u32) -> anyhow::Result<u32>;
+	}
+	#[derive(Clone)]
+	struct Client {}
+
+	impl Rpc for Client {
+		async fn a(&self) -> anyhow::Result<u32> {
+			// sleep(Duration::new(1, 0)).await;
+			Ok(random::<u32>())
+		}
+
+		// async fn b(&self, value: u32) -> anyhow::Result<u32> {
+		// 	sleep(Duration::new(1, 0)).await;
+		// 	Ok(value)
+		// }
+	}
+	#[tokio::test]
+	async fn internal_client_called_once() {
+		task_scope(|scope: &Scope<Error>| {
+			async {
+				let client = Client {};
+				println!("Starting ...");
+				let caching_client = CachingClient::<Key, Client>::new(scope, client);
+				println!("Finishing ...");
+
+				println!("Starting ...");
+
+				let result = caching_client.get(
+					Box::pin(move |client| {
+						#[allow(clippy::redundant_async_block)]
+						Box::pin(async move { client.a().await })
+					}),
+					Key::KeyA
+				).await.unwrap();
+				let result2 = caching_client.get(
+					Box::pin(move |client| {
+						#[allow(clippy::redundant_async_block)]
+						Box::pin(async move { client.a().await })
+					}),
+					Key::KeyA
+				).await.unwrap();
+				println!("result {result:#?}");
+				println!("result2 {result2:#?}");
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
 	}
 }
