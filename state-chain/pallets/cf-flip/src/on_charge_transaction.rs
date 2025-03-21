@@ -20,11 +20,15 @@
 //! 'good' behaviour and (b) to ensure that only funded actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
-use cf_traits::WaivedFees;
+use cf_traits::{PoolTouched, TransactionFeeScaler, WaivedFees};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
-	sp_runtime::traits::{DispatchInfoOf, Zero},
+	sp_runtime::{
+		traits::{DispatchInfoOf, Get, Zero},
+		RuntimeDebug,
+	},
 	traits::Imbalance,
+	DefaultNoBound,
 };
 use frame_system::Config;
 use pallet_transaction_payment::{Config as TxConfig, OnChargeTransaction};
@@ -37,26 +41,39 @@ use sp_std::marker::PhantomData;
 /// Any excess fees are refunded to the caller.
 pub struct FlipTransactionPayment<T>(PhantomData<T>);
 
+#[derive(DefaultNoBound, RuntimeDebug)]
+pub struct TransactionPaymentLiquidityInfo<T: crate::Config + FlipConfig> {
+	pub imbalance: Option<Surplus<T>>,
+	pub pool_touched: Option<PoolTouched<T::AccountId>>,
+}
+
 impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransactionPayment<T> {
 	type Balance = <T as FlipConfig>::Balance;
-	type LiquidityInfo = Option<Surplus<T>>;
+	type LiquidityInfo = TransactionPaymentLiquidityInfo<T>;
 
 	fn withdraw_fee(
 		who: &T::AccountId,
 		call: &<T as frame_system::Config>::RuntimeCall,
 		_dispatch_info: &DispatchInfoOf<<T as frame_system::Config>::RuntimeCall>,
-		fee: Self::Balance,
+		mut fee: Self::Balance,
 		_tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, frame_support::unsigned::TransactionValidityError> {
 		if T::WaivedFees::should_waive_fees(call, who) {
-			return Ok(None)
+			return Ok(Default::default())
 		}
+
+		let pool_touched = T::TransactionFeeScaler::call_info(call, who);
+
+		if pool_touched.is_some() {
+			fee = sp_std::cmp::max(fee, T::SpamPreventionUpfrontFee::get());
+		};
+
 		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
-			if surplus.peek().is_zero() {
-				Ok(None)
+			Ok(if surplus.peek().is_zero() {
+				Default::default()
 			} else {
-				Ok(Some(surplus))
-			}
+				TransactionPaymentLiquidityInfo { imbalance: Some(surplus), pool_touched }
+			})
 		} else {
 			Err(InvalidTransaction::Payment.into())
 		}
@@ -74,14 +91,27 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		_tip: Self::Balance,
 		escrow: Self::LiquidityInfo,
 	) -> Result<(), frame_support::unsigned::TransactionValidityError> {
-		if let Some(surplus) = escrow {
+		if let Some(surplus) = escrow.imbalance {
 			// It's possible the account was deleted during extrinsic execution. If this is the
 			// case, we shouldn't refund anything, we can just burn all fees in escrow.
-			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
+			let pre_scaled_fee_to_burn = if frame_system::Pallet::<T>::account_exists(who) {
 				corrected_fee
 			} else {
 				surplus.peek()
 			};
+
+			let to_burn = T::TransactionFeeScaler::scale_fee(
+				pre_scaled_fee_to_burn,
+				if let Some(pool_touched) = escrow.pool_touched {
+					crate::CallCounter::<T>::mutate(&pool_touched, |count| {
+						let before_count = *count;
+						*count += 1;
+						before_count
+					})
+				} else {
+					0u32
+				},
+			);
 
 			// If there is a difference this will be reconciled when the result goes out of scope.
 			let _imbalance = surplus.offset(Flip::<T>::burn(to_burn));

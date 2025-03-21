@@ -17,11 +17,11 @@
 use crate as pallet_cf_funding;
 use crate::PalletSafeMode;
 use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
-use cf_primitives::FlipBalance;
+use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
 	mocks::{broadcaster::MockBroadcaster, time_source},
-	AccountRoleRegistry, RedemptionCheck, WaivedFees,
+	AccountRoleRegistry, NoTransactionFeeScaling, RedemptionCheck, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types};
@@ -65,6 +65,8 @@ impl pallet_cf_flip::Config for Test {
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
+	type TransactionFeeScaler = NoTransactionFeeScaling;
+	type SpamPreventionUpfrontFee = sp_core::ConstU128<FLIPPERINOS_PER_FLIP>;
 }
 
 cf_traits::impl_mock_on_account_funded!(AccountId, u128);
