@@ -173,7 +173,7 @@ jobs:
           ls -l /usr/lib
           touch ./localnet/.setup_complete
           # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana programs version. Remove after 1.9 is released.
-          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[0-9.]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
+          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[^ ]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
           ./localnet/manage.sh
           git reset --hard
 
