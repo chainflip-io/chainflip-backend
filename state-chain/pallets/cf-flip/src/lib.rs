@@ -77,7 +77,7 @@ pub enum PalletConfigUpdate {
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 pub struct ExponentBufferFeeConfig {
 	// Number of calls before fee scaling is applied.
-	pub buffer: u32,
+	pub buffer: u16,
 	// Base for the fee scaling exponent.
 	pub exp_base: FixedU64,
 }
@@ -181,7 +181,7 @@ pub mod pallet {
 	// This is used to determine the fees the LP needs to pay.
 	#[pallet::storage]
 	pub type CallCounter<T: Config> =
-		StorageMap<_, Identity, PoolTouched<T::AccountId>, u32, ValueQuery>;
+		StorageMap<_, Identity, PoolTouched<T::AccountId>, u16, ValueQuery>;
 
 	#[pallet::storage]
 	pub type FeeScalingRateConfig<T: Config> = StorageValue<_, ExponentBufferFeeConfig, ValueQuery>;
