@@ -1138,54 +1138,62 @@ pub mod pallet {
 
 			if T::AllowTransactionReports::get() {
 				let mut deferred_rejections = Vec::new();
-				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
-					if let Some(Ok(refund_address)) =
-						tx.refund_address.clone().map(TryInto::try_into)
-					{
-						if tx.should_fetch {
-							let maybe_fetch_id =
-								tx.deposit_address.as_ref().and_then(|deposit_address| {
-									DepositChannelLookup::<T, I>::mutate(
-										deposit_address,
-										|details| {
-											details.as_mut().and_then(|details| {
-												let can_fetch =
-													details.deposit_channel.state.can_fetch();
 
-												if can_fetch {
-													let fetch_id =
-														details.deposit_channel.fetch_id();
-													details
-														.deposit_channel
-														.state
-														.on_fetch_scheduled();
-													Some(fetch_id)
-												} else {
-													None
-												}
-											})
-										},
-									)
+				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
+					let refund_address = match tx.refund_address.clone().map(TryInto::try_into) {
+						Some(Ok(address)) => address,
+						_ => {
+							FailedRejections::<T, I>::append(tx.clone());
+							continue;
+						},
+					};
+
+					match tx.deposit_address {
+						Some(ref deposit_address) => {
+							if !DepositChannelLookup::<T, I>::contains_key(&deposit_address) {
+								Self::try_broadcast_rejection_refund_or_store_tx_details(
+									tx.clone(),
+									refund_address,
+									None,
+								);
+								continue;
+							}
+
+							let maybe_fetch_id =
+								DepositChannelLookup::<T, I>::mutate(deposit_address, |details| {
+									details.as_mut().and_then(|details| {
+										let can_fetch = details.deposit_channel.state.can_fetch();
+
+										if can_fetch {
+											let fetch_id = details.deposit_channel.fetch_id();
+											details.deposit_channel.state.on_fetch_scheduled();
+											Some(fetch_id)
+										} else {
+											None
+										}
+									})
 								});
 
-							match maybe_fetch_id {
-								Some(fetch_id) =>
-									Self::try_broadcast_rejection_refund_or_store_tx_details(
-										tx,
-										refund_address,
-										Some(fetch_id),
-									),
-								None => deferred_rejections.push(tx),
+							if let Some(fetch_id) = maybe_fetch_id {
+								Self::try_broadcast_rejection_refund_or_store_tx_details(
+									tx,
+									refund_address,
+									Some(fetch_id),
+								);
+							} else {
+								deferred_rejections.push(tx);
 							}
-						} else {
+						},
+						None => {
 							Self::try_broadcast_rejection_refund_or_store_tx_details(
 								tx,
 								refund_address,
 								None,
 							);
-						}
+						},
 					}
 				}
+
 				ScheduledTransactionsForRejection::<T, I>::put(deferred_rejections);
 			}
 		}
