@@ -59,10 +59,10 @@ fn basic_usage() {
             credit_account(&DORIS, BASE_ASSET, AMOUNT);
             const STRATEGY: TradingStrategy =
                 TradingStrategy::SellAndBuyAtTicks { sell_tick: 1, buy_tick: -1, base_asset: BASE_ASSET };
-            assert_ok!(TradingStrategyPallet::deploy_trading_strategy(
+            assert_ok!(TradingStrategyPallet::deploy_strategy(
                 RuntimeOrigin::signed(DORIS),
                 STRATEGY.clone(),
-                BTreeMap::from_iter(vec![(BASE_ASSET, AMOUNT)]),
+                BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
             ));
 
             // Get the strategy ID from the emitted event
@@ -77,7 +77,7 @@ fn basic_usage() {
             assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
                 RuntimeOrigin::signed(DORIS),
                 strategy_id.clone(),
-                BTreeMap::from_iter(vec![(BASE_ASSET, AMOUNT)]),
+                BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
             ));
 
             // Make sure all of our funds are in the strategy

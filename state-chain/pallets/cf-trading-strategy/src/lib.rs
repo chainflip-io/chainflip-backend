@@ -28,7 +28,6 @@ mod mock;
 mod tests;
 
 use cf_primitives::{Asset, AssetAmount, Tick, STABLE_ASSET};
-use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, IncreaseOrDecrease,
 	LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
@@ -39,7 +38,11 @@ use frame_support::{
 	traits::HandleLifetime,
 };
 use frame_system::pallet_prelude::*;
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec,
+	vec::Vec,
+};
 use weights::WeightInfo;
 
 pub use pallet::*;
@@ -70,7 +73,7 @@ impl TradingStrategy {
 			Err(Error::<T>::InvalidAssetsForStrategy)
 		}
 	}
-	pub fn supported_assets(&self) -> Vec<Asset> {
+	pub fn supported_assets(&self) -> BTreeSet<Asset> {
 		self.supported_asset_pairs().into_iter().flat_map(|(a, b)| vec![a, b]).collect()
 	}
 	pub fn supported_asset_pairs(&self) -> Vec<(Asset, Asset)> {
@@ -189,7 +192,8 @@ pub mod pallet {
 							if balance >= threshold {
 								weight_used += limit_order_update_weight;
 
-								if let Err(e) = T::PoolApi::update_limit_order(
+								// We expect an error here if the pool does not exist
+								let _error = T::PoolApi::update_limit_order(
 									&strategy_id,
 									base_asset,
 									STABLE_ASSET,
@@ -197,11 +201,7 @@ pub mod pallet {
 									STRATEGY_ORDER_ID,
 									Some(tick),
 									IncreaseOrDecrease::Increase(balance),
-								) {
-									// Should be impossible to get an error since we just
-									// checked the balance above
-									log_or_panic!("Failed to update limit order for strategy {strategy_id:?}, {e:?}");
-								}
+								);
 							}
 						}
 					},

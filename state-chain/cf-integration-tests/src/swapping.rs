@@ -197,63 +197,63 @@ pub fn do_eth_swap(
 	// Check for swap events
 	if from_asset == STABLE_ASSET || to_asset == STABLE_ASSET {
 		let (.., (input_amount, output_amount), egress_id) = assert_events_match!(
-		Runtime,
-		RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetSwapped {
-				from,
-				to,
-				..
-			},
-		) if from == from_asset && to == to_asset => (),
-		RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::SwapExecuted {
-				swap_request_id: executed_swap_request_id,
-				input_amount,
-				output_amount,
-				..
-			},
-		) if executed_swap_request_id == swap_request_id => (input_amount, output_amount),
-		RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::SwapEgressScheduled {
-				egress_id: egress_id @ (ForeignChain::Ethereum, _),
-				asset,
-				..
-			},
-		) if asset == to_asset => egress_id
+			Runtime,
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from,
+					to,
+					..
+				},
+			) if from == from_asset && to == to_asset => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_request_id: executed_swap_request_id,
+					input_amount,
+					output_amount,
+					..
+				},
+			) if executed_swap_request_id == swap_request_id => (input_amount, output_amount),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapEgressScheduled {
+					egress_id: egress_id @ (ForeignChain::Ethereum, _),
+					asset,
+					..
+				},
+			) if asset == to_asset => egress_id
 		);
 		(egress_id, input_amount, output_amount)
 	} else {
 		let (.., (input_amount, output_amount), egress_id) = assert_events_match!(
-		Runtime,
-		RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetSwapped {
-				from,
-				to: STABLE_ASSET,
-				..
-			},
-		) if from == from_asset  => (),
-		RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetSwapped {
-				from: STABLE_ASSET,
-				to,
-				..
-			},
-		) if to == to_asset => (),
-		RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::SwapExecuted {
-				swap_request_id: executed_swap_request_id,
-				input_amount,
-				output_amount,
-				..
-			},
-		) if executed_swap_request_id == swap_request_id => (input_amount, output_amount),
-		RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::SwapEgressScheduled {
-				egress_id: egress_id @ (ForeignChain::Ethereum, _),
-				asset,
-				..
-			},
-		) if asset == to_asset  => egress_id
+			Runtime,
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from,
+					to: STABLE_ASSET,
+					..
+				},
+			) if from == from_asset => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: STABLE_ASSET,
+					to,
+					..
+				},
+			) if to == to_asset => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_request_id: executed_swap_request_id,
+					input_amount,
+					output_amount,
+					..
+				},
+			) if executed_swap_request_id == swap_request_id => (input_amount, output_amount),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapEgressScheduled {
+					egress_id: egress_id @ (ForeignChain::Ethereum, _),
+					asset,
+					..
+				},
+			) if asset == to_asset => egress_id
 		);
 		(egress_id, input_amount, output_amount)
 	}
