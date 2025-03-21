@@ -2,27 +2,27 @@ use cf_chains::witness_period::BlockZero;
 use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 use super::{
-	primitives::validate_vote_and_height, state_machine::InputHeaders,
-	BlockHeightTrackingProperties, BlockHeightTrackingTypes,
+	primitives::validate_vote_and_height, state_machine::InputHeaders, HWTypes,
+	HeightWitnesserProperties,
 };
 use crate::electoral_systems::state_machine::consensus::{
 	ConsensusMechanism, MultipleVotes, StagedConsensus, SupermajorityConsensus, Threshold,
 };
 
-pub struct BlockHeightTrackingConsensus<T: BlockHeightTrackingTypes> {
+pub struct BlockHeightTrackingConsensus<T: HWTypes> {
 	votes: Vec<InputHeaders<T>>,
 }
 
-impl<T: BlockHeightTrackingTypes> Default for BlockHeightTrackingConsensus<T> {
+impl<T: HWTypes> Default for BlockHeightTrackingConsensus<T> {
 	fn default() -> Self {
 		Self { votes: Default::default() }
 	}
 }
 
-impl<T: BlockHeightTrackingTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
+impl<T: HWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 	type Vote = InputHeaders<T>;
 	type Result = InputHeaders<T>;
-	type Settings = (Threshold, BlockHeightTrackingProperties<T::ChainBlockNumber>);
+	type Settings = (Threshold, HeightWitnesserProperties<T>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
 		self.votes.push(vote);

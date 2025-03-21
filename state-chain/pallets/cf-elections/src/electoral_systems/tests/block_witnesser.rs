@@ -27,15 +27,15 @@ use crate::{
 		block_witnesser::{
 			primitives::ElectionTracker,
 			state_machine::{
-				BWProcessorTypes, ElectionPropertiesHook, ExecuteHook, HookTypeFor, RulesHook,
-				SafeModeEnabledHook, SafetyMarginHook,
+				BWElectionProperties, BWProcessorTypes, ElectionPropertiesHook, ExecuteHook,
+				HookTypeFor, RulesHook, SafeModeEnabledHook, SafetyMarginHook,
 			},
 			*,
 		},
 		mocks::ElectoralSystemState,
 		state_machine::{
-			core::{hook_test_utils::MockHook, ConstantIndex, Hook, TypesFor},
-			state_machine_es::{StateMachineES, StateMachineESInstance},
+			core::{hook_test_utils::MockHook, Hook, TypesFor},
+			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
 	vote_storage,
@@ -71,8 +71,8 @@ impl BWProcessorTypes for Types {
 	type ChainBlockNumber = u64;
 	type BlockData = Vec<u8>;
 	type Event = ();
-	type Rules = MockHook<"rules", HookTypeFor<Self, RulesHook>>;
-	type Execute = MockHook<"execute", HookTypeFor<Self, ExecuteHook>>;
+	type Rules = MockHook<HookTypeFor<Self, RulesHook>, "rules">;
+	type Execute = MockHook<HookTypeFor<Self, ExecuteHook>, "execute">;
 	type SafetyMargin = Self;
 }
 
@@ -86,7 +86,7 @@ impl Hook<HookTypeFor<Types, SafetyMarginHook>> for Types {
 impl BWTypes for Types {
 	type ElectionProperties = ElectionProperties;
 	type ElectionPropertiesHook =
-		MockHook<"generate_election_properties", HookTypeFor<Self, ElectionPropertiesHook>>;
+		MockHook<HookTypeFor<Self, ElectionPropertiesHook>, "generate_election_properties">;
 	type SafeModeEnabledHook = Self;
 }
 
@@ -99,34 +99,27 @@ impl ElectoralSystemTypes for Types {
 	type ElectoralUnsynchronisedSettings = BlockWitnesserSettings;
 	type ElectoralSettings = ();
 	type ElectionIdentifierExtra = ();
-	type ElectionProperties = (u64, ElectionProperties, u8);
+	type ElectionProperties = BWElectionProperties<Self>;
 	type ElectionState = ();
-	type VoteStorage =
-		vote_storage::bitmap::Bitmap<ConstantIndex<(u64, ElectionProperties, u8), BlockData>>;
-	type Consensus = ConstantIndex<(u64, ElectionProperties, u8), BlockData>;
+	type VoteStorage = vote_storage::bitmap::Bitmap<BlockData>;
+	type Consensus = BlockData;
 	type OnFinalizeContext = Vec<ChainProgress<u64>>;
 	type OnFinalizeReturn = Vec<()>;
 }
 
 /// Associating the state machine and consensus mechanism to the struct
-impl StateMachineES for Types {
+impl StatemachineElectoralSystemTypes for Types {
 	// both context and return have to be vectors, these are the item types
 	type OnFinalizeContextItem = ChainProgress<u64>;
 	type OnFinalizeReturnItem = ();
 
-	// restating types since we have to prove that they have the correct bounds
-	type Consensus2 = ConstantIndex<(u64, ElectionProperties, u8), BlockData>;
-	type Vote2 = ConstantIndex<(u64, ElectionProperties, u8), BlockData>;
-	type VoteStorage2 =
-		vote_storage::bitmap::Bitmap<ConstantIndex<(u64, ElectionProperties, u8), BlockData>>;
-
 	// the actual state machine and consensus mechanisms of this ES
-	type StateMachine = BWStateMachine<Self>;
-	type ConsensusMechanism = BWConsensus<BlockData, u64, ElectionProperties>;
+	type Statemachine = BWStateMachine<Self>;
+	type ConsensusMechanism = BWConsensus<Self>;
 }
 
 /// Generating the state machine-based electoral system
-type SimpleBlockWitnesser = StateMachineESInstance<Types>;
+type SimpleBlockWitnesser = StatemachineElectoralSystem<Types>;
 
 register_checks! {
 	SimpleBlockWitnesser {
@@ -139,7 +132,7 @@ register_checks! {
 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
 		},
 		rules_hook_called_n_times_for_age_zero(pre, post, n: usize) {
-			let count = |state: &ElectoralSystemState<StateMachineESInstance<TypesFor<MockBlockProcessorDefinition>>>| {
+			let count = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
 				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(_, age, _event)| age.contains(&0)).count()
 			};
 			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);
@@ -167,20 +160,16 @@ fn generate_votes(
 ) -> ConsensusVotes<SimpleBlockWitnesser> {
 	println!("Generate votes called");
 
-	let to_vote = |data| ConstantIndex::new(data);
-
+	let to_vote = |data| data;
 	let incorrect_data = vec![1u8, 2, 3];
 	assert_ne!(incorrect_data, correct_data);
 	let votes = ConsensusVotes {
 		votes: correct_voters
 			.clone()
 			.into_iter()
-			.map(|v| ConsensusVote {
-				vote: Some(((), to_vote(correct_data.clone()))),
-				validator_id: v,
-			})
+			.map(|v| ConsensusVote { vote: Some(((), correct_data.clone())), validator_id: v })
 			.chain(incorrect_voters.clone().into_iter().map(|v| ConsensusVote {
-				vote: Some(((), to_vote(incorrect_data.clone()))),
+				vote: Some(((), incorrect_data.clone())),
 				validator_id: v,
 			}))
 			.chain(
@@ -211,7 +200,7 @@ fn create_votes_expectation(
 			Default::default(),
 			consensus.clone(),
 		),
-		Some(ConstantIndex::new(consensus)),
+		Some(consensus),
 	)
 }
 
@@ -238,7 +227,7 @@ fn no_block_data_success() {
 		)
 		.expect_consensus(
 			generate_votes((0..20).collect(), Default::default(), Default::default(), vec![]),
-			Some(ConstantIndex::new(vec![])),
+			Some(vec![]),
 		)
 		.test_on_finalize(
 			&vec![ChainProgress::None],
@@ -288,7 +277,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 		.expect_consensus_multi(vec![
 			(
 				generate_votes((0..20).collect(), Default::default(), Default::default(), vec![]),
-				Some(ConstantIndex::new(vec![])),
+				Some(vec![]),
 			),
 			(
 				generate_votes(
@@ -297,7 +286,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 					Default::default(),
 					vec![1, 3, 4],
 				),
-				Some(ConstantIndex::new(vec![1, 3, 4])),
+				Some(vec![1, 3, 4]),
 			),
 			// no progress on external chain but on finalize called again
 		])
@@ -604,7 +593,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 					Default::default(),
 					vec![1, 3, 4],
 				),
-				Some(ConstantIndex::new(vec![1, 3, 4])),
+				Some(vec![1, 3, 4]),
 			),
 		])
 		// no progress on external chain but on finalize called again
@@ -644,7 +633,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 				Default::default(),
 				vec![9, 1, 2],
 			),
-			Some(ConstantIndex::new(vec![9, 1, 2])),
+			Some(vec![9, 1, 2]),
 		)])
 		.test_on_finalize(
 			&vec![ChainProgress::Range(range_n(
@@ -683,7 +672,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 					Default::default(),
 					vec![81, 1, 93],
 				),
-				Some(ConstantIndex::new(vec![81, 1, 93])),
+				Some(vec![81, 1, 93]),
 			),
 			(
 				generate_votes(
@@ -692,7 +681,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 					Default::default(),
 					vec![69, 69, 69],
 				),
-				Some(ConstantIndex::new(vec![69, 69, 69])),
+				Some(vec![69, 69, 69]),
 			),
 		])
 		// external chain doesn't move forward

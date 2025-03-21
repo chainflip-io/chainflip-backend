@@ -2,10 +2,7 @@ use core::{iter::Step, ops::Range};
 
 use crate::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	state_machine::{
-		core::{Hook, IndexOf, Indexed, Validate},
-		state_machine::StateMachine,
-	},
+	state_machine::core::{Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -356,6 +353,7 @@ pub(crate) mod test {
 		type Event = MockBtcEvent;
 		type Rules = Types;
 		type Execute = Types;
+		// type Execute = MockHook<HookTypeFor<Types, ExecuteHook>, "execute_event">;
 		type SafetyMargin = Types;
 	}
 
@@ -484,19 +482,19 @@ pub enum SMBlockProcessorInput<T: BWProcessorTypes> {
 	ChainProgress(ChainProgressInner<T::ChainBlockNumber>),
 }
 
-impl<T: BWProcessorTypes> Indexed for SMBlockProcessorInput<T> {
-	type Index = ();
-	fn has_index(&self, _idx: &Self::Index) -> bool {
-		true
-	}
-}
-impl<T: BWProcessorTypes> Validate for SMBlockProcessorInput<T> {
-	type Error = ();
+// impl<T: BWProcessorTypes> Indexed for SMBlockProcessorInput<T> {
+// 	type Index = ();
+// 	fn has_index(&self, _idx: &Self::Index) -> bool {
+// 		true
+// 	}
+// }
+// impl<T: BWProcessorTypes> Validate for SMBlockProcessorInput<T> {
+// 	type Error = ();
 
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
+// 	fn is_valid(&self) -> Result<(), Self::Error> {
+// 		Ok(())
+// 	}
+// }
 
 impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
 	type Error = ();
@@ -518,7 +516,8 @@ pub struct SMBlockProcessor<T: BWProcessorTypes> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: BWProcessorTypes + 'static> StateMachine for SMBlockProcessor<T> {
+/*
+impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 	type Input = SMBlockProcessorInput<T>;
 	type Settings = ();
 	type Output = SMBlockProcessorOutput<T>;
@@ -535,6 +534,7 @@ impl<T: BWProcessorTypes + 'static> StateMachine for SMBlockProcessor<T> {
 		SMBlockProcessorOutput { phantom_data: Default::default() }
 	}
 }
+	*/
 
 // #[cfg(test)]
 // fn step_specification(
