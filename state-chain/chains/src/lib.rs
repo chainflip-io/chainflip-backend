@@ -566,7 +566,7 @@ pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		_refund_address: C::ChainAccount,
 		_refund_amount: C::ChainAmount,
 		_asset: C::ChainAsset,
-		_deposit_fetch_id: C::DepositFetchId,
+		_deposit_fetch_id: Option<C::DepositFetchId>,
 	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}

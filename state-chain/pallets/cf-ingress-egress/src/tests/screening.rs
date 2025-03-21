@@ -34,7 +34,7 @@ use sp_runtime::DispatchError::BadOrigin;
 const DEFAULT_DEPOSIT_AMOUNT: u64 = 1_000;
 const DEFAULT_BTC_ADDRESS: [u8; 20] = [0; 20];
 
-mod helpers {
+pub mod helpers {
 
 	use super::*;
 	use cf_chains::btc::Utxo;

@@ -242,6 +242,7 @@ pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
 	pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
+	pub should_fetch: bool,
 }
 
 /// Cross-chain messaging requests.
@@ -266,7 +267,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(22);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(23);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -1137,12 +1138,28 @@ pub mod pallet {
 
 			if T::AllowTransactionReports::get() {
 				let mut deferred_rejections = Vec::new();
+
 				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
-					if let Some(Ok(refund_address)) =
-						tx.refund_address.clone().map(TryInto::try_into)
-					{
-						let deposit_fetch_id =
-							tx.deposit_address.as_ref().and_then(|deposit_address| {
+					let refund_address = match tx.refund_address.clone().map(TryInto::try_into) {
+						Some(Ok(address)) => address,
+						_ => {
+							FailedRejections::<T, I>::append(tx.clone());
+							continue;
+						},
+					};
+
+					match tx.deposit_address {
+						Some(ref deposit_address) => {
+							if !DepositChannelLookup::<T, I>::contains_key(&deposit_address) {
+								Self::try_broadcast_rejection_refund_or_store_tx_details(
+									tx.clone(),
+									refund_address,
+									None,
+								);
+								continue;
+							}
+
+							let maybe_fetch_id =
 								DepositChannelLookup::<T, I>::mutate(deposit_address, |details| {
 									details.as_mut().and_then(|details| {
 										let can_fetch = details.deposit_channel.state.can_fetch();
@@ -1155,64 +1172,28 @@ pub mod pallet {
 											None
 										}
 									})
-								})
-							});
-						if let Some(deposit_fetch_id) = deposit_fetch_id {
-							let AmountAndFeesWithheld {
-								amount_after_fees: amount_after_ingress_fees,
-								fees_withheld: _,
-							} = Self::withhold_ingress_or_egress_fee(
-								IngressOrEgress::IngressDepositChannel,
-								tx.asset,
-								tx.amount,
-							);
-							let AmountAndFeesWithheld {
-								amount_after_fees: amount_to_refund,
-								fees_withheld: _,
-							} = Self::withhold_ingress_or_egress_fee(
-								IngressOrEgress::Egress,
-								tx.asset,
-								amount_after_ingress_fees,
-							);
-							if let Ok(api_call) =
-								<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
-									tx.deposit_details.clone(),
+								});
+
+							if let Some(fetch_id) = maybe_fetch_id {
+								Self::try_broadcast_rejection_refund_or_store_tx_details(
+									tx,
 									refund_address,
-									amount_to_refund,
-									tx.asset,
-									deposit_fetch_id,
-								) {
-								let broadcast_id =
-									T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-										api_call,
-										tx.deposit_address.map(|deposit_address| {
-											Call::finalise_ingress {
-												addresses: vec![deposit_address],
-											}
-											.into()
-										}),
-										|_| None,
-									);
-								Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
-									broadcast_id,
-									tx_id: tx.deposit_details,
-								});
+									Some(fetch_id),
+								);
 							} else {
-								FailedRejections::<T, I>::append(tx.clone());
-								Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-									tx_id: tx.deposit_details,
-								});
+								deferred_rejections.push(tx);
 							}
-						} else {
-							deferred_rejections.push(tx);
-						}
-					} else {
-						FailedRejections::<T, I>::append(tx.clone());
-						Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-							tx_id: tx.deposit_details,
-						});
+						},
+						None => {
+							Self::try_broadcast_rejection_refund_or_store_tx_details(
+								tx,
+								refund_address,
+								None,
+							);
+						},
 					}
 				}
+
 				ScheduledTransactionsForRejection::<T, I>::put(deferred_rejections);
 			}
 		}
@@ -1667,6 +1648,51 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount,
 				})
 			}
+		}
+	}
+
+	fn try_broadcast_rejection_refund_or_store_tx_details(
+		tx: TransactionRejectionDetails<T, I>,
+		refund_address: <T::TargetChain as Chain>::ChainAccount,
+		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
+	) {
+		let AmountAndFeesWithheld {
+			amount_after_fees: amount_after_ingress_fees,
+			fees_withheld: _,
+		} = Self::withhold_ingress_or_egress_fee(
+			IngressOrEgress::IngressDepositChannel,
+			tx.asset,
+			tx.amount,
+		);
+		let AmountAndFeesWithheld { amount_after_fees: amount_to_refund, fees_withheld: _ } =
+			Self::withhold_ingress_or_egress_fee(
+				IngressOrEgress::Egress,
+				tx.asset,
+				amount_after_ingress_fees,
+			);
+		if let Ok(api_call) = <T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+			tx.deposit_details.clone(),
+			refund_address,
+			amount_to_refund,
+			tx.asset,
+			deposit_fetch_id,
+		) {
+			let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+				api_call,
+				tx.deposit_address.map(|deposit_address| {
+					Call::finalise_ingress { addresses: vec![deposit_address] }.into()
+				}),
+				|_| None,
+			);
+			Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
+				broadcast_id,
+				tx_id: tx.deposit_details.clone(),
+			});
+		} else {
+			FailedRejections::<T, I>::append(tx.clone());
+			Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+				tx_id: tx.deposit_details.clone(),
+			});
 		}
 	}
 
@@ -2443,6 +2469,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								refund_address.clone(),
 						};
 
+						let is_vault_swap = matches!(origin, DepositOrigin::Vault { .. });
+
 						ScheduledTransactionsForRejection::<T, I>::append(
 							TransactionRejectionDetails {
 								deposit_address: deposit_address.clone(),
@@ -2450,6 +2478,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								amount: deposit_amount,
 								asset,
 								deposit_details: deposit_details.clone(),
+								should_fetch: !is_vault_swap,
 							},
 						);
 
