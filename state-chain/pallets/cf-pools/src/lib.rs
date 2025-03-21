@@ -900,7 +900,8 @@ pub mod pallet {
 			for order in orders {
 				match order {
 					CloseOrder::Limit { base_asset, quote_asset, side, id } => {
-						Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+						let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+						Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 							match pool.limit_orders_cache[side.to_sold_pair()]
 								.get(lp)
 								.and_then(|limit_orders| limit_orders.get(&id))
@@ -927,7 +928,8 @@ pub mod pallet {
 						})?;
 					},
 					CloseOrder::Range { base_asset, quote_asset, id } => {
-						Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+						let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+						Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 							match (pool
 								.range_orders_cache
 								.get(lp)
