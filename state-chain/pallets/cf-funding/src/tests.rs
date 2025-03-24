@@ -1091,8 +1091,11 @@ mod test_restricted_balances {
 						bound_redeem_address,
 						Default::default()
 					));
-					let expected_redeemed_amount =
-						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
+					let expected_redeemed_amount = if redeem_amount == RedemptionAmount::Max {
+						initial_balance - Flip::balance(&ALICE)
+					} else {
+						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get()
+					};
 					assert_matches!(
 						cf_test_utilities::last_event::<Test>(),
 						RuntimeEvent::Funding(Event::RedemptionRequested {
