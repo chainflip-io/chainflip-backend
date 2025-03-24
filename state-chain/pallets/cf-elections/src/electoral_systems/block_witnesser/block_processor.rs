@@ -10,6 +10,9 @@ use derive_where::derive_where;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
+#[cfg(test)]
+use proptest_derive::Arbitrary;
+
 ///
 /// DepositChannelWitnessingProcessor
 /// ===================================
@@ -130,9 +133,12 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			},
 			ChainProgressInner::Reorg(range) => {
 				last_block = *range.end();
-				for n in range {
-					let block_data = self.blocks_data.remove(&n);
-					if let Some((data, next_age)) = block_data {
+
+				self.blocks_data
+					.extract_if(|n, _| range.contains(n))
+					.collect::<Vec<_>>()
+					.into_iter()
+					.for_each(|(n, (data, next_age))| {
 						let age_range: Range<u32> = 0..next_age;
 						let events = self
 							.process_rules_for_ages_and_block(n, age_range, &data)
@@ -148,7 +154,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 							},
 						}
 					}
-				}
+				);
 			},
 		}
 		let events = self.process_rules(last_block);
@@ -243,12 +249,12 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 }
 
 #[cfg(test)]
-pub(crate) mod test {
+pub(crate) mod tests {
 
 	use crate::{
 		electoral_systems::{
 			block_witnesser::{
-				block_processor::BlockProcessor,
+				block_processor::{BlockProcessor, SMBlockProcessorInput},
 				primitives::ChainProgressInner,
 				state_machine::{
 					BWProcessorTypes, ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook,
@@ -259,6 +265,8 @@ pub(crate) mod test {
 		*,
 	};
 	use codec::{Decode, Encode};
+	use proptest::prelude::Strategy;
+	use proptest_derive::Arbitrary;
 	use core::ops::{Range, RangeInclusive};
 	use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 	use std::collections::BTreeMap;
@@ -272,6 +280,7 @@ pub(crate) mod test {
 
 	type MockBlockData = Vec<u8>;
 
+	#[derive(Arbitrary)]
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 	pub enum MockBtcEvent {
 		PreWitness(u8),
@@ -472,9 +481,50 @@ pub(crate) mod test {
 		// events for the same deposit, only the new detected deposit (10) is present
 		assert_eq!(result, vec![(11, MockBtcEvent::PreWitness(10))]);
 	}
+
+
+	// ------------------------ fuzzy testing ---------------------------
+
+
+
+	use proptest::prelude::*;
+	pub fn generate_state() -> impl Strategy<Value = BlockProcessor<Types>> {
+		(
+			proptest::collection::btree_map(any::<BlockNumber>(), (any::<MockBlockData>(), 0..1u32), 0..1),
+			proptest::collection::btree_map(any::<BlockNumber>(), proptest::collection::vec(any::<MockBtcEvent>(), 0..1), 0..1),
+		)
+		.prop_map(
+			|(blocks_data, reorg_events)| BlockProcessor {
+			blocks_data,
+			reorg_events,
+			..Default::default()
+		})
+	}
+
+
+	#[test]
+	pub fn test_block_processor() {
+
+		use proptest::{
+			prelude::{any, prop, Arbitrary, Just, Strategy},
+			prop_oneof,
+			sample::select,
+		};
+		use super::SMBlockProcessor;
+		use crate::electoral_systems::state_machine::state_machine::Statemachine;
+
+		SMBlockProcessor::<Types>::test(
+			module_path!(),
+			generate_state(),
+			Just(()),
+			|_indices| any::<SMBlockProcessorInput<Types>>().boxed()
+		)
+	}
+
 }
 
 // State-Machine Block Witness Processor
+#[cfg_attr(test, derive(Arbitrary))]
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub enum SMBlockProcessorInput<T: BWProcessorTypes> {
@@ -482,19 +532,6 @@ pub enum SMBlockProcessorInput<T: BWProcessorTypes> {
 	ChainProgress(ChainProgressInner<T::ChainBlockNumber>),
 }
 
-// impl<T: BWProcessorTypes> Indexed for SMBlockProcessorInput<T> {
-// 	type Index = ();
-// 	fn has_index(&self, _idx: &Self::Index) -> bool {
-// 		true
-// 	}
-// }
-// impl<T: BWProcessorTypes> Validate for SMBlockProcessorInput<T> {
-// 	type Error = ();
-
-// 	fn is_valid(&self) -> Result<(), Self::Error> {
-// 		Ok(())
-// 	}
-// }
 
 impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
 	type Error = ();
@@ -516,14 +553,23 @@ pub struct SMBlockProcessor<T: BWProcessorTypes> {
 	_phantom: PhantomData<T>,
 }
 
-/*
+use crate::electoral_systems::state_machine::core::IndexedValidate;
+impl<T: BWProcessorTypes + 'static> IndexedValidate<(), SMBlockProcessorInput<T>> for SMBlockProcessor<T> {
+	type Error = ();
+	fn validate(index: &(), value: &SMBlockProcessorInput<T>) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+use crate::electoral_systems::state_machine::state_machine::Statemachine;
 impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 	type Input = SMBlockProcessorInput<T>;
+	type InputIndex = ();
 	type Settings = ();
 	type Output = SMBlockProcessorOutput<T>;
 	type State = BlockProcessor<T>;
 
-	fn input_index(_s: &mut Self::State) -> IndexOf<Self::Input> {}
+	fn input_index(_s: &mut Self::State) -> () {}
 
 	fn step(s: &mut Self::State, i: Self::Input, _set: &Self::Settings) -> Self::Output {
 		match i {
@@ -533,40 +579,24 @@ impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 		}
 		SMBlockProcessorOutput { phantom_data: Default::default() }
 	}
-}
-	*/
 
-// #[cfg(test)]
-// fn step_specification(
-// 	before: &Self::State,
-// 	input: &Self::Input,
-// 	_settings: &Self::Settings,
-// 	after: &Self::State,
-// ) {
-// 	assert!(
-// 		after.blocks_data.len() <=
-// 			BitcoinIngressEgress::witness_safety_margin().unwrap() as usize,
-// 		"Too many blocks data, we should never have more than safety margin blocks"
-// 	);
-//
-// 	match input {
-// 		SMBlockProcessorInput::ChainProgress(chain_progress) => match chain_progress {
-// 			ChainProgressInner::Progress(_last_height) => {
-// 				assert!(after.reorg_events.len() <= before.reorg_events.len(), "If no reorg happened,
-// number of reorg events should stay the same or decrease"); 	// 			},
-// 	// 			ChainProgressInner::Reorg(range) =>
-// 	// 				for n in range.clone().into_iter() {
-// 	// 					assert!(after.reorg_events.contains_key(&n), "Should always contains key for blocks
-// being reorged, even if no events were produced! (Empty vec)"); 	// 					assert!(
-// 	// 						!after.blocks_data.contains_key(&n),
-// 	// 						"Should never contain blocks data for blocks being reorged"
-// 	// 					);
-// 	// 				},
-// 	// 		},
-// 	// 		SMBlockProcessorInput::NewBlockData(last_height, n, _deposits) => {
-// 	// 			if last_height - BitcoinIngressEgress::witness_safety_margin().unwrap() > *n {
-// 	// 				assert!(!after.blocks_data.contains_key(n));
-// 	// 			}
-// 	// 		},
-// 	// 	}
-// 	// }
+	#[cfg(test)]
+	fn step_specification(
+		_before: &mut Self::State,
+		_input: &Self::Input,
+		_settings: &Self::Settings,
+		_after: &Self::State,
+	) {
+		let active_events = |s: &mut Self::State| -> Vec<T::Event> {
+			s.blocks_data
+				.iter()
+				.flat_map(|(height, (data, age))| s.rules.run((*height, (0..*age), data.clone())))
+				.map(|(number, event)| event)
+				.collect()
+		};
+
+		let stored_events = |s: &mut Self::State| -> Vec<T::Event> {
+			s.reorg_events.values().cloned().flatten().collect()
+		};
+	}
+}
