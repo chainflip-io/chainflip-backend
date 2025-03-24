@@ -81,17 +81,16 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters,
+	DcaParameters, FLIPPERINOS_PER_FLIP,
 };
-use cf_traits::CallInfoId;
-
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
-	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
-	KeyProvider, OnBroadcastReady, OnDeposit, PoolTouched, QualifyNode, RewardsDistribution,
-	RuntimeUpgrade, ScheduledEgressDetails, TransactionFeeScaler,
+	BroadcastAnyChainGovKey, Broadcaster, CallInfoId, Chainflip, CommKeyBroadcaster, DepositApi,
+	EgressApi, EpochInfo, FeeScalingRateConfig, FetchesTransfersLimitProvider, Heartbeat,
+	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, PoolTouched,
+	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails, TransactionFeeScaler,
 };
+use sp_runtime::Saturating;
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use codec::{Decode, Encode};
@@ -1026,11 +1025,12 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 	}
 }
 
-use sp_runtime::Saturating;
-
 pub struct CfTransactionFeeScaler;
 impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransactionFeeScaler {
-	fn call_info(call: &RuntimeCall, caller: &AccountId) -> Option<CallInfoId<AccountId>> {
+	fn call_info_and_spam_prevention_upfront_fee(
+		call: &RuntimeCall,
+		caller: &AccountId,
+	) -> Option<(CallInfoId<AccountId>, FlipBalance)> {
 		match call {
 			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_limit_order {
 				base_asset,
@@ -1053,14 +1053,20 @@ impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransaction
 			})),
 			_ => None,
 		}
+		.map(|call_info_id| (call_info_id, FLIPPERINOS_PER_FLIP))
 	}
 
 	fn scale_fee(
+		fee_scaling_config: FeeScalingRateConfig,
 		pre_scaled_fee: FlipBalance,
-		scale_factor: u16,
-		exp_base: FixedU64,
+		call_count: u16,
 	) -> FlipBalance {
-		let multiplier = exp_base.saturating_pow(scale_factor.into());
-		multiplier.saturating_mul_int(pre_scaled_fee)
+		match fee_scaling_config {
+			FeeScalingRateConfig::ExponentBuffer { buffer, exp_base } => {
+				let multiplier = exp_base.saturating_pow(call_count.saturating_sub(buffer).into());
+				multiplier.saturating_mul_int(pre_scaled_fee)
+			},
+			FeeScalingRateConfig::NoScaling => pre_scaled_fee,
+		}
 	}
 }

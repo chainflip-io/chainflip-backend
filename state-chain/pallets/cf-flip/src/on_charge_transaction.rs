@@ -23,12 +23,8 @@ use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
 use cf_traits::{CallInfoId, TransactionFeeScaler, WaivedFees};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
-	sp_runtime::{
-		traits::{DispatchInfoOf, Get, Zero},
-		RuntimeDebug,
-	},
+	sp_runtime::traits::{DispatchInfoOf, Zero},
 	traits::Imbalance,
-	DefaultNoBound,
 };
 use frame_system::Config;
 use pallet_transaction_payment::{Config as TxConfig, OnChargeTransaction};
@@ -41,15 +37,9 @@ use sp_std::marker::PhantomData;
 /// Any excess fees are refunded to the caller.
 pub struct FlipTransactionPayment<T>(PhantomData<T>);
 
-#[derive(DefaultNoBound, RuntimeDebug)]
-pub struct TransactionPaymentLiquidityInfo<T: crate::Config + FlipConfig> {
-	pub imbalance: Option<Surplus<T>>,
-	pub call_info_id: Option<CallInfoId<T::AccountId>>,
-}
-
 impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransactionPayment<T> {
 	type Balance = <T as FlipConfig>::Balance;
-	type LiquidityInfo = TransactionPaymentLiquidityInfo<T>;
+	type LiquidityInfo = Option<(Surplus<T>, Option<CallInfoId<T::AccountId>>)>;
 
 	fn withdraw_fee(
 		who: &T::AccountId,
@@ -62,17 +52,20 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			return Ok(Default::default())
 		}
 
-		let call_info_id = T::TransactionFeeScaler::call_info(call, who);
-
-		if call_info_id.is_some() {
-			fee = sp_std::cmp::max(fee, T::SpamPreventionUpfrontFee::get());
-		};
+		// Check if there's an upfront fee for spam prevention
+		let call_info_id = T::TransactionFeeScaler::call_info_and_spam_prevention_upfront_fee(
+			call, who,
+		)
+		.map(|(call_info_id, upfront_fee)| {
+			fee = sp_std::cmp::max(fee, upfront_fee);
+			call_info_id
+		});
 
 		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
 			Ok(if surplus.peek().is_zero() {
 				Default::default()
 			} else {
-				TransactionPaymentLiquidityInfo { imbalance: Some(surplus), call_info_id }
+				Some((surplus, call_info_id))
 			})
 		} else {
 			Err(InvalidTransaction::Payment.into())
@@ -91,34 +84,28 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		_tip: Self::Balance,
 		escrow: Self::LiquidityInfo,
 	) -> Result<(), frame_support::unsigned::TransactionValidityError> {
-		if let Some(surplus) = escrow.imbalance {
+		if let Some((surplus, call_info_id)) = escrow {
 			// It's possible the account was deleted during extrinsic execution. If this is the
 			// case, we shouldn't refund anything, we can just burn all fees in escrow.
-			let pre_scaled_fee_to_burn = if frame_system::Pallet::<T>::account_exists(who) {
-				corrected_fee
-			} else {
-				surplus.peek()
-			};
-
-			let to_burn = if let Some(call_info_id) = escrow.call_info_id {
-				let before_count = crate::CallCounter::<T>::mutate(&call_info_id, |count| {
-					let before_count = *count;
-					*count += 1;
-					before_count
-				});
-				match call_info_id {
-					CallInfoId::Pool(_) => {
-						let crate::ExponentBufferFeeConfig { buffer, exp_base } =
-							crate::FeeScalingRateConfig::<T>::get();
-						T::TransactionFeeScaler::scale_fee(
-							pre_scaled_fee_to_burn,
-							before_count.saturating_sub(buffer),
-							exp_base,
-						)
-					},
+			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
+				if let Some(call_info_id) = call_info_id {
+					let before_count = crate::CallCounter::<T>::mutate(&call_info_id, |count| {
+						let before_count = *count;
+						*count += 1;
+						before_count
+					});
+					match call_info_id {
+						CallInfoId::Pool(_) => T::TransactionFeeScaler::scale_fee(
+							crate::FeeScalingRate::<T>::get(),
+							corrected_fee,
+							before_count,
+						),
+					}
+				} else {
+					corrected_fee
 				}
 			} else {
-				pre_scaled_fee_to_burn
+				surplus.peek()
 			};
 
 			// If there is a difference this will be reconciled when the result goes out of scope.

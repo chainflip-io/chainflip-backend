@@ -1,7 +1,7 @@
 use cf_primitives::{AccountRole, Asset, AuthorityCount, FLIPPERINOS_PER_FLIP};
-use cf_traits::IncreaseOrDecrease;
+use cf_traits::{FeeScalingRateConfig, IncreaseOrDecrease};
 use frame_support::pallet_prelude::{InvalidTransaction, TransactionValidityError};
-use pallet_cf_flip::{ExponentBufferFeeConfig, FeeScalingRateConfig};
+use pallet_cf_flip::FeeScalingRate;
 use pallet_cf_pools::RangeOrderSize;
 use sp_keyring::Ed25519Keyring as AccountKeyring;
 use sp_runtime::FixedU64;
@@ -43,7 +43,7 @@ fn fee_scales_within_a_pool() {
 
 			let call = update_range_order_call(Asset::Eth);
 
-			assert_eq!(FeeScalingRateConfig::<Runtime>::get(), ExponentBufferFeeConfig::default());
+			assert_eq!(FeeScalingRate::<Runtime>::get(), FeeScalingRateConfig::NoScaling);
 
 			let (mut last_gas, mut last_remaining_balance) =
 				apply_extrinsic_and_calculate_gas_fee(lp, call.clone()).unwrap();
@@ -61,7 +61,7 @@ fn fee_scales_within_a_pool() {
 			testnet.move_forward_blocks(1);
 
 			// Set the config to scale per pool.
-			FeeScalingRateConfig::<Runtime>::set(ExponentBufferFeeConfig {
+			FeeScalingRate::<Runtime>::set(FeeScalingRateConfig::ExponentBuffer {
 				buffer: 0,
 				exp_base: FixedU64::from_rational(2, 1u128),
 			});
@@ -113,7 +113,7 @@ fn fee_scales_per_pool() {
 		.execute_with(|| {
 			crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
-			FeeScalingRateConfig::<Runtime>::set(ExponentBufferFeeConfig {
+			FeeScalingRate::<Runtime>::set(FeeScalingRateConfig::ExponentBuffer {
 				buffer: 0,
 				exp_base: FixedU64::from_rational(2, 1u128),
 			});

@@ -22,7 +22,7 @@ use cf_chains::{
 	mocks::{MockEthereum, MockEthereumChainCrypto},
 	ApiCall, ChainCrypto, Ethereum, UpdateFlipSupply,
 };
-use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
+use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
 	mocks::{
@@ -82,7 +82,6 @@ impl pallet_cf_flip::Config for Test {
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 	type TransactionFeeScaler = NoTransactionFeeScaling;
-	type SpamPreventionUpfrontFee = sp_core::ConstU128<FLIPPERINOS_PER_FLIP>;
 }
 
 pub const EMISSION_RATE: u128 = 10;

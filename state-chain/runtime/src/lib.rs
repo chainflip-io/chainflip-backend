@@ -703,8 +703,6 @@ impl pallet_cf_flip::Config for Runtime {
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
 	type TransactionFeeScaler = chainflip::CfTransactionFeeScaler;
-	// 1 FLIP. The maximum fee that can be taken for a single transaction.
-	type SpamPreventionUpfrontFee = sp_core::ConstU128<FLIPPERINOS_PER_FLIP>;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {

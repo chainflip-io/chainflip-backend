@@ -1234,13 +1234,32 @@ pub enum CallInfoId<AccountId> {
 	Pool(PoolTouched<AccountId>),
 }
 
+#[derive(
+	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
+)]
+pub enum FeeScalingRateConfig {
+	ExponentBuffer {
+		buffer: u16,
+		exp_base: FixedU64,
+	},
+	#[default]
+	NoScaling,
+}
+
 use frame_support::sp_runtime::FixedU64;
 pub trait TransactionFeeScaler<Call, AccountId, Balance> {
-	fn call_info(_call: &Call, _caller: &AccountId) -> Option<CallInfoId<AccountId>> {
+	fn call_info_and_spam_prevention_upfront_fee(
+		_call: &Call,
+		_caller: &AccountId,
+	) -> Option<(CallInfoId<AccountId>, Balance)> {
 		None
 	}
 
-	fn scale_fee(pre_scaled_fee: Balance, _scale_factor: u16, _exp_base: FixedU64) -> Balance {
+	fn scale_fee(
+		_fee_scaling_config: FeeScalingRateConfig,
+		pre_scaled_fee: Balance,
+		_call_count: u16,
+	) -> Balance {
 		pre_scaled_fee
 	}
 }
