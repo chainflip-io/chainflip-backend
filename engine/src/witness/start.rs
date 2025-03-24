@@ -100,18 +100,6 @@ where
 		db.clone(),
 	);
 
-	// let start_btc = super::btc::start(
-	// 	scope,
-	// 	btc_client.clone(),
-	// 	witness_call.clone(),
-	// 	prewitness_call,
-	// 	state_chain_client.clone(),
-	// 	state_chain_stream.clone(),
-	// 	unfinalised_state_chain_stream.clone(),
-	// 	epoch_source.clone(),
-	// 	db.clone(),
-	// );
-
 	let start_dot = super::dot::start(
 		scope,
 		dot_client,
@@ -134,9 +122,9 @@ where
 
 	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
 
-	let start_btc_e = super::btc_e::start(scope, btc_client, state_chain_client);
+	let start_btc = super::btc::start(scope, btc_client, state_chain_client);
 
-	futures::future::try_join5(start_eth, start_dot, start_arb, start_sol, start_btc_e).await?;
+	futures::future::try_join5(start_eth, start_dot, start_arb, start_sol, start_btc).await?;
 
 	Ok(())
 }
