@@ -50,7 +50,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 // have a fixed order id (at least until we develop more advanced strategies).
 const STRATEGY_ORDER_ID: OrderId = 0;
 
-impl_pallet_safe_mode!(PalletSafeMode; trading_strategies_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum TradingStrategy {
@@ -159,7 +159,7 @@ pub mod pallet {
 		fn on_idle(_current_block: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
 
-			if !T::SafeMode::get().trading_strategies_enabled {
+			if !T::SafeMode::get().strategy_execution_enabled {
 				return weight_used
 			}
 
@@ -259,7 +259,7 @@ pub mod pallet {
 			funding: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			ensure!(
-				T::SafeMode::get().trading_strategies_enabled,
+				T::SafeMode::get().strategy_updates_enabled,
 				Error::<T>::TradingStrategiesDisabled
 			);
 
@@ -320,7 +320,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::close_strategy())]
 		pub fn close_strategy(origin: OriginFor<T>, strategy_id: T::AccountId) -> DispatchResult {
 			ensure!(
-				T::SafeMode::get().trading_strategies_enabled,
+				T::SafeMode::get().strategy_closure_enabled,
 				Error::<T>::TradingStrategiesDisabled
 			);
 
@@ -359,7 +359,7 @@ pub mod pallet {
 			funding: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			ensure!(
-				T::SafeMode::get().trading_strategies_enabled,
+				T::SafeMode::get().strategy_updates_enabled,
 				Error::<T>::TradingStrategiesDisabled
 			);
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
