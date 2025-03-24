@@ -134,7 +134,7 @@ pub trait ConsensusMechanismForES<ES: StatemachineElectoralSystemTypes> = Consen
 ///    choosing all the associated types, but have to follow these conditions. For instance, both
 ///    `OnFinalizeContext` and `OnFinalizeReturn` have to be of type `Vec<_>`.
 ///
-/// 3. You'll find that in the previous step you have to choose associated types `StateMachine` and
+/// 3. You'll find that in the previous step you have to choose associated types `Statemachine` and
 ///    `ConsensusMechanism`. If you want to implement a new state machine and/or a new consensus
 ///    mechanism, you'll have to do either of the following (ES refers to the tag type you created
 ///    in step 1):

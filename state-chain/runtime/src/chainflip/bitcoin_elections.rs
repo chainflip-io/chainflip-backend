@@ -30,7 +30,7 @@ use pallet_cf_elections::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
 			state_machine::{
-				BWElectionProperties, BWProcessorTypes, BWStateMachine, BWTypes,
+				BWElectionProperties, BWProcessorTypes, BWStatemachine, BWTypes,
 				BlockWitnesserSettings, BlockWitnesserState, ElectionPropertiesHook, HookTypeFor,
 				SafeModeEnabledHook,
 			},
@@ -190,7 +190,7 @@ impls! {
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStateMachine<Self>;
+		type Statemachine = BWStatemachine<Self>;
 		type ConsensusMechanism = BWConsensus<Self>;
 	}
 
@@ -277,7 +277,7 @@ impls! {
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStateMachine<Self>;
+		type Statemachine = BWStatemachine<Self>;
 		type ConsensusMechanism = BWConsensus<Self>;
 	}
 
@@ -373,7 +373,7 @@ impls! {
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStateMachine<Self>;
+		type Statemachine = BWStatemachine<Self>;
 		type ConsensusMechanism = BWConsensus<Self>;
 	}
 

@@ -170,7 +170,7 @@ pub struct BWElectionProperties<T: BWTypes> {
 	pub reorg_id: u8,
 }
 
-impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, T::BlockData> for BWStateMachine<T> {
+impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, T::BlockData> for BWStatemachine<T> {
 	type Error = ();
 
 	fn validate(
@@ -182,11 +182,11 @@ impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, T::BlockData> for BWSt
 }
 
 #[derive(Debug)]
-pub struct BWStateMachine<Types: BWTypes> {
+pub struct BWStatemachine<Types: BWTypes> {
 	_phantom: sp_std::marker::PhantomData<Types>,
 }
 
-impl<T: BWTypes> Statemachine for BWStateMachine<T> {
+impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	type Input =
 		SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>;
 	type InputIndex = Vec<BWElectionProperties<T>>;
@@ -461,8 +461,8 @@ mod tests {
 	}
 
 	fn generate_input<T: BWTypes<BlockData = ()>>(
-		indices: <BWStateMachine<T> as Statemachine>::InputIndex,
-	) -> BoxedStrategy<<BWStateMachine<T> as Statemachine>::Input>
+		indices: <BWStatemachine<T> as Statemachine>::InputIndex,
+	) -> BoxedStrategy<<BWStatemachine<T> as Statemachine>::Input>
 	where
 		T::ChainBlockNumber: Arbitrary,
 	{
@@ -513,7 +513,7 @@ mod tests {
 
 	#[test]
 	pub fn test_bw_statemachine() {
-		BWStateMachine::<u32>::test(
+		BWStatemachine::<u32>::test(
 			file!(),
 			generate_state(),
 			prop_do! {
@@ -532,7 +532,7 @@ mod tests {
 
 	#[test]
 	pub fn test_bw_statemachine2() {
-		BWStateMachine::<BlockWitnessRange<TestChain>>::test(
+		BWStatemachine::<BlockWitnessRange<TestChain>>::test(
 			file!(),
 			generate_state(),
 			prop_do! {

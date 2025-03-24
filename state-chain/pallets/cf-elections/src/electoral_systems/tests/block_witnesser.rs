@@ -44,7 +44,7 @@ use cf_chains::{mocks::MockEthereum, Chain};
 use consensus::BWConsensus;
 use primitives::SafeModeStatus;
 use sp_std::collections::btree_set::BTreeSet;
-use state_machine::{BWStateMachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState};
+use state_machine::{BWStatemachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState};
 
 fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
 	assert!(count > 0);
@@ -114,7 +114,7 @@ impl StatemachineElectoralSystemTypes for Types {
 	type OnFinalizeReturnItem = ();
 
 	// the actual state machine and consensus mechanisms of this ES
-	type Statemachine = BWStateMachine<Self>;
+	type Statemachine = BWStatemachine<Self>;
 	type ConsensusMechanism = BWConsensus<Self>;
 }
 
@@ -160,7 +160,6 @@ fn generate_votes(
 ) -> ConsensusVotes<SimpleBlockWitnesser> {
 	println!("Generate votes called");
 
-	let to_vote = |data| data;
 	let incorrect_data = vec![1u8, 2, 3];
 	assert_ne!(incorrect_data, correct_data);
 	let votes = ConsensusVotes {
