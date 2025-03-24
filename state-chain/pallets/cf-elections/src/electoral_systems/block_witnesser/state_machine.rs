@@ -200,7 +200,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.clone()
 			.into_iter()
 			.map(|(block_height, reorg_id)| BWElectionProperties {
-				properties: s.generate_election_properties_hook.run(block_height.clone()),
+				properties: s.generate_election_properties_hook.run(block_height),
 				block_height,
 				reorg_id,
 			})
