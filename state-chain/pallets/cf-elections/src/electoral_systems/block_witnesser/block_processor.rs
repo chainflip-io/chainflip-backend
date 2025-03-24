@@ -122,6 +122,9 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		&mut self,
 		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
 		block_data: Option<(T::ChainBlockNumber, T::BlockData)>,
+	) -> (Vec<(T::ChainBlockNumber, T::Event)>,
+			(Vec<(T::ChainBlockNumber, Vec<T::Event>)>,
+			Vec< (T::ChainBlockNumber, (T::BlockData, u32)) >) 
 	) {
 		if let Some((block_number, block_data)) = block_data {
 			self.blocks_data.insert(block_number, (block_data, Default::default()));
@@ -159,7 +162,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		}
 		let events = self.process_rules(last_block);
 		self.execute.run(events.clone());
-		self.clean_old(last_block);
+		(events, self.clean_old(last_block))
 	}
 
 	/// Processes the stored block data to generate events by applying the provided rules.
@@ -233,18 +236,24 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			})
 			.collect::<Vec<_>>()
 	}
-	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
-		self.blocks_data
-			.retain(|_key, (_, next_age)| *next_age <= self.safety_margin.run(()));
+	fn clean_old(&mut self, last_height: T::ChainBlockNumber) -> 
+		(Vec<(T::ChainBlockNumber, Vec<T::Event>)>,
+		Vec< (T::ChainBlockNumber, (T::BlockData, u32)) >) 
+	{
+		let blocks = self.blocks_data
+			.extract_if(|_key, (_, next_age)| *next_age > self.safety_margin.run(()))
+			.collect();
 		// Todo! Do we want to keep these events around for longer? is there any benefit?
 		// If we keep these for let's say 100 blocks we can then prevent double processing things
 		// that are reorged up to 100 blocks later, what are the chanches of smth like this
 		// happening? This still won't protect us from re-processing full Witness events since we
 		// remove the blocks from block_data as soon as safety margin is reached (we would have to
 		// increase the size of blocks_data as well)
-		self.reorg_events.retain(|key, _| {
-			key.saturating_forward(self.safety_margin.run(()) as usize) > last_height
-		});
+		let events = self.reorg_events.extract_if(|key, _| {
+			key.saturating_forward(self.safety_margin.run(()) as usize) <= last_height
+		}).collect();
+
+		(events, blocks)
 	}
 }
 
@@ -260,7 +269,7 @@ pub(crate) mod tests {
 					BWProcessorTypes, ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook,
 				},
 			},
-			state_machine::core::{Hook, TypesFor},
+			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor},
 		},
 		*,
 	};
@@ -272,7 +281,7 @@ pub(crate) mod tests {
 	use std::collections::BTreeMap;
 
 	const SAFETY_MARGIN: usize = 3;
-	type BlockNumber = u64;
+	type BlockNumber = u8;
 
 	pub struct MockBlockProcessorDefinition;
 
@@ -281,7 +290,7 @@ pub(crate) mod tests {
 	type MockBlockData = Vec<u8>;
 
 	#[derive(Arbitrary)]
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 	pub enum MockBtcEvent {
 		PreWitness(u8),
 		Witness(u8),
@@ -297,9 +306,9 @@ pub(crate) mod tests {
 	impl Hook<HookTypeFor<Types, RulesHook>> for Types {
 		fn run(
 			&mut self,
-			(block, age, block_data): (cf_chains::btc::BlockNumber, Range<u32>, MockBlockData),
-		) -> Vec<(cf_chains::btc::BlockNumber, MockBtcEvent)> {
-			let mut results: Vec<(cf_chains::btc::BlockNumber, MockBtcEvent)> = vec![];
+			(block, age, block_data): (BlockNumber, Range<u32>, MockBlockData),
+		) -> Vec<(BlockNumber, MockBtcEvent)> {
+			let mut results: Vec<(BlockNumber, MockBtcEvent)> = vec![];
 			if age.contains(&0u32) {
 				results.extend(
 					block_data
@@ -361,8 +370,8 @@ pub(crate) mod tests {
 		type BlockData = MockBlockData;
 		type Event = MockBtcEvent;
 		type Rules = Types;
-		type Execute = Types;
-		// type Execute = MockHook<HookTypeFor<Types, ExecuteHook>, "execute_event">;
+		// type Execute = Types;
+		type Execute = MockHook<HookTypeFor<Types, ExecuteHook>, "execute_event">;
 		type SafetyMargin = Types;
 	}
 
@@ -390,8 +399,8 @@ pub(crate) mod tests {
 	fn temp_large_delta() {
 		let mut processor = BlockProcessor::<Types>::default();
 
-		processor
-			.process_block_data(ChainProgressInner::Progress(u32::MAX as u64), Some((9, vec![1])));
+		// processor
+		// 	.process_block_data(ChainProgressInner::Progress(u32::MAX as u64), Some((9, vec![1])));
 	}
 
 	/// test that a reorg cause the processor to discard all the reorged blocks
@@ -490,8 +499,8 @@ pub(crate) mod tests {
 	use proptest::prelude::*;
 	pub fn generate_state() -> impl Strategy<Value = BlockProcessor<Types>> {
 		(
-			proptest::collection::btree_map(any::<BlockNumber>(), (any::<MockBlockData>(), 0..1u32), 0..1),
-			proptest::collection::btree_map(any::<BlockNumber>(), proptest::collection::vec(any::<MockBtcEvent>(), 0..1), 0..1),
+			proptest::collection::btree_map(any::<BlockNumber>(), (any::<MockBlockData>(), 0..10u32), 0..10),
+			proptest::collection::btree_map(any::<BlockNumber>(), proptest::collection::vec(any::<MockBtcEvent>(), 0..10), 0..10),
 		)
 		.prop_map(
 			|(blocks_data, reorg_events)| BlockProcessor {
@@ -541,7 +550,9 @@ impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
 }
 #[allow(dead_code)]
 pub struct SMBlockProcessorOutput<T: BWProcessorTypes> {
-	phantom_data: PhantomData<T>,
+	events: Vec<(T::ChainBlockNumber, T::Event)>,
+	deleted_data: Vec< (T::ChainBlockNumber, (T::BlockData, u32)) >,
+	deleted_events:  Vec<(T::ChainBlockNumber, Vec<T::Event>)>,
 }
 impl<T: BWProcessorTypes> Validate for SMBlockProcessorOutput<T> {
 	type Error = ();
@@ -572,31 +583,64 @@ impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 	fn input_index(_s: &mut Self::State) -> () {}
 
 	fn step(s: &mut Self::State, i: Self::Input, _set: &Self::Settings) -> Self::Output {
-		match i {
+		let (events, (a, b)) = match i {
 			SMBlockProcessorInput::NewBlockData(last_height, n, deposits) =>
 				s.process_block_data(ChainProgressInner::Progress(last_height), Some((n, deposits))),
 			SMBlockProcessorInput::ChainProgress(inner) => s.process_block_data(inner, None),
-		}
-		SMBlockProcessorOutput { phantom_data: Default::default() }
+		};
+		SMBlockProcessorOutput { events, deleted_data: b, deleted_events: a }
 	}
 
 	#[cfg(test)]
 	fn step_specification(
-		_before: &mut Self::State,
-		_input: &Self::Input,
+		pre: &mut Self::State,
+		input: &Self::Input,
+		output: &Self::Output,
 		_settings: &Self::Settings,
-		_after: &Self::State,
+		post: &Self::State,
 	) {
-		let active_events = |s: &mut Self::State| -> Vec<T::Event> {
-			s.blocks_data
-				.iter()
-				.flat_map(|(height, (data, age))| s.rules.run((*height, (0..*age), data.clone())))
-				.map(|(number, event)| event)
+		use std::collections::BTreeSet;
+		use crate::{asserts, electoral_systems::block_witnesser::helpers::Merge};
+
+		type BlocksData<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, (T::BlockData, u32)>;
+		type ReorgData<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, Vec<T::Event>>;
+
+		let active_events = |s: &BlocksData<T>| -> BTreeSet<(T::ChainBlockNumber, T::Event)> {
+			s.iter()
+				.flat_map(|(height, (data, age))| {
+						let mut x : BlockProcessor<T> = Default::default();
+						x.rules.run((*height, (0..age.saturating_forward(1)), data.clone()))
+					})
+				// .map(|(number, event)| event)
 				.collect()
 		};
 
-		let stored_events = |s: &mut Self::State| -> Vec<T::Event> {
-			s.reorg_events.values().cloned().flatten().collect()
+		let stored_events = |s: &ReorgData<T>| -> BTreeSet<(T::ChainBlockNumber, T::Event)> {
+			s.iter().flat_map(|(k, v)| v.iter().map(|vx| (k.clone(), vx.clone())).collect::<Vec<_>>()).collect()
 		};
+
+		let events = |s: &Self::State| active_events(&s.blocks_data).merge(stored_events(&s.reorg_events));
+		let deleted_events = active_events(&output.deleted_data.iter().cloned().collect()).merge(stored_events(&output.deleted_events.iter().cloned().collect()));
+		let all_events = |s| events(s).merge(deleted_events);
+
+		let executed_events : BTreeSet<_> = output.events.iter().cloned().collect();
+
+		let latest_block = match input {
+			SMBlockProcessorInput::NewBlockData(n, _, _) => n,
+			SMBlockProcessorInput::ChainProgress(ChainProgressInner::Progress(x)) => x,
+			SMBlockProcessorInput::ChainProgress(ChainProgressInner::Reorg(x)) => x.end(),
+		};
+
+		// let filtered = |events: BTreeSet<_>, k| events.into_iter().filter(|(n, _)| n >= k).collect::<BTreeSet<_>>();
+
+		asserts! {
+			"the executed events are exactly those that are new (post: {:?})"
+			in all_events(post).difference(&events(pre)).cloned().collect::<BTreeSet<_>>() == executed_events,
+			else
+				post
+				// executed_events
+			;
+		}
+
 	}
 }

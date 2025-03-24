@@ -144,6 +144,7 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 	fn step_specification(
 		before: &mut Self::State,
 		input: &Self::Input,
+		_output: &Self::Output,
 		_settings: &Self::Settings,
 		after: &Self::State,
 	) {

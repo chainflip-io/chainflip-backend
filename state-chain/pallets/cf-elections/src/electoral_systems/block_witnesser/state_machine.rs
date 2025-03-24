@@ -76,7 +76,7 @@ pub trait BWProcessorTypes: Sized {
 		+ 'static;
 	type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
 
-	type Event: Serde + Debug + Clone + Eq;
+	type Event: Serde + Debug + Clone + Eq + Ord;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
 	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + Serde + Debug + Clone + Eq;
 
@@ -256,6 +256,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	fn step_specification(
 		before: &mut Self::State,
 		input: &Self::Input,
+		_output: &Self::Output,
 		settings: &Self::Settings,
 		after: &Self::State,
 	) {
