@@ -36,9 +36,9 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::One, FixedU64},
-	traits::HandleLifetime,
+	traits::{ConstU128, HandleLifetime},
 };
-use frame_system::pallet_prelude::*;
+use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 use weights::WeightInfo;
 
@@ -50,9 +50,39 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 // have a fixed order id (at least until we develop more advanced strategies).
 const STRATEGY_ORDER_ID: OrderId = 0;
 
+pub struct DefaultLimitOrderUpdateThresholds<T> {
+	_phantom: PhantomData<T>,
+}
+impl<T: Config> Get<AssetToAmountMap> for DefaultLimitOrderUpdateThresholds<T> {
+	fn get() -> AssetToAmountMap {
+		Asset::all()
+			.map(|asset| {
+				(
+					asset,
+					match asset {
+						Asset::Usdc | Asset::Usdt => 1_000 * 10u128.pow(6),
+						_ => u128::MAX, // Turned off by default all other assets
+					},
+				)
+			})
+			.collect()
+	}
+}
+
+const DEFAULT_STABLE_COIN_MINIMUM_DEPLOYMENT: u128 = 20_000 * 10u128.pow(6); // $20,000 USD
+const DEFAULT_STABLE_COIN_MINIMUM_ADDED_FUNDS: u128 = 10 * 10u128.pow(6); // $10 USD
+const DEFAULT_MINIMUM_FUNDING: u128 = u128::MAX;
+
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum TradingStrategy {
 	SellAndBuyAtTicks { sell_tick: Tick, buy_tick: Tick, base_asset: Asset },
+}
+
+#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum PalletConfigUpdate {
+	MinimumDeploymentAmountForStrategy { asset: Asset, amount: AssetAmount },
+	MinimumAddedFundsToStrategy { asset: Asset, amount: AssetAmount },
+	LimitOrderUpdateThreshold { asset: Asset, amount: AssetAmount },
 }
 
 impl TradingStrategy {
@@ -139,15 +169,31 @@ pub mod pallet {
 	/// read multiple assets at once (and this map is small).
 	#[pallet::storage]
 	pub(super) type LimitOrderUpdateThresholds<T: Config> =
-		StorageValue<_, AssetToAmountMap, ValueQuery>;
+		StorageValue<_, AssetToAmountMap, ValueQuery, DefaultLimitOrderUpdateThresholds<T>>;
 
 	/// Stores minimum amount per asset necessary to deploy a strategy if only one of the
 	/// assets is provided. If more then one asset is provided, we allow splitting the requirement
 	/// between them: e.g. it is possible to start a strategy with only 30% of the required amount
 	/// of asset A, as long as there is at least 70% of the required amount of asset B.
 	#[pallet::storage]
-	pub(super) type MinimumDeploymentAmountForStrategy<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+	pub(super) type MinimumDeploymentAmountForStrategy<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		Asset,
+		AssetAmount,
+		ValueQuery,
+		ConstU128<DEFAULT_MINIMUM_FUNDING>,
+	>;
+
+	#[pallet::storage]
+	pub(super) type MinimumAddedFundsToStrategy<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		Asset,
+		AssetAmount,
+		ValueQuery,
+		ConstU128<DEFAULT_MINIMUM_FUNDING>,
+	>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -213,6 +259,44 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T> {
+		pub limit_order_update_thresholds: AssetToAmountMap,
+		pub minimum_deployment_amount_for_strategy: AssetToAmountMap,
+		pub minimum_added_funds_to_strategy: AssetToAmountMap,
+		pub _phantom: PhantomData<T>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+		fn build(&self) {
+			LimitOrderUpdateThresholds::<T>::set(self.limit_order_update_thresholds.clone());
+			self.minimum_deployment_amount_for_strategy.iter().for_each(|(asset, amount)| {
+				MinimumDeploymentAmountForStrategy::<T>::insert(asset, amount);
+			});
+			self.minimum_added_funds_to_strategy.iter().for_each(|(asset, amount)| {
+				MinimumAddedFundsToStrategy::<T>::insert(asset, amount);
+			});
+		}
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				limit_order_update_thresholds: DefaultLimitOrderUpdateThresholds::<T>::get(),
+				minimum_deployment_amount_for_strategy: AssetToAmountMap::from_iter([
+					(Asset::Usdc, DEFAULT_STABLE_COIN_MINIMUM_DEPLOYMENT),
+					(Asset::Usdt, DEFAULT_STABLE_COIN_MINIMUM_DEPLOYMENT),
+				]),
+				minimum_added_funds_to_strategy: AssetToAmountMap::from_iter([
+					(Asset::Usdc, DEFAULT_STABLE_COIN_MINIMUM_ADDED_FUNDS),
+					(Asset::Usdt, DEFAULT_STABLE_COIN_MINIMUM_ADDED_FUNDS),
+				]),
+				_phantom: Default::default(),
+			}
+		}
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -228,12 +312,25 @@ pub mod pallet {
 		StrategyClosed {
 			strategy_id: T::AccountId,
 		},
+		MinimumDeploymentAmountForStrategySet {
+			asset: Asset,
+			amount: AssetAmount,
+		},
+		MinimumAddedFundsToStrategySet {
+			asset: Asset,
+			amount: AssetAmount,
+		},
+		LimitOrderUpdateThresholdSet {
+			asset: Asset,
+			amount: AssetAmount,
+		},
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		StrategyNotFound,
 		AmountBelowDeploymentThreshold,
+		AmountBelowAddedFundsThreshold,
 		InvalidAssetsForStrategy,
 		/// The liquidity provider has active strategies and cannot be deregistered.
 		LpHasActiveStrategies,
@@ -256,30 +353,14 @@ pub mod pallet {
 
 			let strategy_id = {
 				// Check that strategy is created with sufficient funds:
-				{
-					let fraction_of_required = |asset, provided| {
-						let min_required = MinimumDeploymentAmountForStrategy::<T>::get(asset);
-
-						if min_required == 0 {
-							FixedU64::one()
-						} else {
-							FixedU64::from_rational(provided, min_required)
-						}
-					};
-
-					ensure!(
-						strategy.supported_assets().into_iter().fold(
-							FixedU64::default(),
-							|acc, asset| {
-								acc + fraction_of_required(
-									asset,
-									*funding.get(&asset).unwrap_or(&0),
-								)
-							}
-						) >= FixedU64::one(),
-						Error::<T>::AmountBelowDeploymentThreshold
-					);
-				}
+				ensure!(
+					Self::is_enough_funding(
+						&strategy,
+						&funding,
+						&MinimumDeploymentAmountForStrategy::<T>::iter().collect(),
+					),
+					Error::<T>::AmountBelowDeploymentThreshold
+				);
 
 				let strategy_id = derive_strategy_id::<T>(lp);
 
@@ -343,7 +424,58 @@ pub mod pallet {
 			let strategy =
 				Strategies::<T>::get(lp, &strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
 
+			ensure!(
+				Self::is_enough_funding(
+					&strategy,
+					&funding,
+					&MinimumAddedFundsToStrategy::<T>::iter().collect(),
+				),
+				Error::<T>::AmountBelowAddedFundsThreshold
+			);
+
 			Self::add_funds_to_existing_strategy(lp, &strategy_id, strategy, funding)
+		}
+
+		/// Apply a list of configuration updates to the pallet.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(4)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			for update in updates {
+				match update {
+					PalletConfigUpdate::MinimumDeploymentAmountForStrategy { asset, amount } => {
+						MinimumDeploymentAmountForStrategy::<T>::set(asset, amount);
+						Self::deposit_event(Event::<T>::MinimumDeploymentAmountForStrategySet {
+							asset,
+							amount,
+						});
+					},
+					PalletConfigUpdate::MinimumAddedFundsToStrategy { asset, amount } => {
+						MinimumAddedFundsToStrategy::<T>::set(asset, amount);
+						Self::deposit_event(Event::<T>::MinimumAddedFundsToStrategySet {
+							asset,
+							amount,
+						});
+					},
+					PalletConfigUpdate::LimitOrderUpdateThreshold { asset, amount } => {
+						LimitOrderUpdateThresholds::<T>::mutate(|thresholds| {
+							thresholds.insert(asset, amount);
+						});
+						Self::deposit_event(Event::<T>::LimitOrderUpdateThresholdSet {
+							asset,
+							amount,
+						});
+					},
+				}
+			}
+
+			Ok(())
 		}
 	}
 }
@@ -367,6 +499,22 @@ impl<T: Config> Pallet<T> {
 		});
 
 		Ok(())
+	}
+
+	fn is_enough_funding(
+		strategy: &TradingStrategy,
+		funding: &BTreeMap<Asset, AssetAmount>,
+		minimum: &BTreeMap<Asset, AssetAmount>,
+	) -> bool {
+		strategy.supported_assets().into_iter().fold(FixedU64::default(), |acc, asset| {
+			let min_required = *minimum.get(&asset).unwrap_or(&DEFAULT_MINIMUM_FUNDING);
+			let fraction_of_required = if min_required == 0 {
+				FixedU64::one()
+			} else {
+				FixedU64::from_rational(*funding.get(&asset).unwrap_or(&0), min_required)
+			};
+			acc + fraction_of_required
+		}) >= FixedU64::one()
 	}
 }
 

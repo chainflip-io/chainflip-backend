@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_primitives::{Asset, AssetAmount, Tick};
-use cf_test_utilities::assert_event_sequence;
+use cf_test_utilities::{assert_event_sequence, assert_events_eq};
 use cf_traits::{
 	mocks::{
 		balance_api::{MockBalance, MockLpRegistration},
@@ -23,9 +23,11 @@ use cf_traits::{
 	},
 	BalanceApi, Side,
 };
-use frame_support::{assert_err, assert_ok};
+use frame_support::{assert_err, assert_noop, assert_ok, sp_runtime};
 
 use crate::{mock::*, *};
+
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 const BASE_ASSET: Asset = Asset::Usdt;
 const QUOTE_ASSET: Asset = cf_primitives::STABLE_ASSET;
@@ -55,7 +57,20 @@ macro_rules! assert_balances {
 	};
 }
 
+fn turn_off_thresholds() {
+	MinimumDeploymentAmountForStrategy::<Test>::insert(BASE_ASSET, 0);
+	MinimumDeploymentAmountForStrategy::<Test>::insert(QUOTE_ASSET, 0);
+	MinimumAddedFundsToStrategy::<Test>::insert(BASE_ASSET, 0);
+	MinimumAddedFundsToStrategy::<Test>::insert(QUOTE_ASSET, 0);
+	LimitOrderUpdateThresholds::<Test>::set(BTreeMap::from_iter([
+		(BASE_ASSET, 0),
+		(QUOTE_ASSET, 0),
+	]));
+}
+
 fn deploy_strategy() -> AccountId {
+	turn_off_thresholds();
+
 	let initial_amounts: BTreeMap<_, _> =
 		[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
 
@@ -134,6 +149,8 @@ fn asset_validation_on_deploy_strategy() {
 		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
 		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
 
+		turn_off_thresholds();
+
 		check_asset_validation(|funding| {
 			TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
@@ -160,11 +177,79 @@ fn asset_validation_on_adding_funds_to_strategy() {
 }
 
 #[test]
+fn enforce_minimum_when_adding_funds_to_strategy() {
+	const MIN_BASE_AMOUNT: AssetAmount = 10_000;
+	const MIN_QUOTE_AMOUNT: AssetAmount = 5_000;
+
+	new_test_ext().then_execute_at_next_block(|_| {
+		let strategy_id = deploy_strategy();
+
+		// Set minimum added funds thresholds
+		MinimumAddedFundsToStrategy::<Test>::insert(BASE_ASSET, MIN_BASE_AMOUNT);
+		MinimumAddedFundsToStrategy::<Test>::insert(QUOTE_ASSET, MIN_QUOTE_AMOUNT);
+
+		// Credit LP with sufficient funds
+		MockBalance::credit_account(&LP, BASE_ASSET, MIN_BASE_AMOUNT * 10);
+		MockBalance::credit_account(&LP, QUOTE_ASSET, MIN_QUOTE_AMOUNT * 10);
+
+		// One sided funding below the minimum threshold should fail
+		assert_err!(
+			TradingStrategyPallet::add_funds_to_strategy(
+				RuntimeOrigin::signed(LP),
+				strategy_id,
+				[(BASE_ASSET, MIN_BASE_AMOUNT - 1)].into()
+			),
+			Error::<Test>::AmountBelowAddedFundsThreshold
+		);
+
+		assert_err!(
+			TradingStrategyPallet::add_funds_to_strategy(
+				RuntimeOrigin::signed(LP),
+				strategy_id,
+				[(QUOTE_ASSET, MIN_QUOTE_AMOUNT - 1)].into()
+			),
+			Error::<Test>::AmountBelowAddedFundsThreshold
+		);
+
+		// Total funding below the minimum threshold should fail
+		assert_err!(
+			TradingStrategyPallet::add_funds_to_strategy(
+				RuntimeOrigin::signed(LP),
+				strategy_id,
+				[(BASE_ASSET, MIN_BASE_AMOUNT / 2 - 1), (QUOTE_ASSET, MIN_QUOTE_AMOUNT / 2)].into()
+			),
+			Error::<Test>::AmountBelowAddedFundsThreshold
+		);
+
+		// Add funds meeting the minimum threshold
+		assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
+			RuntimeOrigin::signed(LP),
+			strategy_id,
+			[(BASE_ASSET, MIN_BASE_AMOUNT)].into()
+		));
+
+		assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
+			RuntimeOrigin::signed(LP),
+			strategy_id,
+			[(QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+		));
+
+		assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
+			RuntimeOrigin::signed(LP),
+			strategy_id,
+			[(BASE_ASSET, MIN_BASE_AMOUNT / 2), (QUOTE_ASSET, MIN_QUOTE_AMOUNT / 2)].into()
+		));
+	});
+}
+
+#[test]
 fn refund_addresses_are_required() {
 	new_test_ext().then_execute_at_next_block(|_| {
 		// Using base asset that's on a different chain to make sure that
 		// two different refund addresses are required:
 		let base_asset = Asset::ArbUsdc;
+
+		turn_off_thresholds();
 
 		MockBalance::credit_account(&LP, base_asset, BASE_AMOUNT);
 		MockBalance::credit_account(&LP, QUOTE_ASSET, QUOTE_AMOUNT);
@@ -398,4 +483,139 @@ fn deregistration_check() {
 
 			assert_ok!(TradingStrategyDeregistrationCheck::<Test>::check(&LP));
 		});
+}
+
+#[test]
+fn can_update_all_config_items() {
+	new_test_ext().execute_with(|| {
+		const NEW_MIN_DEPLOY_AMOUNT_USDC: AssetAmount = 50_000 * 10u128.pow(6);
+		const NEW_MIN_DEPLOY_AMOUNT_USDT: AssetAmount = 60_000 * 10u128.pow(6);
+		const NEW_MIN_ADDED_FUNDS_USDC: AssetAmount = 20_000 * 10u128.pow(6);
+		const NEW_MIN_ADDED_FUNDS_USDT: AssetAmount = 25_000 * 10u128.pow(6);
+		const NEW_LIMIT_ORDER_THRESHOLD_USDC: AssetAmount = 5_000 * 10u128.pow(6);
+		const NEW_LIMIT_ORDER_THRESHOLD_USDT: AssetAmount = 6_000 * 10u128.pow(6);
+
+		// Check that the default values are different from the new ones
+		assert_ne!(
+			MinimumDeploymentAmountForStrategy::<Test>::get(Asset::Usdc),
+			NEW_MIN_DEPLOY_AMOUNT_USDC
+		);
+		assert_ne!(
+			MinimumDeploymentAmountForStrategy::<Test>::get(Asset::Usdt),
+			NEW_MIN_DEPLOY_AMOUNT_USDT
+		);
+		assert_ne!(MinimumAddedFundsToStrategy::<Test>::get(Asset::Usdc), NEW_MIN_ADDED_FUNDS_USDC);
+		assert_ne!(MinimumAddedFundsToStrategy::<Test>::get(Asset::Usdt), NEW_MIN_ADDED_FUNDS_USDT);
+		assert_ne!(
+			LimitOrderUpdateThresholds::<Test>::get()
+				.get(&Asset::Usdc)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDC
+		);
+		assert_ne!(
+			LimitOrderUpdateThresholds::<Test>::get()
+				.get(&Asset::Usdt)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDT
+		);
+
+		// Update all config items at the same time
+		assert_ok!(TradingStrategyPallet::update_pallet_config(
+			RuntimeOrigin::root(),
+			vec![
+				PalletConfigUpdate::MinimumDeploymentAmountForStrategy {
+					asset: Asset::Usdc,
+					amount: NEW_MIN_DEPLOY_AMOUNT_USDC
+				},
+				PalletConfigUpdate::MinimumDeploymentAmountForStrategy {
+					asset: Asset::Usdt,
+					amount: NEW_MIN_DEPLOY_AMOUNT_USDT
+				},
+				PalletConfigUpdate::MinimumAddedFundsToStrategy {
+					asset: Asset::Usdc,
+					amount: NEW_MIN_ADDED_FUNDS_USDC
+				},
+				PalletConfigUpdate::MinimumAddedFundsToStrategy {
+					asset: Asset::Usdt,
+					amount: NEW_MIN_ADDED_FUNDS_USDT
+				},
+				PalletConfigUpdate::LimitOrderUpdateThreshold {
+					asset: Asset::Usdc,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC
+				},
+				PalletConfigUpdate::LimitOrderUpdateThreshold {
+					asset: Asset::Usdt,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT
+				},
+			]
+			.try_into()
+			.unwrap()
+		));
+
+		// Check that the new values were set
+		assert_eq!(
+			MinimumDeploymentAmountForStrategy::<Test>::get(Asset::Usdc),
+			NEW_MIN_DEPLOY_AMOUNT_USDC
+		);
+		assert_eq!(
+			MinimumDeploymentAmountForStrategy::<Test>::get(Asset::Usdt),
+			NEW_MIN_DEPLOY_AMOUNT_USDT
+		);
+		assert_eq!(MinimumAddedFundsToStrategy::<Test>::get(Asset::Usdc), NEW_MIN_ADDED_FUNDS_USDC);
+		assert_eq!(MinimumAddedFundsToStrategy::<Test>::get(Asset::Usdt), NEW_MIN_ADDED_FUNDS_USDT);
+		assert_eq!(
+			LimitOrderUpdateThresholds::<Test>::get()
+				.get(&Asset::Usdc)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDC
+		);
+		assert_eq!(
+			LimitOrderUpdateThresholds::<Test>::get()
+				.get(&Asset::Usdt)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDT
+		);
+
+		// Check that the events were emitted
+		assert_events_eq!(
+			Test,
+			RuntimeEvent::TradingStrategyPallet(Event::MinimumDeploymentAmountForStrategySet {
+				asset: Asset::Usdc,
+				amount: NEW_MIN_DEPLOY_AMOUNT_USDC,
+			}),
+			RuntimeEvent::TradingStrategyPallet(Event::MinimumDeploymentAmountForStrategySet {
+				asset: Asset::Usdt,
+				amount: NEW_MIN_DEPLOY_AMOUNT_USDT,
+			}),
+			RuntimeEvent::TradingStrategyPallet(Event::MinimumAddedFundsToStrategySet {
+				asset: Asset::Usdc,
+				amount: NEW_MIN_ADDED_FUNDS_USDC,
+			}),
+			RuntimeEvent::TradingStrategyPallet(Event::MinimumAddedFundsToStrategySet {
+				asset: Asset::Usdt,
+				amount: NEW_MIN_ADDED_FUNDS_USDT,
+			}),
+			RuntimeEvent::TradingStrategyPallet(Event::LimitOrderUpdateThresholdSet {
+				asset: Asset::Usdc,
+				amount: NEW_LIMIT_ORDER_THRESHOLD_USDC,
+			}),
+			RuntimeEvent::TradingStrategyPallet(Event::LimitOrderUpdateThresholdSet {
+				asset: Asset::Usdt,
+				amount: NEW_LIMIT_ORDER_THRESHOLD_USDT,
+			}),
+		);
+
+		// Make sure that only governance can update the config
+		assert_noop!(
+			TradingStrategyPallet::update_pallet_config(
+				RuntimeOrigin::signed(ALICE),
+				vec![].try_into().unwrap()
+			),
+			sp_runtime::traits::BadOrigin
+		);
+	});
 }

@@ -43,10 +43,10 @@ use frame_support::{
 use cf_traits::HistoricalFeeMigration;
 
 use cf_traits::LpRegistration;
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::{pallet_prelude::OriginFor, WeightInfo as SystemWeightInfo};
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{SaturatedConversion, Zero};
-use sp_std::{boxed::Box, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
 
 pub use pallet::*;
 
@@ -62,6 +62,28 @@ mod mock;
 mod tests;
 
 impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_update_enabled);
+
+type SweepingThresholds = BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>;
+pub struct DefaultLimitOrderAutoSweepingThresholds<T> {
+	_phantom: PhantomData<T>,
+}
+impl<T: Config> Get<SweepingThresholds> for DefaultLimitOrderAutoSweepingThresholds<T> {
+	fn get() -> SweepingThresholds {
+		Asset::all()
+			.map(|asset| {
+				(
+					asset,
+					match asset {
+						Asset::Usdc | Asset::Usdt => 1_000 * 10u128.pow(6),
+						_ => u128::MAX, // Turned off by default for all other assets
+					},
+				)
+			})
+			.collect::<BTreeMap<Asset, AssetAmount>>()
+			.try_into()
+			.expect("Asset list will fit")
+	}
+}
 
 pub const MAX_ORDERS_DELETE: u32 = 100;
 #[derive(
@@ -173,6 +195,11 @@ impl<T> AskBidMap<T> {
 	pub fn map<S, F: FnMut(T) -> S>(self, mut f: F) -> AskBidMap<S> {
 		AskBidMap { asks: f(self.asks), bids: f(self.bids) }
 	}
+}
+
+#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum PalletConfigUpdate {
+	LimitOrderAutoSweepingThresholds { asset: Asset, amount: AssetAmount },
 }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
@@ -310,7 +337,7 @@ pub mod pallet {
 	/// swept
 	#[pallet::storage]
 	pub(super) type LimitOrderAutoSweepingThresholds<T: Config> =
-		StorageValue<_, BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>, ValueQuery>;
+		StorageValue<_, SweepingThresholds, ValueQuery, DefaultLimitOrderAutoSweepingThresholds<T>>;
 
 	#[pallet::storage]
 	/// Historical earned fees for an account.
@@ -392,6 +419,31 @@ pub mod pallet {
 		InvalidSize,
 	}
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T> {
+		pub limit_order_auto_sweeping_thresholds: SweepingThresholds,
+		pub _phantom: PhantomData<T>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+		fn build(&self) {
+			LimitOrderAutoSweepingThresholds::<T>::set(
+				self.limit_order_auto_sweeping_thresholds.clone(),
+			);
+		}
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				limit_order_auto_sweeping_thresholds:
+					DefaultLimitOrderAutoSweepingThresholds::<T>::get(),
+				_phantom: Default::default(),
+			}
+		}
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -465,6 +517,10 @@ pub mod pallet {
 		/// An order wasn't deleted (order not found)
 		OrderDeletionFailed {
 			order: CloseOrder,
+		},
+		LimitOrderAutoSweepingThresholdsUpdated {
+			asset: Asset,
+			amount: AssetAmount,
 		},
 	}
 
@@ -958,6 +1014,34 @@ pub mod pallet {
 						})?;
 					},
 				};
+			}
+
+			Ok(())
+		}
+
+		/// Apply a list of configuration updates to the pallet.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(11)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			for update in updates {
+				match update {
+					PalletConfigUpdate::LimitOrderAutoSweepingThresholds { asset, amount } => {
+						LimitOrderAutoSweepingThresholds::<T>::mutate(|thresholds| {
+							thresholds.try_insert(asset, amount).expect("Every asset will fit");
+						});
+						Self::deposit_event(Event::<T>::LimitOrderAutoSweepingThresholdsUpdated {
+							asset,
+							amount,
+						});
+					},
+				}
 			}
 
 			Ok(())

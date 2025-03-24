@@ -362,6 +362,8 @@ impl ExtBuilder {
 			solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
 				broadcast_timeout: 4 * BLOCKS_PER_MINUTE_SOLANA,
 			},
+			liquidity_pools: Default::default(),
+			trading_strategy: Default::default(),
 		})
 	}
 }
