@@ -58,6 +58,7 @@ use frame_support::{
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
 	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
+	weights::Weight,
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
@@ -1087,6 +1088,22 @@ pub trait BalanceApi {
 
 	/// Returns the balance of the given account for the given asset.
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount;
+
+	/// Transfers asset from one account to another. This function assumes that
+	/// the target account credited has a refund address registered for the asset.
+	fn transfer(
+		from: &Self::AccountId,
+		to: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		if amount > 0 {
+			Self::try_debit_account(from, asset, amount)?;
+			Self::credit_account(to, asset, amount);
+		}
+
+		Ok(())
+	}
 }
 
 pub trait IngressSink {
@@ -1204,4 +1221,9 @@ pub trait AffiliateRegistry {
 
 pub trait MinimumDeposit {
 	fn get(asset: Asset) -> AssetAmount;
+}
+
+// Used for exposing weights from the Pools pallet
+pub trait LpOrdersWeightsProvider {
+	fn update_limit_order_weight() -> Weight;
 }

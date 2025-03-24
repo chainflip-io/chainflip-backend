@@ -21,7 +21,10 @@ use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
 	hub::AssethubTrackedData,
-	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, SolTrackedData},
+	sol::{
+		api::DurableNonceAndAccount, AddressLookupTableAccount, SolAddress, SolApiEnvironment,
+		SolHash, SolTrackedData,
+	},
 	Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use cf_primitives::{
@@ -128,11 +131,13 @@ pub struct StateChainEnvironment {
 	sol_usdc_token_mint_pubkey: SolAddress,
 	sol_token_vault_pda_account: SolAddress,
 	sol_usdc_token_vault_ata: SolAddress,
-	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 10], /* we inject 10 nonce
-	                                                                * accounts
-	                                                                * at genesis */
+	// We injected 10 nonce accounts at genesis and 40 more on an upgrade
+	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 50],
 	sol_swap_endpoint_program: SolAddress,
 	sol_swap_endpoint_program_data_account: SolAddress,
+	sol_alt_manager_program: SolAddress,
+	// Initialized with 65 accounts (50 of them nonces)
+	sol_address_lookup_table_account: (SolAddress, [SolAddress; 65]),
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -184,6 +189,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		SOL_SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
 		sol_swap_endpoint_program_data_account
 	);
+	from_env_var!(FromStr::from_str, SOL_ALT_MANAGER_PROGRAM, sol_alt_manager_program);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -230,6 +236,11 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.sol_durable_nonces_and_accounts,
 	};
 
+	let sol_address_lookup_table_account = match env::var("SOL_ADDRESS_LOOKUP_TABLE_ACCOUNT") {
+		Ok(_) => unimplemented!("Solana address lookup table account should not be supplied via environment variables since its a complex type"),
+		Err(_) => defaults.sol_address_lookup_table_account,
+	};
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -269,6 +280,8 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		sol_durable_nonces_and_accounts,
 		sol_swap_endpoint_program,
 		sol_swap_endpoint_program_data_account,
+		sol_alt_manager_program,
+		sol_address_lookup_table_account,
 	}
 }
 
@@ -341,6 +354,8 @@ pub fn inner_cf_development_config(
 		sol_durable_nonces_and_accounts,
 		sol_swap_endpoint_program,
 		sol_swap_endpoint_program_data_account,
+		sol_alt_manager_program,
+		sol_address_lookup_table_account,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, Default::default())
 		.with_name("CF Develop")
@@ -382,6 +397,15 @@ pub fn inner_cf_development_config(
 					usdc_token_vault_ata: sol_usdc_token_vault_ata,
 					swap_endpoint_program: sol_swap_endpoint_program,
 					swap_endpoint_program_data_account: sol_swap_endpoint_program_data_account,
+					alt_manager_program: sol_alt_manager_program,
+					address_lookup_table_account: AddressLookupTableAccount {
+						key: sol_address_lookup_table_account.0.into(),
+						addresses: sol_address_lookup_table_account
+							.1
+							.into_iter()
+							.map(|addr| addr.into())
+							.collect(),
+					},
 				},
 				sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts.to_vec(),
 				network_environment: NetworkEnvironment::Development,
@@ -478,6 +502,8 @@ macro_rules! network_spec {
 					sol_durable_nonces_and_accounts,
 					sol_swap_endpoint_program,
 					sol_swap_endpoint_program_data_account,
+					sol_alt_manager_program,
+					sol_address_lookup_table_account,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -552,6 +578,15 @@ macro_rules! network_spec {
 								swap_endpoint_program: sol_swap_endpoint_program,
 								swap_endpoint_program_data_account:
 									sol_swap_endpoint_program_data_account,
+								alt_manager_program: sol_alt_manager_program,
+								address_lookup_table_account: AddressLookupTableAccount {
+									key: sol_address_lookup_table_account.0.into(),
+									addresses: sol_address_lookup_table_account
+										.1
+										.into_iter()
+										.map(|addr| addr.into())
+										.collect(),
+								},
 							},
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()

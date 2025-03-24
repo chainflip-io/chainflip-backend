@@ -27,7 +27,7 @@ use cf_chains::{
 			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
 			SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolHash,
+		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,
 	},
 	ApiCall, Arbitrum, Assethub, Bitcoin, Chain, ChainCrypto, ChainEnvironment, Polkadot, Solana,
 };
@@ -175,6 +175,11 @@ impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment 
 			usdc_token_vault_ata: SolAddress([0x00; 32]),
 			swap_endpoint_program: SolAddress([0x00; 32]),
 			swap_endpoint_program_data_account: SolAddress([0x00; 32]),
+			alt_manager_program: SolAddress([0x00; 32]),
+			address_lookup_table_account: SolAddressLookupTableAccount {
+				key: SolAddress([0x00; 32]).into(),
+				addresses: vec![],
+			},
 		})
 	}
 }
@@ -208,6 +213,7 @@ impl RecoverDurableNonce for MockSolEnvironment {
 		unimplemented!();
 	}
 }
+
 impl SolanaEnvironment for MockSolEnvironment {}
 
 pub struct MockSolanaBroadcaster;

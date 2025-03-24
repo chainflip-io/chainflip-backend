@@ -28,7 +28,8 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler, swap_request_api::MockSwapRequestHandler,
+		egress_handler::MockEgressHandler, pool_api::MockPoolApi,
+		swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry, BalanceApi, BoostApi, HistoricalFeeMigration, MinimumDeposit,
 };
@@ -182,7 +183,7 @@ impl crate::Config for Test {
 	type AddressConverter = MockAddressConverter;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
-	type PoolApi = Self;
+	type PoolApi = MockPoolApi;
 	type BalanceApi = MockBalanceApi;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;

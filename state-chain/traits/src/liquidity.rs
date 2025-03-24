@@ -14,11 +14,62 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_amm::common::PoolPairsMap;
+pub use cf_amm::common::{PoolPairsMap, Side};
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, Tick};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
-use sp_std::{vec, vec::Vec};
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_std::vec::Vec;
+
+pub type OrderId = u64;
+
+/// Indicates if an LP wishes to increase or decrease the size of an order.
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum IncreaseOrDecrease<T> {
+	Increase(T),
+	Decrease(T),
+}
+
+impl<T> IncreaseOrDecrease<T> {
+	pub fn abs(&self) -> &T {
+		match self {
+			IncreaseOrDecrease::Increase(t) => t,
+			IncreaseOrDecrease::Decrease(t) => t,
+		}
+	}
+
+	pub fn map<R, F: FnOnce(T) -> R>(self, f: F) -> IncreaseOrDecrease<R> {
+		match self {
+			IncreaseOrDecrease::Increase(t) => IncreaseOrDecrease::Increase(f(t)),
+			IncreaseOrDecrease::Decrease(t) => IncreaseOrDecrease::Decrease(f(t)),
+		}
+	}
+
+	pub fn try_map<R, E, F: FnOnce(T) -> Result<R, E>>(
+		self,
+		f: F,
+	) -> Result<IncreaseOrDecrease<R>, E> {
+		Ok(match self {
+			IncreaseOrDecrease::Increase(t) => IncreaseOrDecrease::Increase(f(t)?),
+			IncreaseOrDecrease::Decrease(t) => IncreaseOrDecrease::Decrease(f(t)?),
+		})
+	}
+}
 
 pub trait LpDepositHandler {
 	type AccountId;
@@ -41,6 +92,17 @@ pub trait LpRegistration {
 
 	/// Ensure that the given account has a refund address set for the given asset.
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult;
+
+	/// Ensure that the given account has a refund address set for the given assets.
+	fn ensure_has_refund_address_for_assets(
+		who: &Self::AccountId,
+		assets: impl IntoIterator<Item = Asset>,
+	) -> DispatchResult {
+		for asset in assets {
+			Self::ensure_has_refund_address_for_asset(who, asset)?;
+		}
+		Ok(())
+	}
 }
 
 pub trait HistoricalFeeMigration {
@@ -65,27 +127,45 @@ pub trait PoolApi {
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 
 	fn pools() -> Vec<PoolPairsMap<Asset>>;
-}
 
-impl<T: frame_system::Config> PoolApi for T {
-	type AccountId = T::AccountId;
+	fn update_limit_order(
+		account: &Self::AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderId,
+		option_tick: Option<Tick>,
+		amount_change: IncreaseOrDecrease<AssetAmount>,
+	) -> DispatchResult;
 
-	fn sweep(_who: &Self::AccountId) -> Result<(), DispatchError> {
-		Ok(())
+	fn cancel_all_limit_orders(account: &Self::AccountId) -> DispatchResult;
+
+	fn cancel_limit_order(
+		account: &Self::AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderId,
+		tick: Tick,
+	) -> DispatchResult {
+		Self::update_limit_order(
+			account,
+			base_asset,
+			quote_asset,
+			side,
+			id,
+			Some(tick),
+			IncreaseOrDecrease::Decrease(AssetAmount::MAX),
+		)
 	}
 
-	fn open_order_count(
-		_who: &Self::AccountId,
-		_asset_pair: &PoolPairsMap<Asset>,
-	) -> Result<u32, DispatchError> {
-		Ok(0)
-	}
-	fn open_order_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
-		AssetMap::from_fn(|_| 0)
-	}
-	fn pools() -> Vec<PoolPairsMap<Asset>> {
-		vec![]
-	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn create_pool(
+		base_asset: Asset,
+		quote_asset: Asset,
+		fee_hundredth_pips: u32,
+		initial_price: cf_primitives::Price,
+	) -> DispatchResult;
 }
 
 pub trait SwappingApi {

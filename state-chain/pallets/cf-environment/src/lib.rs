@@ -674,7 +674,7 @@ pub mod pallet {
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
-			SolanaApiEnvironment::<T>::set(self.sol_api_env);
+			SolanaApiEnvironment::<T>::set(self.sol_api_env.clone());
 			SolanaAvailableNonceAccounts::<T>::set(self.sol_durable_nonces_and_accounts.clone());
 
 			AssethubGenesisHash::<T>::set(self.assethub_genesis_hash);

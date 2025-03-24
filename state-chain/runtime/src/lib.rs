@@ -66,7 +66,7 @@ use cf_chains::{
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
 	ccm_checker::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
-		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
+		DecodedCcmAdditionalData,
 	},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -99,6 +99,7 @@ use pallet_cf_pools::{
 use pallet_cf_swapping::{
 	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
 };
+use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
@@ -600,7 +601,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type DeregistrationCheck = Bonder<Self>;
+	type DeregistrationCheck = (Bonder<Self>, TradingStrategyDeregistrationCheck<Self>);
 	type WeightInfo = ();
 }
 
@@ -1114,6 +1115,15 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
+impl pallet_cf_trading_strategy::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
+	type LpOrdersWeights = LiquidityPools;
+	type BalanceApi = AssetBalances;
+	type PoolApi = LiquidityPools;
+	type LpRegistrationApi = LiquidityProvider;
+}
+
 #[frame_support::runtime]
 mod runtime {
 	#[runtime::runtime]
@@ -1238,6 +1248,9 @@ mod runtime {
 	pub type AssethubBroadcaster = pallet_cf_broadcast<Instance6>;
 	#[runtime::pallet_index(51)]
 	pub type AssethubIngressEgress = pallet_cf_ingress_egress<Instance6>;
+
+	#[rutnime::pallet_index(52)]
+	pub type TradingStrategy = pallet_cf_trading_strategy;
 }
 
 /// The address format for describing accounts.
@@ -1338,6 +1351,8 @@ pub type PalletExecutionOrder = (
 	AssethubIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
+	// Miscellaneous
+	TradingStrategy,
 );
 
 /// Contains:
@@ -1402,6 +1417,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, AssethubInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
+	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 );
 
 macro_rules! instanced_migrations {
@@ -1480,6 +1496,7 @@ mod benches {
 		[pallet_cf_cfe_interface, CfeInterface]
 		[pallet_cf_asset_balances, AssetBalances]
 		[pallet_cf_elections, SolanaElections]
+		[pallet_cf_trading_strategy, TradingStrategy]
 	);
 }
 
@@ -2284,7 +2301,9 @@ impl_runtime_apis! {
 				// Ensure CCM message is valid
 				match CcmValidityChecker::check_and_decode(ccm, destination_asset, destination_address.clone())
 				{
-					Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(ccm_accounts))) => {
+					Ok(DecodedCcmAdditionalData::Solana(decoded)) => {
+						let ccm_accounts = decoded.ccm_accounts();
+
 						// Ensure the CCM parameters do not contain blacklisted accounts.
 						// Load up environment variables.
 						let api_environment =
@@ -2945,6 +2964,14 @@ mod test {
 	use super::*;
 
 	const CALL_ENUM_MAX_SIZE: usize = 320;
+
+	#[test]
+	fn account_id_size() {
+		assert!(
+			core::mem::size_of::<AccountId>() <= 32,
+			r"Our use of blake2_256 to derive account ids requires that account ids are no larger than 32 bytes"
+		);
+	}
 
 	// Introduced from polkadot
 	#[test]

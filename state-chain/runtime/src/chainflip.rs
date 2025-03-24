@@ -421,11 +421,14 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 						RequiresSignatureRefresh::False,
 						|active_epoch_key| {
 							let current_aggkey = active_epoch_key.key;
-							for key in modified_call.transaction.message.account_keys.iter_mut() {
-								if *key == signer.into() {
-									*key = current_aggkey.into()
+							modified_call.transaction.message.map_static_account_keys(|key| {
+								if key == signer.into() {
+									current_aggkey.into()
+								} else {
+									key
 								}
-							}
+							});
+
 							for sig in modified_call.transaction.signatures.iter_mut() {
 								*sig = Default::default()
 							}
