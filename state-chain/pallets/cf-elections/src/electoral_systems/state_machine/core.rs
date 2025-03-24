@@ -93,6 +93,10 @@ pub mod hook_test_utils {
 			pub fn new(b: T::Output) -> Self {
 				Self { state: b, call_history: Vec::new(), _phantom: Default::default() }
 			}
+
+			pub fn take_history(&mut self) -> Vec<T::Input> {
+				sp_std::mem::take(&mut self.call_history)
+			}
 		}
 
 		impl Default where (T::Output: Default)
@@ -112,6 +116,33 @@ pub mod hook_test_utils {
 				self.call_history.push(input);
 				self.state.clone()
 			}
+		}
+	}
+
+	/// Hook to use for when we want to not do anything, for example
+	/// useful for "disabling" debug hooks in production.
+	/// It is marked as `inline` so shouldn't have any runtime cost.
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+		Default,
+	)]
+	pub struct EmptyHook {}
+
+	impl<X: HookType<Output = ()>> Hook<X> for EmptyHook {
+		#[inline]
+		fn run(&mut self, _input: <X as HookType>::Input) -> <X as HookType>::Output {
+			()
 		}
 	}
 }
