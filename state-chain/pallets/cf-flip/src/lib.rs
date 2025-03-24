@@ -32,12 +32,11 @@ use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	AccountInfo, Bonding, CallInfoId, DeregistrationCheck, FeePayment, FundingInfo,
-	OnAccountFunded, Slashing, TransactionFeeScaler,
+	AccountInfo, Bonding, CallInfoId, DeregistrationCheck, FeePayment, FeeScalingRateConfig,
+	FundingInfo, OnAccountFunded, Slashing, TransactionFeeScaler,
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
-use sp_runtime::FixedU64;
 
 use frame_support::{
 	ensure,
@@ -70,23 +69,7 @@ pub use pallet::*;
 pub enum PalletConfigUpdate {
 	SetSlashingRate(Permill),
 	// Set fee scaling rate for any calls that are scaled.
-	SetFeeScalingRate(ExponentBufferFeeConfig),
-}
-
-// See `state-chain/pallets/cf-flip/src/on_charge_transaction.rs` for how this is used.
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
-pub struct ExponentBufferFeeConfig {
-	// Number of calls before fee scaling is applied.
-	pub buffer: u16,
-	// Base for the fee scaling exponent.
-	pub exp_base: FixedU64,
-}
-
-impl Default for ExponentBufferFeeConfig {
-	fn default() -> Self {
-		// Default to no scaling. 1^x = 1.
-		Self { buffer: 0, exp_base: FixedU64::from_rational(1, 1) }
-	}
+	SetFeeScalingRate(FeeScalingRateConfig),
 }
 
 #[frame_support::pallet]
@@ -135,11 +118,6 @@ pub mod pallet {
 			Self::AccountId,
 			Self::Balance,
 		>;
-
-		/// For calls that are spam-able, the fee taken in pre-dispatch.
-		/// Excess fees taken are returned in post-dispatch
-		#[pallet::constant]
-		type SpamPreventionUpfrontFee: Get<Self::Balance>;
 	}
 
 	#[pallet::pallet]
@@ -183,7 +161,7 @@ pub mod pallet {
 		StorageMap<_, Identity, CallInfoId<T::AccountId>, u16, ValueQuery>;
 
 	#[pallet::storage]
-	pub type FeeScalingRateConfig<T: Config> = StorageValue<_, ExponentBufferFeeConfig, ValueQuery>;
+	pub type FeeScalingRate<T: Config> = StorageValue<_, FeeScalingRateConfig, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -205,7 +183,7 @@ pub mod pallet {
 			slashing_rate: Permill,
 		},
 		FeeScalingRateUpdated {
-			fee_scaling_rate: ExponentBufferFeeConfig,
+			fee_scaling_rate: FeeScalingRateConfig,
 		},
 	}
 
@@ -256,7 +234,7 @@ pub mod pallet {
 					// The range is: [0.000000000, 18446744073.709551615]
 					// i.e. there are 9 decimal places.
 					PalletConfigUpdate::SetFeeScalingRate(fee_scaling_rate) => {
-						FeeScalingRateConfig::<T>::set(fee_scaling_rate);
+						FeeScalingRate::<T>::set(fee_scaling_rate);
 						Self::deposit_event(Event::FeeScalingRateUpdated { fee_scaling_rate });
 					},
 				}

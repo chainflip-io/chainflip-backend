@@ -29,7 +29,7 @@ use frame_support::{
 };
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
-use sp_runtime::Permill;
+use sp_runtime::{FixedU64, Permill};
 use std::mem;
 
 impl FlipOperation {
@@ -515,7 +515,6 @@ mod test_tx_payments {
 				0,
 			)
 			.expect("Alice can afford the fee.")
-			.imbalance
 			.is_none());
 		});
 	}
@@ -564,7 +563,7 @@ mod test_tx_payments {
 			.expect("Alice can afford the fee.");
 
 			// Fee is in escrow.
-			assert_eq!(escrow.imbalance.as_ref().map(|fee| fee.peek()), Some(FEE));
+			assert_eq!(escrow.as_ref().map(|(fee, _)| fee.peek()), Some(FEE));
 			// Issuance unchanged.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
@@ -626,7 +625,7 @@ mod test_tx_payments {
 			.expect("Alice can afford the fee.");
 
 			// Fee is in escrow.
-			assert_eq!(escrow.imbalance.as_ref().map(|fee| fee.peek()), Some(PRE_FEE));
+			assert_eq!(escrow.as_ref().map(|(fee, _)| fee.peek()), Some(PRE_FEE));
 			// Issuance unchanged.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
@@ -670,16 +669,18 @@ fn update_pallet_config() {
 		assert_eq!(SlashingRate::<Test>::get(), update_to_slashing_rate);
 
 		// Fee scaling rate can be updated
-		let update_to_fee_scaling_rate =
-			ExponentBufferFeeConfig { buffer: 10, exp_base: FixedU64::from_rational(11, 10) };
+		let update_to_fee_scaling_rate = FeeScalingRateConfig::ExponentBuffer {
+			buffer: 10,
+			exp_base: FixedU64::from_rational(11, 10),
+		};
 		// compare to fee we will update to with the fee before to see it updates
-		assert_ne!(FeeScalingRateConfig::<Test>::get(), update_to_fee_scaling_rate);
+		assert_ne!(FeeScalingRate::<Test>::get(), update_to_fee_scaling_rate);
 		assert_ok!(Flip::update_pallet_config(
 			RuntimeOrigin::root(),
 			vec![PalletConfigUpdate::SetFeeScalingRate(update_to_fee_scaling_rate)]
 				.try_into()
 				.unwrap(),
 		));
-		assert_eq!(FeeScalingRateConfig::<Test>::get(), update_to_fee_scaling_rate);
+		assert_eq!(FeeScalingRate::<Test>::get(), update_to_fee_scaling_rate);
 	});
 }

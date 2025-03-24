@@ -17,7 +17,7 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
-use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
+use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_waived_fees, Funding, TransactionFeeScaler, WaivedFees,
 };
@@ -74,7 +74,6 @@ impl pallet_cf_flip::Config for Test {
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 	type TransactionFeeScaler = MockTransactionFeeScaler;
-	type SpamPreventionUpfrontFee = ConstU128<FLIPPERINOS_PER_FLIP>;
 }
 
 parameter_types! {
