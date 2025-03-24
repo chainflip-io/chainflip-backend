@@ -1830,20 +1830,28 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<TradingStrategyInfo<NumberOrHex>>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			let strategies = api
-				.cf_get_trading_strategies(hash, lp)?
-				.into_iter()
-				.map(|info| TradingStrategyInfo {
-					lp_id: info.lp_id,
-					strategy_id: info.strategy_id,
-					strategy: info.strategy,
-					balance: info
-						.balance
-						.into_iter()
-						.map(|(asset, amount)| (asset, amount.into()))
-						.collect(),
-				})
-				.collect();
+			let api_version = api
+				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)?
+				.unwrap_or_default();
+
+			let strategies = if api_version < 4 {
+				// Strategies didn't exist in earlier versions:
+				vec![]
+			} else {
+				api.cf_get_trading_strategies(hash, lp)?
+					.into_iter()
+					.map(|info| TradingStrategyInfo {
+						lp_id: info.lp_id,
+						strategy_id: info.strategy_id,
+						strategy: info.strategy,
+						balance: info
+							.balance
+							.into_iter()
+							.map(|(asset, amount)| (asset, amount.into()))
+							.collect(),
+					})
+					.collect()
+			};
 
 			RpcResult::Ok(strategies)
 		})
