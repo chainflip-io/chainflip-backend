@@ -89,6 +89,7 @@ pub enum VoteValidationError {
 	BlockHeightsNotContinuous,
 	ParentHashMismatch,
 	EmptyVote,
+	BlockNotMatchingRequestedHeight,
 }
 
 #[derive(

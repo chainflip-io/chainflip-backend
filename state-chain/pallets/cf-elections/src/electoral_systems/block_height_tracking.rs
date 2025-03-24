@@ -6,6 +6,7 @@ use super::{
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
+use derive_where::derive_where;
 use frame_support::ensure;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ pub mod consensus;
 pub mod primitives;
 pub mod state_machine;
 
-pub trait BlockHeightTrackingTypes: Ord + PartialEq + Clone + Debug + 'static {
+pub trait HWTypes: Ord + PartialEq + Clone + Debug + 'static {
 	const BLOCK_BUFFER_SIZE: usize;
 	type ChainBlockNumber: SaturatingStep
 		+ BlockZero
@@ -42,30 +43,21 @@ pub trait BlockHeightTrackingTypes: Ord + PartialEq + Clone + Debug + 'static {
 }
 
 pub struct BlockHeightChangeHook;
-impl<T: BlockHeightTrackingTypes> HookType for HookTypeFor<T, BlockHeightChangeHook> {
+impl<T: HWTypes> HookType for HookTypeFor<T, BlockHeightChangeHook> {
 	type Input = T::ChainBlockNumber;
 	type Output = ();
 }
 
 #[cfg_attr(test, derive(Arbitrary))]
-#[derive(
-	Debug,
-	Clone,
-	Copy,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	TypeInfo,
-	Deserialize,
-	Serialize,
-	Ord,
-	PartialOrd,
+#[derive_where(
+	Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd;
+	T::ChainBlockNumber: Debug + Clone + Copy + Eq + Ord
 )]
-pub struct BlockHeightTrackingProperties<BlockNumber> {
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub struct HeightWitnesserProperties<T: HWTypes> {
 	/// An election starts with a given block number,
 	/// meaning that engines have to submit all blocks they know of starting with this height.
-	pub witness_from_index: BlockNumber,
+	pub witness_from_index: T::ChainBlockNumber,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
