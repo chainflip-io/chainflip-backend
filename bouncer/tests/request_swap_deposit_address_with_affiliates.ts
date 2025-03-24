@@ -45,7 +45,6 @@ export async function depositChannelCreation(testContext: TestContext) {
     destAsset: { asset: Asset; chain: Chain };
   };
 
-
   const numberSchema = z.string().transform((n) => Number(n.replace(/,/g, '')));
   const bigintSchema = z.string().transform((n) => BigInt(n.replace(/,/g, '')));
 
@@ -111,7 +110,7 @@ export async function depositChannelCreation(testContext: TestContext) {
           gas_budget: `0x${BigInt(params.ccmParams.gasBudget).toString(16)}`,
           ccm_additional_data: params.ccmParams.ccmAdditionalData,
         },
-        getInternalAsset(params.srcAsset) === 'Btc' ? params.maxBoostFeeBps ?? 0 : 0,
+        getInternalAsset(params.srcAsset) === 'Btc' ? (params.maxBoostFeeBps ?? 0) : 0,
         (params.affiliates ?? []).map(({ account, commissionBps }) => ({
           account: isHex(account) ? account : bytesToHex(ss58.decode(account).data),
           bps: commissionBps,
@@ -292,6 +291,7 @@ export async function depositChannelCreation(testContext: TestContext) {
     if (result.status === 'fulfilled') {
       testContext.debug(`swap channel ${i} opened successfully`);
     } else {
-      throw new Error(`Swap channel ${i} couldn't be opened: ${(result.reason as Error).message}`);    }
+      throw new Error(`Swap channel ${i} couldn't be opened: ${(result.reason as Error).message}`);
+    }
   });
 }

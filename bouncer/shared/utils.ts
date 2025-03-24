@@ -620,7 +620,7 @@ export async function newAddress(
 
 export function chainFromAsset(asset: Asset): Chain {
   if (isSDKAsset(asset)) return assetConstants[asset].chain;
-  else if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
+  if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
   throw new Error(`Unsupported asset: ${asset}`);
 }
 

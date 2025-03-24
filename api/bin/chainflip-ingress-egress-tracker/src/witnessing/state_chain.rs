@@ -221,7 +221,7 @@ impl IntoDepositDetailsAnyChain for u32 {
 		Some(DepositDetails::Polkadot { extrinsic_index: self })
 	}
 }
-//todo: impl IntoDepositDetailsAnyChain for Assethub
+
 impl IntoDepositDetailsAnyChain for Vec<H256> {
 	fn into_any_chain(self) -> Option<DepositDetails> {
 		Some(DepositDetails::Arbitrum { tx_hashes: self })

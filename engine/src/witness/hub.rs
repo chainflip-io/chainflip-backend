@@ -196,7 +196,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 				if let Some(signature) = unchecked.signature() {
 					if monitored_egress_ids.contains(&signature) {
 						tracing::info!(
-							"Witnessing transaction_succeeded. signature: {signature:?}"
+							"Witnessing Assethub transaction succeeded. signature: {signature:?}"
 						);
 						process_call(
 							pallet_cf_broadcast::Call::<_, AssethubInstance>::transaction_succeeded {

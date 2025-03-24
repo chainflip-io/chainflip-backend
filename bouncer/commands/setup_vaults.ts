@@ -108,7 +108,6 @@ async function main(): Promise<void> {
 
   await using polkadot = await getPolkadotApi();
   await using assethub = await getAssethubApi();
-  const alice = await aliceKeyringPair();
 
   logger.info('Performing initial Vault setup');
 
@@ -142,7 +141,7 @@ async function main(): Promise<void> {
   ).event;
   const hubActivationRequest = observeEvent(
     logger,
-    'assethubVault:AwaitingGovernanceActivation'
+    'assethubVault:AwaitingGovernanceActivation',
   ).event;
 
   const dotKey = (await dotActivationRequest).data.newPublicKey;

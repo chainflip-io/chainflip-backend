@@ -326,7 +326,9 @@ impl TransactionBuilder<Assethub, AssethubApi<HubEnvironment>> for DotTransactio
 	}
 
 	fn refresh_unsigned_data(_unsigned_tx: &mut <Assethub as Chain>::Transaction) {
-		// TODO: For now this is a noop until we actually have dot chain tracking
+		// The only relevant data here would be the tip, but this is typically zero,
+		// so a noop here is ok for now. If we want to implement this, then let's do
+		// it together with the same method for Polkadot above.
 	}
 
 	fn requires_signature_refresh(

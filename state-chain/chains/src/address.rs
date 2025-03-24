@@ -464,10 +464,10 @@ impl std::fmt::Display for ForeignChainAddressHumanreadable {
 		match self {
 			ForeignChainAddressHumanreadable::Eth(address) |
 			ForeignChainAddressHumanreadable::Arb(address) => write!(f, "{:#x}", address),
-			ForeignChainAddressHumanreadable::Dot(address) => write!(f, "{}", address),
-			ForeignChainAddressHumanreadable::Btc(address) => write!(f, "{}", address),
-			ForeignChainAddressHumanreadable::Sol(address) => write!(f, "{}", address),
+			ForeignChainAddressHumanreadable::Dot(address) |
 			ForeignChainAddressHumanreadable::Hub(address) => write!(f, "{}", address),
+			ForeignChainAddressHumanreadable::Btc(address) |
+			ForeignChainAddressHumanreadable::Sol(address) => write!(f, "{}", address),
 		}
 	}
 }

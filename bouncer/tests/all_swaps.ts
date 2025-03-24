@@ -54,8 +54,6 @@ export async function initiateSwap(
 
 export async function testAllSwaps(textContext: TestContext) {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
-  let finished: number = 0;
-  let total: number = 0;
 
   // Open a private BTC channel to be used for btc vault swaps
   await openPrivateBtcChannel(textContext.logger, '//BROKER_1');
@@ -107,7 +105,6 @@ export async function testAllSwaps(textContext: TestContext) {
 
   // Swaps from/to assethub paired with random chains
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
-  const assets = Object.values(Assets);
   assethubAssets.forEach((hubAsset) => {
     appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
     appendSwap(randomElement(AssetsWithoutAssethub), hubAsset, testSwap);

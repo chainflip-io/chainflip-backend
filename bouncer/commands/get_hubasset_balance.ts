@@ -13,9 +13,8 @@ import { getHubAssetBalance } from '../shared/get_hub_balance';
 function stringToHubAsset(asset: string): HubAsset {
   if (asset === 'HubUsdc' || asset === 'HubUsdt') {
     return asset;
-  } else {
-      throw new Error(`Unsupported Assethub asset: ${asset}`);
   }
+  throw new Error(`Unsupported Assethub asset: ${asset}`);
 }
 
 async function getHubAssetBalanceCommand(asset: string, address: string) {

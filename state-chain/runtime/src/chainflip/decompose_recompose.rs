@@ -295,10 +295,10 @@ mod tests {
 		test_medians::<Ethereum>();
 		test_medians::<Bitcoin>();
 		test_medians::<Polkadot>();
+		test_medians::<Assethub>();
 		// we don't test medians for Arbitrum since there is no priority fee in arbitrum
 		// we don't test medians for Solana as we use a different method for Solana block height
 		// tracking
-		test_medians::<Assethub>();
 	}
 
 	#[track_caller]
