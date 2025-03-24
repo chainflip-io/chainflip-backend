@@ -17,6 +17,7 @@ import { depositChannelCreation } from './request_swap_deposit_address_with_affi
 import { testBrokerLevelScreening } from './broker_level_screening';
 import { testFundRedeem } from './fund_redeem';
 import { concurrentTest, serialTest } from '../shared/utils/vitest';
+import { testAssethubXcm } from './assethub_xcm';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
@@ -40,6 +41,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('DepositChannelCreation', depositChannelCreation, 360);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 300);
   concurrentTest('VaultSwapFeeCollection', testVaultSwapFeeCollection, 800);
+  concurrentTest('AssethubXCM', testAssethubXcm, 120);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
