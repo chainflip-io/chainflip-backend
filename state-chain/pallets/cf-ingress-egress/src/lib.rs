@@ -242,7 +242,6 @@ pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
 	pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
-	pub should_fetch: bool,
 }
 
 /// Cross-chain messaging requests.
@@ -267,7 +266,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(23);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(22);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -1150,7 +1149,7 @@ pub mod pallet {
 
 					match tx.deposit_address {
 						Some(ref deposit_address) => {
-							if !DepositChannelLookup::<T, I>::contains_key(&deposit_address) {
+							if !DepositChannelLookup::<T, I>::contains_key(deposit_address) {
 								Self::try_broadcast_rejection_refund_or_store_tx_details(
 									tx.clone(),
 									refund_address,
@@ -2469,8 +2468,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								refund_address.clone(),
 						};
 
-						let is_vault_swap = matches!(origin, DepositOrigin::Vault { .. });
-
 						ScheduledTransactionsForRejection::<T, I>::append(
 							TransactionRejectionDetails {
 								deposit_address: deposit_address.clone(),
@@ -2478,7 +2475,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								amount: deposit_amount,
 								asset,
 								deposit_details: deposit_details.clone(),
-								should_fetch: !is_vault_swap,
 							},
 						);
 

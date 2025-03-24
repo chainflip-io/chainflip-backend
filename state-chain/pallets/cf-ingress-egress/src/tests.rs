@@ -2506,7 +2506,6 @@ mod evm_transaction_rejection {
 				scheduled_tx_for_reject[0].deposit_details.deposit_ids().unwrap(),
 				vec![tx_id]
 			);
-			assert!(scheduled_tx_for_reject[0].should_fetch);
 
 			IngressEgress::on_finalize(2);
 
@@ -2980,7 +2979,7 @@ mod evm_transaction_rejection {
 	}
 
 	#[test]
-	fn schedule_vault_swap_should_be_not_fetched_if_marked_for_rejection() {
+	fn rejecting_vault_swap() {
 		new_test_ext().execute_with(|| {
 			let tx_id = H256::from_str(
 				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
@@ -3021,7 +3020,6 @@ mod evm_transaction_rejection {
 
 			assert_eq!(scheduled_txs.len(), 1);
 			assert_eq!(scheduled_txs[0].deposit_details.deposit_ids().unwrap(), vec![tx_id]);
-			assert!(!scheduled_txs[0].should_fetch);
 
 			IngressEgress::on_finalize(1);
 
