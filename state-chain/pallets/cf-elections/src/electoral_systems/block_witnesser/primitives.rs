@@ -5,6 +5,9 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
+#[cfg(test)]
+use proptest_derive::Arbitrary;
+
 use crate::electoral_systems::state_machine::core::Validate;
 
 /// Keeps track of ongoing elections for the block witnesser.
@@ -138,8 +141,9 @@ fn generate_new_reorg_id<N: BlockZero + SaturatingStep + Ord + 'static>(indices:
 	index
 }
 
+#[cfg_attr(test, derive(Arbitrary))]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ChainProgressInner<ChainBlockNumber: SaturatingStep> {
+pub enum ChainProgressInner<ChainBlockNumber: SaturatingStep + PartialOrd> {
 	Progress(ChainBlockNumber),
 	Reorg(RangeInclusive<ChainBlockNumber>),
 }
