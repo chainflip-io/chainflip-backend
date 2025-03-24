@@ -66,7 +66,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 		let BWElectionProperties {
 			block_height: witness_range,
 			properties: deposit_addresses,
-			reorg_id: _,
+			..
 		} = properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range)
 			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
@@ -109,7 +109,7 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 		let BWElectionProperties {
 			block_height: witness_range,
 			properties: vaults,
-			reorg_id: _,
+			..
 		} = properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range)
 			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
@@ -234,7 +234,7 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 		let BWElectionProperties {
 			block_height: witness_range,
 			properties: tx_hashes,
-			reorg_id: _,
+			..
 		} = properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
 
