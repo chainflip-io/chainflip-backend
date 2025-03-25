@@ -1659,7 +1659,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			amount_after_fees: amount_after_ingress_fees,
 			fees_withheld: _,
 		} = Self::withhold_ingress_or_egress_fee(
-			IngressOrEgress::IngressDepositChannel,
+			if deposit_fetch_id.is_some() {
+				IngressOrEgress::IngressDepositChannel
+			} else {
+				IngressOrEgress::IngressVaultSwap
+			},
 			tx.asset,
 			tx.amount,
 		);
