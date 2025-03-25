@@ -1,5 +1,5 @@
 use cf_primitives::{AccountRole, Asset, AuthorityCount, FLIPPERINOS_PER_FLIP};
-use cf_traits::{IncreaseOrDecrease, FeeScalingCallInfoIdentifier};
+use cf_traits::{FeeScalingCallInfoIdentifier, IncreaseOrDecrease};
 use frame_support::pallet_prelude::{InvalidTransaction, TransactionValidityError};
 use pallet_cf_flip::{FeeScalingRate, FeeScalingRateConfig};
 use pallet_cf_pools::RangeOrderSize;
