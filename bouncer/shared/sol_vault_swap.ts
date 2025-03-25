@@ -26,7 +26,7 @@ import {
 } from './utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.1-swap-endpoint/swap_endpoint';
+import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v0.1.1-alt-test/swap_endpoint';
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
 import { getBalance } from './get_balance';
@@ -170,7 +170,10 @@ export async function executeSolVaultSwap(
     { commitment: 'confirmed' },
   );
 
-  const transactionData = await connection.getTransaction(txHash, { commitment: 'confirmed' });
+  const transactionData = await connection.getTransaction(txHash, {
+    commitment: 'confirmed',
+    maxSupportedTransactionVersion: 0,
+  });
   if (transactionData === null) {
     throwError(logger, new Error('Solana TransactionData is empty'));
   }

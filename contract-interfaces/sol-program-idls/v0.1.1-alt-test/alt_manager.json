@@ -1,0 +1,371 @@
+{
+  "address": "49XegQyykAXwzigc6u7gXbaLjhKfNadWMZwFiovzjwUw",
+  "metadata": {
+    "name": "alt_manager",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "check_remaining_accounts_ix",
+      "discriminator": [
+        59,
+        191,
+        203,
+        214,
+        176,
+        149,
+        65,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_lookup_table",
+      "discriminator": [
+        74,
+        26,
+        45,
+        214,
+        23,
+        155,
+        143,
+        153
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "agg_key",
+          "signer": true
+        },
+        {
+          "name": "address_lookup_table_account",
+          "writable": true
+        },
+        {
+          "name": "signer_pda",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  116,
+                  95,
+                  115,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "address_lookup_table_program",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "recent_slot",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "extend_protocol_lookup_table",
+      "discriminator": [
+        7,
+        227,
+        198,
+        1,
+        107,
+        113,
+        31,
+        88
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "agg_key",
+          "signer": true
+        },
+        {
+          "name": "address_lookup_table_account",
+          "writable": true
+        },
+        {
+          "name": "signer_pda",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  116,
+                  95,
+                  115,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "address_lookup_table_program",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bump",
+          "type": "u8"
+        },
+        {
+          "name": "new_addresses",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_lookup_table",
+      "discriminator": [
+        149,
+        120,
+        10,
+        249,
+        212,
+        185,
+        177,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true,
+          "address": "HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp"
+        },
+        {
+          "name": "address_lookup_table_account",
+          "writable": true
+        },
+        {
+          "name": "signer_pda",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  116,
+                  95,
+                  115,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "address_lookup_table_program",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bump",
+          "type": "u8"
+        },
+        {
+          "name": "new_addresses",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rotate_nonces",
+      "discriminator": [
+        98,
+        245,
+        73,
+        119,
+        165,
+        90,
+        57,
+        203
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "agg_key",
+          "signer": true
+        },
+        {
+          "name": "new_agg_key",
+          "docs": [
+            "NonceAuthorize instruction. However, we pass it as an account to save bytes so only",
+            "the reference is needed compared to it's address for every instruction."
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "DataAccount",
+      "discriminator": [
+        85,
+        240,
+        182,
+        158,
+        76,
+        7,
+        18,
+        233
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "CreateAltKeyMissmatch",
+      "msg": "Address lookup table doesn't match"
+    },
+    {
+      "code": 6001,
+      "name": "ExtendAltInvalidKey",
+      "msg": "Address lookup table cant be extended with aggKey"
+    },
+    {
+      "code": 6002,
+      "name": "CannotDeserializeAlt",
+      "msg": "Cant deserialize lookip table account"
+    },
+    {
+      "code": 6003,
+      "name": "AddressExtensionLimitReached",
+      "msg": "Reached the maximum number of addresses that can be initialized"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidRemainingAccount",
+      "msg": "Invalid remaining accounts"
+    }
+  ],
+  "types": [
+    {
+      "name": "DataAccount",
+      "docs": [
+        "* ****************************************************************************\n * *************************** IMPORTANT NOTE *********************************\n * ****************************************************************************\n * If the vault is upgraded and the DataAccount struct is modified we need to\n * check the compatibility and ensure there is a proper migration process, given\n * that the Vault bytecode is the only thing being upgraded, not the data account.\n *\n * The easiest approach on upgrade is keeping the DataAccount unchanged and use\n * a new account struct for any new data that is required.\n *\n *        DO NOT MODIFY THIS WITHOUT UNDERSTANDING THE CONSEQUENCES!\n * ****************************************************************************\n * ****************************************************************************"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agg_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "gov_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_vault_pda",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "upgrade_signer_pda",
+            "type": "pubkey"
+          },
+          {
+            "name": "upgrade_signer_pda_bump",
+            "type": "u8"
+          },
+          {
+            "name": "suspended",
+            "type": "bool"
+          },
+          {
+            "name": "suspended_legacy_swaps",
+            "type": "bool"
+          },
+          {
+            "name": "suspended_event_swaps",
+            "type": "bool"
+          },
+          {
+            "name": "min_native_swap_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_dst_address_len",
+            "type": "u16"
+          },
+          {
+            "name": "max_ccm_message_len",
+            "type": "u32"
+          },
+          {
+            "name": "max_cf_parameters_len",
+            "type": "u32"
+          },
+          {
+            "name": "max_event_accounts",
+            "type": "u32"
+          }
+        ]
+      }
+    }
+  ]
+}
