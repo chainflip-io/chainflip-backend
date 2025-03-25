@@ -8,10 +8,23 @@ use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use derive_where::derive_where;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, collections::btree_set::BTreeSet, fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
+
+
+type BlockStore<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, (T::BlockData, u32)>;
+
+pub fn past_events<T: BWProcessorTypes>(store: &mut BlockStore<T>) -> Vec<T::Event> {
+	store.iter()
+		.flat_map(|(height, (data, age))| {
+				let mut x : BlockProcessor<T> = Default::default();
+				x.rules.run((*height, (0..*age), data.clone()))
+			})
+		.map(|(number, event)| event)
+		.collect()
+}
 
 ///
 /// DepositChannelWitnessingProcessor
@@ -205,7 +218,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// 1. **Event Generation:** It calls the `rules` hook with a tuple `(block, age, data.clone())`
 	///    to generate events.
 	/// 2. **Deduplication Filtering:** It then filters out events that are already present in
-	///    `reorg_events`
+	///    `reorg_events` or in the active blocks themselves.
 	///
 	/// # Parameters
 	///
@@ -233,6 +246,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 					.iter()
 					.flat_map(|(_, events)| events)
 					.any(|event| event == last_event)
+				
+				&& !past_events::<T>(&mut self.blocks_data).contains(last_event)
 			})
 			.collect::<Vec<_>>()
 	}
@@ -269,7 +284,7 @@ pub(crate) mod tests {
 					BWProcessorTypes, ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook,
 				},
 			},
-			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor},
+			state_machine::core::{hook_test_utils::MockHook, Hook, IndexedValidate, TypesFor},
 		},
 		*,
 	};
@@ -491,6 +506,14 @@ pub(crate) mod tests {
 		assert_eq!(result, vec![(11, MockBtcEvent::PreWitness(10))]);
 	}
 
+	#[test]
+	fn same_block_twice() {
+		let mut processor = BlockProcessor::<Types>::default();
+		// We processed pre-witnessing (boost) for the followings deposit
+		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1])));
+		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![1])));
+	}
+
 
 	// ------------------------ fuzzy testing ---------------------------
 
@@ -522,14 +545,23 @@ pub(crate) mod tests {
 		use super::SMBlockProcessor;
 		use crate::electoral_systems::state_machine::state_machine::Statemachine;
 
+		// let mut processor = BlockProcessor::default();
+		// processor.blocks_data.insert(0, (vec![], 1));
+		// let index = SMBlockProcessor::<Types>::input_index(&mut processor);
+		// let input = SMBlockProcessorInput::NewBlockData(0, 0, vec![]);
+		// let valid = SMBlockProcessor::<Types>::validate(&index, &input).unwrap();
+
+		// let res = SMBlockProcessor::<Types>::step(processor, input, &());
 		SMBlockProcessor::<Types>::test(
 			module_path!(),
 			generate_state(),
 			Just(()),
-			|_indices| any::<SMBlockProcessorInput<Types>>().boxed()
+			|indices| any::<SMBlockProcessorInput<Types>>().prop_filter("..", move |input| match input {
+				SMBlockProcessorInput::NewBlockData(_, n, _) => !indices.contains(n),
+				SMBlockProcessorInput::ChainProgress(_) => true,
+			}).boxed()
 		)
 	}
-
 }
 
 // State-Machine Block Witness Processor
@@ -565,22 +597,32 @@ pub struct SMBlockProcessor<T: BWProcessorTypes> {
 }
 
 use crate::electoral_systems::state_machine::core::IndexedValidate;
-impl<T: BWProcessorTypes + 'static> IndexedValidate<(), SMBlockProcessorInput<T>> for SMBlockProcessor<T> {
+impl<T: BWProcessorTypes + 'static + Debug> IndexedValidate<BTreeSet<T::ChainBlockNumber>, SMBlockProcessorInput<T>> for SMBlockProcessor<T> {
 	type Error = ();
-	fn validate(index: &(), value: &SMBlockProcessorInput<T>) -> Result<(), Self::Error> {
-		Ok(())
+	fn validate(index: &BTreeSet<T::ChainBlockNumber>, value: &SMBlockProcessorInput<T>) -> Result<(), Self::Error> {
+		println!("validate called for {value:?} in {index:?}");
+		match value {
+			SMBlockProcessorInput::NewBlockData(_, n, _) => if index.contains(n) {
+				Err(())
+			} else {
+				Ok(())
+			},
+			SMBlockProcessorInput::ChainProgress(_) => Ok(()),
+		}
 	}
 }
 
 use crate::electoral_systems::state_machine::state_machine::Statemachine;
-impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
+impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T> {
 	type Input = SMBlockProcessorInput<T>;
-	type InputIndex = ();
+	type InputIndex = BTreeSet<T::ChainBlockNumber>;
 	type Settings = ();
 	type Output = SMBlockProcessorOutput<T>;
 	type State = BlockProcessor<T>;
 
-	fn input_index(_s: &mut Self::State) -> () {}
+	fn input_index(s: &mut Self::State) -> Self::InputIndex {
+		s.blocks_data.keys().cloned().collect()
+	}
 
 	fn step(s: &mut Self::State, i: Self::Input, _set: &Self::Settings) -> Self::Output {
 		let (events, (a, b)) = match i {
@@ -605,25 +647,27 @@ impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 		type BlocksData<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, (T::BlockData, u32)>;
 		type ReorgData<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, Vec<T::Event>>;
 
-		let active_events = |s: &BlocksData<T>| -> BTreeSet<(T::ChainBlockNumber, T::Event)> {
+		// let active_events = |s: &BlocksData<T>| -> BTreeSet<(T::ChainBlockNumber, T::Event)> {
+		let active_events = |s: &BlocksData<T>| -> BTreeSet<T::Event> {
 			s.iter()
 				.flat_map(|(height, (data, age))| {
 						let mut x : BlockProcessor<T> = Default::default();
-						x.rules.run((*height, (0..age.saturating_forward(1)), data.clone()))
+						x.rules.run((*height, (0..*age), data.clone()))
 					})
-				// .map(|(number, event)| event)
+				.map(|(number, event)| event)
 				.collect()
 		};
 
-		let stored_events = |s: &ReorgData<T>| -> BTreeSet<(T::ChainBlockNumber, T::Event)> {
-			s.iter().flat_map(|(k, v)| v.iter().map(|vx| (k.clone(), vx.clone())).collect::<Vec<_>>()).collect()
+		let stored_events = |s: &ReorgData<T>| -> BTreeSet<T::Event> {
+			// s.iter().flat_map(|(k, v)| v.iter().map(|vx| (k.clone(), vx.clone())).collect::<Vec<_>>()).collect()
+			s.values().flatten().cloned().collect() // flat_map(|(k, v)| v.iter().map(|vx| (k.clone(), vx.clone())).collect::<Vec<_>>()).collect()
 		};
 
 		let events = |s: &Self::State| active_events(&s.blocks_data).merge(stored_events(&s.reorg_events));
 		let deleted_events = active_events(&output.deleted_data.iter().cloned().collect()).merge(stored_events(&output.deleted_events.iter().cloned().collect()));
 		let all_events = |s| events(s).merge(deleted_events);
 
-		let executed_events : BTreeSet<_> = output.events.iter().cloned().collect();
+		let executed_events : BTreeSet<_> = output.events.iter().map(|(k,v)| v).cloned().collect();
 
 		let latest_block = match input {
 			SMBlockProcessorInput::NewBlockData(n, _, _) => n,
@@ -634,11 +678,14 @@ impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 		// let filtered = |events: BTreeSet<_>, k| events.into_iter().filter(|(n, _)| n >= k).collect::<BTreeSet<_>>();
 
 		asserts! {
-			"the executed events are exactly those that are new (post: {:?})"
-			in all_events(post).difference(&events(pre)).cloned().collect::<BTreeSet<_>>() == executed_events,
+			let all_events = all_events(post);
+
+			"the executed events are exactly those that are new (post: {:?}, pre: {:?}, executed: {:?})"
+			in all_events.difference(&events(pre)).cloned().collect::<BTreeSet<_>>() == executed_events,
 			else
-				post
-				// executed_events
+				all_events,
+				events(pre),
+				executed_events
 			;
 		}
 
