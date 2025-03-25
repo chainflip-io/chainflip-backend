@@ -21,6 +21,8 @@ fn update_range_order_call(base_asset: Asset) -> RuntimeCall {
 	})
 }
 
+use cf_traits::TransactionFeeScaler;
+
 #[test]
 fn fee_scales_within_a_pool() {
 	const EPOCH_BLOCKS: u32 = 100;
@@ -42,6 +44,11 @@ fn fee_scales_within_a_pool() {
 			let lp_account_id = lp.to_account_id();
 
 			let call = update_range_order_call(Asset::Eth);
+
+			let (_call_info_id, upfront_fee) = <Runtime as pallet_cf_flip::Config>::TransactionFeeScaler::call_info_and_spam_prevention_upfront_fee(
+				&call,
+				&lp_account_id,
+			).expect("We chose a call that should be scaled.");
 
 			assert_eq!(FeeScalingRate::<Runtime>::get(), FeeScalingRateConfig::NoScaling);
 
@@ -66,11 +73,15 @@ fn fee_scales_within_a_pool() {
 				exp_base: FixedU64::from_rational(2, 1u128),
 			});
 
+			let (mut last_gas, mut last_remaining_balance) =
+				apply_extrinsic_and_calculate_gas_fee(lp, call.clone()).unwrap();
+
 			let mut can_pay = true;
 			(1..50).for_each(|_| {
 				match apply_extrinsic_and_calculate_gas_fee(lp, call.clone()) {
 					Ok((gas, remaining_balance)) => {
-						assert!(gas >= last_gas);
+						// Either the gas is increasnig, or we've hit the ceiling of the upfront fee.
+						assert!(gas > last_gas || gas == upfront_fee);
 						assert_eq!(remaining_balance, last_remaining_balance - gas);
 						// We should never fail, and then succeed again, since the fee always
 						// increases within a block in the same pool.
