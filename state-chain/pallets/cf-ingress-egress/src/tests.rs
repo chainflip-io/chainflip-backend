@@ -3016,15 +3016,20 @@ mod evm_transaction_rejection {
 				assert_eq!(scheduled_txs.len(), 1);
 				assert_eq!(scheduled_txs[0].deposit_details.deposit_ids().unwrap(), vec![tx_id]);
 			})
-			.then_process_blocks(1)
 			.then_process_events(|_, event| match event {
 				RuntimeEvent::IngressEgress(PalletEvent::TransactionRejectedByBroker {
 					tx_id,
 					..
-				}) if tx_id == tx_id => Some(()),
-				_ => {
-					panic!("Expected a TransactionRejectedByBroker event");
-				},
+				}) => Some(tx_id.tx_hashes),
+				_ => None,
+			})
+			.then_execute_with(|(_, tx_hashes)| {
+				assert!(tx_hashes
+					.into_iter()
+					.filter_map(|hashes| hashes.clone())
+					.flatten()
+					.collect::<Vec<_>>()
+					.contains(&tx_id));
 			})
 			.then_execute_with(|_| {
 				assert!(FailedRejections::<Test, ()>::get().is_empty());
