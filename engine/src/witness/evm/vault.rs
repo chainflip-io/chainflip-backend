@@ -35,7 +35,8 @@ use cf_chains::{
 	cf_parameters::{CfParameters, VaultSwapParameters, VersionedCfParameters},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain,
+	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain,
+	ForeignChainAddress,
 };
 use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
 use ethers::prelude::*;
@@ -282,7 +283,7 @@ pub trait IngressCallBuilder {
 		deposit_amount: cf_primitives::AssetAmount,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		deposit_metadata: Option<CcmDepositMetadata>,
+		deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 		tx_hash: H256,
 		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
 	) -> state_chain_runtime::RuntimeCall;

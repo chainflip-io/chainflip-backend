@@ -20,7 +20,7 @@ use super::*;
 use crate::{BoostStatus, DisabledEgressAssets};
 use cf_chains::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
-	DepositChannel,
+	CcmChannelMetadataUnchecked, DepositChannel,
 };
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
@@ -313,7 +313,7 @@ mod benchmarks {
 		let deposit_metadata = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::benchmark_value()),
-			channel_metadata: CcmChannelMetadata {
+			channel_metadata: CcmChannelMetadataUnchecked {
 				message: vec![0x00].try_into().unwrap(),
 				gas_budget: 1,
 				ccm_additional_data: Default::default(),

@@ -16,8 +16,9 @@
 
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
-	AccountOrAddress, CcmDepositMetadataGeneric, Chain, ForeignChainAddress,
-	RefundParametersExtended, SwapOrigin,
+	ccm_checker::DecodedCcmAdditionalData,
+	AccountOrAddress, CcmDepositMetadata, Chain, ForeignChainAddress, RefundParametersExtended,
+	SwapOrigin,
 };
 use cf_primitives::{
 	Asset, AssetAmount, Beneficiaries, BlockNumber, DcaParameters, Price, SwapRequestId,
@@ -35,7 +36,7 @@ pub enum SwapType {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOutputActionGeneric<Address, AccountId> {
 	Egress {
-		ccm_deposit_metadata: Option<CcmDepositMetadataGeneric<Address>>,
+		ccm_deposit_metadata: Option<CcmDepositMetadata<Address, DecodedCcmAdditionalData>>,
 		output_address: Address,
 	},
 	CreditOnChain {

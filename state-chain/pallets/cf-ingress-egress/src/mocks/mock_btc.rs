@@ -126,7 +126,6 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type SolanaAltWitnessingHandler = MockAltWitnessing;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;
 }
