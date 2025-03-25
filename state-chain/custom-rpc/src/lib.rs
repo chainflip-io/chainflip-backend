@@ -473,6 +473,8 @@ pub struct SwapResponse {
 	swaps: Vec<ScheduledSwap>,
 }
 
+type TradingStrategyInfoHexAmounts = TradingStrategyInfo<NumberOrHex>;
+
 mod boost_pool_rpc {
 
 	use std::collections::BTreeSet;
@@ -981,7 +983,7 @@ pub trait CustomApi {
 		&self,
 		lp: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<TradingStrategyInfo<NumberOrHex>>>;
+	) -> RpcResult<Vec<TradingStrategyInfoHexAmounts>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2252,6 +2254,23 @@ mod test {
 			ethereum: EncodedAddress::Eth([0; 20]),
 			arbitrum: EncodedAddress::Arb([1; 20]),
 			bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
+		};
+		insta::assert_json_snapshot!(val);
+	}
+
+	#[test]
+	fn test_trading_strategies_custom_rpc() {
+		use pallet_cf_trading_strategy::TradingStrategy;
+
+		let val = TradingStrategyInfoHexAmounts {
+			lp_id: ID_1,
+			strategy_id: ID_2,
+			strategy: TradingStrategy::SellAndBuyAtTicks {
+				sell_tick: 1,
+				buy_tick: -1,
+				base_asset: Asset::Usdt,
+			},
+			balance: vec![(Asset::Usdc, 500u128.into()), (Asset::Usdt, 1_000u128.into())],
 		};
 		insta::assert_json_snapshot!(val);
 	}
