@@ -1060,7 +1060,10 @@ impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransaction
 	) -> FlipBalance {
 		match fee_scaling_config {
 			FeeScalingRateConfig::ExponentBuffer { buffer, exp_base } => {
-				let multiplier = exp_base.saturating_pow(call_count.saturating_sub(buffer).into());
+				let multiplier = exp_base
+					// we subtract an extra 1 to account for the fact that the first call passes
+					// through a count of 1, but we don't want to scale it.
+					.saturating_pow(call_count.saturating_sub(buffer).saturating_sub(1).into());
 				multiplier.saturating_mul_int(pre_scaled_fee)
 			},
 			FeeScalingRateConfig::NoScaling => pre_scaled_fee,
