@@ -89,16 +89,15 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			// case, we shouldn't refund anything, we can just burn all fees in escrow.
 			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
 				if let Some(call_info_id) = call_info_id {
-					let before_count = crate::CallCounter::<T>::mutate(&call_info_id, |count| {
-						let before_count = *count;
+					let call_count = crate::CallCounter::<T>::mutate(&call_info_id, |count| {
 						*count += 1;
-						before_count
+						*count
 					});
 					match call_info_id {
 						CallInfoId::Pool { .. } => T::TransactionFeeScaler::scale_fee(
 							crate::FeeScalingRate::<T>::get(),
 							corrected_fee,
-							before_count,
+							call_count,
 						),
 					}
 				} else {
