@@ -43,9 +43,7 @@ use cf_primitives::{
 	FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
-use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, PoolApi, SwapType,
-};
+use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, SwapType};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
@@ -364,7 +362,7 @@ pub fn add_liquidity(
 	// We use random order id to make collisions with any existing orders near impossible:
 	let order_id: u64 = order_id.unwrap_or_else(|| rand::thread_rng().gen());
 
-	assert!(LiquidityPools::pool_exists(asset, Asset::Usdc), "pool must be set up first");
+	assert!(LiquidityPools::pool_info(asset, Asset::Usdc).is_ok(), "pool must be set up first");
 
 	credit_account(lp_account, asset, amount);
 	credit_account(lp_account, Asset::Usdc, amount);

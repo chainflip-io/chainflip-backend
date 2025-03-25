@@ -192,8 +192,8 @@ pub mod pallet {
 							if balance >= threshold {
 								weight_used += limit_order_update_weight;
 
-								// We expect an error here if the pool does not exist
-								let _error = T::PoolApi::update_limit_order(
+								// We expect this to fail if the pool does not exist
+								let _result = T::PoolApi::update_limit_order(
 									&strategy_id,
 									base_asset,
 									STABLE_ASSET,
@@ -250,13 +250,6 @@ pub mod pallet {
 			funding: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			// Check that the pools exist
-			for (base, quote) in strategy.supported_asset_pairs() {
-				if !T::PoolApi::pool_exists(base, quote) {
-					return Err(Error::<T>::PoolDoesNotExist.into());
-				}
-			}
 
 			// Check that the LP has a refund address for each asset
 			for asset in strategy.supported_assets() {

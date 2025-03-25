@@ -1172,14 +1172,6 @@ impl<T: Config> PoolApi for Pallet<T> {
 	) -> DispatchResult {
 		Self::create_pool(base_asset, quote_asset, fee_hundredth_pips, initial_price)
 	}
-
-	fn pool_exists(base_asset: Asset, quote_asset: Asset) -> bool {
-		if let Ok(asset_pair) = AssetPair::try_new::<T>(base_asset, quote_asset) {
-			Pools::<T>::contains_key(asset_pair)
-		} else {
-			false
-		}
-	}
 }
 
 #[derive(
