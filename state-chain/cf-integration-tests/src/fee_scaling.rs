@@ -1,5 +1,5 @@
 use cf_primitives::{AccountRole, Asset, AuthorityCount, FLIPPERINOS_PER_FLIP};
-use cf_traits::{IncreaseOrDecrease, TransactionFeeScaler};
+use cf_traits::{IncreaseOrDecrease, FeeScalingCallInfoIdentifier};
 use frame_support::pallet_prelude::{InvalidTransaction, TransactionValidityError};
 use pallet_cf_flip::{FeeScalingRate, FeeScalingRateConfig};
 use pallet_cf_pools::RangeOrderSize;
@@ -43,7 +43,7 @@ fn fee_scales_within_a_pool() {
 
 			let call = update_range_order_call(Asset::Eth);
 
-			let (_call_info_id, upfront_fee) = <Runtime as pallet_cf_flip::Config>::TransactionFeeScaler::call_info_and_spam_prevention_upfront_fee(
+			let (_call_info_id, upfront_fee) = <Runtime as pallet_cf_flip::Config>::FeeScalingCallInfoIdentifier::call_info_and_spam_prevention_upfront_fee(
 				&call,
 				&lp_account_id,
 			).expect("We chose a call that should be scaled.");

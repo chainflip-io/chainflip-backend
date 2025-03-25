@@ -88,7 +88,7 @@ use cf_traits::{
 	BroadcastAnyChainGovKey, Broadcaster, CallInfoId, Chainflip, CommKeyBroadcaster, DepositApi,
 	EgressApi, EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
 	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails, TransactionFeeScaler,
+	ScheduledEgressDetails, FeeScalingCallInfoIdentifier,
 };
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
@@ -1024,8 +1024,8 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 	}
 }
 
-pub struct CfTransactionFeeScaler;
-impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransactionFeeScaler {
+pub struct CfFeeScalingCallInfoIdentifier;
+impl FeeScalingCallInfoIdentifier<RuntimeCall, AccountId, FlipBalance> for CfFeeScalingCallInfoIdentifier {
 	fn call_info_and_spam_prevention_upfront_fee(
 		call: &RuntimeCall,
 		caller: &AccountId,

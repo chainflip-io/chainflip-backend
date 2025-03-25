@@ -32,8 +32,8 @@ use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	AccountInfo, Bonding, CallInfoId, DeregistrationCheck, FeePayment, FundingInfo,
-	OnAccountFunded, Slashing, TransactionFeeScaler,
+	AccountInfo, Bonding, CallInfoId, DeregistrationCheck, FeePayment,
+	FeeScalingCallInfoIdentifier, FundingInfo, OnAccountFunded, Slashing,
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
@@ -141,7 +141,7 @@ pub mod pallet {
 			RuntimeCall = <Self as frame_system::Config>::RuntimeCall,
 		>;
 
-		type TransactionFeeScaler: TransactionFeeScaler<
+		type FeeScalingCallInfoIdentifier: FeeScalingCallInfoIdentifier<
 			<Self as frame_system::Config>::RuntimeCall,
 			Self::AccountId,
 			Self::Balance,

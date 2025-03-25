@@ -19,7 +19,7 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_primitives::FlipBalance;
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_waived_fees, Funding, TransactionFeeScaler, WaivedFees,
+	impl_mock_chainflip, impl_mock_waived_fees, Funding, FeeScalingCallInfoIdentifier, WaivedFees,
 };
 use frame_support::{
 	derive_impl, parameter_types,
@@ -63,8 +63,8 @@ parameter_types! {
 // Implement mock for WaivedFees
 impl_mock_waived_fees!(AccountId, RuntimeCall);
 
-pub struct MockTransactionFeeScaler;
-impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for MockTransactionFeeScaler {}
+pub struct MockFeeScalingCallInfoIdentifier;
+impl FeeScalingCallInfoIdentifier<RuntimeCall, AccountId, FlipBalance> for MockFeeScalingCallInfoIdentifier {}
 
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -73,7 +73,7 @@ impl pallet_cf_flip::Config for Test {
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
-	type TransactionFeeScaler = MockTransactionFeeScaler;
+	type FeeScalingCallInfoIdentifier = MockFeeScalingCallInfoIdentifier;
 }
 
 parameter_types! {
