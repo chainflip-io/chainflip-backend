@@ -664,6 +664,8 @@ mod safe_mode {
 	#[test]
 	fn deploy_strategy_safe_mode() {
 		new_test_ext().then_execute_with(|_| {
+			turn_off_thresholds();
+
 			let initial_amounts: BTreeMap<_, _> =
 				[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
 
