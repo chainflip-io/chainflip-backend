@@ -74,7 +74,7 @@ pub trait BWProcessorTypes: Sized {
 		+ BlockZero
 		+ Debug
 		+ 'static;
-	type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
+	type BlockData: PartialEq + Clone + Debug + Eq + Ord + Serde + 'static;
 
 	type Event: Serde + Debug + Clone + Eq + Ord;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;

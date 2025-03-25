@@ -137,7 +137,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		block_data: Option<(T::ChainBlockNumber, T::BlockData)>,
 	) -> (Vec<(T::ChainBlockNumber, T::Event)>,
 			(Vec<(T::ChainBlockNumber, Vec<T::Event>)>,
-			Vec< (T::ChainBlockNumber, (T::BlockData, u32)) >) 
+			BTreeMap< T::ChainBlockNumber, (T::BlockData, u32) >) 
 	) {
 		if let Some((block_number, block_data)) = block_data {
 			self.blocks_data.insert(block_number, (block_data, Default::default()));
@@ -253,7 +253,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	}
 	fn clean_old(&mut self, last_height: T::ChainBlockNumber) -> 
 		(Vec<(T::ChainBlockNumber, Vec<T::Event>)>,
-		Vec< (T::ChainBlockNumber, (T::BlockData, u32)) >) 
+		BTreeMap< T::ChainBlockNumber, (T::BlockData, u32) >) 
 	{
 		let blocks = self.blocks_data
 			.extract_if(|_key, (_, next_age)| *next_age > self.safety_margin.run(()))
@@ -386,7 +386,7 @@ pub(crate) mod tests {
 		type Event = MockBtcEvent;
 		type Rules = Types;
 		// type Execute = Types;
-		type Execute = MockHook<HookTypeFor<Types, ExecuteHook>, "execute_event">;
+		type Execute = MockHook<HookTypeFor<Types, ExecuteHook>>;
 		type SafetyMargin = Types;
 	}
 
@@ -583,7 +583,7 @@ impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
 #[allow(dead_code)]
 pub struct SMBlockProcessorOutput<T: BWProcessorTypes> {
 	events: Vec<(T::ChainBlockNumber, T::Event)>,
-	deleted_data: Vec< (T::ChainBlockNumber, (T::BlockData, u32)) >,
+	deleted_data: BTreeMap< T::ChainBlockNumber, (T::BlockData, u32) >,
 	deleted_events:  Vec<(T::ChainBlockNumber, Vec<T::Event>)>,
 }
 impl<T: BWProcessorTypes> Validate for SMBlockProcessorOutput<T> {
@@ -600,7 +600,6 @@ use crate::electoral_systems::state_machine::core::IndexedValidate;
 impl<T: BWProcessorTypes + 'static + Debug> IndexedValidate<BTreeSet<T::ChainBlockNumber>, SMBlockProcessorInput<T>> for SMBlockProcessor<T> {
 	type Error = ();
 	fn validate(index: &BTreeSet<T::ChainBlockNumber>, value: &SMBlockProcessorInput<T>) -> Result<(), Self::Error> {
-		println!("validate called for {value:?} in {index:?}");
 		match value {
 			SMBlockProcessorInput::NewBlockData(_, n, _) => if index.contains(n) {
 				Err(())
@@ -664,7 +663,7 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 		};
 
 		let events = |s: &Self::State| active_events(&s.blocks_data).merge(stored_events(&s.reorg_events));
-		let deleted_events = active_events(&output.deleted_data.iter().cloned().collect()).merge(stored_events(&output.deleted_events.iter().cloned().collect()));
+		let deleted_events = active_events(&output.deleted_data).merge(stored_events(&output.deleted_events.iter().cloned().collect()));
 		let all_events = |s| events(s).merge(deleted_events);
 
 		let executed_events : BTreeSet<_> = output.events.iter().map(|(k,v)| v).cloned().collect();
@@ -674,8 +673,21 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 			SMBlockProcessorInput::ChainProgress(ChainProgressInner::Progress(x)) => x,
 			SMBlockProcessorInput::ChainProgress(ChainProgressInner::Reorg(x)) => x.end(),
 		};
+		let reorg = matches!(input, SMBlockProcessorInput::ChainProgress(ChainProgressInner::Reorg(_)));
+		let blocks = |d: &BlocksData<T>| d.values().map(|(d, age)| d.clone()).collect::<BTreeSet<_>>();
 
-		// let filtered = |events: BTreeSet<_>, k| events.into_iter().filter(|(n, _)| n >= k).collect::<BTreeSet<_>>();
+		let deleted_new : BTreeSet<T::BlockData> = match input {
+			SMBlockProcessorInput::NewBlockData(n, i, x) 
+			 if i.saturating_forward(3) <= *n => BTreeSet::from([x.clone()]),
+			_ => BTreeSet::new(),
+		};
+
+		let new_block : BTreeSet<T::BlockData> = match input {
+			SMBlockProcessorInput::NewBlockData(n, i, x) 
+			 => BTreeSet::from([x.clone()]),
+			_ => BTreeSet::new(),
+		};
+			// BTreeSet::from([ ])
 
 		asserts! {
 			let all_events = all_events(post);
@@ -687,6 +699,29 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 				events(pre),
 				executed_events
 			;
+
+			// TODO: handle the reorg case
+			"blocks stay in the blockstore until they expire"
+			in if !reorg {
+				blocks(&pre.blocks_data).is_subset(&blocks(&post.blocks_data).merge(blocks(&output.deleted_data)))
+			} else {true};
+
+			let forgotten_blocks = blocks(&pre.blocks_data).difference(&blocks(&post.blocks_data)).cloned().collect::<BTreeSet<_>>();
+
+			"deleted data is deleted (forgotten: {:?}, claimed: {:?}, deleted_new: {:?})"
+			in if !reorg {
+			  forgotten_blocks.clone() 
+				.merge(deleted_new.clone())
+			  	== blocks(&output.deleted_data)
+			} else {true},
+			else
+				forgotten_blocks,
+				blocks(&output.deleted_data),
+				deleted_new
+			;
+
+			"new blocks are added to block data"
+			in new_block.is_subset(&blocks(&post.blocks_data));
 		}
 
 	}
