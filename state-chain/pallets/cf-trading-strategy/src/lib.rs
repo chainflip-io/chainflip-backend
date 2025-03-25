@@ -157,8 +157,9 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_current_block: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+			let mut weight_used: Weight = Weight::zero();
 
+			// We assume this consumes 0 weight since safe mode is likely in cache
 			if !T::SafeMode::get().strategy_execution_enabled {
 				return weight_used
 			}
@@ -167,7 +168,6 @@ pub mod pallet {
 			let order_update_thresholds = LimitOrderUpdateThresholds::<T>::get();
 
 			weight_used += T::DbWeight::get().reads(1);
-
 			let limit_order_update_weight = T::LpOrdersWeights::update_limit_order_weight();
 
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
