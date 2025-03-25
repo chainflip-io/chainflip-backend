@@ -60,7 +60,8 @@ impl<T: Config> Get<BTreeMap<Asset, AssetAmount>> for DefaultLimitOrderUpdateThr
 				(
 					asset,
 					match asset {
-						Asset::Usdc | Asset::Usdt => 1_000 * 10u128.pow(6),
+						Asset::Usdc | Asset::Usdt | Asset::ArbUsdc | Asset::SolUsdc =>
+							1_000_000_000, // $1,000 USD
 						_ => u128::MAX, // Turned off by default all other assets
 					},
 				)
@@ -79,9 +80,10 @@ impl<T: Config> Get<BTreeMap<Asset, AssetAmount>> for DefaultMinimumDeploymentAm
 				(
 					asset,
 					match asset {
-						Asset::Usdc | Asset::Usdt => 20_000_000_000, // $20,000 USD
-						_ => u128::MAX,                              /* Turned off by default
-						                                               * all other assets */
+						Asset::Usdc | Asset::Usdt | Asset::ArbUsdc | Asset::SolUsdc =>
+							20_000_000_000, // $20,000 USD
+						_ => u128::MAX, /* Turned off by default
+						                 * all other assets */
 					},
 				)
 			})
@@ -99,9 +101,9 @@ impl<T: Config> Get<BTreeMap<Asset, AssetAmount>> for DefaultMinimumAddedFundsTo
 				(
 					asset,
 					match asset {
-						Asset::Usdc | Asset::Usdt => 10_000_000, // $10 USD
-						_ => u128::MAX,                          /* Turned off by default
-						                                           * all other assets */
+						Asset::Usdc | Asset::Usdt | Asset::ArbUsdc | Asset::SolUsdc => 10_000_000, /* $10 USD */
+						_ => u128::MAX, /* Turned off by default
+						                 * all other assets */
 					},
 				)
 			})
@@ -435,7 +437,7 @@ pub mod pallet {
 		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<100>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 

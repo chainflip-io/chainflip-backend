@@ -27,8 +27,6 @@ use frame_support::{assert_err, assert_noop, assert_ok, sp_runtime};
 
 use crate::{mock::*, *};
 
-pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
-
 const BASE_ASSET: Asset = Asset::Usdt;
 const QUOTE_ASSET: Asset = cf_primitives::STABLE_ASSET;
 const BASE_AMOUNT: AssetAmount = 100_000;
@@ -488,12 +486,13 @@ fn deregistration_check() {
 #[test]
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
-		const NEW_MIN_DEPLOY_AMOUNT_USDC: AssetAmount = 50_000 * 10u128.pow(6);
-		const NEW_MIN_DEPLOY_AMOUNT_USDT: AssetAmount = 60_000 * 10u128.pow(6);
-		const NEW_MIN_ADDED_FUNDS_USDC: AssetAmount = 20_000 * 10u128.pow(6);
-		const NEW_MIN_ADDED_FUNDS_USDT: AssetAmount = 25_000 * 10u128.pow(6);
-		const NEW_LIMIT_ORDER_THRESHOLD_USDC: AssetAmount = 5_000 * 10u128.pow(6);
-		const NEW_LIMIT_ORDER_THRESHOLD_USDT: AssetAmount = 6_000 * 10u128.pow(6);
+		const ONE_USD: AssetAmount = 10u128.pow(6);
+		const NEW_MIN_DEPLOY_AMOUNT_USDC: AssetAmount = 50_000 * ONE_USD;
+		const NEW_MIN_DEPLOY_AMOUNT_USDT: AssetAmount = 60_000 * ONE_USD;
+		const NEW_MIN_ADDED_FUNDS_USDC: AssetAmount = 20_000 * ONE_USD;
+		const NEW_MIN_ADDED_FUNDS_USDT: AssetAmount = 25_000 * ONE_USD;
+		const NEW_LIMIT_ORDER_THRESHOLD_USDC: AssetAmount = 5_000 * ONE_USD;
+		const NEW_LIMIT_ORDER_THRESHOLD_USDT: AssetAmount = 6_000 * ONE_USD;
 
 		// Check that the default values are different from the new ones
 		assert_ne!(
@@ -648,7 +647,7 @@ fn can_update_all_config_items() {
 		// Make sure that only governance can update the config
 		assert_noop!(
 			TradingStrategyPallet::update_pallet_config(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::signed(LP),
 				vec![].try_into().unwrap()
 			),
 			sp_runtime::traits::BadOrigin

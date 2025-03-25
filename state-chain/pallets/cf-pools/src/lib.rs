@@ -74,9 +74,10 @@ impl<T: Config> Get<SweepingThresholds> for DefaultLimitOrderAutoSweepingThresho
 				(
 					asset,
 					match asset {
-						Asset::Usdc | Asset::Usdt => 1_000_000_000, // $1000 USD
-						_ => u128::MAX,                             /* Turned off by default for
-						                                              * all other assets */
+						Asset::Usdc | Asset::Usdt | Asset::ArbUsdc | Asset::SolUsdc =>
+							1_000_000_000, // $1000 USD
+						_ => u128::MAX, /* Turned off by default for
+						                 * all other assets */
 					},
 				)
 			})
@@ -1001,7 +1002,7 @@ pub mod pallet {
 		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<100>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
