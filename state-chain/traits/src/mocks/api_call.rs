@@ -17,10 +17,10 @@
 use core::marker::PhantomData;
 
 use cf_chains::{
-	btc::BitcoinCrypto, evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Bitcoin, Chain,
-	ChainCrypto, ChainEnvironment, ConsolidationError, Ethereum, ExecutexSwapAndCall,
-	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, RejectCall, RejectError,
-	TransferAssetParams, TransferFallback, TransferFallbackError,
+	btc::BitcoinCrypto, ccm_checker::DecodedCcmAdditionalData, evm::EvmCrypto, AllBatch,
+	AllBatchError, ApiCall, Bitcoin, Chain, ChainCrypto, ChainEnvironment, ConsolidationError,
+	Ethereum, ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
+	RejectCall, RejectError, TransferAssetParams, TransferFallback, TransferFallbackError,
 };
 use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount};
 use codec::{Decode, Encode};
@@ -166,7 +166,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: GasAmount,
 		message: Vec<u8>,
-		_ccm_additional_data: Vec<u8>,
+		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
@@ -303,7 +303,7 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: GasAmount,
 		message: Vec<u8>,
-		_ccm_additional_data: Vec<u8>,
+		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockBtcEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))

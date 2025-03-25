@@ -65,16 +65,13 @@ use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
-	ccm_checker::{
-		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
-		DecodedCcmAdditionalData,
-	},
+	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
-	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
-	TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
+	Arbitrum, Bitcoin, CcmChannelMetadataUnchecked, DefaultRetryPolicy, ForeignChain, Polkadot,
+	Solana, TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -328,7 +325,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
-	type CcmValidityChecker = CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
 	type ChannelIdAllocator = BitcoinIngressEgress;
@@ -416,7 +412,6 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -445,7 +440,6 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -474,7 +468,6 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 }
@@ -503,7 +496,6 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -532,7 +524,6 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
@@ -2159,7 +2150,7 @@ impl_runtime_apis! {
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
 			extra_parameters: VaultSwapExtraParametersEncoded,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
@@ -2194,7 +2185,7 @@ impl_runtime_apis! {
 			})?;
 
 			// Validate CCM.
-			if let Some(ccm) = channel_metadata.as_ref() {
+			if let Some(channel_metadata) = channel_metadata.as_ref() {
 				if source_chain == ForeignChain::Bitcoin {
 					return Err(DispatchErrorWithMessage::from("Vault swaps with CCM are not supported for the Bitcoin Chain"));
 				}
@@ -2203,7 +2194,11 @@ impl_runtime_apis! {
 				}
 
 				// Ensure CCM message is valid
-				match CcmValidityChecker::check_and_decode(ccm, destination_asset, destination_address.clone())
+				match channel_metadata.clone().to_checked(
+					destination_asset,
+					ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+						.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
+				).map(|checked| checked.ccm_additional_data)
 				{
 					Ok(DecodedCcmAdditionalData::Solana(decoded)) => {
 						let ccm_accounts = decoded.ccm_accounts();

@@ -74,8 +74,8 @@ use cf_chains::{
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
-	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
-	ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
+	AnyChain, ApiCall, Arbitrum, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain,
+	ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
 	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	Solana, TransactionBuilder,
 };
@@ -726,7 +726,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				destination_address: ForeignChainAddress,
 				broker_commission: Beneficiaries<Self::AccountId>,
 				broker_id: Self::AccountId,
-				channel_metadata: Option<CcmChannelMetadata>,
+				channel_metadata: Option<CcmChannelMetadataChecked>,
 				boost_fee: BasisPoints,
 				refund_parameters: ChannelRefundParametersDecoded,
 				dca_parameters: Option<DcaParameters>,
@@ -761,7 +761,7 @@ macro_rules! impl_egress_api_for_anychain {
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
-				maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+				maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 				swap_request_id: Option<SwapRequestId>,
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {

@@ -34,7 +34,8 @@ use cf_chains::{
 		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder,
 		sol_tx_core::address_derivation::derive_associated_token_account, SolAmount, SolPubkey,
 	},
-	Arbitrum, CcmChannelMetadata, ChannelRefundParametersEncoded, Ethereum, ForeignChain, Solana,
+	Arbitrum, CcmChannelMetadataUnchecked, ChannelRefundParametersEncoded, Ethereum, ForeignChain,
+	Solana,
 };
 use cf_primitives::{
 	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, DcaParameters, SWAP_DELAY_BLOCKS,
@@ -126,7 +127,7 @@ pub fn evm_vault_swap<A>(
 	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
-	channel_metadata: Option<cf_chains::CcmChannelMetadata>,
+	channel_metadata: Option<cf_chains::CcmChannelMetadataUnchecked>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	let refund_params = refund_params.try_map_address(|addr| {
 		Ok::<_, DispatchErrorWithMessage>(
@@ -243,7 +244,7 @@ pub fn solana_vault_swap<A>(
 	destination_address: EncodedAddress,
 	broker_commission: BasisPoints,
 	refund_parameters: ChannelRefundParametersEncoded,
-	channel_metadata: Option<CcmChannelMetadata>,
+	channel_metadata: Option<CcmChannelMetadataUnchecked>,
 	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
