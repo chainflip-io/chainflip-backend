@@ -23,6 +23,7 @@ use futures::{stream, stream::StreamExt, FutureExt};
 use jsonrpsee::{
 	core::async_trait,
 	proc_macros::rpc,
+	tokio::sync::Mutex,
 	types::{
 		error::{ErrorObject, ErrorObjectOwned},
 		ErrorCode,
@@ -70,7 +71,7 @@ use state_chain_runtime::{
 	Hash, NetworkFee, SolanaInstance,
 };
 use std::{
-	collections::{BTreeMap, BTreeSet, HashMap},
+	collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
 	marker::PhantomData,
 	sync::Arc,
 };
@@ -1969,6 +1970,81 @@ pub enum NotificationBehaviour {
 	New,
 }
 
+/// Number of pinned blocks before starting to unpin old blocks. Must be lower than
+/// `ChainHeadConfig` maximum pinned blocks across all connections (ChainHeadConfig default is 512).
+const MAX_RETAINED_PINNED_BLOCKS: usize = 64;
+
+/// A subscription garbage collector that keeps track of pinned block hashes as reported by
+/// `chainHead_v1_follow` and unpins old blocks when the number of tracked pinned hashes reaches its
+/// configured capacity. The chain head API pins blocks in memory but clients have to explicitly
+/// call `chainHead_v1_unpin` to release memory. If pinned blocks reach MAX_PINNED_BLOCKS a `stop`
+/// event is generated causing all subscriptions to be dropped.
+/// SubscriptionCleaner is per subscription since blocks are pinned only in the context of a
+/// specific subscription. The api states that If multiple chainHead_v1_follow subscriptions exist,
+/// then each (subscription, block) tuple must be unpinned individually.
+struct SubscriptionCleaner<B: BlockT, BE: Backend<B>, C> {
+	chain_head_client: Arc<RpcModule<ChainHead<BE, B, C>>>,
+	sub_id: String,
+	pinned_hashes: Arc<Mutex<VecDeque<Hash>>>,
+}
+
+impl<B: BlockT, BE: Backend<B>, C> Clone for SubscriptionCleaner<B, BE, C> {
+	fn clone(&self) -> Self {
+		Self {
+			chain_head_client: self.chain_head_client.clone(),
+			sub_id: self.sub_id.clone(),
+			pinned_hashes: self.pinned_hashes.clone(),
+		}
+	}
+}
+
+impl<B: BlockT, BE: Backend<B>, C> SubscriptionCleaner<B, BE, C> {
+	pub fn new(
+		chain_head_client: Arc<RpcModule<ChainHead<BE, B, C>>>,
+		sub_id: String,
+		capacity: usize,
+	) -> Self {
+		Self {
+			chain_head_client,
+			sub_id,
+			pinned_hashes: Arc::new(Mutex::new(VecDeque::with_capacity(capacity))),
+		}
+	}
+
+	pub async fn add(&self, new_hashes: &[Hash]) {
+		let mut pinned_blocks = self.pinned_hashes.lock().await;
+
+		// Unpin blocks if we are at capacity
+		if pinned_blocks.len() + new_hashes.len() >= pinned_blocks.capacity() {
+			for _ in 0..new_hashes.len() {
+				if let Some(old_hash) = pinned_blocks.pop_front() {
+					if let Err(e) = self
+						.chain_head_client
+						.call::<_, ()>(
+							"chainHead_v1_unpin",
+							[&self.sub_id, &format!("{:?}", old_hash)],
+						)
+						.await
+					{
+						log::warn!(
+							"Failed to unpin block for subscription: {:?} , {:?}",
+							self.sub_id,
+							e
+						);
+					}
+				}
+			}
+		}
+
+		new_hashes.iter().for_each(|hash| {
+			// don't add duplicates
+			if !pinned_blocks.contains(hash) {
+				pinned_blocks.push_back(*hash)
+			}
+		});
+	}
+}
+
 impl<C, B, BE> CustomRpc<C, B, BE>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
@@ -2039,9 +2115,12 @@ where
 		pending_sink: PendingSubscriptionSink,
 		f: F,
 	) {
+		let chain_head_client = Arc::new(self.chain_head_api());
 		// subscribe to the chain head
-		let Ok(subscription) =
-			self.chain_head_api().subscribe_unbounded("chainHead_v1_follow", [false]).await
+		let Ok(subscription) = chain_head_client
+			.clone()
+			.subscribe_unbounded("chainHead_v1_follow", [false])
+			.await
 		else {
 			pending_sink
 				.reject(internal_error("chainHead_v1_follow subscription failed"))
@@ -2049,18 +2128,34 @@ where
 			return;
 		};
 
+		let Ok(sub_id) = serde_json::to_string(&subscription.subscription_id()) else {
+			pending_sink
+				.reject(internal_error(format!(
+					"Unable to serialize subscription id {:?}",
+					subscription.subscription_id()
+				)))
+				.await;
+			return;
+		};
+
+		let sub_cleaner =
+			SubscriptionCleaner::new(chain_head_client, sub_id, MAX_RETAINED_PINNED_BLOCKS);
+
 		// construct either best, new or finalized blocks stream from the chain head subscription
-		let blocks_stream = stream::unfold(subscription, move |mut sub| async move {
-			match sub.next::<FollowEvent<Hash>>().await {
-				Some(Ok((event, _subs_id))) => Some((event, sub)),
-				Some(Err(e)) => {
-					log::warn!("ChainHead subscription error {:?}", e);
-					None
-				},
-				_ => None,
+		let blocks_stream = stream::unfold(subscription, move |mut sub| {
+			let sub_gc = sub_cleaner.clone();
+			async move {
+				match sub.next::<FollowEvent<Hash>>().await {
+					Some(Ok((event, _subs_id))) => Some(((event, sub_gc), sub)),
+					Some(Err(e)) => {
+						log::warn!("ChainHead subscription error {:?}", e);
+						None
+					},
+					_ => None,
+				}
 			}
 		})
-		.filter_map(move |event| async move {
+		.filter_map(move |(event, sub_gc)| async move {
 			// When NotificationBehaviour is:
 			// * NotificationBehaviour::Finalized: listen to initialized and finalized events
 			// * NotificationBehaviour::Best: listen to just bestBlockChanged events
@@ -2074,28 +2169,47 @@ where
 						mut finalized_block_hashes,
 						..
 					}),
-				) => Some(vec![finalized_block_hashes
-					.pop()
-					.expect("Guaranteed to have at least one element.")]),
+				) => {
+					let initial_hash_vec = vec![finalized_block_hashes
+						.pop()
+						.expect("Guaranteed to have at least one element.")];
+					sub_gc.add(&initial_hash_vec).await;
+					Some(initial_hash_vec)
+				},
 				(
 					NotificationBehaviour::Finalized,
 					FollowEvent::Finalized(sc_rpc_spec_v2::chain_head::Finalized {
 						finalized_block_hashes,
 						..
 					}),
-				) => Some(finalized_block_hashes),
+				) => {
+					sub_gc.add(&finalized_block_hashes).await;
+					Some(finalized_block_hashes)
+				},
 				(
 					NotificationBehaviour::Best,
 					FollowEvent::BestBlockChanged(sc_rpc_spec_v2::chain_head::BestBlockChanged {
 						best_block_hash,
 					}),
-				) => Some(vec![best_block_hash]),
+				) => {
+					let best_block_vec = vec![best_block_hash];
+					sub_gc.add(&best_block_vec).await;
+					Some(best_block_vec)
+				},
 				(
 					NotificationBehaviour::New,
 					FollowEvent::NewBlock(sc_rpc_spec_v2::chain_head::NewBlock {
 						block_hash, ..
 					}),
-				) => Some(vec![block_hash]),
+				) => {
+					let new_block_vec = vec![block_hash];
+					sub_gc.add(&new_block_vec).await;
+					Some(new_block_vec)
+				},
+				(_, FollowEvent::Stop) => {
+					log::warn!("ChainHead subscription {:?} received a STOP event.", sub_gc.sub_id);
+					None
+				},
 				_ => None,
 			}
 		})
