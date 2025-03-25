@@ -71,7 +71,7 @@ fn fee_scales_within_a_pool() {
 				match apply_extrinsic_and_calculate_gas_fee(lp, call.clone()) {
 					Ok((gas, remaining_balance)) => {
 						assert!(gas >= last_gas);
-						assert!(remaining_balance < last_remaining_balance);
+						assert_eq!(remaining_balance, last_remaining_balance - gas);
 						// We should never fail, and then succeed again, since the fee always
 						// increases within a block in the same pool.
 						assert!(can_pay);
