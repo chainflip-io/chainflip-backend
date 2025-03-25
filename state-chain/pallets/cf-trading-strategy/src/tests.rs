@@ -21,7 +21,7 @@ use cf_traits::{
 		balance_api::{MockBalance, MockLpRegistration},
 		pool_api::{MockLimitOrder, MockPoolApi},
 	},
-	BalanceApi, Side,
+	BalanceApi, SetSafeMode, Side,
 };
 use frame_support::{assert_err, assert_noop, assert_ok, sp_runtime};
 
@@ -653,4 +653,131 @@ fn can_update_all_config_items() {
 			sp_runtime::traits::BadOrigin
 		);
 	});
+}
+
+mod safe_mode {
+
+	use cf_traits::SafeMode;
+
+	use super::*;
+
+	#[test]
+	fn deploy_strategy_safe_mode() {
+		new_test_ext().then_execute_with(|_| {
+			let initial_amounts: BTreeMap<_, _> =
+				[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
+
+			for (asset, amount) in initial_amounts.clone() {
+				MockLpRegistration::register_refund_address(LP, asset.into());
+				MockBalance::credit_account(&LP, asset, amount);
+			}
+
+			<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_safe_mode(PalletSafeMode {
+				strategy_updates_enabled: false,
+				..PalletSafeMode::CODE_GREEN
+			});
+
+			assert_err!(
+				TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					STRATEGY.clone(),
+					initial_amounts.clone(),
+				),
+				Error::<Test>::TradingStrategiesDisabled
+			);
+
+			<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_code_green();
+
+			assert_ok!(TradingStrategyPallet::deploy_strategy(
+				RuntimeOrigin::signed(LP),
+				STRATEGY.clone(),
+				initial_amounts.clone(),
+			));
+		});
+	}
+
+	#[test]
+	fn add_funds_to_strategy_safe_mode() {
+		new_test_ext()
+			.then_execute_with(|_| deploy_strategy())
+			.then_execute_with(|strategy_id| {
+				const AMOUNT: AssetAmount = 1000;
+				MockBalance::credit_account(&LP, BASE_ASSET, AMOUNT);
+
+				let amounts_to_add: BTreeMap<_, _> = [(BASE_ASSET, AMOUNT)].into();
+
+				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_safe_mode(
+					PalletSafeMode {
+						strategy_updates_enabled: false,
+						..PalletSafeMode::CODE_GREEN
+					},
+				);
+
+				assert_err!(
+					TradingStrategyPallet::add_funds_to_strategy(
+						RuntimeOrigin::signed(LP),
+						strategy_id,
+						amounts_to_add.clone()
+					),
+					Error::<Test>::TradingStrategiesDisabled
+				);
+
+				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_code_green();
+
+				assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
+					RuntimeOrigin::signed(LP),
+					strategy_id,
+					amounts_to_add.clone()
+				));
+			});
+	}
+
+	#[test]
+	fn close_strategy_safe_mode() {
+		new_test_ext()
+			.then_execute_with(|_| deploy_strategy())
+			.then_execute_with(|strategy_id| {
+				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_safe_mode(
+					PalletSafeMode {
+						strategy_closure_enabled: false,
+						..PalletSafeMode::CODE_GREEN
+					},
+				);
+
+				assert_err!(
+					TradingStrategyPallet::close_strategy(RuntimeOrigin::signed(LP), strategy_id),
+					Error::<Test>::TradingStrategiesDisabled
+				);
+
+				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_code_green();
+
+				assert_ok!(TradingStrategyPallet::close_strategy(
+					RuntimeOrigin::signed(LP),
+					strategy_id
+				));
+			});
+	}
+
+	#[test]
+	fn strategy_order_updates_safe_mode() {
+		new_test_ext()
+			.then_execute_with(|_| deploy_strategy())
+			.then_execute_with(|_| {
+				// Code red should prevent limit orders from being created:
+				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_safe_mode(
+					PalletSafeMode {
+						strategy_execution_enabled: false,
+						..PalletSafeMode::CODE_GREEN
+					},
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				assert_eq!(MockPoolApi::get_limit_orders().len(), 0);
+				// Resetting to code green should allow limit order creation:
+				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_code_green();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_eq!(MockPoolApi::get_limit_orders().len(), 2);
+			});
+	}
 }
