@@ -32,24 +32,21 @@ use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	AccountInfo, Bonding, CallInfoId, DeregistrationCheck, FeePayment, FeeScalingRateConfig,
-	FundingInfo, OnAccountFunded, Slashing, TransactionFeeScaler,
+	AccountInfo, Bonding, CallInfoId, DeregistrationCheck, FeePayment, FundingInfo,
+	OnAccountFunded, Slashing, TransactionFeeScaler,
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
-use frame_support::{
-	ensure,
-	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
-};
-
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	ensure,
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
-		DispatchError, Permill, RuntimeDebug,
+		DispatchError, FixedPointNumber, FixedU64, Permill, RuntimeDebug,
 	},
+	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 use frame_system::pallet_prelude::*;
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -70,6 +67,37 @@ pub enum PalletConfigUpdate {
 	SetSlashingRate(Permill),
 	// Set fee scaling rate for any calls that are scaled.
 	SetFeeScalingRate(FeeScalingRateConfig),
+}
+
+#[derive(
+	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
+)]
+pub enum FeeScalingRateConfig {
+	ExponentBuffer {
+		buffer: u16,
+		exp_base: FixedU64,
+	},
+	#[default]
+	NoScaling,
+}
+
+impl FeeScalingRateConfig {
+	pub fn scale_fee<Balance: AtLeast32BitUnsigned + Copy>(
+		&self,
+		pre_scaled_fee: Balance,
+		call_count: u16,
+	) -> Balance {
+		match self {
+			FeeScalingRateConfig::ExponentBuffer { buffer, exp_base } => {
+				let multiplier = (*exp_base)
+					// we subtract an extra 1 to account for the fact that the first call passes
+					// through a count of 1, but we don't want to scale it.
+					.saturating_pow(call_count.saturating_sub(*buffer).saturating_sub(1).into());
+				multiplier.saturating_mul_int(pre_scaled_fee)
+			},
+			FeeScalingRateConfig::NoScaling => pre_scaled_fee,
+		}
+	}
 }
 
 #[frame_support::pallet]

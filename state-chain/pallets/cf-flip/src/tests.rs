@@ -684,3 +684,46 @@ fn update_pallet_config() {
 		assert_eq!(FeeScalingRate::<Test>::get(), update_to_fee_scaling_rate);
 	});
 }
+
+mod test_fee_scaling_config {
+	use super::*;
+
+	#[test]
+	fn no_fee_scaling_does_not_scale_fee() {
+		for (pre_scaled_fee, call_count) in
+			[(0, 0), (1, 1), (u32::MAX, u16::MAX), (100u32, 1), (200, 9), (3, 4000)]
+		{
+			assert_eq!(
+				FeeScalingRateConfig::NoScaling.scale_fee(pre_scaled_fee, call_count),
+				pre_scaled_fee
+			);
+		}
+	}
+
+	#[test]
+	fn exponent_buffer_scales_fee() {
+		let pre_scaled_fee: u32 = 100;
+
+		let large_buffer_config = FeeScalingRateConfig::ExponentBuffer {
+			buffer: BUFFER,
+			exp_base: FixedU64::from_rational(2, 1),
+		};
+
+		const BUFFER: u16 = 10;
+		// In reality the call count will be 1 (hence the +1), but we test 0 behaves reasonably in
+		// case.
+		for call_count in 0..=BUFFER + 1 {
+			assert_eq!(large_buffer_config.scale_fee(pre_scaled_fee, call_count), pre_scaled_fee);
+		}
+		// + 2 because call count will always be +1 and therefore the last call *not scaled* is
+		//   BUFFER + 1 (as above)
+		assert_eq!(large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + 2), pre_scaled_fee * 2);
+
+		// Test later calls scale correctly
+		assert_eq!(large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + 5), pre_scaled_fee * 16);
+		assert_eq!(
+			large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + 10),
+			pre_scaled_fee * 512
+		);
+	}
+}

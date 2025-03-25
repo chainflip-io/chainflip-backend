@@ -1,7 +1,7 @@
 use cf_primitives::{AccountRole, Asset, AuthorityCount, FLIPPERINOS_PER_FLIP};
-use cf_traits::{FeeScalingRateConfig, IncreaseOrDecrease};
+use cf_traits::{IncreaseOrDecrease, TransactionFeeScaler};
 use frame_support::pallet_prelude::{InvalidTransaction, TransactionValidityError};
-use pallet_cf_flip::FeeScalingRate;
+use pallet_cf_flip::{FeeScalingRate, FeeScalingRateConfig};
 use pallet_cf_pools::RangeOrderSize;
 use sp_keyring::Ed25519Keyring as AccountKeyring;
 use sp_runtime::FixedU64;
@@ -20,8 +20,6 @@ fn update_range_order_call(base_asset: Asset) -> RuntimeCall {
 		}),
 	})
 }
-
-use cf_traits::TransactionFeeScaler;
 
 #[test]
 fn fee_scales_within_a_pool() {
@@ -80,7 +78,7 @@ fn fee_scales_within_a_pool() {
 			(1..50).for_each(|_| {
 				match apply_extrinsic_and_calculate_gas_fee(lp, call.clone()) {
 					Ok((gas, remaining_balance)) => {
-						// Either the gas is increasnig, or we've hit the ceiling of the upfront fee.
+						// Either the gas is increasing, or we've hit the ceiling of the upfront fee.
 						assert!(gas > last_gas || gas == upfront_fee);
 						assert_eq!(remaining_balance, last_remaining_balance - gas);
 						// We should never fail, and then succeed again, since the fee always
