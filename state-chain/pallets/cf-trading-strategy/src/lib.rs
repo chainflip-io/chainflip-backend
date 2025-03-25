@@ -255,8 +255,6 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::deploy_strategy())]
 		pub fn deploy_strategy(
-		#[pallet::weight(T::WeightInfo::deploy_strategy())]
-		pub fn deploy_strategy(
 			origin: OriginFor<T>,
 			strategy: TradingStrategy,
 			funding: BTreeMap<Asset, AssetAmount>,
