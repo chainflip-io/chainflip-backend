@@ -1552,13 +1552,17 @@ fn can_update_all_config_items() {
 		// Check that the events were emitted
 		assert_events_eq!(
 			Test,
-			RuntimeEvent::LiquidityPools(Event::LimitOrderAutoSweepingThresholdsUpdated {
-				asset: Asset::Usdc,
-				amount: NEW_LIMIT_ORDER_THRESHOLD_USDC,
+			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::LimitOrderAutoSweepingThresholds {
+					asset: Asset::Usdc,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC,
+				},
 			}),
-			RuntimeEvent::LiquidityPools(Event::LimitOrderAutoSweepingThresholdsUpdated {
-				asset: Asset::Usdt,
-				amount: NEW_LIMIT_ORDER_THRESHOLD_USDT,
+			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::LimitOrderAutoSweepingThresholds {
+					asset: Asset::Usdt,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT,
+				},
 			}),
 		);
 

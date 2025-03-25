@@ -63,7 +63,7 @@ mod tests;
 
 impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_update_enabled);
 
-type SweepingThresholds = BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>;
+type SweepingThresholds = BoundedBTreeMap<Asset, AssetAmount, ConstU32<100>>;
 pub struct DefaultLimitOrderAutoSweepingThresholds<T> {
 	_phantom: PhantomData<T>,
 }
@@ -74,8 +74,9 @@ impl<T: Config> Get<SweepingThresholds> for DefaultLimitOrderAutoSweepingThresho
 				(
 					asset,
 					match asset {
-						Asset::Usdc | Asset::Usdt => 1_000 * 10u128.pow(6),
-						_ => u128::MAX, // Turned off by default for all other assets
+						Asset::Usdc | Asset::Usdt => 1_000_000_000, // $1000 USD
+						_ => u128::MAX,                             /* Turned off by default for
+						                                              * all other assets */
 					},
 				)
 			})
@@ -419,31 +420,6 @@ pub mod pallet {
 		InvalidSize,
 	}
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T> {
-		pub limit_order_auto_sweeping_thresholds: SweepingThresholds,
-		pub _phantom: PhantomData<T>,
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
-		fn build(&self) {
-			LimitOrderAutoSweepingThresholds::<T>::set(
-				self.limit_order_auto_sweeping_thresholds.clone(),
-			);
-		}
-	}
-
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self {
-				limit_order_auto_sweeping_thresholds:
-					DefaultLimitOrderAutoSweepingThresholds::<T>::get(),
-				_phantom: Default::default(),
-			}
-		}
-	}
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -518,9 +494,8 @@ pub mod pallet {
 		OrderDeletionFailed {
 			order: CloseOrder,
 		},
-		LimitOrderAutoSweepingThresholdsUpdated {
-			asset: Asset,
-			amount: AssetAmount,
+		PalletConfigUpdated {
+			update: PalletConfigUpdate,
 		},
 	}
 
@@ -1036,12 +1011,9 @@ pub mod pallet {
 						LimitOrderAutoSweepingThresholds::<T>::mutate(|thresholds| {
 							thresholds.try_insert(asset, amount).expect("Every asset will fit");
 						});
-						Self::deposit_event(Event::<T>::LimitOrderAutoSweepingThresholdsUpdated {
-							asset,
-							amount,
-						});
 					},
 				}
+				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
 			}
 
 			Ok(())
