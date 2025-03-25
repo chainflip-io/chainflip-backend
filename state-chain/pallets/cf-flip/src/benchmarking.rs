@@ -18,7 +18,7 @@
 use super::*;
 
 use cf_primitives::{AccountRole, Asset};
-use cf_traits::{AccountRoleRegistry, PoolTouched};
+use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -40,10 +40,7 @@ mod benchmarks {
 		for account in whitelisted_callers {
 			for _ in 0..50 {
 				CallCounter::<T>::mutate(
-					CallInfoId::Pool(PoolTouched {
-						account: account.clone(),
-						base_asset: Asset::Eth,
-					}),
+					CallInfoId::Pool { account: account.clone(), base_asset: Asset::Eth },
 					|count| {
 						*count += 1;
 					},
