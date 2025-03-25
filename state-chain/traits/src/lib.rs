@@ -1224,14 +1224,8 @@ pub trait MinimumDeposit {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
-pub struct PoolTouched<AccountId> {
-	pub account: AccountId,
-	pub base_asset: Asset,
-}
-
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 pub enum CallInfoId<AccountId> {
-	Pool(PoolTouched<AccountId>),
+	Pool { account: AccountId, base_asset: Asset },
 }
 
 #[derive(

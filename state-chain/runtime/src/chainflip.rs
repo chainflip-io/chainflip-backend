@@ -87,8 +87,8 @@ use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, CallInfoId, Chainflip, CommKeyBroadcaster, DepositApi,
 	EgressApi, EpochInfo, FeeScalingRateConfig, FetchesTransfersLimitProvider, Heartbeat,
-	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, PoolTouched,
-	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails, TransactionFeeScaler,
+	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails, TransactionFeeScaler,
 };
 use sp_runtime::Saturating;
 
@@ -1047,10 +1047,7 @@ impl TransactionFeeScaler<RuntimeCall, AccountId, FlipBalance> for CfTransaction
 			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
 				base_asset,
 				..
-			}) => Some(CallInfoId::Pool(PoolTouched {
-				account: caller.clone(),
-				base_asset: *base_asset,
-			})),
+			}) => Some(CallInfoId::Pool { account: caller.clone(), base_asset: *base_asset }),
 			_ => None,
 		}
 		.map(|call_info_id| (call_info_id, FLIPPERINOS_PER_FLIP))

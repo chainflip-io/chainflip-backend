@@ -95,7 +95,7 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 						before_count
 					});
 					match call_info_id {
-						CallInfoId::Pool(_) => T::TransactionFeeScaler::scale_fee(
+						CallInfoId::Pool { .. } => T::TransactionFeeScaler::scale_fee(
 							crate::FeeScalingRate::<T>::get(),
 							corrected_fee,
 							before_count,
