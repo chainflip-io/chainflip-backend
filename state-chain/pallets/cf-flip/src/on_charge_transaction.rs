@@ -20,7 +20,7 @@
 //! 'good' behaviour and (b) to ensure that only funded actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
-use cf_traits::{CallInfoId, TransactionFeeScaler, WaivedFees};
+use cf_traits::{CallInfoId, FeeScalingCallInfoIdentifier, WaivedFees};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
 	sp_runtime::traits::{DispatchInfoOf, Zero},
@@ -53,13 +53,12 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		}
 
 		// Check if there's an upfront fee for spam prevention
-		let call_info_id = T::TransactionFeeScaler::call_info_and_spam_prevention_upfront_fee(
-			call, who,
-		)
-		.map(|(call_info_id, upfront_fee)| {
-			fee = sp_std::cmp::max(fee, upfront_fee);
-			call_info_id
-		});
+		let call_info_id =
+			T::FeeScalingCallInfoIdentifier::call_info_and_spam_prevention_upfront_fee(call, who)
+				.map(|(call_info_id, upfront_fee)| {
+					fee = sp_std::cmp::max(fee, upfront_fee);
+					call_info_id
+				});
 
 		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
 			Ok(if surplus.peek().is_zero() {

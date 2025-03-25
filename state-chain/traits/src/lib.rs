@@ -1228,7 +1228,9 @@ pub enum CallInfoId<AccountId> {
 	Pool { account: AccountId, base_asset: Asset },
 }
 
-pub trait TransactionFeeScaler<Call, AccountId, Balance> {
+// Creates an identifier that is used to group calls that should be scaled together.
+// Returns None if the call should not be scaled.
+pub trait FeeScalingCallInfoIdentifier<Call, AccountId, Balance> {
 	fn call_info_and_spam_prevention_upfront_fee(
 		_call: &Call,
 		_caller: &AccountId,
@@ -1238,7 +1240,7 @@ pub trait TransactionFeeScaler<Call, AccountId, Balance> {
 }
 
 pub struct NoTransactionFeeScaling;
-impl<Call, AccountId, Balance> TransactionFeeScaler<Call, AccountId, Balance>
+impl<Call, AccountId, Balance> FeeScalingCallInfoIdentifier<Call, AccountId, Balance>
 	for NoTransactionFeeScaling
 {
 }

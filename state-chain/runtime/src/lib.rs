@@ -702,7 +702,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type OnAccountFunded = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
-	type TransactionFeeScaler = chainflip::CfTransactionFeeScaler;
+	type FeeScalingCallInfoIdentifier = chainflip::CfFeeScalingCallInfoIdentifier;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
