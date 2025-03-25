@@ -2014,34 +2014,33 @@ impl<B: BlockT, BE: Backend<B>, C> SubscriptionCleaner<B, BE, C> {
 	pub async fn add(&self, new_hashes: &[Hash]) {
 		let mut pinned_blocks = self.pinned_hashes.lock().await;
 
-		// Unpin blocks if we are at capacity
-		if pinned_blocks.len() + new_hashes.len() >= pinned_blocks.capacity() {
-			for _ in 0..new_hashes.len() {
-				if let Some(old_hash) = pinned_blocks.pop_front() {
-					if let Err(e) = self
-						.chain_head_client
-						.call::<_, ()>(
-							"chainHead_v1_unpin",
-							[&self.sub_id, &format!("{:?}", old_hash)],
-						)
-						.await
-					{
-						log::warn!(
-							"Failed to unpin block for subscription: {:?} , {:?}",
-							self.sub_id,
-							e
-						);
+		for new_hash in new_hashes.iter() {
+			// don't add duplicates
+			if !pinned_blocks.contains(new_hash) {
+				// Unpin the oldest block if we are at capacity
+				if pinned_blocks.len() + 1 >= pinned_blocks.capacity() {
+					if let Some(old_hash) = pinned_blocks.pop_front() {
+						if let Err(e) = self
+							.chain_head_client
+							.call::<_, ()>(
+								"chainHead_v1_unpin",
+								[&self.sub_id, &format!("{:?}", old_hash)],
+							)
+							.await
+						{
+							log::warn!(
+								"Failed to unpin block for subscription: {:?} , {:?}",
+								self.sub_id,
+								e
+							);
+						}
 					}
 				}
+
+				// add the new block
+				pinned_blocks.push_back(*new_hash)
 			}
 		}
-
-		new_hashes.iter().for_each(|hash| {
-			// don't add duplicates
-			if !pinned_blocks.contains(hash) {
-				pinned_blocks.push_back(*hash)
-			}
-		});
 	}
 }
 
