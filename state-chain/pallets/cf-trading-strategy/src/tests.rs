@@ -432,6 +432,7 @@ fn strategy_deployment_threshold() {
 			(QUOTE_ASSET, MIN_QUOTE_AMOUNT),
 		]));
 
+		// Below minimum threshold should fail
 		for (base_amount, quote_amount) in [
 			(MIN_BASE_AMOUNT - 1, 0),
 			(0, MIN_QUOTE_AMOUNT - 1),
@@ -448,6 +449,7 @@ fn strategy_deployment_threshold() {
 			);
 		}
 
+		// => minimum threshold should succeed
 		for (base_amount, quote_amount) in [
 			(MIN_BASE_AMOUNT, 0),
 			(0, MIN_QUOTE_AMOUNT),
@@ -460,6 +462,23 @@ fn strategy_deployment_threshold() {
 				[(BASE_ASSET, base_amount), (QUOTE_ASSET, quote_amount)].into()
 			));
 		}
+
+		// Minimum not set for an asset should always fail
+		const DISABLED_ASSET: Asset = Asset::Eth;
+		assert!(!MinimumDeploymentAmountForStrategy::<Test>::get().contains_key(&DISABLED_ASSET));
+		MockBalance::credit_account(&LP, DISABLED_ASSET, MIN_BASE_AMOUNT * 10);
+		assert_err!(
+			TradingStrategyPallet::deploy_strategy(
+				RuntimeOrigin::signed(LP),
+				TradingStrategy::SellAndBuyAtTicks {
+					sell_tick: SELL_TICK,
+					buy_tick: BUY_TICK,
+					base_asset: DISABLED_ASSET,
+				},
+				[(DISABLED_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+			),
+			Error::<Test>::InvalidAssetsForStrategy
+		);
 	});
 }
 
@@ -487,34 +506,28 @@ fn deregistration_check() {
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
 		const ONE_USD: AssetAmount = 10u128.pow(6);
-		const NEW_MIN_DEPLOY_AMOUNT_USDC: AssetAmount = 50_000 * ONE_USD;
-		const NEW_MIN_DEPLOY_AMOUNT_USDT: AssetAmount = 60_000 * ONE_USD;
-		const NEW_MIN_ADDED_FUNDS_USDC: AssetAmount = 20_000 * ONE_USD;
-		const NEW_MIN_ADDED_FUNDS_USDT: AssetAmount = 25_000 * ONE_USD;
+		const NEW_MIN_DEPLOY_AMOUNT_USDC: Option<AssetAmount> = Some(50_000 * ONE_USD);
+		const NEW_MIN_DEPLOY_AMOUNT_USDT: Option<AssetAmount> = None;
+		const NEW_MIN_ADDED_FUNDS_USDC: Option<AssetAmount> = Some(20_000 * ONE_USD);
+		const NEW_MIN_ADDED_FUNDS_USDT: Option<AssetAmount> = Some(25_000 * ONE_USD);
 		const NEW_LIMIT_ORDER_THRESHOLD_USDC: AssetAmount = 5_000 * ONE_USD;
 		const NEW_LIMIT_ORDER_THRESHOLD_USDT: AssetAmount = 6_000 * ONE_USD;
 
 		// Check that the default values are different from the new ones
 		assert_ne!(
-			MinimumDeploymentAmountForStrategy::<Test>::get()
-				.get(&Asset::Usdc)
-				.copied()
-				.unwrap(),
+			MinimumDeploymentAmountForStrategy::<Test>::get().get(&Asset::Usdc).copied(),
 			NEW_MIN_DEPLOY_AMOUNT_USDC
 		);
 		assert_ne!(
-			MinimumDeploymentAmountForStrategy::<Test>::get()
-				.get(&Asset::Usdt)
-				.copied()
-				.unwrap(),
+			MinimumDeploymentAmountForStrategy::<Test>::get().get(&Asset::Usdt).copied(),
 			NEW_MIN_DEPLOY_AMOUNT_USDT
 		);
 		assert_ne!(
-			MinimumAddedFundsToStrategy::<Test>::get().get(&Asset::Usdc).copied().unwrap(),
+			MinimumAddedFundsToStrategy::<Test>::get().get(&Asset::Usdc).copied(),
 			NEW_MIN_ADDED_FUNDS_USDC
 		);
 		assert_ne!(
-			MinimumAddedFundsToStrategy::<Test>::get().get(&Asset::Usdt).copied().unwrap(),
+			MinimumAddedFundsToStrategy::<Test>::get().get(&Asset::Usdt).copied(),
 			NEW_MIN_ADDED_FUNDS_USDT
 		);
 		assert_ne!(
@@ -561,31 +574,19 @@ fn can_update_all_config_items() {
 
 		// Check that the new values were set
 		assert_eq!(
-			MinimumDeploymentAmountForStrategy::<Test>::get()
-				.get(&Asset::Usdc)
-				.copied()
-				.unwrap_or_default(),
+			MinimumDeploymentAmountForStrategy::<Test>::get().get(&Asset::Usdc).copied(),
 			NEW_MIN_DEPLOY_AMOUNT_USDC
 		);
 		assert_eq!(
-			MinimumDeploymentAmountForStrategy::<Test>::get()
-				.get(&Asset::Usdt)
-				.copied()
-				.unwrap_or_default(),
+			MinimumDeploymentAmountForStrategy::<Test>::get().get(&Asset::Usdt).copied(),
 			NEW_MIN_DEPLOY_AMOUNT_USDT
 		);
 		assert_eq!(
-			MinimumAddedFundsToStrategy::<Test>::get()
-				.get(&Asset::Usdc)
-				.copied()
-				.unwrap_or_default(),
+			MinimumAddedFundsToStrategy::<Test>::get().get(&Asset::Usdc).copied(),
 			NEW_MIN_ADDED_FUNDS_USDC
 		);
 		assert_eq!(
-			MinimumAddedFundsToStrategy::<Test>::get()
-				.get(&Asset::Usdt)
-				.copied()
-				.unwrap_or_default(),
+			MinimumAddedFundsToStrategy::<Test>::get().get(&Asset::Usdt).copied(),
 			NEW_MIN_ADDED_FUNDS_USDT
 		);
 		assert_eq!(

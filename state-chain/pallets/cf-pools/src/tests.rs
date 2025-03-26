@@ -1520,11 +1520,11 @@ fn can_update_all_config_items() {
 		assert_ok!(LiquidityPools::update_pallet_config(
 			RuntimeOrigin::root(),
 			vec![
-				PalletConfigUpdate::LimitOrderAutoSweepingThresholds {
+				PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
 					asset: Asset::Usdc,
 					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC
 				},
-				PalletConfigUpdate::LimitOrderAutoSweepingThresholds {
+				PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
 					asset: Asset::Usdt,
 					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT
 				},
@@ -1553,13 +1553,13 @@ fn can_update_all_config_items() {
 		assert_events_eq!(
 			Test,
 			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::LimitOrderAutoSweepingThresholds {
+				update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
 					asset: Asset::Usdc,
 					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC,
 				},
 			}),
 			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::LimitOrderAutoSweepingThresholds {
+				update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
 					asset: Asset::Usdt,
 					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT,
 				},

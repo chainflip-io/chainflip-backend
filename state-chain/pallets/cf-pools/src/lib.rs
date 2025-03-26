@@ -46,7 +46,7 @@ use cf_traits::LpRegistration;
 use frame_system::{pallet_prelude::OriginFor, WeightInfo as SystemWeightInfo};
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{SaturatedConversion, Zero};
-use sp_std::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{boxed::Box, vec::Vec};
 
 pub use pallet::*;
 
@@ -64,26 +64,10 @@ mod tests;
 impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_update_enabled);
 
 type SweepingThresholds = BoundedBTreeMap<Asset, AssetAmount, ConstU32<100>>;
-pub struct DefaultLimitOrderAutoSweepingThresholds<T> {
-	_phantom: PhantomData<T>,
-}
-impl<T: Config> Get<SweepingThresholds> for DefaultLimitOrderAutoSweepingThresholds<T> {
+pub struct StablecoinDefaults<const N: u128>;
+impl<const N: u128> Get<SweepingThresholds> for StablecoinDefaults<N> {
 	fn get() -> SweepingThresholds {
-		Asset::all()
-			.map(|asset| {
-				(
-					asset,
-					match asset {
-						Asset::Usdc | Asset::Usdt | Asset::ArbUsdc | Asset::SolUsdc =>
-							1_000_000_000, // $1000 USD
-						_ => u128::MAX, /* Turned off by default for
-						                 * all other assets */
-					},
-				)
-			})
-			.collect::<BTreeMap<Asset, AssetAmount>>()
-			.try_into()
-			.expect("Asset list will fit")
+		cf_primitives::StablecoinDefaults::<N>::get().try_into().unwrap()
 	}
 }
 
@@ -201,7 +185,7 @@ impl<T> AskBidMap<T> {
 
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
-	LimitOrderAutoSweepingThresholds { asset: Asset, amount: AssetAmount },
+	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
 }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
@@ -339,7 +323,7 @@ pub mod pallet {
 	/// swept
 	#[pallet::storage]
 	pub(super) type LimitOrderAutoSweepingThresholds<T: Config> =
-		StorageValue<_, SweepingThresholds, ValueQuery, DefaultLimitOrderAutoSweepingThresholds<T>>;
+		StorageValue<_, SweepingThresholds, ValueQuery, StablecoinDefaults<1_000_000_000>>; // $1000 USD
 
 	#[pallet::storage]
 	/// Historical earned fees for an account.
@@ -1008,7 +992,7 @@ pub mod pallet {
 
 			for update in updates {
 				match update {
-					PalletConfigUpdate::LimitOrderAutoSweepingThresholds { asset, amount } => {
+					PalletConfigUpdate::LimitOrderAutoSweepingThreshold { asset, amount } => {
 						LimitOrderAutoSweepingThresholds::<T>::mutate(|thresholds| {
 							thresholds.try_insert(asset, amount).expect("Every asset will fit");
 						});
