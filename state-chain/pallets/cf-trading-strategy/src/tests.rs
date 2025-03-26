@@ -245,7 +245,9 @@ fn refund_addresses_are_required() {
 		// two different refund addresses are required:
 		let base_asset = Asset::ArbUsdc;
 
-		turn_off_thresholds();
+		let zero_thresholds = BTreeMap::from_iter([(base_asset, 0), (QUOTE_ASSET, 0)]);
+		MinimumDeploymentAmountForStrategy::<Test>::set(zero_thresholds.clone());
+		MinimumAddedFundsToStrategy::<Test>::set(zero_thresholds.clone());
 
 		MockBalance::credit_account(&LP, base_asset, BASE_AMOUNT);
 		MockBalance::credit_account(&LP, QUOTE_ASSET, QUOTE_AMOUNT);

@@ -149,6 +149,7 @@ pub mod pallet {
 	/// has enough funds in "free balance" to make it worthwhile updating/creating a limit order
 	/// with them. Note that we use store map as a single value since it is often more convenient to
 	/// read multiple assets at once (and this map is small).
+	/// An asset that is not in this map is disabled from being updated.
 	#[pallet::storage]
 	pub(super) type LimitOrderUpdateThresholds<T: Config> = StorageValue<
 		_,
@@ -306,11 +307,15 @@ pub mod pallet {
 
 			let strategy_id = {
 				// Check that strategy is created with sufficient funds:
-				Self::ensure_enough_funding(
-					&strategy,
-					&funding,
-					&MinimumDeploymentAmountForStrategy::<T>::get(),
-				)?;
+				ensure!(
+					Self::validate_minimum_funding(
+						&strategy,
+						&funding,
+						&MinimumDeploymentAmountForStrategy::<T>::get(),
+					)
+					.ok_or(Error::<T>::InvalidAssetsForStrategy)?,
+					Error::<T>::AmountBelowDeploymentThreshold
+				);
 
 				let strategy_id = derive_strategy_id::<T>(lp);
 
@@ -383,11 +388,15 @@ pub mod pallet {
 			let strategy =
 				Strategies::<T>::get(lp, &strategy_id).ok_or(Error::<T>::StrategyNotFound)?;
 
-			Self::ensure_enough_funding(
-				&strategy,
-				&funding,
-				&MinimumAddedFundsToStrategy::<T>::get(),
-			)?;
+			ensure!(
+				Self::validate_minimum_funding(
+					&strategy,
+					&funding,
+					&MinimumAddedFundsToStrategy::<T>::get(),
+				)
+				.ok_or(Error::<T>::InvalidAssetsForStrategy)?,
+				Error::<T>::AmountBelowAddedFundsThreshold
+			);
 
 			Self::add_funds_to_existing_strategy(lp, &strategy_id, strategy, funding)
 		}
@@ -458,34 +467,31 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn ensure_enough_funding(
+	fn validate_minimum_funding(
 		strategy: &TradingStrategy,
 		funding: &BTreeMap<Asset, AssetAmount>,
 		minimum: &BTreeMap<Asset, AssetAmount>,
-	) -> DispatchResult {
+	) -> Option<bool> {
 		// Fail if any of the strategies assets do not have a minimum amount set
 		if !strategy
 			.supported_assets()
 			.into_iter()
 			.all(|asset| minimum.contains_key(&asset))
 		{
-			return Err(Error::<T>::InvalidAssetsForStrategy.into());
+			return None
 		}
 
-		if strategy.supported_assets().into_iter().fold(FixedU64::default(), |acc, asset| {
-			let min_required = *minimum.get(&asset).expect("checked above");
-			let fraction_of_required = if min_required == 0 {
-				FixedU64::one()
-			} else {
-				FixedU64::from_rational(*funding.get(&asset).unwrap_or(&0), min_required)
-			};
-			acc + fraction_of_required
-		}) >= FixedU64::one()
-		{
-			Ok(())
-		} else {
-			Err(Error::<T>::AmountBelowDeploymentThreshold.into())
-		}
+		Some(
+			strategy.supported_assets().into_iter().fold(FixedU64::default(), |acc, asset| {
+				let min_required = *minimum.get(&asset).expect("checked above");
+				let fraction_of_required = if min_required == 0 {
+					FixedU64::one()
+				} else {
+					FixedU64::from_rational(*funding.get(&asset).unwrap_or(&0), min_required)
+				};
+				acc + fraction_of_required
+			}) >= FixedU64::one(),
+		)
 	}
 }
 
