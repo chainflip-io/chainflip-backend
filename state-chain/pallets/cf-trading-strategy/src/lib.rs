@@ -52,7 +52,9 @@ const STRATEGY_ORDER_ID: OrderId = 0;
 
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, serde::Serialize, serde::Deserialize, PartialEq, Eq,
+)]
 pub enum TradingStrategy {
 	SellAndBuyAtTicks { sell_tick: Tick, buy_tick: Tick, base_asset: Asset },
 }
@@ -133,7 +135,7 @@ pub mod pallet {
 	// Stores all deployed strategies by the liquidity provider's id (owner) and
 	// the strategy id.
 	#[pallet::storage]
-	pub(super) type Strategies<T: Config> = StorageDoubleMap<
+	pub type Strategies<T: Config> = StorageDoubleMap<
 		_,
 		Identity,
 		T::AccountId,
