@@ -229,11 +229,16 @@ export async function depositChannelCreation(testContext: TestContext) {
         BigInt(params.ccmParams.gasBudget),
         `Expected CCM parameter gasBudget to be ${BigInt(params.ccmParams.gasBudget)}, but got ${event.channelMetadata.gasBudget}`,
       );
-      assert.strictEqual(
-        event.channelMetadata.ccmAdditionalData,
-        params.ccmParams.ccmAdditionalData === '0x' ? '' : params.ccmParams.ccmAdditionalData,
-        `Expected CCM parameter ccmAdditionalData to be ${params.ccmParams.ccmAdditionalData === '0x' ? '' : params.ccmParams.ccmAdditionalData}, but got ${event.channelMetadata.ccmAdditionalData}`,
-      );
+      if (params.ccmParams.ccmAdditionalData === '0x') {
+        assert.strictEqual(
+          event.channelMetadata.ccmAdditionalData,
+          'NotRequired',
+          `Expected CCM parameter ccmAdditionalData to be NotRequired, but got ${event.channelMetadata.ccmAdditionalData}`,
+        );
+      } else {
+        event.channelMetadata.ccmAdditionalData.Solana ??
+          assert.fail('Expected Solana ccmAdditionalData');
+      }
     }
   };
 
