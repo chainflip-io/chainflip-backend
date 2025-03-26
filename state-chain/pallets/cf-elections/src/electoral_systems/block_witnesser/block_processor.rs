@@ -255,6 +255,10 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		(Vec<(T::ChainBlockNumber, Vec<T::Event>)>,
 		BTreeMap< T::ChainBlockNumber, (T::BlockData, u32) >) 
 	{
+		// TODO 2025-03-26: to-discuss: currently the deletion of blocks is done
+		// by safety-margin. There is an implicit requirement that the rules-hook
+		// should only generate events for ages <= safety_margin which isn't checked
+		// or guaranteed anywhere.
 		let blocks = self.blocks_data
 			.extract_if(|_key, (_, next_age)| *next_age > self.safety_margin.run(()))
 			.collect();
@@ -701,27 +705,42 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 			;
 
 			// TODO: handle the reorg case
-			"blocks stay in the blockstore until they expire"
+			"blocks either stay in the blockstore or are included in the 'deleted output'"
 			in if !reorg {
 				blocks(&pre.blocks_data).is_subset(&blocks(&post.blocks_data).merge(blocks(&output.deleted_data)))
 			} else {true};
 
 			let forgotten_blocks = blocks(&pre.blocks_data).difference(&blocks(&post.blocks_data)).cloned().collect::<BTreeSet<_>>();
 
-			"deleted data is deleted (forgotten: {:?}, claimed: {:?}, deleted_new: {:?})"
-			in if !reorg {
-			  forgotten_blocks.clone() 
+			let old_blocks = blocks(&pre.blocks_data.iter().filter(|(i, _)| i.saturating_forward(3) <= *latest_block).map(|(a, b)| (a.clone(), b.clone())).collect());
+
+			"old blocks are deleted (old: {:?}, deleted_new: {:?}, output: {:?})"
+			in old_blocks.clone()
 				.merge(deleted_new.clone())
-			  	== blocks(&output.deleted_data)
-			} else {true},
+				== blocks(&output.deleted_data),
 			else
-				forgotten_blocks,
-				blocks(&output.deleted_data),
-				deleted_new
+				old_blocks,
+				deleted_new.clone(),
+				blocks(&output.deleted_data)
 			;
 
-			"new blocks are added to block data"
-			in new_block.is_subset(&blocks(&post.blocks_data));
+			// "deleted data is deleted (forgotten: {:?}, claimed: {:?}, deleted_new: {:?})"
+			// in if !reorg {
+			//   forgotten_blocks.clone() 
+			// 	.merge(deleted_new.clone())
+			//   	== blocks(&output.deleted_data)
+			// } else {true},
+			// else
+			// 	forgotten_blocks,
+			// 	blocks(&output.deleted_data),
+			// 	deleted_new
+			// ;
+
+			"new blocks are added to block data or are immediately deleted"
+			in new_block.is_subset(&blocks(&post.blocks_data).merge(deleted_new));
+
+			"all events of immediately deleted blocks are executed"
+			in true;
 		}
 
 	}
