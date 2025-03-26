@@ -50,12 +50,11 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 // have a fixed order id (at least until we develop more advanced strategies).
 const STRATEGY_ORDER_ID: OrderId = 0;
 
+impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
+
 #[derive(
 	Clone, Debug, Encode, Decode, TypeInfo, serde::Serialize, serde::Deserialize, PartialEq, Eq,
 )]
-impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
-
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum TradingStrategy {
 	SellAndBuyAtTicks { sell_tick: Tick, buy_tick: Tick, base_asset: Asset },
 }
