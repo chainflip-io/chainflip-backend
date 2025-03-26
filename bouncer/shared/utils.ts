@@ -918,6 +918,10 @@ export async function observeCcmReceived(
         sourceAddress ?? null,
         messageMetadata,
       );
+    case 'Assethub':
+      // In Assethub XCM it is not clear what destination chain the XCM call should be observed
+      // Instead, we check the success manually in the appropriate test.
+      return Promise.resolve(undefined);
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
   }
