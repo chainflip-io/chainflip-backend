@@ -81,15 +81,14 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters,
+	DcaParameters, FLIPPERINOS_PER_FLIP,
 };
-
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
-	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
-	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails,
+	BroadcastAnyChainGovKey, Broadcaster, CallInfoId, Chainflip, CommKeyBroadcaster, DepositApi,
+	EgressApi, EpochInfo, FeeScalingCallInfoIdentifier, FetchesTransfersLimitProvider, Heartbeat,
+	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
@@ -1022,5 +1021,36 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 			ForeignChainAndAsset::Solana(asset) =>
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 		}
+	}
+}
+
+pub struct CfFeeScalingCallInfoIdentifier;
+impl FeeScalingCallInfoIdentifier<RuntimeCall, AccountId, FlipBalance>
+	for CfFeeScalingCallInfoIdentifier
+{
+	fn call_info_and_spam_prevention_upfront_fee(
+		call: &RuntimeCall,
+		caller: &AccountId,
+	) -> Option<(CallInfoId<AccountId>, FlipBalance)> {
+		match call {
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_limit_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_limit_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_range_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
+				base_asset,
+				..
+			}) => Some(CallInfoId::Pool { account: caller.clone(), base_asset: *base_asset }),
+			_ => None,
+		}
+		.map(|call_info_id| (call_info_id, FLIPPERINOS_PER_FLIP))
 	}
 }

@@ -20,7 +20,7 @@
 //! 'good' behaviour and (b) to ensure that only funded actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
-use cf_traits::WaivedFees;
+use cf_traits::{CallInfoId, FeeScalingCallInfoIdentifier, WaivedFees};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
 	sp_runtime::traits::{DispatchInfoOf, Zero},
@@ -39,24 +39,33 @@ pub struct FlipTransactionPayment<T>(PhantomData<T>);
 
 impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransactionPayment<T> {
 	type Balance = <T as FlipConfig>::Balance;
-	type LiquidityInfo = Option<Surplus<T>>;
+	type LiquidityInfo = Option<(Surplus<T>, Option<CallInfoId<T::AccountId>>)>;
 
 	fn withdraw_fee(
 		who: &T::AccountId,
 		call: &<T as frame_system::Config>::RuntimeCall,
 		_dispatch_info: &DispatchInfoOf<<T as frame_system::Config>::RuntimeCall>,
-		fee: Self::Balance,
+		mut fee: Self::Balance,
 		_tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, frame_support::unsigned::TransactionValidityError> {
 		if T::WaivedFees::should_waive_fees(call, who) {
-			return Ok(None)
+			return Ok(Default::default())
 		}
+
+		// Check if there's an upfront fee for spam prevention
+		let call_info_id =
+			T::FeeScalingCallInfoIdentifier::call_info_and_spam_prevention_upfront_fee(call, who)
+				.map(|(call_info_id, upfront_fee)| {
+					fee = sp_std::cmp::max(fee, upfront_fee);
+					call_info_id
+				});
+
 		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
-			if surplus.peek().is_zero() {
-				Ok(None)
+			Ok(if surplus.peek().is_zero() {
+				Default::default()
 			} else {
-				Ok(Some(surplus))
-			}
+				Some((surplus, call_info_id))
+			})
 		} else {
 			Err(InvalidTransaction::Payment.into())
 		}
@@ -74,11 +83,22 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		_tip: Self::Balance,
 		escrow: Self::LiquidityInfo,
 	) -> Result<(), frame_support::unsigned::TransactionValidityError> {
-		if let Some(surplus) = escrow {
+		if let Some((surplus, call_info_id)) = escrow {
 			// It's possible the account was deleted during extrinsic execution. If this is the
 			// case, we shouldn't refund anything, we can just burn all fees in escrow.
 			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
-				corrected_fee
+				if let Some(call_info_id) = call_info_id {
+					let call_count = crate::CallCounter::<T>::mutate(&call_info_id, |count| {
+						*count += 1;
+						*count
+					});
+					match call_info_id {
+						CallInfoId::Pool { .. } =>
+							crate::FeeScalingRate::<T>::get().scale_fee(corrected_fee, call_count),
+					}
+				} else {
+					corrected_fee
+				}
 			} else {
 				surplus.peek()
 			};

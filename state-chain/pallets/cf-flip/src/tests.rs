@@ -24,12 +24,12 @@ use crate::{
 use cf_primitives::FlipBalance;
 use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
 use frame_support::{
-	assert_noop,
+	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},
 };
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
-use sp_runtime::Permill;
+use sp_runtime::{FixedU64, Permill};
 use std::mem;
 
 impl FlipOperation {
@@ -563,7 +563,7 @@ mod test_tx_payments {
 			.expect("Alice can afford the fee.");
 
 			// Fee is in escrow.
-			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(FEE));
+			assert_eq!(escrow.as_ref().map(|(fee, _)| fee.peek()), Some(FEE));
 			// Issuance unchanged.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
@@ -625,7 +625,7 @@ mod test_tx_payments {
 			.expect("Alice can afford the fee.");
 
 			// Fee is in escrow.
-			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(PRE_FEE));
+			assert_eq!(escrow.as_ref().map(|(fee, _)| fee.peek()), Some(PRE_FEE));
 			// Issuance unchanged.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
@@ -649,11 +649,81 @@ mod test_tx_payments {
 }
 
 #[test]
-fn only_governance_can_set_slashing_rate() {
+fn update_pallet_config() {
 	new_test_ext().execute_with(|| {
+		// Only governance can update the pallet config
 		assert_noop!(
-			Flip::set_slashing_rate(RuntimeOrigin::signed(ALICE), Permill::from_percent(0)),
+			Flip::update_pallet_config(RuntimeOrigin::signed(ALICE), vec![].try_into().unwrap()),
 			sp_runtime::traits::BadOrigin,
 		);
+
+		// Slashing rate can be updated
+		let update_to_slashing_rate = Permill::from_percent(40);
+		assert_ne!(SlashingRate::<Test>::get(), update_to_slashing_rate);
+		assert_ok!(Flip::update_pallet_config(
+			RuntimeOrigin::root(),
+			vec![PalletConfigUpdate::SetSlashingRate(update_to_slashing_rate)]
+				.try_into()
+				.unwrap(),
+		));
+		assert_eq!(SlashingRate::<Test>::get(), update_to_slashing_rate);
+
+		// Fee scaling rate can be updated
+		let update_to_fee_scaling_rate = FeeScalingRateConfig::ExponentBuffer {
+			buffer: 10,
+			exp_base: FixedU64::from_rational(11, 10),
+		};
+		// compare to fee we will update to with the fee before to see it updates
+		assert_ne!(FeeScalingRate::<Test>::get(), update_to_fee_scaling_rate);
+		assert_ok!(Flip::update_pallet_config(
+			RuntimeOrigin::root(),
+			vec![PalletConfigUpdate::SetFeeScalingRate(update_to_fee_scaling_rate)]
+				.try_into()
+				.unwrap(),
+		));
+		assert_eq!(FeeScalingRate::<Test>::get(), update_to_fee_scaling_rate);
 	});
+}
+
+mod test_fee_scaling_config {
+	use super::*;
+
+	#[test]
+	fn no_fee_scaling_does_not_scale_fee() {
+		for (pre_scaled_fee, call_count) in
+			[(0, 0), (1, 1), (u32::MAX, u16::MAX), (100u32, 1), (200, 9), (3, 4000)]
+		{
+			assert_eq!(
+				FeeScalingRateConfig::NoScaling.scale_fee(pre_scaled_fee, call_count),
+				pre_scaled_fee
+			);
+		}
+	}
+
+	#[test]
+	fn exponent_buffer_scales_fee() {
+		let pre_scaled_fee: u32 = 100;
+
+		let large_buffer_config = FeeScalingRateConfig::ExponentBuffer {
+			buffer: BUFFER,
+			exp_base: FixedU64::from_rational(2, 1),
+		};
+
+		const BUFFER: u16 = 10;
+		// In reality the call count will be 1 (hence the +1), but we test 0 behaves reasonably in
+		// case.
+		for call_count in 0..=BUFFER + 1 {
+			assert_eq!(large_buffer_config.scale_fee(pre_scaled_fee, call_count), pre_scaled_fee);
+		}
+		// + 2 because call count will always be +1 and therefore the last call *not scaled* is
+		//   BUFFER + 1 (as above)
+		assert_eq!(large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + 2), pre_scaled_fee * 2);
+
+		// Test later calls scale correctly
+		assert_eq!(large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + 5), pre_scaled_fee * 16);
+		assert_eq!(
+			large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + 10),
+			pre_scaled_fee * 512
+		);
+	}
 }

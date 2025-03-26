@@ -35,7 +35,10 @@ fn governance_members_pay_no_fees_for_governance_extrinsics() {
 			5,
 			0,
 		);
-		assert!(ordinary.expect("we have a result").is_some(), "expected Some(Surplus)");
+		assert!(
+			ordinary.expect("we have a result").is_some(),
+			"expected Some((Surplus, CallInfoId))"
+		);
 		// Expect a successful gov call to work
 		let gov = FlipTransactionPayment::<Runtime>::withdraw_fee(
 			&ERIN.into(),

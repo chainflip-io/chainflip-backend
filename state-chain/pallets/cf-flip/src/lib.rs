@@ -32,28 +32,73 @@ use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
+	AccountInfo, Bonding, CallInfoId, DeregistrationCheck, FeePayment,
+	FeeScalingCallInfoIdentifier, FundingInfo, OnAccountFunded, Slashing,
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
-use frame_support::{
-	ensure,
-	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
-};
-
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	ensure,
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
-		DispatchError, Permill, RuntimeDebug,
+		DispatchError, FixedPointNumber, FixedU64, Permill, RuntimeDebug,
 	},
+	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 use frame_system::pallet_prelude::*;
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
+
+#[derive(
+	CloneNoBound,
+	RuntimeDebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+)]
+pub enum PalletConfigUpdate {
+	SetSlashingRate(Permill),
+	// Set fee scaling rate for any calls that are scaled.
+	SetFeeScalingRate(FeeScalingRateConfig),
+}
+
+#[derive(
+	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
+)]
+pub enum FeeScalingRateConfig {
+	ExponentBuffer {
+		buffer: u16,
+		exp_base: FixedU64,
+	},
+	#[default]
+	NoScaling,
+}
+
+impl FeeScalingRateConfig {
+	pub fn scale_fee<Balance: AtLeast32BitUnsigned + Copy>(
+		&self,
+		pre_scaled_fee: Balance,
+		call_count: u16,
+	) -> Balance {
+		match self {
+			FeeScalingRateConfig::ExponentBuffer { buffer, exp_base } => {
+				let multiplier = (*exp_base)
+					// we subtract an extra 1 to account for the fact that the first call passes
+					// through a count of 1, but we don't want to scale it.
+					.saturating_pow(call_count.saturating_sub(*buffer).saturating_sub(1).into());
+				multiplier.saturating_mul_int(pre_scaled_fee)
+			},
+			FeeScalingRateConfig::NoScaling => pre_scaled_fee,
+		}
+	}
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -95,6 +140,12 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			RuntimeCall = <Self as frame_system::Config>::RuntimeCall,
 		>;
+
+		type FeeScalingCallInfoIdentifier: FeeScalingCallInfoIdentifier<
+			<Self as frame_system::Config>::RuntimeCall,
+			Self::AccountId,
+			Self::Balance,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -132,6 +183,14 @@ pub mod pallet {
 	#[pallet::getter(fn offchain_funds)]
 	pub type OffchainFunds<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
+	// Counts the number of calls within a block against a particular call info id.
+	#[pallet::storage]
+	pub type CallCounter<T: Config> =
+		StorageMap<_, Identity, CallInfoId<T::AccountId>, u16, ValueQuery>;
+
+	#[pallet::storage]
+	pub type FeeScalingRate<T: Config> = StorageValue<_, FeeScalingRateConfig, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -151,6 +210,9 @@ pub mod pallet {
 		SlashingRateUpdated {
 			slashing_rate: Permill,
 		},
+		FeeScalingRateUpdated {
+			fee_scaling_rate: FeeScalingRateConfig,
+		},
 	}
 
 	#[pallet::error]
@@ -165,31 +227,46 @@ pub mod pallet {
 		AccountBonded,
 	}
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_current_block: BlockNumberFor<T>) -> Weight {
+			// Clear the call counter on every block. Do it in on_initialize (instead of
+			// `on_finalize`) so it's inspectable.
+			let _ = CallCounter::<T>::clear(u32::MAX, None);
+			T::WeightInfo::on_initialize()
+		}
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Set the PER BLOCK slashing rate.
+		/// Apply a list of configuration updates to the pallet.
 		///
-		/// The dispatch origin of this function must be governance
-		///
-		/// ## Events
-		///
-		/// - [SlashingRateUpdated]
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		///
-		/// ## Dependencies
-		///
-		/// - [EnsureGovernance]
+		/// Requires Governance.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
-		pub fn set_slashing_rate(origin: OriginFor<T>, slashing_rate: Permill) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::update_pallet_config())]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+		) -> DispatchResult {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
-			// Set the slashing rate
-			SlashingRate::<T>::set(slashing_rate);
-			Self::deposit_event(Event::SlashingRateUpdated { slashing_rate });
+
+			for update in updates {
+				match update {
+					PalletConfigUpdate::SetSlashingRate(slashing_rate) => {
+						SlashingRate::<T>::set(slashing_rate);
+						Self::deposit_event(Event::SlashingRateUpdated { slashing_rate });
+					},
+					// You can used FixedU64::from_rational or from_float to convert the input
+					// number to FixedU64.
+					// The range is: [0.000000000, 18446744073.709551615]
+					// i.e. there are 9 decimal places.
+					PalletConfigUpdate::SetFeeScalingRate(fee_scaling_rate) => {
+						FeeScalingRate::<T>::set(fee_scaling_rate);
+						Self::deposit_event(Event::FeeScalingRateUpdated { fee_scaling_rate });
+					},
+				}
+			}
 			Ok(())
 		}
 	}
