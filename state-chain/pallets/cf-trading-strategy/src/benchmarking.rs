@@ -44,9 +44,16 @@ mod benchmarks {
 
 	const ASSET: Asset = Asset::Usdt;
 
+	fn turn_off_minimums<T: Config>() {
+		let zero_thresholds = BTreeMap::from_iter([(ASSET, 0), (STABLE_ASSET, 0)]);
+		MinimumDeploymentAmountForStrategy::<T>::set(zero_thresholds.clone());
+		MinimumAddedFundsToStrategy::<T>::set(zero_thresholds);
+	}
+
 	#[benchmark]
 	fn deploy_strategy() {
 		let caller = new_lp_account::<T>();
+		turn_off_minimums::<T>();
 
 		T::BalanceApi::credit_account(&caller, ASSET, 1000);
 		T::BalanceApi::credit_account(&caller, STABLE_ASSET, 1000);
@@ -68,6 +75,7 @@ mod benchmarks {
 	#[benchmark]
 	fn close_strategy() {
 		let caller = new_lp_account::<T>();
+		turn_off_minimums::<T>();
 
 		T::BalanceApi::credit_account(&caller, ASSET, 1000);
 		T::BalanceApi::credit_account(&caller, STABLE_ASSET, 1000);
@@ -94,6 +102,7 @@ mod benchmarks {
 	#[benchmark]
 	fn add_funds_to_strategy() {
 		let caller = new_lp_account::<T>();
+		turn_off_minimums::<T>();
 
 		T::BalanceApi::credit_account(&caller, ASSET, 2000);
 		T::BalanceApi::credit_account(&caller, STABLE_ASSET, 2000);

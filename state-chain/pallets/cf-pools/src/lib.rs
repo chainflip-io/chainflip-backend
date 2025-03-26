@@ -43,7 +43,7 @@ use frame_support::{
 use cf_traits::HistoricalFeeMigration;
 
 use cf_traits::LpRegistration;
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::{pallet_prelude::OriginFor, WeightInfo as SystemWeightInfo};
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{SaturatedConversion, Zero};
 use sp_std::{boxed::Box, vec::Vec};
@@ -62,6 +62,14 @@ mod mock;
 mod tests;
 
 impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_update_enabled);
+
+type SweepingThresholds = BoundedBTreeMap<Asset, AssetAmount, ConstU32<100>>;
+pub struct StablecoinDefaults<const N: u128>;
+impl<const N: u128> Get<SweepingThresholds> for StablecoinDefaults<N> {
+	fn get() -> SweepingThresholds {
+		cf_primitives::StablecoinDefaults::<N>::get().try_into().unwrap()
+	}
+}
 
 pub const MAX_ORDERS_DELETE: u32 = 100;
 #[derive(
@@ -173,6 +181,11 @@ impl<T> AskBidMap<T> {
 	pub fn map<S, F: FnMut(T) -> S>(self, mut f: F) -> AskBidMap<S> {
 		AskBidMap { asks: f(self.asks), bids: f(self.bids) }
 	}
+}
+
+#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum PalletConfigUpdate {
+	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
 }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
@@ -310,7 +323,7 @@ pub mod pallet {
 	/// swept
 	#[pallet::storage]
 	pub(super) type LimitOrderAutoSweepingThresholds<T: Config> =
-		StorageValue<_, BoundedBTreeMap<Asset, AssetAmount, ConstU32<1000>>, ValueQuery>;
+		StorageValue<_, SweepingThresholds, ValueQuery, StablecoinDefaults<1_000_000_000>>; // $1000 USD
 
 	#[pallet::storage]
 	/// Historical earned fees for an account.
@@ -465,6 +478,9 @@ pub mod pallet {
 		/// An order wasn't deleted (order not found)
 		OrderDeletionFailed {
 			order: CloseOrder,
+		},
+		PalletConfigUpdated {
+			update: PalletConfigUpdate,
 		},
 	}
 
@@ -958,6 +974,31 @@ pub mod pallet {
 						})?;
 					},
 				};
+			}
+
+			Ok(())
+		}
+
+		/// Apply a list of configuration updates to the pallet.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(11)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<100>>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			for update in updates {
+				match update {
+					PalletConfigUpdate::LimitOrderAutoSweepingThreshold { asset, amount } => {
+						LimitOrderAutoSweepingThresholds::<T>::mutate(|thresholds| {
+							thresholds.try_insert(asset, amount).expect("Every asset will fit");
+						});
+					},
+				}
+				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
 			}
 
 			Ok(())
