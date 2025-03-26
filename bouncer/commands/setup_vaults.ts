@@ -24,7 +24,7 @@ import {
   initializeSolanaPrograms,
   initializeAssethubChain,
 } from '../shared/initialize_new_chains';
-import { globalLogger, loggerChild } from '../shared/utils/logger';
+import { globalLogger, loggerChild, Logger } from '../shared/utils/logger';
 import {
   getPolkadotApi,
   getAssethubApi,
