@@ -86,7 +86,7 @@ mod benchmarks {
 						source_asset,
 					)
 					.unwrap(),
-				action: ChannelAction::<T::AccountId>::LiquidityProvision {
+				action: ChannelAction::<T::AccountId, T::TargetChain>::LiquidityProvision {
 					lp_account: account("doogle", 0, 0),
 					refund_address: ForeignChainAddress::benchmark_value(),
 				},
@@ -129,7 +129,7 @@ mod benchmarks {
 						<T as Config<I>>::AddressDerivation,
 					>(1, source_asset)
 					.unwrap(),
-					action: ChannelAction::<T::AccountId>::LiquidityProvision {
+					action: ChannelAction::<T::AccountId, T::TargetChain>::LiquidityProvision {
 						lp_account: account("doogle", 0, 0),
 						refund_address: ForeignChainAddress::benchmark_value(),
 					},

@@ -36,7 +36,6 @@ mod boost_pool;
 
 pub use boost_pool::OwedAmount;
 use boost_pool::{BoostPool, DepositFinalisationOutcomeForPool};
-use cf_chains::{address::EncodedAddress, CcmDepositMetadataGeneric};
 
 use cf_chains::{
 	address::{
@@ -161,6 +160,7 @@ pub enum DepositFailedReason {
 	InvalidDcaParameters,
 	CcmUnsupportedForTargetChain,
 	CcmInvalidMetadata,
+	CanNotRejectRefunds,
 }
 
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -481,7 +481,7 @@ pub mod pallet {
 		/// sent after this block, they will not be witnessed.
 		pub expires_at: TargetChainBlockNumber<T, I>,
 		/// The action to be taken when the DepositChannel is deposited to.
-		pub action: ChannelAction<T::AccountId>,
+		pub action: ChannelAction<T::AccountId, T::TargetChain>,
 		/// The boost fee
 		pub boost_fee: BasisPoints,
 		/// Boost status, indicating whether there is pending boost on the channel
@@ -502,7 +502,8 @@ pub mod pallet {
 
 	/// Determines the action to take when a deposit is made to a channel.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum ChannelAction<AccountId> {
+	#[scale_info(skip_type_params(C))]
+	pub enum ChannelAction<AccountId, C: Chain> {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
@@ -516,9 +517,9 @@ pub mod pallet {
 			refund_address: ForeignChainAddress,
 		},
 		Refund {
-			asset: Asset,
+			asset: C::ChainAsset,
 			reason: RefundReason,
-			refund_address: ForeignChainAddress,
+			refund_address: C::ChainAccount,
 		},
 	}
 
@@ -1925,7 +1926,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn perform_channel_action(
-		action: ChannelAction<T::AccountId>,
+		action: ChannelAction<T::AccountId, T::TargetChain>,
 		asset: TargetChainAsset<T, I>,
 		source_address: Option<ForeignChainAddress>,
 		amount_after_fees: TargetChainAmount<T, I>,
@@ -1974,35 +1975,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				DepositAction::Swap { swap_request_id }
 			},
 			ChannelAction::Refund { asset, refund_address, reason } => {
-				match (asset.try_into(), refund_address.try_into()) {
-					(Ok(asset), Ok(address)) => {
-						let egress_id =
-							match Self::schedule_egress(asset, amount_after_fees, address, None) {
-								Ok(egress_details) => Some(egress_details.egress_id),
-								Err(e) => {
-									log::warn!(
-										"Failed to schedule egress for vault swap refund: {:?}",
-										e
-									);
-									None
-								},
-							};
-						DepositAction::Refund {
-							egress_id,
-							amount: amount_after_fees,
-							refund_success: egress_id.is_some(),
-							reason,
-						}
-					},
-					_ => {
-						log_or_panic!("Refund action with invalid asset or address!");
-						DepositAction::Refund {
-							egress_id: None,
-							amount: amount_after_fees,
-							refund_success: false,
-							reason,
-						}
-					},
+				let egress_id =
+					match Self::schedule_egress(asset, amount_after_fees, refund_address, None) {
+						Ok(egress_details) => Some(egress_details.egress_id),
+						Err(e) => {
+							log::warn!("Failed to schedule egress for vault swap refund: {:?}", e);
+							None
+						},
+					};
+				DepositAction::Refund {
+					egress_id,
+					amount: amount_after_fees,
+					refund_success: egress_id.is_some(),
+					reason,
 				}
 			},
 		}
@@ -2154,7 +2139,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		deposit_address: Option<TargetChainAccount<T, I>>,
 		source_address: Option<ForeignChainAddress>,
-		action: ChannelAction<T::AccountId>,
+		action: ChannelAction<T::AccountId, T::TargetChain>,
 		boost_fee: u16,
 		boost_status: BoostStatus<TargetChainAmount<T, I>>,
 		channel_id: Option<u64>,
@@ -2360,7 +2345,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		boost_status: BoostStatus<TargetChainAmount<T, I>>,
 		max_boost_fee_bps: BasisPoints,
 		channel_id: Option<u64>,
-		action: ChannelAction<T::AccountId>,
+		action: ChannelAction<T::AccountId, T::TargetChain>,
 		block_height: TargetChainBlockNumber<T, I>,
 		origin: DepositOrigin<T, I>,
 	) -> Result<FullWitnessDepositOutcome, DepositFailedReason> {
@@ -2376,12 +2361,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// Only consider rejecting a transaction if we haven't already boosted it,
 				// since by boosting the protocol is committing to accept the deposit.
 				if TransactionsMarkedForRejection::<T, I>::take(broker_id, &tx_id).is_some() {
+					if matches!(action, ChannelAction::Refund { .. }) {
+						return Err(DepositFailedReason::CanNotRejectRefunds);
+					}
+
 					let refund_address = match &action {
 						ChannelAction::Swap { refund_params, .. } =>
 							refund_params.refund_address.clone(),
 						ChannelAction::LiquidityProvision { refund_address, .. } =>
 							refund_address.clone(),
-						ChannelAction::Refund { refund_address, .. } => refund_address.clone(),
+						ChannelAction::Refund { .. } => unreachable!("Condition checked above!"),
 					};
 
 					ScheduledTransactionsForRejection::<T, I>::append(
@@ -2651,11 +2640,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					});
 					(
 						ChannelAction::Refund {
-							asset: source_asset.into(),
+							asset: source_asset,
 							reason: reason.clone(),
-							refund_address: refund_params
-								.refund_address
-								.into_foreign_chain_address(),
+							refund_address: refund_params.refund_address,
 						},
 						None,
 					)
@@ -2744,7 +2731,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn open_channel(
 		requester: &T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-		action: ChannelAction<T::AccountId>,
+		action: ChannelAction<T::AccountId, T::TargetChain>,
 		boost_fee: BasisPoints,
 	) -> Result<
 		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),

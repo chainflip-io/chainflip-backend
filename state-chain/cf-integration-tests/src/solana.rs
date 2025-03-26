@@ -46,8 +46,7 @@ use pallet_cf_elections::{
 	AuthorityVoteOf, ElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{
-	DepositAction, DepositFailedReason, DepositWitness, FetchOrTransfer, RefundReason,
-	VaultDepositWitness,
+	DepositAction, DepositWitness, FetchOrTransfer, RefundReason, VaultDepositWitness,
 };
 use pallet_cf_validator::RotationPhase;
 use sp_core::ConstU32;
