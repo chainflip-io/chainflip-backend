@@ -36,6 +36,7 @@ mod boost_pool;
 
 pub use boost_pool::OwedAmount;
 use boost_pool::{BoostPool, DepositFinalisationOutcomeForPool};
+use cf_chains::{address::EncodedAddress, CcmDepositMetadataGeneric};
 
 use cf_chains::{
 	address::{
@@ -176,6 +177,18 @@ enum FullWitnessDepositOutcome {
 	BoostFinalised,
 	DepositActionPerformed,
 }
+
+// Either all successfully validated data of a vault swap or the reason why the validation has
+// failed.
+type MaybeValidatedVaultSwap<AccountId> = Result<
+	(
+		BoundedVec<Beneficiary<AccountId>, ConstU32<6>>,
+		Option<CcmChannelMetadata>,
+		Option<ForeignChainAddress>,
+		ForeignChainAddress,
+	),
+	RefundReason,
+>;
 
 mod deposit_origin {
 
@@ -2514,32 +2527,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn validate_vault_swap_request(
+	fn try_validate_vault_swap(
 		vault_deposit_witness: VaultDepositWitness<T, I>,
-	) -> Result<
-		(
-			BoundedVec<Beneficiary<T::AccountId>, ConstU32<6>>,
-			Option<CcmChannelMetadata>,
-			Option<ForeignChainAddress>,
-			ForeignChainAddress,
-		),
-		RefundReason,
-	> {
+	) -> MaybeValidatedVaultSwap<T::AccountId> {
 		let VaultDepositWitness {
-			input_asset: source_asset,
-			deposit_address,
-			channel_id,
-			deposit_amount,
-			deposit_details,
+			input_asset: _,
+			deposit_address: _,
+			channel_id: _,
+			deposit_amount: _,
+			deposit_details: _,
 			output_asset: destination_asset,
 			destination_address,
 			deposit_metadata,
-			tx_id,
+			tx_id: _,
 			broker_fee,
 			affiliate_fees,
 			refund_params,
 			dca_params,
-			boost_fee,
+			boost_fee: _,
 		} = vault_deposit_witness.clone();
 
 		let Some(broker_fees) =
@@ -2610,18 +2615,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_amount,
 			deposit_details,
 			output_asset: destination_asset,
-			destination_address,
-			deposit_metadata,
+			destination_address: _,
+			deposit_metadata: _,
 			tx_id,
 			broker_fee,
-			affiliate_fees,
+			affiliate_fees: _,
 			refund_params,
 			dca_params,
 			boost_fee,
 		} = vault_deposit_witness.clone();
 
 		let (action, source_address) =
-			match Self::validate_vault_swap_request(vault_deposit_witness.clone()) {
+			match Self::try_validate_vault_swap(vault_deposit_witness.clone()) {
 				Ok((
 					broker_fees,
 					channel_metadata,
