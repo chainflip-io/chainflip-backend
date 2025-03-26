@@ -1249,7 +1249,7 @@ mod runtime {
 	#[runtime::pallet_index(51)]
 	pub type AssethubIngressEgress = pallet_cf_ingress_egress<Instance6>;
 
-	#[rutnime::pallet_index(52)]
+	#[runtime::pallet_index(52)]
 	pub type TradingStrategy = pallet_cf_trading_strategy;
 }
 
