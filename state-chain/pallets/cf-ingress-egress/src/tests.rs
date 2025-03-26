@@ -3020,18 +3020,11 @@ mod evm_transaction_rejection {
 				RuntimeEvent::IngressEgress(PalletEvent::TransactionRejectedByBroker {
 					tx_id,
 					..
-				}) => Some(tx_id.tx_hashes),
+				}) => Some(tx_id.tx_hashes.expect("Should not be empty.")),
 				_ => None,
 			})
 			.then_execute_with(|(_, tx_hashes)| {
-				assert!(tx_hashes
-					.into_iter()
-					.filter_map(|hashes| hashes.clone())
-					.flatten()
-					.collect::<Vec<_>>()
-					.contains(&tx_id));
-			})
-			.then_execute_with(|_| {
+				assert_eq!(tx_hashes, vec![vec![tx_id]], "Expected exactly one rejection.");
 				assert!(FailedRejections::<Test, ()>::get().is_empty());
 
 				let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
