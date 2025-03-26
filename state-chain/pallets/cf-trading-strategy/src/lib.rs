@@ -41,7 +41,6 @@ use frame_system::pallet_prelude::*;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec,
-	vec::Vec,
 };
 use weights::WeightInfo;
 
@@ -76,13 +75,9 @@ impl TradingStrategy {
 		}
 	}
 	pub fn supported_assets(&self) -> BTreeSet<Asset> {
-		self.supported_asset_pairs().into_iter().flat_map(|(a, b)| vec![a, b]).collect()
-	}
-	pub fn supported_asset_pairs(&self) -> Vec<(Asset, Asset)> {
 		match self {
-			TradingStrategy::SellAndBuyAtTicks { base_asset, .. } => {
-				vec![(*base_asset, STABLE_ASSET)]
-			},
+			TradingStrategy::SellAndBuyAtTicks { base_asset, .. } =>
+				BTreeSet::from_iter([*base_asset, STABLE_ASSET]),
 		}
 	}
 }
@@ -246,8 +241,6 @@ pub mod pallet {
 		LpHasActiveStrategies,
 		/// Strategies are disabled due to safe mode
 		TradingStrategiesDisabled,
-		/// One or more of the supported pools does not exist.
-		PoolDoesNotExist,
 	}
 
 	#[pallet::call]
