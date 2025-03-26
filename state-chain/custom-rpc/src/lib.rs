@@ -1970,7 +1970,7 @@ pub enum NotificationBehaviour {
 	New,
 }
 
-/// Number of pinned blocks before starting to unpin old blocks. Must be lower than
+/// Number of pinned blocks before starting to unpin oldest block. Must be lower than
 /// `ChainHeadConfig` maximum pinned blocks across all connections (ChainHeadConfig default is 512).
 const MAX_RETAINED_PINNED_BLOCKS: usize = 64;
 
@@ -2024,7 +2024,7 @@ impl<B: BlockT, BE: Backend<B>, C> SubscriptionCleaner<B, BE, C> {
 							.chain_head_client
 							.call::<_, ()>(
 								"chainHead_v1_unpin",
-								[&self.sub_id, &format!("{:?}", old_hash)],
+								jsonrpsee::rpc_params!(&self.sub_id, old_hash),
 							)
 							.await
 						{
@@ -2155,6 +2155,20 @@ where
 			}
 		})
 		.filter_map(move |(event, sub_gc)| async move {
+			// The finalized blocks reported in the initialized event and each subsequent block
+			// reported with a newBlock event, are pinned by the chain head API. These blocks
+			// need to be added to the subscription's garbage collector for later unpinning.
+			match event.clone() {
+				FollowEvent::Initialized(sc_rpc_spec_v2::chain_head::Initialized {
+					finalized_block_hashes,
+					..
+				}) => sub_gc.add(&finalized_block_hashes).await,
+				FollowEvent::NewBlock(sc_rpc_spec_v2::chain_head::NewBlock {
+					block_hash, ..
+				}) => sub_gc.add(&[block_hash]).await,
+				_ => {},
+			}
+
 			// When NotificationBehaviour is:
 			// * NotificationBehaviour::Finalized: listen to initialized and finalized events
 			// * NotificationBehaviour::Best: listen to just bestBlockChanged events
@@ -2168,43 +2182,28 @@ where
 						mut finalized_block_hashes,
 						..
 					}),
-				) => {
-					let initial_hash_vec = vec![finalized_block_hashes
-						.pop()
-						.expect("Guaranteed to have at least one element.")];
-					sub_gc.add(&initial_hash_vec).await;
-					Some(initial_hash_vec)
-				},
+				) => Some(vec![finalized_block_hashes
+					.pop()
+					.expect("Guaranteed to have at least one element.")]),
 				(
 					NotificationBehaviour::Finalized,
 					FollowEvent::Finalized(sc_rpc_spec_v2::chain_head::Finalized {
 						finalized_block_hashes,
 						..
 					}),
-				) => {
-					sub_gc.add(&finalized_block_hashes).await;
-					Some(finalized_block_hashes)
-				},
+				) => Some(finalized_block_hashes),
 				(
 					NotificationBehaviour::Best,
 					FollowEvent::BestBlockChanged(sc_rpc_spec_v2::chain_head::BestBlockChanged {
 						best_block_hash,
 					}),
-				) => {
-					let best_block_vec = vec![best_block_hash];
-					sub_gc.add(&best_block_vec).await;
-					Some(best_block_vec)
-				},
+				) => Some(vec![best_block_hash]),
 				(
 					NotificationBehaviour::New,
 					FollowEvent::NewBlock(sc_rpc_spec_v2::chain_head::NewBlock {
 						block_hash, ..
 					}),
-				) => {
-					let new_block_vec = vec![block_hash];
-					sub_gc.add(&new_block_vec).await;
-					Some(new_block_vec)
-				},
+				) => Some(vec![block_hash]),
 				(_, FollowEvent::Stop) => {
 					log::warn!("ChainHead subscription {:?} received a STOP event.", sub_gc.sub_id);
 					None
