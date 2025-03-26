@@ -42,6 +42,7 @@ std = [
     "cf-primitives/std",
     "cf-traits/std",
     "codec/std",
+    "serde/std",
     "sp-std/std",
     "frame-benchmarking?/std",
     "frame-support/std",
