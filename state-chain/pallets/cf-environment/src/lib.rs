@@ -544,18 +544,24 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Manually initiates Assethub vault key rotation completion steps so Epoch rotation can be
-		/// continued and sets the Assethub Pure Proxy Vault in environment pallet. The extrinsic
-		/// takes in the hub_pure_proxy_vault_key, which is obtained from the Assethub blockchain as
-		/// a result of creating an assethub vault which is done by executing the extrinsic
-		/// create_assethub_vault(), hub_witnessed_aggkey, the aggkey which initiated the assethub
-		/// creation transaction and the tx hash and block number of the Assethub block the
-		/// vault creation transaction was witnessed in. This extrinsic should complete the Assethub
-		/// initiation process and the vault should rotate successfully.
+		/// **READ WARNINGS BEFORE USING THIS**
 		///
-		/// ## Events
+		/// Allows Governance to dispatch calls to the Solana Contracts.
 		///
-		/// - [AssethubVaultCreationCallInitiated](Event::AssethubVaultCreationCallInitiated)
+		/// Note this will only work as long as the Solana GovKey is the current AggKey, which might
+		/// change in the future.
+		///
+		/// Requires Governance Origin. This action is allowed to consume any nonce account because
+		/// it's a high priority action. Therefore, **DO NOT** execute this governance function
+		/// around a rotation as it could consume the nonce saved for rotations.
+		///
+		/// ## Events
+		///
+		/// - [OnSuccess](Event::SolanaGovCallDispatched)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(8)]
 		#[pallet::weight(Weight::zero())]
 		pub fn dispatch_solana_gov_call(
@@ -576,24 +582,18 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// **READ WARNINGS BEFORE USING THIS**
+		/// /// Manually initiates Assethub vault key rotation completion steps so Epoch rotation
+		/// can be continued and sets the Assethub Pure Proxy Vault in environment pallet. The
+		/// extrinsic takes in the hub_pure_proxy_vault_key, which is obtained from the Assethub
+		/// blockchain as a result of creating an assethub vault which is done by executing the
+		/// extrinsic create_assethub_vault(), hub_witnessed_aggkey, the aggkey which initiated
+		/// the assethub creation transaction and the tx hash and block number of the Assethub
+		/// block the vault creation transaction was witnessed in. This extrinsic should complete
+		/// the Assethub initiation process and the vault should rotate successfully.
 		///
-		/// Allows Governance to dispatch calls to the Solana Contracts.
+		/// ## Events
 		///
-		/// Note this will only work as long as the Solana GovKey is the current AggKey, which might
-		/// change in the future.
-		///
-		/// Requires Governance Origin. This action is allowed to consume any nonce account because
-		/// it's a high priority action. Therefore, **DO NOT** execute this governance function
-		/// around a rotation as it could consume the nonce saved for rotations.
-		///
-		/// ## Events
-		///
-		/// - [OnSuccess](Event::SolanaGovCallDispatched)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [AssethubVaultCreationCallInitiated](Event::AssethubVaultCreationCallInitiated)
 		#[allow(unused_variables)]
 		#[pallet::call_index(9)]
 		// This weight is not strictly correct but since it's a governance call, weight is

@@ -94,16 +94,16 @@ fn utility_fetch(
 					keep_alive: false,
 				}),
 			cf_primitives::chains::assets::hub::Asset::HubUsdt =>
-				AssethubRuntimeCall::Assets(AssetsCall::transfer {
+				AssethubRuntimeCall::Assets(AssetsCall::transfer_all {
 					id: ASSETHUB_USDT_ASSET_ID,
 					dest: PolkadotAccountIdLookup::from(vault_account),
-					value: fetch_param.amount,
+					keep_alive: false,
 				}),
 			cf_primitives::chains::assets::hub::Asset::HubUsdc =>
-				AssethubRuntimeCall::Assets(AssetsCall::transfer {
+				AssethubRuntimeCall::Assets(AssetsCall::transfer_all {
 					id: ASSETHUB_USDC_ASSET_ID,
 					dest: PolkadotAccountIdLookup::from(vault_account),
-					value: fetch_param.amount,
+					keep_alive: false,
 				}),
 		},
 		|call, index| {
@@ -236,10 +236,10 @@ mod test_batch_fetch {
 			call,
 			AssethubRuntimeCall::Utility(UtilityCall::as_derivative {
 				index: 1,
-				call: Box::new(AssethubRuntimeCall::Assets(AssetsCall::transfer {
+				call: Box::new(AssethubRuntimeCall::Assets(AssetsCall::transfer_all {
 					dest: PolkadotAccountIdLookup::from(vault_account),
 					id: ASSETHUB_USDC_ASSET_ID,
-					value: 123456
+					keep_alive: false
 				})),
 			})
 		);
