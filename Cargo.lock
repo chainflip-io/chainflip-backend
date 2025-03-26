@@ -2745,6 +2745,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-pools",
  "pallet-cf-swapping",
+ "pallet-cf-trading-strategy",
  "pallet-cf-witnesser",
  "parity-scale-codec",
  "sc-client-api",
