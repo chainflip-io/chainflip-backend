@@ -536,7 +536,7 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 		assert_eq!(
 			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
 			0,
-			"Refund broadcast should have been scheduled!"
+			"Refund broadcast should not have been scheduled!"
 		);
 
 		IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
@@ -549,7 +549,7 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 		assert_eq!(
 			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
 			0,
-			"Refund broadcast should have been scheduled!"
+			"Refund broadcast should not have been scheduled!"
 		);
 
 		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::decode_len(), Some(1));
