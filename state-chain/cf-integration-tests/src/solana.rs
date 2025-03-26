@@ -531,14 +531,13 @@ fn solana_ccm_fails_with_invalid_input() {
 			Swapping::on_finalize(block_number);
 			SolanaIngressEgress::on_finalize(block_number);
 
-			// TODO: Figure out why this is not working and with what we have to replace it.
 			assert_has_matching_event!(
 				Runtime,
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
 					Runtime,
 					SolanaInstance,
 				>::CcmEgressInvalid {
-					egress_id: (ForeignChain::Solana, 1u64),
+					egress_id: (ForeignChain::Solana, 2u64),
 					error: ExecutexSwapAndCallError::FailedToBuildCcmForSolana(
 						SolanaTransactionBuildingError::InvalidCcm(
 							CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
