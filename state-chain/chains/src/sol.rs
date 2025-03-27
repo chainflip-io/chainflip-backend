@@ -48,12 +48,15 @@ pub use sol_prim::{
 		TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
-	transaction::legacy::{
-		LegacyMessage as SolLegacyMessage, LegacyTransaction as SolLegacyTransaction,
+	transaction::{
+		v0::VersionedMessageV0 as SolVersionedMessageV0, VersionedMessage as SolVersionedMessage,
+		VersionedTransaction as SolVersionedTransaction,
 	},
-	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
-	Hash as RawSolHash, Instruction as SolInstruction, InstructionRpc as SolInstructionRpc,
-	Pubkey as SolPubkey, Signature as SolSignature, SlotNumber as SolBlockNumber,
+	Address as SolAddress, AddressLookupTableAccount as SolAddressLookupTableAccount,
+	AddressLookupTableAccount, Amount as SolAmount, ComputeLimit as SolComputeLimit,
+	Digest as SolHash, Hash as RawSolHash, Instruction as SolInstruction,
+	InstructionRpc as SolInstructionRpc, Pubkey as SolPubkey, Signature as SolSignature,
+	SlotNumber as SolBlockNumber,
 };
 pub use sol_tx_core::{
 	rpc_types, AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts,
@@ -66,8 +69,11 @@ pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
 // Bytes left that are available for the user when building the native and token ccm transfers.
 // All function parameters are already accounted except additional_accounts and message.
-pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 538usize + 32usize; // 694 bytes left + 32 empty source address
-pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 751usize + 32usize; // 481 bytes left + 32 empty source address
+pub const MAX_USER_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 418usize; // 814 bytes left
+pub const MAX_USER_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 507usize; // 725 bytes left
+
+/// Maximum number of Accounts Lookup Tables user can pass in as part of CCM call.
+pub const MAX_CCM_USER_ALTS: u8 = 3u8;
 
 // Nonce management values
 pub const NONCE_NUMBER_CRITICAL_NONCES: usize = 1;
@@ -123,7 +129,7 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
-	type Payload = SolLegacyMessage;
+	type Payload = SolVersionedMessage;
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolanaTransactionInId;
 	type TransactionOutId = Self::ThresholdSignature;
@@ -146,7 +152,7 @@ impl ChainCrypto for SolanaCrypto {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
-		SolLegacyMessage::new(&[], Some(&SolPubkey::from(agg_key)))
+		SolVersionedMessage::new(&[], Some(SolPubkey::from(agg_key)), None, &[])
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(
@@ -181,7 +187,8 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32;
 	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32;
-	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
+	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 5_000u32;
+	pub const COMPUTE_UNITS_PER_NONCE_ROTATION: SolComputeLimit = 4_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
 	pub const COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS: SolComputeLimit = 20_000u32;
@@ -465,7 +472,7 @@ pub mod signing_key {
 
 /// Solana Environment variables used when building the base API call.
 #[derive(
-	Encode, Decode, TypeInfo, Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize,
+	Encode, Decode, TypeInfo, Default, Clone, PartialEq, Eq, Debug, Serialize, Deserialize,
 )]
 pub struct SolApiEnvironment {
 	// For native Sol API calls.
@@ -482,6 +489,8 @@ pub struct SolApiEnvironment {
 	// For program swaps API calls.
 	pub swap_endpoint_program: SolAddress,
 	pub swap_endpoint_program_data_account: SolAddress,
+	pub alt_manager_program: SolAddress,
+	pub address_lookup_table_account: AddressLookupTableAccount,
 }
 
 impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}

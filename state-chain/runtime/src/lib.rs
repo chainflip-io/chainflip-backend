@@ -46,8 +46,8 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, DispatchErrorWithMessage, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TransactionScreeningEvents,
-		ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -66,7 +66,7 @@ use cf_chains::{
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
 	ccm_checker::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
-		DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData,
+		DecodedCcmAdditionalData,
 	},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -1044,7 +1044,9 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 impl pallet_cf_trading_strategy::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
+	type LpOrdersWeights = LiquidityPools;
 	type BalanceApi = AssetBalances;
+	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type LpRegistrationApi = LiquidityProvider;
 }
@@ -2196,7 +2198,9 @@ impl_runtime_apis! {
 				// Ensure CCM message is valid
 				match CcmValidityChecker::check_and_decode(ccm, destination_asset, destination_address.clone())
 				{
-					Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(ccm_accounts))) => {
+					Ok(DecodedCcmAdditionalData::Solana(decoded)) => {
+						let ccm_accounts = decoded.ccm_accounts();
+
 						// Ensure the CCM parameters do not contain blacklisted accounts.
 						// Load up environment variables.
 						let api_environment =
@@ -2361,6 +2365,40 @@ impl_runtime_apis! {
 					})
 					.collect(),
 			}
+		}
+
+		fn cf_get_trading_strategies(lp_id: Option<AccountId>,) -> Vec<TradingStrategyInfo<AssetAmount>> {
+
+			type Strategies = pallet_cf_trading_strategy::Strategies::<Runtime>;
+			type Strategy = pallet_cf_trading_strategy::TradingStrategy;
+
+			fn to_strategy_info(lp_id: AccountId, strategy_id: AccountId, strategy: Strategy) -> TradingStrategyInfo<AssetAmount> {
+
+				let free_balances = AssetBalances::free_balances(&strategy_id);
+				let open_order_balances = LiquidityPools::open_order_balances(&strategy_id);
+
+				let total_balances = free_balances.saturating_add(open_order_balances);
+
+				let supported_assets = strategy.supported_assets();
+				let supported_asset_balances = total_balances.iter()
+					.filter(|(asset, _amount)| supported_assets.contains(asset))
+					.map(|(asset, amount)| (asset, *amount));
+
+				TradingStrategyInfo {
+					lp_id,
+					strategy_id,
+					strategy,
+					balance: supported_asset_balances.collect(),
+				}
+
+			}
+
+			if let Some(lp_id) = &lp_id {
+				Strategies::iter_prefix(lp_id).map(|(strategy_id, strategy)| to_strategy_info(lp_id.clone(), strategy_id, strategy)).collect()
+			} else {
+				Strategies::iter().map(|(lp_id, strategy_id, strategy)| to_strategy_info(lp_id, strategy_id, strategy)).collect()
+			}
+
 		}
 	}
 

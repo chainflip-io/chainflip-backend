@@ -47,3 +47,4 @@ frame-support = { workspace = true, default-features = true }
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }
 serde_json = { workspace = true }
+pallet-cf-trading-strategy = { workspace = true, default-features = true }

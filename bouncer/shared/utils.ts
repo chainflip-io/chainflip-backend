@@ -65,7 +65,9 @@ export type VaultSwapParams = {
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
-export const solanaNumberOfNonces = 10;
+// Nonces deployed in two stages
+export const solanaNumberOfNonces: number = 10;
+export const solanaNumberOfAdditionalNonces: number = 40;
 
 const solCcmAccountsCodec = Struct({
   cf_receiver: Struct({
@@ -81,8 +83,14 @@ const solCcmAccountsCodec = Struct({
   fallback_address: TsBytes(32),
 });
 
+const solCcmAltAccountsCodec = Struct({
+  ccm_accounts: solCcmAccountsCodec,
+  alts: Vector(TsBytes(32)),
+});
+
 export const solVersionedCcmAdditionalDataCodec = Enum({
   V0: solCcmAccountsCodec,
+  V1: solCcmAltAccountsCodec,
 });
 
 export function getContractAddress(chain: Chain, contract: string): string {
@@ -153,6 +161,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9';
         case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
+        case 'USER_ADDRESS_LOOKUP_TABLE':
+          return '4eUGPyr3krnw8tD3rL3UBXXdy1cx8Sf9HKVESZUAatqv';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -766,7 +776,9 @@ export async function observeSolanaCcmEvent(
   for (let i = 0; i < 300; i++) {
     const txSignatures = await connection.getSignaturesForAddress(cfTesterAddress);
     for (const txSignature of txSignatures) {
-      const tx = await connection.getTransaction(txSignature.signature);
+      const tx = await connection.getTransaction(txSignature.signature, {
+        maxSupportedTransactionVersion: 0,
+      });
       if (tx) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const eventParser = new EventParser(cfTesterAddress, new BorshCoder(idl as any));
@@ -780,8 +792,13 @@ export async function observeSolanaCcmEvent(
 
           // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
-            const { additional_accounts: expectedAdditionalAccounts } =
-              solVersionedCcmAdditionalDataCodec.dec(messageMetadata.ccmAdditionalData!).value;
+            const decodedCcmAdditionalData = solVersionedCcmAdditionalDataCodec.dec(
+              messageMetadata.ccmAdditionalData!,
+            );
+            const expectedAdditionalAccounts =
+              decodedCcmAdditionalData.tag === 'V0'
+                ? decodedCcmAdditionalData.value.additional_accounts
+                : decodedCcmAdditionalData.value.ccm_accounts.additional_accounts;
 
             if (
               expectedAdditionalAccounts.length !== event.data.remaining_is_writable.length ||
@@ -1143,16 +1160,16 @@ export async function checkAvailabilityAllSolanaNonces(testContext: TestContext)
 
   // Check that all Solana nonces are available
   await using chainflip = await getChainflipApi();
-  const maxRetries = 7; // 42 seconds
+  const maxRetries = 10; // 60 seconds
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .toJSON() as any[];
-    if (availableNonces.length === solanaNumberOfNonces) {
+    if (availableNonces.length === solanaNumberOfNonces + solanaNumberOfAdditionalNonces) {
       break;
     } else if (attempt === maxRetries - 1) {
       throw new Error(
-        `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces}`,
+        `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces + solanaNumberOfAdditionalNonces}`,
       );
     } else {
       await sleep(6000);

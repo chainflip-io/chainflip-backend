@@ -16,7 +16,7 @@
 
 use crate as pallet_cf_trading_strategy;
 use cf_traits::{
-	impl_mock_chainflip,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{balance_api::MockLpRegistration, pool_api::MockPoolApi},
 	AccountRoleRegistry,
 };
@@ -37,12 +37,15 @@ impl frame_system::Config for Test {
 	type Block = frame_system::mocking::MockBlock<Test>;
 }
 
+impl_mock_runtime_safe_mode!(trading_strategies: crate::PalletSafeMode);
 impl pallet_cf_trading_strategy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type BalanceApi = cf_traits::mocks::balance_api::MockBalance;
 	type PoolApi = MockPoolApi;
+	type LpOrdersWeights = MockPoolApi;
 	type LpRegistrationApi = MockLpRegistration;
+	type SafeMode = MockRuntimeSafeMode;
 }
 
 pub const LP: <Test as frame_system::Config>::AccountId = 123u64;

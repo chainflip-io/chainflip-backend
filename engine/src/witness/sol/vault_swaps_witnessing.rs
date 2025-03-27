@@ -14,23 +14,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sol::{
-	commitment_config::CommitmentConfig,
-	retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
-	rpc_client_api::{RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding},
+use crate::{
+	sol::{
+		commitment_config::CommitmentConfig,
+		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
+		rpc_client_api::{RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding},
+	},
+	witness::evm::vault::decode_cf_parameters,
 };
 use anyhow::{anyhow, bail, ensure, Context};
 use base64::Engine;
 use cf_chains::{
 	address::EncodedAddress,
 	assets::sol::Asset as SolAsset,
-	cf_parameters::{
-		CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
-	},
+	cf_parameters::VaultSwapParameters,
 	sol::{api::VaultSwapAccountAndSender, SolAddress},
 	CcmChannelMetadata, CcmDepositMetadata, ForeignChainAddress,
 };
-use codec::Decode;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use sol_prim::program_instructions::{
@@ -55,7 +55,7 @@ const MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY: usize = 10;
 // 5. If they are not seen in the SC we query the account data. Then we parse the account data and
 //    ensure it's a valid a program swap. The new program swap needs to be reported to the SC.
 
-pub async fn get_program_swaps(
+pub async fn get_vault_swaps(
 	sol_rpc: &SolRetryRpcClient,
 	swap_endpoint_data_account_address: SolAddress,
 	sc_open_accounts: HashSet<SolAddress>,
@@ -136,23 +136,13 @@ pub async fn get_program_swaps(
 							},
 						) = match ccm_parameters {
 							None => {
-								let VersionedCfParameters::V0(CfParameters {
-									ccm_additional_data: (),
-									vault_swap_parameters,
-								}) = VersionedCfParameters::decode(&mut &cf_parameters[..])
-									.map_err(|e| {
-										anyhow!("Error while decoding VersionedCfParameters for solana vault swap: {}.", e)
-									})?;
+								let (vault_swap_parameters, ()) =
+									decode_cf_parameters(&cf_parameters[..], creation_slot)?;
 								(None, vault_swap_parameters)
 							},
 							Some(ccm_parameters) => {
-								let VersionedCcmCfParameters::V0(CfParameters {
-									ccm_additional_data,
-									vault_swap_parameters
-									}) = VersionedCcmCfParameters::decode(&mut &cf_parameters[..]).map_err(|e| {
-											anyhow!("Error while decoding VersionedCcmCfParameters for solana vault swap: {}.", e)
-										},
-									)?;
+								let (vault_swap_parameters, ccm_additional_data) =
+									decode_cf_parameters(&cf_parameters[..], creation_slot)?;
 
 								(
 									Some(CcmDepositMetadata {

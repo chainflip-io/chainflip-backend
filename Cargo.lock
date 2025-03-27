@@ -1484,6 +1484,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
+ "hex",
  "hex-literal",
  "libsecp256k1",
  "log",
@@ -2743,6 +2744,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-pools",
  "pallet-cf-swapping",
+ "pallet-cf-trading-strategy",
  "pallet-cf-witnesser",
  "parity-scale-codec",
  "sc-client-api",
@@ -8459,6 +8461,7 @@ dependencies = [
 name = "pallet-cf-trading-strategy"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-primitives",
  "cf-runtime-utilities",
  "cf-test-utilities",
@@ -8469,6 +8472,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2)",
 ]
 

@@ -158,6 +158,14 @@ pub trait PoolApi {
 			IncreaseOrDecrease::Decrease(AssetAmount::MAX),
 		)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn create_pool(
+		base_asset: Asset,
+		quote_asset: Asset,
+		fee_hundredth_pips: u32,
+		initial_price: cf_primitives::Price,
+	) -> DispatchResult;
 }
 
 pub trait SwappingApi {

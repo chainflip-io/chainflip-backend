@@ -14,17 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	self as pallet_cf_pools, mock::*, AskBidMap, AssetAmounts, AssetPair, CloseOrder, Error, Event,
-	HistoricalEarnedFees, LimitOrder, LimitOrderAutoSweepingThresholds, PoolInfo, PoolOrders,
-	PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
-};
+use crate::{self as pallet_cf_pools, mock::*, *};
 use cf_amm::{
 	common::Side,
 	math::{price_at_tick, Tick},
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
-use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
+use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_event, last_event};
 use cf_traits::{mocks::balance_api::MockBalance, BalanceApi, PoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::{bounded_vec, ConstU32, U256};
@@ -1436,6 +1432,88 @@ fn cancel_all_limit_orders_for_account() {
 		assert_eq!(count_orders(ASSET_1, ALICE), (0, 0));
 		assert_eq!(count_orders(ASSET_2, ALICE), (0, 0));
 		assert_eq!(count_orders(ASSET_1, BOB), (1, 0));
+	});
+}
+#[test]
+fn can_update_all_config_items() {
+	new_test_ext().execute_with(|| {
+		const NEW_LIMIT_ORDER_THRESHOLD_USDC: AssetAmount = 5_000 * 10u128.pow(6);
+		const NEW_LIMIT_ORDER_THRESHOLD_USDT: AssetAmount = 6_000 * 10u128.pow(6);
+
+		// Check that the default values are different from the new ones
+		assert_ne!(
+			LimitOrderAutoSweepingThresholds::<Test>::get()
+				.get(&Asset::Usdc)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDC
+		);
+		assert_ne!(
+			LimitOrderAutoSweepingThresholds::<Test>::get()
+				.get(&Asset::Usdt)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDT
+		);
+
+		// Update all config items at the same time
+		assert_ok!(LiquidityPools::update_pallet_config(
+			RuntimeOrigin::root(),
+			vec![
+				PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
+					asset: Asset::Usdc,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC
+				},
+				PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
+					asset: Asset::Usdt,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT
+				},
+			]
+			.try_into()
+			.unwrap()
+		));
+
+		// Check that the new values were set
+		assert_eq!(
+			LimitOrderAutoSweepingThresholds::<Test>::get()
+				.get(&Asset::Usdc)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDC
+		);
+		assert_eq!(
+			LimitOrderAutoSweepingThresholds::<Test>::get()
+				.get(&Asset::Usdt)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDT
+		);
+
+		// Check that the events were emitted
+		assert_events_eq!(
+			Test,
+			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
+					asset: Asset::Usdc,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC,
+				},
+			}),
+			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
+					asset: Asset::Usdt,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT,
+				},
+			}),
+		);
+
+		// Make sure that only governance can update the config
+		assert_noop!(
+			LiquidityPools::update_pallet_config(
+				RuntimeOrigin::signed(ALICE),
+				vec![].try_into().unwrap()
+			),
+			sp_runtime::traits::BadOrigin
+		);
 	});
 }
 
