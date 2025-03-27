@@ -974,10 +974,6 @@ pub mod pallet {
 		NetworkFeeDeductionFromBoostSet {
 			deduction_percent: Percent,
 		},
-		ScheduleVaultSwapRefund {
-			block_height: TargetChainBlockNumber<T, I>,
-			reason: RefundReason,
-		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -2633,20 +2629,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					source_address,
 				),
-				Err(reason) => {
-					Self::deposit_event(Event::<T, I>::ScheduleVaultSwapRefund {
-						block_height,
+				Err(reason) => (
+					ChannelAction::Refund {
+						asset: source_asset,
 						reason: reason.clone(),
-					});
-					(
-						ChannelAction::Refund {
-							asset: source_asset,
-							reason: reason.clone(),
-							refund_address: refund_params.refund_address,
-						},
-						None,
-					)
-				},
+						refund_address: refund_params.refund_address,
+					},
+					None,
+				),
 			};
 
 		match Self::process_full_witness_deposit_inner(
