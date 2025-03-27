@@ -54,9 +54,9 @@ mod old {
 		},
 	}
 
-	impl<A> TryFrom<ChannelAction<A>> for crate::ChannelAction<A> {
+	impl<A, C: cf_chains::Chain> TryFrom<ChannelAction<A>> for crate::ChannelAction<A, C> {
 		type Error = ();
-		fn try_from(action: ChannelAction<A>) -> Result<crate::ChannelAction<A>, Self::Error> {
+		fn try_from(action: ChannelAction<A>) -> Result<crate::ChannelAction<A, C>, Self::Error> {
 			Ok(match action {
 				ChannelAction::Swap {
 					destination_asset,
