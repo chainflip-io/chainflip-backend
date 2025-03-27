@@ -71,8 +71,8 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-		VaultSwapDetails,
+		SimulatedSwapInformation, TradingStrategyInfo, TransactionScreeningEvents, ValidatorInfo,
+		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -472,6 +472,8 @@ pub struct RpcPrewitnessedSwap {
 pub struct SwapResponse {
 	swaps: Vec<ScheduledSwap>,
 }
+
+type TradingStrategyInfoHexAmounts = TradingStrategyInfo<NumberOrHex>;
 
 mod boost_pool_rpc {
 
@@ -975,6 +977,13 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultAddresses>;
+
+	#[method(name = "get_trading_strategies")]
+	fn cf_get_trading_strategies(
+		&self,
+		lp: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<TradingStrategyInfoHexAmounts>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1816,6 +1825,39 @@ where
 		self.rpc_backend
 			.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
 	}
+
+	fn cf_get_trading_strategies(
+		&self,
+		lp: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<TradingStrategyInfo<NumberOrHex>>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			let api_version = api
+				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)?
+				.unwrap_or_default();
+
+			let strategies = if api_version < 4 {
+				// Strategies didn't exist in earlier versions:
+				vec![]
+			} else {
+				api.cf_get_trading_strategies(hash, lp)?
+					.into_iter()
+					.map(|info| TradingStrategyInfo {
+						lp_id: info.lp_id,
+						strategy_id: info.strategy_id,
+						strategy: info.strategy,
+						balance: info
+							.balance
+							.into_iter()
+							.map(|(asset, amount)| (asset, amount.into()))
+							.collect(),
+					})
+					.collect()
+			};
+
+			RpcResult::Ok(strategies)
+		})
+	}
 }
 
 /// Execute f (which returns a Vec of results) for `asset`. If `asset` is `None`
@@ -2234,6 +2276,23 @@ mod test {
 			ethereum: EncodedAddress::Eth([0; 20]),
 			arbitrum: EncodedAddress::Arb([1; 20]),
 			bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
+		};
+		insta::assert_json_snapshot!(val);
+	}
+
+	#[test]
+	fn test_trading_strategies_custom_rpc() {
+		use pallet_cf_trading_strategy::TradingStrategy;
+
+		let val = TradingStrategyInfoHexAmounts {
+			lp_id: ID_1,
+			strategy_id: ID_2,
+			strategy: TradingStrategy::SellAndBuyAtTicks {
+				sell_tick: 1,
+				buy_tick: -1,
+				base_asset: Asset::Usdt,
+			},
+			balance: vec![(Asset::Usdc, 500u128.into()), (Asset::Usdt, 1_000u128.into())],
 		};
 		insta::assert_json_snapshot!(val);
 	}

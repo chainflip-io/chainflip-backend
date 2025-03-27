@@ -14,17 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	self as pallet_cf_pools, mock::*, AskBidMap, AssetAmounts, AssetPair, CloseOrder, Error, Event,
-	HistoricalEarnedFees, LimitOrder, LimitOrderAutoSweepingThresholds, PoolInfo, PoolOrders,
-	PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
-};
+use crate::{self as pallet_cf_pools, mock::*, *};
 use cf_amm::{
 	common::Side,
 	math::{price_at_tick, Tick},
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
-use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
+use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_event, last_event};
 use cf_traits::{mocks::balance_api::MockBalance, BalanceApi, PoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::{bounded_vec, ConstU32, U256};
@@ -137,57 +133,6 @@ fn test_mint_range_order_with_asset_amounts() {
 			Some(POSITION),
 			RangeOrderSize::Liquidity { liquidity: 0 }
 		));
-	});
-}
-
-#[test]
-fn test_sweeping() {
-	new_test_ext().execute_with(|| {
-		const TICK: Tick = 0;
-		const ETH: Asset = Asset::Eth;
-		const POSITION_0_SIZE: AssetAmount = 100_000;
-		const POSITION_1_SIZE: AssetAmount = 90_000;
-		const SWAP_AMOUNT: AssetAmount = 50_000;
-
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			ETH,
-			STABLE_ASSET,
-			Default::default(),
-			price_at_tick(0).unwrap(),
-		));
-
-		MockBalance::credit_account(&ALICE, STABLE_ASSET, POSITION_0_SIZE);
-
-		assert_ok!(LiquidityPools::set_limit_order(
-			RuntimeOrigin::signed(ALICE),
-			ETH,
-			STABLE_ASSET,
-			Side::Buy,
-			0,
-			Some(TICK),
-			POSITION_0_SIZE,
-		));
-
-		assert_eq!(MockBalance::get_balance(&ALICE, ETH), 0);
-		assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 0);
-
-		LiquidityPools::swap_single_leg(ETH, STABLE_ASSET, SWAP_AMOUNT).unwrap();
-
-		MockBalance::credit_account(&ALICE, ETH, POSITION_1_SIZE);
-
-		assert_ok!(LiquidityPools::set_limit_order(
-			RuntimeOrigin::signed(ALICE),
-			ETH,
-			STABLE_ASSET,
-			Side::Sell,
-			1,
-			Some(TICK),
-			POSITION_1_SIZE,
-		));
-
-		assert_eq!(MockBalance::get_balance(&ALICE, ETH), SWAP_AMOUNT);
-		assert_eq!(MockBalance::get_balance(&ALICE, STABLE_ASSET), 0);
 	});
 }
 
@@ -1202,7 +1147,7 @@ fn test_cancel_orders_batch() {
 			RuntimeOrigin::root(),
 			FLIP,
 			STABLE_ASSET,
-			Default::default(),
+			10_000, // 100bps fee
 			price_at_tick(0).unwrap(),
 		));
 
@@ -1235,16 +1180,8 @@ fn test_cancel_orders_batch() {
 			Side::Sell,
 			0,
 			Some(TICK),
-			12
+			10_000
 		));
-		assert_events_match!(
-			Test,
-			RuntimeEvent::LiquidityPools(
-				Event::LimitOrderUpdated {
-					..
-				},
-			) => ()
-		);
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
 			FLIP,
@@ -1252,16 +1189,8 @@ fn test_cancel_orders_batch() {
 			Side::Sell,
 			1,
 			Some(TICK + 1),
-			15
+			15_000
 		));
-		assert_events_match!(
-			Test,
-			RuntimeEvent::LiquidityPools(
-				Event::LimitOrderUpdated {
-					..
-				},
-			) => ()
-		);
 		orders_to_delete
 			.try_push(CloseOrder::Limit {
 				base_asset: FLIP,
@@ -1269,7 +1198,7 @@ fn test_cancel_orders_batch() {
 				side: Side::Sell,
 				id: 0,
 			})
-			.expect("Len should be below 100");
+			.unwrap();
 		orders_to_delete
 			.try_push(CloseOrder::Limit {
 				base_asset: FLIP,
@@ -1277,10 +1206,10 @@ fn test_cancel_orders_batch() {
 				side: Side::Sell,
 				id: 1,
 			})
-			.expect("Len should be below 100");
+			.unwrap();
 		orders_to_delete
 			.try_push(CloseOrder::Range { base_asset: FLIP, quote_asset: STABLE_ASSET, id: 0 })
-			.expect("Len should be below 100");
+			.unwrap();
 		assert_eq!(
 			LiquidityPools::open_order_count(
 				&ALICE,
@@ -1289,6 +1218,11 @@ fn test_cancel_orders_batch() {
 			.unwrap(),
 			3
 		);
+
+		// Do a swap and check that the fee has not been collected yet
+		assert!(LiquidityPools::swap_single_leg(STABLE_ASSET, FLIP, 10_000).is_ok());
+		assert_eq!(HistoricalEarnedFees::<Test>::get(ALICE, STABLE_ASSET), 0);
+
 		assert_ok!(LiquidityPools::cancel_orders_batch(
 			RuntimeOrigin::signed(ALICE),
 			orders_to_delete
@@ -1300,7 +1234,9 @@ fn test_cancel_orders_batch() {
 			)
 			.unwrap(),
 			0
-		)
+		);
+		// Canceling the orders should have also swept the orders
+		assert!(HistoricalEarnedFees::<Test>::get(ALICE, STABLE_ASSET) > 0);
 	});
 }
 
@@ -1496,5 +1432,260 @@ fn cancel_all_limit_orders_for_account() {
 		assert_eq!(count_orders(ASSET_1, ALICE), (0, 0));
 		assert_eq!(count_orders(ASSET_2, ALICE), (0, 0));
 		assert_eq!(count_orders(ASSET_1, BOB), (1, 0));
+	});
+}
+#[test]
+fn can_update_all_config_items() {
+	new_test_ext().execute_with(|| {
+		const NEW_LIMIT_ORDER_THRESHOLD_USDC: AssetAmount = 5_000 * 10u128.pow(6);
+		const NEW_LIMIT_ORDER_THRESHOLD_USDT: AssetAmount = 6_000 * 10u128.pow(6);
+
+		// Check that the default values are different from the new ones
+		assert_ne!(
+			LimitOrderAutoSweepingThresholds::<Test>::get()
+				.get(&Asset::Usdc)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDC
+		);
+		assert_ne!(
+			LimitOrderAutoSweepingThresholds::<Test>::get()
+				.get(&Asset::Usdt)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDT
+		);
+
+		// Update all config items at the same time
+		assert_ok!(LiquidityPools::update_pallet_config(
+			RuntimeOrigin::root(),
+			vec![
+				PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
+					asset: Asset::Usdc,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC
+				},
+				PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
+					asset: Asset::Usdt,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT
+				},
+			]
+			.try_into()
+			.unwrap()
+		));
+
+		// Check that the new values were set
+		assert_eq!(
+			LimitOrderAutoSweepingThresholds::<Test>::get()
+				.get(&Asset::Usdc)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDC
+		);
+		assert_eq!(
+			LimitOrderAutoSweepingThresholds::<Test>::get()
+				.get(&Asset::Usdt)
+				.copied()
+				.unwrap_or_default(),
+			NEW_LIMIT_ORDER_THRESHOLD_USDT
+		);
+
+		// Check that the events were emitted
+		assert_events_eq!(
+			Test,
+			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
+					asset: Asset::Usdc,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDC,
+				},
+			}),
+			RuntimeEvent::LiquidityPools(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::LimitOrderAutoSweepingThreshold {
+					asset: Asset::Usdt,
+					amount: NEW_LIMIT_ORDER_THRESHOLD_USDT,
+				},
+			}),
+		);
+
+		// Make sure that only governance can update the config
+		assert_noop!(
+			LiquidityPools::update_pallet_config(
+				RuntimeOrigin::signed(ALICE),
+				vec![].try_into().unwrap()
+			),
+			sp_runtime::traits::BadOrigin
+		);
+	});
+}
+
+#[test]
+fn test_sweeping_when_updating_limit_order() {
+	const ASSET: Asset = Asset::Flip;
+
+	let get_balance =
+		|lp| (MockBalance::get_balance(lp, ASSET), MockBalance::get_balance(lp, STABLE_ASSET));
+
+	new_test_ext().execute_with(|| {
+		// Turn off auto-sweeping
+		LimitOrderAutoSweepingThresholds::<Test>::mutate(|thresholds| {
+			thresholds.try_insert(ASSET, u128::MAX).unwrap();
+			thresholds.try_insert(STABLE_ASSET, u128::MAX).unwrap();
+		});
+
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			ASSET,
+			STABLE_ASSET,
+			0, // no fee
+			price_at_tick(0).unwrap(),
+		));
+
+		// Setup limit orders
+		for (lp, amount) in [(ALICE, 10_000), (BOB, 10_000)] {
+			MockBalance::credit_account(&lp, ASSET, amount);
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(lp),
+				ASSET,
+				STABLE_ASSET,
+				Side::Sell,
+				1,
+				Some(0),
+				amount
+			));
+			MockBalance::credit_account(&lp, STABLE_ASSET, amount);
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(lp),
+				ASSET,
+				STABLE_ASSET,
+				Side::Buy,
+				2,
+				Some(0),
+				amount
+			));
+		}
+		assert_eq!(get_balance(&ALICE), (0, 0));
+		assert_eq!(get_balance(&BOB), (0, 0));
+
+		// Do a swap in each direction to execute the orders
+		assert!(LiquidityPools::swap_single_leg(STABLE_ASSET, ASSET, 10_000).is_ok());
+		assert!(LiquidityPools::swap_single_leg(ASSET, STABLE_ASSET, 10_000).is_ok());
+
+		// Confirm no sweeping has happened yet
+		assert_eq!(get_balance(&ALICE), (0, 0));
+		assert_eq!(get_balance(&BOB), (0, 0));
+		assert_eq!(HistoricalEarnedFees::<Test>::get(ALICE, STABLE_ASSET), 0);
+		assert_eq!(HistoricalEarnedFees::<Test>::get(BOB, STABLE_ASSET), 0);
+
+		// Increase a limit order should cause sweeping of all orders for that LP
+		// NOTE: We would not be able to increase this order if Alice's other order was not swept
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			ASSET,
+			STABLE_ASSET,
+			Side::Sell,
+			1,
+			None,
+			10_000
+		));
+		assert_eq!(get_balance(&ALICE), (0, 5000));
+
+		// Bob's orders are not swept yet
+		assert_eq!(get_balance(&BOB), (0, 0));
+		assert_eq!(HistoricalEarnedFees::<Test>::get(BOB, STABLE_ASSET), 0);
+
+		// Decrease a limit order should also cause sweeping for that LP
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(BOB),
+			ASSET,
+			STABLE_ASSET,
+			Side::Sell,
+			1,
+			None,
+			1000
+		));
+		assert_eq!(get_balance(&BOB), (9000, 5000));
+	});
+}
+
+#[test]
+fn test_sweeping_when_updating_range_order() {
+	const ASSET: Asset = Asset::Flip;
+
+	let get_balance =
+		|lp| (MockBalance::get_balance(lp, ASSET), MockBalance::get_balance(lp, STABLE_ASSET));
+
+	new_test_ext().execute_with(|| {
+		// Turn off auto-sweeping
+		LimitOrderAutoSweepingThresholds::<Test>::mutate(|thresholds| {
+			thresholds.try_insert(ASSET, u128::MAX).unwrap();
+			thresholds.try_insert(STABLE_ASSET, u128::MAX).unwrap();
+		});
+
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			ASSET,
+			STABLE_ASSET,
+			10_000, // 100bps fee
+			price_at_tick(0).unwrap(),
+		));
+
+		// Setup range orders
+		for (lp, amount) in [(ALICE, 5_000), (BOB, 5_000)] {
+			MockBalance::credit_account(&lp, ASSET, amount * 2);
+			MockBalance::credit_account(&lp, STABLE_ASSET, amount * 2);
+			for id in 1..=2 {
+				assert_ok!(LiquidityPools::set_range_order(
+					RuntimeOrigin::signed(lp),
+					ASSET,
+					STABLE_ASSET,
+					id,
+					Some(-1..1),
+					RangeOrderSize::AssetAmounts {
+						minimum: PoolPairsMap { base: 0, quote: 0 },
+						maximum: PoolPairsMap { base: amount, quote: amount }
+					}
+				));
+			}
+		}
+		assert_eq!(get_balance(&ALICE), (0, 0));
+		assert_eq!(get_balance(&BOB), (0, 0));
+
+		// Do a swap
+		assert!(LiquidityPools::swap_single_leg(STABLE_ASSET, ASSET, 10_000).is_ok());
+		assert!(LiquidityPools::swap_single_leg(ASSET, STABLE_ASSET, 10_000).is_ok());
+
+		// Confirm no sweeping has happened yet
+		assert_eq!(get_balance(&ALICE), (0, 0));
+		assert_eq!(get_balance(&BOB), (0, 0));
+
+		// Increase the range order should cause fee collection of both orders for that LP
+		MockBalance::credit_account(&ALICE, STABLE_ASSET, 5_000);
+		MockBalance::credit_account(&ALICE, ASSET, 5_000);
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			ASSET,
+			STABLE_ASSET,
+			1,
+			None,
+			RangeOrderSize::AssetAmounts {
+				minimum: PoolPairsMap { base: 0, quote: 0 },
+				maximum: PoolPairsMap { base: 10_000, quote: 10_000 }
+			}
+		));
+		// NOTE: The collected fees would not be correct unless both orders got swept
+		const EXPECTED_FEES: u128 = 48;
+		assert_eq!(HistoricalEarnedFees::<Test>::get(ALICE, STABLE_ASSET), EXPECTED_FEES);
+		// But Bob's orders are not swept yet
+		assert_eq!(HistoricalEarnedFees::<Test>::get(BOB, STABLE_ASSET), 0);
+
+		// Decrease the range order should cause sweeping of it
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(BOB),
+			ASSET,
+			STABLE_ASSET,
+			1,
+			None,
+			RangeOrderSize::Liquidity { liquidity: 100 }
+		));
+		assert_eq!(HistoricalEarnedFees::<Test>::get(BOB, STABLE_ASSET), EXPECTED_FEES);
 	});
 }

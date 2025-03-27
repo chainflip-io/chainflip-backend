@@ -17,6 +17,7 @@ workspace = true
 
 [dependencies]
 log = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Local deps
 cf-primitives = { workspace = true }
@@ -41,10 +42,12 @@ std = [
     "cf-primitives/std",
     "cf-traits/std",
     "codec/std",
+    "serde/std",
     "sp-std/std",
     "frame-benchmarking?/std",
     "frame-support/std",
     "frame-system/std",
+    "serde/std",
 ]
 runtime-benchmarks = [
     "cf-traits/runtime-benchmarks",

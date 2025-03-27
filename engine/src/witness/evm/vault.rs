@@ -43,7 +43,7 @@ use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
-fn decode_cf_parameters<RefundAddress, CcmData>(
+pub fn decode_cf_parameters<RefundAddress, CcmData>(
 	cf_parameters: &[u8],
 	block_height: u64,
 ) -> Result<(VaultSwapParameters<RefundAddress>, CcmData)>

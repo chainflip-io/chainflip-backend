@@ -26,13 +26,15 @@ use frame_support::sp_runtime::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::{ConstU32, U256};
+use sp_core::{ConstU32, Get, U256};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
+	collections::btree_map::BTreeMap,
 	fmt,
 	ops::{Deref, DerefMut},
 	vec::Vec,
 };
+
 pub mod chains;
 
 #[macro_export]
@@ -483,3 +485,13 @@ pub struct DcaParameters {
 }
 
 pub type ShortId = u8;
+
+pub struct StablecoinDefaults<const N: u128>();
+impl<const N: u128> Get<BTreeMap<Asset, AssetAmount>> for StablecoinDefaults<N> {
+	fn get() -> BTreeMap<Asset, AssetAmount> {
+		[Asset::Usdc, Asset::Usdt, Asset::ArbUsdc, Asset::SolUsdc]
+			.into_iter()
+			.map(|asset| (asset, N))
+			.collect()
+	}
+}
