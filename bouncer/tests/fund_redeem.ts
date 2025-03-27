@@ -83,7 +83,7 @@ async function main(logger: Logger, providedSeed?: string) {
   logger.debug(`Testing redeem all`);
   const redeemedAll = await redeemAndObserve(logger, seed, redeemEthAddress as HexString, 'Max');
   // We expect to redeem the entire amount minus the exact amount redeemed above + tax & gas for both redemptions
-  const expectedRedeemAllAmount = fundAmount - redeemedExact;
+  const expectedRedeemAllAmount = fundAmount - redeemedExact - redemptionTaxAmount;
   assert(
     redeemedAll >= expectedRedeemAllAmount - gasErrorMargin &&
       redeemedAll <= expectedRedeemAllAmount,
