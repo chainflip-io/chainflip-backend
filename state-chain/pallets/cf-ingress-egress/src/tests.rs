@@ -2378,21 +2378,62 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 }
 
 #[test]
-fn gets_refunded_if_vault_transaction_was_aborted() {
-	new_test_ext().execute_with(|| {
-		let tx_id = H256::default();
-		const DEPOSIT_AMOUNT: AssetAmount = 100;
+fn test_various_refund_reasons() {
+	fn test_vault_swap_refund(
+		vault_swap: VaultDepositWitness<Test, ()>,
+		expected_reason: RefundReason,
+	) {
+		new_test_ext().execute_with(|| {
+			IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
 
-		let vault_swap = VaultDepositWitness {
+			assert_eq!(
+				ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+				0,
+				"Refund broadcast should not have been scheduled!"
+			);
+
+			IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
+
+			assert!(
+				MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
+				"No swaps should have been triggered!"
+			);
+
+			assert_eq!(
+				ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+				1,
+				"Refund broadcast should have been scheduled!"
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(Event::DepositFinalised {
+					action: DepositAction::Refund {
+						egress_id: _,
+						amount: _,
+						reason,
+					},
+					..
+				}) if *reason == expected_reason
+			);
+
+			System::reset_events();
+			ScheduledEgressFetchOrTransfer::<Test, ()>::kill();
+		});
+	}
+
+	// Test case 1: Invalid broker fees
+	test_vault_swap_refund(
+		VaultDepositWitness {
 			input_asset: Asset::Eth.try_into().unwrap(),
 			deposit_address: Default::default(),
 			channel_id: Some(0),
-			deposit_amount: DEPOSIT_AMOUNT,
+			deposit_amount: 100,
 			deposit_details: Default::default(),
 			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			deposit_metadata: Default::default(),
-			tx_id,
+			tx_id: H256::default(),
 			broker_fee: None,
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParameters {
@@ -2402,35 +2443,82 @@ fn gets_refunded_if_vault_transaction_was_aborted() {
 			},
 			dca_params: None,
 			boost_fee: 0,
-		};
+		},
+		RefundReason::InvalidBrokerFees,
+	);
 
-		IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
+	// Test case 2: Invalid refund parameters - retry duration too high
+	test_vault_swap_refund(
+		VaultDepositWitness {
+			input_asset: Asset::Eth.try_into().unwrap(),
+			deposit_address: Default::default(),
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details: Default::default(),
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			deposit_metadata: Default::default(),
+			tx_id: H256::default(),
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParameters {
+				retry_duration: 700,
+				min_price: U256::from(0),
+				refund_address: H160::default(),
+			},
+			dca_params: None,
+			boost_fee: 0,
+		},
+		RefundReason::InvalidRefundParameters,
+	);
 
-		assert_eq!(
-			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
-			0,
-			"Refund broadcast should not have been scheduled!"
-		);
+	// Test case 3: Invalid destination address
+	test_vault_swap_refund(
+		VaultDepositWitness {
+			input_asset: Asset::Eth.try_into().unwrap(),
+			deposit_address: Default::default(),
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details: Default::default(),
+			output_asset: Asset::Btc,
+			destination_address: EncodedAddress::Btc(Default::default()),
+			deposit_metadata: Default::default(),
+			tx_id: H256::default(),
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParameters {
+				retry_duration: 400,
+				min_price: U256::from(0),
+				refund_address: H160::default(),
+			},
+			dca_params: None,
+			boost_fee: 0,
+		},
+		RefundReason::InvalidDestinationAddress,
+	);
 
-		IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
-
-		assert!(
-			MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
-			"No swaps should have been triggered!"
-		);
-
-		assert_eq!(
-			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
-			1,
-			"Refund broadcast should have been scheduled!"
-		);
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::IngressEgress(Event::DepositFinalised {
-				action: DepositAction::Refund { egress_id: _, amount: DEPOSIT_AMOUNT, reason: _ },
-				..
-			})
-		);
-	});
+	// Test case 4: Invalid DCA parameters - number of chunks is 0
+	test_vault_swap_refund(
+		VaultDepositWitness {
+			input_asset: Asset::Eth.try_into().unwrap(),
+			deposit_address: Default::default(),
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details: Default::default(),
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			deposit_metadata: Default::default(),
+			tx_id: H256::default(),
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParameters {
+				retry_duration: 0,
+				min_price: U256::from(0),
+				refund_address: H160::default(),
+			},
+			dca_params: Some(DcaParameters { number_of_chunks: 0, chunk_interval: 100 }),
+			boost_fee: 0,
+		},
+		RefundReason::InvalidDcaParameters,
+	);
 }
