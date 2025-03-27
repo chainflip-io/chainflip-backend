@@ -38,6 +38,17 @@ const ZION: AccountId = AccountId::new([0x22; 32]);
 const BASE_ASSET: Asset = Asset::Usdt;
 const QUOTE_ASSET: Asset = STABLE_ASSET;
 
+fn turn_off_thresholds() {
+	let zero_thresholds = BTreeMap::from_iter([(BASE_ASSET, 0), (QUOTE_ASSET, 0)]);
+	pallet_cf_trading_strategy::MinimumDeploymentAmountForStrategy::<Runtime>::set(
+		zero_thresholds.clone(),
+	);
+	pallet_cf_trading_strategy::MinimumAddedFundsToStrategy::<Runtime>::set(
+		zero_thresholds.clone(),
+	);
+	pallet_cf_trading_strategy::LimitOrderUpdateThresholds::<Runtime>::set(zero_thresholds.clone());
+}
+
 #[test]
 fn basic_usage() {
 	const DECIMALS: u128 = 10u128.pow(6);
@@ -53,6 +64,7 @@ fn basic_usage() {
 		.build()
 		.execute_with(|| {
             new_pool(BASE_ASSET, 0, price_at_tick(0).unwrap());
+            turn_off_thresholds();
 
             // Start trading strategy
             register_refund_addresses(&DORIS);

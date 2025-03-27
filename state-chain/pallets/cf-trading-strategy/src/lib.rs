@@ -152,7 +152,7 @@ pub mod pallet {
 	/// read multiple assets at once (and this map is small).
 	/// An asset that is not in this map is disabled from being updated.
 	#[pallet::storage]
-	pub(super) type LimitOrderUpdateThresholds<T: Config> = StorageValue<
+	pub type LimitOrderUpdateThresholds<T: Config> = StorageValue<
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
@@ -165,7 +165,7 @@ pub mod pallet {
 	/// of asset A, as long as there is at least 70% of the required amount of asset B.
 	/// An asset that is not in this map is disabled from being deployed.
 	#[pallet::storage]
-	pub(super) type MinimumDeploymentAmountForStrategy<T: Config> = StorageValue<
+	pub type MinimumDeploymentAmountForStrategy<T: Config> = StorageValue<
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
@@ -175,7 +175,7 @@ pub mod pallet {
 	/// Stores the minimum amount per asset that can be added to an existing strategy.
 	/// An asset that is not in this map is disabled from adding funds.
 	#[pallet::storage]
-	pub(super) type MinimumAddedFundsToStrategy<T: Config> = StorageValue<
+	pub type MinimumAddedFundsToStrategy<T: Config> = StorageValue<
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
