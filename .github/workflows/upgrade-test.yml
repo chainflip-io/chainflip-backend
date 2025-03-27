@@ -23,7 +23,7 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
-  SOLANA_PROGRAMS_VERSION: v0.1.1-alt-test
+  SOLANA_PROGRAMS_VERSION: v1.0.0-alt-manager
   NODE_COUNT: "1-node"
 
 permissions:
