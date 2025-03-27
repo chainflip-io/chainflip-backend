@@ -19,15 +19,22 @@
 //! The Chainflip network is permissioned and as such the main reasons for fees are (a) to encourage
 //! 'good' behaviour and (b) to ensure that only funded actors can submit extrinsics to the network.
 
-use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
-use cf_traits::{CallInfoId, FeeScalingCallInfoIdentifier, WaivedFees};
+use crate::{imbalances::Surplus, Config as FlipConfig, OpaqueCallIndex, Pallet as Flip};
+use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
+use cf_traits::WaivedFees;
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
-	sp_runtime::traits::{DispatchInfoOf, Zero},
+	sp_runtime::{
+		traits::{DispatchInfoOf, Zero},
+		RuntimeDebug,
+	},
 	traits::Imbalance,
 };
 use frame_system::Config;
 use pallet_transaction_payment::{Config as TxConfig, OnChargeTransaction};
+use scale_info::TypeInfo;
+use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::marker::PhantomData;
 
 /// Marker struct for implementation of [OnChargeTransaction].
@@ -37,9 +44,15 @@ use sp_std::marker::PhantomData;
 /// Any excess fees are refunded to the caller.
 pub struct FlipTransactionPayment<T>(PhantomData<T>);
 
+const UP_FRONT_ESCROW_FEE: FlipBalance = FLIPPERINOS_PER_FLIP;
+
+pub type CallIndexFor<T> = <<T as crate::Config>::CallIndexer as CallIndexer<
+	<T as frame_system::Config>::RuntimeCall,
+>>::CallIndex;
+
 impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransactionPayment<T> {
 	type Balance = <T as FlipConfig>::Balance;
-	type LiquidityInfo = Option<(Surplus<T>, Option<CallInfoId<T::AccountId>>)>;
+	type LiquidityInfo = Option<(Surplus<T>, Option<CallIndexFor<T>>)>;
 
 	fn withdraw_fee(
 		who: &T::AccountId,
@@ -53,18 +66,14 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		}
 
 		// Check if there's an upfront fee for spam prevention
-		let call_info_id =
-			T::FeeScalingCallInfoIdentifier::call_info_and_spam_prevention_upfront_fee(call, who)
-				.map(|(call_info_id, upfront_fee)| {
-					fee = sp_std::cmp::max(fee, upfront_fee);
-					call_info_id
-				});
+		let call_index = T::CallIndexer::call_index(call)
+			.inspect(|_| fee = sp_std::cmp::max(fee, UP_FRONT_ESCROW_FEE.into()));
 
 		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
 			Ok(if surplus.peek().is_zero() {
 				Default::default()
 			} else {
-				Some((surplus, call_info_id))
+				Some((surplus, call_index))
 			})
 		} else {
 			Err(InvalidTransaction::Payment.into())
@@ -83,19 +92,18 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		_tip: Self::Balance,
 		escrow: Self::LiquidityInfo,
 	) -> Result<(), frame_support::unsigned::TransactionValidityError> {
-		if let Some((surplus, call_info_id)) = escrow {
+		if let Some((surplus, call_index)) = escrow {
 			// It's possible the account was deleted during extrinsic execution. If this is the
 			// case, we shouldn't refund anything, we can just burn all fees in escrow.
 			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
-				if let Some(call_info_id) = call_info_id {
-					let call_count = crate::CallCounter::<T>::mutate(&call_info_id, |count| {
-						*count += 1;
-						*count
-					});
-					match call_info_id {
-						CallInfoId::Pool { .. } =>
-							crate::FeeScalingRate::<T>::get().scale_fee(corrected_fee, call_count),
-					}
+				if let Some(call_index) = call_index {
+					crate::CallCounter::<T>::mutate(
+						OpaqueCallIndex::from((who.clone(), call_index)),
+						|count| {
+							*count += 1;
+							crate::FeeScalingRate::<T>::get().scale_fee(corrected_fee, *count)
+						},
+					)
 				} else {
 					corrected_fee
 				}
@@ -108,4 +116,72 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		}
 		Ok(())
 	}
+}
+
+/// Converts a call into a call index to allow it to be categorised for fee scaling.
+pub trait CallIndexer<Call> {
+	type CallIndex: Encode + MaxEncodedLen;
+
+	fn call_index(_call: &Call) -> Option<Self::CallIndex>;
+}
+
+impl<Call> CallIndexer<Call> for () {
+	type CallIndex = ();
+
+	fn call_index(_call: &Call) -> Option<Self::CallIndex> {
+		None
+	}
+}
+
+#[derive(
+	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
+)]
+pub enum FeeScalingRateConfig {
+	/// No scaling for the first `threshold` calls, then scale by `exp_base`^(`call_count` -
+	/// `threshold`).
+	DelayedExponential { threshold: u16, exponent: u16 },
+	#[default]
+	NoScaling,
+}
+
+impl FeeScalingRateConfig {
+	pub fn scale_fee<Balance: AtLeast32BitUnsigned + Copy>(
+		&self,
+		pre_scaled_fee: Balance,
+		call_count: u16,
+	) -> Balance {
+		match self {
+			FeeScalingRateConfig::DelayedExponential { threshold, exponent } => {
+				let multiplier =
+					1 + call_count.saturating_sub(*threshold).saturating_pow(*exponent as u32);
+				pre_scaled_fee.saturating_mul(multiplier.into())
+			},
+			FeeScalingRateConfig::NoScaling => pre_scaled_fee,
+		}
+	}
+}
+
+#[test]
+fn fee_scaling() {
+	const FEE: u64 = 10;
+
+	macro_rules! test_fee_scaling_config {
+		($name:literal, $config:expr, $expected:expr) => {
+			let results = (1..=10).map(|i| $config.scale_fee(FEE, i)).collect::<Vec<_>>();
+			let expected = $expected.iter().map(|m| (1 + m) * FEE).collect::<Vec<_>>();
+			assert_eq!(results, expected, "Scaling test failed for `{}` test.", $name,);
+		};
+	}
+
+	test_fee_scaling_config!("no_scaling", FeeScalingRateConfig::NoScaling, [0; 10]);
+	test_fee_scaling_config!(
+		"linear",
+		FeeScalingRateConfig::DelayedExponential { threshold: 3, exponent: 1 },
+		[0, 0, 0, 1, 2, 3, 4, 5, 6, 7]
+	);
+	test_fee_scaling_config!(
+		"quadratic",
+		FeeScalingRateConfig::DelayedExponential { threshold: 2, exponent: 2 },
+		[0, 0, 1, 4, 9, 16, 25, 36, 49, 64]
+	);
 }

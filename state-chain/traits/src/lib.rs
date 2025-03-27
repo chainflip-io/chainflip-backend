@@ -1223,28 +1223,6 @@ pub trait MinimumDeposit {
 	fn get(asset: Asset) -> AssetAmount;
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
-pub enum CallInfoId<AccountId> {
-	Pool { account: AccountId, base_asset: Asset },
-}
-
-// Creates an identifier that is used to group calls that should be scaled together.
-// Returns None if the call should not be scaled.
-pub trait FeeScalingCallInfoIdentifier<Call, AccountId, Balance> {
-	fn call_info_and_spam_prevention_upfront_fee(
-		_call: &Call,
-		_caller: &AccountId,
-	) -> Option<(CallInfoId<AccountId>, Balance)> {
-		None
-	}
-}
-
-pub struct NoTransactionFeeScaling;
-impl<Call, AccountId, Balance> FeeScalingCallInfoIdentifier<Call, AccountId, Balance>
-	for NoTransactionFeeScaling
-{
-}
-
 // Used for exposing weights from the Pools pallet
 pub trait LpOrdersWeightsProvider {
 	fn update_limit_order_weight() -> Weight;

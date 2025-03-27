@@ -29,7 +29,7 @@ use frame_support::{
 };
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
-use sp_runtime::{FixedU64, Permill};
+use sp_runtime::Permill;
 use std::mem;
 
 impl FlipOperation {
@@ -669,10 +669,8 @@ fn update_pallet_config() {
 		assert_eq!(SlashingRate::<Test>::get(), update_to_slashing_rate);
 
 		// Fee scaling rate can be updated
-		let update_to_fee_scaling_rate = FeeScalingRateConfig::ExponentBuffer {
-			buffer: 10,
-			exp_base: FixedU64::from_rational(11, 10),
-		};
+		let update_to_fee_scaling_rate =
+			FeeScalingRateConfig::DelayedExponential { threshold: 10, exponent: 2 };
 		// compare to fee we will update to with the fee before to see it updates
 		assert_ne!(FeeScalingRate::<Test>::get(), update_to_fee_scaling_rate);
 		assert_ok!(Flip::update_pallet_config(
@@ -703,27 +701,21 @@ mod test_fee_scaling_config {
 	#[test]
 	fn exponent_buffer_scales_fee() {
 		let pre_scaled_fee: u32 = 100;
-
-		let large_buffer_config = FeeScalingRateConfig::ExponentBuffer {
-			buffer: BUFFER,
-			exp_base: FixedU64::from_rational(2, 1),
-		};
-
 		const BUFFER: u16 = 10;
+
+		let large_buffer_config =
+			FeeScalingRateConfig::DelayedExponential { threshold: BUFFER, exponent: 2 };
+
 		// In reality the call count will be 1 (hence the +1), but we test 0 behaves reasonably in
 		// case.
-		for call_count in 0..=BUFFER + 1 {
+		for call_count in 0..=BUFFER {
 			assert_eq!(large_buffer_config.scale_fee(pre_scaled_fee, call_count), pre_scaled_fee);
 		}
-		// + 2 because call count will always be +1 and therefore the last call *not scaled* is
-		//   BUFFER + 1 (as above)
-		assert_eq!(large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + 2), pre_scaled_fee * 2);
-
-		// Test later calls scale correctly
-		assert_eq!(large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + 5), pre_scaled_fee * 16);
-		assert_eq!(
-			large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + 10),
-			pre_scaled_fee * 512
-		);
+		for i in 0..BUFFER {
+			assert_eq!(
+				large_buffer_config.scale_fee(pre_scaled_fee, BUFFER + i),
+				pre_scaled_fee * 2u32.pow(i as u32)
+			);
+		}
 	}
 }

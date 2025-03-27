@@ -29,7 +29,7 @@ use cf_traits::{
 		broadcaster::MockBroadcaster, egress_handler::MockEgressHandler,
 		flip_burn_info::MockFlipBurnInfo,
 	},
-	Issuance, NoTransactionFeeScaling, RewardsDistribution, WaivedFees,
+	Issuance, RewardsDistribution, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types, traits::Imbalance};
@@ -81,7 +81,7 @@ impl pallet_cf_flip::Config for Test {
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
-	type FeeScalingCallInfoIdentifier = NoTransactionFeeScaling;
+	type CallIndexer = ();
 }
 
 pub const EMISSION_RATE: u128 = 10;

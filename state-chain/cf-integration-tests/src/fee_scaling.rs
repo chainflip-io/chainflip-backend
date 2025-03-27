@@ -1,10 +1,9 @@
 use cf_primitives::{AccountRole, Asset, AuthorityCount, FLIPPERINOS_PER_FLIP};
-use cf_traits::{FeeScalingCallInfoIdentifier, IncreaseOrDecrease};
+use cf_traits::IncreaseOrDecrease;
 use frame_support::pallet_prelude::{InvalidTransaction, TransactionValidityError};
 use pallet_cf_flip::{FeeScalingRate, FeeScalingRateConfig};
 use pallet_cf_pools::RangeOrderSize;
 use sp_keyring::Ed25519Keyring as AccountKeyring;
-use sp_runtime::FixedU64;
 use state_chain_runtime::{Flip, Runtime, RuntimeCall};
 
 use crate::network::apply_extrinsic_and_calculate_gas_fee;
@@ -43,11 +42,6 @@ fn fee_scales_within_a_pool() {
 
 			let call = update_range_order_call(Asset::Eth);
 
-			let (_call_info_id, upfront_fee) = <Runtime as pallet_cf_flip::Config>::FeeScalingCallInfoIdentifier::call_info_and_spam_prevention_upfront_fee(
-				&call,
-				&lp_account_id,
-			).expect("We chose a call that should be scaled.");
-
 			assert_eq!(FeeScalingRate::<Runtime>::get(), FeeScalingRateConfig::NoScaling);
 
 			let (mut last_gas, mut last_remaining_balance) =
@@ -66,9 +60,9 @@ fn fee_scales_within_a_pool() {
 			testnet.move_forward_blocks(1);
 
 			// Set the config to scale per pool.
-			FeeScalingRate::<Runtime>::set(FeeScalingRateConfig::ExponentBuffer {
-				buffer: 0,
-				exp_base: FixedU64::from_rational(2, 1u128),
+			FeeScalingRate::<Runtime>::set(FeeScalingRateConfig::DelayedExponential {
+				threshold: 0,
+				exponent: 2,
 			});
 
 			let (mut last_gas, mut last_remaining_balance) =
@@ -78,8 +72,9 @@ fn fee_scales_within_a_pool() {
 			(1..50).for_each(|_| {
 				match apply_extrinsic_and_calculate_gas_fee(lp, call.clone()) {
 					Ok((gas, remaining_balance)) => {
-						// Either the gas is increasing, or we've hit the ceiling of the upfront fee.
-						assert!(gas > last_gas || gas == upfront_fee);
+						// Either the gas is increasing, or we've hit the ceiling of the upfront
+						// fee.
+						assert!(gas > last_gas || gas == FLIPPERINOS_PER_FLIP);
 						assert_eq!(remaining_balance, last_remaining_balance - gas);
 						// We should never fail, and then succeed again, since the fee always
 						// increases within a block in the same pool.
@@ -122,9 +117,9 @@ fn fee_scales_per_pool() {
 		.execute_with(|| {
 			crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
-			FeeScalingRate::<Runtime>::set(FeeScalingRateConfig::ExponentBuffer {
-				buffer: 0,
-				exp_base: FixedU64::from_rational(2, 1u128),
+			FeeScalingRate::<Runtime>::set(FeeScalingRateConfig::DelayedExponential {
+				threshold: 0,
+				exponent: 2,
 			});
 
 			let call = update_range_order_call(Asset::Eth);
