@@ -546,7 +546,6 @@ pub mod pallet {
 		Refund {
 			egress_id: Option<EgressId>,
 			reason: RefundReason,
-			refund_success: bool,
 			amount: TargetChainAmount<T, I>,
 		},
 	}
@@ -1979,12 +1978,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							None
 						},
 					};
-				DepositAction::Refund {
-					egress_id,
-					amount: amount_after_fees,
-					refund_success: egress_id.is_some(),
-					reason,
-				}
+				DepositAction::Refund { egress_id, amount: amount_after_fees, reason }
 			},
 		}
 	}

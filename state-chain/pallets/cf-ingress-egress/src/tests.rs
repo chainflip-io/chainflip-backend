@@ -2428,12 +2428,7 @@ fn gets_refunded_if_vault_transaction_was_aborted() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::IngressEgress(Event::DepositFinalised {
-				action: DepositAction::Refund {
-					egress_id: _,
-					refund_success: true,
-					amount: DEPOSIT_AMOUNT,
-					reason: _,
-				},
+				action: DepositAction::Refund { egress_id: _, amount: DEPOSIT_AMOUNT, reason: _ },
 				..
 			})
 		);
