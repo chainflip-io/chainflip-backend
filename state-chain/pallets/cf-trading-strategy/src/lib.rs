@@ -56,7 +56,7 @@ impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closur
 	Clone, Debug, Encode, Decode, TypeInfo, serde::Serialize, serde::Deserialize, PartialEq, Eq,
 )]
 pub enum TradingStrategy {
-	SellAndBuyAtTicks { sell_tick: Tick, buy_tick: Tick, base_asset: Asset },
+	SellAndBuyAtTicks { spread_tick: Tick, base_asset: Asset },
 }
 
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -87,6 +87,16 @@ impl TradingStrategy {
 				vec![*base_asset, STABLE_ASSET]
 			},
 		}
+	}
+	fn validate_params<T: Config>(&self) -> Result<(), Error<T>> {
+		match self {
+			TradingStrategy::SellAndBuyAtTicks { spread_tick, .. } => {
+				if *spread_tick < 0 || *spread_tick > cf_amm_math::MAX_TICK {
+					return Err(Error::<T>::InvalidTick)
+				}
+			},
+		}
+		Ok(())
 	}
 }
 
@@ -199,7 +209,7 @@ pub mod pallet {
 
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {
-					TradingStrategy::SellAndBuyAtTicks { sell_tick, buy_tick, base_asset } => {
+					TradingStrategy::SellAndBuyAtTicks { spread_tick, base_asset } => {
 						let new_weight_estimate =
 							weight_used.saturating_add(limit_order_update_weight * 2);
 
@@ -207,7 +217,8 @@ pub mod pallet {
 							break;
 						}
 
-						for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
+						let tick = core::cmp::max(spread_tick, 0);
+						for (side, tick) in [(Side::Buy, -tick), (Side::Sell, tick)] {
 							let sell_asset =
 								if side == Side::Buy { STABLE_ASSET } else { base_asset };
 
@@ -279,6 +290,7 @@ pub mod pallet {
 		AmountBelowDeploymentThreshold,
 		AmountBelowAddedFundsThreshold,
 		InvalidAssetsForStrategy,
+		InvalidTick,
 		/// The liquidity provider has active strategies and cannot be deregistered.
 		LpHasActiveStrategies,
 		/// Strategies are disabled due to safe mode
@@ -304,6 +316,8 @@ pub mod pallet {
 			for asset in strategy.supported_assets() {
 				T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, asset)?;
 			}
+
+			strategy.validate_params::<T>()?;
 
 			let strategy_id = {
 				// Check that strategy is created with sufficient funds:

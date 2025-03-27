@@ -7,8 +7,7 @@ expression: val
   "strategy_id": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
   "strategy": {
     "SellAndBuyAtTicks": {
-      "sell_tick": 1,
-      "buy_tick": -1,
+      "spread_tick": 1,
       "base_asset": {
         "chain": "Ethereum",
         "asset": "USDT"

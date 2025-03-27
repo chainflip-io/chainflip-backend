@@ -2266,8 +2266,7 @@ mod test {
 			lp_id: ID_1,
 			strategy_id: ID_2,
 			strategy: TradingStrategy::SellAndBuyAtTicks {
-				sell_tick: 1,
-				buy_tick: -1,
+				spread_tick: 1,
 				base_asset: Asset::Usdt,
 			},
 			balance: vec![(Asset::Usdc, 500u128.into()), (Asset::Usdt, 1_000u128.into())],
