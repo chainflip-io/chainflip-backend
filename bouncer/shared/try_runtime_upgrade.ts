@@ -62,6 +62,8 @@ export async function tryRuntimeUpgrade(
     noInitWarn: true,
   });
 
+  let anyFailed = false;
+
   if (block === 'all') {
     const latestBlock = await httpApi.rpc.chain.getBlockHash();
 
@@ -71,7 +73,13 @@ export async function tryRuntimeUpgrade(
     let blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
     while (!blockHash.eq(latestBlock)) {
       blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
-      await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+      const success = await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+
+      if (!success) {
+        logger.error('Migration failed for block: ', blockHash.toString());
+        anyFailed = true;
+      }
+
       blockNumber++;
     }
     logger.info(`Block ${latestBlock} has been reached, exiting.`);
@@ -83,7 +91,13 @@ export async function tryRuntimeUpgrade(
 
     while (blocksProcessed < lastN) {
       logger.info('Running try-runtime for block: ', nextHash.toString());
-      await tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
+
+      const success = await tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
+
+      if (!success) {
+        logger.error('Migration failed for block: ', nextHash.toString());
+        anyFailed = true;
+      }
 
       const currentHash = nextHash;
       const currentBlockHeader = await retryRpcCall(
@@ -99,13 +113,18 @@ export async function tryRuntimeUpgrade(
       blocksProcessed++;
     }
   } else if (block === 'latest') {
-    await tryRuntimeCommand(runtimePath, 'latest', networkUrl);
+    anyFailed = !(await tryRuntimeCommand(runtimePath, 'latest', networkUrl));
   } else {
     const blockHash = await httpApi.rpc.chain.getBlockHash(block);
-    await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+    anyFailed = !(await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl));
   }
 
-  logger.info('try-runtime upgrade successful.');
+  if (anyFailed) {
+    logger.error('try-runtime upgrade failed.');
+    throw new Error('try-runtime upgrade failed.');
+  } else {
+    logger.info('try-runtime upgrade successful.');
+  }
 }
 
 export async function tryRuntimeUpgradeWithCompileRuntime(
