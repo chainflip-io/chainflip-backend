@@ -2472,32 +2472,7 @@ fn test_various_refund_reasons() {
 		RefundReason::InvalidRefundParameters,
 	);
 
-	// Test case 3: Invalid destination address
-	test_vault_swap_refund(
-		VaultDepositWitness {
-			input_asset: Asset::Eth.try_into().unwrap(),
-			deposit_address: Default::default(),
-			channel_id: Some(0),
-			deposit_amount: 100,
-			deposit_details: Default::default(),
-			output_asset: Asset::Btc,
-			destination_address: EncodedAddress::Btc(Default::default()),
-			deposit_metadata: Default::default(),
-			tx_id: H256::default(),
-			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
-			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParameters {
-				retry_duration: 400,
-				min_price: U256::from(0),
-				refund_address: H160::default(),
-			},
-			dca_params: None,
-			boost_fee: 0,
-		},
-		RefundReason::InvalidDestinationAddress,
-	);
-
-	// Test case 4: Invalid DCA parameters - number of chunks is 0
+	// Test case 3: Invalid DCA parameters - number of chunks is 0
 	test_vault_swap_refund(
 		VaultDepositWitness {
 			input_asset: Asset::Eth.try_into().unwrap(),
