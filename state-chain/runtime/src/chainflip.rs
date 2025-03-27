@@ -81,14 +81,14 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters, FLIPPERINOS_PER_FLIP,
+	DcaParameters,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
-	BroadcastAnyChainGovKey, Broadcaster, CallInfoId, Chainflip, CommKeyBroadcaster, DepositApi,
-	EgressApi, EpochInfo, FeeScalingCallInfoIdentifier, FetchesTransfersLimitProvider, Heartbeat,
-	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
+	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
+	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	ScheduledEgressDetails,
 };
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
@@ -105,6 +105,7 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
+use pallet_cf_flip::CallIndexer;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
@@ -1024,14 +1025,12 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 	}
 }
 
-pub struct CfFeeScalingCallInfoIdentifier;
-impl FeeScalingCallInfoIdentifier<RuntimeCall, AccountId, FlipBalance>
-	for CfFeeScalingCallInfoIdentifier
-{
-	fn call_info_and_spam_prevention_upfront_fee(
-		call: &RuntimeCall,
-		caller: &AccountId,
-	) -> Option<(CallInfoId<AccountId>, FlipBalance)> {
+pub struct LpOrderCallIndexer;
+impl CallIndexer<RuntimeCall> for LpOrderCallIndexer {
+	/// Calls are indexed by the pool's base asset.
+	type CallIndex = Asset;
+
+	fn call_index(call: &RuntimeCall) -> Option<Self::CallIndex> {
 		match call {
 			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_limit_order {
 				base_asset,
@@ -1048,9 +1047,8 @@ impl FeeScalingCallInfoIdentifier<RuntimeCall, AccountId, FlipBalance>
 			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
 				base_asset,
 				..
-			}) => Some(CallInfoId::Pool { account: caller.clone(), base_asset: *base_asset }),
+			}) => Some(*base_asset),
 			_ => None,
 		}
-		.map(|call_info_id| (call_info_id, FLIPPERINOS_PER_FLIP))
 	}
 }

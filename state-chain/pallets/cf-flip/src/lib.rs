@@ -32,11 +32,10 @@ use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	AccountInfo, Bonding, CallInfoId, DeregistrationCheck, FeePayment,
-	FeeScalingCallInfoIdentifier, FundingInfo, OnAccountFunded, Slashing,
+	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
-pub use on_charge_transaction::FlipTransactionPayment;
+pub use on_charge_transaction::{CallIndexer, FeeScalingRateConfig, FlipTransactionPayment};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -44,11 +43,12 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
-		DispatchError, FixedPointNumber, FixedU64, Permill, RuntimeDebug,
+		DispatchError, Permill, RuntimeDebug,
 	},
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 use frame_system::pallet_prelude::*;
+use on_charge_transaction::CallIndexFor;
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
@@ -69,34 +69,20 @@ pub enum PalletConfigUpdate {
 	SetFeeScalingRate(FeeScalingRateConfig),
 }
 
-#[derive(
-	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
-)]
-pub enum FeeScalingRateConfig {
-	ExponentBuffer {
-		buffer: u16,
-		exp_base: FixedU64,
-	},
-	#[default]
-	NoScaling,
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[scale_info(skip_type_params(T))]
+pub struct OpaqueCallIndex<T: Config>(pub(crate) Vec<u8>, PhantomData<T>);
+
+impl<T: Config> From<(T::AccountId, CallIndexFor<T>)> for OpaqueCallIndex<T> {
+	fn from(v: (T::AccountId, CallIndexFor<T>)) -> Self {
+		Self(v.encode(), PhantomData)
+	}
 }
 
-impl FeeScalingRateConfig {
-	pub fn scale_fee<Balance: AtLeast32BitUnsigned + Copy>(
-		&self,
-		pre_scaled_fee: Balance,
-		call_count: u16,
-	) -> Balance {
-		match self {
-			FeeScalingRateConfig::ExponentBuffer { buffer, exp_base } => {
-				let multiplier = (*exp_base)
-					// we subtract an extra 1 to account for the fact that the first call passes
-					// through a count of 1, but we don't want to scale it.
-					.saturating_pow(call_count.saturating_sub(*buffer).saturating_sub(1).into());
-				multiplier.saturating_mul_int(pre_scaled_fee)
-			},
-			FeeScalingRateConfig::NoScaling => pre_scaled_fee,
-		}
+impl<T: Config> MaxEncodedLen for OpaqueCallIndex<T> {
+	fn max_encoded_len() -> usize {
+		// 32 bytes for the account
+		32 + CallIndexFor::<T>::max_encoded_len()
 	}
 }
 
@@ -141,11 +127,7 @@ pub mod pallet {
 			RuntimeCall = <Self as frame_system::Config>::RuntimeCall,
 		>;
 
-		type FeeScalingCallInfoIdentifier: FeeScalingCallInfoIdentifier<
-			<Self as frame_system::Config>::RuntimeCall,
-			Self::AccountId,
-			Self::Balance,
-		>;
+		type CallIndexer: CallIndexer<<Self as frame_system::Config>::RuntimeCall>;
 	}
 
 	#[pallet::pallet]
@@ -185,8 +167,7 @@ pub mod pallet {
 
 	// Counts the number of calls within a block against a particular call info id.
 	#[pallet::storage]
-	pub type CallCounter<T: Config> =
-		StorageMap<_, Identity, CallInfoId<T::AccountId>, u16, ValueQuery>;
+	pub type CallCounter<T: Config> = StorageMap<_, Identity, OpaqueCallIndex<T>, u16, ValueQuery>;
 
 	#[pallet::storage]
 	pub type FeeScalingRate<T: Config> = StorageValue<_, FeeScalingRateConfig, ValueQuery>;

@@ -40,7 +40,10 @@ mod benchmarks {
 		for account in whitelisted_callers {
 			for _ in 0..50 {
 				CallCounter::<T>::mutate(
-					CallInfoId::Pool { account: account.clone(), base_asset: Asset::Eth },
+					OpaqueCallIndex::<T>(
+						(account.clone(), Asset::Eth).encode(),
+						Default::default(),
+					),
 					|count| {
 						*count += 1;
 					},

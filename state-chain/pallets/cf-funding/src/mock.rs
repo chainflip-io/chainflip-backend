@@ -21,7 +21,7 @@ use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
 	mocks::{broadcaster::MockBroadcaster, time_source},
-	AccountRoleRegistry, NoTransactionFeeScaling, RedemptionCheck, WaivedFees,
+	AccountRoleRegistry, RedemptionCheck, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types};
@@ -65,7 +65,7 @@ impl pallet_cf_flip::Config for Test {
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
-	type FeeScalingCallInfoIdentifier = NoTransactionFeeScaling;
+	type CallIndexer = ();
 }
 
 cf_traits::impl_mock_on_account_funded!(AccountId, u128);
