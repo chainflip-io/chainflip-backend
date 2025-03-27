@@ -64,7 +64,7 @@ export async function depositLiquidity(
   const ingressAddress = (await eventHandle).data.depositAddress[chain];
 
   logger.trace(`Received ${ccy} deposit address: ${ingressAddress}`);
-  logger.info(`Initiating transfer of ${amount} ${ccy} to ${ingressAddress}`);
+  logger.trace(`Initiating transfer of ${amount} ${ccy} to ${ingressAddress}`);
   eventHandle = observeEvent(logger, 'assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === ccy &&
