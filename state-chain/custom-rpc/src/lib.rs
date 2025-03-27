@@ -2166,6 +2166,10 @@ where
 				FollowEvent::NewBlock(sc_rpc_spec_v2::chain_head::NewBlock {
 					block_hash, ..
 				}) => sub_gc.add(&[block_hash]).await,
+				FollowEvent::Finalized(sc_rpc_spec_v2::chain_head::Finalized {
+					finalized_block_hashes,
+					..
+				}) => sub_gc.add(&finalized_block_hashes).await,
 				_ => {},
 			}
 
