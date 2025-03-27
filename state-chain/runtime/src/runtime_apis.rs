@@ -339,6 +339,12 @@ pub struct TradingStrategyInfo<Amount> {
 	pub balance: Vec<(Asset, Amount)>,
 }
 
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct TradingStrategyLimits {
+	pub minimum_deployment_amount: AssetMap<Option<AssetAmount>>,
+	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
+}
+
 // READ THIS BEFORE UPDATING THIS TRAIT:
 //
 // ## When changing an existing method:
@@ -511,6 +517,7 @@ decl_runtime_apis!(
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
+		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 	}
 );
 
