@@ -47,7 +47,8 @@ use crate::{
 		BoostPoolDetails, BrokerInfo, CcmData, DispatchErrorWithMessage, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+		VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2505,6 +2506,15 @@ impl_runtime_apis! {
 				Strategies::iter().map(|(lp_id, strategy_id, strategy)| to_strategy_info(lp_id, strategy_id, strategy)).collect()
 			}
 
+		}
+
+		fn cf_trading_strategy_limits() -> TradingStrategyLimits{
+			TradingStrategyLimits{
+				minimum_deployment_amount: AssetMap::from_iter(pallet_cf_trading_strategy::MinimumDeploymentAmountForStrategy::<Runtime>::get().into_iter()
+					.map(|(asset, balance)| (asset, Some(balance)))),
+				minimum_added_funds_amount: AssetMap::from_iter(pallet_cf_trading_strategy::MinimumAddedFundsToStrategy::<Runtime>::get().into_iter()
+					.map(|(asset, balance)| (asset, Some(balance)))),
+			}
 		}
 	}
 
