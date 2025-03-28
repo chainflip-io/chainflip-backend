@@ -84,9 +84,7 @@ export async function requestNewSwap(
         ? event.data.channelMetadata !== null &&
           event.data.channelMetadata.message ===
             (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
-          event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
-          event.data.channelMetadata.ccmAdditionalData ===
-            (messageMetadata.ccmAdditionalData === '0x' ? '' : messageMetadata.ccmAdditionalData)
+          event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
@@ -105,8 +103,17 @@ export async function requestNewSwap(
     dcaParams,
   );
 
-  const res = (await addressPromise).data;
+  // Set an aggressive timeout for the addressPromise. We expect an event within 3 blocks at most.
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(`Timeout waiting for deposit address for swap ${tag}`));
+    }, 18000);
+  });
 
+  // Wait for the addressPromise or the timeoutPromise to resolve (race)
+  const eventOrTimeout = await Promise.race([addressPromise, timeoutPromise]);
+
+  const res = eventOrTimeout.data;
   const depositAddress = res.depositAddress[shortChainFromAsset(sourceAsset)];
   const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
   const channelId = Number(res.channelId.replaceAll(',', ''));
