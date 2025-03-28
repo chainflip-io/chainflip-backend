@@ -26,6 +26,9 @@ ethabi = { workspace = true }
 bitvec = { workspace = true }
 paste = { workspace = true }
 
+# Remove this after 1.9 migration
+sol-prim = { workspace = true }
+
 # Chainflip local dependencies
 cf-amm = { workspace = true }
 cf-chains = { workspace = true }

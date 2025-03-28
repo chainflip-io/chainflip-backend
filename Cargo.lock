@@ -13670,6 +13670,7 @@ dependencies = [
  "paste",
  "scale-info",
  "serde",
+ "sol-prim",
  "sp-api 34.0.0",
  "sp-block-builder",
  "sp-consensus-aura",
