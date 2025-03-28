@@ -545,51 +545,53 @@ mod benchmarks {
 	}
 
 	#[cfg(test)]
-	use crate::mock_eth::*;
+	use crate::mocks::{new_test_ext, Test};
+	#[cfg(test)]
+	use frame_support::instances::Instance1;
 
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
-			_ccm_broadcast_failed::<Test, ()>(true);
+			_ccm_broadcast_failed::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_vault_transfer_failed::<Test, ()>(true);
+			_vault_transfer_failed::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_finalise_ingress::<Test, ()>(100, true);
+			_finalise_ingress::<Test, Instance1>(100, true);
 		});
 		new_test_ext().execute_with(|| {
-			_process_channel_deposit_full_witness::<Test, ()>(true);
+			_process_channel_deposit_full_witness::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_disable_asset_egress::<Test, ()>(true);
+			_disable_asset_egress::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_add_boost_funds::<Test, ()>(true);
+			_add_boost_funds::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_process_deposit_as_lost::<Test, ()>(100, true);
+			_process_deposit_as_lost::<Test, Instance1>(100, true);
 		});
 		new_test_ext().execute_with(|| {
-			_stop_boosting::<Test, ()>(true);
+			_stop_boosting::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_deposit_boosted::<Test, ()>(true);
+			_deposit_boosted::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_boost_finalised::<Test, ()>(true);
+			_boost_finalised::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_create_boost_pools::<Test, ()>(true);
+			_create_boost_pools::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_vault_swap_request::<Test, ()>(true);
+			_vault_swap_request::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_vault_swap_request::<Test, ()>(true);
+			_vault_swap_request::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_mark_transaction_for_rejection::<Test, ()>(true);
+			_mark_transaction_for_rejection::<Test, Instance1>(true);
 		});
 	}
 }
