@@ -5,7 +5,7 @@ use cf_utilities::make_periodic_tick;
 use futures_util::stream;
 
 use crate::{
-	btc::retry_rpc::BtcRetryRpcApi,
+	btc::rpc::BtcRpcApi,
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
 		ExternalChainSource,
@@ -28,7 +28,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(5);
 #[async_trait::async_trait]
 impl<C> ChainSource for BtcSource<C>
 where
-	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()>,
+	C: BtcRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()>,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
@@ -45,8 +45,12 @@ where
 					loop {
 						tick.tick().await;
 
+						let best_block_hash = client
+							.best_block_hash()
+							.await
+							.expect("TODO: This whole source will be deleted ");
 						let best_block_header = client
-							.best_block_header()
+							.block_header(best_block_hash)
 							.await
 							.expect("TODO: This whole source will be deleted ");
 						if last_block_hash_yielded != Some(best_block_header.hash) {
@@ -70,7 +74,7 @@ where
 
 impl<C> ExternalChainSource for BtcSource<C>
 where
-	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
+	C: BtcRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
 {
 	type Chain = cf_chains::Bitcoin;
 }

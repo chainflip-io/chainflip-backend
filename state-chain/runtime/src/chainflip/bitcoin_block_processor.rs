@@ -193,10 +193,7 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, RulesHook>> for TypesEgressWitnessi
 		&mut self,
 		(block, age, block_data): (BlockNumber, Range<u32>, EgressBlockData),
 	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
-		if age.contains(
-			&(u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
-				as u32),
-		) {
+		if age.contains(&0) {
 			return block_data
 				.iter()
 				.map(|egress_witness| (block, BtcEvent::Witness(egress_witness.clone())))

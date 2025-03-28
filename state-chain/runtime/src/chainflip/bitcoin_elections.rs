@@ -531,7 +531,10 @@ impl
 				BitcoinLiveness,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(liveness_identifiers, &(current_sc_block_number, last_btc_block.block_height - 3))?;
+		>(
+			liveness_identifiers,
+			&(current_sc_block_number, last_btc_block.block_height.saturating_sub(3)),
+		)?;
 
 		Ok(())
 	}
