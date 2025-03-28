@@ -32,12 +32,12 @@ const QUOTE_ASSET: Asset = cf_primitives::STABLE_ASSET;
 const BASE_AMOUNT: AssetAmount = 100_000;
 const QUOTE_AMOUNT: AssetAmount = 50_000;
 
-const SPREAD: Tick = 1;
+const SPREAD_TICK: Tick = 1;
 
 type AccountId = u64;
 
 const STRATEGY: TradingStrategy =
-	TradingStrategy::SellAndBuyAtTicks { spread_tick: SPREAD, base_asset: BASE_ASSET };
+	TradingStrategy::TickZeroCentered { spread_tick: SPREAD_TICK, base_asset: BASE_ASSET };
 
 macro_rules! assert_balances {
 	($account_id:expr, $base_amount:expr, $quote_amount:expr) => {
@@ -251,7 +251,7 @@ fn refund_addresses_are_required() {
 		let deploy = || {
 			TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
-				TradingStrategy::SellAndBuyAtTicks { spread_tick: SPREAD, base_asset },
+				TradingStrategy::TickZeroCentered { spread_tick: SPREAD_TICK, base_asset },
 				[(base_asset, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into(),
 			)
 		};
@@ -287,7 +287,7 @@ fn automated_strategy_basic_usage() {
 						account_id: strategy_id,
 						side: Side::Buy,
 						order_id: STRATEGY_ORDER_ID,
-						tick: -SPREAD,
+						tick: -SPREAD_TICK,
 						amount: QUOTE_AMOUNT
 					},
 					MockLimitOrder {
@@ -295,7 +295,7 @@ fn automated_strategy_basic_usage() {
 						account_id: strategy_id,
 						side: Side::Sell,
 						order_id: STRATEGY_ORDER_ID,
-						tick: SPREAD,
+						tick: SPREAD_TICK,
 						amount: BASE_AMOUNT
 					}
 				]
@@ -354,7 +354,7 @@ fn automated_strategy_basic_usage() {
 						account_id: strategy_id,
 						side: Side::Buy,
 						order_id: STRATEGY_ORDER_ID,
-						tick: -SPREAD,
+						tick: -SPREAD_TICK,
 						amount: QUOTE_AMOUNT
 					},
 					MockLimitOrder {
@@ -362,7 +362,7 @@ fn automated_strategy_basic_usage() {
 						account_id: strategy_id,
 						side: Side::Sell,
 						order_id: STRATEGY_ORDER_ID,
-						tick: SPREAD,
+						tick: SPREAD_TICK,
 						amount: BASE_AMOUNT + ADDITIONAL_BASE_AMOUNT * 2
 					}
 				]
@@ -464,8 +464,8 @@ fn strategy_deployment_validation() {
 		assert_err!(
 			TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
-				TradingStrategy::SellAndBuyAtTicks {
-					spread_tick: SPREAD,
+				TradingStrategy::TickZeroCentered {
+					spread_tick: SPREAD_TICK,
 					base_asset: DISABLED_ASSET
 				},
 				[(DISABLED_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
@@ -478,10 +478,7 @@ fn strategy_deployment_validation() {
 			assert_err!(
 				TradingStrategyPallet::deploy_strategy(
 					RuntimeOrigin::signed(LP),
-					TradingStrategy::SellAndBuyAtTicks {
-						spread_tick: tick,
-						base_asset: BASE_ASSET
-					},
+					TradingStrategy::TickZeroCentered { spread_tick: tick, base_asset: BASE_ASSET },
 					[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
 				),
 				Error::<Test>::InvalidTick
