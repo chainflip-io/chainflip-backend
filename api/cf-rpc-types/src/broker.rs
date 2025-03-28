@@ -73,6 +73,7 @@ pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::Tra
 #[derive(Serialize, Deserialize)]
 pub enum TransactionInId {
 	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
+	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
 	// other variants reserved for other chains.
 }
 
