@@ -18,6 +18,7 @@ pub mod witness;
 
 // Blockchains
 pub mod btc;
+mod caching_client;
 pub mod dot;
 pub mod evm;
 pub mod sol;
@@ -47,6 +48,7 @@ use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use engine_upgrade_utils::{ExitStatus, ERROR_READING_SETTINGS, NO_START_FROM, SUCCESS};
 
+use crate::btc::cached_rpc::BtcCachingClient;
 use cf_utilities::{
 	cached_stream::CachedStream, logging::ErrorType, metrics, task_scope::task_scope,
 };
@@ -276,15 +278,19 @@ async fn run_main(
 			};
 
 			let btc_client = {
-				let expected_btc_network = cf_chains::btc::BitcoinNetwork::from(
-					state_chain_client
-						.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
-							state_chain_runtime::Runtime,
-						>>(state_chain_client.latest_finalized_block().hash)
-						.await
-						.expect(STATE_CHAIN_CONNECTION),
-				);
-				BtcRetryRpcClient::new(scope, settings.btc.nodes, expected_btc_network).await?
+				let btc_client = {
+					let expected_btc_network = cf_chains::btc::BitcoinNetwork::from(
+						state_chain_client
+							.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
+								state_chain_runtime::Runtime,
+							>>(state_chain_client.latest_finalized_block().hash)
+							.await
+							.expect(STATE_CHAIN_CONNECTION),
+					);
+					BtcRetryRpcClient::new(scope, settings.btc.nodes.clone(), expected_btc_network)
+						.await?
+				};
+				BtcCachingClient::new(scope, btc_client)
 			};
 			let dot_client = {
 				let expected_dot_genesis_hash = PolkadotHash::from(

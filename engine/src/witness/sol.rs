@@ -248,6 +248,7 @@ where
 						SolanaLivenessVoter { client: client.clone() },
 						SolanaVaultSwapsVoter { client },
 					)),
+					None,
 				)
 				.continuously_vote()
 				.await;
