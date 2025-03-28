@@ -1,14 +1,50 @@
 use cf_primitives::{AccountRole, Asset, AuthorityCount, FLIPPERINOS_PER_FLIP};
 use cf_traits::IncreaseOrDecrease;
-use frame_support::pallet_prelude::{InvalidTransaction, TransactionValidityError};
+use codec::Encode;
+use frame_support::pallet_prelude::TransactionValidityError;
 use pallet_cf_flip::{FeeScalingRate, FeeScalingRateConfig};
 use pallet_cf_pools::RangeOrderSize;
-use sp_keyring::Ed25519Keyring as AccountKeyring;
-use state_chain_runtime::{Flip, Runtime, RuntimeCall};
+use sp_block_builder::runtime_decl_for_block_builder::BlockBuilderV6;
+use sp_keyring::test::AccountKeyring;
+use sp_runtime::{generic::Era, MultiSignature};
+use state_chain_runtime::{Balance, Flip, Runtime, RuntimeCall, SignedPayload, System};
 
-use crate::network::apply_extrinsic_and_calculate_gas_fee;
+pub fn apply_extrinsic_and_calculate_gas_fee(
+	caller: AccountKeyring,
+	call: RuntimeCall,
+) -> Result<(Balance, Balance), TransactionValidityError> {
+	let caller_account_id = caller.to_account_id();
+	let before = Flip::total_balance_of(&caller_account_id);
 
-fn update_range_order_call(base_asset: Asset) -> RuntimeCall {
+	let extra = (
+		frame_system::CheckNonZeroSender::<Runtime>::new(),
+		frame_system::CheckSpecVersion::<Runtime>::new(),
+		frame_system::CheckTxVersion::<Runtime>::new(),
+		frame_system::CheckGenesis::<Runtime>::new(),
+		frame_system::CheckEra::<Runtime>::from(Era::Immortal),
+		frame_system::CheckNonce::<Runtime>::from(System::account_nonce(&caller_account_id)),
+		frame_system::CheckWeight::<Runtime>::new(),
+		pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(0u128),
+		frame_metadata_hash_extension::CheckMetadataHash::<Runtime>::new(false),
+	);
+
+	let signed_payload = SignedPayload::new(call.clone(), extra.clone()).unwrap();
+	let signature = MultiSignature::Ed25519(caller.sign(&signed_payload.encode()));
+	let ext = sp_runtime::generic::UncheckedExtrinsic::new_signed(
+		call,
+		caller_account_id.clone().into(),
+		signature,
+		extra,
+	);
+
+	let _ = Runtime::apply_extrinsic(ext)?;
+
+	let after = Flip::total_balance_of(&caller_account_id);
+
+	Ok((before - after, after))
+}
+
+const fn update_range_order_call(base_asset: Asset) -> RuntimeCall {
 	RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
 		base_asset,
 		quote_asset: Asset::Usdc,
@@ -19,6 +55,9 @@ fn update_range_order_call(base_asset: Asset) -> RuntimeCall {
 		}),
 	})
 }
+
+const UPDATE_ETH_RANGE_ORDER: RuntimeCall = update_range_order_call(Asset::Eth);
+const UPDATE_BTC_RANGE_ORDER: RuntimeCall = update_range_order_call(Asset::Btc);
 
 #[test]
 fn fee_scales_within_a_pool() {
@@ -38,110 +77,84 @@ fn fee_scales_within_a_pool() {
 			let (mut testnet, _, _) =
 				crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
-			let lp_account_id = lp.to_account_id();
-
-			let call = update_range_order_call(Asset::Eth);
-
 			assert_eq!(FeeScalingRate::<Runtime>::get(), FeeScalingRateConfig::NoScaling);
 
-			let (mut last_gas, mut last_remaining_balance) =
-				apply_extrinsic_and_calculate_gas_fee(lp, call.clone()).unwrap();
-			(0..50).for_each(|_| {
-				let (gas, remaining_balance) =
-					apply_extrinsic_and_calculate_gas_fee(lp, call.clone()).unwrap();
-				assert_ne!(gas, 0);
-				assert_eq!(gas, last_gas);
-				last_gas = gas;
-				assert!(remaining_balance < last_remaining_balance);
-				last_remaining_balance = remaining_balance;
-			});
+			let fees = (1u16..=10)
+				.map(|call_count| {
+					(
+						call_count,
+						apply_extrinsic_and_calculate_gas_fee(lp, UPDATE_ETH_RANGE_ORDER).unwrap(),
+					)
+				})
+				.collect::<Vec<_>>();
+
+			for ((_, (gas, remaining_balance)), (_, (next_gas, next_remaining_balance))) in
+				fees.iter().zip(fees.iter().skip(1))
+			{
+				assert_eq!(next_gas, gas);
+				assert_eq!(*next_remaining_balance, remaining_balance - next_gas);
+			}
 
 			// Reset the fee scaling counters
 			testnet.move_forward_blocks(1);
 
-			// Set the config to scale per pool.
+			// Set the config to scale linearly per pool.
+			const THRESHOLD: u16 = 2;
 			FeeScalingRate::<Runtime>::set(FeeScalingRateConfig::DelayedExponential {
-				threshold: 0,
-				exponent: 2,
+				threshold: THRESHOLD,
+				exponent: 1,
 			});
 
-			let (mut last_gas, mut last_remaining_balance) =
-				apply_extrinsic_and_calculate_gas_fee(lp, call.clone()).unwrap();
+			let fees = (1u16..=10)
+				.map(|call_count| {
+					(
+						call_count,
+						apply_extrinsic_and_calculate_gas_fee(lp, UPDATE_ETH_RANGE_ORDER).unwrap(),
+					)
+				})
+				.collect::<Vec<_>>();
 
-			let mut can_pay = true;
-			(1..50).for_each(|_| {
-				match apply_extrinsic_and_calculate_gas_fee(lp, call.clone()) {
-					Ok((gas, remaining_balance)) => {
-						// Either the gas is increasing, or we've hit the ceiling of the upfront
-						// fee.
-						assert!(gas > last_gas || gas == FLIPPERINOS_PER_FLIP);
-						assert_eq!(remaining_balance, last_remaining_balance - gas);
-						// We should never fail, and then succeed again, since the fee always
-						// increases within a block in the same pool.
-						assert!(can_pay);
-						last_remaining_balance = remaining_balance;
-						last_gas = gas;
-					},
-					Err(e) => {
-						can_pay = false;
-						// We no longer have enough to pay fees.
+			let mut fee_increase = None;
+			for (
+				(call_count, (gas, remaining_balance)),
+				(next_call_count, (next_gas, next_remaining_balance)),
+			) in fees.iter().zip(fees.iter().skip(1))
+			{
+				if *next_call_count > THRESHOLD {
+					assert!(next_gas > gas, "Call {call_count} vs {next_call_count} in {:?}", fees);
+					let last_fee_increase = fee_increase.replace(next_gas - gas);
+					if let Some(last_fee_increase) = last_fee_increase {
 						assert_eq!(
-							e,
-							TransactionValidityError::Invalid(InvalidTransaction::Payment)
+							next_gas - gas,
+							last_fee_increase,
+							"Expected linear increase at call count {next_call_count} in {:?}",
+							fees
 						);
-						// No balance change if transaction fails
-						assert_eq!(Flip::total_balance_of(&lp_account_id), last_remaining_balance);
-					},
+					}
+				} else {
+					assert_eq!(
+						next_gas, gas,
+						"Call {call_count} vs {next_call_count} in {:?}",
+						fees
+					);
 				}
-			});
+				assert_eq!(*next_remaining_balance, remaining_balance - next_gas);
+			}
 
-			// We should have run out of balance by the end.
-			assert!(!can_pay);
-		});
-}
+			// Using a different pool should scale independently, starting from the same value.
+			let fees_btc = (1u16..=10)
+				.map(|call_count| {
+					(
+						call_count,
+						apply_extrinsic_and_calculate_gas_fee(lp, UPDATE_BTC_RANGE_ORDER).unwrap(),
+					)
+				})
+				.collect::<Vec<_>>();
 
-#[test]
-fn fee_scales_per_pool() {
-	const EPOCH_BLOCKS: u32 = 100;
-	const MAX_AUTHORITIES: AuthorityCount = 10;
-	let lp = AccountKeyring::Alice;
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.with_additional_accounts(&[(
-			lp.to_account_id(),
-			AccountRole::LiquidityProvider,
-			5 * FLIPPERINOS_PER_FLIP,
-		)])
-		.build()
-		.execute_with(|| {
-			crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
-
-			FeeScalingRate::<Runtime>::set(FeeScalingRateConfig::DelayedExponential {
-				threshold: 0,
-				exponent: 2,
-			});
-
-			let call = update_range_order_call(Asset::Eth);
-			let call2 = update_range_order_call(Asset::Btc);
-
-			// Different pools so fee shouldn't scale.
-			let (gas_pool1, remaining_balance_pool1) =
-				apply_extrinsic_and_calculate_gas_fee(lp, call.clone()).unwrap();
-			let (gas_pool2, remaining_balance_pool2) =
-				apply_extrinsic_and_calculate_gas_fee(lp, call2.clone()).unwrap();
-			assert_eq!(gas_pool1, gas_pool2);
-			assert!(remaining_balance_pool2 < remaining_balance_pool1);
-
-			// Again, once each on each pool.
-			let (gas_pool1_again, remaining_balance_pool1_again) =
-				apply_extrinsic_and_calculate_gas_fee(lp, call.clone()).unwrap();
-			assert!(remaining_balance_pool1_again < remaining_balance_pool2);
-			let (gas_pool2_again, remaining_balance_pool2_again) =
-				apply_extrinsic_and_calculate_gas_fee(lp, call2.clone()).unwrap();
-			assert!(gas_pool1_again > gas_pool1);
-			assert!(gas_pool2_again > gas_pool2);
-			assert_eq!(gas_pool1_again, gas_pool2_again);
-			assert!(remaining_balance_pool2_again < remaining_balance_pool2);
+			assert_eq!(
+				fees_btc.iter().map(|(_, (gas, _))| gas).collect::<Vec<_>>(),
+				fees.iter().map(|(_, (gas, _))| gas).collect::<Vec<_>>(),
+				"Expected same fees for BTC and ETH",
+			);
 		});
 }

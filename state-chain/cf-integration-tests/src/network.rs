@@ -36,16 +36,13 @@ use frame_support::{
 };
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 
-use sp_block_builder::runtime_decl_for_block_builder::BlockBuilderV6;
 use sp_consensus_aura::SlotDuration;
-use sp_keyring::test::AccountKeyring;
-use sp_runtime::{generic::Era, transaction_validity, MultiSignature};
 use sp_std::collections::btree_set::BTreeSet;
 
 use state_chain_runtime::{
-	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, Balance, BitcoinInstance, Funding,
+	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, BitcoinInstance, Funding,
 	LiquidityProvider, PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent,
-	RuntimeOrigin, SignedPayload, SolanaInstance, Validator, Weight,
+	RuntimeOrigin, SolanaInstance, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -887,39 +884,4 @@ pub fn register_refund_addresses(account_id: &AccountId) {
 			encoded_address
 		));
 	}
-}
-
-pub fn apply_extrinsic_and_calculate_gas_fee(
-	caller: AccountKeyring,
-	call: RuntimeCall,
-) -> Result<(Balance, Balance), transaction_validity::TransactionValidityError> {
-	let caller_account_id = caller.to_account_id();
-	let before = Flip::total_balance_of(&caller_account_id);
-
-	let extra = (
-		frame_system::CheckNonZeroSender::<Runtime>::new(),
-		frame_system::CheckSpecVersion::<Runtime>::new(),
-		frame_system::CheckTxVersion::<Runtime>::new(),
-		frame_system::CheckGenesis::<Runtime>::new(),
-		frame_system::CheckEra::<Runtime>::from(Era::Immortal),
-		frame_system::CheckNonce::<Runtime>::from(System::account_nonce(&caller_account_id)),
-		frame_system::CheckWeight::<Runtime>::new(),
-		pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(0u128),
-		frame_metadata_hash_extension::CheckMetadataHash::<Runtime>::new(false),
-	);
-
-	let signed_payload = SignedPayload::new(call.clone(), extra.clone()).unwrap();
-	let signature = MultiSignature::Ed25519(caller.sign(&signed_payload.encode()));
-	let ext = sp_runtime::generic::UncheckedExtrinsic::new_signed(
-		call,
-		caller_account_id.clone().into(),
-		signature,
-		extra,
-	);
-
-	let _ = Runtime::apply_extrinsic(ext)?;
-
-	let after = Flip::total_balance_of(&caller_account_id);
-
-	Ok((before - after, after))
 }
