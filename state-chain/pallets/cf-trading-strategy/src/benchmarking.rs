@@ -65,7 +65,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		deploy_strategy(
 			RawOrigin::Signed(caller.clone()),
-			TradingStrategy::SellAndBuyAtTicks { sell_tick: 1, buy_tick: -1, base_asset: ASSET },
+			TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: ASSET },
 			BTreeMap::from_iter([(Asset::Usdt, 1000), (STABLE_ASSET, 1000)]),
 		);
 
@@ -84,7 +84,7 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T>::deploy_strategy(
 			RawOrigin::Signed(caller.clone()).into(),
-			TradingStrategy::SellAndBuyAtTicks { sell_tick: 1, buy_tick: -1, base_asset: ASSET },
+			TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: ASSET },
 			BTreeMap::from_iter([(ASSET, 1000), (STABLE_ASSET, 1000)]),
 		));
 
@@ -111,7 +111,7 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T>::deploy_strategy(
 			RawOrigin::Signed(caller.clone()).into(),
-			TradingStrategy::SellAndBuyAtTicks { sell_tick: 1, buy_tick: -1, base_asset: ASSET },
+			TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: ASSET },
 			BTreeMap::from_iter([(ASSET, 1000), (STABLE_ASSET, 1000)]),
 		));
 
