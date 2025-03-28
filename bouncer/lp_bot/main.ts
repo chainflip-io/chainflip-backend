@@ -7,7 +7,7 @@ import { Asset } from '../shared/utils';
 const main = async () => {
     await cancelAllOrders();
     await depositUsdcLiquidity('100000');
-    await manageRangeOrder('Usdt', 1, 10, 1000);
+    // await manageRangeOrder('Usdt', 1, 10, 1000);
 
     const [stateChainWsConnection, lpWsConnection] = initializeLiquidityProviderBot();
 
