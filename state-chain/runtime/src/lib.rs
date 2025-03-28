@@ -1463,6 +1463,8 @@ type MigrationsForV1_9 = (
 		include_instances: [SolanaInstance],
 		exclude_instances: [],
 	),
+	migrations::assethub_integration::AssethubSafemode,
+	migrations::assethub_integration::AssethubChainstate,
 );
 
 #[cfg(feature = "runtime-benchmarks")]

@@ -18,3 +18,4 @@
 
 pub mod backoff_settings_migration;
 pub mod housekeeping;
+pub mod assethub_integration;
