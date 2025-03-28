@@ -118,9 +118,8 @@ impl UncheckedOnRuntimeUpgrade for AssethubSafemode {
 					> as SafeMode>::CODE_GREEN,
 				})
 			},
-		).or_else(|_| {
-			log::warn!("Migration for Runtime Safe mode was not able to interpret the existing storage in the old format!");
-			Err(())
+		).map_err(|_| {
+			log::warn!("Migration for Runtime Safe mode was not able to interpret the existing storage in the old format!")
 		});
 		Weight::zero()
 	}
