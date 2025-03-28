@@ -248,6 +248,13 @@ const depositUsdcLiquidity = async (amount: string) => {
     logger.info(`Liquidity deposited: ${amount} USDC!`);
 }
 
+const createPoolPriceStream = (wsConnection: any): Observable<any> => {
+    return wsConnection.pipe(
+        filter((msg: any) => msg.method === 'cf_subscribe_pool_price_v2'),
+        map((msg: any) => msg.params.result)
+    );
+};
+
 /**
  * Cancels all orders.
  */
@@ -273,25 +280,26 @@ const initializeLiquidityProviderBot = () => {
     logger.info('Setting up reactive pipeline');
 
     // Create our reactive pipeline
-    const swaps$ = createSwapStream(stateChainWsConnection);
-    const tradeDecisions$ = createTradeDecisionStream(swaps$);
-    const orders$ = createOrderStream(tradeDecisions$);
+    // const swaps$ = createSwapStream(stateChainWsConnection);
+    // const tradeDecisions$ = createTradeDecisionStream(swaps$);
+    // const orders$ = createOrderStream(tradeDecisions$);
     const orderFills$ = createOrderFillStream(lpWsConnection);
+    const poolPrices$ = createPoolPriceStream(lpWsConnection);
 
     // Subscribe to the final stream to start the flow
-    orders$.subscribe({
-        next: (orderId) => {
-            if (orderId) {
-                logger.info(`Submitted order: ${orderId} successfully!`);
-                const order = global.ORDER_BOOK.get(orderId)!;
-                order.status = OrderStatus.Submitted;
-                logger.info(`OrderBook State: `);
-                console.log(global.ORDER_BOOK);
-            }
-        },
-        error: (err) => logger.error('Error in order stream:', err),
-        complete: () => logger.info('Order stream completed')
-    });
+    // orders$.subscribe({
+    //     next: (orderId) => {
+    //         if (orderId) {
+    //             logger.info(`Submitted order: ${orderId} successfully!`);
+    //             const order = global.ORDER_BOOK.get(orderId)!;
+    //             order.status = OrderStatus.Submitted;
+    //             logger.info(`OrderBook State: `);
+    //             console.log(global.ORDER_BOOK);
+    //         }
+    //     },
+    //     error: (err) => logger.error('Error in order stream:', err),
+    //     complete: () => logger.info('Order stream completed')
+    // });
 
     stateChainWsConnection.next({
         id: 1,
@@ -312,11 +320,35 @@ const initializeLiquidityProviderBot = () => {
         complete: () => logger.info('Order fills stream completed')
     });
 
+    poolPrices$.subscribe({
+        next: (poolPrice) => {
+            logger.info(`Received pool price: ${JSON.stringify(poolPrice, null, 2)}`);
+        },
+        error: (err) => logger.error('Error in pool price stream:', err),
+        complete: () => logger.info('Pool price stream completed')
+    });
+
     lpWsConnection.next({
         "id": 1,
         "jsonrpc": "2.0",
         "method": "lp_subscribe_order_fills",
         "params": []
+    });
+
+    lpWsConnection.next({
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "cf_subscribe_pool_price_v2",
+        "params": {
+            "base_asset": {
+                "chain": "Ethereum",
+                "asset": "USDT"
+            },
+            "quote_asset": {
+                "chain": "Ethereum",
+                "asset": "USDC"
+            }
+        }
     });
 
     return [stateChainWsConnection, lpWsConnection];
