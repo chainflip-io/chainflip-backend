@@ -22,6 +22,7 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	sync::Arc,
 };
+use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use voter_api::CompositeVoterApi;
 
@@ -41,6 +42,7 @@ pub struct Voter<
 {
 	state_chain_client: Arc<StateChainClient>,
 	voter: RetrierClient<VoterClient>,
+	cache_invalidation_sender: Option<mpsc::Sender<()>>,
 	_phantom: core::marker::PhantomData<Instance>,
 }
 
@@ -59,6 +61,7 @@ where
 		scope: &Scope<'_, anyhow::Error>,
 		state_chain_client: Arc<StateChainClient>,
 		voter: VoterClient,
+		cache_invalidation_sender: Option<mpsc::Sender<()>>,
 	) -> Self {
 		Self {
 			state_chain_client,
@@ -70,6 +73,7 @@ where
 				INITIAL_VOTER_REQUEST_TIMEOUT,
 				MAXIMUM_CONCURRENT_VOTER_REQUESTS,
 			),
+			cache_invalidation_sender ,
 			_phantom: Default::default(),
 		}
 	}
@@ -196,6 +200,9 @@ where
 
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
 					if electoral_data.contributing {
+						if let Some(cache) = &self.cache_invalidation_sender {
+							let _ = cache.send(()).await;
+						}
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
 								if !vote_tasks.contains_key(&election_identifier) {
