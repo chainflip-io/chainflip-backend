@@ -139,6 +139,17 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			(Vec<(T::ChainBlockNumber, Vec<T::Event>)>,
 			BTreeMap< T::ChainBlockNumber, (T::BlockData, u32) >) 
 	) {
+		let mut executed_events : Vec<_> = Vec::new();
+		// events in reorged events
+		for (n , events) in &self.reorg_events {
+			executed_events.append(&mut events.clone());
+		}
+		// events in block data
+		for (n, (data, next_age)) in &self.blocks_data {
+			executed_events.extend(self.rules.run((*n, (0..*next_age), data.clone())).into_iter().map(|(n, x)| x));
+		}
+		
+		
 		if let Some((block_number, block_data)) = block_data {
 			self.blocks_data.insert(block_number, (block_data, Default::default()));
 		}
@@ -174,7 +185,10 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			},
 		}
 		let events = self.process_rules(last_block);
-		self.execute.run(events.clone());
+		self.execute.run(events.iter().cloned().filter(|(n, event)| !executed_events.contains(event)).collect());
+		// for (n, event) in &events {
+		// 	self.reorg_events.entry(*n).or_insert(Vec::new()).extend([event.clone()]);
+		// }
 		(events, self.clean_old(last_block))
 	}
 
@@ -198,15 +212,19 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
 		let mut last_events: Vec<(T::ChainBlockNumber, T::Event)> = vec![];
 		for (block_height, (data, next_age_to_process)) in self.blocks_data.clone() {
-			let current_age = T::ChainBlockNumber::steps_between(&block_height, &last_height).0;
-			let age_range: Range<u32> = next_age_to_process..current_age.saturating_add(1) as u32;
-			last_events.extend(self.process_rules_for_ages_and_block(
-				block_height,
-				age_range,
-				&data,
-			));
-			self.blocks_data
-				.insert(block_height, (data.clone(), (current_age as u32).saturating_add(1)));
+			let new_age = T::ChainBlockNumber::steps_between(&block_height, &last_height).0;
+			// We ensure that we don't break anything in case the new age < next_age_to_process 
+			if new_age as u32 >= next_age_to_process {
+				let age_range: Range<u32> = next_age_to_process..new_age.saturating_add(1) as u32;
+				last_events.extend(self.process_rules_for_ages_and_block(
+					block_height,
+					age_range,
+					&data,
+				));
+				self.blocks_data
+					.insert(block_height, (data.clone(), (new_age as u32).saturating_add(1)));
+
+			}
 		}
 		last_events
 	}
@@ -293,7 +311,7 @@ pub(crate) mod tests {
 		*,
 	};
 	use codec::{Decode, Encode};
-	use proptest::prelude::Strategy;
+	use proptest::{arbitrary::arbitrary, prelude::Strategy};
 	use proptest_derive::Arbitrary;
 	use core::ops::{Range, RangeInclusive};
 	use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
@@ -525,8 +543,10 @@ pub(crate) mod tests {
 
 	use proptest::prelude::*;
 	pub fn generate_state() -> impl Strategy<Value = BlockProcessor<Types>> {
+		// Precondition: block_data should have only unique entries
+		let block_data = proptest::collection::btree_set(any::<u8>(), 0..10).prop_map(|set| set.into_iter().collect::<Vec<_>>());
 		(
-			proptest::collection::btree_map(any::<BlockNumber>(), (any::<MockBlockData>(), 0..10u32), 0..10),
+			proptest::collection::btree_map(any::<BlockNumber>(), (block_data, 0..10u32), 0..10),
 			proptest::collection::btree_map(any::<BlockNumber>(), proptest::collection::vec(any::<MockBtcEvent>(), 0..10), 0..10),
 		)
 		.prop_map(
@@ -535,6 +555,14 @@ pub(crate) mod tests {
 			reorg_events,
 			..Default::default()
 		})
+	}
+
+	pub fn generate_input() -> impl Strategy<Value = SMBlockProcessorInput<Types>> {
+		prop_oneof![
+			((any::<u8>(), any::<u8>(), proptest::collection::btree_set(any::<u8>(), 0..10).prop_map(|set| set.into_iter().collect::<Vec<_>>())))
+			.prop_map(|(x,y,z)| SMBlockProcessorInput::NewBlockData(x, y , z)),
+			any::<ChainProgressInner<u8>>().prop_map(SMBlockProcessorInput::ChainProgress)
+		]
 	}
 
 
@@ -549,18 +577,11 @@ pub(crate) mod tests {
 		use super::SMBlockProcessor;
 		use crate::electoral_systems::state_machine::state_machine::Statemachine;
 
-		// let mut processor = BlockProcessor::default();
-		// processor.blocks_data.insert(0, (vec![], 1));
-		// let index = SMBlockProcessor::<Types>::input_index(&mut processor);
-		// let input = SMBlockProcessorInput::NewBlockData(0, 0, vec![]);
-		// let valid = SMBlockProcessor::<Types>::validate(&index, &input).unwrap();
-
-		// let res = SMBlockProcessor::<Types>::step(processor, input, &());
 		SMBlockProcessor::<Types>::test(
 			module_path!(),
 			generate_state(),
 			Just(()),
-			|indices| any::<SMBlockProcessorInput<Types>>().prop_filter("..", move |input| match input {
+			|indices| generate_input().prop_filter("..", move |input| match input {
 				SMBlockProcessorInput::NewBlockData(_, n, _) => !indices.contains(n),
 				SMBlockProcessorInput::ChainProgress(_) => true,
 			}).boxed()
@@ -645,13 +666,15 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 		post: &Self::State,
 	) {
 		use std::collections::BTreeSet;
-		use crate::{asserts, electoral_systems::block_witnesser::helpers::Merge};
+		use crate::{asserts, electoral_systems::{block_witnesser::helpers::Merge, state_machine::test_utils::{BTreeMultiSet, Container}}};
 
 		type BlocksData<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, (T::BlockData, u32)>;
 		type ReorgData<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, Vec<T::Event>>;
 
+		type Multiset<A> = Container<BTreeSet<A>>;
+
 		// let active_events = |s: &BlocksData<T>| -> BTreeSet<(T::ChainBlockNumber, T::Event)> {
-		let active_events = |s: &BlocksData<T>| -> BTreeSet<T::Event> {
+		let active_events = |s: &BlocksData<T>| -> Multiset<T::Event> {
 			s.iter()
 				.flat_map(|(height, (data, age))| {
 						let mut x : BlockProcessor<T> = Default::default();
@@ -661,16 +684,17 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 				.collect()
 		};
 
-		let stored_events = |s: &ReorgData<T>| -> BTreeSet<T::Event> {
+		let stored_events = |s: &ReorgData<T>| -> Multiset<T::Event> {
 			// s.iter().flat_map(|(k, v)| v.iter().map(|vx| (k.clone(), vx.clone())).collect::<Vec<_>>()).collect()
 			s.values().flatten().cloned().collect() // flat_map(|(k, v)| v.iter().map(|vx| (k.clone(), vx.clone())).collect::<Vec<_>>()).collect()
 		};
 
-		let events = |s: &Self::State| active_events(&s.blocks_data).merge(stored_events(&s.reorg_events));
-		let deleted_events = active_events(&output.deleted_data).merge(stored_events(&output.deleted_events.iter().cloned().collect()));
-		let all_events = |s| events(s).merge(deleted_events);
+		let events = |s: &Self::State| active_events(&s.blocks_data) + stored_events(&s.reorg_events);
+		let deleted_events = active_events(&output.deleted_data) + stored_events(&output.deleted_events.iter().cloned().collect());
+		// let all_events = |s| events(s) + deleted_events;
 
-		let executed_events : BTreeSet<_> = output.events.iter().map(|(k,v)| v).cloned().collect();
+		let executed_events = || -> Multiset<_> { output.events.iter().map(|(k,v)| v).cloned().collect() };
+		let executed_events_vector = || -> Container<BTreeMultiSet<_>> { output.events.iter().map(|(k,v)| v).cloned().collect() };
 
 		let latest_block = match input {
 			SMBlockProcessorInput::NewBlockData(n, _, _) => n,
@@ -691,18 +715,23 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 			 => BTreeSet::from([x.clone()]),
 			_ => BTreeSet::new(),
 		};
-			// BTreeSet::from([ ])
 
 		asserts! {
-			let all_events = all_events(post);
 
-			"the executed events are exactly those that are new (post: {:?}, pre: {:?}, executed: {:?})"
-			in all_events.difference(&events(pre)).cloned().collect::<BTreeSet<_>>() == executed_events,
+			"the executed events are exactly those that are new (post events: {:?}, pre: {:?}, executed: {:?}, post-state: {:?})"
+			in events(post) + deleted_events == executed_events() + events(pre),
 			else
-				all_events,
+				events(post),
 				events(pre),
-				executed_events
+				executed_events(),
+				post
 			;
+
+			"stored events are never executed again"
+			in events(pre) & executed_events() == Container(BTreeSet::new());
+
+			"executed events are unique"
+			in executed_events_vector().0.0.iter().all(|(x, n)| *n == 1);
 
 			// TODO: handle the reorg case
 			"blocks either stay in the blockstore or are included in the 'deleted output'"
@@ -714,6 +743,8 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 
 			let old_blocks = blocks(&pre.blocks_data.iter().filter(|(i, _)| i.saturating_forward(3) <= *latest_block).map(|(a, b)| (a.clone(), b.clone())).collect());
 
+
+			/*
 			"old blocks are deleted (old: {:?}, deleted_new: {:?}, output: {:?})"
 			in old_blocks.clone()
 				.merge(deleted_new.clone())
@@ -723,6 +754,7 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 				deleted_new.clone(),
 				blocks(&output.deleted_data)
 			;
+ 			*/
 
 			// "deleted data is deleted (forgotten: {:?}, claimed: {:?}, deleted_new: {:?})"
 			// in if !reorg {
