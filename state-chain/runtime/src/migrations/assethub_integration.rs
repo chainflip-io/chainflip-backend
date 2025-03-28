@@ -17,7 +17,10 @@
 use crate::{Instance15, Instance6, Runtime};
 use cf_chains::instances::AssethubInstance;
 use cf_traits::SafeMode;
-use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use frame_support::{
+	traits::{OnRuntimeUpgrade, UncheckedOnRuntimeUpgrade},
+	weights::Weight,
+};
 
 pub mod old {
 	use crate::*;
@@ -76,47 +79,49 @@ impl OnRuntimeUpgrade for AssethubChainstate {
 
 pub struct AssethubSafemode;
 
-impl OnRuntimeUpgrade for AssethubSafemode {
+impl UncheckedOnRuntimeUpgrade for AssethubSafemode {
 	fn on_runtime_upgrade() -> Weight {
-		let _ =
-			pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
-				|maybe_old: Option<old::RuntimeSafeMode>| {
-					maybe_old.map(|old| crate::safe_mode::RuntimeSafeMode {
-						emissions: old.emissions,
-						funding: old.funding,
-						swapping: old.swapping,
-						liquidity_provider: old.liquidity_provider,
-						validator: old.validator,
-						pools: old.pools,
-						trading_strategies:
-							<pallet_cf_trading_strategy::PalletSafeMode as SafeMode>::CODE_GREEN,
-						reputation: old.reputation,
-						asset_balances: old.asset_balances,
-						threshold_signature_evm: old.threshold_signature_evm,
-						threshold_signature_bitcoin: old.threshold_signature_bitcoin,
-						threshold_signature_polkadot: <pallet_cf_threshold_signature::PalletSafeMode<
-							Instance15,
-						> as SafeMode>::CODE_GREEN,
-						threshold_signature_solana: old.threshold_signature_solana,
-						broadcast_ethereum: old.broadcast_ethereum,
-						broadcast_bitcoin: old.broadcast_bitcoin,
-						broadcast_polkadot: old.broadcast_polkadot,
-						broadcast_arbitrum: old.broadcast_arbitrum,
-						broadcast_solana: old.broadcast_solana,
-						broadcast_assethub:
-							<pallet_cf_broadcast::PalletSafeMode<Instance6> as SafeMode>::CODE_GREEN,
-						witnesser: old.witnesser,
-						ingress_egress_ethereum: old.ingress_egress_ethereum,
-						ingress_egress_bitcoin: old.ingress_egress_bitcoin,
-						ingress_egress_polkadot: old.ingress_egress_polkadot,
-						ingress_egress_arbitrum: old.ingress_egress_arbitrum,
-						ingress_egress_solana: old.ingress_egress_solana,
-						ingress_egress_assethub: <pallet_cf_ingress_egress::PalletSafeMode<
-							Instance6,
-						> as SafeMode>::CODE_GREEN,
-					})
-				},
-			);
+		let _ = pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
+			|maybe_old: Option<old::RuntimeSafeMode>| {
+				maybe_old.map(|old| crate::safe_mode::RuntimeSafeMode {
+					emissions: old.emissions,
+					funding: old.funding,
+					swapping: old.swapping,
+					liquidity_provider: old.liquidity_provider,
+					validator: old.validator,
+					pools: old.pools,
+					trading_strategies:
+						<pallet_cf_trading_strategy::PalletSafeMode as SafeMode>::CODE_GREEN,
+					reputation: old.reputation,
+					asset_balances: old.asset_balances,
+					threshold_signature_evm: old.threshold_signature_evm,
+					threshold_signature_bitcoin: old.threshold_signature_bitcoin,
+					threshold_signature_polkadot: <pallet_cf_threshold_signature::PalletSafeMode<
+						Instance15,
+					> as SafeMode>::CODE_GREEN,
+					threshold_signature_solana: old.threshold_signature_solana,
+					broadcast_ethereum: old.broadcast_ethereum,
+					broadcast_bitcoin: old.broadcast_bitcoin,
+					broadcast_polkadot: old.broadcast_polkadot,
+					broadcast_arbitrum: old.broadcast_arbitrum,
+					broadcast_solana: old.broadcast_solana,
+					broadcast_assethub:
+						<pallet_cf_broadcast::PalletSafeMode<Instance6> as SafeMode>::CODE_GREEN,
+					witnesser: old.witnesser,
+					ingress_egress_ethereum: old.ingress_egress_ethereum,
+					ingress_egress_bitcoin: old.ingress_egress_bitcoin,
+					ingress_egress_polkadot: old.ingress_egress_polkadot,
+					ingress_egress_arbitrum: old.ingress_egress_arbitrum,
+					ingress_egress_solana: old.ingress_egress_solana,
+					ingress_egress_assethub: <pallet_cf_ingress_egress::PalletSafeMode<
+						Instance6,
+					> as SafeMode>::CODE_GREEN,
+				})
+			},
+		).or_else(|_| {
+			log::warn!("Migration for Runtime Safe mode was not able to interpret the existing storage in the old format!");
+			Err(())
+		});
 		Weight::zero()
 	}
 }

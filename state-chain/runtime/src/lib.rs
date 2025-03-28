@@ -1464,7 +1464,13 @@ type MigrationsForV1_9 = (
 		include_instances: [SolanaInstance],
 		exclude_instances: [],
 	),
-	migrations::assethub_integration::AssethubSafemode,
+	VersionedMigration<
+		14,
+		15,
+		migrations::assethub_integration::AssethubSafemode,
+		pallet_cf_environment::Pallet<Runtime>,
+		<Runtime as frame_system::Config>::DbWeight,
+	>,
 	migrations::assethub_integration::AssethubChainstate,
 );
 
