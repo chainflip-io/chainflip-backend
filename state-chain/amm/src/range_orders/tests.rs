@@ -17,9 +17,9 @@
 use rand::{prelude::Distribution, Rng, SeedableRng};
 
 use crate::common::Pairs;
-use cf_amm_math::test_utilities::rng_u256_inclusive_bound;
 #[cfg(feature = "slow-tests")]
 use cf_amm_math::MIN_SQRT_PRICE;
+use cf_amm_math::{sqrt_price_to_price, test_utilities::rng_u256_inclusive_bound};
 
 use super::*;
 
@@ -197,4 +197,38 @@ fn test_amounts_to_liquidity() {
 			});
 		}
 	});
+}
+
+#[test]
+fn check_price_reduction_by_pool_fee() {
+	use cf_amm_math::{output_amount_floor, price_at_tick};
+	use sp_core::U256;
+
+	#[track_caller]
+	fn test_case(tick: i32, fee_hundredth_pips: u32) {
+		let input = U256::from(100_000_000u32);
+
+		let price = price_at_tick(tick).unwrap();
+		let expected_output = {
+			let input_minus_fees = reduce_by_pool_fee(input, fee_hundredth_pips);
+			output_amount_floor(input_minus_fees, price)
+		};
+
+		let output = {
+			let sqrt_price = price_to_sqrt_price(price);
+			let adjusted_sqrt_price =
+				sqrt_price_adjusted_by_pool_fee(sqrt_price, Side::Sell, fee_hundredth_pips);
+			let adjusted_price = sqrt_price_to_price(adjusted_sqrt_price);
+
+			output_amount_floor(input, adjusted_price)
+		};
+
+		assert_eq!(output, expected_output);
+	}
+
+	test_case(100, 500);
+	test_case(20000, 500);
+	test_case(-20000, 50_000);
+	test_case(-100, 0);
+	test_case(0, 0);
 }

@@ -225,35 +225,43 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		let mut total_output_amount = Amount::zero();
 
 		while !amount.is_zero() {
-			let (output_amount, remaining_amount) = match (
+			let limit_orders_sqrt_price =
 				self.limit_orders.current_sqrt_price::<SD>().filter(|sqrt_price| {
 					sqrt_price_limit.is_none_or(|sqrt_price_limit| {
 						!SD::sqrt_price_op_more_than(*sqrt_price, sqrt_price_limit)
 					})
-				}),
+				});
+
+			let range_orders_sqrt_price =
 				self.range_orders.current_sqrt_price::<SD>().filter(|sqrt_price| {
 					sqrt_price_limit.is_none_or(|sqrt_price_limit| {
 						SD::sqrt_price_op_more_than(sqrt_price_limit, *sqrt_price)
 					})
-				}),
-			) {
-				(Some(limit_order_sqrt_price), Some(range_order_sqrt_price)) => {
-					if SD::sqrt_price_op_more_than(limit_order_sqrt_price, range_order_sqrt_price) {
-						self.range_orders.swap::<SD>(amount, Some(limit_order_sqrt_price))
-					} else {
-						// Note it is important that in the equal price case we prefer to swap limit
-						// orders as if we do a swap with range_orders where the sqrt_price_limit is
-						// equal to the current sqrt_price then the swap will not change the current
-						// price or use any of the input amount, therefore we would loop forever
+				});
 
-						// Also we prefer limit orders as they don't immediately incur slippage
-						self.limit_orders.swap::<SD>(amount, Some(range_order_sqrt_price))
-					}
-				},
-				(Some(_), None) => self.limit_orders.swap::<SD>(amount, sqrt_price_limit),
-				(None, Some(_)) => self.range_orders.swap::<SD>(amount, sqrt_price_limit),
-				(None, None) => break,
-			};
+			let (output_amount, remaining_amount) =
+				match (limit_orders_sqrt_price, range_orders_sqrt_price) {
+					(Some(limit_order_sqrt_price), Some(range_orders_sqrt_price)) => {
+						if SD::sqrt_price_op_more_than(
+							limit_order_sqrt_price,
+							range_orders_sqrt_price,
+						) {
+							self.range_orders.swap::<SD>(amount, Some(limit_order_sqrt_price))
+						} else {
+							// Note it is important that in the equal price case we prefer to swap
+							// limit orders as if we do a swap with range_orders where the
+							// sqrt_price_limit is equal to the current sqrt_price then the
+							// swap will not change the current price or use any of the input
+							// amount, therefore we would loop forever
+
+							// Also we prefer limit orders as they don't immediately incur slippage
+							self.limit_orders.swap::<SD>(amount, Some(range_orders_sqrt_price))
+						}
+					},
+					(Some(_), None) => self.limit_orders.swap::<SD>(amount, sqrt_price_limit),
+					(None, Some(_)) => self.range_orders.swap::<SD>(amount, sqrt_price_limit),
+					(None, None) => break,
+				};
 
 			amount = remaining_amount;
 			total_output_amount = total_output_amount.saturating_add(output_amount);
@@ -480,12 +488,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	#[allow(clippy::type_complexity)]
-	pub fn set_fees(
+	pub fn set_range_order_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
+		self.range_orders.set_fees(fee_hundredth_pips)
+	}
+
+	#[allow(clippy::type_complexity)]
+	pub fn set_limit_order_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
 	) -> Result<PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError>
 	{
-		self.range_orders.set_fees(fee_hundredth_pips)?;
 		self.limit_orders.set_fees(fee_hundredth_pips)
 	}
 
