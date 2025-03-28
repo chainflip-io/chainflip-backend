@@ -144,7 +144,7 @@ where
 		_source_address: Option<ForeignChainAddress>,
 		_gas_budget: GasAmount,
 		_message: Vec<u8>,
-		_ccm_additional_data: Vec<u8>,
+		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		Err(ExecutexSwapAndCallError::Unsupported)
 	}
