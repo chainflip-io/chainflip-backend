@@ -28,7 +28,6 @@ mod mock;
 mod tests;
 
 use cf_primitives::{Asset, AssetAmount, StablecoinDefaults, Tick, STABLE_ASSET};
-use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
 	IncreaseOrDecrease, LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
@@ -39,7 +38,10 @@ use frame_support::{
 	traits::HandleLifetime,
 };
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec,
+};
 use weights::WeightInfo;
 
 pub use pallet::*;
@@ -81,11 +83,10 @@ impl TradingStrategy {
 			Err(Error::<T>::InvalidAssetsForStrategy)
 		}
 	}
-	pub fn supported_assets(&self) -> Vec<Asset> {
+	pub fn supported_assets(&self) -> BTreeSet<Asset> {
 		match self {
-			TradingStrategy::TickZeroCentered { base_asset, .. } => {
-				vec![*base_asset, STABLE_ASSET]
-			},
+			TradingStrategy::TickZeroCentered { base_asset, .. } =>
+				BTreeSet::from_iter([*base_asset, STABLE_ASSET]),
 		}
 	}
 	fn validate_params<T: Config>(&self) -> Result<(), Error<T>> {
@@ -161,7 +162,7 @@ pub mod pallet {
 	/// read multiple assets at once (and this map is small).
 	/// An asset that is not in this map is disabled from being updated.
 	#[pallet::storage]
-	pub(super) type LimitOrderUpdateThresholds<T: Config> = StorageValue<
+	pub type LimitOrderUpdateThresholds<T: Config> = StorageValue<
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
@@ -174,7 +175,7 @@ pub mod pallet {
 	/// of asset A, as long as there is at least 70% of the required amount of asset B.
 	/// An asset that is not in this map is disabled from being deployed.
 	#[pallet::storage]
-	pub(super) type MinimumDeploymentAmountForStrategy<T: Config> = StorageValue<
+	pub type MinimumDeploymentAmountForStrategy<T: Config> = StorageValue<
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
@@ -184,7 +185,7 @@ pub mod pallet {
 	/// Stores the minimum amount per asset that can be added to an existing strategy.
 	/// An asset that is not in this map is disabled from adding funds.
 	#[pallet::storage]
-	pub(super) type MinimumAddedFundsToStrategy<T: Config> = StorageValue<
+	pub type MinimumAddedFundsToStrategy<T: Config> = StorageValue<
 		_,
 		BTreeMap<Asset, AssetAmount>,
 		ValueQuery,
@@ -237,7 +238,8 @@ pub mod pallet {
 							if balance >= threshold {
 								weight_used += limit_order_update_weight;
 
-								if T::PoolApi::update_limit_order(
+								// We expect this to fail if the pool does not exist
+								let _result = T::PoolApi::update_limit_order(
 									&strategy_id,
 									base_asset,
 									STABLE_ASSET,
@@ -245,15 +247,7 @@ pub mod pallet {
 									STRATEGY_ORDER_ID,
 									Some(tick),
 									IncreaseOrDecrease::Increase(balance),
-								)
-								.is_err()
-								{
-									// Should be impossible to get an error since we just
-									// checked the balance above
-									log_or_panic!(
-										"Failed to update limit order for strategy {strategy_id:?}"
-									);
-								}
+								);
 							}
 						}
 					},
@@ -313,6 +307,7 @@ pub mod pallet {
 
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+			// Check that the LP has a refund address for each asset
 			for asset in strategy.supported_assets() {
 				T::LpRegistrationApi::ensure_has_refund_address_for_asset(lp, asset)?;
 			}

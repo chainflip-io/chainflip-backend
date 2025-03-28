@@ -71,8 +71,8 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulatedSwapInformation, TradingStrategyInfo, TransactionScreeningEvents, ValidatorInfo,
-		VaultAddresses, VaultSwapDetails,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -984,6 +984,12 @@ pub trait CustomApi {
 		lp: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<TradingStrategyInfoHexAmounts>>;
+
+	#[method(name = "get_trading_strategy_limits")]
+	fn cf_trading_strategy_limits(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<TradingStrategyLimits>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1234,6 +1240,7 @@ where
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_vault_addresses() -> VaultAddresses,
+		cf_trading_strategy_limits() -> TradingStrategyLimits,
 	}
 
 	pass_through_and_flatten! {

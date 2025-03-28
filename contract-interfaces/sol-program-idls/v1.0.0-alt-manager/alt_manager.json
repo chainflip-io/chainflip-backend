@@ -245,8 +245,9 @@
         {
           "name": "new_agg_key",
           "docs": [
-            "NonceAuthorize instruction. However, we pass it as an account to save bytes so only",
-            "the reference is needed compared to it's address for every instruction."
+            "as in NonceAuthorize instruction but we pass it as an account to save bytes.",
+            "The nonce accounts will be included in the protocol ALT so only the reference",
+            "(1 byte) is needed compared to it's address (32 bytes) for every instruction."
           ]
         },
         {
