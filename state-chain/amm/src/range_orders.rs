@@ -46,11 +46,12 @@ use scale_info::TypeInfo;
 use sp_core::{U256, U512};
 
 use crate::common::{
-	BaseToQuote, Pairs, PoolPairsMap, QuoteToBase, SetFeesError, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS,
+	BaseToQuote, Pairs, PoolPairsMap, QuoteToBase, SetFeesError, Side, MAX_LP_FEE,
+	ONE_IN_HUNDREDTH_PIPS,
 };
 use cf_amm_math::{
-	is_sqrt_price_valid, is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick,
-	tick_at_sqrt_price, Amount, SqrtPriceQ64F96, Tick, MAX_TICK, MIN_TICK,
+	is_sqrt_price_valid, is_tick_valid, mul_div_ceil, mul_div_floor, price_to_sqrt_price,
+	sqrt_price_at_tick, tick_at_sqrt_price, Amount, SqrtPriceQ64F96, Tick, MAX_TICK, MIN_TICK,
 	SQRT_PRICE_FRACTIONAL_BITS,
 };
 
@@ -542,7 +543,17 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// This function never panics
 	pub(super) fn current_sqrt_price<SD: SwapDirection>(&self) -> Option<SqrtPriceQ64F96> {
-		SD::further_liquidity(self.current_tick).then_some(self.current_sqrt_price)
+		// self.current_sqrt_price does not account for the pool fees (it can't without knowing the
+		// direction), so we adjust it before returning:
+		SD::further_liquidity(self.current_tick)
+			.then_some(self.current_sqrt_price)
+			.map(|price| {
+				sqrt_price_adjusted_by_pool_fee(
+					price,
+					SD::INPUT_SIDE.sell_order(),
+					self.fee_hundredth_pips,
+				)
+			})
 	}
 
 	/// Returns the raw current sqrt price of the pool, without liquidity checks.
@@ -795,6 +806,17 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	) -> (Amount, Amount) {
 		let mut total_output_amount = Amount::zero();
 
+		// For historical reasons the code below does not take pool fee into account
+		// when comparing against the price limit, so we adjust here to compensate
+		// for that:
+		let sqrt_price_limit = sqrt_price_limit.map(|price| {
+			sqrt_price_adjusted_by_pool_fee(
+				price,
+				!SD::INPUT_SIDE.sell_order(),
+				self.fee_hundredth_pips,
+			)
+		});
+
 		// DIFF: This behaviour is different than Uniswap's. As Solidity doesn't have an ordered map
 		// container, there is a fixed limit to how far the price can move in one iteration of the
 		// loop, we don't have this restriction here.
@@ -820,11 +842,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let sqrt_price_next = if self.current_liquidity == 0 {
 				sqrt_price_target
 			} else {
-				let amount_minus_fees = mul_div_floor(
-					amount,
-					U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
-					U256::from(ONE_IN_HUNDREDTH_PIPS),
-				); // This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
+				let amount_minus_fees = reduce_by_pool_fee(amount, self.fee_hundredth_pips);
 
 				let amount_required_to_reach_target = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,
@@ -1286,4 +1304,45 @@ fn one_amount_delta_ceil(
 		Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
 	*/
 	mul_div_ceil(liquidity.into(), to - from, U512::from(1u32) << SQRT_PRICE_FRACTIONAL_BITS)
+}
+
+fn reduce_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
+	// This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
+	mul_div_floor(
+		input,
+		U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
+		U256::from(ONE_IN_HUNDREDTH_PIPS),
+	)
+}
+
+fn grow_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
+	// This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
+	mul_div_floor(
+		input,
+		U256::from(ONE_IN_HUNDREDTH_PIPS),
+		U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
+	)
+}
+
+/// Returns the ratio between price between prices with and without accounting for the pool fee
+/// as a fixed point number (same representation as Price).
+pub fn pool_fee_scaling_factor(side: Side, fee_hundredth_pips: u32) -> U256 {
+	use cf_amm_math::PRICE_FRACTIONAL_BITS;
+	match side {
+		Side::Buy => grow_by_pool_fee(U256::one() << PRICE_FRACTIONAL_BITS, fee_hundredth_pips),
+		Side::Sell => reduce_by_pool_fee(U256::one() << PRICE_FRACTIONAL_BITS, fee_hundredth_pips),
+	}
+}
+
+fn sqrt_price_adjusted_by_pool_fee(
+	sqrt_price: SqrtPriceQ64F96,
+	side: Side,
+	fee_hundredth_pips: u32,
+) -> SqrtPriceQ64F96 {
+	use cf_amm_math::SQRT_PRICE_FRACTIONAL_BITS;
+
+	let fee_factor = pool_fee_scaling_factor(side, fee_hundredth_pips);
+	let sqrt_fee_factor = price_to_sqrt_price(fee_factor);
+
+	mul_div_floor(sqrt_price, sqrt_fee_factor, U256::one() << SQRT_PRICE_FRACTIONAL_BITS)
 }

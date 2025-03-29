@@ -558,33 +558,19 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			}) {
 			let fixed_pool = fixed_pool_entry.get_mut();
 
-			let amount_minus_fees = mul_div_floor(
-				amount,
-				U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
-				U256::from(ONE_IN_HUNDREDTH_PIPS),
-			); /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */
-
 			let price = sqrt_price_to_price(sqrt_price);
 			let amount_required_to_consume_pool =
 				SD::input_amount_ceil(fixed_pool.available, price);
 
-			let (output_amount, swapped_amount, fees_taken) = if amount_minus_fees >=
-				amount_required_to_consume_pool
-			{
+			let (output_amount, swapped_amount) = if amount >= amount_required_to_consume_pool {
 				let fixed_pool = fixed_pool_entry.remove();
 
-				let fees = mul_div_ceil(
-					amount_required_to_consume_pool,
-					U256::from(self.fee_hundredth_pips),
-					U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
-				); /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */
+				// Cannot underflow as amount >= amount_required_to_consume_pool
+				amount -= amount_required_to_consume_pool;
 
-				// Cannot underflow as amount_minus_fees >= amount_required_to_consume_pool
-				amount -= amount_required_to_consume_pool + fees;
-
-				(fixed_pool.available, amount_required_to_consume_pool, fees)
+				(fixed_pool.available, amount_required_to_consume_pool)
 			} else {
-				let initial_output_amount = SD::output_amount_floor(amount_minus_fees, price);
+				let initial_output_amount = SD::output_amount_floor(amount, price);
 
 				// We calculate (output_amount, next_percent_remaining) so that
 				// next_percent_remaining is an under-estimate of the remaining liquidity, but also
@@ -616,16 +602,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				fixed_pool.percent_remaining = next_percent_remaining;
 				fixed_pool.available -= output_amount;
 
-				let fees_taken = amount - amount_minus_fees;
+				let swapped_amount = amount;
+
 				amount = Amount::zero();
 
-				(output_amount, amount_minus_fees, fees_taken)
+				(output_amount, swapped_amount)
 			};
 
 			self.total_swap_inputs[SD::INPUT_SIDE] =
 				self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(swapped_amount);
-			self.total_fees_earned[SD::INPUT_SIDE] =
-				self.total_fees_earned[SD::INPUT_SIDE].saturating_add(fees_taken);
 
 			total_output_amount = total_output_amount.saturating_add(output_amount);
 		}
