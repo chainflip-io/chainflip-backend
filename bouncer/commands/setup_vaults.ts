@@ -32,7 +32,7 @@ import {
   DisposableApiPromise,
 } from '../shared/utils/substrate';
 
-export async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
+async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
     vaultAddress: AddressOrPair;
     vaultExtrinsicIndex: number;
@@ -60,11 +60,7 @@ export async function createPolkadotVault(logger: Logger, api: DisposableApiProm
   return promise;
 }
 
-export async function rotateAndFund(
-  api: DisposableApiPromise,
-  vault: AddressOrPair,
-  key: AddressOrPair,
-) {
+async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, key: AddressOrPair) {
   const { promise, resolve } = deferredPromise<void>();
   const alice = await aliceKeyringPair();
   const rotation = api.tx.proxy.proxy(
