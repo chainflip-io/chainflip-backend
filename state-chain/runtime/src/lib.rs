@@ -1422,6 +1422,13 @@ type PalletMigrations = (
 	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 );
 
+pub struct NoopMigration;
+impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		log::info!("🤷 Noop migration");
+		Default::default()
+	}
+}
 macro_rules! instanced_migrations {
 	(
 		module: $module:ident,
@@ -1445,7 +1452,7 @@ macro_rules! instanced_migrations {
 				VersionedMigration<
 					$from,
 					$to,
-					(),
+					NoopMigration,
 					$module::Pallet<Runtime, $exclude>,
 					DbWeight,
 				>,
@@ -1472,6 +1479,31 @@ type MigrationsForV1_9 = (
 		<Runtime as frame_system::Config>::DbWeight,
 	>,
 	migrations::assethub_integration::AssethubChainstate,
+	instanced_migrations!(
+		module: pallet_cf_broadcast,
+		migration: migrations::sol_versioned_transactions::SolVersionedTransactionBroadcastPallet,
+		from: 12,
+		to: 13,
+		include_instances: [SolanaInstance],
+		exclude_instances: [
+			EthereumInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+			ArbitrumInstance,
+		],
+	),
+	instanced_migrations!(
+		module: pallet_cf_threshold_signature,
+		migration: migrations::sol_versioned_transactions::SolVersionedTransactionThresholdSignerPallet,
+		from: 6,
+		to: 7,
+		include_instances: [SolanaInstance],
+		exclude_instances: [
+			EvmInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+		],
+	),
 );
 
 #[cfg(feature = "runtime-benchmarks")]

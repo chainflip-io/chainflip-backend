@@ -71,7 +71,12 @@ export async function tryRuntimeUpgrade(
     let blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
     while (!blockHash.eq(latestBlock)) {
       blockHash = await httpApi.rpc.chain.getBlockHash(blockNumber);
-      await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+      const success = await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+
+      if (!success) {
+        throw new Error('Migration failed for block: ' + blockHash.toString());
+      }
+
       blockNumber++;
     }
     logger.info(`Block ${latestBlock} has been reached, exiting.`);
@@ -83,7 +88,12 @@ export async function tryRuntimeUpgrade(
 
     while (blocksProcessed < lastN) {
       logger.info('Running try-runtime for block: ', nextHash.toString());
-      await tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
+
+      const success = await tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
+
+      if (!success) {
+        throw new Error('Migration failed for block: ' + nextHash.toString());
+      }
 
       const currentHash = nextHash;
       const currentBlockHeader = await retryRpcCall(
@@ -99,10 +109,16 @@ export async function tryRuntimeUpgrade(
       blocksProcessed++;
     }
   } else if (block === 'latest') {
-    await tryRuntimeCommand(runtimePath, 'latest', networkUrl);
+    const success = await tryRuntimeCommand(runtimePath, 'latest', networkUrl);
+    if (!success) {
+      throw new Error('Migration failed for latest block');
+    }
   } else {
     const blockHash = await httpApi.rpc.chain.getBlockHash(block);
-    await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+    const success = await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
+    if (!success) {
+      throw new Error('Migration failed for latest block');
+    }
   }
 
   logger.info('try-runtime upgrade successful.');
