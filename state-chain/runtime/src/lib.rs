@@ -1500,7 +1500,7 @@ type MigrationsForV1_9 = (
 		include_instances: [SolanaInstance],
 		exclude_instances: [
 			EvmInstance,
-			PolkadotInstance,
+			PolkadotCryptoInstance,
 			BitcoinInstance,
 		],
 	),
