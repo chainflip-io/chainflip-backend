@@ -16,6 +16,7 @@
 
 use crate::{
 	address::EncodedAddress,
+	hub::AssethubRuntimeCall,
 	sol::{
 		sol_tx_core::consts::{
 			ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
@@ -122,115 +123,130 @@ impl VersionedSolanaCcmAdditionalData {
 pub struct CcmValidityChecker;
 
 impl CcmValidityCheck for CcmValidityChecker {
-	/// Checks to see if a given CCM is valid. Currently this only applies to Solana chain.
-	/// For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected length.
-	/// Returns the decoded `cf_parameter`.
+	/// Checks to see if a given CCM is valid. Currently this only applies to Solana and Assethub
+	/// chains. For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected
+	/// length. For Assethub Chain: Decodes the message into a supported extrinsic of the
+	/// PolkadotXcm pallet. Returns the decoded `cf_parameter`.
 	fn check_and_decode(
 		ccm: &CcmChannelMetadata,
 		egress_asset: Asset,
 		destination: EncodedAddress,
 	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
-		if ForeignChain::from(egress_asset) == ForeignChain::Solana {
-			let destination_address = SolPubkey::try_from(destination)
-				.map_err(|_| CcmValidityError::InvalidDestinationAddress)?;
+		match ForeignChain::from(egress_asset) {
+			ForeignChain::Solana => {
+				let destination_address = SolPubkey::try_from(destination)
+					.map_err(|_| CcmValidityError::InvalidDestinationAddress)?;
 
-			let asset: SolAsset = egress_asset
-				.try_into()
-				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
+				let asset: SolAsset = egress_asset.try_into().expect(
+					"Only Solana chain's asset will be checked. This conversion must succeed.",
+				);
 
-			// Check if the cf_parameter can be decoded
-			let decoded_data =
-				VersionedSolanaCcmAdditionalData::decode(&mut &ccm.ccm_additional_data.clone()[..])
-					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
+				// Check if the cf_parameter can be decoded
+				let decoded_data = VersionedSolanaCcmAdditionalData::decode(
+					&mut &ccm.ccm_additional_data.clone()[..],
+				)
+				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 
-			let ccm_accounts = decoded_data.ccm_accounts();
-			let address_lookup_tables = decoded_data.address_lookup_tables();
-			let num_address_lookup_tables = address_lookup_tables.len();
+				let ccm_accounts = decoded_data.ccm_accounts();
+				let address_lookup_tables = decoded_data.address_lookup_tables();
+				let num_address_lookup_tables = address_lookup_tables.len();
 
-			if num_address_lookup_tables > MAX_CCM_USER_ALTS as usize {
-				return Err(CcmValidityError::TooManyAddressLookupTables)
-			}
-
-			// We calculate the final length of the CCM transaction to fail early if it's certain
-			// that the egress will fail.
-			// Chainflip uses Versioned transactions regardless of the user passing an ALT or not.
-			// If the user doesn't pass any additional address lookup table (ALT) the final length
-			// of the egress can be calculated deterministically. However, a user ALT makes it so
-			// we can't exactly calculate the final length, since we can't know the ALT content
-			// beforehand. Therefore, we calculate the most optimistic scenario when an ALT is
-			// passed and it might fail to build on egress but we rely on the user to provide
-			// valid ALTs that will make it so the egress transaction will succeed. If that was
-			// not the case and the CCM egress were to fail, the user would be refunded to a
-			// fallback address.
-			let (lookup_tables_length, extra_buffer, bytes_per_new_account) =
-				if num_address_lookup_tables > 0 {
-					// Each empty lookup table is 34 bytes -> 32 bytes for address plus 2 for vector
-					// lengths (write_indexes and readonly_indexes).
-					let lookup_tables_length =
-						num_address_lookup_tables * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION + 2);
-
-					// The most optimistic scenario is the ALT containing both the CfReceiver and
-					// the destination address as well as all the ccm additional accounts. That
-					// will allow for an extra amount of bytes that is available for the user
-					// transaction.
-					let extra_buffer = (ACCOUNT_KEY_LENGTH_IN_TRANSACTION * 2)
-						.saturating_sub(2 * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION);
-
-					// Each non-repeated account would take an extra byte on the address table
-					// lookups.
-					(lookup_tables_length, extra_buffer, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION)
-				} else {
-					// Without lookup tables each new non-repeated account will take a full account.
-					(0, 0, ACCOUNT_KEY_LENGTH_IN_TRANSACTION)
-				};
-
-			// Technically it shouldn't be necessary to pass duplicated accounts as
-			// it will all be executed in the same instruction. However, when integrating
-			// with other protocols, many of the accounts are part of a returned
-			// payload from an API and it makes it cumbersome to then deduplicate on the
-			// fly and then make it match with the receiver contract. It can be done
-			// but it then requires extra configuration bytes in the payload, which
-			// then defeats the purpose of decreasing the payload length.
-			// Therefore we want to account for duplicated accounts, both duplicated
-			// within the additional accounts and with our accounts. Then we can
-			// calculate the length accordingly.
-			// The only Chainflip accounts that are relevant to the user for deduplication
-			// purposes are used when initializing the `seen_addresses` set.
-			let mut seen_addresses = BTreeSet::from_iter([
-				SYSTEM_PROGRAM_ID,
-				SYS_VAR_INSTRUCTIONS,
-				destination_address.into(),
-				ccm_accounts.cf_receiver.pubkey.into(),
-			]);
-
-			if asset == SolAsset::SolUsdc {
-				seen_addresses.insert(TOKEN_PROGRAM_ID);
-			}
-			let mut accounts_length =
-				ccm_accounts.additional_accounts.len() * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
-
-			for ccm_address in &ccm_accounts.additional_accounts {
-				if seen_addresses.insert(ccm_address.pubkey.into()) {
-					accounts_length += bytes_per_new_account;
+				if num_address_lookup_tables > MAX_CCM_USER_ALTS as usize {
+					return Err(CcmValidityError::TooManyAddressLookupTables)
 				}
-			}
 
-			let ccm_length = (ccm.message.len() + accounts_length + lookup_tables_length)
-				.saturating_sub(extra_buffer);
+				// We calculate the final length of the CCM transaction to fail early if it's
+				// certain that the egress will fail.
+				// Chainflip uses Versioned transactions regardless of the user passing an ALT or
+				// not. If the user doesn't pass any additional address lookup table (ALT) the
+				// final length of the egress can be calculated deterministically. However, a
+				// user ALT makes it so we can't exactly calculate the final length, since we
+				// can't know the ALT content beforehand. Therefore, we calculate the most
+				// optimistic scenario when an ALT is passed and it might fail to build on
+				// egress but we rely on the user to provide valid ALTs that will make it so the
+				// egress transaction will succeed. If that was not the case and the CCM egress
+				// were to fail, the user would be refunded to a fallback address.
+				let (lookup_tables_length, extra_buffer, bytes_per_new_account) =
+					if num_address_lookup_tables > 0 {
+						// Each empty lookup table is 34 bytes -> 32 bytes for address plus 2 for
+						// vector lengths (write_indexes and readonly_indexes).
+						let lookup_tables_length =
+							num_address_lookup_tables * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION + 2);
 
-			if ccm_length >
-				match asset {
-					SolAsset::Sol => MAX_USER_CCM_BYTES_SOL,
-					SolAsset::SolUsdc => MAX_USER_CCM_BYTES_USDC,
-				} {
-				return Err(CcmValidityError::CcmIsTooLong)
-			}
+						// The most optimistic scenario is the ALT containing both the CfReceiver
+						// and the destination address as well as all the ccm additional
+						// accounts. That will allow for an extra amount of bytes that is
+						// available for the user transaction.
+						let extra_buffer = (ACCOUNT_KEY_LENGTH_IN_TRANSACTION * 2)
+							.saturating_sub(2 * ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION);
 
-			Ok(DecodedCcmAdditionalData::Solana(decoded_data))
-		} else if !ccm.ccm_additional_data.is_empty() {
-			Err(CcmValidityError::RedundantDataSupplied)
-		} else {
-			Ok(DecodedCcmAdditionalData::NotRequired)
+						// Each non-repeated account would take an extra byte on the address table
+						// lookups.
+						(
+							lookup_tables_length,
+							extra_buffer,
+							ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
+						)
+					} else {
+						// Without lookup tables each new non-repeated account will take a full
+						// account.
+						(0, 0, ACCOUNT_KEY_LENGTH_IN_TRANSACTION)
+					};
+
+				// Technically it shouldn't be necessary to pass duplicated accounts as
+				// it will all be executed in the same instruction. However, when integrating
+				// with other protocols, many of the accounts are part of a returned
+				// payload from an API and it makes it cumbersome to then deduplicate on the
+				// fly and then make it match with the receiver contract. It can be done
+				// but it then requires extra configuration bytes in the payload, which
+				// then defeats the purpose of decreasing the payload length.
+				// Therefore we want to account for duplicated accounts, both duplicated
+				// within the additional accounts and with our accounts. Then we can
+				// calculate the length accordingly.
+				// The only Chainflip accounts that are relevant to the user for deduplication
+				// purposes are used when initializing the `seen_addresses` set.
+				let mut seen_addresses = BTreeSet::from_iter([
+					SYSTEM_PROGRAM_ID,
+					SYS_VAR_INSTRUCTIONS,
+					destination_address.into(),
+					ccm_accounts.cf_receiver.pubkey.into(),
+				]);
+
+				if asset == SolAsset::SolUsdc {
+					seen_addresses.insert(TOKEN_PROGRAM_ID);
+				}
+				let mut accounts_length = ccm_accounts.additional_accounts.len() *
+					ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION;
+
+				for ccm_address in &ccm_accounts.additional_accounts {
+					if seen_addresses.insert(ccm_address.pubkey.into()) {
+						accounts_length += bytes_per_new_account;
+					}
+				}
+
+				let ccm_length = (ccm.message.len() + accounts_length + lookup_tables_length)
+					.saturating_sub(extra_buffer);
+
+				if ccm_length >
+					match asset {
+						SolAsset::Sol => MAX_USER_CCM_BYTES_SOL,
+						SolAsset::SolUsdc => MAX_USER_CCM_BYTES_USDC,
+					} {
+					return Err(CcmValidityError::CcmIsTooLong)
+				}
+
+				Ok(DecodedCcmAdditionalData::Solana(decoded_data))
+			},
+			ForeignChain::Assethub =>
+				<AssethubRuntimeCall as codec::Decode>::decode(&mut ccm.message.as_ref())
+					.map(|_| DecodedCcmAdditionalData::NotRequired)
+					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData),
+			_ =>
+				if !ccm.ccm_additional_data.is_empty() {
+					Err(CcmValidityError::RedundantDataSupplied)
+				} else {
+					Ok(DecodedCcmAdditionalData::NotRequired)
+				},
 		}
 	}
 

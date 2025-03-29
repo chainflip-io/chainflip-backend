@@ -774,7 +774,39 @@ assets!(
 				index: 10,
 			},
 		],
-	}
+	},
+	Chain {
+		variant: Assethub,
+		member_and_module: hub,
+		string: "Assethub" (aliases: ["ASSETHUB", "assethub"]),
+		json: "Assethub",
+		assets: [
+			Asset {
+				variant: HubDot,
+				member: dot,
+				string: "DOT" (aliases: ["Dot", "dot"]),
+				json: "DOT",
+				gas: true,
+				index: 11,
+			},
+			Asset {
+				variant: HubUsdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 12,
+			},
+			Asset {
+				variant: HubUsdc,
+				member: usdc,
+				string: "USDC" (aliases: ["Usdc", "usdc"]),
+				json: "USDC",
+				gas: false,
+				index: 13,
+			},
+		],
+	},
 );
 
 #[cfg(test)]
@@ -808,6 +840,9 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(8).unwrap(), any::Asset::Usdt);
 		assert_eq!(any::Asset::try_from(9).unwrap(), any::Asset::Sol);
 		assert_eq!(any::Asset::try_from(10).unwrap(), any::Asset::SolUsdc);
+		assert_eq!(any::Asset::try_from(11).unwrap(), any::Asset::HubDot);
+		assert_eq!(any::Asset::try_from(12).unwrap(), any::Asset::HubUsdt);
+		assert_eq!(any::Asset::try_from(13).unwrap(), any::Asset::HubUsdc);
 	}
 
 	#[test]
@@ -822,6 +857,7 @@ mod test_assets {
 		assert_conversion!(arb, ArbUsdc);
 		assert_conversion!(sol, Sol);
 		assert_conversion!(sol, SolUsdc);
+		assert_conversion!(hub, HubDot);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);
@@ -829,6 +865,7 @@ mod test_assets {
 		assert_incompatible!(dot, Usdc);
 		assert_incompatible!(btc, Usdc);
 		assert_incompatible!(btc, Usdt);
+		assert_incompatible!(hub, Dot);
 
 		assert_incompatible!(sol, Usdc);
 		assert_incompatible!(sol, Usdt);
@@ -852,6 +889,7 @@ mod test_assets {
 		assert_eq!(assert_ok!(any::Asset::from_str("Arbitrum-Eth")), any::Asset::ArbEth);
 		assert_eq!(assert_ok!(any::Asset::from_str("Solana-Sol")), any::Asset::Sol);
 		assert_eq!(assert_ok!(any::Asset::from_str("Solana-Usdc")), any::Asset::SolUsdc);
+		assert_eq!(assert_ok!(any::Asset::from_str("Assethub-Dot")), any::Asset::HubDot);
 
 		assert_err!(any::Asset::from_str("Ethereum-BTC"));
 		assert_err!(any::Asset::from_str("Polkadot-USDC"));
@@ -884,6 +922,10 @@ mod test_assets {
 		assert_eq!(
 			assert_ok!(serde_json::to_string(&any::Asset::SolUsdc)),
 			"{\"chain\":\"Solana\",\"asset\":\"USDC\"}"
+		);
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::HubDot)),
+			"{\"chain\":\"Assethub\",\"asset\":\"DOT\"}"
 		);
 
 		// Explicit Chain Deserialization
@@ -922,6 +964,12 @@ mod test_assets {
 				"{\"chain\":\"Solana\",\"asset\":\"USDC\"}"
 			)),
 			any::Asset::SolUsdc
+		);
+		assert_eq!(
+			assert_ok!(serde_json::from_str::<any::Asset>(
+				"{\"chain\":\"Assethub\",\"asset\":\"DOT\"}"
+			)),
+			any::Asset::HubDot
 		);
 
 		assert_err!(serde_json::from_str::<any::Asset>(
@@ -1028,7 +1076,8 @@ mod test_assets {
 			btc(Btc),
 			dot(Dot),
 			arb(ArbEth, ArbUsdc),
-			sol(Sol, SolUsdc)
+			sol(Sol, SolUsdc),
+			hub(HubDot)
 		);
 
 		let asset_map = any::AssetMap::from_iter_or_default(

@@ -42,7 +42,7 @@ use sp_runtime::AccountId32;
 use cf_utilities::cached_stream::MakeCachedStream;
 use sp_core::H256;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EvmInstance, PolkadotInstance, Runtime, RuntimeCall,
+	AccountId, BitcoinInstance, EvmInstance, PolkadotCryptoInstance, Runtime, RuntimeCall,
 };
 
 use crate::{
@@ -73,6 +73,7 @@ async fn start_sc_observer<
 		MockDotHttpRpcClient::new(),
 		MockBtcRetryRpcClient::new(),
 		MockSolRetryRpcClient::new(),
+		MockDotHttpRpcClient::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
@@ -288,11 +289,11 @@ mod dot_signing {
 	use multisig::polkadot::PolkadotCryptoScheme;
 
 	use super::*;
-	use PolkadotInstance;
+	use PolkadotCryptoInstance;
 
 	#[tokio::test]
 	async fn should_handle_signing_request_dot() {
-		should_handle_signing_request::<PolkadotCryptoScheme, PolkadotInstance>().await;
+		should_handle_signing_request::<PolkadotCryptoScheme, PolkadotCryptoInstance>().await;
 	}
 }
 
@@ -390,10 +391,10 @@ mod dot_keygen {
 	use multisig::polkadot::PolkadotSigning;
 
 	use super::*;
-	use PolkadotInstance;
+	use PolkadotCryptoInstance;
 	#[tokio::test]
 	async fn should_handle_keygen_request_dot() {
-		should_handle_keygen_request::<PolkadotSigning, PolkadotInstance>().await;
+		should_handle_keygen_request::<PolkadotSigning, PolkadotCryptoInstance>().await;
 	}
 }
 
@@ -702,7 +703,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 	state_chain_client
 		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
+			state_chain_runtime::PolkadotCryptoInstance,
 		>>()
 		.with(eq(block_hash))
 		.once()
@@ -780,6 +781,7 @@ async fn run_the_sc_observer() {
 				MockDotHttpRpcClient::new(),
 				MockBtcRetryRpcClient::new(),
 				MockSolRetryRpcClient::new(),
+				MockDotHttpRpcClient::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),

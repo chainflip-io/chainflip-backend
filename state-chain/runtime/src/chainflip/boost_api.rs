@@ -15,8 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	ArbitrumIngressEgress, BitcoinIngressEgress, EthereumIngressEgress, PolkadotIngressEgress,
-	SolanaIngressEgress,
+	ArbitrumIngressEgress, AssethubIngressEgress, BitcoinIngressEgress, EthereumIngressEgress,
+	PolkadotIngressEgress, SolanaIngressEgress,
 };
 use cf_primitives::AssetAmount;
 use cf_traits::BoostApi;
@@ -35,6 +35,7 @@ impl BoostApi for IngressEgressBoostApi {
 			btc: BitcoinIngressEgress::boost_pool_account_balances(who),
 			arb: ArbitrumIngressEgress::boost_pool_account_balances(who),
 			sol: SolanaIngressEgress::boost_pool_account_balances(who),
+			hub: AssethubIngressEgress::boost_pool_account_balances(who),
 		}
 	}
 }

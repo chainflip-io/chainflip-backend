@@ -18,8 +18,8 @@ use super::StateChainEnvironment;
 pub use super::{
 	common::*,
 	testnet::{
-		ARBITRUM_EXPIRY_BLOCKS, BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS,
-		POLKADOT_EXPIRY_BLOCKS, SOLANA_EXPIRY_BLOCKS,
+		ARBITRUM_EXPIRY_BLOCKS, ASSETHUB_EXPIRY_BLOCKS, BITCOIN_EXPIRY_BLOCKS,
+		ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS, SOLANA_EXPIRY_BLOCKS,
 	},
 };
 use cf_chains::{
@@ -67,6 +67,11 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
+	hub_genesis_hash: H256(hex_literal::hex!(
+		"d6ca94b515c4693ca4acc8a04afa935572c2896a796b691848f075d5749c6afc"
+	)),
+	hub_vault_account_id: None,
+	hub_runtime_version: RuntimeVersion { spec_version: 1003004, transaction_version: 15 },
 	sol_genesis_hash: Some(SolHash(bs58_array("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"))),
 	sol_vault_program: SolAddress(bs58_array("Gvcsg1ADZJSFXFRp7RUR1Z3DtMZec8iWUPoPVCMv4VQh")),
 	sol_vault_program_data_account: SolAddress(bs58_array(
