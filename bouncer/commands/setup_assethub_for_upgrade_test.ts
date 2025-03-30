@@ -133,4 +133,4 @@ async function main(): Promise<void> {
   ]);
 }
 
-await runWithTimeoutAndExit(main(), 120);
+await runWithTimeoutAndExit(main(), 6000);
