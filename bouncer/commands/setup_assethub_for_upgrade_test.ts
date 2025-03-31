@@ -11,7 +11,7 @@ import { rangeOrder } from '../shared/range_order';
 import { deferredPromise, handleSubstrateError, runWithTimeoutAndExit } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 
-export async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
+export async function createAssethubVault(logger: Logger, api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
     vaultAddress: AddressOrPair;
     vaultExtrinsicIndex: number;
@@ -25,7 +25,7 @@ export async function createPolkadotVault(logger: Logger, api: DisposableApiProm
         handleSubstrateError(api)(result);
       }
       if (result.isInBlock) {
-        logger.info('Polkadot Vault created');
+        logger.info('Assethub Vault created');
         // TODO: figure out type inference so we don't have to coerce using `any`
         const pureCreated = result.findRecord('proxy', 'PureCreated')!;
         resolve({
@@ -86,6 +86,19 @@ export async function rotateAndFund(
 async function main(): Promise<void> {
   await using assethub = await getAssethubApi();
   const logger = loggerChild(globalLogger, 'setup_vaults');
+  
+  const alice = await aliceKeyringPair();
+  logger.info("setting up assethub assets");
+   let batch = [
+     assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1337, alice.address, true, 10000)),
+     assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1984, alice.address, true, 10000)),
+     assethub.tx.assets.setMetadata(1337, "USD Coin", "USDC", 6),
+     assethub.tx.assets.setMetadata(1984, "Tether USD", "USDT", 6),
+     assethub.tx.assets.mint(1337, alice.address, 100000000000000),
+     assethub.tx.assets.mint(1984, alice.address, 100000000000000)
+   ];
+   await assethub.tx.utility.batchAll(batch).signAndSend(alice, {nonce: -1});
+ 
   await initializeAssethubChain(logger);
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   const hubActivationRequest = observeEvent(
@@ -93,12 +106,13 @@ async function main(): Promise<void> {
     'assethubVault:AwaitingGovernanceActivation',
   ).event;
   const hubKey = (await hubActivationRequest).data.newPublicKey;
-  const { vaultAddress: hubVaultAddress } = await createPolkadotVault(logger, assethub);
+  const { vaultAddress: hubVaultAddress } = await createAssethubVault(logger, assethub);
   const hubProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', { chain: 'assethub' }).event;
   const [, hubVaultEvent] = await Promise.all([
     rotateAndFund(assethub, hubVaultAddress, hubKey),
     hubProxyAdded,
   ]);
+  logger.info("registering assethub vault on state chain");
   await submitGovernanceExtrinsic((chainflip) =>
     chainflip.tx.environment.witnessAssethubVaultCreation(hubVaultAddress, {
       blockNumber: hubVaultEvent.block,
@@ -106,12 +120,14 @@ async function main(): Promise<void> {
     }),
   );
 
+  logger.info("creating pools for assethub assets");
   await Promise.all([
     createLpPool(logger, 'HubDot', 10),
     createLpPool(logger, 'HubUsdc', 1),
     createLpPool(logger, 'HubUsdt', 1),
   ]);
 
+  logger.info("funding pools with assethub assets");
   const lp1Deposits = Promise.all([
     depositLiquidity(logger, 'HubDot', 10000, false, '//LP_1'),
     depositLiquidity(logger, 'HubUsdc', 250000, false, '//LP_1'),
@@ -120,12 +136,13 @@ async function main(): Promise<void> {
 
   const lpApiDeposits = Promise.all([
     depositLiquidity(logger, 'HubDot', 2000, false, '//LP_API'),
-    depositLiquidity(logger, 'HubUsdc', 1000, false, '//LP_API'),
-    depositLiquidity(logger, 'HubUsdt', 1000, false, '//LP_API'),
+    depositLiquidity(logger, 'HubUsdc', 250000, false, '//LP_API'),
+    depositLiquidity(logger, 'HubUsdt', 250000, false, '//LP_API'),
   ]);
 
   await Promise.all([lpApiDeposits, lp1Deposits]);
 
+  logger.info("creating orders for assethub assets");
   await Promise.all([
     rangeOrder(logger, 'HubDot', 10000 * 0.9999),
     rangeOrder(logger, 'HubUsdc', 250000 * 0.9999),
