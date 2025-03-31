@@ -749,8 +749,14 @@ pub struct CcmAdditionalData(
 		feature = "std",
 		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
 	)]
-	BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>,
+	pub BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>,
 );
+
+impl From<BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>> for CcmAdditionalData {
+	fn from(bytes: BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>) -> Self {
+		Self(bytes)
+	}
+}
 
 impl TryFrom<Vec<u8>> for CcmAdditionalData {
 	type Error =

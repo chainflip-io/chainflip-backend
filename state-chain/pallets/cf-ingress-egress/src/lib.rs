@@ -1794,23 +1794,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						ccm.ccm_additional_data.refund_address::<T::TargetChain>()
 					{
 						match Self::schedule_egress(
-								ccm.asset,
-								ccm.amount,
-								fallback_address.clone(),
-								None,
-								None,
-							) {
-								Ok(egress_details) =>
-									Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
-										asset: ccm.asset,
-										amount: egress_details.egress_amount,
-										destination_address: fallback_address,
-									}),
-								Err(e) => log::warn!(
-									"Cannot refund failed Ccm: failed to Egress. Error: {:?}",
-									e
-								),
-							};
+							ccm.asset,
+							ccm.amount,
+							fallback_address.clone(),
+							None,
+							None,
+						) {
+							Ok(egress_details) =>
+								Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
+									asset: ccm.asset,
+									amount: egress_details.egress_amount,
+									destination_address: fallback_address,
+								}),
+							Err(e) => log::warn!(
+								"Cannot refund failed Ccm: failed to Egress. Error: {:?}",
+								e
+							),
+						};
 					}
 				},
 			};
@@ -2541,6 +2541,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				emit_deposit_failed_event(DepositFailedReason::CcmUnsupportedForTargetChain);
 				return;
 			}
+
+			let destination_address_internal =
+				match T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					destination_asset,
+				) {
+					Ok(address) => address,
+					Err(err) => {
+						log::warn!("Failed to process vault swap due to invalid destination address. Tx hash: {tx_id:?}. Error: {err:?}");
+						return;
+					},
+				};
 
 			let decoded =
 				metadata.to_checked(destination_asset, destination_address_internal.clone());

@@ -945,7 +945,6 @@ fn solana_failed_ccm_can_trigger_refund_transfer() {
 						},
 					),
 					gas_budget: 1_000_000_000u128,
-					swap_request_id: SwapRequestId(1u64),
 				},
 			);
 
