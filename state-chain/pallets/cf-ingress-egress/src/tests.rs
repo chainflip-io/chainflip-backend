@@ -707,7 +707,6 @@ fn can_egress_ccm() {
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				gas_budget: GAS_BUDGET,
-				swap_request_id: SOME_SWAP_REQUEST_ID,
 			}
 		]);
 

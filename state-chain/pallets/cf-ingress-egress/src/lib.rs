@@ -2013,7 +2013,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(ExecutexSwapAndCallError::TryAgainLater) =>
 					ScheduledEgressCcm::<T, I>::append(ccm),
 				Err(error) => {
-					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. swap_request_id: {:?}, Error: {:?}", ccm.swap_request_id, error);
+					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. Error: {:?}", error);
 
 					Self::deposit_event(Event::<T, I>::CcmEgressInvalid {
 						egress_id: ccm.egress_id,
@@ -2033,18 +2033,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								fallback_address.clone(),
 								None,
 								None,
-
 							) {
-								Ok(egress_details) => Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
-									asset: ccm.asset,
-									amount: egress_details.egress_amount,
-									destination_address: fallback_address,
-								}),
-								Err(e) => log::warn!("Cannot refund failed Ccm: failed to Egress. swap_request_id: {:?}, Error: {:?}", ccm.swap_request_id, e),
+								Ok(egress_details) =>
+									Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
+										asset: ccm.asset,
+										amount: egress_details.egress_amount,
+										destination_address: fallback_address,
+									}),
+								Err(e) => log::warn!(
+									"Cannot refund failed Ccm: failed to Egress. Error: {:?}",
+									e
+								),
 							};
 						}
 					} else {
-						log::warn!("Cannot refund failed Ccm: failed to decode `ccm_additional_data`. swap_request_id: {:?}", ccm.swap_request_id);
+						log::warn!(
+							"Cannot refund failed Ccm: failed to decode `ccm_additional_data`."
+						);
 					}
 				},
 			};
@@ -3290,7 +3295,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
-		swap_request_id: Option<SwapRequestId>,
+		_swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
@@ -3324,7 +3329,6 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_chain,
 						source_address,
 						gas_budget,
-						swap_request_id: swap_request_id.unwrap_or_default(),
 					});
 
 					Ok(ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld))
