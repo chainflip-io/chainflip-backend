@@ -70,7 +70,7 @@ fn basic_usage() {
             register_refund_addresses(&DORIS);
             credit_account(&DORIS, BASE_ASSET, AMOUNT);
             const STRATEGY: TradingStrategy =
-                TradingStrategy::SellAndBuyAtTicks { sell_tick: 1, buy_tick: -1, base_asset: BASE_ASSET };
+                TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: BASE_ASSET };
             assert_ok!(TradingStrategyPallet::deploy_strategy(
                 RuntimeOrigin::signed(DORIS),
                 STRATEGY.clone(),
