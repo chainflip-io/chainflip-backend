@@ -87,18 +87,6 @@ async function main(): Promise<void> {
   await using assethub = await getAssethubApi();
   const logger = loggerChild(globalLogger, 'setup_vaults');
 
-  const alice = await aliceKeyringPair();
-  logger.info('setting up assethub assets');
-  const batch = [
-    assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1337, alice.address, true, 10000)),
-    assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1984, alice.address, true, 10000)),
-    assethub.tx.assets.setMetadata(1337, 'USD Coin', 'USDC', 6),
-    assethub.tx.assets.setMetadata(1984, 'Tether USD', 'USDT', 6),
-    assethub.tx.assets.mint(1337, alice.address, 100000000000000),
-    assethub.tx.assets.mint(1984, alice.address, 100000000000000),
-  ];
-  await assethub.tx.utility.batchAll(batch).signAndSend(alice, { nonce: -1 });
-
   await initializeAssethubChain(logger);
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   const hubActivationRequest = observeEvent(
