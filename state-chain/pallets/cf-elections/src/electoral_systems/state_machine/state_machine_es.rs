@@ -20,7 +20,7 @@ use super::{
 /// Since the state machine's step function has to be called in two different cases,
 ///  - when an election reached consensus
 ///  - when the upstream electoral system produces a new `OnFinalizeContext`,
-/// 
+///
 /// the input type of the state machine should be an enum with these two variants.
 ///
 /// To be more precise, in case an election reaches consensus, the SM is called
@@ -143,7 +143,7 @@ pub trait ConsensusMechanismForES<ES: StatemachineElectoralSystemTypes> = Consen
 ///       `StatemachineForES<ES>`.
 ///     - Create a new tag type for the consensus mechanism, and implement the trait
 ///       `ConsensusMechanismForES<ES>`.
-/// 
+///
 ///    The conditions on associated types in the definitions of `StatemachineForES` and
 ///    `ConsensusMechanismForES` ensure that all components fit together into a coherent electoral
 ///    system.

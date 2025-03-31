@@ -141,7 +141,7 @@ fn generate_new_reorg_id<N: BlockZero + SaturatingStep + Ord + 'static>(indices:
 	index
 }
 
-#[cfg_attr(test,derive(Arbitrary))]
+#[cfg_attr(test, derive(Arbitrary))]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum ChainProgressInner<ChainBlockNumber: SaturatingStep + PartialOrd> {
 	Progress(ChainBlockNumber),
