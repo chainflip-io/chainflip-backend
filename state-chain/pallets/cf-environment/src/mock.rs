@@ -24,7 +24,7 @@ use cf_chains::{
 	sol::{
 		api::{
 			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
-			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,SolanaApi
+			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
 			SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,

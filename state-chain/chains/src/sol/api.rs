@@ -34,8 +34,8 @@ use crate::{
 			address_derivation::derive_associated_token_account, consts::SOL_USDC_DECIMAL,
 		},
 		transaction_builder::SolanaTransactionBuilder,
-		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolHash, SolTrackedData,
-		SolVersionedTransaction, SolanaCrypto,
+		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolAsset, SolHash,
+		SolTrackedData, SolVersionedTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
@@ -44,7 +44,7 @@ use crate::{
 	TransferFallbackError,
 };
 
-use cf_primitives::{EgressId, ForeignChain, GasAmount};
+use cf_primitives::{EgressId, ForeignChain, GasAmount, SwapRequestId};
 
 #[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ComputePrice;
@@ -420,11 +420,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::current_agg_key()?;
 
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
-		// TODO roy: Coordinate with Ramiz on the interface for getting ALTS
-		let address_lookup_tables =
-			sp_std::iter::once(sol_api_environment.address_lookup_table_account)
-				.chain(Environment::get_address_lookup_tables(swap_request_id)?)
-				.collect::<Vec<_>>();
+		// TODO roy: THIS WILL BE REFACTORED LATER.
+		let address_lookup_tables = sol_api_environment.address_lookup_table_account;
 
 		// Ensure the CCM parameters do not contain blacklisted accounts.
 		check_ccm_for_blacklisted_accounts(
@@ -461,7 +458,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					durable_nonce,
 					compute_price,
 					compute_limit,
-					address_lookup_tables,
+					vec![address_lookup_tables],
 				),
 				SolAsset::SolUsdc => SolanaTransactionBuilder::ccm_transfer_token(
 					derive_associated_token_account(
@@ -486,7 +483,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					compute_price,
 					SOL_USDC_DECIMAL,
 					compute_limit,
-					address_lookup_tables,
+					vec![address_lookup_tables],
 				),
 			}
 			.inspect_err(|e| {
