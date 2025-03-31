@@ -106,7 +106,9 @@ export async function requestNewSwap(
   // Set an aggressive timeout for the addressPromise. We expect an event within 3 blocks at most.
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => {
-      reject(new Error(`Timeout waiting for deposit address for swap ${tag}`));
+      reject(
+        new Error(`Timeout waiting for deposit address for ${sourceAsset} -> ${destAsset} swap.`),
+      );
     }, 18000);
   });
 
