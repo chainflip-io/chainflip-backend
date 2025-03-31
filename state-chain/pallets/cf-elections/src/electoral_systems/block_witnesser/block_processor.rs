@@ -685,13 +685,11 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 		};
 
 		let stored_events = |s: &ReorgData<T>| -> Multiset<T::Event> {
-			// s.iter().flat_map(|(k, v)| v.iter().map(|vx| (k.clone(), vx.clone())).collect::<Vec<_>>()).collect()
-			s.values().flatten().cloned().collect() // flat_map(|(k, v)| v.iter().map(|vx| (k.clone(), vx.clone())).collect::<Vec<_>>()).collect()
+			s.values().flatten().cloned().collect() 
 		};
 
 		let events = |s: &Self::State| active_events(&s.blocks_data) + stored_events(&s.reorg_events);
 		let deleted_events = active_events(&output.deleted_data) + stored_events(&output.deleted_events.iter().cloned().collect());
-		// let all_events = |s| events(s) + deleted_events;
 
 		let executed_events = || -> Multiset<_> { output.events.iter().map(|(k,v)| v).cloned().collect() };
 		let executed_events_vector = || -> Container<BTreeMultiSet<_>> { output.events.iter().map(|(k,v)| v).cloned().collect() };
@@ -739,40 +737,8 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 				blocks(&pre.blocks_data).is_subset(&blocks(&post.blocks_data).merge(blocks(&output.deleted_data)))
 			} else {true};
 
-			let forgotten_blocks = blocks(&pre.blocks_data).difference(&blocks(&post.blocks_data)).cloned().collect::<BTreeSet<_>>();
-
-			let old_blocks = blocks(&pre.blocks_data.iter().filter(|(i, _)| i.saturating_forward(3) <= *latest_block).map(|(a, b)| (a.clone(), b.clone())).collect());
-
-
-			/*
-			"old blocks are deleted (old: {:?}, deleted_new: {:?}, output: {:?})"
-			in old_blocks.clone()
-				.merge(deleted_new.clone())
-				== blocks(&output.deleted_data),
-			else
-				old_blocks,
-				deleted_new.clone(),
-				blocks(&output.deleted_data)
-			;
- 			*/
-
-			// "deleted data is deleted (forgotten: {:?}, claimed: {:?}, deleted_new: {:?})"
-			// in if !reorg {
-			//   forgotten_blocks.clone() 
-			// 	.merge(deleted_new.clone())
-			//   	== blocks(&output.deleted_data)
-			// } else {true},
-			// else
-			// 	forgotten_blocks,
-			// 	blocks(&output.deleted_data),
-			// 	deleted_new
-			// ;
-
 			"new blocks are added to block data or are immediately deleted"
 			in new_block.is_subset(&blocks(&post.blocks_data).merge(deleted_new));
-
-			"all events of immediately deleted blocks are executed"
-			in true;
 		}
 
 	}
