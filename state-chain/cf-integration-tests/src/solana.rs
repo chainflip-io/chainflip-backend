@@ -949,7 +949,6 @@ fn solana_failed_ccm_can_trigger_refund_transfer() {
 				ccm.gas_budget,
 				ccm.message.clone().to_vec(),
 				ccm.ccm_additional_data.clone().to_vec(),
-				Default::default(),
 			), Err(SolanaTransactionBuildingError::InvalidCcm(CcmValidityError::CcmIsTooLong)));
 
 			// Directly insert a CCM to be ingressed. 
@@ -963,7 +962,6 @@ fn solana_failed_ccm_can_trigger_refund_transfer() {
 				source_address: None,
 				ccm_additional_data: ccm.ccm_additional_data,
 				gas_budget: ccm.gas_budget,
-				swap_request_id: SwapRequestId(1u64),
 			});
 
 			testnet.move_forward_blocks(1);

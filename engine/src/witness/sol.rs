@@ -15,10 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod egress_witnessing;
+mod lookup_table_witnessing;
 mod nonce_witnessing;
 mod sol_deposits;
 mod vault_swaps_witnessing;
-
 use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
 	sol::{
