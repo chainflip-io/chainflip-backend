@@ -19,16 +19,16 @@ use sp_std::{
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-type BlockStore<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, (T::BlockData, u32)>;
-
-pub fn past_events<T: BWProcessorTypes>(store: &mut BlockStore<T>) -> Vec<T::Event> {
+pub fn past_events<T: BWProcessorTypes>(
+	store: &mut BTreeMap<T::ChainBlockNumber, (T::BlockData, u32)>,
+) -> Vec<T::Event> {
 	store
 		.iter()
 		.flat_map(|(height, (data, age))| {
 			let mut x: BlockProcessor<T> = Default::default();
 			x.rules.run((*height, (0..*age), data.clone()))
 		})
-		.map(|(number, event)| event)
+		.map(|(_number, event)| event)
 		.collect()
 }
 
@@ -137,6 +137,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	///
 	/// A vector of (block height, events (`T::Event`)) generated during the processing. These
 	/// events have been deduplicated and executed.
+	#[allow(clippy::type_complexity)]
 	pub fn process_block_data(
 		&mut self,
 		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
@@ -150,13 +151,13 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	) {
 		let mut executed_events: Vec<_> = Vec::new();
 		// events in reorged events
-		for (n, events) in &self.reorg_events {
+		for events in self.reorg_events.values() {
 			executed_events.append(&mut events.clone());
 		}
 		// events in block data
 		for (n, (data, next_age)) in &self.blocks_data {
 			executed_events.extend(
-				self.rules.run((*n, (0..*next_age), data.clone())).into_iter().map(|(n, x)| x),
+				self.rules.run((*n, (0..*next_age), data.clone())).into_iter().map(|(_n, x)| x),
 			);
 		}
 
@@ -187,7 +188,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 								self.reorg_events.insert(n, events);
 							},
 							Some(previous_events) => {
-								previous_events.extend(events.into_iter());
+								previous_events.extend(events);
 							},
 						}
 					});
@@ -197,8 +198,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		self.execute.run(
 			events
 				.iter()
+				.filter(|(_, event)| !executed_events.contains(event))
 				.cloned()
-				.filter(|(n, event)| !executed_events.contains(event))
 				.collect(),
 		);
 		// for (n, event) in &events {
@@ -282,6 +283,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			})
 			.collect::<Vec<_>>()
 	}
+	#[allow(clippy::type_complexity)]
 	fn clean_old(
 		&mut self,
 		last_height: T::ChainBlockNumber,
@@ -326,14 +328,14 @@ pub(crate) mod tests {
 					BWProcessorTypes, ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook,
 				},
 			},
-			state_machine::core::{hook_test_utils::MockHook, Hook, IndexedValidate, TypesFor},
+			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor},
 		},
 		*,
 	};
 	use codec::{Decode, Encode};
 	use core::ops::{Range, RangeInclusive};
 	use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-	use proptest::{arbitrary::arbitrary, prelude::Strategy};
+	use proptest::prelude::Strategy;
 	use proptest_derive::Arbitrary;
 	use std::collections::BTreeMap;
 
@@ -463,15 +465,6 @@ pub(crate) mod tests {
 		);
 	}
 
-	///temp test, checking large progress delta
-	#[test]
-	fn temp_large_delta() {
-		let mut processor = BlockProcessor::<Types>::default();
-
-		// processor
-		// 	.process_block_data(ChainProgressInner::Progress(u32::MAX as u64), Some((9, vec![1])));
-	}
-
 	/// test that a reorg cause the processor to discard all the reorged blocks
 	#[test]
 	fn reorgs_remove_block_data() {
@@ -592,12 +585,12 @@ pub(crate) mod tests {
 
 	pub fn generate_input() -> impl Strategy<Value = SMBlockProcessorInput<Types>> {
 		prop_oneof![
-			((
+			(
 				any::<u8>(),
 				any::<u8>(),
 				proptest::collection::btree_set(any::<u8>(), 0..10)
 					.prop_map(|set| set.into_iter().collect::<Vec<_>>())
-			))
+			)
 				.prop_map(|(x, y, z)| SMBlockProcessorInput::NewBlockData(x, y, z)),
 			any::<ChainProgressInner<u8>>().prop_map(SMBlockProcessorInput::ChainProgress)
 		]
@@ -607,11 +600,7 @@ pub(crate) mod tests {
 	pub fn test_block_processor() {
 		use super::SMBlockProcessor;
 		use crate::electoral_systems::state_machine::state_machine::Statemachine;
-		use proptest::{
-			prelude::{any, prop, Arbitrary, Just, Strategy},
-			prop_oneof,
-			sample::select,
-		};
+		use proptest::prelude::{Just, Strategy};
 
 		SMBlockProcessor::<Types>::test(module_path!(), generate_state(), Just(()), |indices| {
 			generate_input()
@@ -714,8 +703,14 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 		};
 		use std::collections::BTreeSet;
 
-		type BlocksData<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, (T::BlockData, u32)>;
-		type ReorgData<T: BWProcessorTypes> = BTreeMap<T::ChainBlockNumber, Vec<T::Event>>;
+		type BlocksData<T> = BTreeMap<
+			<T as BWProcessorTypes>::ChainBlockNumber,
+			(<T as BWProcessorTypes>::BlockData, u32),
+		>;
+		type ReorgData<T> = BTreeMap<
+			<T as BWProcessorTypes>::ChainBlockNumber,
+			Vec<<T as BWProcessorTypes>::Event>,
+		>;
 
 		type Multiset<A> = Container<BTreeSet<A>>;
 
@@ -726,7 +721,7 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 					let mut x: BlockProcessor<T> = Default::default();
 					x.rules.run((*height, (0..*age), data.clone()))
 				})
-				.map(|(number, event)| event)
+				.map(|(_number, event)| event)
 				.collect()
 		};
 
@@ -739,20 +734,15 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 			stored_events(&output.deleted_events.iter().cloned().collect());
 
 		let executed_events =
-			|| -> Multiset<_> { output.events.iter().map(|(k, v)| v).cloned().collect() };
+			|| -> Multiset<_> { output.events.iter().map(|(_, v)| v).cloned().collect() };
 		let executed_events_vector = || -> Container<BTreeMultiSet<_>> {
-			output.events.iter().map(|(k, v)| v).cloned().collect()
+			output.events.iter().map(|(_k, v)| v).cloned().collect()
 		};
 
-		let latest_block = match input {
-			SMBlockProcessorInput::NewBlockData(n, _, _) => n,
-			SMBlockProcessorInput::ChainProgress(ChainProgressInner::Progress(x)) => x,
-			SMBlockProcessorInput::ChainProgress(ChainProgressInner::Reorg(x)) => x.end(),
-		};
 		let reorg =
 			matches!(input, SMBlockProcessorInput::ChainProgress(ChainProgressInner::Reorg(_)));
 		let blocks =
-			|d: &BlocksData<T>| d.values().map(|(d, age)| d.clone()).collect::<BTreeSet<_>>();
+			|d: &BlocksData<T>| d.values().map(|(d, _age)| d.clone()).collect::<BTreeSet<_>>();
 
 		let deleted_new: BTreeSet<T::BlockData> = match input {
 			SMBlockProcessorInput::NewBlockData(n, i, x) if i.saturating_forward(3) <= *n =>
@@ -761,7 +751,7 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 		};
 
 		let new_block: BTreeSet<T::BlockData> = match input {
-			SMBlockProcessorInput::NewBlockData(n, i, x) => BTreeSet::from([x.clone()]),
+			SMBlockProcessorInput::NewBlockData(_n, _i, x) => BTreeSet::from([x.clone()]),
 			_ => BTreeSet::new(),
 		};
 
@@ -780,7 +770,7 @@ impl<T: BWProcessorTypes + 'static + Debug> Statemachine for SMBlockProcessor<T>
 			in events(pre) & executed_events() == Container(BTreeSet::new());
 
 			"executed events are unique"
-			in executed_events_vector().0.0.iter().all(|(x, n)| *n == 1);
+			in executed_events_vector().0.0.iter().all(|(_x, n)| *n == 1);
 
 			// TODO: handle the reorg case
 			"blocks either stay in the blockstore or are included in the 'deleted output'"
