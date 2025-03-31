@@ -66,7 +66,11 @@ export async function depositChannelCreation(testContext: TestContext) {
           destinationAsset: z.string(),
           brokerCommissionRate: numberSchema,
           channelMetadata: z
-            .object({ message: z.string(), gasBudget: bigintSchema, ccmAdditionalData: z.string() })
+            .object({
+              message: z.string(),
+              gasBudget: bigintSchema,
+              ccmAdditionalData: z.union([z.object({ Solana: z.any() }), z.literal('NotRequired')]),
+            })
             .nullable(),
           boostFee: numberSchema,
           affiliateFees: z.array(z.object({ account: z.string(), bps: numberSchema })),
@@ -235,9 +239,6 @@ export async function depositChannelCreation(testContext: TestContext) {
           'NotRequired',
           `Expected CCM parameter ccmAdditionalData to be NotRequired, but got ${event.channelMetadata.ccmAdditionalData}`,
         );
-      } else {
-        event.channelMetadata.ccmAdditionalData.Solana ??
-          assert.fail('Expected Solana ccmAdditionalData');
       }
     }
   };
