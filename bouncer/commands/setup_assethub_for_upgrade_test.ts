@@ -86,19 +86,19 @@ export async function rotateAndFund(
 async function main(): Promise<void> {
   await using assethub = await getAssethubApi();
   const logger = loggerChild(globalLogger, 'setup_vaults');
-  
+
   const alice = await aliceKeyringPair();
-  logger.info("setting up assethub assets");
-   let batch = [
-     assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1337, alice.address, true, 10000)),
-     assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1984, alice.address, true, 10000)),
-     assethub.tx.assets.setMetadata(1337, "USD Coin", "USDC", 6),
-     assethub.tx.assets.setMetadata(1984, "Tether USD", "USDT", 6),
-     assethub.tx.assets.mint(1337, alice.address, 100000000000000),
-     assethub.tx.assets.mint(1984, alice.address, 100000000000000)
-   ];
-   await assethub.tx.utility.batchAll(batch).signAndSend(alice, {nonce: -1});
- 
+  logger.info('setting up assethub assets');
+  const batch = [
+    assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1337, alice.address, true, 10000)),
+    assethub.tx.sudo.sudo(assethub.tx.assets.forceCreate(1984, alice.address, true, 10000)),
+    assethub.tx.assets.setMetadata(1337, 'USD Coin', 'USDC', 6),
+    assethub.tx.assets.setMetadata(1984, 'Tether USD', 'USDT', 6),
+    assethub.tx.assets.mint(1337, alice.address, 100000000000000),
+    assethub.tx.assets.mint(1984, alice.address, 100000000000000),
+  ];
+  await assethub.tx.utility.batchAll(batch).signAndSend(alice, { nonce: -1 });
+
   await initializeAssethubChain(logger);
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   const hubActivationRequest = observeEvent(
@@ -112,7 +112,7 @@ async function main(): Promise<void> {
     rotateAndFund(assethub, hubVaultAddress, hubKey),
     hubProxyAdded,
   ]);
-  logger.info("registering assethub vault on state chain");
+  logger.info('registering assethub vault on state chain');
   await submitGovernanceExtrinsic((chainflip) =>
     chainflip.tx.environment.witnessAssethubVaultCreation(hubVaultAddress, {
       blockNumber: hubVaultEvent.block,
@@ -120,14 +120,14 @@ async function main(): Promise<void> {
     }),
   );
 
-  logger.info("creating pools for assethub assets");
+  logger.info('creating pools for assethub assets');
   await Promise.all([
     createLpPool(logger, 'HubDot', 10),
     createLpPool(logger, 'HubUsdc', 1),
     createLpPool(logger, 'HubUsdt', 1),
   ]);
 
-  logger.info("funding pools with assethub assets");
+  logger.info('funding pools with assethub assets');
   const lp1Deposits = Promise.all([
     depositLiquidity(logger, 'HubDot', 10000, false, '//LP_1'),
     depositLiquidity(logger, 'HubUsdc', 250000, false, '//LP_1'),
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
 
   await Promise.all([lpApiDeposits, lp1Deposits]);
 
-  logger.info("creating orders for assethub assets");
+  logger.info('creating orders for assethub assets');
   await Promise.all([
     rangeOrder(logger, 'HubDot', 10000 * 0.9999),
     rangeOrder(logger, 'HubUsdc', 250000 * 0.9999),
