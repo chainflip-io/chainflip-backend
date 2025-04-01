@@ -372,6 +372,9 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
+		/// Name of the chain that this Config is implemented for
+		const NAME: &'static str;
+
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -942,10 +945,10 @@ pub mod pallet {
 		use codec::{Decode, Encode};
 		use frame_system::pallet_prelude::BlockNumberFor;
 		use scale_info::TypeInfo;
+		use generic_typeinfo_derive::GenericTypeInfo;
 		use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-		#[derive(Encode, Decode, TypeInfo)]
-		#[scale_info(skip_type_params(T, I))]
+		#[derive(Encode, Decode, GenericTypeInfo)]
 		pub struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
 			epoch: EpochIndex,
 			#[allow(clippy::type_complexity)]

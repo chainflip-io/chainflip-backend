@@ -1051,6 +1051,7 @@ impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
 }
 
 impl pallet_cf_elections::Config<Instance5> for Runtime {
+	const NAME: &'static str = "Solana";
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;

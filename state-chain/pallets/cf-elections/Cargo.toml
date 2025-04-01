@@ -25,6 +25,7 @@ cf-primitives = { workspace = true }
 # Utility deps
 cf-utilities = { workspace = true }
 cf-runtime-utilities = { workspace = true }
+generic-typeinfo-derive = { path = '../../generic-typeinfo-derive' }
 
 # Non-substrate external deps
 bitvec = { workspace = true, features = ["alloc"] }

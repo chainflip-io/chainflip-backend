@@ -6,10 +6,12 @@
 /// pallets, which contain types that depend on the generic type parameter. Even if the names of
 /// these generic types are the same, their types may not be. This confuses the SCALE libraries,
 /// because they rely on the name of the type to resolve it in the type metadata (they should really
-/// use the uniqe type ID, but they don't). In this crate, we provide an alternative macro
+/// use the unique type ID, but they don't). In this crate, we provide an alternative macro
 /// `#[derive(GenericTypeInfo)]`. It can be used on types that are generic and contain generic
-/// types. The requirement is that the first generic parameter contains a static `NAME` element. For
-/// example:
+/// types. Typically you'd want to use it on types that also have
+/// #[scale_info(skip_type_params(T, I))]
+/// applied to it. The requirement is that the first generic parameter contains a static `NAME`
+/// element. For example:
 ///
 /// #[derive(GenericTypeInfo)]
 /// pub struct MyStruct<T: Config<I>, I: 'static = ()> {
@@ -24,6 +26,21 @@
 /// based on the type name alone and will usually just fail. Using `#[derive(GenericTypeInfo)]` here
 /// will instead assume that `T::NAME` is a static string uniquely determining the type `T` (for
 /// example "Bitcoin") and will generate type names like `SpecialType<T, I>ForBitcoin` instead.
+///
+/// This code calls .leak(), but that is ok!
+/// The problem is that #derive macros like the one below get expanded into code before any generics
+/// are resolved. That means that by the time this macro is fully executed and the corresponding
+/// code is generated, we still don't know what types T and I from the example above represent. The
+/// generic resolution happens at a later stage. Because the actual type of T determines the desired
+/// typenames and the TypeInfo trait requires this string to be 'static, we can't really construct
+/// it in the macro. The first time any code is executed that has all information required to
+/// assemble the name is at runtime. The way to create 'static strings at runtime is exactly to call
+/// .leak() on them. Normally one would then implement a caching mechanism to ensure that each
+/// string is constructed and leaked at most once during the lifetime of the program, but since this
+/// code will be running inside the runtime WASM, this is not necessary (or even possible in a
+/// straightforward way). The way the Substrate node calls methods on the WASM runtime guarantees
+/// that 'static variables don't survive inbetween calls, so we are fine calling .leak() here and
+/// not worrying about anything.
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -35,7 +52,7 @@ pub fn derive(item: TokenStream) -> TokenStream {
 	let item2: TokenStream2 = item.into();
 	let ast: DeriveInput = syn::parse2(item2).unwrap();
 	let ident = ast.ident;
-	let chain_generic_ident = ast.generics.type_params().next().unwrap().ident.clone();
+	let chain_generic_ident = ast.generics.type_params().next().expect("You are trying to #[derive(GenericTypeInfo)] on a Struct/Enum that is not a generic! Just do #[derive(TypeInfo)] instead.").ident.clone();
 	let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
 	match ast.data {
 		Data::Struct(d) => derive_struct(d, ident, impl_generics, ty_generics, chain_generic_ident),
@@ -126,6 +143,9 @@ fn derive_enum(
 	})
 }
 
+// This is taken directly from the Substrate TypeInfo library
+// The purpose is to remove spurious whitespace and make the type
+// name align with what one would see in the code.
 fn clean_type_string(input: &str) -> String {
 	input
 		.replace(" ::", "::")
