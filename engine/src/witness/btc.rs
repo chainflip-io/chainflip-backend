@@ -56,7 +56,6 @@ use crate::{
 	witness::btc::deposits::{egress_witnessing, vault_deposits},
 };
 
-
 #[derive(Clone)]
 pub struct BitcoinDepositChannelWitnessingVoter {
 	client: BtcRetryRpcClient,
@@ -70,9 +69,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 		properties: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties {
-			block_height: witness_range,
-			properties: deposit_addresses,
-			..
+			block_height: witness_range, properties: deposit_addresses, ..
 		} = properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range)
 			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
@@ -112,11 +109,8 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 		_settings: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinVaultDepositWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties {
-			block_height: witness_range,
-			properties: vaults,
-			..
-		} = properties;
+		let BWElectionProperties { block_height: witness_range, properties: vaults, .. } =
+			properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range)
 			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
 
@@ -237,11 +231,8 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 		_settings: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinEgressWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties {
-			block_height: witness_range,
-			properties: tx_hashes,
-			..
-		} = properties;
+		let BWElectionProperties { block_height: witness_range, properties: tx_hashes, .. } =
+			properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
 
 		let mut txs = vec![];
@@ -353,7 +344,11 @@ use super::common::epoch_source::Vault;
 
 pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoricInfo>(
 	epoch: Vault<cf_chains::Bitcoin, ExtraInfo, ExtraHistoricInfo>,
-	header: super::common::chain_source::Header<u64, BlockHash, (Vec<VerboseTransaction>, Vec<(btc::Hash, BlockNumber)>)>,
+	header: super::common::chain_source::Header<
+		u64,
+		BlockHash,
+		(Vec<VerboseTransaction>, Vec<(btc::Hash, BlockNumber)>),
+	>,
 	process_call: ProcessCall,
 ) where
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut

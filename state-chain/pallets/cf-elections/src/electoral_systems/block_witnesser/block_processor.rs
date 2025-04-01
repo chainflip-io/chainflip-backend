@@ -38,14 +38,12 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 ///     - `Event`: The type of event generated from processing blocks.
 ///     - `Rules`: A hook to process block data and generate events.
 ///     - `Execute`: A hook to execute generated events.
-///     - `SafetyMargin`: A hook to retrieve the chain specific safety-margin
 #[derive_where(Debug, Clone, PartialEq, Eq;
 	T::ChainBlockNumber: Debug + Clone + Eq,
 	T::BlockData: Debug + Clone + Eq,
 	T::Event: Debug + Clone + Eq,
 	T::Rules: Debug + Clone + Eq,
 	T::Execute: Debug + Clone + Eq,
-	T::SafetyMargin: Debug + Clone + Eq,
 )]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
@@ -54,18 +52,16 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 	T::Event: Encode,
 	T::Rules: Encode,
 	T::Execute: Encode,
-	T::SafetyMargin: Encode,
 ))]
 pub struct BlockProcessor<T: BWProcessorTypes> {
-	/// A mapping from block numbers to their corresponding block data and the next age to be
-	/// processed. The "age" represents the block height difference between head of the chain and
-	/// block that we are processing, and it's used to know what rules have already been processed
-	/// for such block
-	pub blocks_data: BTreeMap<T::ChainBlockNumber, (T::BlockData, u32)>,
-	pub reorg_events: BTreeMap<T::ChainBlockNumber, Vec<T::Event>>,
+	/// A mapping from block numbers to their corresponding block data, the next age to be
+	/// processed and the safety margin. The "age" represents the block height difference between
+	/// head of the chain and block that we are processing, and it's used to know what rules have
+	/// already been processed for such block
+	pub blocks_data: BTreeMap<T::ChainBlockNumber, (T::BlockData, u32, u32)>,
+	pub reorg_events: BTreeMap<T::ChainBlockNumber, (Vec<T::Event>, u32)>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
-	pub safety_margin: T::SafetyMargin,
 }
 impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 	for BlockProcessor<BlockWitnessingProcessorDefinition>
@@ -76,7 +72,6 @@ impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 			reorg_events: Default::default(),
 			rules: Default::default(),
 			execute: Default::default(),
-			safety_margin: Default::default(),
 		}
 	}
 }
@@ -118,10 +113,11 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	pub fn process_block_data(
 		&mut self,
 		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
-		block_data: Option<(T::ChainBlockNumber, T::BlockData)>,
+		block_data: Option<(T::ChainBlockNumber, T::BlockData, u32)>,
 	) {
-		if let Some((block_number, block_data)) = block_data {
-			self.blocks_data.insert(block_number, (block_data, Default::default()));
+		if let Some((block_number, block_data, safety_margin)) = block_data {
+			self.blocks_data
+				.insert(block_number, (block_data, Default::default(), safety_margin));
 		}
 		let last_block: T::ChainBlockNumber;
 		match chain_progress {
@@ -132,18 +128,18 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 				last_block = *range.end();
 				for n in range {
 					let block_data = self.blocks_data.remove(&n);
-					if let Some((data, next_age)) = block_data {
+					if let Some((data, next_age, safety_margin)) = block_data {
 						let age_range: Range<u32> = 0..next_age;
 						let events = self
-							.process_rules_for_ages_and_block(n, age_range, &data)
+							.process_rules_for_ages_and_block(n, age_range, &data, safety_margin)
 							.into_iter()
 							.map(|(_, event)| event)
 							.collect::<Vec<_>>();
 						match self.reorg_events.get_mut(&n) {
 							None => {
-								self.reorg_events.insert(n, events);
+								self.reorg_events.insert(n, (events, safety_margin));
 							},
-							Some(previous_events) => {
+							Some((previous_events, _)) => {
 								previous_events.extend(events.into_iter());
 							},
 						}
@@ -175,16 +171,19 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		last_height: T::ChainBlockNumber,
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
 		let mut last_events: Vec<(T::ChainBlockNumber, T::Event)> = vec![];
-		for (block_height, (data, next_age_to_process)) in self.blocks_data.clone() {
+		for (block_height, (data, next_age_to_process, safety_margin)) in self.blocks_data.clone() {
 			let current_age = T::ChainBlockNumber::steps_between(&block_height, &last_height).0;
 			let age_range: Range<u32> = next_age_to_process..current_age.saturating_add(1) as u32;
 			last_events.extend(self.process_rules_for_ages_and_block(
 				block_height,
 				age_range,
 				&data,
+				safety_margin,
 			));
-			self.blocks_data
-				.insert(block_height, (data.clone(), (current_age as u32).saturating_add(1)));
+			self.blocks_data.insert(
+				block_height,
+				(data.clone(), (current_age as u32).saturating_add(1), safety_margin),
+			);
 		}
 		last_events
 	}
@@ -213,31 +212,32 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		block: T::ChainBlockNumber,
 		age: Range<u32>,
 		data: &T::BlockData,
+		safety_margin: u32,
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
 		let events: Vec<(T::ChainBlockNumber, T::Event)> =
-			self.rules.run((block, age, data.clone()));
+			self.rules.run((block, age, data.clone(), safety_margin));
 		events
 			.into_iter()
 			.filter(|(_, last_event)| {
 				!self
 					.reorg_events
 					.iter()
-					.flat_map(|(_, events)| events)
+					.flat_map(|(_, (events, _))| events)
 					.any(|event| event == last_event)
 			})
 			.collect::<Vec<_>>()
 	}
 	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
 		self.blocks_data
-			.retain(|_key, (_, next_age)| *next_age <= self.safety_margin.run(()));
+			.retain(|_key, (_, next_age, safety_margin)| *next_age <= *safety_margin);
 		// Todo! Do we want to keep these events around for longer? is there any benefit?
 		// If we keep these for let's say 100 blocks we can then prevent double processing things
 		// that are reorged up to 100 blocks later, what are the chanches of smth like this
 		// happening? This still won't protect us from re-processing full Witness events since we
 		// remove the blocks from block_data as soon as safety margin is reached (we would have to
 		// increase the size of blocks_data as well)
-		self.reorg_events.retain(|key, _| {
-			key.saturating_forward(self.safety_margin.run(()) as usize) > last_height
+		self.reorg_events.retain(|key, (_, safety_margin)| {
+			key.saturating_forward(*safety_margin as usize) > last_height
 		});
 	}
 }
@@ -250,9 +250,7 @@ pub(crate) mod test {
 			block_witnesser::{
 				block_processor::BlockProcessor,
 				primitives::ChainProgressInner,
-				state_machine::{
-					BWProcessorTypes, ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook,
-				},
+				state_machine::{BWProcessorTypes, ExecuteHook, HookTypeFor, RulesHook},
 			},
 			state_machine::core::{Hook, TypesFor},
 		},
@@ -263,7 +261,7 @@ pub(crate) mod test {
 	use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 	use std::collections::BTreeMap;
 
-	const SAFETY_MARGIN: usize = 3;
+	const SAFETY_MARGIN: u32 = 3;
 	type BlockNumber = u64;
 
 	pub struct MockBlockProcessorDefinition;
@@ -288,7 +286,12 @@ pub(crate) mod test {
 	impl Hook<HookTypeFor<Types, RulesHook>> for Types {
 		fn run(
 			&mut self,
-			(block, age, block_data): (cf_chains::btc::BlockNumber, Range<u32>, MockBlockData),
+			(block, age, block_data, safety_margin): (
+				cf_chains::btc::BlockNumber,
+				Range<u32>,
+				MockBlockData,
+				u32,
+			),
 		) -> Vec<(cf_chains::btc::BlockNumber, MockBtcEvent)> {
 			let mut results: Vec<(cf_chains::btc::BlockNumber, MockBtcEvent)> = vec![];
 			if age.contains(&0u32) {
@@ -299,7 +302,7 @@ pub(crate) mod test {
 						.collect::<Vec<_>>(),
 				)
 			}
-			if age.contains(&(SAFETY_MARGIN as u32)) {
+			if age.contains(&safety_margin) {
 				results.extend(
 					block_data
 						.iter()
@@ -308,12 +311,6 @@ pub(crate) mod test {
 				)
 			}
 			results
-		}
-	}
-
-	impl Hook<HookTypeFor<Types, SafetyMarginHook>> for Types {
-		fn run(&mut self, _input: ()) -> u32 {
-			3
 		}
 	}
 
@@ -353,8 +350,6 @@ pub(crate) mod test {
 		type Event = MockBtcEvent;
 		type Rules = Types;
 		type Execute = Types;
-		// type Execute = MockHook<HookTypeFor<Types, ExecuteHook>, "execute_event">;
-		type SafetyMargin = Types;
 	}
 
 	/// tests that the processor correcly keep up to SAFETY MARGIN blocks (3), and remove them once
@@ -363,12 +358,24 @@ pub(crate) mod test {
 	fn blocks_correctly_inserted_and_removed() {
 		let mut processor = BlockProcessor::<Types>::default();
 
-		processor.process_block_data(ChainProgressInner::Progress(11), Some((9, vec![1])));
+		processor.process_block_data(
+			ChainProgressInner::Progress(11),
+			Some((9, vec![1], SAFETY_MARGIN)),
+		);
 		assert_eq!(processor.blocks_data.len(), 1, "Only one blockdata added to the processor");
-		processor.process_block_data(ChainProgressInner::Progress(11), Some((10, vec![4])));
-		processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![7])));
+		processor.process_block_data(
+			ChainProgressInner::Progress(11),
+			Some((10, vec![4], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(11),
+			Some((11, vec![7], SAFETY_MARGIN)),
+		);
 		assert_eq!(processor.blocks_data.len(), 3, "Only three blockdata added to the processor");
-		processor.process_block_data(ChainProgressInner::Progress(12), Some((12, vec![10])));
+		processor.process_block_data(
+			ChainProgressInner::Progress(12),
+			Some((12, vec![10], SAFETY_MARGIN)),
+		);
 		assert_eq!(
 			processor.blocks_data.len(),
 			3,
@@ -381,8 +388,10 @@ pub(crate) mod test {
 	fn temp_large_delta() {
 		let mut processor = BlockProcessor::<Types>::default();
 
-		processor
-			.process_block_data(ChainProgressInner::Progress(u32::MAX as u64), Some((9, vec![1])));
+		processor.process_block_data(
+			ChainProgressInner::Progress(u32::MAX as u64),
+			Some((9, vec![1], SAFETY_MARGIN)),
+		);
 	}
 
 	/// test that a reorg cause the processor to discard all the reorged blocks
@@ -390,9 +399,18 @@ pub(crate) mod test {
 	fn reorgs_remove_block_data() {
 		let mut processor = BlockProcessor::<Types>::default();
 
-		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
-		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4, 5, 6])));
-		processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![7, 8, 9])));
+		processor.process_block_data(
+			ChainProgressInner::Progress(9),
+			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(10),
+			Some((10, vec![4, 5, 6], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(11),
+			Some((11, vec![7, 8, 9], SAFETY_MARGIN)),
+		);
 		processor.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(9, 11)), None);
 		assert!(!processor.blocks_data.contains_key(&9));
 		assert!(!processor.blocks_data.contains_key(&10));
@@ -404,9 +422,18 @@ pub(crate) mod test {
 	fn reorgs_events_saved_and_removed() {
 		let mut processor = BlockProcessor::<Types>::default();
 
-		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
-		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4, 5, 6])));
-		processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![7, 8, 9])));
+		processor.process_block_data(
+			ChainProgressInner::Progress(9),
+			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(10),
+			Some((10, vec![4, 5, 6], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(11),
+			Some((11, vec![7, 8, 9], SAFETY_MARGIN)),
+		);
 
 		//when a reorg happens the block processor saves all the events it has processed so far for
 		// the reorged blocks
@@ -426,7 +453,7 @@ pub(crate) mod test {
 			processor
 				.reorg_events
 				.iter()
-				.flat_map(|(block_number, events)| {
+				.flat_map(|(block_number, (events, _safety_margin))| {
 					events.iter().map(|event| (*block_number, event.clone()))
 				})
 				.collect::<Vec<_>>()
@@ -441,7 +468,7 @@ pub(crate) mod test {
 			processor
 				.reorg_events
 				.iter()
-				.flat_map(|(block_number, events)| {
+				.flat_map(|(block_number, (events, _safety_margin))| {
 					events.iter().map(|event| (*block_number, event.clone()))
 				})
 				.collect::<Vec<_>>()
@@ -456,9 +483,18 @@ pub(crate) mod test {
 	fn already_executed_events_are_not_reprocessed_after_reorg() {
 		let mut processor = BlockProcessor::<Types>::default();
 		// We processed pre-witnessing (boost) for the followings deposit
-		processor.process_block_data(ChainProgressInner::Progress(9), Some((9, vec![1, 2, 3])));
-		processor.process_block_data(ChainProgressInner::Progress(10), Some((10, vec![4, 5, 6])));
-		processor.process_block_data(ChainProgressInner::Progress(11), Some((11, vec![7, 8, 9])));
+		processor.process_block_data(
+			ChainProgressInner::Progress(9),
+			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(10),
+			Some((10, vec![4, 5, 6], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(11),
+			Some((11, vec![7, 8, 9], SAFETY_MARGIN)),
+		);
 
 		processor.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(9, 11)), None);
 
@@ -467,6 +503,7 @@ pub(crate) mod test {
 			11,
 			0..1,
 			&vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+			SAFETY_MARGIN,
 		);
 		// After reprocessing the reorged blocks we should have not re-emitted the same prewitness
 		// events for the same deposit, only the new detected deposit (10) is present

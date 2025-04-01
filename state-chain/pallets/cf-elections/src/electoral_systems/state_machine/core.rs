@@ -7,7 +7,7 @@ use sp_std::{fmt::Debug, vec::Vec};
 /// Syntax sugar for implementing multiple traits for a single type.
 ///
 /// Example use:
-/// ```
+///
 /// impls! {
 ///     for u8:
 ///     Clone {
@@ -20,7 +20,6 @@ use sp_std::{fmt::Debug, vec::Vec};
 ///         ...
 ///     }
 /// }
-/// ```
 macro_rules! impls {
     (for $name:ty $(where ($($bounds:tt)*))? :
 	$(#[doc = $doc_text:tt])? impl $($trait:ty)?  $(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}

@@ -28,7 +28,7 @@ use crate::{
 			primitives::ElectionTracker,
 			state_machine::{
 				BWElectionProperties, BWProcessorTypes, ElectionPropertiesHook, ExecuteHook,
-				HookTypeFor, RulesHook, SafeModeEnabledHook, SafetyMarginHook,
+				HookTypeFor, RulesHook, SafeModeEnabledHook,
 			},
 			*,
 		},
@@ -73,13 +73,6 @@ impl BWProcessorTypes for Types {
 	type Event = ();
 	type Rules = MockHook<HookTypeFor<Self, RulesHook>, "rules">;
 	type Execute = MockHook<HookTypeFor<Self, ExecuteHook>, "execute">;
-	type SafetyMargin = Self;
-}
-
-impl Hook<HookTypeFor<Types, SafetyMarginHook>> for Types {
-	fn run(&mut self, _input: ()) -> u32 {
-		3
-	}
 }
 
 /// Associating BW types to the struct
@@ -133,7 +126,7 @@ register_checks! {
 		},
 		rules_hook_called_n_times_for_age_zero(pre, post, n: usize) {
 			let count = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
-				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(_, age, _event)| age.contains(&0)).count()
+				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(_, age, _event, _)| age.contains(&0)).count()
 			};
 			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);
 		},
@@ -204,6 +197,7 @@ fn create_votes_expectation(
 }
 
 const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
+const SAFETY_MARGIN: u32 = 3;
 
 // We start an election for a block and there is nothing there. The base case.
 #[test]
@@ -212,6 +206,7 @@ fn no_block_data_success() {
 	TestSetup::<SimpleBlockWitnesser>::default()
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
+			safety_margin: SAFETY_MARGIN,
 		})
 		.build()
 		.test_on_finalize(
@@ -254,6 +249,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 	TestSetup::<SimpleBlockWitnesser>::default()
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
+			safety_margin: SAFETY_MARGIN,
 		})
 		.build()
 		.test_on_finalize(
@@ -327,6 +323,7 @@ fn creates_multiple_elections_limited_by_maximum() {
 	TestSetup::<SimpleBlockWitnesser>::default()
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
+			safety_margin: SAFETY_MARGIN,
 		})
 		.build()
 		.test_on_finalize(
@@ -403,6 +400,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 		})
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
+			safety_margin: SAFETY_MARGIN,
 		})
 		.build()
 		.test_on_finalize(
@@ -560,6 +558,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 		})
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
+			safety_margin: SAFETY_MARGIN,
 		})
 		.build()
 		.test_on_finalize(
