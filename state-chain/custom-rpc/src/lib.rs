@@ -29,6 +29,7 @@ use cf_chains::{
 	eth::Address as EthereumAddress,
 	CcmChannelMetadata, Chain, VaultSwapExtraParametersRpc, MAX_CCM_MSG_LENGTH,
 };
+use cf_node_client::events_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
@@ -86,6 +87,7 @@ use std::{
 pub mod backend;
 pub mod monitoring;
 pub mod order_fills;
+pub mod pool_client;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -1085,6 +1087,12 @@ pub enum CfApiError {
 	DispatchError(#[from] DispatchErrorWithMessage),
 	#[error("{0:?}")]
 	RuntimeApiError(#[from] ApiError),
+	#[error("{0:?}")]
+	SubstrateClientError(#[from] sc_client_api::blockchain::Error),
+	#[error("{0:?}")]
+	PoolClientError(#[from] pool_client::PoolClientError),
+	#[error("{0:?}")]
+	DynamicEventsError(#[from] events_decoder::DynamicEventError),
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
 	#[error(transparent)]
@@ -1130,6 +1138,9 @@ impl From<CfApiError> for ErrorObjectOwned {
 			},
 			CfApiError::ErrorObject(object) => object,
 			CfApiError::OtherError(error) => internal_error(error),
+			CfApiError::SubstrateClientError(error) => call_error(error),
+			CfApiError::PoolClientError(error) => call_error(error),
+			CfApiError::DynamicEventsError(error) => call_error(error),
 		}
 	}
 }
