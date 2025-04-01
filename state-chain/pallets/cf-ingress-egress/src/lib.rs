@@ -247,7 +247,6 @@ mod deposit_origin {
 
 use deposit_origin::DepositOrigin;
 
-
 /// Holds information about a transaction that is marked for rejection.
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
 pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
@@ -365,7 +364,13 @@ pub mod pallet {
 	}
 
 	#[derive(
-		CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, GenericTypeInfo,
+		CloneNoBound,
+		RuntimeDebugNoBound,
+		PartialEqNoBound,
+		EqNoBound,
+		Encode,
+		Decode,
+		GenericTypeInfo,
 	)]
 	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
@@ -388,13 +393,18 @@ pub mod pallet {
 	}
 
 	#[derive(
-		CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, GenericTypeInfo,
+		CloneNoBound,
+		RuntimeDebugNoBound,
+		PartialEqNoBound,
+		EqNoBound,
+		Encode,
+		Decode,
+		GenericTypeInfo,
 	)]
 	pub enum DepositFailedDetails<T: Config<I>, I: 'static> {
 		DepositChannel { deposit_witness: DepositWitness<T::TargetChain> },
 		Vault { vault_witness: Box<VaultDepositWitness<T, I>> },
 	}
-
 
 	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
