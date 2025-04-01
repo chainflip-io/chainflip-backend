@@ -34,7 +34,7 @@ use frame_support::{
 use frame_system::Config;
 use pallet_transaction_payment::{Config as TxConfig, OnChargeTransaction};
 use scale_info::TypeInfo;
-use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_runtime::traits::Saturating;
 use sp_std::marker::PhantomData;
 
 /// Marker struct for implementation of [OnChargeTransaction].
@@ -97,12 +97,15 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			// case, we shouldn't refund anything, we can just burn all fees in escrow.
 			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
 				if let Some(call_index) = call_index {
-					crate::CallCounter::<T>::mutate(
-						OpaqueCallIndex::from((who.clone(), call_index)),
-						|count| {
-							*count += 1;
-							crate::FeeScalingRate::<T>::get().scale_fee(corrected_fee, *count)
-						},
+					corrected_fee.saturating_mul(
+						crate::CallCounter::<T>::mutate(
+							OpaqueCallIndex::from((who.clone(), call_index)),
+							|count| {
+								*count += 1;
+								crate::FeeScalingRate::<T>::get().multiplier_at_call_count(*count)
+							},
+						)
+						.into(),
 					)
 				} else {
 					corrected_fee
@@ -144,43 +147,41 @@ pub enum FeeScalingRateConfig {
 }
 
 impl FeeScalingRateConfig {
-	pub fn scale_fee<Balance: AtLeast32BitUnsigned + Copy>(
-		&self,
-		pre_scaled_fee: Balance,
-		call_count: u16,
-	) -> Balance {
+	pub fn multiplier_at_call_count(&self, call_count: u16) -> u16 {
 		match self {
-			FeeScalingRateConfig::DelayedExponential { threshold, exponent } => {
-				let multiplier =
-					1 + call_count.saturating_sub(*threshold).saturating_pow(*exponent as u32);
-				pre_scaled_fee.saturating_mul(multiplier.into())
-			},
-			FeeScalingRateConfig::NoScaling => pre_scaled_fee,
+			FeeScalingRateConfig::DelayedExponential { threshold, exponent } => core::cmp::max(
+				1,
+				call_count.saturating_sub(*threshold).saturating_pow(*exponent as u32),
+			),
+			FeeScalingRateConfig::NoScaling => 1,
 		}
 	}
 }
 
 #[test]
 fn fee_scaling() {
-	const FEE: u64 = 10;
-
-	macro_rules! test_fee_scaling_config {
+	macro_rules! test_expected_scaling_factors {
 		($name:literal, $config:expr, $expected:expr) => {
-			let results = (1..=10).map(|i| $config.scale_fee(FEE, i)).collect::<Vec<_>>();
-			let expected = $expected.iter().map(|m| (1 + m) * FEE).collect::<Vec<_>>();
-			assert_eq!(results, expected, "Scaling test failed for `{}` test.", $name,);
+			let multipliers =
+				(1..=10).map(|i| $config.multiplier_at_call_count(i)).collect::<Vec<_>>();
+			assert_eq!(multipliers, $expected, "Scaling test failed for `{}` test.", $name,);
 		};
 	}
 
-	test_fee_scaling_config!("no_scaling", FeeScalingRateConfig::NoScaling, [0; 10]);
-	test_fee_scaling_config!(
+	test_expected_scaling_factors!("no_scaling", FeeScalingRateConfig::NoScaling, [1; 10]);
+	test_expected_scaling_factors!(
+		"linear_from_0",
+		FeeScalingRateConfig::DelayedExponential { threshold: 0, exponent: 1 },
+		[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+	);
+	test_expected_scaling_factors!(
 		"linear",
 		FeeScalingRateConfig::DelayedExponential { threshold: 3, exponent: 1 },
-		[0, 0, 0, 1, 2, 3, 4, 5, 6, 7]
+		[1, 1, 1, 1, 2, 3, 4, 5, 6, 7]
 	);
-	test_fee_scaling_config!(
+	test_expected_scaling_factors!(
 		"quadratic",
 		FeeScalingRateConfig::DelayedExponential { threshold: 2, exponent: 2 },
-		[0, 0, 1, 4, 9, 16, 25, 36, 49, 64]
+		[1, 1, 1, 4, 9, 16, 25, 36, 49, 64]
 	);
 }
