@@ -3,82 +3,63 @@ use crate::{
 		retry_rpc::BtcRetryRpcClient,
 		rpc::{BlockHeader, BtcRpcApi, VerboseBlock},
 	},
-	caching_client::CachingClient,
+	caching_client::CachingRequest,
 };
 use bitcoin::{BlockHash, Txid};
 use cf_chains::btc::{BlockNumber, BtcAmount};
-use cf_utilities::{loop_select, task_scope::Scope};
-use futures::FutureExt;
+use cf_utilities::task_scope::Scope;
 use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub struct BtcCachingClient {
-	block: CachingClient<BlockHash, VerboseBlock, BtcRetryRpcClient>,
-	block_hash: CachingClient<BlockNumber, BlockHash, BtcRetryRpcClient>,
-	send_raw_transaction: CachingClient<Vec<u8>, Txid, BtcRetryRpcClient>,
-	next_block_fee: CachingClient<(), Option<BtcAmount>, BtcRetryRpcClient>,
-	avg_fee_rate: CachingClient<BlockHash, BtcAmount, BtcRetryRpcClient>,
-	block_header: CachingClient<BlockHash, BlockHeader, BtcRetryRpcClient>,
-	best_block_hash: CachingClient<(), BlockHash, BtcRetryRpcClient>,
+	block: CachingRequest<BlockHash, VerboseBlock, BtcRetryRpcClient>,
+	block_hash: CachingRequest<BlockNumber, BlockHash, BtcRetryRpcClient>,
+	send_raw_transaction: CachingRequest<Vec<u8>, Txid, BtcRetryRpcClient>,
+	next_block_fee: CachingRequest<(), Option<BtcAmount>, BtcRetryRpcClient>,
+	avg_fee_rate: CachingRequest<BlockHash, BtcAmount, BtcRetryRpcClient>,
+	block_header: CachingRequest<BlockHash, BlockHeader, BtcRetryRpcClient>,
+	best_block_hash: CachingRequest<(), BlockHash, BtcRetryRpcClient>,
 
-	pub cache_invalidation_sender: mpsc::Sender<()>,
+	pub cache_invalidation_sender: Vec<mpsc::Sender<()>>,
 }
 
 impl BtcCachingClient {
 	pub(crate) fn new(scope: &Scope<'_, anyhow::Error>, client: BtcRetryRpcClient) -> Self {
-		let (cache_invalidation_sender, mut cache_invalidation_receiver) = mpsc::channel::<()>(1);
-
-		let cached_client = BtcCachingClient {
-			block: CachingClient::<BlockHash, VerboseBlock, BtcRetryRpcClient>::new(
+		let (block, block_cache) =
+			CachingRequest::<BlockHash, VerboseBlock, BtcRetryRpcClient>::new(
 				scope,
 				client.clone(),
-			),
-			block_hash: CachingClient::<BlockNumber, BlockHash, BtcRetryRpcClient>::new(
-				scope,
-				client.clone(),
-			),
-			send_raw_transaction: CachingClient::<Vec<u8>, Txid, BtcRetryRpcClient>::new(
-				scope,
-				client.clone(),
-			),
-			next_block_fee: CachingClient::<(), Option<BtcAmount>, BtcRetryRpcClient>::new(
-				scope,
-				client.clone(),
-			),
-			avg_fee_rate: CachingClient::<BlockHash, BtcAmount, BtcRetryRpcClient>::new(
-				scope,
-				client.clone(),
-			),
-			block_header: CachingClient::<BlockHash, BlockHeader, BtcRetryRpcClient>::new(
-				scope,
-				client.clone(),
-			),
-			best_block_hash: CachingClient::<(), BlockHash, BtcRetryRpcClient>::new(scope, client),
-			cache_invalidation_sender,
-		};
-		let client = cached_client.clone();
-		scope.spawn(
-			async move {
-				loop_select!(
-					if let Some(_) = cache_invalidation_receiver.recv() => {
-						client.clear_cache().await;
-					},
-				);
-				Ok(())
-			}
-			.boxed(),
-		);
-		cached_client
-	}
-
-	async fn clear_cache(&self) {
-		self.block.cache_invalidation_sender.send(()).await.unwrap();
-		self.block_hash.cache_invalidation_sender.send(()).await.unwrap();
-		self.send_raw_transaction.cache_invalidation_sender.send(()).await.unwrap();
-		self.next_block_fee.cache_invalidation_sender.send(()).await.unwrap();
-		self.avg_fee_rate.cache_invalidation_sender.send(()).await.unwrap();
-		self.block_header.cache_invalidation_sender.send(()).await.unwrap();
-		self.best_block_hash.cache_invalidation_sender.send(()).await.unwrap();
+			);
+		let (block_hash, block_hash_cache) =
+			CachingRequest::<BlockNumber, BlockHash, BtcRetryRpcClient>::new(scope, client.clone());
+		let (send_raw_transaction, send_raw_transaction_cache) =
+			CachingRequest::<Vec<u8>, Txid, BtcRetryRpcClient>::new(scope, client.clone());
+		let (next_block_fee, next_block_fee_cache) =
+			CachingRequest::<(), Option<BtcAmount>, BtcRetryRpcClient>::new(scope, client.clone());
+		let (avg_fee_rate, avg_fee_rate_cache) =
+			CachingRequest::<BlockHash, BtcAmount, BtcRetryRpcClient>::new(scope, client.clone());
+		let (block_header, block_header_cache) =
+			CachingRequest::<BlockHash, BlockHeader, BtcRetryRpcClient>::new(scope, client.clone());
+		let (best_block_hash, best_block_hash_cache) =
+			CachingRequest::<(), BlockHash, BtcRetryRpcClient>::new(scope, client);
+		BtcCachingClient {
+			block,
+			block_hash,
+			send_raw_transaction,
+			next_block_fee,
+			avg_fee_rate,
+			block_header,
+			best_block_hash,
+			cache_invalidation_sender: vec![
+				block_cache,
+				block_hash_cache,
+				send_raw_transaction_cache,
+				next_block_fee_cache,
+				avg_fee_rate_cache,
+				block_header_cache,
+				best_block_hash_cache,
+			],
+		}
 	}
 }
 

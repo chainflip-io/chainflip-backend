@@ -12,10 +12,12 @@ const MAX_DURATION: Duration = Duration::new(30, 0);
 type PinBoxedFuture<ResultType> =
 	Pin<Box<dyn Future<Output = Result<ResultType, anyhow::Error>> + Send>>;
 #[derive(Clone)]
-pub struct CachingClient<Key, ResultType, Client> {
-	request_sender:
-		mpsc::UnboundedSender<(PinBoxedFuture<ResultType>, Key, oneshot::Sender<ResultType>)>,
-	pub cache_invalidation_sender: mpsc::Sender<()>,
+pub struct CachingRequest<Key, ResultType, Client> {
+	request_sender: mpsc::UnboundedSender<(
+		PinBoxedFuture<ResultType>,
+		Key,
+		oneshot::Sender<Result<ResultType, anyhow::Error>>,
+	)>,
 	client: Client,
 }
 
@@ -23,21 +25,23 @@ impl<
 		Key: Eq + Hash + Clone + Send + 'static,
 		ResultType: Clone + Send + 'static,
 		Client: Clone + Send + Sync + 'static,
-	> CachingClient<Key, ResultType, Client>
+	> CachingRequest<Key, ResultType, Client>
 {
-	pub fn new(scope: &Scope<'_, anyhow::Error>, client: Client) -> Self {
+	pub fn new(scope: &Scope<'_, anyhow::Error>, client: Client) -> (Self, mpsc::Sender<()>) {
 		let (request_sender, mut request_receiver) = mpsc::unbounded_channel::<(
 			PinBoxedFuture<ResultType>,
 			Key,
-			oneshot::Sender<ResultType>,
+			oneshot::Sender<Result<ResultType, anyhow::Error>>,
 		)>();
 		let (cache_invalidation_sender, mut cache_invalidation_receiver) = mpsc::channel::<()>(1);
 		scope.spawn_weak({
 			task_scope::task_scope(|scope| {
 				async move {
 					let mut cache: HashMap<Key, ResultType> = HashMap::new();
-					let mut in_flight: HashMap<Key, Vec<oneshot::Sender<ResultType>>> =
-						HashMap::default();
+					let mut in_flight: HashMap<
+						Key,
+						Vec<oneshot::Sender<Result<ResultType, anyhow::Error>>>,
+					> = HashMap::default();
 					let (cache_sender, mut cache_receiver) =
 						mpsc::unbounded_channel::<(Key, Result<ResultType, anyhow::Error>)>();
 					loop {
@@ -49,23 +53,22 @@ impl<
 								cache.clear();
 							},
 							Some((key, value)) = cache_receiver.recv() => {
-								match value {
-									Ok(value) => {
-										if let Some(senders) = in_flight.remove(&key) {
-											for sender in senders {
-												let _ = sender.send(value.clone());
-											}
-										}
-										cache.insert(key, value);
-									},
-									Err(_e) => {
-										in_flight.remove(&key);
+								if let Ok(ref value) = value {
+									cache.insert(key.clone(), value.clone());
+								}
+								if let Some(senders) = in_flight.remove(&key) {
+									for sender in senders {
+										let to_send = match &value {
+											Ok(val) => Ok(val.clone()),
+											Err(e) => Err(anyhow::anyhow!(e.to_string())),
+										};
+										let _ = sender.send(to_send);
 									}
 								}
 							},
 							Some((future, request_key, sender)) = request_receiver.recv() => {
 								if let Some(value) = cache.get(&request_key)  {
-										let _ = sender.send(value.clone());
+										let _ = sender.send(Ok(value.clone()));
 								} else if let Some(result_senders) = in_flight.get_mut(&request_key) {
 									result_senders.push(sender);
 								} else {
@@ -86,7 +89,7 @@ impl<
 			})
 		});
 
-		Self { request_sender, cache_invalidation_sender, client }
+		(Self { request_sender, client }, cache_invalidation_sender)
 	}
 
 	pub(crate) async fn get(
@@ -94,18 +97,18 @@ impl<
 		future: TypedFutureGenerator<ResultType, Client>,
 		key: Key,
 	) -> Result<ResultType, anyhow::Error> {
-		let (tx, rx) = oneshot::channel::<ResultType>();
+		let (tx, rx) = oneshot::channel::<Result<ResultType, anyhow::Error>>();
 		let client = self.client.clone();
 		let future = future(client);
 		self.request_sender.send((future, key, tx)).unwrap();
-		let result = timeout(MAX_DURATION, rx).await??;
+		let result = timeout(MAX_DURATION, rx).await???;
 		Ok(result)
 	}
 }
 
 #[cfg(test)]
 mod test {
-	use crate::caching_client::CachingClient;
+	use crate::caching_client::CachingRequest;
 	use anyhow::Error;
 	use cf_utilities::task_scope::{task_scope, Scope};
 	use futures_util::FutureExt;
@@ -137,7 +140,8 @@ mod test {
 			async {
 				let client = Client::default();
 
-				let caching_client = CachingClient::<(), u32, Client>::new(scope, client.clone());
+				let (caching_client, _) =
+					CachingRequest::<(), u32, Client>::new(scope, client.clone());
 
 				let result = caching_client
 					.get(
@@ -177,7 +181,8 @@ mod test {
 			async {
 				let client = Client::default();
 
-				let caching_client = CachingClient::<(), u32, Client>::new(scope, client.clone());
+				let (caching_client, cache_invalidation_sender) =
+					CachingRequest::<(), u32, Client>::new(scope, client.clone());
 
 				let result = caching_client
 					.get(
@@ -190,7 +195,7 @@ mod test {
 					.await
 					.unwrap();
 
-				caching_client.cache_invalidation_sender.send(()).await.unwrap();
+				cache_invalidation_sender.send(()).await.unwrap();
 
 				let result2 = caching_client
 					.get(

@@ -42,7 +42,7 @@ pub struct Voter<
 {
 	state_chain_client: Arc<StateChainClient>,
 	voter: RetrierClient<VoterClient>,
-	cache_invalidation_sender: Option<mpsc::Sender<()>>,
+	cache_invalidation_sender: Option<Vec<mpsc::Sender<()>>>,
 	_phantom: core::marker::PhantomData<Instance>,
 }
 
@@ -61,7 +61,7 @@ where
 		scope: &Scope<'_, anyhow::Error>,
 		state_chain_client: Arc<StateChainClient>,
 		voter: VoterClient,
-		cache_invalidation_sender: Option<mpsc::Sender<()>>,
+		cache_invalidation_sender: Option<Vec<mpsc::Sender<()>>>,
 	) -> Self {
 		Self {
 			state_chain_client,
@@ -200,8 +200,12 @@ where
 
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
 					if electoral_data.contributing {
-						if let Some(cache) = &self.cache_invalidation_sender {
-							let _ = cache.send(()).await;
+						if let Some(caches) = &self.cache_invalidation_sender {
+							for cache in caches {
+								if let Err(e) = cache.send(()).await {
+									warn!("Cache receiver dropped: {e}")
+								}
+							}
 						}
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
