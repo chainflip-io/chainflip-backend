@@ -140,7 +140,8 @@ impl<Call> CallIndexer<Call> for () {
 	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
 )]
 pub enum FeeScalingRateConfig {
-	/// Scale by `1 + (call_count - threshold)^exponent`.
+	/// No scaling for the first `threshold` calls, scale by `(call_count - threshold)^exponent`
+	/// thereafter.
 	DelayedExponential { threshold: u16, exponent: u16 },
 	#[default]
 	NoScaling,
