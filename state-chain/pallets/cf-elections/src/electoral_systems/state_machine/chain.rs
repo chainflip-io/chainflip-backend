@@ -1,16 +1,16 @@
-use core::ops::Range;
+use core::ops::{Range, RangeInclusive};
 
 use proptest::{collection::*, prelude::*, strategy::ValueTree, test_runner::TestRunner};
 
 #[derive(Debug, Clone)]
 pub enum Block {
-	Block { jump: usize, drop: usize, take: usize },
+	Block { jump: usize, drop: usize, take: usize, time_steps: usize, data_delays: Vec<usize> },
 	Fork(Vec<Block>),
 }
 
 #[derive(Debug, Clone)]
 pub enum FilledBlocks<E> {
-	Block { events: Vec<E> },
+	Block { events: Vec<E>, time_steps: usize, data_delays: Vec<usize> },
 	Fork(Vec<FilledBlocks<E>>),
 }
 
@@ -22,6 +22,31 @@ pub struct FlatBlock<E> {
 #[derive(Debug, Clone)]
 pub struct FlatChain<E> {
 	blocks: Vec<FlatBlock<E>>,
+    // time_steps: usize,
+    data_delays: Vec<usize>
+}
+
+#[derive(Debug, Clone)]
+pub struct FlatChainProgression<E> {
+    chains: Vec<FlatChain<E>>,
+    age: usize
+}
+
+impl<E: Clone> FlatChainProgression<E> {
+    pub fn get_next_chain(&mut self) -> Option<Vec<FlatBlock<E>>> {
+        let mut age_left = self.age;
+        for (chain_count, chain) in self.chains.iter().enumerate() {
+            if age_left < chain.data_delays.len() {
+                self.age += 1;
+                return Some(self.chains.get(
+                    chain_count.saturating_sub(*chain.data_delays.get(age_left).unwrap())
+                ).unwrap().blocks.clone());
+            } else {
+                age_left -= chain.data_delays.len();
+            }
+        }
+        None
+    }
 }
 
 /// First this function generates a chain,
@@ -31,11 +56,18 @@ pub fn generate_block(
 	max_block_count: u32,
 	max_fork_length: usize,
 	block_size: Range<usize>,
+    time_steps_per_block: RangeInclusive<usize>,
+    max_data_delay: usize,
 	max_drop: usize,
 	max_jump: usize,
 ) -> impl Strategy<Value = Block> {
-	let leaf = (0..=max_drop, 0..=max_jump, block_size)
-		.prop_map(|(drop, jump, take)| Block::Block { drop, jump, take });
+	let leaf = (0..=max_drop, 0..=max_jump, block_size, time_steps_per_block)
+		.prop_flat_map(move |(drop, jump, take, time_steps)| 
+            vec(0..max_data_delay, time_steps)
+                .prop_map(move |data_delays| {
+                    Block::Block { drop, jump, take, time_steps, data_delays }
+                })
+    );
 	leaf.prop_recursive(max_fork_count, max_block_count, max_fork_length as u32, move |inner| {
 		vec(inner, 1..max_fork_length).prop_map(Block::Fork)
 	})
@@ -47,6 +79,8 @@ pub fn generate_blocks(
 	max_block_count: u32,
 	max_fork_length: usize,
 	block_size: Range<usize>,
+    time_steps_per_block: RangeInclusive<usize>,
+    max_data_delay: usize,
 	max_drop: usize,
 	max_jump: usize,
 ) -> impl Strategy<Value = Vec<Block>> {
@@ -56,6 +90,8 @@ pub fn generate_blocks(
 			max_block_count,
 			max_fork_length,
 			block_size,
+            time_steps_per_block,
+            max_data_delay,
 			max_drop,
 			max_jump,
 		),
@@ -72,7 +108,7 @@ pub fn size(blocks: &Vec<Block>) -> (usize, usize) {
 
 	for block in blocks {
 		match block {
-			Block::Block { jump, drop, take } => {
+			Block::Block { jump, drop, take, time_steps: _, data_delays: _ } => {
 				cursor = std::cmp::max(cursor, *jump);
 				consumed += drop + take;
 			},
@@ -89,7 +125,7 @@ pub fn size(blocks: &Vec<Block>) -> (usize, usize) {
 impl Block {
 	pub fn size(&self) -> (usize, usize) {
 		match self {
-			Block::Block { jump, drop, take } => (*jump, drop + take),
+			Block::Block { jump, drop, take, time_steps: _, data_delays: _ } => (*jump, drop + take),
 			Block::Fork(blocks) => size(blocks),
 		}
 	}
@@ -97,12 +133,12 @@ impl Block {
 
 pub fn fill_block<E: Clone>(block: &Block, mut events: Vec<E>) -> (FilledBlocks<E>, Vec<E>) {
 	match block {
-		Block::Block { jump, drop, take } => {
+		Block::Block { jump, drop, take, time_steps, data_delays } => {
 			{
 				let _dropped_events = events.drain(jump..&(jump + drop));
 			}
 			let block_events = events.drain(jump..&(jump + take));
-			let block = FilledBlocks::Block { events: block_events.collect() };
+			let block = FilledBlocks::Block { events: block_events.collect(), time_steps: *time_steps, data_delays: data_delays.clone() };
 			(block, events)
 		},
 		Block::Fork(blocks) => {
@@ -131,19 +167,19 @@ pub fn fill_blocks<E: Clone>(blocks: &Vec<Block>, mut events: Vec<E>) -> Vec<Fil
 
 pub fn create_time_steps<E: Clone>(blocks: &Vec<FilledBlocks<E>>) -> Vec<FlatChain<E>> {
 	let mut chains = Vec::new();
-	let mut current_chain = FlatChain { blocks: Vec::new() };
+	let mut current_blocks = Vec::new();
 	for block in blocks {
 		match block {
-			FilledBlocks::Block { events } => {
-				current_chain.blocks.push(FlatBlock { events: events.clone() });
-				chains.push(current_chain.clone());
+			FilledBlocks::Block { events, time_steps: _, data_delays } => {
+				current_blocks.push(FlatBlock { events: events.clone() });
+				chains.push(FlatChain { blocks: current_blocks.clone(), data_delays: data_delays.clone() });
 			},
 			FilledBlocks::Fork(forked_blocks) => {
 				let forked_chains = create_time_steps(forked_blocks);
 				chains.extend(forked_chains.into_iter().map(|mut forked_chain| {
-					let mut extended_current_chain = current_chain.clone();
-					extended_current_chain.blocks.append(&mut forked_chain.blocks);
-					extended_current_chain
+					let mut extended_current_chain = current_blocks.clone();
+					extended_current_chain.append(&mut forked_chain.blocks);
+					FlatChain { blocks: extended_current_chain, data_delays: forked_chain.data_delays }
 				}));
 			},
 		}
@@ -158,7 +194,7 @@ pub fn make_events(len: usize) -> Vec<char> {
 #[test]
 pub fn test_test() {
 	let mut runner = TestRunner::default();
-	let filled_chain = generate_blocks(10, 4, 50, 4, 3..5, 1, 2)
+	let filled_chain = generate_blocks(10, 4, 50, 4, 3..5, 0..=4, 2, 1, 2)
 		.prop_map(|block| {
 			let (cursor, consumed) = size(&block);
 			fill_blocks(&block, make_events(consumed + cursor))
@@ -171,8 +207,20 @@ pub fn test_test() {
 
 	let time_steps = create_time_steps(&filled_chain);
 
-	for step in time_steps {
+	for step in &time_steps {
 		println!("step: {step:?}");
 	}
+
+    let mut chain_progression = FlatChainProgression {
+        chains: time_steps,
+        age: 0,
+    };
+
+    println!("---- progression -----");
+
+    while let Some(blocks) = chain_progression.get_next_chain() {
+        println!("blocks: {blocks:?}");
+    }
+
 	assert!(false);
 }
