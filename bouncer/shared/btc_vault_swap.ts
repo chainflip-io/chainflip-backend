@@ -14,6 +14,7 @@ import {
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { fundFlip } from '../shared/fund_flip';
+import { config } from 'yargs';
 
 interface BtcVaultSwapDetails {
   chain: string;
@@ -40,6 +41,7 @@ export async function buildAndSendBtcVaultSwap(
     account: string;
     bps: number;
   }[] = [],
+  confirmations: number = 1
 ) {
   await using chainflip = await getChainflipApi();
 
@@ -73,7 +75,9 @@ export async function buildAndSendBtcVaultSwap(
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
   );
-  await waitForBtcTransaction(txid);
+  if (confirmations > 0) {
+    await waitForBtcTransaction(txid, confirmations);
+  }
 
   return txid;
 }
