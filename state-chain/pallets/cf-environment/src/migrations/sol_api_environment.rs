@@ -63,16 +63,273 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for SolApiEnvironmentMigr
 				 }| {
 					let (alt_manager_program, address_lookup_table_account) =
 						match cf_runtime_utilities::genesis_hashes::genesis_hash::<T>() {
-							// TODO: To update with real values
 							cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 								SolAddress(bs58_array(
-									"J88B7gmadHzTNGiy54c9Ms8BsEXNdB2fntFyhKpk3qoT",
+									"9WuKqnyB4i7sFh2VkrPSW4dkJ3pB8wePQ9MeHEUudsvV",
 								)),
 								(
 									SolAddress(bs58_array(
-										"FmAcjWaRFUxGWBfGT7G3CzcFeJFsewQ4KPJVG4f6fcob",
+										"CFdyxyubce52nvCVVP3XEgCyJmxMVg5yf4VV41aybh9k",
 									)),
-									vec![],
+									vec![
+										const_address(
+											"ACLMuTFvDAb3oecQQGkTVqpUbhCKHG3EZ9uNXHK1W9ka",
+										)
+										.into(),
+										const_address(
+											"SysvarRecentB1ockHashes11111111111111111111",
+										)
+										.into(),
+										const_address(
+											"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+										)
+										.into(),
+										const_address(
+											"4ZhKJgotJ2tmpYs9Y2NkgJzS7Ac5sghrU4a6cyTLEe7U",
+										)
+										.into(),
+										const_address(
+											"8KNqCBB1LKWbtjNxY9v2g1fSBKm2ZRgNNv7rmx2bE6Ce",
+										)
+										.into(),
+										const_address(
+											"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+										)
+										.into(),
+										const_address(
+											"Sysvar1nstructions1111111111111111111111111",
+										)
+										.into(),
+										const_address(
+											"FmAcjWaRFUxGWBfGT7G3CzcFeJFsewQ4KPJVG4f6fcob",
+										)
+										.into(),
+										const_address(
+											"3tJ67qa2GDfvv2wcMYNUfN5QBZrFpTwcU8ASZKMvCTVU",
+										)
+										.into(),
+										const_address(
+											"So11111111111111111111111111111111111111112",
+										)
+										.into(),
+										const_address(
+											"ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+										)
+										.into(),
+										const_address("11111111111111111111111111111111").into(),
+										const_address(
+											"AusZPVXPoUM8QJJ2SL4KwvRGCQ22cDg6Y4rg7EvFrxi7",
+										)
+										.into(),
+										const_address(
+											"J88B7gmadHzTNGiy54c9Ms8BsEXNdB2fntFyhKpk3qoT",
+										)
+										.into(),
+										const_address(
+											"9WuKqnyB4i7sFh2VkrPSW4dkJ3pB8wePQ9MeHEUudsvV",
+										)
+										.into(),
+										const_address(
+											"BDKywh4jrvMEFRUkX1bzK8JoyXBY7cmjaZh7bRFpMX4o",
+										)
+										.into(),
+										const_address(
+											"2sZp8mnaNZW5FLpbys4rG7RCpVWixmWydRyJmPzNgxi4",
+										)
+										.into(),
+										const_address(
+											"J4Afw1uLrnsQQwEUHQiPe71H3Y3gJQ1oZer5q1QBMViC",
+										)
+										.into(),
+										const_address(
+											"CCqwvHKHuUSRxxbV7RLSnSYt7XaFrQtFEmaVumLVNmJK",
+										)
+										.into(),
+										const_address(
+											"3bVqyf58hQHsxbjnqnSkopnoyEHB9v9KQwhZj7h1DucW",
+										)
+										.into(),
+										const_address(
+											"5iKkv5RTvHKzn4VdYLWu48dYsPz5tVniUEa3wHrG9hjB",
+										)
+										.into(),
+										const_address(
+											"3GGKqshYCGcnQKp6iNh8kb5nbZwtNKSbA9Y7H11eAgyU",
+										)
+										.into(),
+										const_address(
+											"A2mR1Ytk7R8kGvnRxVLTurZzGr9FwvD8A2ovt3ZRCwQS",
+										)
+										.into(),
+										const_address(
+											"HS6RiBAt9FbC62xJ6kLAH4ekpCW8ZE7HiuHZKNaUbk7a",
+										)
+										.into(),
+										const_address(
+											"14AwUr3FG75E66aaLy7jCbVGaxGCGLdqtpVyBNAFwKac",
+										)
+										.into(),
+										const_address(
+											"Gvn18oy3EZydPGmowvSZYVQSA3Tt1tpAF1D7sdS4oqmc",
+										)
+										.into(),
+										const_address(
+											"EGq7QuR2tjwEWTT2dqBgbH911cSzCQrosw5fawhv1Ynb",
+										)
+										.into(),
+										const_address(
+											"Hh4pQvB4CvyVsDf3HY2CPW7RXNihUKnnWdY6Q3Et7XC7",
+										)
+										.into(),
+										const_address(
+											"75iFAcFXJL2NUoAGdK4x2L3J6HzKGkphiQV4t7WBWRkG",
+										)
+										.into(),
+										const_address(
+											"F8Sje34REeRP7GenCkA6aWAaZr23MDd37sZnP95fnWUZ",
+										)
+										.into(),
+										const_address(
+											"441a8gL3LWFunH4FzmSvPdnXdSAf5uAk9G83UM3trSLs",
+										)
+										.into(),
+										const_address(
+											"9q3kbdHjAUvFtM7scz6FFoUZpQsPD6Ynv47hPcpaLHcg",
+										)
+										.into(),
+										const_address(
+											"DfhR7xCzGsFiEW35dNEEa28MiRx8ST2AENYLKRf7DQs1",
+										)
+										.into(),
+										const_address(
+											"DviGUYND6o5LsmBAcuVJDb3R5ZNwNs4PCieDCQ7W1oxG",
+										)
+										.into(),
+										const_address(
+											"FDVTwERCAq2X6GDczSmf8mg3Hk8G2Wsjupw75QjpryfM",
+										)
+										.into(),
+										const_address(
+											"5ibkrb5M6Kd2MYTfobY5oeLPp8QXKTnKJLKhqsVKXfWF",
+										)
+										.into(),
+										const_address(
+											"2dLkhYpCtmyXufU5msW3THSjmGGUTnAoziT3ukBTKQbu",
+										)
+										.into(),
+										const_address(
+											"Fzh6VuMyoQDj9it51joLf1zDV6GAzjqXE7aXUN7DDkDi",
+										)
+										.into(),
+										const_address(
+											"HnH4nSudUL7JAjtLrPxPX5adRFR7HJTtCkrA5d5NvLP3",
+										)
+										.into(),
+										const_address(
+											"7TpvwcE7tXuUkrYJ1JbVsq6r1bH3ea2i9nmEuZWXgBfp",
+										)
+										.into(),
+										const_address(
+											"FEzs883Xc3j6pk9e4Daox9Yd78h3Xxx9u9ub2GbdK4Fi",
+										)
+										.into(),
+										const_address(
+											"Cr9fHbshkweGk6z4DqVg1FG8dNoWfrgYrsJShpY4L15V",
+										)
+										.into(),
+										const_address(
+											"HdYL4KEULHN2NKunFPChcGFUYgvqpnZSkLUZUbta1ADj",
+										)
+										.into(),
+										const_address(
+											"82vjKymhRCzSTyULmYnoxXkB5WdH69WT3tVX5gPbap77",
+										)
+										.into(),
+										const_address(
+											"7kCR5ExCF9r9Tk84aqvXWvBWGv1r3X96W5XmiBbGE1yA",
+										)
+										.into(),
+										const_address(
+											"6oiAkK8o3KL3w8pbMJpv99jnuuNi57BdB6HqThjgkpB7",
+										)
+										.into(),
+										const_address(
+											"3rPs5e1risNQUY8Bh1HVUwFzs89qCGTGY7nvby12PHxt",
+										)
+										.into(),
+										const_address(
+											"GknzUHNX8qF3AsHY1dvdDMa2tN3Fua6kCkpKpLzvC7pc",
+										)
+										.into(),
+										const_address(
+											"6qMTRduNAJeofRhyxPNYK5LgaYgLsgBve3r7aH2Jg5BZ",
+										)
+										.into(),
+										const_address(
+											"9korXEj8h9o4GNwju9DTk8HCXKCQfafR5jB1a5gykjcF",
+										)
+										.into(),
+										const_address(
+											"EXvDJycst46TtzW4p2J6xzMJcAGoNDYno5fiCuxoNAMd",
+										)
+										.into(),
+										const_address(
+											"5w7Efx8GR1fJ1cKPgTsK7rzeu1T2VqfQXPNgtPfsKfW8",
+										)
+										.into(),
+										const_address(
+											"G4ntoKddtNrBu9TiAqBGmrboY54fCDDKg2S8M822xuwS",
+										)
+										.into(),
+										const_address(
+											"DW2en8bGK7C9yxtBaEniLbCaYm5hETG79LEsLK4cXCxs",
+										)
+										.into(),
+										const_address(
+											"4hXQXaS4nyGLS2LBV5Z4iWyAs61LP4DCTkr66oUV8qqk",
+										)
+										.into(),
+										const_address(
+											"3AprWhiw1EGF1SsayNbCQDj7DV5BZ9naRSBB2LS6GzAD",
+										)
+										.into(),
+										const_address(
+											"BL6h9KaC1RJZuAD7mK1TtwJXQJ5YQC3zcD9xEvWMguQ4",
+										)
+										.into(),
+										const_address(
+											"e8t1kzNkwvU7fczonysbGU6HkKuQSHKfDHWhACuH9VL",
+										)
+										.into(),
+										const_address(
+											"G29wnM1eQrHqZeV43GvrEf5RsK2VbjecnS94S7bCGSP3",
+										)
+										.into(),
+										const_address(
+											"DefhiKiD54tGa1LTpwM4LevYtUenGUi36UkBkQqAfvet",
+										)
+										.into(),
+										const_address(
+											"69HunmA67d16zAK14biGGAZMiMqn9qBJCfxcRAjJMm3E",
+										)
+										.into(),
+										const_address(
+											"8WawSHgiexniQ52H7KcxqaxQpknCYythW6ghPCfWfj62",
+										)
+										.into(),
+										const_address(
+											"GgtqYVQdaUj1k6WSnyYfEHUMy7Nf8jxze2jy8UenuNwE",
+										)
+										.into(),
+										const_address(
+											"6LihAbvnT46GXKfjqQaPPiB7nadusCrFyyY1Pe5A6m3W",
+										)
+										.into(),
+										const_address(
+											"CeTTyF33ZDijNs9MCCMZVtoUFi5WBFVmZVrEkhoWhiHc",
+										)
+										.into(),
+									],
 								),
 							),
 							cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
@@ -906,8 +1163,207 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for SolApiEnvironmentMigr
 
 		// Insert new nonces into storage
 		match cf_runtime_utilities::genesis_hashes::genesis_hash::<T>() {
-			// TODO: To add the right values
-			cf_runtime_utilities::genesis_hashes::BERGHAIN => (),
+			cf_runtime_utilities::genesis_hashes::BERGHAIN => {
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("Gvn18oy3EZydPGmowvSZYVQSA3Tt1tpAF1D7sdS4oqmc"),
+					const_hash("6UEw8EEzB4ttJgq3kJvFn1iLTk18KvSJ8Md1vxiEkZqt"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("EGq7QuR2tjwEWTT2dqBgbH911cSzCQrosw5fawhv1Ynb"),
+					const_hash("6S18X45DpiABYgSxCgVTukUokf3Q3ZemkD8NF1gFfCmz"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("Hh4pQvB4CvyVsDf3HY2CPW7RXNihUKnnWdY6Q3Et7XC7"),
+					const_hash("Dp6yaqEvMbsZuiL3E8jdyTqwSpwir5B42twjxLThR8oi"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("75iFAcFXJL2NUoAGdK4x2L3J6HzKGkphiQV4t7WBWRkG"),
+					const_hash("5xqqeUMSqpmQ1M5W2itgc47HQGoQLeV3uKZGoVECtUBX"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("F8Sje34REeRP7GenCkA6aWAaZr23MDd37sZnP95fnWUZ"),
+					const_hash("Cs35kXNUMCMgoqfdcTyKuRfqGVTbEGVDAwPZidsYgYyn"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("441a8gL3LWFunH4FzmSvPdnXdSAf5uAk9G83UM3trSLs"),
+					const_hash("DFoiT9qfUjMhxp4UgeTmfDj3iHTW8sGAPjKuPzusc6Vn"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("9q3kbdHjAUvFtM7scz6FFoUZpQsPD6Ynv47hPcpaLHcg"),
+					const_hash("DJ7BJaMyEyG8LUczagLPCdtQ6yGkv6wam1Gxqy1f99Y3"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("DfhR7xCzGsFiEW35dNEEa28MiRx8ST2AENYLKRf7DQs1"),
+					const_hash("AtVm1fT2qgxZTSdbj2st6u3AvbW25mzSvbpKt8YiZFDw"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("DviGUYND6o5LsmBAcuVJDb3R5ZNwNs4PCieDCQ7W1oxG"),
+					const_hash("JAPsKsCv2FquBzgVxw7hbHw7xJqm99zANCZFXrvd83GL"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("FDVTwERCAq2X6GDczSmf8mg3Hk8G2Wsjupw75QjpryfM"),
+					const_hash("5sHmsBrbBQqhJyZJRdDr7Mgf27XegeLCf9W1YwCKB1n2"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("5ibkrb5M6Kd2MYTfobY5oeLPp8QXKTnKJLKhqsVKXfWF"),
+					const_hash("4DAJ9Gt1DXoMUyuEbeWT4k5ms672TRWi5rLchoj9KRty"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("2dLkhYpCtmyXufU5msW3THSjmGGUTnAoziT3ukBTKQbu"),
+					const_hash("2bs5XUHdNQvH4zuDY19WasgmnpDKoHdRQ7LQk1W4Gv2M"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("Fzh6VuMyoQDj9it51joLf1zDV6GAzjqXE7aXUN7DDkDi"),
+					const_hash("CAVfhDy4[/vWjZ7TLAs92PTKRE5cywQDyKnex3XCD3pcYf"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("HnH4nSudUL7JAjtLrPxPX5adRFR7HJTtCkrA5d5NvLP3"),
+					const_hash("8QTuQLRST5bcpjy8yhqDsuDUA1m82VKW51wKqpUkbohF"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("7TpvwcE7tXuUkrYJ1JbVsq6r1bH3ea2i9nmEuZWXgBfp"),
+					const_hash("8xMcfW95iis3QmwRed29XDS5fPZSkRXGTJkkdLj43ZA3"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("FEzs883Xc3j6pk9e4Daox9Yd78h3Xxx9u9ub2GbdK4Fi"),
+					const_hash("H5mMuFNGbBmTnxRA1ngFqvqHFSStBfqNwwSF29LmRiaz"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("Cr9fHbshkweGk6z4DqVg1FG8dNoWfrgYrsJShpY4L15V"),
+					const_hash("71ypT5pKT5q6qfYFLjUBiYsAWKGYuyKka5X8db3oz26q"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("HdYL4KEULHN2NKunFPChcGFUYgvqpnZSkLUZUbta1ADj"),
+					const_hash("FZoG4f465iN96rVgGZ5rLEf9SqS3cVUifzMMk9enZ2Zr"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("82vjKymhRCzSTyULmYnoxXkB5WdH69WT3tVX5gPbap77"),
+					const_hash("8ZbEvSSWyi2DM3BEU8wYna17S3hp8N7vJbKPhzhurh6c"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("7kCR5ExCF9r9Tk84aqvXWvBWGv1r3X96W5XmiBbGE1yA"),
+					const_hash("2MWDZKzHjiugxprfnRLrVVc9nvEEMnu1k4EggPSUYNLn"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("6oiAkK8o3KL3w8pbMJpv99jnuuNi57BdB6HqThjgkpB7"),
+					const_hash("B5jYinLvxL8nELQtA746Nw73EyD4Fa6Hp7sDYQSQDssC"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("3rPs5e1risNQUY8Bh1HVUwFzs89qCGTGY7nvby12PHxt"),
+					const_hash("9ep23qh2YBYNR33WK1vJhGVCVER2CjjWa8kTYQdVfH4B"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("GknzUHNX8qF3AsHY1dvdDMa2tN3Fua6kCkpKpLzvC7pc"),
+					const_hash("Civh5UjRPVn5Gz2QGh9fmHQRBSoQB5PB7rsYW62xbUhw"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("6qMTRduNAJeofRhyxPNYK5LgaYgLsgBve3r7aH2Jg5BZ"),
+					const_hash("8WXexE58i5kdTeDJmsRzdWc3dHtRSZYnwxiF21m8HTnG"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("9korXEj8h9o4GNwju9DTk8HCXKCQfafR5jB1a5gykjcF"),
+					const_hash("HAN7Tn2CoKPpogEKDPfW5CCFEDqAdEUGWpfe55s5HPKu"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("EXvDJycst46TtzW4p2J6xzMJcAGoNDYno5fiCuxoNAMd"),
+					const_hash("8w2vHaXYibhTW7Y9AFJhLEmJS3xR4wvkASJ8CGUpuZ49"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("5w7Efx8GR1fJ1cKPgTsK7rzeu1T2VqfQXPNgtPfsKfW8"),
+					const_hash("ZV8Z1dgDHrPJocsqy9kPdHRMxHNfLzTBdEUNmCAJktP"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("G4ntoKddtNrBu9TiAqBGmrboY54fCDDKg2S8M822xuwS"),
+					const_hash("64oEUGLNVeEg8S8Y3NBUesNGUbps75tiChpQzb4E5rrQ"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("DW2en8bGK7C9yxtBaEniLbCaYm5hETG79LEsLK4cXCxs"),
+					const_hash("8JaGEpABTpsMehyUB4Rtsfjxf6oWJFTR6RKkMQexrKA1"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("4hXQXaS4nyGLS2LBV5Z4iWyAs61LP4DCTkr66oUV8qqk"),
+					const_hash("BVgTfnLxkedAouCu9aaadReDHsd4ibQu4tjPVxK73Y2n"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("3AprWhiw1EGF1SsayNbCQDj7DV5BZ9naRSBB2LS6GzAD"),
+					const_hash("2Bnj8PdTbGpgwQCGB3PySoXaS57gYhVWt3XoStYV1HBP"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("BL6h9KaC1RJZuAD7mK1TtwJXQJ5YQC3zcD9xEvWMguQ4"),
+					const_hash("e6pGcrkMnhBY1aLS1EzCJrSKtJED2dps2PPCYUCapB5"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("e8t1kzNkwvU7fczonysbGU6HkKuQSHKfDHWhACuH9VL"),
+					const_hash("A5outvSBwTVRL4wkwTxLGj2JM7nUv68afmvL44Dq6PEp"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("G29wnM1eQrHqZeV43GvrEf5RsK2VbjecnS94S7bCGSP3"),
+					const_hash("9B43eXxdApVRT4u129u3Qxp749H777JLtCeR5UTzncch"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("DefhiKiD54tGa1LTpwM4LevYtUenGUi36UkBkQqAfvet"),
+					const_hash("Brg5UziLTWU2ouxchyURSX53MTbRbYjoAFTCR2inyVr8"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("69HunmA67d16zAK14biGGAZMiMqn9qBJCfxcRAjJMm3E"),
+					const_hash("71UJG6yxZzV9QppATPReRqM7oNY1UbxJtaWgZa2koY3h"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("8WawSHgiexniQ52H7KcxqaxQpknCYythW6ghPCfWfj62"),
+					const_hash("3csxLEwWzMjWKNfHy1Rraym7QXNfpGunmgYNJckYc89n"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("GgtqYVQdaUj1k6WSnyYfEHUMy7Nf8jxze2jy8UenuNwE"),
+					const_hash("Goh4K5Y4TVbhyThuQRyAe1Ghh8gjMn9oujzejgupmz3w"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("6LihAbvnT46GXKfjqQaPPiB7nadusCrFyyY1Pe5A6m3W"),
+					const_hash("BvsLHsz8GnGdnpY6r8PZwp3w3FUrb6kpP5V2yNU2Jgcd"),
+				));
+
+				SolanaAvailableNonceAccounts::<T>::append((
+					const_address("CeTTyF33ZDijNs9MCCMZVtoUFi5WBFVmZVrEkhoWhiHc"),
+					const_hash("BRVa4YUgwLrXnJDiuRtBt8yihWA4PPchEMpMGopCPRtr"),
+				));
+			},
 			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => {
 				SolanaAvailableNonceAccounts::<T>::append((
 					const_address("CMLQg4VYFDaqe5qvNxAUCTE9NnNj8otKXzCevMtxfjLj"),
