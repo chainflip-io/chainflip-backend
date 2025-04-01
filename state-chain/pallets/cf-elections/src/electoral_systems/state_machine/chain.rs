@@ -49,6 +49,22 @@ impl<E: Clone> FlatChainProgression<E> {
     }
 }
 
+pub fn generate_leaf_block(
+	block_size: Range<usize>,
+    time_steps_per_block: RangeInclusive<usize>,
+    max_data_delay: usize,
+	max_drop: usize,
+	max_jump: usize,
+) -> impl Strategy<Value = Block> {
+	(0..=max_drop, 0..=max_jump, block_size, time_steps_per_block)
+		.prop_flat_map(move |(drop, jump, take, time_steps)| 
+            vec(0..max_data_delay, time_steps)
+                .prop_map(move |data_delays| {
+                    Block::Block { drop, jump, take, time_steps, data_delays }
+                })
+    )
+}
+
 /// First this function generates a chain,
 /// which is then filled with events
 pub fn generate_block(
@@ -61,13 +77,7 @@ pub fn generate_block(
 	max_drop: usize,
 	max_jump: usize,
 ) -> impl Strategy<Value = Block> {
-	let leaf = (0..=max_drop, 0..=max_jump, block_size, time_steps_per_block)
-		.prop_flat_map(move |(drop, jump, take, time_steps)| 
-            vec(0..max_data_delay, time_steps)
-                .prop_map(move |data_delays| {
-                    Block::Block { drop, jump, take, time_steps, data_delays }
-                })
-    );
+    let leaf = generate_leaf_block(block_size, time_steps_per_block, max_data_delay, max_drop, max_jump);
 	leaf.prop_recursive(max_fork_count, max_block_count, max_fork_length as u32, move |inner| {
 		vec(inner, 1..max_fork_length).prop_map(Block::Fork)
 	})
@@ -84,17 +94,19 @@ pub fn generate_blocks(
 	max_drop: usize,
 	max_jump: usize,
 ) -> impl Strategy<Value = Vec<Block>> {
+    let single = generate_block(
+        max_fork_count,
+        max_block_count,
+        max_fork_length,
+        block_size.clone(),
+        time_steps_per_block.clone(),
+        max_data_delay,
+        max_drop,
+        max_jump,
+    );
+    let forked = generate_leaf_block(block_size, time_steps_per_block, max_data_delay, max_drop, max_jump);
 	vec(
-		generate_block(
-			max_fork_count,
-			max_block_count,
-			max_fork_length,
-			block_size,
-            time_steps_per_block,
-            max_data_delay,
-			max_drop,
-			max_jump,
-		),
+        prop_oneof![single, forked],
 		0..=max_mainchain_length,
 	)
 }
@@ -194,7 +206,7 @@ pub fn make_events(len: usize) -> Vec<char> {
 #[test]
 pub fn test_test() {
 	let mut runner = TestRunner::default();
-	let filled_chain = generate_blocks(10, 4, 50, 4, 3..5, 0..=4, 2, 1, 2)
+	let filled_chain = generate_blocks(10, 4, 200, 4, 3..5, 10..=20, 2, 1, 2)
 		.prop_map(|block| {
 			let (cursor, consumed) = size(&block);
 			fill_blocks(&block, make_events(consumed + cursor))
