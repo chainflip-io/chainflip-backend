@@ -32,7 +32,7 @@ use crate::{
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolInstruction, SolPubkey,
 	},
-	CcmChannelMetadata,
+	CcmChannelMetadataUnchecked,
 };
 use cf_primitives::chains::assets::any::Asset;
 use sp_std::vec::Vec;
@@ -57,7 +57,7 @@ impl SolanaInstructionBuilder {
 		event_data_account: SolPubkey,
 		input_amount: SolAmount,
 		cf_parameters: Vec<u8>,
-		ccm: Option<CcmChannelMetadata>,
+		ccm: Option<CcmChannelMetadataUnchecked>,
 	) -> SolInstruction {
 		SwapEndpointProgram::with_id(api_environment.swap_endpoint_program).x_swap_native(
 			SwapNativeParams {
@@ -87,7 +87,7 @@ impl SolanaInstructionBuilder {
 		token_supported_account: SolPubkey,
 		input_amount: SolAmount,
 		cf_parameters: Vec<u8>,
-		ccm: Option<CcmChannelMetadata>,
+		ccm: Option<CcmChannelMetadataUnchecked>,
 	) -> SolInstruction {
 		SwapEndpointProgram::with_id(api_environment.swap_endpoint_program).x_swap_token(
 			SwapTokenParams {

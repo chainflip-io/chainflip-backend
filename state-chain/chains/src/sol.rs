@@ -33,9 +33,9 @@ use crate::{
 		},
 		AccountBump, SlotNumber,
 	},
-	AnyChainAsset, CcmAdditionalData, CcmChannelMetadata, CcmParams, ChannelRefundParameters,
-	DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator,
-	TypeInfo,
+	AnyChainAsset, CcmAdditionalData, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmParams,
+	ChannelRefundParameters, DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi,
+	FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{sp_runtime::RuntimeDebug, Parameter};
@@ -521,7 +521,7 @@ pub struct DecodedXSwapParams {
 	pub broker_id: cf_primitives::AccountId,
 	pub broker_commission: BasisPoints,
 	pub affiliate_fees: Vec<AffiliateAndFee>,
-	pub ccm: Option<CcmChannelMetadata>,
+	pub ccm: Option<CcmChannelMetadataUnchecked>,
 }
 
 pub fn decode_sol_instruction_data(

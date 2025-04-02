@@ -21,8 +21,9 @@ use sp_core::H256;
 
 #[track_caller]
 fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) {
-	let ccm_deposit_metadata = generate_ccm_deposit();
 	let output_address = (*EVM_OUTPUT_ADDRESS).clone();
+	let ccm_deposit_metadata =
+		generate_ccm_deposit().to_checked(output_asset, output_address.clone()).unwrap();
 	let encoded_output_address = MockAddressConverter::to_encoded_address(output_address.clone());
 	let origin = SwapOrigin::Vault {
 		tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
@@ -87,7 +88,7 @@ pub(super) fn assert_ccm_egressed(asset: Asset, swap_amount: AssetAmount, gas_bu
 			amount: swap_amount,
 			destination_address: (*EVM_OUTPUT_ADDRESS).clone(),
 			message: vec![0x01].try_into().unwrap(),
-			ccm_additional_data: vec![].try_into().unwrap(),
+			ccm_additional_data: Default::default(),
 			gas_budget,
 			swap_request_id: SWAP_REQUEST_ID,
 		},
@@ -104,7 +105,9 @@ fn can_process_ccms_via_swap_deposit_address() {
 		.execute_with(|| {
 			let request_ccm = generate_ccm_channel();
 
-			let ccm_deposit_metadata = generate_ccm_deposit();
+			let ccm_deposit_metadata = generate_ccm_deposit()
+				.to_checked(Asset::Eth, EVM_OUTPUT_ADDRESS.clone())
+				.unwrap();
 
 			let refund_params = ChannelRefundParametersEncoded {
 				retry_duration: 100,

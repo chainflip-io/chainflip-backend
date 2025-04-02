@@ -21,7 +21,7 @@ use crate::{
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, sol::Asset as SolAsset},
-	ccm_checker::{CcmValidityCheck, CcmValidityChecker},
+	ccm_checker::DecodedCcmAdditionalData,
 	instances::{ChainInstanceAlias, SolanaInstance},
 	sol::{
 		api::{
@@ -33,8 +33,8 @@ use cf_chains::{
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
 		SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
-	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParameters, FeeEstimationApi,
+	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, ForeignChainAddress, Solana,
 };
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, SwapRequestId};
 use cf_runtime_utilities::log_or_panic;
@@ -602,7 +602,7 @@ pub struct SolanaVaultSwapDetails {
 	pub to: Asset,
 	pub deposit_amount: SolAmount,
 	pub destination_address: EncodedAddress,
-	pub deposit_metadata: Option<CcmDepositMetadata>,
+	pub deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 	pub swap_account: SolAddress,
 	pub creation_slot: u64,
 	pub broker_fee: Beneficiary<AccountId>,
@@ -707,15 +707,12 @@ impl FromSolOrNot for SolanaVaultSwapDetails {
 pub struct SolanaAltWitnessingHandler;
 impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 	fn initiate_alt_witnessing(
-		ccm_channel_metadata: CcmChannelMetadata,
+		ccm_additional_data: DecodedCcmAdditionalData,
 		swap_request_id: SwapRequestId,
 	) {
 		use sp_std::vec;
-		match CcmValidityChecker::decode_unchecked(
-			ccm_channel_metadata.ccm_additional_data,
-			ForeignChain::Solana,
-		) {
-			Ok(crate::DecodedCcmAdditionalData::Solana(versioned_ccm_data)) => {
+		match ccm_additional_data {
+			DecodedCcmAdditionalData::Solana(versioned_ccm_data) => {
 				let alt_addresses = versioned_ccm_data.address_lookup_tables();
 				if !alt_addresses.is_empty() {
 					pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(
@@ -729,19 +726,25 @@ impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
 							>(SolanaAltWitnessingIdentifier {
 								alt_addresses,
 								swap_request_id,
-								election_expiry_block_number: crate::System::block_number() + EXPIRY_TIME_FOR_ALT_ELECTIONS,
+								election_expiry_block_number: crate::System::block_number() +
+									EXPIRY_TIME_FOR_ALT_ELECTIONS,
 							})
 						},
 					)
-					.unwrap_or_else(|e| {log::error!("Cannot start Solana ALT witnessing election: {:?}", e);}) //The error should not happen as long as the election identifiers dont overflow and
-					 // the electoral system is initialized
+					.unwrap_or_else(|e| {
+						log::error!("Cannot start Solana ALT witnessing election: {:?}", e);
+					}) //The error should not happen as long as the election identifiers dont overflow
+				 // and the electoral system is initialized
 				} else {
-					Environment::add_sol_ccm_swap_alts(swap_request_id, AltConsensusResult::ValidConsensusAlts(vec![]));
+					Environment::add_sol_ccm_swap_alts(
+						swap_request_id,
+						AltConsensusResult::ValidConsensusAlts(vec![]),
+					);
 				}
 			},
-			// This should never happen since the same ccm validity check has been done while opening the channel.
-			Err(e) => log::error!("Ccm Check failed while decoding ccm_additional_data while initiating Solana ALT witnessing: {:?}", e),
-			_ => {},
+			_ => {
+				log_or_panic!("Invalid CCM data type for Solana alt witnessing");
+			},
 		}
 	}
 }
