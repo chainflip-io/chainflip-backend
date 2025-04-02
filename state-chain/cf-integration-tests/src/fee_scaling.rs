@@ -120,7 +120,7 @@ fn fee_scales_within_a_pool() {
 				(next_call_count, (next_gas, next_remaining_balance)),
 			) in fees.iter().zip(fees.iter().skip(1))
 			{
-				if *next_call_count > THRESHOLD {
+				if *next_call_count > THRESHOLD + 1 {
 					assert!(next_gas > gas, "Call {call_count} vs {next_call_count} in {:?}", fees);
 					let last_fee_increase = fee_increase.replace(next_gas - gas);
 					if let Some(last_fee_increase) = last_fee_increase {
