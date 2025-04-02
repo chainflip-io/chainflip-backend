@@ -3,7 +3,7 @@ use crate::{
 		retry_rpc::BtcRetryRpcClient,
 		rpc::{BlockHeader, BtcRpcApi, VerboseBlock},
 	},
-	caching_client::CachingRequest,
+	caching_request::CachingRequest,
 };
 use bitcoin::{BlockHash, Txid};
 use cf_chains::btc::{BlockNumber, BtcAmount};
@@ -67,7 +67,7 @@ impl BtcCachingClient {
 impl BtcRpcApi for BtcCachingClient {
 	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock> {
 		self.block
-			.get(
+			.get_or_fetch(
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block(block_hash).await })
@@ -79,7 +79,7 @@ impl BtcRpcApi for BtcCachingClient {
 
 	async fn block_hash(&self, block_number: BlockNumber) -> anyhow::Result<BlockHash> {
 		self.block_hash
-			.get(
+			.get_or_fetch(
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_hash(block_number).await })
@@ -92,7 +92,7 @@ impl BtcRpcApi for BtcCachingClient {
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
 		let transaction_bytess = transaction_bytes.clone();
 		self.send_raw_transaction
-			.get(
+			.get_or_fetch(
 				Box::pin(move |client| {
 					let transaction_bytes = transaction_bytes.clone();
 					#[allow(clippy::redundant_async_block)]
@@ -105,7 +105,7 @@ impl BtcRpcApi for BtcCachingClient {
 
 	async fn next_block_fee_rate(&self) -> anyhow::Result<Option<BtcAmount>> {
 		self.next_block_fee
-			.get(
+			.get_or_fetch(
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.next_block_fee_rate().await })
@@ -117,7 +117,7 @@ impl BtcRpcApi for BtcCachingClient {
 
 	async fn average_block_fee_rate(&self, block_hash: BlockHash) -> anyhow::Result<BtcAmount> {
 		self.avg_fee_rate
-			.get(
+			.get_or_fetch(
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.average_block_fee_rate(block_hash).await })
@@ -129,7 +129,7 @@ impl BtcRpcApi for BtcCachingClient {
 
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash> {
 		self.best_block_hash
-			.get(
+			.get_or_fetch(
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.best_block_hash().await })
@@ -141,7 +141,7 @@ impl BtcRpcApi for BtcCachingClient {
 
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader> {
 		self.block_header
-			.get(
+			.get_or_fetch(
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_header(block_hash).await })

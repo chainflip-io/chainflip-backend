@@ -7,7 +7,7 @@ use tokio::{
 	time::timeout,
 };
 
-const MAX_DURATION: Duration = Duration::new(30, 0);
+const MAX_WAIT_TIME_FOR_REQUEST: Duration = Duration::new(6, 0);
 
 type PinBoxedFuture<ResultType> =
 	Pin<Box<dyn Future<Output = Result<ResultType, anyhow::Error>> + Send>>;
@@ -58,25 +58,23 @@ impl<
 								}
 								if let Some(senders) = in_flight.remove(&key) {
 									for sender in senders {
-										let to_send = match &value {
+										let _ = sender.send(match &value {
 											Ok(val) => Ok(val.clone()),
 											Err(e) => Err(anyhow::anyhow!(e.to_string())),
-										};
-										let _ = sender.send(to_send);
+										});
 									}
 								}
 							},
-							Some((future, request_key, sender)) = request_receiver.recv() => {
+							Some((future, request_key, result_to_caller_sender)) = request_receiver.recv() => {
 								if let Some(value) = cache.get(&request_key)  {
-										let _ = sender.send(Ok(value.clone()));
+										let _ = result_to_caller_sender.send(Ok(value.clone()));
 								} else if let Some(result_senders) = in_flight.get_mut(&request_key) {
-									result_senders.push(sender);
+									result_senders.push(result_to_caller_sender);
 								} else {
-									let sender_result = cache_sender.clone();
-									in_flight.insert(request_key.clone(), vec![sender]);
+									let result_to_cache_sender = cache_sender.clone();
+									in_flight.insert(request_key.clone(), vec![result_to_caller_sender]);
 									scope.spawn(async move {
-										let result = future.await;
-										let _ = sender_result.send((request_key, result));
+										let _ = result_to_cache_sender.send((request_key, future.await));
 										Ok(())
 									})
 								}
@@ -92,7 +90,7 @@ impl<
 		(Self { request_sender, client }, cache_invalidation_sender)
 	}
 
-	pub(crate) async fn get(
+	pub(crate) async fn get_or_fetch(
 		&self,
 		future: TypedFutureGenerator<ResultType, Client>,
 		key: Key,
@@ -101,23 +99,24 @@ impl<
 		let client = self.client.clone();
 		let future = future(client);
 		self.request_sender.send((future, key, tx)).unwrap();
-		let result = timeout(MAX_DURATION, rx).await???;
+		let result = timeout(MAX_WAIT_TIME_FOR_REQUEST, rx).await???;
 		Ok(result)
 	}
 }
 
 #[cfg(test)]
 mod test {
-	use crate::caching_client::CachingRequest;
+	use crate::caching_request::CachingRequest;
 	use anyhow::Error;
 	use cf_utilities::task_scope::{task_scope, Scope};
 	use futures_util::FutureExt;
 	use rand::random;
+	use serial_test::serial;
 	use std::{
 		sync::atomic::{AtomicU32, Ordering},
 		time::Duration,
 	};
-	use tokio::time::sleep;
+	use tokio::{time::sleep, try_join};
 
 	static A: AtomicU32 = AtomicU32::new(0);
 
@@ -128,23 +127,25 @@ mod test {
 	struct Client {}
 	impl Rpc for Client {
 		async fn a(&self) -> anyhow::Result<u32> {
-			sleep(Duration::new(1, 0)).await;
+			sleep(Duration::new(2, 0)).await;
 			A.fetch_add(1, Ordering::Relaxed);
 			Ok(random::<u32>())
 		}
 	}
 
 	#[tokio::test]
-	async fn internal_client_called_once() {
+	#[serial]
+	async fn result_in_cache_internal_client_called_once() {
 		task_scope(|scope: &Scope<'_, Error>| {
 			async {
 				let client = Client::default();
+				A.store(0, Ordering::Relaxed);
 
 				let (caching_client, _) =
 					CachingRequest::<(), u32, Client>::new(scope, client.clone());
 
-				let result = caching_client
-					.get(
+				let result1 = caching_client
+					.get_or_fetch(
 						Box::pin(move |client| {
 							#[allow(clippy::redundant_async_block)]
 							Box::pin(async move { client.a().await })
@@ -153,8 +154,9 @@ mod test {
 					)
 					.await
 					.unwrap();
+				// After the first request completes, result is stored in cache
 				let result2 = caching_client
-					.get(
+					.get_or_fetch(
 						Box::pin(move |client| {
 							#[allow(clippy::redundant_async_block)]
 							Box::pin(async move { client.a().await })
@@ -165,7 +167,7 @@ mod test {
 					.unwrap();
 
 				// without cache invalidation the result get cached and a() is called only once
-				assert_eq!(result, result2);
+				assert_eq!(result1, result2);
 				assert_eq!(A.load(Ordering::Relaxed), 1);
 				Ok(())
 			}
@@ -176,16 +178,57 @@ mod test {
 	}
 
 	#[tokio::test]
+	#[serial]
+	async fn request_in_flight_internal_client_called_once() {
+		task_scope(|scope: &Scope<'_, Error>| {
+			async {
+				let client = Client::default();
+				A.store(0, Ordering::Relaxed);
+
+				let (caching_client, _) =
+					CachingRequest::<(), u32, Client>::new(scope, client.clone());
+
+				let future1 = caching_client.get_or_fetch(
+					Box::pin(move |client| {
+						#[allow(clippy::redundant_async_block)]
+						Box::pin(async move { client.a().await })
+					}),
+					(),
+				);
+				let future2 = caching_client.get_or_fetch(
+					Box::pin(move |client| {
+						#[allow(clippy::redundant_async_block)]
+						Box::pin(async move { client.a().await })
+					}),
+					(),
+				);
+				// we will start both request simultaneously such that the request is still in
+				// flight
+				let (result1, result2) = try_join!(future1, future2)?;
+
+				assert_eq!(result1, result2);
+				assert_eq!(A.load(Ordering::Relaxed), 1);
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	#[serial]
 	async fn cache_invalidation() {
 		task_scope(|scope: &Scope<'_, Error>| {
 			async {
 				let client = Client::default();
+				A.store(0, Ordering::Relaxed);
 
 				let (caching_client, cache_invalidation_sender) =
 					CachingRequest::<(), u32, Client>::new(scope, client.clone());
 
 				let result = caching_client
-					.get(
+					.get_or_fetch(
 						Box::pin(move |client| {
 							#[allow(clippy::redundant_async_block)]
 							Box::pin(async move { client.a().await })
@@ -198,7 +241,7 @@ mod test {
 				cache_invalidation_sender.send(()).await.unwrap();
 
 				let result2 = caching_client
-					.get(
+					.get_or_fetch(
 						Box::pin(move |client| {
 							#[allow(clippy::redundant_async_block)]
 							Box::pin(async move { client.a().await })

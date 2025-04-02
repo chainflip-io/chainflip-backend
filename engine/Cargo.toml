@@ -136,6 +136,7 @@ cf-utilities = { workspace = true, default-features = true, features = [
   "test-utils",
 ] }
 serde_path_to_error = { workspace = true }
+serial_test = "3.2.0"
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

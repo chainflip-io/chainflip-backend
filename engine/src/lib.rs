@@ -15,10 +15,10 @@ pub mod retrier;
 pub mod settings;
 pub mod state_chain_observer;
 pub mod witness;
+mod caching_request;
 
 // Blockchains
 pub mod btc;
-mod caching_client;
 pub mod dot;
 pub mod evm;
 pub mod sol;
