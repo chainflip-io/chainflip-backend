@@ -944,8 +944,8 @@ pub mod pallet {
 		use cf_traits::EpochInfo;
 		use codec::{Decode, Encode};
 		use frame_system::pallet_prelude::BlockNumberFor;
-		use scale_info::TypeInfo;
 		use generic_typeinfo_derive::GenericTypeInfo;
+		use scale_info::TypeInfo;
 		use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 		#[derive(Encode, Decode, GenericTypeInfo)]
