@@ -33,7 +33,8 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
+	CcmChannelMetadata, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
+	CcmDepositMetadataUnchecked, ChannelRefundParameters, DepositChannel, DepositOriginType,
 	ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin, TransactionInIdForAnyChain,
 	TransferAssetParams,
 };
@@ -149,10 +150,10 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
+			channel_metadata: CcmChannelMetadataChecked {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: 1_000,
-				ccm_additional_data: vec![].try_into().unwrap(),
+				ccm_additional_data: Default::default(),
 			},
 		};
 
@@ -523,7 +524,7 @@ fn can_egress_ccm() {
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
+			channel_metadata: CcmChannelMetadataUnchecked {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: GAS_BUDGET,
 				ccm_additional_data: vec![].try_into().unwrap(),
@@ -535,7 +536,7 @@ fn can_egress_ccm() {
 			destination_asset,
 			amount,
 			destination_address,
-			Some(ccm.clone()), Some(SOME_SWAP_REQUEST_ID)
+			Some(ccm.clone().to_checked(destination_asset.into(), ForeignChainAddress::Eth(destination_address)).unwrap()), Some(SOME_SWAP_REQUEST_ID)
 		).expect("Egress should succeed");
 
 		assert!(ScheduledEgressFetchOrTransfer::<Test, ()>::get().is_empty());
@@ -546,7 +547,7 @@ fn can_egress_ccm() {
 				amount,
 				destination_address,
 				message: ccm.channel_metadata.message.clone(),
-				ccm_additional_data: vec![].try_into().unwrap(),
+				ccm_additional_data: Default::default(),
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				gas_budget: GAS_BUDGET,
@@ -567,7 +568,7 @@ fn can_egress_ccm() {
 			ccm.source_address,
 			GAS_BUDGET,
 			ccm.channel_metadata.message.to_vec(),
-			vec![],
+			Default::default(),
 		).unwrap()]);
 
 		// Storage should be cleared
@@ -1850,7 +1851,7 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 		const EXCESS_CCMS: usize = 1;
 		let ccm_limits = MockFetchesTransfersLimitProvider::maybe_ccm_limit().unwrap();
 
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmDepositMetadataUnchecked {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
@@ -1858,7 +1859,9 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 				gas_budget: 1_000,
 				ccm_additional_data: vec![].try_into().unwrap(),
 			},
-		};
+		}
+		.to_checked(ETH_ETH.into(), ForeignChainAddress::Eth(ALICE_ETH_ADDRESS))
+		.unwrap();
 
 		for _ in 1..=ccm_limits + EXCESS_CCMS {
 			assert_ok!(IngressEgress::schedule_egress(
@@ -1898,7 +1901,7 @@ fn submit_vault_swap_request(
 	deposit_amount: AssetAmount,
 	deposit_address: H160,
 	destination_address: EncodedAddress,
-	deposit_metadata: Option<CcmDepositMetadata>,
+	deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 	tx_id: H256,
 	deposit_details: DepositDetails,
 	broker_fee: Beneficiary<u64>,
@@ -2151,8 +2154,10 @@ fn can_request_ccm_swap_via_extrinsic() {
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular {
 					output_action: SwapOutputAction::Egress {
-						output_address,
-						ccm_deposit_metadata: Some(ccm_deposit_metadata)
+						output_address: output_address.clone(),
+						ccm_deposit_metadata: Some(
+							ccm_deposit_metadata.to_checked(OUTPUT_ASSET, output_address).unwrap()
+						)
 					}
 				},
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],

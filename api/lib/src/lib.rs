@@ -19,7 +19,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
-use cf_chains::{evm::to_evm_address, CcmChannelMetadata};
+use cf_chains::{evm::to_evm_address, CcmChannelMetadataUnchecked};
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_rpc_types::RedemptionAmount;
@@ -349,7 +349,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,

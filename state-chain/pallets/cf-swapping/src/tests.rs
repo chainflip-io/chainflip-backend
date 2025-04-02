@@ -34,7 +34,8 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	dot::PolkadotAccountId,
 	evm::H256,
-	AnyChain, CcmChannelMetadata, CcmDepositMetadata, Ethereum, TransactionInIdForAnyChain,
+	AnyChain, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata,
+	CcmDepositMetadataUnchecked, Ethereum, TransactionInIdForAnyChain,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
@@ -218,7 +219,15 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 
 fn insert_swaps(swaps: &[TestSwapParams]) {
 	for (broker_id, swap) in swaps.iter().enumerate() {
-		let ccm_deposit_metadata = if swap.is_ccm { Some(generate_ccm_deposit()) } else { None };
+		let ccm_deposit_metadata = if swap.is_ccm {
+			Some(
+				generate_ccm_deposit()
+					.to_checked(swap.output_asset, swap.output_address.clone())
+					.unwrap(),
+			)
+		} else {
+			None
+		};
 
 		let request_type = SwapRequestType::Regular {
 			output_action: SwapOutputAction::Egress {
@@ -243,14 +252,14 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 	}
 }
 
-fn generate_ccm_channel() -> CcmChannelMetadata {
+fn generate_ccm_channel() -> CcmChannelMetadataUnchecked {
 	CcmChannelMetadata {
 		message: vec![0x01].try_into().unwrap(),
 		gas_budget: GAS_BUDGET,
 		ccm_additional_data: Default::default(),
 	}
 }
-fn generate_ccm_deposit() -> CcmDepositMetadata {
+fn generate_ccm_deposit() -> CcmDepositMetadataUnchecked<ForeignChainAddress> {
 	CcmDepositMetadata {
 		source_chain: ForeignChain::Ethereum,
 		source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
@@ -684,7 +693,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 	new_test_ext()
 		.execute_with(|| {
 			let eth_address = ForeignChainAddress::Eth(Default::default());
-			let ccm = generate_ccm_deposit();
+			let ccm = generate_ccm_deposit().to_checked(OUTPUT_ASSET, eth_address.clone()).unwrap();
 
 			Swapping::init_swap_request(
 				INPUT_ASSET,

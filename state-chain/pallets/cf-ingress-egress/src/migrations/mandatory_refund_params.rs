@@ -20,12 +20,24 @@ pub struct Migration<T, I>(sp_std::marker::PhantomData<(T, I)>);
 
 mod old {
 	use crate::{
-		Asset, BasisPoints, Beneficiaries, BoostStatus, CcmChannelMetadata,
-		ChannelRefundParameters, Config, DcaParameters, DepositChannel, ForeignChainAddress,
-		TargetChainAmount, TargetChainBlockNumber,
+		Asset, BasisPoints, Beneficiaries, BoostStatus, ChannelRefundParameters, Config,
+		DcaParameters, DepositChannel, ForeignChainAddress, TargetChainAmount,
+		TargetChainBlockNumber,
 	};
 
+	use cf_chains::{CcmChannelMetadataUnchecked, CcmMessage, MAX_CCM_ADDITIONAL_DATA_LENGTH};
+	use cf_primitives::GasAmount;
+
 	use frame_support::pallet_prelude::*;
+
+	pub type CcmAdditionalData = BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>;
+
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub struct CcmChannelMetadata {
+		pub message: CcmMessage,
+		pub gas_budget: GasAmount,
+		pub ccm_additional_data: CcmAdditionalData,
+	}
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
@@ -67,9 +79,21 @@ mod old {
 					dca_params,
 				} => crate::ChannelAction::Swap {
 					destination_asset,
-					destination_address,
+					destination_address: destination_address.clone(),
 					broker_fees,
-					channel_metadata,
+					// Map all metadata into Checked metadata assuming All `ccm_additional_data` is
+					// valid.
+					channel_metadata: channel_metadata
+						.map(|metadata| {
+							CcmChannelMetadataUnchecked {
+								message: metadata.message,
+								gas_budget: metadata.gas_budget,
+								ccm_additional_data: metadata.ccm_additional_data.into(),
+							}
+							.to_checked(destination_asset, destination_address)
+						})
+						.transpose()
+						.unwrap_or_default(),
 					refund_params: refund_params.ok_or(())?,
 					dca_params,
 				},

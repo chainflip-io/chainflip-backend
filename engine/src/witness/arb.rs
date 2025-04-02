@@ -22,7 +22,7 @@ use cf_chains::{
 	address::EncodedAddress,
 	cf_parameters::VaultSwapParameters,
 	evm::{DepositDetails, H256},
-	Arbitrum, CcmDepositMetadata,
+	Arbitrum, CcmDepositMetadataUnchecked, ForeignChainAddress,
 };
 use cf_primitives::{chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount, EpochIndex};
 use cf_utilities::task_scope::Scope;
@@ -206,7 +206,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		deposit_metadata: Option<CcmDepositMetadata>,
+		deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 		tx_id: H256,
 		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
 	) -> state_chain_runtime::RuntimeCall {

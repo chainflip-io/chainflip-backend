@@ -30,6 +30,7 @@ use crate::{
 		SolanaCrypto, SolanaTransactionInId,
 	},
 };
+use ccm_checker::{CcmValidityChecker, CcmValidityError, DecodedCcmAdditionalData};
 use core::{fmt::Display, iter::Step};
 use sol::api::VaultSwapAccountAndSender;
 use sp_std::marker::PhantomData;
@@ -41,7 +42,7 @@ use address::{
 };
 use cf_amm_math::Price;
 use cf_primitives::{
-	AssetAmount, BlockNumber, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId,
+	Asset, AssetAmount, BlockNumber, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -607,7 +608,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: GasAmount,
 		message: Vec<u8>,
-		ccm_additional_data: Vec<u8>,
+		ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
@@ -728,7 +729,50 @@ pub const MAX_CCM_MSG_LENGTH: u32 = 15_000;
 pub const MAX_CCM_ADDITIONAL_DATA_LENGTH: u32 = 3_000;
 
 pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
-pub type CcmAdditionalData = BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>;
+
+#[derive(
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+)]
+pub struct CcmAdditionalData(
+	#[cfg_attr(
+		feature = "std",
+		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
+	)]
+	pub BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>,
+);
+
+impl From<BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>> for CcmAdditionalData {
+	fn from(bytes: BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>) -> Self {
+		Self(bytes)
+	}
+}
+
+impl TryFrom<Vec<u8>> for CcmAdditionalData {
+	type Error =
+		<BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>> as TryFrom<Vec<u8>>>::Error;
+
+	fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+		Ok(Self(BoundedVec::try_from(value)?))
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for CcmAdditionalData {
+	fn benchmark_value() -> Self {
+		Self::default()
+	}
+}
 
 #[cfg(feature = "std")]
 mod bounded_hex {
@@ -772,7 +816,7 @@ mod bounded_hex {
 	PartialOrd,
 	Ord,
 )]
-pub struct CcmChannelMetadata {
+pub struct CcmChannelMetadata<AdditionalData> {
 	/// Call data used after the message is egressed.
 	#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
 	pub message: CcmMessage,
@@ -780,15 +824,31 @@ pub struct CcmChannelMetadata {
 	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::number_or_hex"))]
 	pub gas_budget: GasAmount,
 	/// Additional parameters for the cross chain message.
-	#[cfg_attr(
-		feature = "std",
-		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
-	)]
-	pub ccm_additional_data: CcmAdditionalData,
+	pub ccm_additional_data: AdditionalData,
+}
+impl CcmChannelMetadataUnchecked {
+	pub fn to_checked(
+		self,
+		egress_asset: Asset,
+		destination_address: ForeignChainAddress,
+	) -> Result<CcmChannelMetadataChecked, CcmValidityError> {
+		Ok(CcmChannelMetadata {
+			message: self.message.clone(),
+			gas_budget: self.gas_budget,
+			ccm_additional_data: CcmValidityChecker::check_and_decode(
+				&self,
+				egress_asset,
+				destination_address,
+			)?,
+		})
+	}
 }
 
+pub type CcmChannelMetadataUnchecked = CcmChannelMetadata<CcmAdditionalData>;
+pub type CcmChannelMetadataChecked = CcmChannelMetadata<DecodedCcmAdditionalData>;
+
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for CcmChannelMetadata {
+impl<D: BenchmarkValue> BenchmarkValue for CcmChannelMetadata<D> {
 	fn benchmark_value() -> Self {
 		Self {
 			message: BenchmarkValue::benchmark_value(),
@@ -798,23 +858,25 @@ impl BenchmarkValue for CcmChannelMetadata {
 	}
 }
 
-impl From<CcmChannelMetadata> for CcmParams {
-	fn from(ccm: crate::CcmChannelMetadata) -> Self {
+impl<T> From<CcmChannelMetadata<T>> for CcmParams {
+	fn from(ccm: CcmChannelMetadata<T>) -> Self {
 		CcmParams { message: ccm.message.to_vec(), gas_amount: ccm.gas_budget as u64 }
 	}
 }
 
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord, Serialize, Deserialize,
 )]
-pub struct CcmDepositMetadataGeneric<Address> {
-	pub channel_metadata: CcmChannelMetadata,
+pub struct CcmDepositMetadata<Address, AdditionalData> {
+	pub channel_metadata: CcmChannelMetadata<AdditionalData>,
 	pub source_chain: ForeignChain,
 	pub source_address: Option<Address>,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<Address: BenchmarkValue> BenchmarkValue for CcmDepositMetadataGeneric<Address> {
+impl<Address: BenchmarkValue, AdditionalData: BenchmarkValue> BenchmarkValue
+	for CcmDepositMetadata<Address, AdditionalData>
+{
 	fn benchmark_value() -> Self {
 		Self {
 			channel_metadata: BenchmarkValue::benchmark_value(),
@@ -824,15 +886,33 @@ impl<Address: BenchmarkValue> BenchmarkValue for CcmDepositMetadataGeneric<Addre
 	}
 }
 
-pub type CcmDepositMetadata = CcmDepositMetadataGeneric<ForeignChainAddress>;
-pub type CcmDepositMetadataEncoded = CcmDepositMetadataGeneric<EncodedAddress>;
+pub type CcmDepositMetadataUnchecked<Address> = CcmDepositMetadata<Address, CcmAdditionalData>;
+pub type CcmDepositMetadataChecked<Address> = CcmDepositMetadata<Address, DecodedCcmAdditionalData>;
 
-impl CcmDepositMetadata {
-	pub fn to_encoded<Converter: AddressConverter>(self) -> CcmDepositMetadataEncoded {
-		CcmDepositMetadataEncoded {
-			source_address: self.source_address.map(Converter::to_encoded_address),
+impl<A> CcmDepositMetadata<A, CcmAdditionalData> {
+	pub fn to_checked(
+		self,
+		egress_asset: Asset,
+		destination_address: ForeignChainAddress,
+	) -> Result<CcmDepositMetadata<A, DecodedCcmAdditionalData>, CcmValidityError> {
+		Ok(CcmDepositMetadata {
+			source_address: self.source_address,
+			channel_metadata: self
+				.channel_metadata
+				.to_checked(egress_asset, destination_address)?,
+			source_chain: self.source_chain,
+		})
+	}
+}
+
+impl<AdditionalData> CcmDepositMetadata<ForeignChainAddress, AdditionalData> {
+	pub fn to_encoded<Converter: AddressConverter>(
+		self,
+	) -> CcmDepositMetadata<EncodedAddress, AdditionalData> {
+		CcmDepositMetadata {
 			channel_metadata: self.channel_metadata,
 			source_chain: self.source_chain,
+			source_address: self.source_address.map(Converter::to_encoded_address),
 		}
 	}
 }

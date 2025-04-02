@@ -42,12 +42,12 @@ use cf_chains::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
 	},
 	assets::any::GetChainAssetMap,
-	ccm_checker::CcmValidityCheck,
-	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
-	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
-	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
-	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
+	ccm_checker::DecodedCcmAdditionalData,
+	AllBatch, AllBatchError, CcmChannelMetadataChecked, CcmDepositMetadata,
+	CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, CcmMessage, Chain, ChainCrypto,
+	ChannelLifecycleHooks, ChannelRefundParameters, ChannelRefundParametersDecoded,
+	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
+	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall, SwapOrigin,
 	TransferAssetParams,
 };
@@ -270,11 +270,9 @@ pub struct CrossChainMessage<C: Chain> {
 	pub amount: C::ChainAmount,
 	pub destination_address: C::ChainAccount,
 	pub message: CcmMessage,
-	// The sender of the deposit transaction.
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
-	// Where funds might be returned to if the message fails.
-	pub ccm_additional_data: CcmAdditionalData,
+	pub ccm_additional_data: DecodedCcmAdditionalData,
 	pub gas_budget: GasAmount,
 }
 
@@ -384,7 +382,9 @@ where
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{address::EncodedAddress, ExecutexSwapAndCall, TransferFallback};
+	use cf_chains::{
+		address::EncodedAddress, CcmChannelMetadataChecked, ExecutexSwapAndCall, TransferFallback,
+	};
 	use cf_primitives::{BroadcastId, EpochIndex};
 	use cf_traits::{OnDeposit, SwapLimitsProvider};
 	use core::marker::PhantomData;
@@ -429,7 +429,9 @@ pub mod pallet {
 		// value can be populated by the submitter of the vault deposit and is not verified
 		// in the engine, so we need to verify on-chain.
 		pub destination_address: EncodedAddress,
-		pub deposit_metadata: Option<CcmDepositMetadata>,
+		// Here, the `source_address` within the CCM Metadata is populated by the engines, so we
+		// can use ForeignChainAddress here.
+		pub deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 		pub tx_id: TransactionInIdFor<T, I>,
 		pub broker_fee: Option<Beneficiary<T::AccountId>>,
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
@@ -479,14 +481,16 @@ pub mod pallet {
 		pub fees_withheld: TargetChainAmount<T, I>,
 	}
 
-	/// Determines the action to take when a deposit is made to a channel.
+	/// Determines the action to take when a deposit is made to a
+	/// channel.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[allow(clippy::large_enum_variant)]
 	pub enum ChannelAction<AccountId> {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadataChecked>,
 			refund_params: ChannelRefundParameters<ForeignChainAddress>,
 			dca_params: Option<DcaParameters>,
 		},
@@ -629,9 +633,6 @@ pub mod pallet {
 		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
 
 		type SolanaAltWitnessingHandler: InitiateSolanaAltWitnessing;
-
-		/// For checking if the CCM message passed in is valid.
-		type CcmValidityChecker: CcmValidityCheck;
 
 		type AffiliateRegistry: AffiliateRegistry<AccountId = Self::AccountId>;
 
@@ -1766,7 +1767,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.source_address.clone(),
 				ccm.gas_budget,
 				ccm.message.clone().to_vec(),
-				ccm.ccm_additional_data.clone().to_vec(),
+				ccm.ccm_additional_data.clone(),
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -1789,36 +1790,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						error,
 					});
 
-					if let Ok(decoded_data) = T::CcmValidityChecker::decode_unchecked(
-						ccm.ccm_additional_data.clone(),
-						T::TargetChain::get(),
-					) {
-						if let Some(fallback_address) =
-							decoded_data.refund_address::<T::TargetChain>()
-						{
-							match Self::schedule_egress(
-								ccm.asset,
-								ccm.amount,
-								fallback_address.clone(),
-								None,
-								None,
-							) {
-								Ok(egress_details) =>
-									Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
-										asset: ccm.asset,
-										amount: egress_details.egress_amount,
-										destination_address: fallback_address,
-									}),
-								Err(e) => log::warn!(
-									"Cannot refund failed Ccm: failed to Egress. Error: {:?}",
-									e
-								),
-							};
-						}
-					} else {
-						log::warn!(
-							"Cannot refund failed Ccm: failed to decode `ccm_additional_data`."
-						);
+					if let Some(fallback_address) =
+						ccm.ccm_additional_data.refund_address::<T::TargetChain>()
+					{
+						match Self::schedule_egress(
+							ccm.asset,
+							ccm.amount,
+							fallback_address.clone(),
+							None,
+							None,
+						) {
+							Ok(egress_details) =>
+								Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
+									asset: ccm.asset,
+									amount: egress_details.egress_amount,
+									destination_address: fallback_address,
+								}),
+							Err(e) => log::warn!(
+								"Cannot refund failed Ccm: failed to Egress. Error: {:?}",
+								e
+							),
+						};
 					}
 				},
 			};
@@ -1954,7 +1946,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				dca_params,
 			} => {
 				let deposit_metadata =
-					channel_metadata.clone().map(|metadata| CcmDepositMetadata {
+					channel_metadata.clone().map(|metadata| CcmDepositMetadataChecked {
 						channel_metadata: metadata,
 						source_chain: asset.into(),
 						source_address,
@@ -1984,7 +1976,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				if let Some(ccm_channel_metadata) = channel_metadata {
 					if ForeignChain::Solana == destination_asset.into() {
 						T::SolanaAltWitnessingHandler::initiate_alt_witnessing(
-							ccm_channel_metadata,
+							ccm_channel_metadata.ccm_additional_data,
 							swap_request_id,
 						);
 					}
@@ -2271,26 +2263,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			};
 
-		if let Some(metadata) = deposit_metadata.clone() {
-			if T::CcmValidityChecker::check_and_decode(
-				&metadata.channel_metadata,
-				output_asset,
-				destination_address,
-			)
-			.is_err()
-			{
-				log::warn!("Failed to process vault swap due to invalid CCM metadata");
-				return;
-			}
-
-			let destination_chain: ForeignChain = output_asset.into();
-			if !destination_chain.ccm_support() {
-				log::warn!(
-					"Failed to process vault swap due to destination chain not supporting CCM"
-				);
-				return;
-			}
-		}
+		let deposit_metadata = deposit_metadata
+			.map(|metadata| {
+				let destination_chain: ForeignChain = output_asset.into();
+				if !destination_chain.ccm_support() {
+					Err("destination chain does not support CCM")
+				} else {
+					metadata
+						.to_checked(output_asset, destination_address_internal.clone())
+						.map_err(|_| "invalid CCM metadata")
+				}
+			})
+			.transpose()
+			.inspect_err(|err| {
+				log::warn!("Failed to process vault swap due to {err}");
+			})
+			.ok()
+			.flatten();
 
 		let origin = DepositOrigin::vault(
 			tx_id.clone(),
@@ -2547,24 +2536,34 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		let (channel_metadata, source_address) = if let Some(metadata) = deposit_metadata.clone() {
-			if T::CcmValidityChecker::check_and_decode(
-				&metadata.channel_metadata,
-				destination_asset,
-				destination_address.clone(),
-			)
-			.is_err()
-			{
-				emit_deposit_failed_event(DepositFailedReason::CcmInvalidMetadata);
-				return;
-			}
-
 			let destination_chain: ForeignChain = (destination_asset).into();
 			if !destination_chain.ccm_support() {
 				emit_deposit_failed_event(DepositFailedReason::CcmUnsupportedForTargetChain);
 				return;
 			}
 
-			(Some(metadata.channel_metadata), metadata.source_address)
+			let destination_address_internal =
+				match T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					destination_asset,
+				) {
+					Ok(address) => address,
+					Err(err) => {
+						log::warn!("Failed to process vault swap due to invalid destination address. Tx hash: {tx_id:?}. Error: {err:?}");
+						return;
+					},
+				};
+
+			let decoded =
+				metadata.to_checked(destination_asset, destination_address_internal.clone());
+
+			if decoded.is_err() {
+				emit_deposit_failed_event(DepositFailedReason::CcmInvalidMetadata);
+				return;
+			}
+			let decoded = decoded.unwrap();
+
+			(Some(decoded.channel_metadata), decoded.source_address)
 		} else {
 			(None, None)
 		};
@@ -2875,7 +2874,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
-		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+		maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 		_swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
@@ -2885,7 +2884,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			match maybe_ccm_deposit_metadata {
 				Some(CcmDepositMetadata {
 					channel_metadata:
-						CcmChannelMetadata { message, gas_budget, ccm_additional_data, .. },
+						CcmChannelMetadataChecked { message, gas_budget, ccm_additional_data, .. },
 					source_chain,
 					source_address,
 					..
@@ -2997,7 +2996,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		destination_address: ForeignChainAddress,
 		broker_fees: Beneficiaries<Self::AccountId>,
 		broker_id: T::AccountId,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataChecked>,
 		boost_fee: BasisPoints,
 		refund_params: ChannelRefundParametersDecoded,
 		dca_params: Option<DcaParameters>,
