@@ -71,6 +71,8 @@ fn setup_dca_swap(
 			remaining_chunks: number_of_chunks - 1,
 			chunk_interval,
 			accumulated_output_amount: 0,
+			network_fee_collected: 0,
+			accumulated_input_amount: 0,
 		}
 	);
 }
@@ -110,7 +112,9 @@ fn assert_chunk_1_executed(number_of_chunks: u32) {
 			remaining_input_amount: INPUT_AMOUNT - (chunk_amount * 2),
 			remaining_chunks: number_of_chunks - 2,
 			chunk_interval: CHUNK_INTERVAL,
-			accumulated_output_amount: chunk_amount_after_fee * DEFAULT_SWAP_RATE
+			accumulated_output_amount: chunk_amount_after_fee * DEFAULT_SWAP_RATE,
+			network_fee_collected: 0,
+			accumulated_input_amount: chunk_amount,
 		}
 	);
 }
@@ -283,7 +287,9 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 					remaining_input_amount: CHUNK_AMOUNT,
 					remaining_chunks: 1,
 					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
+					accumulated_output_amount: 0,
+					network_fee_collected: 0,
+					accumulated_input_amount: 0,
 				}
 			);
 		})
@@ -371,7 +377,9 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 					remaining_input_amount: REFUNDED_AMOUNT - CHUNK_AMOUNT,
 					remaining_chunks: 2,
 					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: CHUNK_OUTPUT
+					accumulated_output_amount: CHUNK_OUTPUT,
+					network_fee_collected: 0,
+					accumulated_input_amount: CHUNK_AMOUNT,
 				}
 			);
 		})
@@ -452,7 +460,6 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(1),
 					execute_at: CHUNK_1_RETRY_BLOCK,
-					..
 				})
 			);
 
@@ -464,7 +471,9 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 					remaining_input_amount: CHUNK_AMOUNT,
 					remaining_chunks: 1,
 					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
+					accumulated_output_amount: 0,
+					network_fee_collected: 0,
+					accumulated_input_amount: 0,
 				}
 			);
 		})
@@ -500,7 +509,9 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 					remaining_input_amount: 0,
 					remaining_chunks: 0,
 					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: CHUNK_OUTPUT
+					accumulated_output_amount: CHUNK_OUTPUT,
+					network_fee_collected: 0,
+					accumulated_input_amount: CHUNK_AMOUNT,
 				}
 			);
 		})
@@ -591,10 +602,10 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(1),
-					input_amount,
-					..
 					// All chunks should be 0 amount except the last one
-				}) if *input_amount == ZERO_CHUNK_AMOUNT
+					input_amount: ZERO_CHUNK_AMOUNT,
+					..
+				})
 			);
 
 			// Check the DCA state is correct
@@ -607,6 +618,8 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 					remaining_chunks: NUMBER_OF_CHUNKS - 1,
 					chunk_interval: CHUNK_INTERVAL,
 					accumulated_output_amount: 0,
+					network_fee_collected: 0,
+					accumulated_input_amount: 0,
 				}
 			);
 		})
@@ -617,11 +630,11 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(1),
-					input_amount,
-					output_amount,
-					..
 					// The first chunk should 0 in and out
-				}) if *input_amount == ZERO_CHUNK_AMOUNT && *output_amount == ZERO_CHUNK_AMOUNT
+					input_amount: ZERO_CHUNK_AMOUNT,
+					output_amount: ZERO_CHUNK_AMOUNT,
+					..
+				})
 			);
 
 			assert_has_matching_event!(
@@ -629,10 +642,10 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(2),
-					input_amount,
-					..
 					// All chunks should be 0 amount except the last one
-				}) if *input_amount == ZERO_CHUNK_AMOUNT
+					input_amount: ZERO_CHUNK_AMOUNT,
+					..
+				})
 			);
 
 			assert_eq!(
@@ -644,6 +657,8 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 					chunk_interval: CHUNK_INTERVAL,
 					// Should still be 0
 					accumulated_output_amount: 0,
+					network_fee_collected: 0,
+					accumulated_input_amount: 0,
 				}
 			);
 		})
@@ -656,11 +671,11 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(3),
-					input_amount,
-					output_amount,
-					..
 					// The last chunk should be the full amount
-				}) if *input_amount == INPUT_AMOUNT && *output_amount == OUTPUT_AMOUNT
+					input_amount: INPUT_AMOUNT,
+					output_amount: OUTPUT_AMOUNT,
+					..
+				})
 			);
 
 			assert_has_matching_event!(

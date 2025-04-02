@@ -38,7 +38,7 @@ fn can_update_all_config_items() {
 		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_ne!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 		assert_ne!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE);
-		assert_ne!(MinimumNetworkFeePerChunk::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
+		assert_ne!(MinimumNetworkFee::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
 
 		// Update all config items at the same time, and updates 2 separate max swap amounts.
 		assert_ok!(Swapping::update_pallet_config(
@@ -76,7 +76,7 @@ fn can_update_all_config_items() {
 		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_eq!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 		assert_eq!(MinimumChunkSize::<Test>::get(Asset::Usdc), NEW_MINIMUM_CHUNK_SIZE);
-		assert_eq!(MinimumNetworkFeePerChunk::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
+		assert_eq!(MinimumNetworkFee::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
 
 		// Check that the events were emitted
 		assert_events_eq!(
