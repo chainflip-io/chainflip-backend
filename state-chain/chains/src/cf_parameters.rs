@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CcmAdditionalData, CcmChannelMetadata, Chain, ChannelRefundParameters};
+use crate::{CcmAdditionalData, CcmChannelMetadataUnchecked, Chain, ChannelRefundParameters};
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
 };
@@ -69,7 +69,7 @@ pub fn build_cf_parameters<C: Chain>(
 	broker_id: AccountId,
 	broker_commission: BasisPoints,
 	affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
-	ccm: Option<&CcmChannelMetadata>,
+	ccm: Option<&CcmChannelMetadataUnchecked>,
 ) -> Vec<u8> {
 	let vault_swap_parameters = VaultSwapParameters {
 		refund_params: refund_parameters,
@@ -78,6 +78,8 @@ pub fn build_cf_parameters<C: Chain>(
 		broker_fee: Beneficiary { account: broker_id, bps: broker_commission },
 		affiliate_fees,
 	};
+
+	// TODO: Consider checking the ccm parameters?
 
 	match ccm {
 		Some(ccm) => VersionedCcmCfParameters::V0(CfParameters {
@@ -191,7 +193,7 @@ mod tests {
 			vault_swap_parameters.broker_fee.account.clone(),
 			vault_swap_parameters.broker_fee.bps,
 			vault_swap_parameters.affiliate_fees.clone(),
-			Some(&CcmChannelMetadata {
+			Some(&CcmChannelMetadataUnchecked {
 				message: Default::default(),
 				gas_budget: Default::default(),
 				ccm_additional_data: ccm_additional_data.clone().try_into().unwrap(),
