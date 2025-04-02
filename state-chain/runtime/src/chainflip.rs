@@ -83,7 +83,6 @@ use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
 	DcaParameters,
 };
-
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
@@ -106,6 +105,7 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
+use pallet_cf_flip::CallIndexer;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
@@ -1021,6 +1021,34 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 				MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
 			ForeignChainAndAsset::Solana(asset) =>
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
+		}
+	}
+}
+
+pub struct LpOrderCallIndexer;
+impl CallIndexer<RuntimeCall> for LpOrderCallIndexer {
+	/// Calls are indexed by the pool's base asset.
+	type CallIndex = Asset;
+
+	fn call_index(call: &RuntimeCall) -> Option<Self::CallIndex> {
+		match call {
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_limit_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_limit_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::set_range_order {
+				base_asset,
+				..
+			}) |
+			RuntimeCall::LiquidityPools(pallet_cf_pools::Call::update_range_order {
+				base_asset,
+				..
+			}) => Some(*base_asset),
+			_ => None,
 		}
 	}
 }

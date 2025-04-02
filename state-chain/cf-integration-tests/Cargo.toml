@@ -92,3 +92,5 @@ sp-transaction-pool = { workspace = true, default-features = true }
 sp-version = { workspace = true, default-features = true }
 sp-consensus-grandpa = { workspace = true, default-features = true }
 sp-timestamp = { workspace = true, default-features = true }
+frame-metadata-hash-extension = { workspace = true, default-features = true }
+sp-keyring = { workspace = true, default-features = true }

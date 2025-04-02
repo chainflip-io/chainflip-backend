@@ -65,6 +65,7 @@ impl pallet_cf_flip::Config for Test {
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
+	type CallIndexer = ();
 }
 
 cf_traits::impl_mock_on_account_funded!(AccountId, u128);

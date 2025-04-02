@@ -26,8 +26,8 @@ use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, BalanceApi, Chainflip, LpOrdersWeightsProvider, PoolApi,
-	SwapRequestHandler, SwappingApi,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, LpOrdersWeightsProvider,
+	PoolApi, SwapRequestHandler, SwappingApi,
 };
 
 pub use cf_traits::{IncreaseOrDecrease, OrderId};
@@ -44,11 +44,10 @@ use cf_traits::HistoricalFeeMigration;
 
 use cf_traits::LpRegistration;
 use frame_system::{pallet_prelude::OriginFor, WeightInfo as SystemWeightInfo};
+pub use pallet::*;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{SaturatedConversion, Zero};
 use sp_std::{boxed::Box, vec::Vec};
-
-pub use pallet::*;
 
 mod benchmarking;
 pub mod migrations;
@@ -196,7 +195,6 @@ pub mod pallet {
 		math::Tick,
 		range_orders::{self, Liquidity},
 	};
-	use cf_traits::AccountRoleRegistry;
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::collections::btree_map::BTreeMap;
 
@@ -334,6 +332,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+
 			for LimitOrderUpdate { ref lp, id, call } in
 				ScheduledLimitOrderUpdates::<T>::take(current_block)
 			{
@@ -535,6 +534,7 @@ pub mod pallet {
 				T::SafeMode::get().range_order_update_enabled,
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
+
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
 				&lp,
@@ -597,7 +597,6 @@ pub mod pallet {
 					}),
 					NoOpStatus::Error,
 				)?;
-
 				Ok(())
 			})
 		}
