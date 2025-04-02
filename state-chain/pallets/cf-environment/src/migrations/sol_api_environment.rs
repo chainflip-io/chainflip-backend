@@ -1226,7 +1226,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for SolApiEnvironmentMigr
 
 				SolanaAvailableNonceAccounts::<T>::append((
 					const_address("Fzh6VuMyoQDj9it51joLf1zDV6GAzjqXE7aXUN7DDkDi"),
-					const_hash("CAVfhDy4[/vWjZ7TLAs92PTKRE5cywQDyKnex3XCD3pcYf"),
+					const_hash("CAVfhDy4vWjZ7TLAs92PTKRE5cywQDyKnex3XCD3pcYf"),
 				));
 
 				SolanaAvailableNonceAccounts::<T>::append((
