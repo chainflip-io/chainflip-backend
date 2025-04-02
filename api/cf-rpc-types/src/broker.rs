@@ -16,14 +16,14 @@
 
 use anyhow::bail;
 
+pub use cf_chains::{address::AddressString, RefundParametersRpc};
 use cf_chains::{Chain, ChainCrypto, ChannelRefundParameters, ForeignChain};
-pub use cf_chains::{RefundParametersRpc, address::AddressString};
 use cf_primitives::AffiliateShortId;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_utilities::rpc::NumberOrHex;
 use sp_core::{
-	H256, U256,
 	serde::{Deserialize, Serialize},
+	H256, U256,
 };
 use std::fmt;
 
