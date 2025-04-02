@@ -39,7 +39,6 @@ pub use async_result::AsyncResult;
 use cf_chains::{
 	address::ForeignChainAddress,
 	assets::any::AssetMap,
-	ccm_checker::DecodedCcmAdditionalData,
 	sol::{SolAddress, SolHash},
 	ApiCall, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain, ChainCrypto,
 	ChannelRefundParametersDecoded, Ethereum,
@@ -48,7 +47,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
-	SwapRequestId, ThresholdSignatureRequestId,
+	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -914,7 +913,6 @@ pub trait EgressApi<C: Chain> {
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-		swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
@@ -1245,8 +1243,10 @@ pub trait PoolPriceProvider {
 }
 
 pub trait InitiateSolanaAltWitnessing {
-	fn initiate_alt_witnessing(
-		_ccm_channel_metadata: DecodedCcmAdditionalData,
-		_swap_request_id: SwapRequestId,
-	);
+	fn initiate_alt_witnessing(_alts: Vec<SolAddress>);
+}
+
+pub struct NoAltWitnessing;
+impl InitiateSolanaAltWitnessing for NoAltWitnessing {
+	fn initiate_alt_witnessing(_alts: Vec<SolAddress>) {}
 }

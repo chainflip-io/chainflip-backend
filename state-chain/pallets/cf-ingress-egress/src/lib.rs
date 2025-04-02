@@ -2029,7 +2029,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							ccm.amount,
 							fallback_address.clone(),
 							None,
-							None,
 						) {
 							Ok(egress_details) =>
 								Self::deposit_event(Event::<T, I>::InvalidCcmRefunded {
@@ -2221,30 +2220,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					dca_params.clone(),
 					origin.into(),
 				);
-				if let Some(ccm_channel_metadata) = channel_metadata {
-					if ForeignChain::Solana == destination_asset.into() {
-						T::SolanaAltWitnessingHandler::initiate_alt_witnessing(
-							ccm_channel_metadata.ccm_additional_data,
-							swap_request_id,
-						);
-					}
-				}
 				DepositAction::Swap { swap_request_id }
 			},
 			ChannelAction::Refund { refund_address, reason } => {
-				let egress_id = match Self::schedule_egress(
-					asset,
-					amount_after_fees,
-					refund_address,
-					None,
-					None,
-				) {
-					Ok(egress_details) => Some(egress_details.egress_id),
-					Err(e) => {
-						log::warn!("Failed to schedule egress for vault swap refund: {:?}", e);
-						None
-					},
-				};
+				let egress_id =
+					match Self::schedule_egress(asset, amount_after_fees, refund_address, None) {
+						Ok(egress_details) => Some(egress_details.egress_id),
+						Err(e) => {
+							log::warn!("Failed to schedule egress for vault swap refund: {:?}", e);
+							None
+						},
+					};
 				DepositAction::Refund { egress_id, amount: amount_after_fees, reason }
 			},
 		}
@@ -3240,7 +3226,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fallback.amount,
 			fallback.to.clone(),
 			None,
-			None,
 		) {
 			Ok(egress_details) => Self::deposit_event(Event::<T, I>::TransferFallbackRequested {
 				asset: fallback.asset,
@@ -3302,7 +3287,6 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-		_swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
@@ -3325,6 +3309,15 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 							asset,
 							amount,
 						);
+
+					// Initiate LUT witnessing if required.
+					if let DecodedCcmAdditionalData::Solana(additional_data) =
+						ccm_additional_data.clone()
+					{
+						additional_data.address_lookup_tables().inspect(|alts| {
+							T::SolanaAltWitnessingHandler::initiate_alt_witnessing(alts.clone())
+						});
+					}
 
 					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 						egress_id,
