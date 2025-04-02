@@ -463,7 +463,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for SolApiEnvironmentMigr
 										)
 										.into(),
 										const_address(
-											"6sr2XvWBuWbGEDKPAsgkBkbzf3Fkw4Dz2gsxyvTC7pVto",
+											"6sr2XvWBuWbUdKPAsgkBkbzf3Fkw4Dz2gsxyvTC7pVto",
 										)
 										.into(),
 										const_address(
