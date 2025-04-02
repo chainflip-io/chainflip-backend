@@ -55,6 +55,7 @@ pub use pallet::*;
 
 #[derive(
 	CloneNoBound,
+	Copy,
 	RuntimeDebugNoBound,
 	PartialEqNoBound,
 	EqNoBound,
@@ -188,11 +189,8 @@ pub mod pallet {
 			who: T::AccountId,
 			dust_burned: T::Balance,
 		},
-		SlashingRateUpdated {
-			slashing_rate: Permill,
-		},
-		FeeScalingRateUpdated {
-			fee_scaling_rate: FeeScalingRateConfig,
+		PalletConfigUpdated {
+			update: PalletConfigUpdate,
 		},
 	}
 
@@ -236,7 +234,6 @@ pub mod pallet {
 				match update {
 					PalletConfigUpdate::SetSlashingRate(slashing_rate) => {
 						SlashingRate::<T>::set(slashing_rate);
-						Self::deposit_event(Event::SlashingRateUpdated { slashing_rate });
 					},
 					// You can used FixedU64::from_rational or from_float to convert the input
 					// number to FixedU64.
@@ -244,9 +241,9 @@ pub mod pallet {
 					// i.e. there are 9 decimal places.
 					PalletConfigUpdate::SetFeeScalingRate(fee_scaling_rate) => {
 						FeeScalingRate::<T>::set(fee_scaling_rate);
-						Self::deposit_event(Event::FeeScalingRateUpdated { fee_scaling_rate });
 					},
-				}
+				};
+				Self::deposit_event(Event::PalletConfigUpdated { update });
 			}
 			Ok(())
 		}
