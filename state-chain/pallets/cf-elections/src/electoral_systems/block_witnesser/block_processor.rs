@@ -58,10 +58,21 @@ pub struct BlockProcessor<T: BWProcessorTypes> {
 	/// processed and the safety margin. The "age" represents the block height difference between
 	/// head of the chain and block that we are processing, and it's used to know what rules have
 	/// already been processed for such block
-	pub blocks_data: BTreeMap<T::ChainBlockNumber, (T::BlockData, u32, u32)>,
+	pub blocks_data: BTreeMap<T::ChainBlockNumber, BlockInfo<T::BlockData>>,
 	pub reorg_events: BTreeMap<T::ChainBlockNumber, (Vec<T::Event>, u32)>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub struct BlockInfo<BlockData> {
+	block_data: BlockData,
+	next_age_to_process: u32,
+	safety_margin: u32,
+}
+impl<BlockData> BlockInfo<BlockData> {
+	fn new(block_data: BlockData, safety_margin: u32) -> Self {
+		BlockInfo { block_data, next_age_to_process: Default::default(), safety_margin }
+	}
 }
 impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 	for BlockProcessor<BlockWitnessingProcessorDefinition>
@@ -116,8 +127,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		block_data: Option<(T::ChainBlockNumber, T::BlockData, u32)>,
 	) {
 		if let Some((block_number, block_data, safety_margin)) = block_data {
-			self.blocks_data
-				.insert(block_number, (block_data, Default::default(), safety_margin));
+			self.blocks_data.insert(block_number, BlockInfo::new(block_data, safety_margin));
 		}
 		let last_block: T::ChainBlockNumber;
 		match chain_progress {
@@ -128,16 +138,21 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 				last_block = *range.end();
 				for n in range {
 					let block_data = self.blocks_data.remove(&n);
-					if let Some((data, next_age, safety_margin)) = block_data {
-						let age_range: Range<u32> = 0..next_age;
+					if let Some(block_info) = block_data {
+						let age_range: Range<u32> = 0..block_info.next_age_to_process;
 						let events = self
-							.process_rules_for_ages_and_block(n, age_range, &data, safety_margin)
+							.process_rules_for_ages_and_block(
+								n,
+								age_range,
+								&block_info.block_data,
+								block_info.safety_margin,
+							)
 							.into_iter()
 							.map(|(_, event)| event)
 							.collect::<Vec<_>>();
 						match self.reorg_events.get_mut(&n) {
 							None => {
-								self.reorg_events.insert(n, (events, safety_margin));
+								self.reorg_events.insert(n, (events, block_info.safety_margin));
 							},
 							Some((previous_events, _)) => {
 								previous_events.extend(events.into_iter());
@@ -171,19 +186,18 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		last_height: T::ChainBlockNumber,
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
 		let mut last_events: Vec<(T::ChainBlockNumber, T::Event)> = vec![];
-		for (block_height, (data, next_age_to_process, safety_margin)) in self.blocks_data.clone() {
+		for (block_height, mut block_info) in self.blocks_data.clone() {
 			let current_age = T::ChainBlockNumber::steps_between(&block_height, &last_height).0;
-			let age_range: Range<u32> = next_age_to_process..current_age.saturating_add(1) as u32;
+			let age_range: Range<u32> =
+				block_info.next_age_to_process..current_age.saturating_add(1) as u32;
 			last_events.extend(self.process_rules_for_ages_and_block(
 				block_height,
 				age_range,
-				&data,
-				safety_margin,
+				&block_info.block_data,
+				block_info.safety_margin,
 			));
-			self.blocks_data.insert(
-				block_height,
-				(data.clone(), (current_age as u32).saturating_add(1), safety_margin),
-			);
+			block_info.next_age_to_process = (current_age as u32).saturating_add(1);
+			self.blocks_data.insert(block_height, block_info);
 		}
 		last_events
 	}
@@ -229,7 +243,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	}
 	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
 		self.blocks_data
-			.retain(|_key, (_, next_age, safety_margin)| *next_age <= *safety_margin);
+			.retain(|_key, block_info| block_info.next_age_to_process <= block_info.safety_margin);
 		// Todo! Do we want to keep these events around for longer? is there any benefit?
 		// If we keep these for let's say 100 blocks we can then prevent double processing things
 		// that are reorged up to 100 blocks later, what are the chanches of smth like this

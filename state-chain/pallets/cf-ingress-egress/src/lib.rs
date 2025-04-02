@@ -741,6 +741,9 @@ pub mod pallet {
 
 	// Determines the number of block confirmations is required for a block on
 	// an external chain before CFE can submit any witness extrinsics for it.
+	//
+	// This storage item won't be used for any chains using the elections witnessing and
+	// will be removed once all chains are migrated
 	#[pallet::storage]
 	#[pallet::getter(fn witness_safety_margin)]
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
