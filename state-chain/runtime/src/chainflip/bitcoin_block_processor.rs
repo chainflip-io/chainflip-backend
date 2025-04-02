@@ -12,11 +12,11 @@ use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::{
-	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook, SafetyMarginHook},
+	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
 	state_machine::core::Hook,
 };
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
-use sp_std::{collections::btree_map::BTreeMap, iter::Step, vec, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 use super::{bitcoin_elections::BitcoinDepositChannelWitnessing, elections::TypesFor};
 
@@ -130,7 +130,12 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnes
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, Range<u32>, BlockDataDepositChannel),
+		(block, age, block_data, safety_margin): (
+			BlockNumber,
+			Range<u32>,
+			BlockDataDepositChannel,
+			u32,
+		),
 	) -> Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> {
 		let mut results: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> = vec![];
 		if age.contains(&0u32) {
@@ -141,10 +146,7 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDeposi
 					.collect::<Vec<_>>(),
 			)
 		}
-		if age.contains(
-			&(u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
-				as u32),
-		) {
+		if age.contains(&safety_margin) {
 			results.extend(
 				block_data
 					.iter()
@@ -159,7 +161,12 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDeposi
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDepositWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, Range<u32>, BlockDataVaultDeposit),
+		(block, age, block_data, safety_margin): (
+			BlockNumber,
+			Range<u32>,
+			BlockDataVaultDeposit,
+			u32,
+		),
 	) -> Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)> {
 		let mut results: Vec<(
 			BlockNumber,
@@ -173,10 +180,7 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDep
 					.collect::<Vec<_>>(),
 			)
 		}
-		if age.contains(
-			&(u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
-				as u32),
-		) {
+		if age.contains(&safety_margin) {
 			results.extend(
 				block_data
 					.iter()
@@ -191,39 +195,15 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDep
 impl Hook<HookTypeFor<TypesEgressWitnessing, RulesHook>> for TypesEgressWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data): (BlockNumber, Range<u32>, EgressBlockData),
+		(block, age, block_data, safety_margin): (BlockNumber, Range<u32>, EgressBlockData, u32),
 	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
-		if age.contains(
-			&(u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0
-				as u32),
-		) {
+		if age.contains(&safety_margin) {
 			return block_data
 				.iter()
 				.map(|egress_witness| (block, BtcEvent::Witness(egress_witness.clone())))
 				.collect::<Vec<_>>();
 		}
 		vec![]
-	}
-}
-
-impl Hook<HookTypeFor<TypesDepositChannelWitnessing, SafetyMarginHook>>
-	for TypesDepositChannelWitnessing
-{
-	fn run(&mut self, _input: ()) -> u32 {
-		u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32
-	}
-}
-impl Hook<HookTypeFor<TypesVaultDepositWitnessing, SafetyMarginHook>>
-	for TypesVaultDepositWitnessing
-{
-	fn run(&mut self, _input: ()) -> u32 {
-		u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32
-	}
-}
-
-impl Hook<HookTypeFor<TypesEgressWitnessing, SafetyMarginHook>> for TypesEgressWitnessing {
-	fn run(&mut self, _input: ()) -> u32 {
-		u64::steps_between(&0, &BitcoinIngressEgress::witness_safety_margin().unwrap_or(0)).0 as u32
 	}
 }
 

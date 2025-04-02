@@ -1,2 +1,0 @@
-//! For BTC Elections
-

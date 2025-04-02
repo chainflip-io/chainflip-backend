@@ -156,7 +156,6 @@ impls! {
 		type Event = BtcEvent<DepositWitness<Bitcoin>>;
 		type Rules = Self;
 		type Execute = Self;
-		type SafetyMargin = Self;
 	}
 
 	/// Associating BW types to the struct
@@ -243,7 +242,6 @@ impls! {
 		type Event = BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
-		type SafetyMargin = Self;
 	}
 
 	/// Associating BW types to the struct
@@ -339,7 +337,6 @@ impls! {
 		type Event = BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
-		type SafetyMargin = Self;
 	}
 
 	/// Associating BW types to the struct
@@ -531,7 +528,10 @@ impl
 				BitcoinLiveness,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(liveness_identifiers, &(current_sc_block_number, last_btc_block.block_height - 3))?;
+		>(
+			liveness_identifiers,
+			&(current_sc_block_number, last_btc_block.block_height.saturating_sub(3)),
+		)?;
 
 		Ok(())
 	}
@@ -557,9 +557,9 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 		unsynchronised_settings: (
 			Default::default(),
 			// TODO: Write a migration to set this too.
-			BlockWitnesserSettings { max_concurrent_elections: 15 },
-			BlockWitnesserSettings { max_concurrent_elections: 15 },
-			BlockWitnesserSettings { max_concurrent_elections: 15 },
+			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
+			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
+			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 0 },
 			Default::default(),
 			(),
 		),

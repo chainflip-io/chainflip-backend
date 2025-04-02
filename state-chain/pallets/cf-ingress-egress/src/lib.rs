@@ -424,21 +424,24 @@ pub mod pallet {
 		PartialOrdNoBound,
 	)]
 	#[scale_info(skip_type_params(T, I))]
-	#[serde(bound(serialize = "
+	#[serde(bound(
+		serialize = "
 		TargetChainAsset<T, I>: Serialize,
 		Option<TargetChainAccount<T, I>>: Serialize,
 		<T::TargetChain as Chain>::ChainAmount: Serialize,
 		<T::TargetChain as Chain>::DepositDetails: Serialize,
 		TransactionInIdFor<T, I>: Serialize,
 		Option<Beneficiary<T::AccountId>>: Serialize,
-	", deserialize = "
+	",
+		deserialize = "
 		TargetChainAsset<T, I>: Deserialize<'de>,
 		Option<TargetChainAccount<T, I>>: Deserialize<'de>,
 		<T::TargetChain as Chain>::ChainAmount: Deserialize<'de>,
 		<T::TargetChain as Chain>::DepositDetails: Deserialize<'de>,
 		TransactionInIdFor<T, I>: Deserialize<'de>,
 		Option<Beneficiary<T::AccountId>>: Deserialize<'de>,
-	"))]
+	"
+	))]
 	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
 		pub deposit_address: Option<TargetChainAccount<T, I>>,
@@ -738,6 +741,9 @@ pub mod pallet {
 
 	// Determines the number of block confirmations is required for a block on
 	// an external chain before CFE can submit any witness extrinsics for it.
+	//
+	// This storage item won't be used for any chains using the elections witnessing and
+	// will be removed once all chains are migrated
 	#[pallet::storage]
 	#[pallet::getter(fn witness_safety_margin)]
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =

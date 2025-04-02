@@ -48,7 +48,7 @@ impl<T: BWTypes> HookType for HookTypeFor<T, ElectionPropertiesHook> {
 
 pub struct RulesHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
-	type Input = (T::ChainBlockNumber, Range<u32>, T::BlockData);
+	type Input = (T::ChainBlockNumber, Range<u32>, T::BlockData, u32);
 	type Output = Vec<(T::ChainBlockNumber, T::Event)>;
 }
 
@@ -56,12 +56,6 @@ pub struct ExecuteHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
 	type Input = Vec<(T::ChainBlockNumber, T::Event)>;
 	type Output = ();
-}
-
-pub struct SafetyMarginHook;
-impl<T: BWProcessorTypes> HookType for HookTypeFor<T, SafetyMarginHook> {
-	type Input = ();
-	type Output = u32;
 }
 
 pub trait BWProcessorTypes: Sized {
@@ -79,13 +73,6 @@ pub trait BWProcessorTypes: Sized {
 	type Event: Serde + Debug + Clone + Eq;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
 	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + Serde + Debug + Clone + Eq;
-
-	type SafetyMargin: Hook<HookTypeFor<Self, SafetyMarginHook>>
-		+ Default
-		+ Serde
-		+ Debug
-		+ Clone
-		+ Eq;
 }
 
 #[derive(
@@ -104,6 +91,7 @@ pub trait BWProcessorTypes: Sized {
 )]
 pub struct BlockWitnesserSettings {
 	pub max_concurrent_elections: u16,
+	pub safety_margin: u32,
 }
 
 #[derive_where(Debug, Clone, PartialEq, Eq;
@@ -236,7 +224,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 				log::info!("got block data: {:?}", blockdata);
 				s.block_processor.process_block_data(
 					ChainProgressInner::Progress(s.elections.next_witnessed.saturating_backward(1)),
-					Some((properties.block_height, blockdata)),
+					Some((properties.block_height, blockdata, settings.safety_margin)),
 				);
 			},
 		};
@@ -415,11 +403,9 @@ mod tests {
 	use crate::prop_do;
 	use hook_test_utils::*;
 
+	const SAFETY_MARGIN: u32 = 3;
 	fn generate_state<
-		T: BWTypes<
-			SafeModeEnabledHook = MockHook<HookTypeFor<T, SafeModeEnabledHook>>,
-			SafetyMargin = MockHook<HookTypeFor<T, SafetyMarginHook>>,
-		>,
+		T: BWTypes<SafeModeEnabledHook = MockHook<HookTypeFor<T, SafeModeEnabledHook>>>,
 	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
 		T::ChainBlockNumber: Arbitrary,
@@ -453,7 +439,6 @@ mod tests {
 					reorg_events: Default::default(),
 					rules: Default::default(),
 					execute: Default::default(),
-					safety_margin: MockHook::new(1),
 				},
 				_phantom: core::marker::PhantomData,
 			})
@@ -500,7 +485,6 @@ mod tests {
 		type Event = ();
 		type Rules = MockHook<HookTypeFor<Self, RulesHook>>;
 		type Execute = MockHook<HookTypeFor<Self, ExecuteHook>>;
-		type SafetyMargin = MockHook<HookTypeFor<Self, SafetyMarginHook>>;
 	}
 
 	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
@@ -518,7 +502,7 @@ mod tests {
 			generate_state(),
 			prop_do! {
 				let max_concurrent_elections in 0..10u16;
-				return BlockWitnesserSettings { max_concurrent_elections }
+				return BlockWitnesserSettings { max_concurrent_elections, safety_margin: SAFETY_MARGIN}
 			},
 			generate_input::<u32>,
 		);
@@ -537,7 +521,7 @@ mod tests {
 			generate_state(),
 			prop_do! {
 				let max_concurrent_elections in 0..10u16;
-				return BlockWitnesserSettings { max_concurrent_elections }
+				return BlockWitnesserSettings { max_concurrent_elections, safety_margin: SAFETY_MARGIN}
 			},
 			generate_input::<BlockWitnessRange<TestChain>>,
 		);
