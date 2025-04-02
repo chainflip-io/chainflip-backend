@@ -1,0 +1,943 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::{
+	backend::{CustomRpcBackend, NotificationBehaviour},
+	order_fills,
+	order_fills::OrderFills,
+	pool_client::SignedPoolClient,
+	CfApiError, RpcResult, StorageQueryApi,
+};
+use anyhow::anyhow;
+use cf_amm::{common::Side, math::Tick};
+use cf_chains::{
+	address::{AddressString, ToHumanreadableAddress},
+	eth::Address as EthereumAddress,
+	instances::ChainInstanceFor,
+	Chain,
+};
+use cf_node_client::{
+	events_decoder::{DynamicEventError, DynamicEvents},
+	extract_dynamic_event,
+	subxt_state_chain_config::cf_static_runtime,
+	ApiWaitForResult, WaitFor, WaitForDynamicResult,
+};
+use cf_primitives::{
+	chains::{assets::any::AssetMap, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
+	Asset, BasisPoints, BlockNumber, DcaParameters, EgressId, ForeignChain, Price,
+};
+use cf_rpc_types::{
+	lp::{
+		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
+		OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
+		SwapRequestResponse,
+	},
+	RedemptionAmount, SwapChannelInfo,
+};
+use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
+use frame_support::BoundedVec;
+use jsonrpsee::{core::async_trait, proc_macros::rpc, tokio, PendingSubscriptionSink};
+use pallet_cf_ingress_egress::DepositChannelDetails;
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
+use sc_client_api::{
+	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
+	HeaderBackend, StorageProvider,
+};
+use sc_transaction_pool::FullPool;
+use sp_api::CallApiAt;
+use sp_core::{crypto::AccountId32, U256};
+use sp_runtime::traits::Block as BlockT;
+use state_chain_runtime::{
+	chainflip::BlockUpdate, runtime_apis::CustomRuntimeApi, AccountId, ConstU32, Hash, Nonce,
+	RuntimeCall,
+};
+use std::{ops::Range, sync::Arc};
+
+pub mod lp_crypto {
+	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
+	/// Liquidity Provider Key Type ID used to store the key on state chain node keystore
+	pub const LP_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"lqpr");
+
+	app_crypto!(sr25519, LP_KEY_TYPE_ID);
+}
+
+#[rpc(server, client, namespace = "lp")]
+pub trait LpSignedApi {
+	#[method(name = "register_account")]
+	async fn register_account(&self) -> RpcResult<state_chain_runtime::Hash>;
+
+	#[deprecated(note = "Use `request_liquidity_deposit_address` instead")]
+	#[method(name = "liquidity_deposit")]
+	async fn request_liquidity_deposit_address_legacy(
+		&self,
+		asset: Asset,
+		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<ApiWaitForResult<AddressString>>;
+
+	#[method(name = "request_liquidity_deposit_address")]
+	async fn request_liquidity_deposit_address(
+		&self,
+		asset: Asset,
+		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<ApiWaitForResult<LiquidityDepositChannelDetails>>;
+
+	#[method(name = "register_liquidity_refund_address")]
+	async fn register_liquidity_refund_address(
+		&self,
+		chain: ForeignChain,
+		address: AddressString,
+	) -> RpcResult<Hash>;
+
+	#[method(name = "withdraw_asset")]
+	async fn withdraw_asset(
+		&self,
+		amount: NumberOrHex,
+		asset: Asset,
+		destination_address: AddressString,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<EgressId>>;
+
+	#[method(name = "transfer_asset")]
+	async fn transfer_asset(
+		&self,
+		amount: U256,
+		asset: Asset,
+		destination_account: AccountId32,
+	) -> RpcResult<Hash>;
+
+	#[method(name = "update_range_order")]
+	async fn update_range_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
+
+	#[method(name = "set_range_order")]
+	async fn set_range_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSizeJson,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
+
+	#[method(name = "update_limit_order")]
+	async fn update_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
+
+	#[method(name = "set_limit_order")]
+	async fn set_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		sell_amount: NumberOrHex,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
+
+	#[method(name = "free_balances", aliases = ["lp_asset_balances"])]
+	async fn free_balances(&self) -> RpcResult<AssetMap<U256>>;
+
+	#[method(name = "get_open_swap_channels")]
+	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels>;
+
+	#[method(name = "request_redemption")]
+	async fn request_redemption(
+		&self,
+		redeem_address: EthereumAddress,
+		exact_amount: Option<NumberOrHex>,
+		executor_address: Option<EthereumAddress>,
+	) -> RpcResult<Hash>;
+
+	#[subscription(name = "subscribe_order_fills", item = BlockUpdate<OrderFills>)]
+	async fn subscribe_order_fills(&self);
+
+	#[method(name = "order_fills")]
+	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
+
+	#[method(name = "cancel_all_orders")]
+	async fn cancel_all_orders(
+		&self,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>>;
+
+	#[method(name = "cancel_orders_batch")]
+	async fn cancel_orders_batch(
+		&self,
+		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
+
+	#[method(name = "schedule_swap")]
+	async fn schedule_swap(
+		&self,
+		amount: NumberOrHex,
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;
+}
+
+/// An LP signed RPC extension for the state chain node.
+pub struct LpSignedRpc<C, B, BE>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	BE: Send + Sync + 'static + Backend<B>,
+	C: Send
+		+ Sync
+		+ 'static
+		+ BlockBackend<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
+		+ CallApiAt<B>
+		+ StorageProvider<B, BE>
+		+ sp_api::ProvideRuntimeApi<B>
+		+ sp_runtime::traits::BlockIdTo<B>,
+	C::Api: CustomRuntimeApi<B>
+		+ sp_api::Core<B>
+		+ sp_api::Metadata<B>
+		+ sp_block_builder::BlockBuilder<B>
+		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
+		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
+{
+	pub rpc_backend: CustomRpcBackend<C, B, BE>,
+	pub signed_pool_client: SignedPoolClient<C, B, BE>,
+}
+
+impl<C, B, BE> LpSignedRpc<C, B, BE>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	BE: Send + Sync + 'static + Backend<B>,
+	C: Send
+		+ Sync
+		+ 'static
+		+ BlockBackend<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
+		+ CallApiAt<B>
+		+ StorageProvider<B, BE>
+		+ sp_api::ProvideRuntimeApi<B>
+		+ sp_runtime::traits::BlockIdTo<B>,
+	C::Api: CustomRuntimeApi<B>
+		+ sp_api::Core<B>
+		+ sp_api::Metadata<B>
+		+ sp_block_builder::BlockBuilder<B>
+		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
+		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
+{
+	pub fn new(
+		client: Arc<C>,
+		backend: Arc<BE>,
+		executor: Arc<dyn sp_core::traits::SpawnNamed>,
+		pool: Arc<FullPool<B, C>>,
+		pair: sp_core::sr25519::Pair,
+	) -> Self {
+		Self {
+			rpc_backend: CustomRpcBackend::new(client.clone(), backend, executor),
+			signed_pool_client: SignedPoolClient::new(client, pool, pair),
+		}
+	}
+}
+
+#[async_trait]
+impl<C, B, BE> LpSignedApiServer for LpSignedRpc<C, B, BE>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	BE: Send + Sync + 'static + Backend<B>,
+	C: Send
+		+ Sync
+		+ 'static
+		+ BlockBackend<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
+		+ BlockchainEvents<B>
+		+ ExecutorProvider<B>
+		+ CallApiAt<B>
+		+ StorageProvider<B, BE>
+		+ sp_api::ProvideRuntimeApi<B>
+		+ sp_runtime::traits::BlockIdTo<B>,
+	C::Api: CustomRuntimeApi<B>
+		+ sp_api::Core<B>
+		+ sp_api::Metadata<B>
+		+ sp_block_builder::BlockBuilder<B>
+		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
+		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
+{
+	async fn register_account(&self) -> RpcResult<state_chain_runtime::Hash> {
+		let (tx_hash, _, _, _) = self
+			.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
+				false,
+				true,
+			)
+			.await?;
+
+		Ok(tx_hash)
+	}
+
+	async fn request_liquidity_deposit_address_legacy(
+		&self,
+		asset: Asset,
+		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<ApiWaitForResult<AddressString>> {
+		Ok(self.request_liquidity_deposit_address(asset, wait_for, boost_fee).await.map(
+			|wait_for_result| wait_for_result.map_details(|response| response.deposit_address),
+		)?)
+	}
+
+	async fn request_liquidity_deposit_address(
+		&self,
+		asset: Asset,
+		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<ApiWaitForResult<LiquidityDepositChannelDetails>> {
+		Ok(
+			match self
+				.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
+						asset,
+						boost_fee: boost_fee.unwrap_or_default(),
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await?
+			{
+				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+				WaitForDynamicResult::Data(data) => {
+					let (tx_hash, dynamic_events, ..) = data;
+					extract_dynamic_event!(
+						dynamic_events,
+						cf_static_runtime::liquidity_provider::events::LiquidityDepositAddressReady,
+						{ deposit_address, deposit_chain_expiry_block },
+						ApiWaitForResult::TxDetails {
+							tx_hash,
+							response: LiquidityDepositChannelDetails {
+								deposit_address: AddressString::from_encoded_address(deposit_address.0),
+								deposit_chain_expiry_block,
+							}
+						}
+					)?
+				},
+			},
+		)
+	}
+
+	async fn register_liquidity_refund_address(
+		&self,
+		chain: ForeignChain,
+		address: AddressString,
+	) -> RpcResult<Hash> {
+		let (tx_hash, _, _, _) = self
+			.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_lp::Call::register_liquidity_refund_address {
+					address: address
+						.try_parse_to_encoded_address(chain)
+						.map_err(anyhow::Error::msg)?,
+				}),
+				false,
+				false,
+			)
+			.await?;
+
+		Ok(tx_hash)
+	}
+
+	async fn withdraw_asset(
+		&self,
+		amount: NumberOrHex,
+		asset: Asset,
+		destination_address: AddressString,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<EgressId>> {
+		let amount = try_parse_number_or_hex(amount)?;
+		if amount == 0 {
+			Err(anyhow!("Withdrawal amount must be greater than 0"))?;
+		}
+
+		Ok(
+			match self
+				.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_lp::Call::withdraw_asset {
+						amount,
+						asset,
+						destination_address: destination_address
+							.try_parse_to_encoded_address(asset.into())
+							.map_err(anyhow::Error::msg)?,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await?
+			{
+				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+				WaitForDynamicResult::Data(data) => {
+					let (tx_hash, dynamic_events, ..) = data;
+					extract_dynamic_event!(
+						dynamic_events,
+						cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled,
+						{ egress_id },
+						ApiWaitForResult::TxDetails {
+							tx_hash,
+							response: (egress_id.0 .0, egress_id.1)
+						}
+					)?
+				},
+			},
+		)
+	}
+
+	async fn transfer_asset(
+		&self,
+		amount: U256,
+		asset: Asset,
+		destination_account: AccountId32,
+	) -> RpcResult<Hash> {
+		let amount = amount.try_into().map_err(|_| anyhow!("Failed to convert amount to u128"))?;
+		if amount == 0 {
+			Err(anyhow!("Amount must be greater than 0"))?;
+		}
+
+		let (tx_hash, _, _, _) = self
+			.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_lp::Call::transfer_asset {
+					amount,
+					asset,
+					destination: destination_account,
+				}),
+				false,
+				false,
+			)
+			.await?;
+
+		Ok(tx_hash)
+	}
+
+	async fn update_range_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
+		Ok(into_api_wait_for_dynamic_result(
+			self.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_pools::Call::update_range_order {
+						base_asset,
+						quote_asset,
+						id: id.try_into()?,
+						option_tick_range: tick_range,
+						size_change: size_change.try_map(|size| size.try_into())?,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await?,
+			filter_range_orders,
+		)?)
+	}
+
+	async fn set_range_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSizeJson,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
+		Ok(into_api_wait_for_dynamic_result(
+			self.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_pools::Call::set_range_order {
+						base_asset,
+						quote_asset,
+						id: id.try_into()?,
+						option_tick_range: tick_range,
+						size: size.try_into()?,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await?,
+			filter_range_orders,
+		)?)
+	}
+
+	async fn update_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
+		self.scheduled_or_immediate(
+			pallet_cf_pools::Call::update_limit_order {
+				base_asset,
+				quote_asset,
+				side,
+				id: id.try_into()?,
+				option_tick: tick,
+				amount_change: amount_change.try_map(try_parse_number_or_hex)?,
+			},
+			dispatch_at,
+			wait_for.unwrap_or_default(),
+		)
+		.await
+	}
+
+	async fn set_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		sell_amount: NumberOrHex,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
+		self.scheduled_or_immediate(
+			pallet_cf_pools::Call::set_limit_order {
+				base_asset,
+				quote_asset,
+				side,
+				id: id.try_into()?,
+				option_tick: tick,
+				sell_amount: try_parse_number_or_hex(sell_amount)?,
+			},
+			dispatch_at,
+			wait_for.unwrap_or_default(),
+		)
+		.await
+	}
+
+	async fn free_balances(&self) -> RpcResult<AssetMap<U256>> {
+		self.rpc_backend
+			.client
+			.runtime_api()
+			.cf_free_balances(
+				self.rpc_backend.client.info().finalized_hash,
+				self.signed_pool_client.account_id(),
+			)
+			.map_err(CfApiError::RuntimeApiError)
+			.map(|asset_map| asset_map.map(Into::into))
+	}
+
+	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels> {
+		let (ethereum, bitcoin, polkadot, arbitrum, solana) = tokio::try_join!(
+			self.get_open_swap_channels_for_chain::<Ethereum>(at),
+			self.get_open_swap_channels_for_chain::<Bitcoin>(at),
+			self.get_open_swap_channels_for_chain::<Polkadot>(at),
+			self.get_open_swap_channels_for_chain::<Arbitrum>(at),
+			self.get_open_swap_channels_for_chain::<Solana>(at),
+		)?;
+		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot, arbitrum, solana })
+	}
+
+	async fn request_redemption(
+		&self,
+		redeem_address: EthereumAddress,
+		exact_amount: Option<NumberOrHex>,
+		executor_address: Option<EthereumAddress>,
+	) -> RpcResult<Hash> {
+		let redeem_amount = if let Some(number_or_hex) = exact_amount {
+			RedemptionAmount::Exact(try_parse_number_or_hex(number_or_hex)?)
+		} else {
+			RedemptionAmount::Max
+		};
+
+		let (tx_hash, _, _, _) = self
+			.signed_pool_client
+			.submit_watch(
+				RuntimeCall::from(pallet_cf_funding::Call::redeem {
+					amount: redeem_amount,
+					address: redeem_address,
+					executor: executor_address,
+				}),
+				false,
+				true,
+			)
+			.await?;
+
+		Ok(tx_hash)
+	}
+
+	async fn subscribe_order_fills(&self, sink: PendingSubscriptionSink) {
+		self.rpc_backend
+			.new_subscription(
+				NotificationBehaviour::Finalized,
+				false,
+				true,
+				sink,
+				move |client, hash| order_fills::order_fills_for_block(client, hash),
+			)
+			.await
+	}
+
+	// TODO: is also defined in lib.rs consider defining in common place
+	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>> {
+		order_fills::order_fills_for_block(
+			self.rpc_backend.client.as_ref(),
+			at.unwrap_or_else(|| self.rpc_backend.client.info().finalized_hash),
+		)
+	}
+
+	async fn cancel_all_orders(
+		&self,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>> {
+		let mut orders_to_delete: Vec<CloseOrder> = vec![];
+
+		let pool_pairs = self
+			.rpc_backend
+			.client
+			.runtime_api()
+			.cf_pools(self.rpc_backend.client.info().best_hash)?;
+
+		for pool in pool_pairs {
+			let orders = match self.rpc_backend.client.runtime_api().cf_pool_orders(
+				self.rpc_backend.client.info().best_hash,
+				pool.base,
+				pool.quote,
+				Some(self.signed_pool_client.account_id()),
+				false,
+			) {
+				Ok(Ok(r)) => Ok(r),
+				Ok(Err(e)) => Err(CfApiError::DispatchError(e)),
+				Err(e) => Err(CfApiError::RuntimeApiError(e)),
+			}?;
+
+			for order in orders.range_orders {
+				orders_to_delete.push(CloseOrder::Range {
+					base_asset: pool.base,
+					quote_asset: pool.quote,
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
+				});
+			}
+			for order in orders.limit_orders.asks {
+				orders_to_delete.push(CloseOrder::Limit {
+					base_asset: pool.base,
+					quote_asset: pool.quote,
+					side: Side::Sell,
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
+				});
+			}
+			for order in orders.limit_orders.bids {
+				orders_to_delete.push(CloseOrder::Limit {
+					base_asset: pool.base,
+					quote_asset: pool.quote,
+					side: Side::Buy,
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
+				});
+			}
+		}
+
+		// in case there are more than 100 elements we need to split the orders into chunks of 100
+		// and submit multiple extrinsics
+		let mut extrinsic_submissions = vec![];
+		for order_chunk in orders_to_delete.chunks(MAX_ORDERS_DELETE as usize) {
+			extrinsic_submissions.push(
+				self.cancel_orders_batch_call(
+					BoundedVec::<_, ConstU32<MAX_ORDERS_DELETE>>::try_from(order_chunk.to_vec())
+						.expect("Guaranteed by `chunk` method."),
+					wait_for,
+				)
+				.await?,
+			);
+		}
+
+		Ok(extrinsic_submissions)
+	}
+
+	async fn cancel_orders_batch(
+		&self,
+		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
+		self.cancel_orders_batch_call(
+			orders
+				.into_iter()
+				.map(TryInto::try_into)
+				.collect::<Result<Vec<_>, _>>()?
+				.try_into()
+				.expect("Impossible to fail, given the same MAX_ORDERS_DELETE"),
+			wait_for,
+		)
+		.await
+	}
+
+	async fn schedule_swap(
+		&self,
+		amount: NumberOrHex,
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {
+		Ok(
+			match self
+				.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_lp::Call::schedule_swap {
+						amount: try_parse_number_or_hex(amount)?,
+						input_asset,
+						output_asset,
+						retry_duration,
+						min_price,
+						dca_params,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await?
+			{
+				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+				WaitForDynamicResult::Data(data) => {
+					let (tx_hash, dynamic_events, ..) = data;
+					extract_dynamic_event!(
+						dynamic_events,
+						cf_static_runtime::swapping::events::SwapRequested,
+						{ swap_request_id },
+						ApiWaitForResult::TxDetails { tx_hash, response: swap_request_id.0.into() }
+					)?
+				},
+			},
+		)
+	}
+}
+
+impl<C, B, BE> LpSignedRpc<C, B, BE>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	BE: Send + Sync + 'static + Backend<B>,
+	C: Send
+		+ Sync
+		+ 'static
+		+ BlockBackend<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
+		+ CallApiAt<B>
+		+ StorageProvider<B, BE>
+		+ sp_api::ProvideRuntimeApi<B>
+		+ sp_runtime::traits::BlockIdTo<B>,
+	C::Api: CustomRuntimeApi<B>
+		+ sp_api::Core<B>
+		+ sp_api::Metadata<B>
+		+ sp_block_builder::BlockBuilder<B>
+		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
+		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
+{
+	async fn cancel_orders_batch_call(
+		&self,
+		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
+		Ok(into_api_wait_for_dynamic_result(
+			self.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_pools::Call::cancel_orders_batch { orders }),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await?,
+			filter_orders,
+		)?)
+	}
+
+	async fn scheduled_or_immediate(
+		&self,
+		call: pallet_cf_pools::Call<state_chain_runtime::Runtime>,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: WaitFor,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
+		Ok(into_api_wait_for_dynamic_result(
+			if let Some(dispatch_at) = dispatch_at {
+				self.signed_pool_client
+					.submit_wait_for_result_dynamic(
+						RuntimeCall::from(pallet_cf_pools::Call::schedule_limit_order_update {
+							call: Box::new(call),
+							dispatch_at,
+						}),
+						wait_for,
+						false,
+					)
+					.await?
+			} else {
+				self.signed_pool_client
+					.submit_wait_for_result_dynamic(RuntimeCall::from(call), wait_for, false)
+					.await?
+			},
+			filter_limit_orders,
+		)?)
+	}
+
+	pub async fn get_open_swap_channels_for_chain<CH: Chain>(
+		&self,
+		block_hash: Option<Hash>,
+	) -> RpcResult<Vec<SwapChannelInfo<CH>>>
+	where
+		state_chain_runtime::Runtime:
+			pallet_cf_ingress_egress::Config<ChainInstanceFor<CH>, TargetChain = CH>,
+	{
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.rpc_backend.client.info().finalized_hash);
+
+		let channels = StorageQueryApi::new(&self.rpc_backend.client)
+			.collect_from_storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
+			state_chain_runtime::Runtime,
+			ChainInstanceFor<CH>,
+		>, _, _, Vec<_>>(block_hash)?;
+
+		let network_environment = StorageQueryApi::new(&self.rpc_backend.client)
+			.get_storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
+			state_chain_runtime::Runtime,
+		>, _>(block_hash)?;
+
+		Ok(channels
+			.into_iter()
+			.filter_map(|(_, DepositChannelDetails { action, deposit_channel, .. })| match action {
+				pallet_cf_ingress_egress::ChannelAction::Swap { destination_asset, .. } =>
+					Some(SwapChannelInfo {
+						deposit_address: deposit_channel
+							.address
+							.to_humanreadable(network_environment),
+						source_asset: deposit_channel.asset.into(),
+						destination_asset,
+					}),
+				_ => None,
+			})
+			.collect::<Vec<_>>())
+	}
+}
+
+fn into_api_wait_for_dynamic_result<T>(
+	from: WaitForDynamicResult,
+	map_events: impl FnOnce(&DynamicEvents) -> Result<T, DynamicEventError>,
+) -> Result<ApiWaitForResult<T>, DynamicEventError> {
+	match from {
+		WaitForDynamicResult::TransactionHash(tx_hash) => Ok(ApiWaitForResult::TxHash(tx_hash)),
+		WaitForDynamicResult::Data(data) => {
+			let (tx_hash, dynamic_events, ..) = data;
+			Ok(ApiWaitForResult::TxDetails { tx_hash, response: map_events(&dynamic_events)? })
+		},
+	}
+}
+
+pub fn filter_orders(events: &DynamicEvents) -> Result<Vec<LimitOrRangeOrder>, DynamicEventError> {
+	Ok(filter_limit_orders(events)?
+		.into_iter()
+		.map(LimitOrRangeOrder::LimitOrder)
+		.chain(filter_range_orders(events)?.into_iter().map(LimitOrRangeOrder::RangeOrder))
+		.collect())
+}
+
+pub fn filter_range_orders(events: &DynamicEvents) -> Result<Vec<RangeOrder>, DynamicEventError> {
+	Ok(events
+		.find_all_static_events::<cf_static_runtime::liquidity_pools::events::RangeOrderUpdated>(
+			false,
+		)?
+		.into_iter()
+		.map(|event| -> RangeOrder {
+			// Convert from cf_static_runtime generated types
+			let size_change = event
+				.size_change
+				.map(Into::<IncreaseOrDecrease<pallet_cf_pools::RangeOrderChange>>::into);
+			let collected_fees =
+				Into::<pallet_cf_pools::pallet::AssetAmounts>::into(event.collected_fees);
+
+			RangeOrder {
+				base_asset: event.base_asset.0,
+				quote_asset: event.quote_asset.0,
+				id: event.id.into(),
+				size_change: size_change.map(|increase_or_decrease| {
+					increase_or_decrease.map(|range_order_change| RangeOrderChange {
+						liquidity: range_order_change.liquidity.into(),
+						amounts: range_order_change.amounts.map(|amount| amount.into()),
+					})
+				}),
+				liquidity_total: event.liquidity_total.into(),
+				tick_range: Range { start: event.tick_range.start, end: event.tick_range.end },
+				collected_fees: collected_fees.map(Into::into),
+			}
+		})
+		.collect::<Vec<_>>())
+}
+
+pub fn filter_limit_orders(events: &DynamicEvents) -> Result<Vec<LimitOrder>, DynamicEventError> {
+	Ok(events
+		.find_all_static_events::<cf_static_runtime::liquidity_pools::events::LimitOrderUpdated>(
+			false,
+		)?
+		.into_iter()
+		.map(|event| -> LimitOrder {
+			// Convert from cf_static_runtime generated types
+			let sell_amount_change =
+				event.sell_amount_change.map(Into::<IncreaseOrDecrease<_>>::into);
+
+			LimitOrder {
+				base_asset: event.base_asset.0,
+				quote_asset: event.quote_asset.0,
+				side: event.side.0,
+				id: event.id.into(),
+				tick: event.tick,
+				sell_amount_total: event.sell_amount_total.into(),
+				collected_fees: event.collected_fees.into(),
+				bought_amount: event.bought_amount.into(),
+				sell_amount_change: sell_amount_change
+					.map(|increase_or_decrease| increase_or_decrease.map(|amount| amount.into())),
+			}
+		})
+		.collect::<Vec<_>>())
+}

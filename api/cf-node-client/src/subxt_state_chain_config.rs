@@ -84,6 +84,10 @@ impl Config for StateChainConfig {
 		with = "::subxt::utils::Static<cf_primitives::chains::ForeignChain>"
 	),
 	substitute_type(
+		path = "cf_primitives::SwapRequestId",
+		with = "::subxt::utils::Static<cf_primitives::SwapRequestId>"
+	),
+	substitute_type(
 		path = "cf_amm::common::Side",
 		with = "::subxt::utils::Static<cf_amm::common::Side>"
 	)
@@ -108,6 +112,10 @@ pub mod cf_static_runtime {}
 	substitute_type(
 		path = "cf_primitives::chains::ForeignChain",
 		with = "::subxt::utils::Static<cf_primitives::chains::ForeignChain>"
+	),
+	substitute_type(
+		path = "cf_primitives::SwapRequestId",
+		with = "::subxt::utils::Static<cf_primitives::SwapRequestId>"
 	),
 	substitute_type(
 		path = "cf_amm::common::Side",
@@ -154,32 +162,32 @@ impl<T> From<cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrD
 	}
 }
 
-// impl
-// From<
-// 	cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease<
-// 		cf_static_runtime::runtime_types::pallet_cf_pools::RangeOrderChange,
-// 	>,
-// > for pallet_cf_pools::IncreaseOrDecrease<pallet_cf_pools::RangeOrderChange>
-// {
-// 	fn from(
-// 		value: cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease<
-// 			cf_static_runtime::runtime_types::pallet_cf_pools::RangeOrderChange,
-// 		>,
-// 	) -> Self {
-// 		match value {
-// 			cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease::Increase(t) =>
-// 				pallet_cf_pools::IncreaseOrDecrease::Increase(pallet_cf_pools::RangeOrderChange{
-// 					liquidity: t.liquidity,
-// 					amounts: t.amounts.into(),
-// 				}),
-// 			cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease::Decrease(t) =>
-// 				pallet_cf_pools::IncreaseOrDecrease::Decrease(pallet_cf_pools::RangeOrderChange {
-// 					liquidity: t.liquidity,
-// 					amounts: t.amounts.into(),
-// 				}),
-// 		}
-// 	}
-// }
+impl
+	From<
+		cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease<
+			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::RangeOrderChange,
+		>,
+	> for pallet_cf_pools::IncreaseOrDecrease<pallet_cf_pools::RangeOrderChange>
+{
+	fn from(
+		value: cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease<
+			cf_static_runtime::runtime_types::pallet_cf_pools::pallet::RangeOrderChange,
+		>,
+	) -> Self {
+		match value {
+			cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease::Increase(t) =>
+				pallet_cf_pools::IncreaseOrDecrease::Increase(pallet_cf_pools::RangeOrderChange{
+					liquidity: t.liquidity,
+					amounts: t.amounts.into(),
+				}),
+			cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease::Decrease(t) =>
+				pallet_cf_pools::IncreaseOrDecrease::Decrease(pallet_cf_pools::RangeOrderChange {
+					liquidity: t.liquidity,
+					amounts: t.amounts.into(),
+				}),
+		}
+	}
+}
 
 impl From<cf_static_runtime::runtime_types::sp_runtime::DispatchError>
 	for sp_runtime::DispatchError

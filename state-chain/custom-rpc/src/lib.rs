@@ -86,6 +86,7 @@ use std::{
 
 pub mod backend;
 pub mod broker;
+pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
 pub mod pool_client;
