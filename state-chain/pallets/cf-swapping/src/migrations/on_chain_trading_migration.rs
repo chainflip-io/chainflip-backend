@@ -28,7 +28,9 @@ use codec::{Decode, Encode};
 
 pub mod old {
 	use super::*;
-	use cf_chains::{CcmDepositMetadata, ChannelRefundParametersDecoded, ForeignChainAddress};
+	use cf_chains::{
+		CcmDepositMetadataUnchecked, ChannelRefundParametersDecoded, ForeignChainAddress,
+	};
 	use cf_primitives::{Asset, Beneficiaries};
 	use frame_support::Twox64Concat;
 
@@ -36,7 +38,7 @@ pub mod old {
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub enum SwapRequestState<T: Config> {
 		UserSwap {
-			ccm_deposit_metadata: Option<CcmDepositMetadata>,
+			ccm_deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 			output_address: ForeignChainAddress,
 			dca_state: DcaState,
 			broker_fees: Beneficiaries<T::AccountId>,
@@ -98,7 +100,13 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 							},
 						),
 						output_action: SwapOutputAction::Egress {
-							ccm_deposit_metadata,
+							ccm_deposit_metadata: ccm_deposit_metadata.map(|old| {
+								old.to_checked(
+									old_swap_request.output_asset,
+									output_address.clone(),
+								)
+								.expect("CCM deposit metadata already verified.")
+							}),
 							output_address,
 						},
 						dca_state,

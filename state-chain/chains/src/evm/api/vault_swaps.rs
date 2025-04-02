@@ -23,7 +23,8 @@ pub mod x_swap_token;
 #[cfg(test)]
 pub mod test_utils {
 	use crate::{
-		cf_parameters::*, eth::Address as EthAddress, CcmChannelMetadata, ChannelRefundParameters,
+		cf_parameters::*, eth::Address as EthAddress, CcmChannelMetadataUnchecked,
+		ChannelRefundParameters,
 	};
 	use cf_primitives::{
 		chains::Ethereum, AccountId, AffiliateAndFee, AffiliateShortId, Beneficiary, DcaParameters,
@@ -46,8 +47,8 @@ pub mod test_utils {
 	pub fn broker_fee() -> Beneficiary<AccountId> {
 		Beneficiary { account: AccountId::from([0xF2; 32]), bps: 1u16 }
 	}
-	pub fn channel_metadata() -> CcmChannelMetadata {
-		CcmChannelMetadata {
+	pub fn channel_metadata() -> CcmChannelMetadataUnchecked {
+		CcmChannelMetadataUnchecked {
 			message: vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06].try_into().unwrap(),
 			gas_budget: 1_000_000u128,
 			ccm_additional_data: vec![0x11, 0x22, 0x33, 0x44].try_into().unwrap(),

@@ -67,21 +67,21 @@ use cf_chains::{
 	instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance, SolanaInstance},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
-			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
-			SolanaEnvironment,
+			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
+			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
+			SolanaApi, SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
-		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
+		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
+		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
-	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
-	ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
+	AnyChain, ApiCall, Arbitrum, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain,
+	ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
 	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters,
+	DcaParameters, SwapRequestId,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
@@ -615,6 +615,16 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
+impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
+	for SolEnvironment
+{
+	fn lookup(
+		swap_request_id: SwapRequestId,
+	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+		Environment::take_sol_ccm_swap_alts(swap_request_id)
+	}
+}
+
 impl SolanaEnvironment for SolEnvironment {}
 
 pub struct TokenholderGovernanceBroadcaster;
@@ -716,7 +726,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				destination_address: ForeignChainAddress,
 				broker_commission: Beneficiaries<Self::AccountId>,
 				broker_id: Self::AccountId,
-				channel_metadata: Option<CcmChannelMetadata>,
+				channel_metadata: Option<CcmChannelMetadataChecked>,
 				boost_fee: BasisPoints,
 				refund_parameters: ChannelRefundParametersDecoded,
 				dca_parameters: Option<DcaParameters>,
@@ -751,7 +761,8 @@ macro_rules! impl_egress_api_for_anychain {
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
-				maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+				maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
+				swap_request_id: Option<SwapRequestId>,
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
@@ -762,6 +773,7 @@ macro_rules! impl_egress_api_for_anychain {
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 							maybe_ccm_deposit_metadata,
+							swap_request_id,
 						)
 						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
 						.map_err(Into::into),

@@ -39,15 +39,16 @@ pub use async_result::AsyncResult;
 use cf_chains::{
 	address::ForeignChainAddress,
 	assets::any::AssetMap,
+	ccm_checker::DecodedCcmAdditionalData,
 	sol::{SolAddress, SolHash},
-	ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
+	ApiCall, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain, ChainCrypto,
 	ChannelRefundParametersDecoded, Ethereum,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, SemVer,
-	ThresholdSignatureRequestId,
+	SwapRequestId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -766,7 +767,7 @@ pub trait DepositApi<C: Chain> {
 		destination_address: ForeignChainAddress,
 		broker_commission: Beneficiaries<Self::AccountId>,
 		broker_id: Self::AccountId,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataChecked>,
 		boost_fee: BasisPoints,
 		refund_params: ChannelRefundParametersDecoded,
 		dca_params: Option<DcaParameters>,
@@ -912,7 +913,8 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+		maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
+		swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
@@ -1226,4 +1228,11 @@ pub trait MinimumDeposit {
 // Used for exposing weights from the Pools pallet
 pub trait LpOrdersWeightsProvider {
 	fn update_limit_order_weight() -> Weight;
+}
+
+pub trait InitiateSolanaAltWitnessing {
+	fn initiate_alt_witnessing(
+		_ccm_channel_metadata: DecodedCcmAdditionalData,
+		_swap_request_id: SwapRequestId,
+	);
 }
