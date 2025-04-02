@@ -16,7 +16,7 @@
 
 use crate::RpcResult;
 
-use cf_chains::{eth::Address as EthereumAddress, CcmChannelMetadata};
+use cf_chains::{eth::Address as EthereumAddress, CcmChannelMetadataUnchecked};
 use cf_rpc_types::{AccountId32, BlockUpdate, RefundParametersRpc, H256};
 use jsonrpsee::proc_macros::rpc;
 
@@ -35,7 +35,7 @@ pub trait BrokerRpcApi {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
@@ -58,7 +58,7 @@ pub trait BrokerRpcApi {
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		extra_parameters: VaultSwapExtraParametersRpc,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,

@@ -74,7 +74,20 @@ pub mod rpc_types {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	Debug,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+)]
 pub struct CcmAddress {
 	pub pubkey: Pubkey,
 	pub is_writable: bool,
@@ -89,7 +102,9 @@ impl From<CcmAddress> for AccountMeta {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord,
+)]
 pub struct CcmAccounts {
 	pub cf_receiver: CcmAddress,
 	pub additional_accounts: Vec<CcmAddress>,
@@ -143,7 +158,8 @@ pub mod sol_test_values {
 			SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolAsset,
 			SolCcmAccounts, SolCcmAddress, SolComputeLimit, SolHash, SolVersionedTransaction,
 		},
-		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
+		CcmChannelMetadataUnchecked, CcmDepositMetadataUnchecked, ForeignChain,
+		ForeignChainAddress,
 	};
 	use itertools::Itertools;
 	use sol_prim::consts::{const_address, const_hash, MAX_TRANSACTION_LENGTH};
@@ -295,11 +311,11 @@ pub mod sol_test_values {
 		}
 	}
 
-	pub fn ccm_parameter() -> CcmDepositMetadata {
-		CcmDepositMetadata {
+	pub fn ccm_parameter() -> CcmDepositMetadataUnchecked<ForeignChainAddress> {
+		CcmDepositMetadataUnchecked {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xff; 20].into())),
-			channel_metadata: CcmChannelMetadata {
+			channel_metadata: CcmChannelMetadataUnchecked {
 				message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(), // CCM message
 				gas_budget: 0u128,                                         // unused
 				ccm_additional_data: codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V0(
@@ -311,7 +327,7 @@ pub mod sol_test_values {
 		}
 	}
 
-	pub fn ccm_parameter_v1() -> CcmDepositMetadata {
+	pub fn ccm_parameter_v1() -> CcmDepositMetadataUnchecked<ForeignChainAddress> {
 		let mut ccm = ccm_parameter();
 		ccm.channel_metadata.ccm_additional_data =
 			codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {

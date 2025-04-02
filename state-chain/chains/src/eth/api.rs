@@ -211,7 +211,7 @@ where
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: GasAmount,
 		message: Vec<u8>,
-		_ccm_additional_data: Vec<u8>,
+		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		let transfer_param = EncodableTransferAssetParams {
 			asset: E::token_address(transfer_param.asset)

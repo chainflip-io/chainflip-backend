@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Address, Digest};
-use cf_primitives::BlockNumber;
 use cf_utilities::bs58_array;
 
 pub const SOLANA_SIGNATURE_LEN: usize = 64;
@@ -82,3 +81,6 @@ pub const X_SWAP_FROM_ACC_IDX: u8 = 2u8;
 pub const X_SWAP_NATIVE_EVENT_DATA_ACC_IDX: u8 = 3u8;
 pub const X_SWAP_TOKEN_FROM_TOKEN_ACC_IDX: u8 = 3u8;
 pub const X_SWAP_TOKEN_EVENT_DATA_ACC_IDX: u8 = 4u8;
+
+// TODO: ensure this is removed in future commit.
+pub const EXPIRY_TIME_FOR_ALT_ELECTIONS: u32 = 0;

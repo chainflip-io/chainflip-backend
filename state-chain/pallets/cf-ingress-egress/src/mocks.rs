@@ -139,7 +139,6 @@ impl Config<Instance1> for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapParameterValidation = MockSwapParameterValidation;
 	type SolanaAltWitnessingHandler = MockAltWitnessing;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
@@ -169,7 +168,6 @@ impl Config<Instance2> for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapParameterValidation = MockSwapParameterValidation;
 	type SolanaAltWitnessingHandler = MockAltWitnessing;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
