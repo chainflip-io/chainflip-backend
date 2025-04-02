@@ -949,9 +949,12 @@ pub mod pallet {
 		use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 		#[derive(Encode, Decode, GenericTypeInfo)]
+		#[expand_name_with(T::NAME)]
 		pub struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
+			#[skip_name_expansion]
 			epoch: EpochIndex,
 			#[allow(clippy::type_complexity)]
+			#[skip_name_expansion]
 			pub bitmaps:
 				Vec<(BitmapComponentOf<T::ElectoralSystemRunner>, BitVec<u8, bitvec::order::Lsb0>)>,
 			#[codec(skip)]

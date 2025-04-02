@@ -127,11 +127,14 @@ pub mod pallet {
 
 	/// All data contained in a Broadcast
 	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
+	#[expand_name_with(T::NAME)]
 	pub struct BroadcastData<T: Config<I>, I: 'static> {
+		#[skip_name_expansion]
 		pub broadcast_id: BroadcastId,
 		pub transaction_payload: TransactionFor<T, I>,
 		pub threshold_signature_payload: PayloadFor<T, I>,
 		pub transaction_out_id: TransactionOutIdFor<T, I>,
+		#[skip_name_expansion]
 		pub nominee: Option<T::ValidatorId>,
 	}
 

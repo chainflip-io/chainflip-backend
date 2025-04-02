@@ -128,6 +128,7 @@ pub enum ThresholdCeremonyType {
 }
 
 #[derive(Clone, Encode, Decode, GenericTypeInfo, PartialEq, Eq, Default, RuntimeDebug)]
+#[expand_name_with(T::NAME)]
 pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
 	pub signer: AggKeyFor<T, I>,
 	pub signature_result: AsyncResult<SignatureResultFor<T, I>>,
@@ -137,12 +138,14 @@ pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
 #[derive(
 	PartialEq, Eq, Clone, Encode, Decode, GenericTypeInfo, EnumVariant, RuntimeDebugNoBound,
 )]
+#[expand_name_with(T::NAME)]
 pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen {
 		ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
 		response_status: KeygenResponseStatus<T, I>,
+		#[skip_name_expansion]
 		new_epoch_index: EpochIndex,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
@@ -158,6 +161,7 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 		ceremony_id: CeremonyId,
 		response_status: KeyHandoverResponseStatus<T, I>,
 		receiving_participants: BTreeSet<T::ValidatorId>,
+		#[skip_name_expansion]
 		next_epoch: EpochIndex,
 		new_public_key: AggKeyFor<T, I>,
 	},
@@ -181,6 +185,7 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	},
 	KeyHandoverFailed {
 		new_public_key: AggKeyFor<T, I>,
+		#[skip_name_expansion]
 		offenders: BTreeSet<T::ValidatorId>,
 	},
 }
@@ -265,34 +270,44 @@ pub mod pallet {
 	use frame_system::ensure_none;
 	/// Context for tracking the progress of a threshold signature ceremony.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[expand_name_with(T::NAME)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
 		/// The respondents that have yet to reply.
+		#[skip_name_expansion]
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each authority has received.
+		#[skip_name_expansion]
 		pub blame_counts: BTreeMap<T::ValidatorId, AuthorityCount>,
 		/// The candidates participating in the signing ceremony (ie. the threshold set).
+		#[skip_name_expansion]
 		pub candidates: BTreeSet<T::ValidatorId>,
 		/// The epoch in which the ceremony was started.
+		#[skip_name_expansion]
 		pub epoch: EpochIndex,
 		/// The key we want to sign with.
 		pub key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 		/// Determines how/if we deal with ceremony failure.
+		#[skip_name_expansion]
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[expand_name_with(T::NAME)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
+		#[skip_name_expansion]
 		pub request_id: RequestId,
 		/// The number of ceremonies attempted so far, excluding the current one.
 		/// Currently we do not limit the number of retry attempts for ceremony type Standard.
 		/// Most transactions are critical, so we should retry until success.
+		#[skip_name_expansion]
 		pub attempt_count: AttemptCount,
 		/// The payload to be signed over.
 		pub payload: PayloadFor<T, I>,
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[expand_name_with(T::NAME)]
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
 		pub request_type:

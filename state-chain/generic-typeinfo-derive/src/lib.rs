@@ -10,11 +10,16 @@
 /// `#[derive(GenericTypeInfo)]`. It can be used on types that are generic and contain generic
 /// types. Typically you'd want to use it on types that also have
 /// #[scale_info(skip_type_params(T, I))]
-/// applied to it. The requirement is that the first generic parameter contains a static `NAME`
-/// element. For example:
+/// applied to it. All fields in the struct (or variants of an enum) will have their typename
+/// changed from "typename" to "typenameForXYZ", where you can specify the "XYZ" part by using
+/// #[expand_name_with("XYZ")]. The argument of expand_name_with can be any valid expression.
+/// If you don't want a field to be renamed, you can suppress it by using the #[skip_name_expansion]
+/// attribute. For example:
 ///
 /// #[derive(GenericTypeInfo)]
+/// #[expand_name_with(T::NAME)]
 /// pub struct MyStruct<T: Config<I>, I: 'static = ()> {
+///     #[skip_name_expansion]
 ///     pub foo: u32,
 ///     pub bar: SpecialType<T, I>,
 /// }
@@ -45,33 +50,41 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Data, DataEnum, DataStruct, DeriveInput, Fields, Ident, ImplGenerics, TypeGenerics};
+use syn::{
+	Data, DataEnum, DataStruct, DeriveInput, Expr, Fields, Ident, ImplGenerics, TypeGenerics,
+};
 
-#[proc_macro_derive(GenericTypeInfo)]
+#[proc_macro_derive(GenericTypeInfo, attributes(expand_name_with, skip_name_expansion))]
 pub fn derive(item: TokenStream) -> TokenStream {
 	let item2: TokenStream2 = item.into();
 	let ast: DeriveInput = syn::parse2(item2).unwrap();
+	let name_for_expansion: Expr = ast.attrs.iter().find(|attr| attr.path().is_ident("expand_name_with")).expect("When using the #[derive(GenericTypeInfo)] directive, you must provide the name to be used for expansion via #[expand_name_with(...)]").parse_args().unwrap();
 	let ident = ast.ident;
-	let chain_generic_ident = ast.generics.type_params().next().expect("You are trying to #[derive(GenericTypeInfo)] on a Struct/Enum that is not a generic! Just do #[derive(TypeInfo)] instead.").ident.clone();
 	let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
 	match ast.data {
-		Data::Struct(d) => derive_struct(d, ident, impl_generics, ty_generics, chain_generic_ident),
-		Data::Enum(d) => derive_enum(d, ident, impl_generics, ty_generics, chain_generic_ident),
+		Data::Struct(d) => derive_struct(d, ident, impl_generics, ty_generics, name_for_expansion),
+		Data::Enum(d) => derive_enum(d, ident, impl_generics, ty_generics, name_for_expansion),
 		Data::Union(_) => panic!("#[derive(GenericTypeInfo)] not yet implemented for Unions"),
 	}
 	.into()
 }
 
-fn derive_fields(d: Fields, chain_ident: Ident) -> TokenStream2 {
+fn derive_fields(d: Fields, name_for_expansion: Expr) -> TokenStream2 {
 	match d {
 		syn::Fields::Named(fields_named) => {
 			let fields: Vec<TokenStream2> = fields_named.named.iter().map(|field| {
                 let ty = field.clone().ty;
                 let typename = clean_type_string(&quote!(#ty).to_string());
                 let name = field.clone().ident.unwrap();
-                quote!(.field(|f| {
-					let full_typename = scale_info::prelude::format!("{}For{}", #typename, #chain_ident::NAME).leak();
-					f.ty::<#ty>().type_name(full_typename).name(::core::stringify!(#name))}))
+				if field.attrs.iter().any(|attr| attr.path().is_ident("skip_name_expansion")){
+					quote!(.field(|f|
+						f.ty::<#ty>().type_name(#typename).name(::core::stringify!(#name))
+					))
+				} else {
+					quote!(.field(|f| {
+						let full_typename = scale_info::prelude::format!("{}For{}", #typename, #name_for_expansion).leak();
+						f.ty::<#ty>().type_name(full_typename).name(::core::stringify!(#name))}))
+				}
             }).collect();
 			quote!(scale_info::build::Fields::named() #( #fields )* )
 		},
@@ -82,9 +95,15 @@ fn derive_fields(d: Fields, chain_ident: Ident) -> TokenStream2 {
 				.map(|field| {
 					let ty = field.clone().ty;
 					let typename = clean_type_string(&quote!(#ty).to_string());
-					quote!(.field(|f| {
-						let full_typename = scale_info::prelude::format!("{}For{}", #typename, #chain_ident::NAME).leak();
-						f.ty::<#ty>().type_name(full_typename)}))
+					if field.attrs.iter().any(|attr| attr.path().is_ident("skip_name_expansion")){
+						quote!(.field(|f|
+							f.ty::<#ty>().type_name(::core::stringify!(#typename))
+						))
+					} else {
+						quote!(.field(|f| {
+							let full_typename = scale_info::prelude::format!("{}For{}", #typename, #name_for_expansion).leak();
+							f.ty::<#ty>().type_name(full_typename)}))
+					}
 				})
 				.collect();
 			quote!(scale_info::build::Fields::unnamed() #( #fields )* )
@@ -98,13 +117,13 @@ fn derive_struct(
 	ident: Ident,
 	impl_generics: ImplGenerics,
 	ty_generics: TypeGenerics,
-	chain_ident: Ident,
+	name_for_expansion: Expr,
 ) -> TokenStream2 {
-	let fields = derive_fields(d.fields, chain_ident.clone());
+	let fields = derive_fields(d.fields, name_for_expansion.clone());
 	quote!(impl #impl_generics TypeInfo for #ident #ty_generics {
 		type Identity = Self;
 		fn type_info() -> scale_info::Type {
-			let full_pathname = scale_info::prelude::format!("{}For{}", ::core::stringify!(#ident), #chain_ident::NAME).leak();
+			let full_pathname = scale_info::prelude::format!("{}For{}", ::core::stringify!(#ident), #name_for_expansion).leak();
 			scale_info::Type::builder()
 				.path(scale_info::Path::new(full_pathname, ::core::module_path!()))
 				.composite(#fields)
@@ -117,7 +136,7 @@ fn derive_enum(
 	ident: Ident,
 	impl_generics: ImplGenerics,
 	ty_generics: TypeGenerics,
-	chain_ident: Ident,
+	name_for_expansion: Expr,
 ) -> TokenStream2 {
 	let variants: Vec<_> = d
 		.variants
@@ -125,7 +144,7 @@ fn derive_enum(
 		.enumerate()
 		.map(|(index, variant)| {
 			let name = variant.ident;
-			let fields = derive_fields(variant.fields, chain_ident.clone());
+			let fields = derive_fields(variant.fields, name_for_expansion.clone());
 			quote!(.variant(::core::stringify!(#name), |v| {
             v.index(#index as u8)
                 .fields(#fields)}))
@@ -134,7 +153,7 @@ fn derive_enum(
 	quote!(impl #impl_generics TypeInfo for #ident #ty_generics {
 		type Identity = Self;
 		fn type_info() -> scale_info::Type {
-			let full_pathname = scale_info::prelude::format!("{}For{}", ::core::stringify!(#ident), #chain_ident::NAME).leak();
+			let full_pathname = scale_info::prelude::format!("{}For{}", ::core::stringify!(#ident), #name_for_expansion).leak();
 			scale_info::Type::builder()
 			.path(scale_info::Path::new(full_pathname, ::core::module_path!()))
 			.variant(

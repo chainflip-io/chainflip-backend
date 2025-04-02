@@ -249,7 +249,9 @@ use deposit_origin::DepositOrigin;
 
 /// Holds information about a transaction that is marked for rejection.
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
+#[expand_name_with(T::NAME)]
 pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
+	#[skip_name_expansion]
 	pub refund_address: ForeignChainAddress,
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
@@ -310,22 +312,18 @@ pub struct FailedForeignChainCall {
 	MaxEncodedLen,
 	GenericTypeInfo,
 )]
+#[expand_name_with(T::NAME)]
 pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
-	ChannelOpeningFee {
-		fee: T::Amount,
-	},
+	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
-	SetMinimumDeposit {
-		asset: TargetChainAsset<T, I>,
-		minimum_deposit: TargetChainAmount<T, I>,
-	},
+	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
 	/// Set the deposit channel lifetime. The time before the engines stop witnessing a channel.
 	/// This is configurable primarily to allow for unpredictable block times in testnets.
-	SetDepositChannelLifetime {
-		lifetime: TargetChainBlockNumber<T, I>,
-	},
+	SetDepositChannelLifetime { lifetime: TargetChainBlockNumber<T, I> },
+	#[skip_name_expansion]
 	SetNetworkFeeDeductionFromBoost {
+		#[skip_name_expansion]
 		deduction_percent: Percent,
 	},
 }
@@ -372,23 +370,32 @@ pub mod pallet {
 		Decode,
 		GenericTypeInfo,
 	)]
+	#[expand_name_with(T::NAME)]
 	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
 		pub deposit_address: Option<TargetChainAccount<T, I>>,
+		#[skip_name_expansion]
 		pub channel_id: Option<ChannelId>,
 		pub deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 		pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		#[skip_name_expansion]
 		pub output_asset: Asset,
 		// Note we use EncodedAddress here rather than eg. ForeignChainAddress because this
 		// value can be populated by the submitter of the vault deposit and is not verified
 		// in the engine, so we need to verify on-chain.
+		#[skip_name_expansion]
 		pub destination_address: EncodedAddress,
+		#[skip_name_expansion]
 		pub deposit_metadata: Option<CcmDepositMetadata>,
 		pub tx_id: TransactionInIdFor<T, I>,
+		#[skip_name_expansion]
 		pub broker_fee: Option<Beneficiary<T::AccountId>>,
+		#[skip_name_expansion]
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
 		pub refund_params: ChannelRefundParameters<TargetChainAccount<T, I>>,
+		#[skip_name_expansion]
 		pub dca_params: Option<DcaParameters>,
+		#[skip_name_expansion]
 		pub boost_fee: BasisPoints,
 	}
 
@@ -401,14 +408,17 @@ pub mod pallet {
 		Decode,
 		GenericTypeInfo,
 	)]
+	#[expand_name_with(T::NAME)]
 	pub enum DepositFailedDetails<T: Config<I>, I: 'static> {
 		DepositChannel { deposit_witness: DepositWitness<T::TargetChain> },
 		Vault { vault_witness: Box<VaultDepositWitness<T, I>> },
 	}
 
 	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[expand_name_with(T::NAME)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
 		/// The owner of the deposit channel.
+		#[skip_name_expansion]
 		pub owner: T::AccountId,
 		pub deposit_channel: DepositChannel<T::TargetChain>,
 		/// The block number at which the deposit channel was opened, expressed as a block number
@@ -418,8 +428,10 @@ pub mod pallet {
 		/// sent after this block, they will not be witnessed.
 		pub expires_at: TargetChainBlockNumber<T, I>,
 		/// The action to be taken when the DepositChannel is deposited to.
+		#[skip_name_expansion]
 		pub action: ChannelAction<T::AccountId>,
 		/// The boost fee
+		#[skip_name_expansion]
 		pub boost_fee: BasisPoints,
 		/// Boost status, indicating whether there is pending boost on the channel
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>>,
