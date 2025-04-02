@@ -81,7 +81,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters, SwapRequestId,
+	DcaParameters,
 };
 
 use cf_traits::{
@@ -615,13 +615,14 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
-impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
+impl ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
 	for SolEnvironment
 {
 	fn lookup(
-		swap_request_id: SwapRequestId,
+		_alts: Vec<SolAddress>,
 	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
-		Environment::take_sol_ccm_swap_alts(swap_request_id)
+		// TODO: To be implemented with ALT election refactor
+		Some(AltConsensusResult::ValidConsensusAlts(vec![]))
 	}
 }
 
@@ -762,7 +763,6 @@ macro_rules! impl_egress_api_for_anychain {
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
 				maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-				swap_request_id: Option<SwapRequestId>,
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
@@ -773,7 +773,6 @@ macro_rules! impl_egress_api_for_anychain {
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 							maybe_ccm_deposit_metadata,
-							swap_request_id,
 						)
 						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
 						.map_err(Into::into),

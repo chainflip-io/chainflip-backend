@@ -90,7 +90,6 @@ pub(super) fn assert_ccm_egressed(asset: Asset, swap_amount: AssetAmount, gas_bu
 			message: vec![0x01].try_into().unwrap(),
 			ccm_additional_data: Default::default(),
 			gas_budget,
-			swap_request_id: SWAP_REQUEST_ID,
 		},
 	);
 }

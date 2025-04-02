@@ -455,7 +455,6 @@ impl<T: Config> Pallet<T> {
 							amount,
 							destination_address_internal,
 							None,
-							None,
 						)
 						.map_err(Into::into)?;
 

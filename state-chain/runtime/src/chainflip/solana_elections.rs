@@ -21,7 +21,6 @@ use crate::{
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, sol::Asset as SolAsset},
-	ccm_checker::DecodedCcmAdditionalData,
 	instances::{ChainInstanceAlias, SolanaInstance},
 	sol::{
 		api::{
@@ -704,45 +703,24 @@ impl FromSolOrNot for SolanaVaultSwapDetails {
 
 pub struct SolanaAltWitnessingHandler;
 impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
-	fn initiate_alt_witnessing(
-		ccm_additional_data: DecodedCcmAdditionalData,
-		swap_request_id: SwapRequestId,
-	) {
-		use sp_std::vec;
-		match ccm_additional_data {
-			DecodedCcmAdditionalData::Solana(versioned_ccm_data) => {
-				let alt_addresses = versioned_ccm_data.address_lookup_tables();
-				if !alt_addresses.is_empty() {
-					pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(
-						|| {
-							SolanaAltWitnessing::witness_exact_value::<
-								DerivedElectoralAccess<
-									_,
-									SolanaAltWitnessing,
-									RunnerStorageAccess<Runtime, SolanaInstance>,
-								>,
-							>(SolanaAltWitnessingIdentifier {
-								alt_addresses,
-								swap_request_id,
-								election_expiry_block_number: crate::System::block_number() +
-									EXPIRY_TIME_FOR_ALT_ELECTIONS,
-							})
-						},
-					)
-					.unwrap_or_else(|e| {
-						log::error!("Cannot start Solana ALT witnessing election: {:?}", e);
-					}) //The error should not happen as long as the election identifiers dont overflow
-				 // and the electoral system is initialized
-				} else {
-					Environment::add_sol_ccm_swap_alts(
-						swap_request_id,
-						AltConsensusResult::ValidConsensusAlts(vec![]),
-					);
-				}
-			},
-			_ => {
-				log_or_panic!("Invalid CCM data type for Solana alt witnessing");
-			},
-		}
+	fn initiate_alt_witnessing(alts: Vec<SolAddress>) {
+		// TODO roy: fix this.
+		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
+			SolanaAltWitnessing::witness_exact_value::<
+				DerivedElectoralAccess<
+					_,
+					SolanaAltWitnessing,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(SolanaAltWitnessingIdentifier {
+				swap_request_id: Default::default(),
+				alt_addresses: alts,
+				election_expiry_block_number: crate::System::block_number() +
+					EXPIRY_TIME_FOR_ALT_ELECTIONS,
+			})
+		})
+		.unwrap_or_else(|e| {
+			log::error!("Cannot start Solana ALT witnessing election: {:?}", e);
+		}) //The error should not happen as long as the election identifiers don't overflow
 	}
 }
