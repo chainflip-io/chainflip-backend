@@ -58,20 +58,20 @@ pub struct BlockProcessor<T: BWProcessorTypes> {
 	/// processed and the safety margin. The "age" represents the block height difference between
 	/// head of the chain and block that we are processing, and it's used to know what rules have
 	/// already been processed for such block
-	pub blocks_data: BTreeMap<T::ChainBlockNumber, BlockInfo<T::BlockData>>,
+	pub blocks_data: BTreeMap<T::ChainBlockNumber, BlockProcessingInfo<T::BlockData>>,
 	pub reorg_events: BTreeMap<T::ChainBlockNumber, (Vec<T::Event>, u32)>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub struct BlockInfo<BlockData> {
+pub struct BlockProcessingInfo<BlockData> {
 	block_data: BlockData,
 	next_age_to_process: u32,
 	safety_margin: u32,
 }
-impl<BlockData> BlockInfo<BlockData> {
+impl<BlockData> BlockProcessingInfo<BlockData> {
 	fn new(block_data: BlockData, safety_margin: u32) -> Self {
-		BlockInfo { block_data, next_age_to_process: Default::default(), safety_margin }
+		BlockProcessingInfo { block_data, next_age_to_process: Default::default(), safety_margin }
 	}
 }
 impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
@@ -127,7 +127,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		block_data: Option<(T::ChainBlockNumber, T::BlockData, u32)>,
 	) {
 		if let Some((block_number, block_data, safety_margin)) = block_data {
-			self.blocks_data.insert(block_number, BlockInfo::new(block_data, safety_margin));
+			self.blocks_data.insert(block_number, BlockProcessingInfo::new(block_data, safety_margin));
 		}
 		let last_block: T::ChainBlockNumber;
 		match chain_progress {
