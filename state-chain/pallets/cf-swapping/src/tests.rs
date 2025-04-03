@@ -614,9 +614,10 @@ fn process_all_into_stable_swaps_first() {
 		assert_swaps_queue_is_empty();
 
 		let usdc_amount_swapped_after_fee =
-			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE, None).remaining_amount;
+			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE, MinFeePolicy::NotEnforced)
+				.remaining_amount;
 		let usdc_amount_deposited_after_fee =
-			Swapping::take_network_fee(AMOUNT, None).remaining_amount;
+			Swapping::take_network_fee(AMOUNT, MinFeePolicy::NotEnforced).remaining_amount;
 
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(

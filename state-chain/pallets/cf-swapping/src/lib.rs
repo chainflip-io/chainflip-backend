@@ -281,7 +281,8 @@ pub struct DcaState {
 	chunk_interval: u32,
 	accumulated_output_amount: AssetAmount,
 	network_fee_collected: AssetAmount,
-	accumulated_input_amount: AssetAmount,
+	// Total amount of stable asset that has been processed so far (before fees)
+	accumulated_stable_amount: AssetAmount,
 }
 
 impl DcaState {
@@ -300,7 +301,7 @@ impl DcaState {
 			chunk_interval: params.as_ref().map(|p| p.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS),
 			accumulated_output_amount: 0,
 			network_fee_collected: 0,
-			accumulated_input_amount: 0,
+			accumulated_stable_amount: 0,
 		};
 
 		let first_chunk_amount = state.prepare_next_chunk(None).unwrap_or_else(|| {
@@ -369,6 +370,11 @@ struct SwapRequest<T: Config> {
 	input_asset: Asset,
 	output_asset: Asset,
 	state: SwapRequestState<T>,
+}
+
+enum MinFeePolicy {
+	Enforced { swap_request_id: SwapRequestId },
+	NotEnforced,
 }
 
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -1506,9 +1512,11 @@ pub mod pallet {
 							let FeeTaken { remaining_amount, fee } = Self::take_network_fee(
 								stable_amount,
 								if *min_fee_enforced {
-									Some(swap.swap.swap_request_id)
+									MinFeePolicy::Enforced {
+										swap_request_id: swap.swap.swap_request_id,
+									}
 								} else {
-									None
+									MinFeePolicy::NotEnforced
 								},
 							);
 							swap.network_fee_taken = Some(fee);
@@ -1786,9 +1794,12 @@ pub mod pallet {
 						dca_state
 							.network_fee_collected
 							.saturating_accrue(swap.network_fee_taken.unwrap_or_default());
-						dca_state
-							.accumulated_input_amount
-							.saturating_accrue(swap.swap.input_amount);
+						dca_state.accumulated_stable_amount.saturating_accrue(
+							swap.stable_amount
+								.unwrap_or_default()
+								.saturating_add(swap.network_fee_taken.unwrap_or_default())
+								.saturating_add(swap.broker_fee_taken.unwrap_or_default()),
+						);
 
 						false
 					} else {
@@ -2038,14 +2049,14 @@ pub mod pallet {
 				(_, STABLE_ASSET) => {
 					let FeeTaken { remaining_amount: output, fee } = Self::take_network_fee(
 						T::SwappingApi::swap_single_leg(from, to, input_amount)?,
-						None,
+						MinFeePolicy::NotEnforced,
 					);
 
 					SwapOutput { intermediary: None, output, network_fee: fee }
 				},
 				(STABLE_ASSET, _) => {
 					let FeeTaken { remaining_amount: input_amount, fee } =
-						Self::take_network_fee(input_amount, None);
+						Self::take_network_fee(input_amount, MinFeePolicy::NotEnforced);
 
 					SwapOutput {
 						intermediary: None,
@@ -2056,7 +2067,7 @@ pub mod pallet {
 				_ => {
 					let FeeTaken { remaining_amount: intermediary, fee } = Self::take_network_fee(
 						T::SwappingApi::swap_single_leg(from, STABLE_ASSET, input_amount)?,
-						None,
+						MinFeePolicy::NotEnforced,
 					);
 
 					SwapOutput {
@@ -2069,10 +2080,11 @@ pub mod pallet {
 		}
 
 		/// Take network fee from the input amount and return the remaining amount and the fee.
-		/// If `swap_request_id` is provided, the minimum network fee is enforced.
+		/// If `swap_request_id` is provided via the MinFeePolicy, the minimum network fee is
+		/// enforced.
 		pub(super) fn take_network_fee(
 			input: AssetAmount,
-			swap_request_id: Option<SwapRequestId>,
+			minimum_fee_policy: MinFeePolicy,
 		) -> FeeTaken {
 			if input.is_zero() {
 				return FeeTaken { remaining_amount: 0, fee: 0 };
@@ -2080,24 +2092,37 @@ pub mod pallet {
 
 			// Check if minimum network fee still needs to be filled for this swap request.
 			let network_fee = T::NetworkFee::get();
-			let fee = if let Some(swap_request_id) = swap_request_id {
-				let swap_request =
-					SwapRequests::<T>::get(swap_request_id).expect("Swap request should exist");
-				match swap_request.state {
-					SwapRequestState::UserSwap { dca_state, .. } => {
-						let calculated_fee = max(
-							network_fee * (dca_state.accumulated_input_amount + input),
-							MinimumNetworkFee::<T>::get(),
-						);
-						min(calculated_fee.saturating_sub(dca_state.network_fee_collected), input)
-					},
-					SwapRequestState::NetworkFee | SwapRequestState::IngressEgressFee => {
-						log_or_panic!("Should not provide swap request id for non-user swaps");
-						network_fee * input
-					},
-				}
-			} else {
-				network_fee * input
+			let fee = match minimum_fee_policy {
+				MinFeePolicy::Enforced { swap_request_id } => {
+					if let Some(swap_request) = SwapRequests::<T>::get(swap_request_id) {
+						match swap_request.state {
+							SwapRequestState::UserSwap { dca_state, .. } => {
+								let calculated_fee = max(
+									network_fee *
+										(dca_state
+											.accumulated_stable_amount
+											.saturating_add(input)),
+									MinimumNetworkFee::<T>::get(),
+								);
+								min(
+									calculated_fee.saturating_sub(dca_state.network_fee_collected),
+									input,
+								)
+							},
+							SwapRequestState::NetworkFee | SwapRequestState::IngressEgressFee => {
+								log_or_panic!(
+									"Should not provide swap request id for non-user swaps"
+								);
+								network_fee * input
+							},
+						}
+					} else {
+						// No swap request found, so ignore fee collection history and do simple fee
+						// calculation.
+						max(network_fee * input, MinimumNetworkFee::<T>::get())
+					}
+				},
+				MinFeePolicy::NotEnforced => network_fee * input,
 			};
 
 			if !fee.is_zero() {

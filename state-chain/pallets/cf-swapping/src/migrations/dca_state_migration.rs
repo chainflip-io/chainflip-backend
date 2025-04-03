@@ -101,7 +101,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 							// cause the minimum network fee to be charged for the next chunk, but
 							// that is acceptable.
 							network_fee_collected: 0,
-							accumulated_input_amount: 0,
+							accumulated_stable_amount: 0,
 						},
 						broker_fees,
 					},
