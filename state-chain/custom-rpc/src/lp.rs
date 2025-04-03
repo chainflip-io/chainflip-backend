@@ -200,6 +200,7 @@ pub trait LpSignedApi {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 
+	//
 	// #[method(name = "schedule_swap")]
 	// async fn schedule_swap(
 	// 	&self,
