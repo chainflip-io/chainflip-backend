@@ -52,7 +52,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_address_checker_address: hex_literal::hex!("638e16DD15588B81257eBe9676FA1a0175FDB70a"),
 	arb_key_manager_address: hex_literal::hex!("7EA74208E2954a7294097C731434caD29c5094D8"),
 	arb_vault_address: hex_literal::hex!("8155BdD48CD011e1118b51A1C82be020A3E5c2f2"),
-	arbusdc_token_address: hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"),
+	arb_usdc_token_address: hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"),
 	arb_address_checker_address: hex_literal::hex!("2e78F26e9798EBDe7F2b19736De6Aae4d51d6d34"),
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,

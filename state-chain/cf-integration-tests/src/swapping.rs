@@ -661,7 +661,7 @@ fn failed_swaps_are_rolled_back() {
 		// swap will fail:
 		add_liquidity(&DORIS, Asset::Eth, 10_000_000 * DECIMALS, OrderType::RangeOrder, None);
 
-		// Get the current state of pools so we can compare agaist this later:
+		// Get the current state of pools so we can compare against this later:
 		let eth_pool = get_pool(Asset::Eth);
 		let flip_pool = get_pool(Asset::Flip);
 

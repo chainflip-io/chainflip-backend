@@ -280,7 +280,7 @@ pub const ETH_CHAIN_ID: u64 = 1;
 
 pub const ARB_KEY_MANAGER_ADDRESS: eth::Address = H160([4u8; 20]);
 pub const ARB_VAULT_ADDRESS: eth::Address = H160([5u8; 20]);
-pub const ARBUSDC_TOKEN_ADDRESS: eth::Address = H160([6u8; 20]);
+pub const ARB_USDC_TOKEN_ADDRESS: eth::Address = H160([6u8; 20]);
 pub const ARB_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([7u8; 20]);
 pub const ARB_CHAIN_ID: u64 = 2;
 
@@ -297,7 +297,7 @@ cf_test_utilities::impl_test_helpers! {
 			arb_key_manager_address: ARB_KEY_MANAGER_ADDRESS,
 			arb_vault_address: ARB_VAULT_ADDRESS,
 			arb_address_checker_address: ARB_ADDRESS_CHECKER_ADDRESS,
-			arb_usdc_address: ARBUSDC_TOKEN_ADDRESS,
+			arb_usdc_address: ARB_USDC_TOKEN_ADDRESS,
 			arbitrum_chain_id: ARB_CHAIN_ID,
 			flip_token_address: [0u8; 20].into(),
 			eth_usdc_address: [0x2; 20].into(),

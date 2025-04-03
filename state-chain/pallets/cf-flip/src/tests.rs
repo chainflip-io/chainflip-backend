@@ -284,7 +284,7 @@ impl FlipOperation {
 						expected_redeemable_balance
 					)
 					.is_ok(),
-					"expexted: {}, redeemable: {}",
+					"expected: {}, redeemable: {}",
 					expected_redeemable_balance,
 					<Flip as AccountInfo>::liquid_funds(account_id)
 				);
@@ -295,7 +295,7 @@ impl FlipOperation {
 				}
 			},
 			FlipOperation::SlashAccount(account_id, slashing_rate, bond, mint, blocks) => {
-				// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
+				// Mint some Flip for testing - 100 is not enough and unrealistic for this use case
 				Flip::settle(account_id, Flip::mint(*mint).into());
 				let initial_balance: u128 = Flip::total_balance_of(account_id);
 				Bonder::<Test>::update_bond(account_id, *bond);
@@ -642,7 +642,7 @@ mod test_tx_payments {
 			assert!(check_balance_integrity());
 			// Alice paid the adjusted fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 100 - POST_FEE);
-			// The fee was bured.
+			// The fee was burned.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000 - POST_FEE);
 		});
 	}
