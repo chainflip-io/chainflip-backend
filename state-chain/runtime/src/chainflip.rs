@@ -50,6 +50,7 @@ use cf_chains::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, Utxo, UtxoId,
 	},
+	ccm_checker::DecodedCcmAdditionalData,
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
 		PolkadotTransactionData, ResetProxyAccountNonce, RuntimeVersion,
@@ -86,10 +87,10 @@ use cf_primitives::{
 
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
-	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
-	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails,
+	BroadcastAnyChainGovKey, Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster,
+	DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, Heartbeat,
+	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
 use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
@@ -1033,5 +1034,14 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 			ForeignChainAndAsset::Solana(asset) =>
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 		}
+	}
+}
+
+pub struct CfCcmAdditionalDataHandler;
+impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
+	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData) {
+		ccm_data
+			.address_lookup_tables()
+			.inspect(|alts| solana_elections::initiate_solana_alt_election(alts.clone()));
 	}
 }

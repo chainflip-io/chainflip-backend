@@ -39,8 +39,7 @@ use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, Sw
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
-	ElectionEgressWitnesser, GetBlockHeight, IngressSource, InitiateSolanaAltWitnessing,
-	SolanaNonceWatch,
+	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -701,26 +700,27 @@ impl FromSolOrNot for SolanaVaultSwapDetails {
 	}
 }
 
-pub struct SolanaAltWitnessingHandler;
-impl InitiateSolanaAltWitnessing for SolanaAltWitnessingHandler {
-	fn initiate_alt_witnessing(alts: Vec<SolAddress>) {
-		// TODO roy: fix this.
-		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
-			SolanaAltWitnessing::witness_exact_value::<
-				DerivedElectoralAccess<
-					_,
-					SolanaAltWitnessing,
-					RunnerStorageAccess<Runtime, SolanaInstance>,
-				>,
-			>(SolanaAltWitnessingIdentifier {
-				swap_request_id: Default::default(),
-				alt_addresses: alts,
-				election_expiry_block_number: crate::System::block_number() +
-					EXPIRY_TIME_FOR_ALT_ELECTIONS,
-			})
-		})
-		.unwrap_or_else(|e| {
-			log::error!("Cannot start Solana ALT witnessing election: {:?}", e);
-		}) //The error should not happen as long as the election identifiers don't overflow
+pub(crate) fn initiate_solana_alt_election(alts: Vec<SolAddress>) {
+	if alts.is_empty() {
+		return
 	}
+
+	// TODO roy: fix this.
+	pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
+		SolanaAltWitnessing::witness_exact_value::<
+			DerivedElectoralAccess<
+				_,
+				SolanaAltWitnessing,
+				RunnerStorageAccess<Runtime, SolanaInstance>,
+			>,
+		>(SolanaAltWitnessingIdentifier {
+			swap_request_id: Default::default(),
+			alt_addresses: alts,
+			election_expiry_block_number: crate::System::block_number() +
+				EXPIRY_TIME_FOR_ALT_ELECTIONS,
+		})
+	})
+	.unwrap_or_else(|e| {
+		log::error!("Cannot start Solana ALT witnessing election: {:?}", e);
+	}) //The error should not happen as long as the election identifiers don't overflow
 }
