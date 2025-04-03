@@ -46,6 +46,14 @@ jobs:
     secrets: inherit
     with:
       full-bouncer: true
+  post-check-old-rpcs:
+    needs: [ build ]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+    with:
+      full-bouncer: true
+      broker-endpoint: "http://127.0.0.1:10997"
+      lp-endpoint: "http://127.0.0.1:10589"
 
   upgrade-check:
     needs: [build-try-runtime]
