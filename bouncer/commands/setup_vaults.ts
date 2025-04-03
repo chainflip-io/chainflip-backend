@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   await using polkadot = await getPolkadotApi();
 
   logger.info(`LP endpoint set to: ${lpApiEndpoint}`);
-  logger.info(`LP endpoint set to: ${brokerApiEndpoint}`);
+  logger.info(`Broker endpoint set to: ${brokerApiEndpoint}`);
 
   logger.info('Performing initial Vault setup');
 
