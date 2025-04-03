@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/pro-2083/rpc-2.0-move-lp-broker-apis-to-node
       - "release/*"
 concurrency:
   group: ${{ github.ref }}-release-development
