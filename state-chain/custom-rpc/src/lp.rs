@@ -37,12 +37,13 @@ use cf_node_client::{
 };
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
-	Asset, BasisPoints, BlockNumber, EgressId, ForeignChain,
+	Asset, BasisPoints, BlockNumber, DcaParameters, EgressId, ForeignChain, Price,
 };
 use cf_rpc_types::{
 	lp::{
 		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
 		OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
+		SwapRequestResponse,
 	},
 	RedemptionAmount, SwapChannelInfo,
 };
@@ -200,18 +201,17 @@ pub trait LpSignedApi {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 
-	//
-	// #[method(name = "schedule_swap")]
-	// async fn schedule_swap(
-	// 	&self,
-	// 	amount: NumberOrHex,
-	// 	input_asset: Asset,
-	// 	output_asset: Asset,
-	// 	retry_duration: BlockNumber,
-	// 	min_price: Price,
-	// 	dca_params: Option<DcaParameters>,
-	// 	wait_for: Option<WaitFor>,
-	// ) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;
+	#[method(name = "schedule_swap")]
+	async fn schedule_swap(
+		&self,
+		amount: NumberOrHex,
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;
 }
 
 /// An LP signed RPC extension for the state chain node.
@@ -716,46 +716,46 @@ where
 		.await
 	}
 
-	// async fn schedule_swap(
-	// 	&self,
-	// 	amount: NumberOrHex,
-	// 	input_asset: Asset,
-	// 	output_asset: Asset,
-	// 	retry_duration: BlockNumber,
-	// 	min_price: Price,
-	// 	dca_params: Option<DcaParameters>,
-	// 	wait_for: Option<WaitFor>,
-	// ) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {
-	// 	Ok(
-	// 		match self
-	// 			.signed_pool_client
-	// 			.submit_wait_for_result_dynamic(
-	// 				RuntimeCall::from(pallet_cf_lp::Call::schedule_swap {
-	// 					amount: try_parse_number_or_hex(amount)?,
-	// 					input_asset,
-	// 					output_asset,
-	// 					retry_duration,
-	// 					min_price,
-	// 					dca_params,
-	// 				}),
-	// 				wait_for.unwrap_or_default(),
-	// 				false,
-	// 			)
-	// 			.await?
-	// 		{
-	// 			WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-	// 			WaitForDynamicResult::Data(data) => {
-	// 				let (tx_hash, dynamic_events, ..) = data;
-	// 				extract_dynamic_event!(
-	// 					dynamic_events,
-	// 					cf_static_runtime::swapping::events::SwapRequested,
-	// 					{ swap_request_id },
-	// 					ApiWaitForResult::TxDetails { tx_hash, response: swap_request_id.0.into() }
-	// 				)?
-	// 			},
-	// 		},
-	// 	)
-	// }
+	async fn schedule_swap(
+		&self,
+		amount: NumberOrHex,
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		min_price: Price,
+		dca_params: Option<DcaParameters>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {
+		Ok(
+			match self
+				.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_lp::Call::schedule_swap {
+						amount: try_parse_number_or_hex(amount)?,
+						input_asset,
+						output_asset,
+						retry_duration,
+						min_price,
+						dca_params,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await?
+			{
+				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+				WaitForDynamicResult::Data(data) => {
+					let (tx_hash, dynamic_events, ..) = data;
+					extract_dynamic_event!(
+						dynamic_events,
+						cf_static_runtime::swapping::events::SwapRequested,
+						{ swap_request_id },
+						ApiWaitForResult::TxDetails { tx_hash, response: swap_request_id.0.into() }
+					)?
+				},
+			},
+		)
+	}
 }
 
 impl<C, B, BE> LpSignedRpc<C, B, BE>
