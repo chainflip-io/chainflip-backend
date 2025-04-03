@@ -111,7 +111,6 @@ mod test {
 	use cf_utilities::task_scope::{task_scope, Scope};
 	use futures_util::FutureExt;
 	use rand::random;
-	use serial_test::serial;
 	use std::{
 		sync::atomic::{AtomicU32, Ordering},
 		time::Duration,
@@ -119,27 +118,27 @@ mod test {
 	use tokio::{time::sleep, try_join};
 
 	static A: AtomicU32 = AtomicU32::new(0);
+	static B: AtomicU32 = AtomicU32::new(0);
+	static C: AtomicU32 = AtomicU32::new(0);
 
 	trait Rpc {
-		async fn a(&self) -> anyhow::Result<u32>;
+		async fn request(&self, counter: &AtomicU32) -> anyhow::Result<u32>;
 	}
 	#[derive(Clone, Default)]
 	struct Client {}
 	impl Rpc for Client {
-		async fn a(&self) -> anyhow::Result<u32> {
+		async fn request(&self, counter: &AtomicU32) -> anyhow::Result<u32> {
+			counter.fetch_add(1, Ordering::Relaxed);
 			sleep(Duration::new(2, 0)).await;
-			A.fetch_add(1, Ordering::Relaxed);
 			Ok(random::<u32>())
 		}
 	}
 
 	#[tokio::test]
-	#[serial]
 	async fn result_in_cache_internal_client_called_once() {
 		task_scope(|scope: &Scope<'_, Error>| {
 			async {
 				let client = Client::default();
-				A.store(0, Ordering::Relaxed);
 
 				let (caching_client, _) =
 					CachingRequest::<(), u32, Client>::new(scope, client.clone());
@@ -148,7 +147,7 @@ mod test {
 					.get_or_fetch(
 						Box::pin(move |client| {
 							#[allow(clippy::redundant_async_block)]
-							Box::pin(async move { client.a().await })
+							Box::pin(async move { client.request(&A).await })
 						}),
 						(),
 					)
@@ -159,7 +158,7 @@ mod test {
 					.get_or_fetch(
 						Box::pin(move |client| {
 							#[allow(clippy::redundant_async_block)]
-							Box::pin(async move { client.a().await })
+							Box::pin(async move { client.request(&A).await })
 						}),
 						(),
 					)
@@ -178,12 +177,10 @@ mod test {
 	}
 
 	#[tokio::test]
-	#[serial]
 	async fn request_in_flight_internal_client_called_once() {
 		task_scope(|scope: &Scope<'_, Error>| {
 			async {
 				let client = Client::default();
-				A.store(0, Ordering::Relaxed);
 
 				let (caching_client, _) =
 					CachingRequest::<(), u32, Client>::new(scope, client.clone());
@@ -191,14 +188,14 @@ mod test {
 				let future1 = caching_client.get_or_fetch(
 					Box::pin(move |client| {
 						#[allow(clippy::redundant_async_block)]
-						Box::pin(async move { client.a().await })
+						Box::pin(async move { client.request(&B).await })
 					}),
 					(),
 				);
 				let future2 = caching_client.get_or_fetch(
 					Box::pin(move |client| {
 						#[allow(clippy::redundant_async_block)]
-						Box::pin(async move { client.a().await })
+						Box::pin(async move { client.request(&B).await })
 					}),
 					(),
 				);
@@ -207,7 +204,7 @@ mod test {
 				let (result1, result2) = try_join!(future1, future2)?;
 
 				assert_eq!(result1, result2);
-				assert_eq!(A.load(Ordering::Relaxed), 1);
+				assert_eq!(B.load(Ordering::Relaxed), 1);
 				Ok(())
 			}
 			.boxed()
@@ -217,12 +214,10 @@ mod test {
 	}
 
 	#[tokio::test]
-	#[serial]
 	async fn cache_invalidation() {
 		task_scope(|scope: &Scope<'_, Error>| {
 			async {
 				let client = Client::default();
-				A.store(0, Ordering::Relaxed);
 
 				let (caching_client, cache_invalidation_sender) =
 					CachingRequest::<(), u32, Client>::new(scope, client.clone());
@@ -231,7 +226,7 @@ mod test {
 					.get_or_fetch(
 						Box::pin(move |client| {
 							#[allow(clippy::redundant_async_block)]
-							Box::pin(async move { client.a().await })
+							Box::pin(async move { client.request(&C).await })
 						}),
 						(),
 					)
@@ -244,7 +239,7 @@ mod test {
 					.get_or_fetch(
 						Box::pin(move |client| {
 							#[allow(clippy::redundant_async_block)]
-							Box::pin(async move { client.a().await })
+							Box::pin(async move { client.request(&C).await })
 						}),
 						(),
 					)
@@ -255,7 +250,7 @@ mod test {
 				assert_ne!(result, result2);
 				// a() is called twice since result was not in cache anymore when we call it the
 				// second time
-				assert_eq!(A.load(Ordering::Relaxed), 2);
+				assert_eq!(C.load(Ordering::Relaxed), 2);
 
 				Ok(())
 			}

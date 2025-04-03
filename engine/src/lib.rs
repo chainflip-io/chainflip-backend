@@ -5,6 +5,7 @@
 #![feature(map_try_insert)]
 #![feature(step_trait)]
 
+mod caching_request;
 pub mod common;
 pub mod constants;
 pub mod db;
@@ -15,7 +16,6 @@ pub mod retrier;
 pub mod settings;
 pub mod state_chain_observer;
 pub mod witness;
-mod caching_request;
 
 // Blockchains
 pub mod btc;
