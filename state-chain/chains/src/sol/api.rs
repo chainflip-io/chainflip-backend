@@ -41,7 +41,7 @@ use crate::{
 	TransferFallbackError,
 };
 
-use cf_primitives::{EgressId, ForeignChain, GasAmount, SwapRequestId};
+use cf_primitives::{EgressId, ForeignChain, GasAmount};
 
 #[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ComputePrice;
@@ -86,7 +86,7 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
-	+ ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
+	+ ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
 	+ RecoverDurableNonce
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
@@ -120,10 +120,10 @@ pub trait SolanaEnvironment:
 
 	/// Get any user-defined Address lookup tables from the Environment.
 	fn get_address_lookup_tables(
-		id: SwapRequestId,
+		alts: Vec<SolAddress>,
 	) -> Result<Vec<SolAddressLookupTableAccount>, SolanaTransactionBuildingError> {
-		match Self::lookup(id) {
-			Some(AltConsensusResult::ValidConsensusAlts(alts)) => Ok(alts),
+		match Self::lookup(alts) {
+			Some(AltConsensusResult::ValidConsensusAlts(res)) => Ok(res),
 			Some(AltConsensusResult::AltsInvalidNoConsensus) =>
 				Err(SolanaTransactionBuildingError::AltsInvalid),
 			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed),
@@ -383,13 +383,20 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		ccm_additional_data: VersionedSolanaCcmAdditionalData,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		let ccm_accounts = ccm_additional_data.ccm_accounts();
+		let alts = ccm_additional_data
+			.address_lookup_tables()
+			.map(|alts| Environment::get_address_lookup_tables(alts))
+			.transpose()?
+			.unwrap_or_default();
 
 		let sol_api_environment = Environment::api_environment()?;
 		let agg_key = Environment::current_agg_key()?;
 
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
-		// TODO roy: THIS WILL BE REFACTORED LATER.
-		let address_lookup_tables = sol_api_environment.address_lookup_table_account;
+		let address_lookup_tables =
+			sp_std::iter::once(sol_api_environment.address_lookup_table_account)
+				.chain(alts)
+				.collect::<Vec<_>>();
 
 		// Ensure the CCM parameters do not contain blacklisted accounts.
 		check_ccm_for_blacklisted_accounts(
@@ -426,7 +433,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					durable_nonce,
 					compute_price,
 					compute_limit,
-					vec![address_lookup_tables],
+					address_lookup_tables,
 				),
 				SolAsset::SolUsdc => SolanaTransactionBuilder::ccm_transfer_token(
 					derive_associated_token_account(
@@ -451,7 +458,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					compute_price,
 					SOL_USDC_DECIMAL,
 					compute_limit,
-					vec![address_lookup_tables],
+					address_lookup_tables,
 				),
 			}
 			.inspect_err(|e| {
@@ -646,7 +653,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			transfer_param,
 			source_chain,
 			// Hardcoding this to None to gain extra bytes in Solana. Consider
-			// reverting this when we implement versioned Transactions. PRO-2046.
+			// reverting this when we implement versioned Transactions. PRO-2181.
 			None,
 			gas_budget,
 			message,

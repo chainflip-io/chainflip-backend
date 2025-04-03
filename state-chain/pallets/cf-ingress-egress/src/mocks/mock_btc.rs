@@ -30,12 +30,12 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		affiliate_registry::MockAffiliateRegistry,
-		alt_witnessing::MockAltWitnessing,
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
 		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
+		ccm_additional_data_handler::MockCcmAdditionalDataHandler,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		pool_api::MockPoolApi,
@@ -125,7 +125,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
-	type SolanaAltWitnessingHandler = MockAltWitnessing;
+	type CcmAdditionalDataHandler = MockCcmAdditionalDataHandler;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;
 }
