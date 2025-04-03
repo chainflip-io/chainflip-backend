@@ -43,6 +43,7 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
+	instances::PalletInstanceAlias,
 	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
 	ChannelRefundParametersDecoded, ConsolidateCall, DepositChannel,
@@ -249,7 +250,7 @@ use deposit_origin::DepositOrigin;
 
 /// Holds information about a transaction that is marked for rejection.
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
-#[expand_name_with(T::NAME)]
+#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 	#[skip_name_expansion]
 	pub refund_address: ForeignChainAddress,
@@ -312,7 +313,7 @@ pub struct FailedForeignChainCall {
 	MaxEncodedLen,
 	GenericTypeInfo,
 )]
-#[expand_name_with(T::NAME)]
+#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
 	ChannelOpeningFee { fee: T::Amount },
@@ -370,7 +371,7 @@ pub mod pallet {
 		Decode,
 		GenericTypeInfo,
 	)]
-	#[expand_name_with(T::NAME)]
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
 		pub deposit_address: Option<TargetChainAccount<T, I>>,
@@ -408,14 +409,14 @@ pub mod pallet {
 		Decode,
 		GenericTypeInfo,
 	)]
-	#[expand_name_with(T::NAME)]
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub enum DepositFailedDetails<T: Config<I>, I: 'static> {
 		DepositChannel { deposit_witness: DepositWitness<T::TargetChain> },
 		Vault { vault_witness: Box<VaultDepositWitness<T, I>> },
 	}
 
 	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
-	#[expand_name_with(T::NAME)]
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
 		/// The owner of the deposit channel.
 		#[skip_name_expansion]
@@ -525,9 +526,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
-		/// Name of the chain that this Config is implemented for
-		const NAME: &'static str;
-
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;

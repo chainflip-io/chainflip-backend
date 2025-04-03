@@ -81,7 +81,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::benchmarking_value::BenchmarkValue;
+	use cf_chains::{benchmarking_value::BenchmarkValue, instances::PalletInstanceAlias};
 	use cf_traits::{AccountRoleRegistry, BroadcastNomination, LiabilityTracker, OnBroadcastReady};
 	use frame_support::{
 		pallet_prelude::{OptionQuery, *},
@@ -127,7 +127,7 @@ pub mod pallet {
 
 	/// All data contained in a Broadcast
 	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
-	#[expand_name_with(T::NAME)]
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct BroadcastData<T: Config<I>, I: 'static> {
 		#[skip_name_expansion]
 		pub broadcast_id: BroadcastId,
@@ -141,9 +141,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
-		/// Name of the chain that this Config is implemented for
-		const NAME: &'static str;
-
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -165,7 +162,7 @@ pub mod pallet {
 		type Offence: From<PalletOffence>;
 
 		/// A marker trait identifying the chain that we are broadcasting to.
-		type TargetChain: Chain;
+		type TargetChain: Chain + PalletInstanceAlias;
 
 		/// The api calls supported by this broadcaster.
 		type ApiCall: ApiCall<<<Self as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto>

@@ -58,7 +58,9 @@ use syn::{
 pub fn derive(item: TokenStream) -> TokenStream {
 	let item2: TokenStream2 = item.into();
 	let ast: DeriveInput = syn::parse2(item2).unwrap();
-	let name_for_expansion: Expr = ast.attrs.iter().find(|attr| attr.path().is_ident("expand_name_with")).expect("When using the #[derive(GenericTypeInfo)] directive, you must provide the name to be used for expansion via #[expand_name_with(...)]").parse_args().unwrap();
+	let name_for_expansion: Expr = ast.attrs.iter()
+		.find(|attr| attr.path().is_ident("expand_name_with"))
+		.expect("When using the #[derive(GenericTypeInfo)] directive, you must provide the name to be used for expansion via #[expand_name_with(...)]").parse_args().unwrap();
 	let ident = ast.ident;
 	let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
 	match ast.data {

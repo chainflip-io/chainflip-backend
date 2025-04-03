@@ -372,8 +372,8 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
-		/// Name of the chain that this Config is implemented for
-		const NAME: &'static str;
+		/// Suffix that will be added to [GenericTypeInfo] derivations for this pallet.
+		const TYPE_INFO_SUFFIX: &'static str;
 
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
@@ -949,7 +949,7 @@ pub mod pallet {
 		use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 		#[derive(Encode, Decode, GenericTypeInfo)]
-		#[expand_name_with(T::NAME)]
+		#[expand_name_with(T::TYPE_INFO_SUFFIX)]
 		pub struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
 			#[skip_name_expansion]
 			epoch: EpochIndex,

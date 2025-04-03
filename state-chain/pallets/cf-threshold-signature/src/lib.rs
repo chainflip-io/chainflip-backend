@@ -31,9 +31,7 @@ pub mod weights;
 mod key_rotator;
 mod response_status;
 
-use response_status::ResponseStatus;
-
-use cf_chains::ChainCrypto;
+use cf_chains::{instances::PalletInstanceAlias, ChainCrypto};
 use cf_primitives::{
 	AuthorityCount, CeremonyId, EpochIndex, FlipBalance, ThresholdSignatureRequestId as RequestId,
 };
@@ -56,6 +54,7 @@ use frame_support::{
 	weights::Weight,
 	RuntimeDebugNoBound,
 };
+use response_status::ResponseStatus;
 use scale_info::TypeInfo;
 
 use generic_typeinfo_derive::GenericTypeInfo;
@@ -128,7 +127,7 @@ pub enum ThresholdCeremonyType {
 }
 
 #[derive(Clone, Encode, Decode, GenericTypeInfo, PartialEq, Eq, Default, RuntimeDebug)]
-#[expand_name_with(T::NAME)]
+#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
 	pub signer: AggKeyFor<T, I>,
 	pub signature_result: AsyncResult<SignatureResultFor<T, I>>,
@@ -138,7 +137,7 @@ pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
 #[derive(
 	PartialEq, Eq, Clone, Encode, Decode, GenericTypeInfo, EnumVariant, RuntimeDebugNoBound,
 )]
-#[expand_name_with(T::NAME)]
+#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen {
@@ -257,6 +256,7 @@ macro_rules! handle_key_ceremony_report {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_chains::instances::PalletInstanceAlias;
 	use cf_primitives::FlipBalance;
 	use cf_traits::{
 		AccountRoleRegistry, AsyncResult, CfeMultisigRequest, ThresholdSignerNomination,
@@ -270,7 +270,7 @@ pub mod pallet {
 	use frame_system::ensure_none;
 	/// Context for tracking the progress of a threshold signature ceremony.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
-	#[expand_name_with(T::NAME)]
+	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
 		/// The respondents that have yet to reply.
@@ -293,7 +293,7 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
-	#[expand_name_with(T::NAME)]
+	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
 		#[skip_name_expansion]
 		pub request_id: RequestId,
@@ -307,7 +307,7 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
-	#[expand_name_with(T::NAME)]
+	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
 		pub request_type:
@@ -385,9 +385,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
-		/// Name of the chain that this Config is implemented for
-		const NAME: &'static str;
-
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -407,7 +404,7 @@ pub mod pallet {
 			+ From<Call<Self, I>>;
 
 		/// A marker trait identifying the chain that we are signing for.
-		type TargetChainCrypto: ChainCrypto;
+		type TargetChainCrypto: ChainCrypto + PalletInstanceAlias;
 
 		/// trait to activate chains that use this pallet's key
 		type VaultActivator: VaultActivator<Self::TargetChainCrypto>;
