@@ -330,6 +330,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type CcmValidityChecker = CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
+	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
 }
@@ -2037,12 +2038,7 @@ impl_runtime_apis! {
 					.cloned()
 					.collect();
 
-				let pool_sell_price = LiquidityPools::pool_price(base_asset, quote_asset).
-					expect("Pool should exist")
-					.sell
-					.map(|price| price.sqrt_price);
-
-				Swapping::get_scheduled_swap_legs(swaps, base_asset, pool_sell_price)
+				Swapping::get_scheduled_swap_legs(swaps, base_asset)
 					.into_iter()
 					.map(move |swap| (swap, execute_at))
 			}).collect()
