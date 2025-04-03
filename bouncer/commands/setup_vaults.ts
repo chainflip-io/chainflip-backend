@@ -25,6 +25,7 @@ import {
 } from '../shared/initialize_new_chains';
 import { globalLogger, loggerChild } from '../shared/utils/logger';
 import { getPolkadotApi, observeEvent } from '../shared/utils/substrate';
+import { brokerApiEndpoint, lpApiEndpoint } from '../shared/json_rpc';
 
 async function main(): Promise<void> {
   const logger = loggerChild(globalLogger, 'setup_vaults');
@@ -34,6 +35,9 @@ async function main(): Promise<void> {
   const solClient = getSolConnection();
 
   await using polkadot = await getPolkadotApi();
+
+  logger.info(`LP endpoint set to: ${lpApiEndpoint}`);
+  logger.info(`LP endpoint set to: ${brokerApiEndpoint}`);
 
   logger.info('Performing initial Vault setup');
 

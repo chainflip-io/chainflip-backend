@@ -17,6 +17,7 @@ import { depositChannelCreation } from './request_swap_deposit_address_with_affi
 import { testBrokerLevelScreening } from './broker_level_screening';
 import { testFundRedeem } from './fund_redeem';
 import { concurrentTest, serialTest } from '../shared/utils/vitest';
+import { brokerApiEndpoint, lpApiEndpoint } from '../shared/json_rpc';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
@@ -25,6 +26,10 @@ describe('ConcurrentTests', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
+
+  // TODO: REMOVE just to test the CI
+  console.log(`LP endpoint set to: ${lpApiEndpoint}`);
+  console.log(`LP endpoint set to: ${brokerApiEndpoint}`);
 
   concurrentTest('SwapLessThanED', swapLessThanED, 400);
   concurrentTest('AllSwaps', testAllSwaps, numberOfNodes === 1 ? 1400 : 2000); // TODO: find out what the 3-node timeout should be
