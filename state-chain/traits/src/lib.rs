@@ -39,6 +39,7 @@ pub use async_result::AsyncResult;
 use cf_chains::{
 	address::ForeignChainAddress,
 	assets::any::AssetMap,
+	ccm_checker::DecodedCcmAdditionalData,
 	sol::{SolAddress, SolHash},
 	ApiCall, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain, ChainCrypto,
 	ChannelRefundParametersDecoded, Ethereum,
@@ -1242,11 +1243,11 @@ pub trait PoolPriceProvider {
 	fn pool_price(base_asset: Asset, quote_asset: Asset) -> Result<PoolPrice, DispatchError>;
 }
 
-pub trait InitiateSolanaAltWitnessing {
-	fn initiate_alt_witnessing(_alts: Vec<SolAddress>);
+pub trait CcmAdditionalDataHandler {
+	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
 }
 
-pub struct NoAltWitnessing;
-impl InitiateSolanaAltWitnessing for NoAltWitnessing {
-	fn initiate_alt_witnessing(_alts: Vec<SolAddress>) {}
+pub struct IgnoreCcmAdditionalData;
+impl CcmAdditionalDataHandler for IgnoreCcmAdditionalData {
+	fn handle_ccm_additional_data(_ccm_data: DecodedCcmAdditionalData) {}
 }

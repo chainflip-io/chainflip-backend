@@ -59,12 +59,11 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry,
-	AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip,
-	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
+	AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster, CcmAdditionalDataHandler,
+	Chainflip, ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	InitiateSolanaAltWitnessing, NetworkEnvironmentProvider, OnDeposit, PoolApi,
-	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType,
+	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapOutputAction,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -704,7 +703,7 @@ pub mod pallet {
 
 		type SwapParameterValidation: SwapParameterValidation<AccountId = Self::AccountId>;
 
-		type SolanaAltWitnessingHandler: InitiateSolanaAltWitnessing;
+		type CcmAdditionalDataHandler: CcmAdditionalDataHandler;
 
 		type AffiliateRegistry: AffiliateRegistry<AccountId = Self::AccountId>;
 
@@ -3310,14 +3309,10 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 							amount,
 						);
 
-					// Initiate LUT witnessing if required.
-					if let DecodedCcmAdditionalData::Solana(additional_data) =
-						ccm_additional_data.clone()
-					{
-						additional_data.address_lookup_tables().inspect(|alts| {
-							T::SolanaAltWitnessingHandler::initiate_alt_witnessing(alts.clone())
-						});
-					}
+					// Handle any action required from the CCM additional data.
+					T::CcmAdditionalDataHandler::handle_ccm_additional_data(
+						ccm_additional_data.clone(),
+					);
 
 					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 						egress_id,

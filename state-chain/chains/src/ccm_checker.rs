@@ -94,6 +94,13 @@ impl DecodedCcmAdditionalData {
 			_ => None,
 		}
 	}
+
+	pub fn address_lookup_tables(&self) -> Option<Vec<SolAddress>> {
+		match self {
+			DecodedCcmAdditionalData::Solana(sol_data) => sol_data.address_lookup_tables(),
+			_ => None,
+		}
+	}
 }
 
 #[derive(
