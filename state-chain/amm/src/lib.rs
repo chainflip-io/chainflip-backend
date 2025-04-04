@@ -27,11 +27,12 @@ use cf_amm_math::{
 use codec::{Decode, Encode};
 use common::{
 	nth_root_of_integer_as_fixed_point, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase,
-	SetFeesError, Side, SwapDirection,
+	SetFeesError, Side, SwapDirection, ONE_IN_HUNDREDTH_PIPS,
 };
 use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
+use sp_core::U256;
 use sp_std::vec::Vec;
 
 pub mod common;
@@ -47,6 +48,7 @@ pub struct PoolState<LiquidityProvider: Ord> {
 	range_orders: range_orders::PoolState<LiquidityProvider>,
 }
 
+#[derive(Debug)]
 pub enum NewError {
 	LimitOrders(limit_orders::NewError),
 	RangeOrders(range_orders::NewError),
@@ -224,36 +226,62 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	) -> (Amount, Amount) {
 		let mut total_output_amount = Amount::zero();
 
+		let range_orders_fee = self.range_orders.fee_hundredth_pips;
+
 		while !amount.is_zero() {
-			let (output_amount, remaining_amount) = match (
+			let limit_orders_sqrt_price =
 				self.limit_orders.current_sqrt_price::<SD>().filter(|sqrt_price| {
 					sqrt_price_limit.is_none_or(|sqrt_price_limit| {
 						!SD::sqrt_price_op_more_than(*sqrt_price, sqrt_price_limit)
 					})
-				}),
+				});
+
+			let range_orders_sqrt_price =
 				self.range_orders.current_sqrt_price::<SD>().filter(|sqrt_price| {
 					sqrt_price_limit.is_none_or(|sqrt_price_limit| {
 						SD::sqrt_price_op_more_than(sqrt_price_limit, *sqrt_price)
 					})
-				}),
-			) {
-				(Some(limit_order_sqrt_price), Some(range_order_sqrt_price)) => {
-					if SD::sqrt_price_op_more_than(limit_order_sqrt_price, range_order_sqrt_price) {
-						self.range_orders.swap::<SD>(amount, Some(limit_order_sqrt_price))
-					} else {
-						// Note it is important that in the equal price case we prefer to swap limit
-						// orders as if we do a swap with range_orders where the sqrt_price_limit is
-						// equal to the current sqrt_price then the swap will not change the current
-						// price or use any of the input amount, therefore we would loop forever
+				});
 
-						// Also we prefer limit orders as they don't immediately incur slippage
-						self.limit_orders.swap::<SD>(amount, Some(range_order_sqrt_price))
-					}
-				},
-				(Some(_), None) => self.limit_orders.swap::<SD>(amount, sqrt_price_limit),
-				(None, Some(_)) => self.range_orders.swap::<SD>(amount, sqrt_price_limit),
-				(None, None) => break,
-			};
+			// Adjust limit order's price to compensate for range order's pool fee.
+			// (We do this instead of adjusting the range order's price to avoid
+			// having to both adjust and "inverse adjust" the price, which due to
+			// rounding errors could lead to an infinite loop):
+			let limit_orders_sqrt_price = limit_orders_sqrt_price.map(|price| {
+				sqrt_price_adjusted_by_pool_fee::<SD::Inverse>(
+					price,
+					self.range_orders.fee_hundredth_pips,
+				)
+			});
+
+			let (output_amount, remaining_amount) =
+				match (limit_orders_sqrt_price, range_orders_sqrt_price) {
+					(Some(limit_order_sqrt_price), Some(range_orders_sqrt_price)) => {
+						if SD::sqrt_price_op_more_than(
+							limit_order_sqrt_price,
+							range_orders_sqrt_price,
+						) {
+							self.range_orders.swap::<SD>(amount, Some(limit_order_sqrt_price))
+						} else {
+							// Note it is important that in the equal price case we prefer to swap
+							// limit orders as if we do a swap with range_orders where the
+							// sqrt_price_limit is equal to the current sqrt_price then the
+							// swap will not change the current price or use any of the input
+							// amount, therefore we would loop forever
+
+							// Also we prefer limit orders as they don't immediately incur slippage
+							self.limit_orders.swap::<SD>(
+								amount,
+								Some(range_orders_sqrt_price),
+								range_orders_fee,
+							)
+						}
+					},
+					(Some(_), None) =>
+						self.limit_orders.swap::<SD>(amount, sqrt_price_limit, range_orders_fee),
+					(None, Some(_)) => self.range_orders.swap::<SD>(amount, sqrt_price_limit),
+					(None, None) => break,
+				};
 
 			amount = remaining_amount;
 			total_output_amount = total_output_amount.saturating_add(output_amount);
@@ -480,12 +508,17 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	#[allow(clippy::type_complexity)]
-	pub fn set_fees(
+	pub fn set_range_order_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
+		self.range_orders.set_fees(fee_hundredth_pips)
+	}
+
+	/// This function exists to help with migration, and will likely be removed in the future.
+	#[allow(clippy::type_complexity)]
+	pub fn set_limit_order_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
 	) -> Result<PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError>
 	{
-		self.range_orders.set_fees(fee_hundredth_pips)?;
 		self.limit_orders.set_fees(fee_hundredth_pips)
 	}
 
@@ -518,4 +551,45 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		limit_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips) &&
 			range_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips)
 	}
+}
+fn reduce_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
+	// This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
+	mul_div_floor(
+		input,
+		U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
+		U256::from(ONE_IN_HUNDREDTH_PIPS),
+	)
+}
+
+fn grow_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
+	// This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
+	mul_div_floor(
+		input,
+		U256::from(ONE_IN_HUNDREDTH_PIPS),
+		U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
+	)
+}
+
+/// Returns the ratio between price between prices with and without accounting for the pool fee
+/// as a fixed point number (same representation as Price).
+fn pool_fee_scaling_factor(side: Side, fee_hundredth_pips: u32) -> U256 {
+	use cf_amm_math::PRICE_FRACTIONAL_BITS;
+	match side {
+		Side::Buy => grow_by_pool_fee(U256::one() << PRICE_FRACTIONAL_BITS, fee_hundredth_pips),
+		Side::Sell => reduce_by_pool_fee(U256::one() << PRICE_FRACTIONAL_BITS, fee_hundredth_pips),
+	}
+}
+
+fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(
+	sqrt_price: SqrtPriceQ64F96,
+	fee_hundredth_pips: u32,
+) -> SqrtPriceQ64F96 {
+	use cf_amm_math::SQRT_PRICE_FRACTIONAL_BITS;
+
+	let fee_factor = pool_fee_scaling_factor(SD::INPUT_SIDE.sell_order(), fee_hundredth_pips);
+	// fee_factor isn't price, but we can use the same code as for the price
+	// because they use the same fixed point representation:
+	let sqrt_fee_factor = price_to_sqrt_price(fee_factor);
+
+	mul_div_floor(sqrt_price, sqrt_fee_factor, U256::one() << SQRT_PRICE_FRACTIONAL_BITS)
 }

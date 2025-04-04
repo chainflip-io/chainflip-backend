@@ -25,7 +25,7 @@ sp-std = { workspace = true }
 [dev-dependencies]
 rand = { workspace = true, features = ["std"] }
 cf-amm-math = { workspace = true, features = ["slow-tests"] }
-cf-utilities = { workspace = true }
+cf-utilities = { workspace = true, features = ["std"] }
 
 [features]
 default = ["std"]

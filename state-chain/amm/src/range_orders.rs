@@ -820,11 +820,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let sqrt_price_next = if self.current_liquidity == 0 {
 				sqrt_price_target
 			} else {
-				let amount_minus_fees = mul_div_floor(
-					amount,
-					U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
-					U256::from(ONE_IN_HUNDREDTH_PIPS),
-				); // This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
+				let amount_minus_fees = super::reduce_by_pool_fee(amount, self.fee_hundredth_pips);
 
 				let amount_required_to_reach_target = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,

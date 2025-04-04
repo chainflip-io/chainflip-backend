@@ -187,7 +187,7 @@ pub enum PalletConfigUpdate {
 	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -787,27 +787,10 @@ pub mod pallet {
 				Error::<T>::InvalidFeeAmount
 			);
 			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
-			Self::try_mutate_pool(asset_pair, |asset_pair: &AssetPair, pool| {
+			Self::try_mutate_pool(asset_pair, |_asset_pair: &AssetPair, pool| {
 				pool.pool_state
-					.set_fees(fee_hundredth_pips)
-					.map_err(|_| Error::<T>::InvalidFeeAmount)?
-					.try_map_with_pair(|asset, collected_fees| {
-						for ((lp, id), tick, collected, position_info) in collected_fees.into_iter()
-						{
-							Self::process_limit_order_update(
-								pool,
-								asset_pair,
-								&lp,
-								asset.sell_order(),
-								id,
-								tick,
-								collected,
-								position_info,
-								IncreaseOrDecrease::Increase(0),
-							)?;
-						}
-						Result::<(), DispatchError>::Ok(())
-					})
+					.set_range_order_fees(fee_hundredth_pips)
+					.map_err(|_| Error::<T>::InvalidFeeAmount)
 			})?;
 
 			Self::deposit_event(Event::<T>::PoolFeeSet {
@@ -2274,6 +2257,34 @@ impl<T: Config> Pallet<T> {
 				bought_amount,
 			});
 		}
+		Ok(())
+	}
+
+	fn set_pool_fee_for_limit_orders(
+		pool: &mut Pool<T>,
+		asset_pair: &AssetPair,
+		fee_hundredth_pips: u32,
+	) -> DispatchResult {
+		pool.pool_state
+			.set_limit_order_fees(fee_hundredth_pips)
+			.map_err(|_| Error::<T>::InvalidFeeAmount)?
+			.try_map_with_pair(|asset, collected_fees| {
+				for ((lp, id), tick, collected, position_info) in collected_fees.into_iter() {
+					Self::process_limit_order_update(
+						pool,
+						asset_pair,
+						&lp,
+						asset.sell_order(),
+						id,
+						tick,
+						collected,
+						position_info,
+						IncreaseOrDecrease::Increase(0),
+					)?;
+				}
+				Result::<(), DispatchError>::Ok(())
+			})?;
+
 		Ok(())
 	}
 }
