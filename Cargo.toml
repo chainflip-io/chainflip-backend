@@ -112,6 +112,7 @@ lazy_static = { version = "1.4" }
 libp2p-identity = { version = "0.2.3" }
 libsecp256k1 = { version = "0.7", default-features = false }
 log = { version = "0.4.16" }
+lru = { version = "0.13.0", default-features = false }
 mockall = { version = "0.13.0" }
 nanorand = { version = "0.7.0", default-features = false }
 num-bigint = { version = "0.4.3" }
