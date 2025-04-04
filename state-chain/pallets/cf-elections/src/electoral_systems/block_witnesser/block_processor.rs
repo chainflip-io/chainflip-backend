@@ -127,7 +127,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		block_data: Option<(T::ChainBlockNumber, T::BlockData, u32)>,
 	) {
 		if let Some((block_number, block_data, safety_margin)) = block_data {
-			self.blocks_data.insert(block_number, BlockProcessingInfo::new(block_data, safety_margin));
+			self.blocks_data
+				.insert(block_number, BlockProcessingInfo::new(block_data, safety_margin));
 		}
 		let last_block: T::ChainBlockNumber;
 		match chain_progress {
