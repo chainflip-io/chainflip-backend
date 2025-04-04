@@ -1592,9 +1592,11 @@ dependencies = [
  "frame-support",
  "pallet-cf-funding",
  "pallet-cf-pools",
+ "parity-scale-codec",
+ "scale-info",
  "serde",
  "sp-core 34.0.0",
- "state-chain-runtime",
+ "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2)",
  "utilities",
 ]
 
@@ -1799,6 +1801,7 @@ version = "1.9.0"
 dependencies = [
  "anyhow",
  "cf-chains",
+ "cf-rpc-types",
  "chainflip-api",
  "clap",
  "custom-rpc",
@@ -2736,6 +2739,7 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "cf-rpc-types",
  "frame-support",
  "frame-system",
  "futures",
@@ -13622,6 +13626,7 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "cf-rpc-types",
  "cf-runtime-utilities",
  "cf-session-benchmarking",
  "cf-test-utilities",

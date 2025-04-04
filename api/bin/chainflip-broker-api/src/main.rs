@@ -19,12 +19,13 @@ use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
 };
+use cf_rpc_types::broker::{
+	ChainAccounts, ChannelActionType, TransactionScreeningEvents, VaultAddresses,
+};
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::{
-			ChainAccounts, TransactionScreeningEvents, VaultAddresses, VaultSwapDetails,
-		},
+		state_chain_runtime::runtime_apis::VaultSwapDetails,
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
 		DcaParameters,
 	},
@@ -141,7 +142,12 @@ pub trait Rpc {
 		query: GetOpenDepositChannelsQuery,
 	) -> RpcResult<ChainAccounts>;
 
-	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
+	#[method(name = "all_open_deposit_channels", aliases = ["broker_allOpenDepositChannels"])]
+	async fn all_open_deposit_channels(
+		&self,
+	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>>;
+
+	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents<AccountId32>>)]
 	async fn subscribe_transaction_screening_events(&self);
 
 	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]
@@ -288,6 +294,16 @@ impl RpcServer for RpcServerImpl {
 		self.api
 			.raw_client()
 			.cf_get_open_deposit_channels(account_id, None)
+			.await
+			.map_err(BrokerApiError::ClientError)
+	}
+
+	async fn all_open_deposit_channels(
+		&self,
+	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>> {
+		self.api
+			.raw_client()
+			.cf_all_open_deposit_channels(None)
 			.await
 			.map_err(BrokerApiError::ClientError)
 	}

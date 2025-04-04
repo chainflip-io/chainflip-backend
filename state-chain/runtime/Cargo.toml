@@ -98,6 +98,7 @@ sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true }
 
 # Used for RPCs
+cf-rpc-types = { workspace = true, default-features = false}
 frame-system-rpc-runtime-api = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 
