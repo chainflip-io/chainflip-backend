@@ -98,7 +98,9 @@ impl<
 		let (tx, rx) = oneshot::channel::<Result<ResultType, anyhow::Error>>();
 		let client = self.client.clone();
 		let future = future(client);
-		self.request_sender.send((future, key, tx)).unwrap();
+		self.request_sender.send((future, key, tx)).expect(
+			"Inner loop containing the receiver should never exits, engine is shutting down",
+		);
 		let result = timeout(MAX_WAIT_TIME_FOR_REQUEST, rx).await???;
 		Ok(result)
 	}
