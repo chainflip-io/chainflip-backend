@@ -20,50 +20,48 @@ import { Logger } from './utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-export async function send(logger: Logger, asset: Asset, address: string, amount?: string) {
+export async function send(
+  logger: Logger,
+  asset: Asset,
+  address: string,
+  amount?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
   switch (asset) {
     case 'Btc':
-      await sendBtc(logger, address, amount ?? defaultAssetAmounts(asset));
-      break;
+      return sendBtc(logger, address, amount ?? defaultAssetAmounts(asset));
     case 'Eth':
-      await sendEvmNative(logger, 'Ethereum', address, amount ?? defaultAssetAmounts(asset));
-      break;
+      return sendEvmNative(logger, 'Ethereum', address, amount ?? defaultAssetAmounts(asset));
     case 'ArbEth':
-      await sendEvmNative(logger, 'Arbitrum', address, amount ?? defaultAssetAmounts(asset));
-      break;
+      return sendEvmNative(logger, 'Arbitrum', address, amount ?? defaultAssetAmounts(asset));
     case 'Dot':
-      await sendDot(address, amount ?? defaultAssetAmounts(asset));
-      break;
+      return sendDot(address, amount ?? defaultAssetAmounts(asset));
     case 'Sol':
-      await sendSol(logger, address, amount ?? defaultAssetAmounts(asset));
-      break;
+      return sendSol(logger, address, amount ?? defaultAssetAmounts(asset));
     case 'Usdc':
     case 'Usdt':
     case 'Flip': {
       const contractAddress = getContractAddress('Ethereum', asset);
-      await sendErc20(
+      return sendErc20(
         logger,
         'Ethereum',
         address,
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
       );
-      break;
     }
     case 'ArbUsdc': {
       const contractAddress = getContractAddress('Arbitrum', asset);
-      await sendErc20(
+      return sendErc20(
         logger,
         'Arbitrum',
         address,
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
       );
-      break;
     }
     case 'SolUsdc':
-      await sendSolUsdc(logger, address, amount ?? defaultAssetAmounts(asset));
-      break;
+      return sendSolUsdc(logger, address, amount ?? defaultAssetAmounts(asset));
     default:
       throw new Error(`Unsupported asset type: ${asset}`);
   }

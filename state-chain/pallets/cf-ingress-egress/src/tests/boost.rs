@@ -1041,7 +1041,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 		assert_ok!(IngressEgress::process_deposits(
 			RuntimeOrigin::root(),
 			vec![
-				// The deposit into an unkown address should fail
+				// The deposit into an unknown address should fail
 				DepositWitness {
 					deposit_address: [0; 20].into(),
 					asset: EthAsset::Eth,
