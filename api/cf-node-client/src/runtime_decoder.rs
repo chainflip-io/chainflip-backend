@@ -66,7 +66,8 @@ impl RuntimeDecoder {
 	}
 }
 
-/// Common macro to extract dynamic events
+/// Uses static metadata to find the first matching event in a list of dynamic events and extracts
+/// the matching fields.
 #[macro_export]
 macro_rules! extract_from_first_matching_event {
 	(
@@ -76,13 +77,23 @@ macro_rules! extract_from_first_matching_event {
 			$($field:ident),*
 		},
 		$result:expr
+		$(,)?
 	) => {
 
 		match $dynamic_events
 			.find_static_event::<$cf_static_event_variant>(false)?
 		{
-			Some($cf_static_event_variant { $($field),*, .. } ) => Ok($result),
-			None => Err($crate::events_decoder::DynamicEventError::StaticEventNotFound(stringify!($cf_static_event_variant)))
+			Some($cf_static_event_variant {
+				$(
+					$field,
+				)*
+				..
+			}) => Ok($result),
+			None => Err(
+				$crate::events_decoder::DynamicEventError::StaticEventNotFound(
+					stringify!($cf_static_event_variant)
+				)
+			),
 		}
 	};
 }
