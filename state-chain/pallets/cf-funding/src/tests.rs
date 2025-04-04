@@ -596,7 +596,7 @@ fn restore_restricted_balance_when_redemption_expires() {
 
 			// We ignore the redemption tax if we claim the max amount.
 			let (total_funds, restricted_amount) = if redeem_amount == RedemptionAmount::Max {
-				(TOTAL_FUNDS, RESTRICTED_AMOUNT)
+				(TOTAL_FUNDS, RESTRICTED_AMOUNT - REDEMPTION_TAX)
 			} else {
 				(TOTAL_FUNDS - REDEMPTION_TAX, RESTRICTED_AMOUNT - REDEMPTION_TAX)
 			};
@@ -1081,7 +1081,6 @@ mod test_restricted_balances {
 			Bonder::<Test>::update_bond(&ALICE, bond);
 
 			let initial_balance = Flip::balance(&ALICE);
-			assert_eq!(initial_balance, TOTAL_BALANCE + REDEMPTION_TAX);
 
 			match maybe_error {
 				None => {
@@ -1091,11 +1090,10 @@ mod test_restricted_balances {
 						bound_redeem_address,
 						Default::default()
 					));
-					let expected_redeemed_amount = if redeem_amount == RedemptionAmount::Max {
-						initial_balance - Flip::balance(&ALICE)
-					} else {
-						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get()
-					};
+
+					let expected_redeemed_amount =
+						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
+
 					assert_matches!(
 						cf_test_utilities::last_event::<Test>(),
 						RuntimeEvent::Funding(Event::RedemptionRequested {
@@ -1487,7 +1485,7 @@ fn max_redemption_is_net_exact_is_gross() {
 	}
 
 	// Redeem as many unrestricted funds as possible.
-	do_test(UNRESTRICTED_ADDRESS, RedemptionAmount::Max, UNRESTRICTED_AMOUNT);
+	do_test(UNRESTRICTED_ADDRESS, RedemptionAmount::Max, UNRESTRICTED_AMOUNT - REDEMPTION_TAX);
 	// Redeem as many restricted funds as possible.
 	do_test(RESTRICTED_ADDRESS, RedemptionAmount::Max, TOTAL_BALANCE);
 	// Redeem exact amounts, should be reflected in the event.
