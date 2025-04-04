@@ -400,7 +400,7 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// broker channel. The funds are getting freed when the channel is closed.
 	SetBrokerBond { bond: T::Amount },
 	/// Set the minimum fee in USDC paid per chunk
-	SetMinimumNetworkFeePerChunk { min_fee: AssetAmount },
+	SetMinimumNetworkFee { min_fee: AssetAmount },
 }
 
 impl_pallet_safe_mode! {
@@ -1049,7 +1049,7 @@ pub mod pallet {
 						BrokerBond::<T>::set(bond);
 						Self::deposit_event(Event::<T>::BrokerBondSet { bond });
 					},
-					PalletConfigUpdate::SetMinimumNetworkFeePerChunk { min_fee } => {
+					PalletConfigUpdate::SetMinimumNetworkFee { min_fee } => {
 						MinimumNetworkFee::<T>::set(min_fee);
 						Self::deposit_event(Event::<T>::MinimumNetworkFeeSet { min_fee });
 					},

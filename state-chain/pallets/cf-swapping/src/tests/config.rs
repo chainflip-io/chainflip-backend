@@ -60,9 +60,7 @@ fn can_update_all_config_items() {
 					asset: Asset::Usdc,
 					size: NEW_MINIMUM_CHUNK_SIZE
 				},
-				PalletConfigUpdate::SetMinimumNetworkFeePerChunk {
-					min_fee: NEW_MINIMUM_NETWORK_FEE
-				},
+				PalletConfigUpdate::SetMinimumNetworkFee { min_fee: NEW_MINIMUM_NETWORK_FEE },
 			]
 			.try_into()
 			.unwrap()
