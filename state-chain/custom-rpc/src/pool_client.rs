@@ -460,7 +460,7 @@ where
 		Err(PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))
 	}
 
-	async fn submit_watch_generic<T, Fut, F>(
+	async fn submit_watch<T, Fut, F>(
 		&self,
 		call: RuntimeCall,
 		until_finalized: bool,
@@ -576,14 +576,14 @@ where
 	/// function may fail to decode the changed event. Use the alternative
 	/// [SignedPoolClient::submit_watch_dynamic] to be able to dynamically decode events.
 	///
-	/// See [SignedPoolClient::submit_watch_generic] for more details.
+	/// See [SignedPoolClient::submit_watch] for more details.
 	pub async fn submit_watch_static(
 		&self,
 		call: RuntimeCall,
 		until_finalized: bool,
 		dry_run: bool,
 	) -> Result<ExtrinsicData<Vec<state_chain_runtime::RuntimeEvent>>, PoolClientError> {
-		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, extrinsic_index| {
+		self.submit_watch(call, until_finalized, dry_run, |block_hash, extrinsic_index| {
 			self.get_extrinsic_data_static(block_hash, extrinsic_index)
 		})
 		.await
@@ -604,7 +604,7 @@ where
 		until_finalized: bool,
 		dry_run: bool,
 	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
-		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, extrinsic_index| {
+		self.submit_watch(call, until_finalized, dry_run, |block_hash, extrinsic_index| {
 			self.get_extrinsic_data_dynamic(block_hash, extrinsic_index)
 		})
 		.await

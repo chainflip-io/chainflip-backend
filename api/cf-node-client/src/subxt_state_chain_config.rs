@@ -135,8 +135,6 @@ impl From<cf_static_runtime::runtime_types::sp_runtime::DispatchError>
 {
 	fn from(error: cf_static_runtime::runtime_types::sp_runtime::DispatchError) -> Self {
 		match error {
-			// TODO: investigate why the types are not symmetrical. may be subxt-cli version
-			// mismatch
 			cf_static_runtime::runtime_types::sp_runtime::DispatchError::Other =>
 				sp_runtime::DispatchError::Other("Other error"),
 
