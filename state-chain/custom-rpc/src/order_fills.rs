@@ -74,10 +74,9 @@ where
 		+ StorageProvider<B, BE>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	let header = client
-		.header(hash)
-		.map_err(|e| call_error(e))?
-		.ok_or(internal_error(format!("Could not fetch block header for block {:?}", hash)))?;
+	let header = client.header(hash).map_err(|e| call_error(e))?.ok_or_else(|| {
+		internal_error(format!("Could not fetch block header for block {:?}", hash))
+	})?;
 
 	let pools = StorageQueryApi::new(client)
 		.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(hash)?;
