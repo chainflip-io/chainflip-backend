@@ -67,7 +67,7 @@ jobs:
       full-bouncer: false
       ngrok: true
   post-check-old-rpcs:
-    needs: [ build ]
+    needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
