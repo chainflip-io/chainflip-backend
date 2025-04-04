@@ -328,7 +328,7 @@ where
 						BitcoinFeeVoter { client: client.clone() },
 						BitcoinLivenessVoter { client: client.clone() },
 					)),
-					Some(client.cache_invalidation_sender),
+					Some(client.cache_invalidation_senders),
 				)
 				.continuously_vote()
 				.await;

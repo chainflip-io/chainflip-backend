@@ -20,7 +20,7 @@ pub struct BtcCachingClient {
 	block_header: CachingRequest<BlockHash, BlockHeader, BtcRetryRpcClient>,
 	best_block_hash: CachingRequest<(), BlockHash, BtcRetryRpcClient>,
 
-	pub cache_invalidation_sender: Vec<mpsc::Sender<()>>,
+	pub cache_invalidation_senders: Vec<mpsc::Sender<()>>,
 }
 
 impl BtcCachingClient {
@@ -50,7 +50,7 @@ impl BtcCachingClient {
 			avg_fee_rate,
 			block_header,
 			best_block_hash,
-			cache_invalidation_sender: vec![
+			cache_invalidation_senders: vec![
 				block_cache,
 				block_hash_cache,
 				send_raw_transaction_cache,
