@@ -393,13 +393,15 @@ where
 pub mod pallet {
 	use core::cmp::max;
 
-	use cf_amm::math::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
+	use cf_amm::math::output_amount_ceil;
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
 		SwapId, SwapOutput, SwapRequestId,
 	};
-	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, ScheduledEgressDetails};
+	use cf_traits::{
+		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, ScheduledEgressDetails,
+	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
 
@@ -449,6 +451,8 @@ pub mod pallet {
 
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
+		type PoolPriceApi: PoolPriceProvider;
 
 		type ChannelIdAllocator: ChannelIdAllocator;
 
@@ -1317,11 +1321,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		#[allow(clippy::result_unit_err)]
-		pub fn get_scheduled_swap_legs(
-			swaps: Vec<Swap<T>>,
-			base_asset: Asset,
-			pool_sell_price: Option<SqrtPriceQ64F96>,
-		) -> Vec<SwapLegInfo> {
+		pub fn get_scheduled_swap_legs(swaps: Vec<Swap<T>>, base_asset: Asset) -> Vec<SwapLegInfo> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
 
 			// Can ignore the result here because we use pool price fallback below
@@ -1367,10 +1367,19 @@ pub mod pallet {
 						let amount = swap.stable_amount.or_else(|| {
 							// If the swap into stable asset failed, fallback to estimating the
 							// amount via pool price.
+
+							// Should be able to successfully retrieve the price since the pool
+							// should exist as we wouldn't need to estimate if input asset
+							// was already STABLE_ASSET):
+							let sell_price =
+								T::PoolPriceApi::pool_price(swap.input_asset(), STABLE_ASSET)
+									.ok()
+									.map(|price| price.sell)?;
+
 							Some(
 								output_amount_ceil(
 									cf_amm::math::Amount::from(swap.input_amount()),
-									sqrt_price_to_price(pool_sell_price?),
+									sell_price,
 								)
 								.saturated_into(),
 							)
