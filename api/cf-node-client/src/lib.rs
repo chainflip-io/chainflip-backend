@@ -27,10 +27,17 @@ pub mod runtime_decoder;
 pub mod signer;
 pub mod subxt_state_chain_config;
 
+#[derive(Debug, Clone)]
+pub struct ExtrinsicData<Events> {
+	pub tx_hash: H256,
+	pub events: Events,
+	pub header: state_chain_runtime::Header,
+	pub dispatch_info: DispatchInfo,
+}
+
+// TODO: deprecate/remove this in favour of ExtrinsicData<state_chain_runtime::RuntimeEvent>
 pub type ExtrinsicDetails =
 	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
-
-pub type ExtrinsicData = (H256, DynamicEvents, state_chain_runtime::Header, DispatchInfo);
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
 pub enum WaitFor {
@@ -79,5 +86,5 @@ impl<T> ApiWaitForResult<T> {
 pub enum WaitForDynamicResult {
 	// The hash of the SC transaction that was submitted.
 	TransactionHash(H256),
-	Data(ExtrinsicData),
+	Data(ExtrinsicData<DynamicEvents>),
 }

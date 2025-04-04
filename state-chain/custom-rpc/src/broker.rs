@@ -24,7 +24,9 @@ use cf_chains::{
 	address::AddressString, CcmChannelMetadata, ChannelRefundParameters, RefundParametersRpc,
 	VaultSwapExtraParametersRpc,
 };
-use cf_node_client::{extract_dynamic_event, subxt_state_chain_config::cf_static_runtime};
+use cf_node_client::{
+	extract_dynamic_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
+};
 use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId, DcaParameters};
 use cf_rpc_types::broker::{
 	GetOpenDepositChannelsQuery, SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
@@ -223,9 +225,9 @@ where
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
 	async fn register_account(&self) -> RpcResult<String> {
-		let (tx_hash, _, _, _) = self
+		let ExtrinsicData { tx_hash, .. } = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 				false,
 				true,
@@ -247,7 +249,7 @@ where
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
-		let (_, dynamic_events, header, _) = self
+		let ExtrinsicData { events, header, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(
@@ -272,7 +274,7 @@ where
 			.await?;
 
 		Ok(extract_dynamic_event!(
-			dynamic_events,
+			events,
 			cf_static_runtime::swapping::events::SwapDepositAddressReady,
 			{
 				deposit_address,
@@ -300,7 +302,7 @@ where
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
-		let (tx_hash, dynamic_events, _, _) = self
+		let ExtrinsicData { tx_hash, events, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
@@ -315,7 +317,7 @@ where
 			.await?;
 
 		Ok(extract_dynamic_event!(
-			dynamic_events,
+			events,
 			cf_static_runtime::swapping::events::WithdrawalRequested,
 			{
 				egress_amount,
@@ -370,7 +372,7 @@ where
 		match tx_id {
 			TransactionInId::Bitcoin(tx_id) =>
 				self.signed_pool_client
-					.submit_watch(
+					.submit_watch_dynamic(
 						RuntimeCall::BitcoinIngressEgress(
 							pallet_cf_ingress_egress::Call::mark_transaction_for_rejection {
 								tx_id,
@@ -415,7 +417,7 @@ where
 	}
 
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		let (_, dynamic_events, _, _) = self
+		let ExtrinsicData { events, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
@@ -425,7 +427,7 @@ where
 			.await?;
 
 		Ok(extract_dynamic_event!(
-			dynamic_events,
+			events,
 			cf_static_runtime::swapping::events::PrivateBrokerChannelOpened,
 			{ channel_id },
 			channel_id
@@ -433,7 +435,7 @@ where
 	}
 
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		let (_, dynamic_events, _, _) = self
+		let ExtrinsicData { events, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::close_private_btc_channel {}),
@@ -443,7 +445,7 @@ where
 			.await?;
 
 		Ok(extract_dynamic_event!(
-			dynamic_events,
+			events,
 			cf_static_runtime::swapping::events::PrivateBrokerChannelClosed,
 			{ channel_id },
 			channel_id
@@ -454,7 +456,7 @@ where
 		&self,
 		withdrawal_address: EthereumAddress,
 	) -> RpcResult<AccountId32> {
-		let (_, dynamic_events, _, _) = self
+		let ExtrinsicData { events, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::register_affiliate {
@@ -466,7 +468,7 @@ where
 			.await?;
 
 		Ok(extract_dynamic_event!(
-			dynamic_events,
+			events,
 			cf_static_runtime::swapping::events::AffiliateRegistration,
 			{ affiliate_id },
 			AccountId32::from(affiliate_id.0)
@@ -492,7 +494,7 @@ where
 		&self,
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail> {
-		let (tx_hash, dynamic_events, ..) = self
+		let ExtrinsicData { tx_hash, events, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::affiliate_withdrawal_request {
@@ -504,7 +506,7 @@ where
 			.await?;
 
 		Ok(extract_dynamic_event!(
-			dynamic_events,
+			events,
 			cf_static_runtime::swapping::events::WithdrawalRequested,
 			{ egress_amount, egress_fee, destination_address, egress_id },
 			WithdrawFeesDetail {

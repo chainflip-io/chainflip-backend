@@ -16,8 +16,11 @@
 
 use crate::StorageQueryApi;
 use cf_node_client::{
-	error_decoder, events_decoder, runtime_decoder::RuntimeDecoder, signer::PairSigner,
-	ExtrinsicData, ExtrinsicDetails, WaitFor, WaitForDynamicResult, WaitForResult,
+	error_decoder,
+	events_decoder::{self, DynamicEvents},
+	runtime_decoder::RuntimeDecoder,
+	signer::PairSigner,
+	ExtrinsicData, WaitFor, WaitForDynamicResult, WaitForResult,
 };
 use codec::{Decode, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
@@ -151,10 +154,11 @@ where
 		Ok(system_account_nonce)
 	}
 
-	/// Returns the `RuntimeDecoder` at the given block. first it acquires the runtime version at
-	/// the given block then it returns a reference to an `RuntimeDecoder` from `runtime_decoders`
-	/// hash map. If not found it creates a new one and inserts it inside the map for future quick
-	/// access
+	/// Returns the [RuntimeDecoder] at the given block.
+	///
+	/// First it acquires the runtime version at the given block then it returns a reference to an
+	/// [RuntimeDecoder] from `runtime_decoders` hash map. If not found it creates a new one and
+	/// inserts it inside the map for future quick access.
 	async fn runtime_decoder(
 		&self,
 		block_hash: Hash,
@@ -221,11 +225,11 @@ where
 		Ok(Decode::decode(&mut &call_data[..])?)
 	}
 
-	async fn get_extrinsic_data(
+	async fn get_extrinsic_data_dynamic(
 		&self,
 		block_hash: Hash,
 		extrinsic_index: usize,
-	) -> Result<ExtrinsicData, PoolClientError> {
+	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
 		let signed_block = self
 			.client
 			.block(block_hash)?
@@ -253,19 +257,23 @@ where
 			<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(extrinsic);
 
 		match dynamic_events.extrinsic_result()? {
-			Either::Left(dispatch_info) =>
-				Ok((tx_hash, dynamic_events, signed_block.block.header().clone(), dispatch_info)),
+			Either::Left(dispatch_info) => Ok(ExtrinsicData {
+				tx_hash,
+				events: dynamic_events,
+				header: signed_block.block.header().clone(),
+				dispatch_info,
+			}),
 			Either::Right(dispatch_error) => Err(PoolClientError::ExtrinsicDispatchError(
 				self.runtime_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
 			)),
 		}
 	}
 
-	async fn get_extrinsic_details(
+	async fn get_extrinsic_data_static(
 		&self,
 		block_hash: Hash,
 		extrinsic_index: usize,
-	) -> Result<ExtrinsicDetails, PoolClientError> {
+	) -> Result<ExtrinsicData<Vec<state_chain_runtime::RuntimeEvent>>, PoolClientError> {
 		let signed_block = self
 			.client
 			.block(block_hash)?
@@ -310,8 +318,11 @@ where
 				_ => None,
 			})
 			.expect("Unexpected state chain node behaviour")
-			.map(|dispatch_info| {
-				(tx_hash, extrinsic_events, signed_block.block.header().clone(), dispatch_info)
+			.map(|dispatch_info| ExtrinsicData {
+				tx_hash,
+				events: extrinsic_events,
+				header: signed_block.block.header().clone(),
+				dispatch_info,
 			});
 
 		match result {
@@ -322,7 +333,8 @@ where
 		}
 	}
 
-	/// Uses the `BlockBuilder` trait `apply_extrinsic` function to dry run the extrinsic
+	/// Uses the `BlockBuilder` trait `apply_extrinsic` function to dry run the extrinsic.
+	///
 	/// This is the same function used by Polkadot System api rpc call `system_dryRun`.
 	/// Meant to be used to quickly test if an extrinsic would result in a failure. Note that this
 	/// always uses the current account nonce at the best block.
@@ -357,7 +369,7 @@ where
 	/// * `WaitFor::InBlock`: submits extrinsic and waits until the transaction is in a block
 	/// * `WaitFor::Finalized`: submits extrinsic and waits until the transaction is in a finalized
 	///   block
-	pub async fn submit_wait_for_result(
+	pub async fn submit_wait_for_result_static(
 		&self,
 		call: RuntimeCall,
 		wait_for: WaitFor,
@@ -366,10 +378,20 @@ where
 		match wait_for {
 			WaitFor::NoWait =>
 				Ok(WaitForResult::TransactionHash(self.submit_one(call, dry_run).await?)),
-			WaitFor::InBlock =>
-				Ok(WaitForResult::Details(self.submit_watch(call, false, dry_run).await?)),
-			WaitFor::Finalized =>
-				Ok(WaitForResult::Details(self.submit_watch(call, true, dry_run).await?)),
+			WaitFor::InBlock => Ok(WaitForResult::Details(
+				self.submit_watch_static(call, false, dry_run).await.map(
+					|ExtrinsicData { tx_hash, events, header, dispatch_info }| {
+						(tx_hash, events, header, dispatch_info)
+					},
+				)?,
+			)),
+			WaitFor::Finalized => Ok(WaitForResult::Details(
+				self.submit_watch_static(call, true, dry_run).await.map(
+					|ExtrinsicData { tx_hash, events, header, dispatch_info }| {
+						(tx_hash, events, header, dispatch_info)
+					},
+				)?,
+			)),
 		}
 	}
 
@@ -541,14 +563,14 @@ where
 	/// `until_finalized` param determines whether to wait until the extrinsic is in a block or in
 	/// a finalized block. This is a blocking call, if until_finalized == false it takes around 1
 	/// block and if until_finalized == true it takes >2 blocks
-	pub async fn submit_watch(
+	pub async fn submit_watch_static(
 		&self,
 		call: RuntimeCall,
 		until_finalized: bool,
 		dry_run: bool,
-	) -> Result<ExtrinsicDetails, PoolClientError> {
-		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, tx_index| {
-			self.get_extrinsic_details(block_hash, tx_index)
+	) -> Result<ExtrinsicData<Vec<state_chain_runtime::RuntimeEvent>>, PoolClientError> {
+		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, extrinsic_index| {
+			self.get_extrinsic_data_static(block_hash, extrinsic_index)
 		})
 		.await
 	}
@@ -566,9 +588,9 @@ where
 		call: RuntimeCall,
 		until_finalized: bool,
 		dry_run: bool,
-	) -> Result<ExtrinsicData, PoolClientError> {
-		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, tx_index| {
-			self.get_extrinsic_data(block_hash, tx_index)
+	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
+		self.submit_watch_generic(call, until_finalized, dry_run, |block_hash, extrinsic_index| {
+			self.get_extrinsic_data_dynamic(block_hash, extrinsic_index)
 		})
 		.await
 	}

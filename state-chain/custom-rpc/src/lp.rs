@@ -33,7 +33,7 @@ use cf_node_client::{
 	events_decoder::{DynamicEventError, DynamicEvents},
 	extract_dynamic_event,
 	subxt_state_chain_config::cf_static_runtime,
-	ApiWaitForResult, WaitFor, WaitForDynamicResult,
+	ApiWaitForResult, ExtrinsicData, WaitFor, WaitForDynamicResult,
 };
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
@@ -300,7 +300,7 @@ where
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
 	async fn register_account(&self) -> RpcResult<state_chain_runtime::Hash> {
-		let (tx_hash, _, _, _) = self
+		let ExtrinsicData { tx_hash, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
@@ -343,10 +343,9 @@ where
 				.await?
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-				WaitForDynamicResult::Data(data) => {
-					let (tx_hash, dynamic_events, ..) = data;
+				WaitForDynamicResult::Data(ExtrinsicData { tx_hash, events, .. }) =>
 					extract_dynamic_event!(
-						dynamic_events,
+						events,
 						cf_static_runtime::liquidity_provider::events::LiquidityDepositAddressReady,
 						{ deposit_address, deposit_chain_expiry_block },
 						ApiWaitForResult::TxDetails {
@@ -356,8 +355,7 @@ where
 								deposit_chain_expiry_block,
 							}
 						}
-					)?
-				},
+					)?,
 			},
 		)
 	}
@@ -367,7 +365,7 @@ where
 		chain: ForeignChain,
 		address: AddressString,
 	) -> RpcResult<Hash> {
-		let (tx_hash, _, _, _) = self
+		let ExtrinsicData { tx_hash, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_lp::Call::register_liquidity_refund_address {
@@ -413,9 +411,9 @@ where
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 				WaitForDynamicResult::Data(data) => {
-					let (tx_hash, dynamic_events, ..) = data;
+					let ExtrinsicData { tx_hash, events, .. } = data;
 					extract_dynamic_event!(
-						dynamic_events,
+						events,
 						cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled,
 						{ egress_id },
 						ApiWaitForResult::TxDetails {
@@ -439,7 +437,7 @@ where
 			Err(anyhow!("Amount must be greater than 0"))?;
 		}
 
-		let (tx_hash, _, _, _) = self
+		let ExtrinsicData { tx_hash, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_lp::Call::transfer_asset {
@@ -596,9 +594,9 @@ where
 			RedemptionAmount::Max
 		};
 
-		let (tx_hash, _, _, _) = self
+		let ExtrinsicData { tx_hash, .. } = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_funding::Call::redeem {
 					amount: redeem_amount,
 					address: redeem_address,
@@ -745,9 +743,9 @@ where
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 				WaitForDynamicResult::Data(data) => {
-					let (tx_hash, dynamic_events, ..) = data;
+					let ExtrinsicData { tx_hash, events, .. } = data;
 					extract_dynamic_event!(
-						dynamic_events,
+						events,
 						cf_static_runtime::swapping::events::SwapRequested,
 						{ swap_request_id },
 						ApiWaitForResult::TxDetails { tx_hash, response: swap_request_id.0.into() }
@@ -869,8 +867,8 @@ fn into_api_wait_for_dynamic_result<T>(
 	match from {
 		WaitForDynamicResult::TransactionHash(tx_hash) => Ok(ApiWaitForResult::TxHash(tx_hash)),
 		WaitForDynamicResult::Data(data) => {
-			let (tx_hash, dynamic_events, ..) = data;
-			Ok(ApiWaitForResult::TxDetails { tx_hash, response: map_events(&dynamic_events)? })
+			let ExtrinsicData { tx_hash, events, .. } = data;
+			Ok(ApiWaitForResult::TxDetails { tx_hash, response: map_events(&events)? })
 		},
 	}
 }
