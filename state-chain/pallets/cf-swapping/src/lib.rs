@@ -104,6 +104,7 @@ pub struct SwapState<T: Config> {
 	pub broker_fee_taken: Option<AssetAmount>,
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
+	pub stable_amount_before_fees: Option<AssetAmount>,
 }
 
 impl<T: Config> SwapState<T> {
@@ -114,6 +115,7 @@ impl<T: Config> SwapState<T> {
 			network_fee_taken: None,
 			broker_fee_taken: None,
 			swap,
+			stable_amount_before_fees: None,
 		}
 	}
 
@@ -1505,6 +1507,7 @@ pub mod pallet {
 				);
 
 				let mut stable_amount = swap.stable_amount.unwrap_or_default();
+				swap.stable_amount_before_fees = Some(stable_amount);
 
 				for fee_type in &swap.swap.fees {
 					let remaining_amount = match fee_type {
@@ -1794,12 +1797,9 @@ pub mod pallet {
 						dca_state
 							.network_fee_collected
 							.saturating_accrue(swap.network_fee_taken.unwrap_or_default());
-						dca_state.accumulated_stable_amount.saturating_accrue(
-							swap.stable_amount
-								.unwrap_or_default()
-								.saturating_add(swap.network_fee_taken.unwrap_or_default())
-								.saturating_add(swap.broker_fee_taken.unwrap_or_default()),
-						);
+						dca_state
+							.accumulated_stable_amount
+							.saturating_accrue(swap.stable_amount_before_fees.unwrap_or_default());
 
 						false
 					} else {
@@ -2111,9 +2111,9 @@ pub mod pallet {
 							},
 							SwapRequestState::NetworkFee | SwapRequestState::IngressEgressFee => {
 								log_or_panic!(
-									"Should not provide swap request id for non-user swaps"
+									"Should not enforce minimum network fee for fee swaps"
 								);
-								network_fee * input
+								0
 							},
 						}
 					} else {

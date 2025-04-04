@@ -1328,6 +1328,7 @@ mod swap_batching {
 				broker_fee_taken: None,
 				stable_amount,
 				final_output: None,
+				stable_amount_before_fees: stable_amount,
 			}
 		}
 	}
