@@ -10,7 +10,7 @@ use frame_support::sp_runtime::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::ConstU32;
+use sp_core::{ConstU32, U256};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
 	fmt,
@@ -67,6 +67,8 @@ macro_rules! define_wrapper_type {
 }
 
 pub use chains::{assets::any::Asset, ForeignChain};
+
+pub type Price = U256;
 
 /// An index to a block.
 pub type BlockNumber = u32;

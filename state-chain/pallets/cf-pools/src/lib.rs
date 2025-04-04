@@ -2,7 +2,7 @@
 use cf_amm::{
 	common::{PoolPairsMap, Side},
 	limit_orders::{self, Collected, PositionInfo},
-	math::{bounded_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick},
+	math::{bounded_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
@@ -2115,5 +2115,28 @@ pub struct DeleteHistoricalEarnedFees<T: Config>(sp_std::marker::PhantomData<T>)
 impl<T: Config> OnKilledAccount<T::AccountId> for DeleteHistoricalEarnedFees<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
+	}
+}
+
+impl<T: Config> cf_traits::PoolPriceProvider for Pallet<T> {
+	fn pool_price(
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> Result<cf_traits::PoolPrice, DispatchError> {
+		use cf_amm::math::sqrt_price_to_price;
+
+		// NOTE: we can default to max price because None is only ever returned by
+		// Self::pool_price when the range order is at its maximum tick (irrespective
+		// of whether the pool has liquidity)
+		Self::pool_price(base_asset, quote_asset).map(|price| cf_traits::PoolPrice {
+			sell: price
+				.sell
+				.map(|p| p.price)
+				.unwrap_or_else(|| sqrt_price_to_price(MAX_SQRT_PRICE)),
+			buy: price
+				.buy
+				.map(|p| p.price)
+				.unwrap_or_else(|| sqrt_price_to_price(MAX_SQRT_PRICE)),
+		})
 	}
 }

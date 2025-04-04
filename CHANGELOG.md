@@ -14,6 +14,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Order_fills_for_block fix to show error only when result is none
 - Dont fetch vault swaps ([#5751](https://github.com/chainflip-io/chainflip-backend/issues/5751))
 - Prevent subscriptions dropping by properly unpinning blocks ([#5760](https://github.com/chainflip-io/chainflip-backend/issues/5760))
+- Correctly estimate input amount in scheduled swaps ([#5782](https://github.com/chainflip-io/chainflip-backend/pull/5782))
 
 ## [1.8.3] - 2025-03-11
 

@@ -27,7 +27,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, SemVer,
+	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -1163,4 +1163,17 @@ pub trait AffiliateRegistry {
 
 	/// Return the reverse mapping from account id to affiliate short id.
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
+}
+
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
+pub struct PoolPrice {
+	pub sell: Price,
+	pub buy: Price,
+}
+
+// Used to get price of a given pool
+pub trait PoolPriceProvider {
+	fn pool_price(base_asset: Asset, quote_asset: Asset) -> Result<PoolPrice, DispatchError>;
 }

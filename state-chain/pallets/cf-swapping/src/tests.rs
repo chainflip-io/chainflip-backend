@@ -12,7 +12,7 @@ use crate::{
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapQueue,
 	SwapType,
 };
-use cf_amm::math::{price_to_sqrt_price, PRICE_FRACTIONAL_BITS};
+use cf_amm::math::PRICE_FRACTIONAL_BITS;
 use cf_chains::{
 	self,
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -31,6 +31,7 @@ use cf_traits::{
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
+		pool_price_api::MockPoolPriceApi,
 	},
 	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode,
 };
@@ -1084,7 +1085,7 @@ fn test_get_scheduled_swap_legs() {
 		assert_ne!(INIT_AMOUNT, INTERMEDIATE_AMOUNT);
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Flip, None),
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Flip),
 			vec![
 				SwapLegInfo {
 					swap_id: SwapId(1),
@@ -1157,10 +1158,16 @@ fn test_get_scheduled_swap_legs_fallback() {
 		// The swap simulation must fail for it to use the fallback price estimation
 		MockSwappingApi::set_swaps_should_fail(true);
 
-		let sqrt_price = price_to_sqrt_price((U256::from(PRICE)) << PRICE_FRACTIONAL_BITS);
+		// Only setting pool price for FLIP to make sure that the test would fail
+		// if the code tried to use the price of some other asset
+		MockPoolPriceApi::set_pool_price(
+			Asset::Flip,
+			STABLE_ASSET,
+			U256::from(PRICE) << PRICE_FRACTIONAL_BITS,
+		);
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth, Some(sqrt_price)),
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth),
 			vec![
 				SwapLegInfo {
 					swap_id: SwapId(1),
@@ -1206,7 +1213,7 @@ fn test_get_scheduled_swap_legs_for_dca() {
 			vec![create_test_swap(1, Asset::Flip, Asset::Eth, INIT_AMOUNT, Some(dca_params))];
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth, None),
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth),
 			vec![SwapLegInfo {
 				swap_id: SwapId(1),
 				swap_request_id: SwapRequestId(1),
