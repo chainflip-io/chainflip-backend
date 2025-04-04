@@ -46,8 +46,7 @@ enum Buzz {
 #[test]
 fn test_name_expansion() {
 	let foo_path = <Foo<MyStruct> as TypeInfo>::type_info().path;
-	let TypeDef::Composite(foo_def) = <Foo<MyStruct> as TypeInfo>::type_info().type_def.into()
-	else {
+	let TypeDef::Composite(foo_def) = <Foo<MyStruct> as TypeInfo>::type_info().type_def else {
 		panic!()
 	};
 
@@ -68,9 +67,7 @@ fn test_name_expansion() {
 	assert_eq!("MuchCoolerTypenameForExample", foo_def.fields[2].type_name.unwrap());
 
 	let bar_path = <Bar as TypeInfo>::type_info().path;
-	let TypeDef::Composite(bar_def) = <Bar as TypeInfo>::type_info().type_def.into() else {
-		panic!()
-	};
+	let TypeDef::Composite(bar_def) = <Bar as TypeInfo>::type_info().type_def else { panic!() };
 
 	// You can also pass raw strings to "expand_name_with"
 	assert_eq!(&"BarForRawString", bar_path.segments.last().unwrap());
@@ -81,9 +78,7 @@ fn test_name_expansion() {
 	assert_eq!("SomeOtherName", bar_def.fields[1].type_name.unwrap());
 
 	let buzz_path = <Buzz as TypeInfo>::type_info().path;
-	let TypeDef::Variant(buzz_def) = <Buzz as TypeInfo>::type_info().type_def.into() else {
-		panic!()
-	};
+	let TypeDef::Variant(buzz_def) = <Buzz as TypeInfo>::type_info().type_def else { panic!() };
 
 	// The GenericTypeInfo macro can also be applied to Enums
 	assert_eq!(&"BuzzForEnum", buzz_path.segments.last().unwrap());
