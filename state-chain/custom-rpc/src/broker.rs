@@ -25,7 +25,7 @@ use cf_chains::{
 	VaultSwapExtraParametersRpc,
 };
 use cf_node_client::{
-	extract_dynamic_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
+	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
 };
 use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId, DcaParameters};
 use cf_rpc_types::broker::{
@@ -273,7 +273,7 @@ where
 			)
 			.await?;
 
-		Ok(extract_dynamic_event!(
+		Ok(extract_from_first_matching_event!(
 			events,
 			cf_static_runtime::swapping::events::SwapDepositAddressReady,
 			{
@@ -316,7 +316,7 @@ where
 			)
 			.await?;
 
-		Ok(extract_dynamic_event!(
+		Ok(extract_from_first_matching_event!(
 			events,
 			cf_static_runtime::swapping::events::WithdrawalRequested,
 			{
@@ -426,7 +426,7 @@ where
 			)
 			.await?;
 
-		Ok(extract_dynamic_event!(
+		Ok(extract_from_first_matching_event!(
 			events,
 			cf_static_runtime::swapping::events::PrivateBrokerChannelOpened,
 			{ channel_id },
@@ -444,7 +444,7 @@ where
 			)
 			.await?;
 
-		Ok(extract_dynamic_event!(
+		Ok(extract_from_first_matching_event!(
 			events,
 			cf_static_runtime::swapping::events::PrivateBrokerChannelClosed,
 			{ channel_id },
@@ -467,7 +467,7 @@ where
 			)
 			.await?;
 
-		Ok(extract_dynamic_event!(
+		Ok(extract_from_first_matching_event!(
 			events,
 			cf_static_runtime::swapping::events::AffiliateRegistration,
 			{ affiliate_id },
@@ -505,7 +505,7 @@ where
 			)
 			.await?;
 
-		Ok(extract_dynamic_event!(
+		Ok(extract_from_first_matching_event!(
 			events,
 			cf_static_runtime::swapping::events::WithdrawalRequested,
 			{ egress_amount, egress_fee, destination_address, egress_id },

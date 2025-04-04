@@ -31,7 +31,7 @@ use cf_chains::{
 };
 use cf_node_client::{
 	events_decoder::{DynamicEventError, DynamicEvents},
-	extract_dynamic_event,
+	extract_from_first_matching_event,
 	subxt_state_chain_config::cf_static_runtime,
 	ApiWaitForResult, ExtrinsicData, WaitFor, WaitForDynamicResult,
 };
@@ -344,7 +344,7 @@ where
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 				WaitForDynamicResult::Data(ExtrinsicData { tx_hash, events, .. }) =>
-					extract_dynamic_event!(
+					extract_from_first_matching_event!(
 						events,
 						cf_static_runtime::liquidity_provider::events::LiquidityDepositAddressReady,
 						{ deposit_address, deposit_chain_expiry_block },
@@ -412,7 +412,7 @@ where
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 				WaitForDynamicResult::Data(data) => {
 					let ExtrinsicData { tx_hash, events, .. } = data;
-					extract_dynamic_event!(
+					extract_from_first_matching_event!(
 						events,
 						cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled,
 						{ egress_id },
@@ -744,7 +744,7 @@ where
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 				WaitForDynamicResult::Data(data) => {
 					let ExtrinsicData { tx_hash, events, .. } = data;
-					extract_dynamic_event!(
+					extract_from_first_matching_event!(
 						events,
 						cf_static_runtime::swapping::events::SwapRequested,
 						{ swap_request_id },
