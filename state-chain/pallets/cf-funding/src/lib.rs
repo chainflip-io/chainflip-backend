@@ -380,13 +380,6 @@ pub mod pallet {
 				}
 			}
 
-			// If we are redeeming the max amount, we don't charge a fee.
-			let redemption_fee = if amount == RedemptionAmount::Max {
-				T::Amount::zero()
-			} else {
-				RedemptionTax::<T>::get()
-			};
-
 			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
 				ensure!(
 					bound_address == address || restricted_balances.contains_key(&address),
@@ -413,15 +406,25 @@ pub mod pallet {
 				),
 			));
 
-			let (debit_amount, redeem_amount) = match amount {
-				RedemptionAmount::Max => (liquid_balance, liquid_balance),
-				RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
+			let redemption_fee = RedemptionTax::<T>::get();
+
+			let (debit_amount, redeem_amount, burn_fee) = match amount {
+				RedemptionAmount::Max =>
+					if liquid_balance == T::Flip::balance(&account_id) {
+						(liquid_balance, liquid_balance, false)
+					} else {
+						(liquid_balance, liquid_balance.saturating_sub(redemption_fee), true)
+					},
+				RedemptionAmount::Exact(amount) =>
+					(amount.saturating_add(redemption_fee), amount, true),
 			};
 
-			ensure!(
-				T::Flip::try_burn_fee(&account_id, redemption_fee).is_ok(),
-				Error::<T>::InsufficientBalance
-			);
+			if burn_fee {
+				ensure!(
+					T::Flip::try_burn_fee(&account_id, redemption_fee).is_ok(),
+					Error::<T>::InsufficientBalance
+				);
+			}
 
 			let mut total_restricted_balance: FlipBalance<T> = T::Amount::zero();
 
