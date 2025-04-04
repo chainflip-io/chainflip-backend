@@ -98,7 +98,8 @@ impl<T> From<cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrD
 			cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease::Increase(t) =>
 				cf_traits::IncreaseOrDecrease::Increase(t),
 			cf_static_runtime::runtime_types::cf_traits::liquidity::IncreaseOrDecrease::Decrease(t) =>
-				cf_traits::IncreaseOrDecrease::Decrease(t), 		}
+				cf_traits::IncreaseOrDecrease::Decrease(t),
+		}
 	}
 }
 
