@@ -22,7 +22,7 @@ cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true, features = ["derive"] }
 cf-utilities = { workspace = true }
 cfe-events = { workspace = true }
-generic-typeinfo-derive = { path = '../../generic-typeinfo-derive'}
+generic-typeinfo-derive = { workspace = true }
 
 log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }

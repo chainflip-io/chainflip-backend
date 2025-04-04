@@ -1,15 +1,12 @@
 [package]
-name = "generic-typeinfo-derive"
+name = "generic-typeinfo-derive-tests"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-proc-macro2 = "1.0.89"
-quote = { workspace = true }
-syn = { workspace = true }
+generic-typeinfo-derive = { workspace = true }
+scale-info = { workspace = true, features = ["derive"] }
 
 [lints]
 workspace = true
 
-[lib]
-proc-macro = true

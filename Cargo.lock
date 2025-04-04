@@ -4628,6 +4628,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "generic-typeinfo-derive-tests"
+version = "0.1.0"
+dependencies = [
+ "generic-typeinfo-derive",
+ "scale-info",
+]
+
+[[package]]
 name = "gethostname"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
