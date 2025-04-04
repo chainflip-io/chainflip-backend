@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cf_utilities::task_scope::Scope;
 
 use crate::{
-	btc::retry_rpc::BtcRetryRpcClient,
+	btc::cached_rpc::BtcCachingClient,
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
@@ -31,7 +31,7 @@ pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
-	btc_client: BtcRetryRpcClient,
+	btc_client: BtcCachingClient,
 	dot_client: DotRetryRpcClient,
 	sol_client: SolRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,

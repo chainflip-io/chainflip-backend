@@ -1,9 +1,8 @@
-mod chain_tracking;
 pub mod deposits;
 pub mod source;
 pub mod vault_swaps;
 
-use crate::btc::rpc::VerboseTransaction;
+use crate::btc::rpc::{BtcRpcApi, VerboseTransaction};
 use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::EpochIndex;
@@ -35,7 +34,7 @@ use state_chain_runtime::{
 };
 
 use crate::{
-	btc::{retry_rpc::BtcRetryRpcApi, rpc::BlockHeader},
+	btc::rpc::BlockHeader,
 	elections::voter_api::{CompositeVoter, VoterApi},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
@@ -52,13 +51,13 @@ use state_chain_runtime::chainflip::bitcoin_elections::{
 use std::sync::Arc;
 
 use crate::{
-	btc::retry_rpc::BtcRetryRpcClient,
+	btc::cached_rpc::BtcCachingClient,
 	witness::btc::deposits::{egress_witnessing, vault_deposits},
 };
 
 #[derive(Clone)]
 pub struct BitcoinDepositChannelWitnessingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -81,8 +80,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
 			tracing::info!("Checking block {:?}", block);
 
-			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
+			let block_hash = self.client.block_hash(block).await?;
 
 			let block = self.client.block(block_hash).await?;
 
@@ -99,7 +97,7 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 
 #[derive(Clone)]
 pub struct BitcoinVaultDepositWitnessingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -120,8 +118,7 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
 			tracing::info!("Checking block {:?}", block);
 
-			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
+			let block_hash = self.client.block_hash(block).await?;
 
 			let block = self.client.block(block_hash).await?;
 
@@ -135,7 +132,7 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 
 #[derive(Clone)]
 pub struct BitcoinBlockHeightTrackingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -147,7 +144,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 		properties: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightTrackingES>>, anyhow::Error> {
 		tracing::info!("Block height tracking called properties: {:?}", properties);
-		let HeightWitnesserProperties { witness_from_index: election_property } = properties;
+		let HeightWitnesserProperties { witness_from_index: latest_block_height } = properties;
 
 		let mut headers = VecDeque::new();
 
@@ -166,20 +163,25 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 
 		let get_header = |index: BlockNumber| {
 			async move {
-				let header = self.client.block_header(index).await?;
+				let block_hash = self.client.block_hash(index).await?;
+				let header = self.client.block_header(block_hash).await?;
 				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
 				// Order from lowest to highest block index.
 				header_from_btc_header(header)
 			}
 		};
 
-		let best_block_header = header_from_btc_header(self.client.best_block_header().await?)?;
-
-		if best_block_header.block_height <= election_property {
-			tracing::info!("btc: no new blocks found since best block height is {} for witness_from={election_property}", best_block_header.block_height);
+		let best_block_hash = self.client.best_block_hash().await?;
+		let best_block_header = self.client.block_header(best_block_hash).await?;
+		if best_block_hash != best_block_header.hash {
+			return Err(anyhow::anyhow!("best_block_hash do not match best header hash"))
+		}
+		let best_block_header = header_from_btc_header(best_block_header)?;
+		if best_block_header.block_height <= latest_block_height {
+			tracing::info!("btc: no new blocks found since best block height is {} for witness_from={latest_block_height}", best_block_header.block_height);
 			return Ok(None)
 		} else {
-			let witness_from_index = if election_property == 0 {
+			let witness_from_index = if latest_block_height == 0 {
 				tracing::info!(
 					"bht: election_property=0, best_block_height={}, submitting last 6 blocks.",
 					best_block_header.block_height
@@ -188,7 +190,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 					TypesFor::<BitcoinBlockHeightTracking>::BLOCK_BUFFER_SIZE as u64,
 				)
 			} else {
-				election_property
+				latest_block_height
 			};
 
 			// fetch the headers we haven't got yet
@@ -208,7 +210,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 			// We should have a chain of hashees.
 			if headers.iter().zip(headers.iter().skip(1)).all(|(a, b)| a.hash == b.parent_hash) {
 				tracing::info!(
-					"bht: Submitting vote for (witness_from={election_property})with {} headers",
+					"bht: Submitting vote for (witness_from={latest_block_height})with {} headers",
 					headers.len()
 				);
 				Ok(Some(InputHeaders(headers)))
@@ -221,7 +223,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 
 #[derive(Clone)]
 pub struct BitcoinEgressWitnessingVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -241,8 +243,7 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
 			tracing::info!("Checking block {:?}", block);
 
-			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
+			let block_hash = self.client.block_hash(block).await?;
 
 			let block = self.client.block(block_hash).await?;
 
@@ -263,7 +264,7 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 
 #[derive(Clone)]
 pub struct BitcoinFeeVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -273,17 +274,18 @@ impl VoterApi<BitcoinFeeTracking> for BitcoinFeeVoter {
 		_settings: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinFeeTracking>>, anyhow::Error> {
-		if let Some(fee) = self.client.next_block_fee_rate().await {
+		if let Some(fee) = self.client.next_block_fee_rate().await? {
 			Ok(Some(fee))
 		} else {
-			Ok(None)
+			let hash = self.client.best_block_hash().await?;
+			Ok(Some(self.client.average_block_fee_rate(hash).await?))
 		}
 	}
 }
 
 #[derive(Clone)]
 pub struct BitcoinLivenessVoter {
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
@@ -293,13 +295,13 @@ impl VoterApi<BitcoinLiveness> for BitcoinLivenessVoter {
 		_settings: <BitcoinLiveness as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinLiveness as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinLiveness>>, anyhow::Error> {
-		Ok(Some(H256::from_slice(&self.client.block_hash(properties).await.to_byte_array())))
+		Ok(Some(H256::from_slice(&self.client.block_hash(properties).await?.to_byte_array())))
 	}
 }
 
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	client: BtcRetryRpcClient,
+	client: BtcCachingClient,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>
 where
@@ -324,8 +326,9 @@ where
 						BitcoinVaultDepositWitnessingVoter { client: client.clone() },
 						BitcoinEgressWitnessingVoter { client: client.clone() },
 						BitcoinFeeVoter { client: client.clone() },
-						BitcoinLivenessVoter { client },
+						BitcoinLivenessVoter { client: client.clone() },
 					)),
+					Some(client.cache_invalidation_senders),
 				)
 				.continuously_vote()
 				.await;
