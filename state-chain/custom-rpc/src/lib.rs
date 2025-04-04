@@ -68,14 +68,20 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-		ChannelActionType, CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi,
+		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, 
+		 CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
 		RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
+};
+use cf_rpc_types::broker::{
+	TransactionScreeningEvents, 
+	ChainAccounts,
+	ChannelActionType,
+	VaultAddresses, 
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
@@ -840,7 +846,7 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
 	async fn cf_subscribe_lp_order_fills(&self);
 
-	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
+	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents<state_chain_runtime::AccountId>>)]
 	async fn cf_subscribe_transaction_screening_events(&self);
 
 	#[method(name = "lp_get_order_fills")]
@@ -962,7 +968,7 @@ pub trait CustomApi {
 	fn cf_get_transaction_screening_events(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<TransactionScreeningEvents>;
+	) -> RpcResult<TransactionScreeningEvents<state_chain_runtime::AccountId>>;
 
 	#[method(name = "get_affiliates")]
 	fn cf_affiliate_details(
@@ -1835,7 +1841,7 @@ where
 	fn cf_get_transaction_screening_events(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<TransactionScreeningEvents> {
+	) -> RpcResult<TransactionScreeningEvents<state_chain_runtime::AccountId>> {
 		self.rpc_backend
 			.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
 	}

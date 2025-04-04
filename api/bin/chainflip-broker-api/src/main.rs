@@ -19,13 +19,13 @@ use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
 };
+use cf_rpc_types::broker::{
+	ChainAccounts, ChannelActionType, TransactionScreeningEvents, VaultAddresses,
+};
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::{
-			ChainAccounts, ChannelActionType, TransactionScreeningEvents, VaultAddresses,
-			VaultSwapDetails,
-		},
+		state_chain_runtime::runtime_apis::VaultSwapDetails,
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
 		DcaParameters,
 	},
@@ -147,7 +147,7 @@ pub trait Rpc {
 		&self,
 	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>>;
 
-	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
+	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents<AccountId32>>)]
 	async fn subscribe_transaction_screening_events(&self);
 
 	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]

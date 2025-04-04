@@ -44,11 +44,11 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
+		BoostPoolDetails, BrokerInfo, CcmData, DispatchErrorWithMessage,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
 		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
-		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
-		VaultAddresses, VaultSwapDetails,
+		TradingStrategyInfo, TradingStrategyLimits, ValidatorInfo,
+		VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -80,6 +80,7 @@ use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
 	NetworkEnvironment, STABLE_ASSET,
 };
+use cf_rpc_types::broker::{ChainAccounts, ChannelActionType, TransactionScreeningEvents, TransactionScreeningEvent, VaultAddresses};
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, MinimumDeposit, NoLimit, SwapLimits,
@@ -91,7 +92,7 @@ use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{IngressOrEgress, OwedAmount, TargetChainAsset};
+use pallet_cf_ingress_egress::{IngressOrEgress, OwedAmount, TargetChainAsset, ChannelAction};
 use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
@@ -100,9 +101,8 @@ use pallet_cf_swapping::{
 	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
 };
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
-use runtime_apis::ChainAccounts;
 
-use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
+use crate::chainflip::EvmLimit;
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::SwapLegInfo;
@@ -2368,17 +2368,23 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_all_open_deposit_channels() -> Vec<(AccountId, ChannelActionType, ChainAccounts)> {
+		fn cf_all_open_deposit_channels() -> Vec<(<Runtime as frame_system::Config>::AccountId, ChannelActionType, ChainAccounts)> {
 			use sp_std::collections::btree_set::BTreeSet;
 
 			#[allow(clippy::type_complexity)]
 			fn open_deposit_channels_for_chain_instance<T: pallet_cf_ingress_egress::Config<I>, I: 'static>()
 				-> BTreeMap<(<T as frame_system::Config>::AccountId, ChannelActionType), Vec<EncodedAddress>>
 			{
+				fn to_channel_action_type<AccountId>(channel_action: &ChannelAction<AccountId>) -> ChannelActionType {
+					match channel_action {
+							ChannelAction::Swap { .. } => ChannelActionType::Swap,
+							ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
+						}
+				}
 				let network_environment = Environment::network_environment();
 				pallet_cf_ingress_egress::DepositChannelLookup::<T, I>::iter_values()
 					.fold(BTreeMap::new(), |mut acc, channel_details| {
-						acc.entry((channel_details.owner.clone(), channel_details.action.into()))
+						acc.entry((channel_details.owner.clone(), to_channel_action_type(&channel_details.action)))
 							.or_default()
 							.push(
 								channel_details.deposit_channel.address
@@ -2409,14 +2415,14 @@ impl_runtime_apis! {
 			}).collect()
 		}
 
-		fn cf_transaction_screening_events() -> crate::runtime_apis::TransactionScreeningEvents {
-			use crate::runtime_apis::BrokerRejectionEventFor;
+		fn cf_transaction_screening_events() -> cf_rpc_types::broker::TransactionScreeningEvents<<Runtime as frame_system::Config>::AccountId> {
+			use cf_rpc_types::broker::BrokerRejectionEventFor;
 			fn extract_screening_events<
 				T: pallet_cf_ingress_egress::Config<I, AccountId = <Runtime as frame_system::Config>::AccountId>,
 				I: 'static
 			>(
 				event: pallet_cf_ingress_egress::Event::<T, I>,
-			) -> Vec<BrokerRejectionEventFor<T::TargetChain>> {
+			) -> Vec<BrokerRejectionEventFor<AccountId, T::TargetChain>> {
 				use cf_chains::DepositDetailsToTransactionInId;
 				match event {
 					pallet_cf_ingress_egress::Event::TransactionRejectionRequestExpired { account_id, tx_id } =>
@@ -2435,9 +2441,9 @@ impl_runtime_apis! {
 				}
 			}
 
-			let mut btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>> = Default::default();
-			let mut eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>> = Default::default();
-			let mut arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>> = Default::default();
+			let mut btc_events: Vec<BrokerRejectionEventFor<AccountId, cf_chains::Bitcoin>> = Default::default();
+			let mut eth_events: Vec<BrokerRejectionEventFor<AccountId, cf_chains::Ethereum>> = Default::default();
+			let mut arb_events: Vec<BrokerRejectionEventFor<AccountId, cf_chains::Arbitrum>> = Default::default();
 			for event_record in System::read_events_no_consensus() {
 				match event_record.event {
 					RuntimeEvent::BitcoinIngressEgress(event) => btc_events.extend(extract_screening_events::<Runtime, BitcoinInstance>(event)),

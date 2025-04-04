@@ -280,7 +280,7 @@ chainflip-api = { path = "api/lib" }
 chainflip-engine = { path = "engine" }
 engine-proc-macros = { path = "engine-proc-macros" }
 cf-node-client = { path = "api/cf-node-client" }
-cf-rpc-types = { path = "api/cf-rpc-types" }
+cf-rpc-types = { path = "api/cf-rpc-types", default-features = false}
 
 # Chainflip utilities and others
 cf-runtime-macros = { path = "state-chain/runtime-utilities/macros", default-features = false }

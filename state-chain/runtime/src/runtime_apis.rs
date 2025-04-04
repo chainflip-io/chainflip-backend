@@ -51,6 +51,12 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
 };
+use cf_rpc_types::broker::{
+	ChainAccounts,
+	TransactionScreeningEvents,
+	ChannelActionType,
+	VaultAddresses
+};
 
 type VanityName = Vec<u8>;
 
@@ -293,74 +299,6 @@ pub struct FailingWitnessValidators {
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub struct ChainAccounts {
-	pub chain_accounts: Vec<EncodedAddress>,
-}
-
-#[derive(
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	Eq,
-	PartialEq,
-	TypeInfo,
-	Debug,
-	Clone,
-	Copy,
-	PartialOrd,
-	Ord,
-)]
-pub enum ChannelActionType {
-	Swap,
-	LiquidityProvision,
-}
-
-impl<AccountId> From<ChannelAction<AccountId>> for ChannelActionType {
-	fn from(action: ChannelAction<AccountId>) -> Self {
-		match action {
-			ChannelAction::Swap { .. } => ChannelActionType::Swap,
-			ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
-		}
-	}
-}
-
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub enum TransactionScreeningEvent<TxId> {
-	TransactionRejectionRequestReceived {
-		account_id: <Runtime as frame_system::Config>::AccountId,
-		tx_id: TxId,
-	},
-
-	TransactionRejectionRequestExpired {
-		account_id: <Runtime as frame_system::Config>::AccountId,
-		tx_id: TxId,
-	},
-
-	TransactionRejectedByBroker {
-		refund_broadcast_id: BroadcastId,
-		tx_id: TxId,
-	},
-}
-
-pub type BrokerRejectionEventFor<C> =
-	TransactionScreeningEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
-
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub struct TransactionScreeningEvents {
-	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
-	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
-	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
-}
-
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
-pub struct VaultAddresses {
-	pub ethereum: EncodedAddress,
-	pub arbitrum: EncodedAddress,
-	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
-}
-
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct TradingStrategyInfo<Amount> {
 	pub lp_id: AccountId32,
@@ -538,7 +476,7 @@ decl_runtime_apis!(
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
-		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
+		fn cf_transaction_screening_events() -> TransactionScreeningEvents<AccountId32>;
 		fn cf_affiliate_details(
 			broker: AccountId32,
 			affiliate: Option<AccountId32>,

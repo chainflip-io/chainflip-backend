@@ -1,3 +1,6 @@
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
 // Copyright 2025 Chainflip Labs GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,13 +23,21 @@ use cf_chains::{address::ToHumanreadableAddress, Chain};
 use cf_primitives::{Asset, FlipBalance};
 use frame_support::{Deserialize, Serialize};
 
+
 /// Defines all broker related RPC types
 pub mod broker;
 /// Defines all LP related RPC types
 pub mod lp;
 
+pub mod without_std;
+
+#[cfg(feature = "std")]
+pub mod with_std;
+
+
 pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 
+#[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {
 	pub deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
