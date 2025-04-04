@@ -33,7 +33,7 @@ use cf_chains::{
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
 	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
-use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
+use cf_primitives::{AccountRole, AuthorityCount, Beneficiary, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_utilities::{assert_matches, bs58_array};
 use codec::Encode;
@@ -46,7 +46,7 @@ use pallet_cf_elections::{
 	AuthorityVoteOf, ElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{
-	DepositFailedReason, DepositWitness, FetchOrTransfer, VaultDepositWitness,
+	DepositAction, DepositWitness, FetchOrTransfer, RefundReason, VaultDepositWitness,
 };
 use pallet_cf_validator::RotationPhase;
 use sp_core::ConstU32;
@@ -385,7 +385,7 @@ fn vault_swap_deposit_witness(
 		deposit_metadata,
 		tx_id: Default::default(),
 		deposit_details: (),
-		broker_fee: None,
+		broker_fee: Some(Beneficiary { account: BROKER.into(), bps: 0 }),
 		affiliate_fees: Default::default(),
 		refund_params: ChannelRefundParameters {
 			retry_duration: REFUND_PARAMS.retry_duration,
@@ -483,8 +483,8 @@ fn solana_ccm_fails_with_invalid_input() {
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
 					Runtime,
 					SolanaInstance,
-				>::DepositFailed {
-					reason: DepositFailedReason::CcmInvalidMetadata,
+				>::DepositFinalised {
+					action: DepositAction::Refund { reason: RefundReason::CcmInvalidMetadata, .. },
 					..
 				}),
 			);
@@ -536,7 +536,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					Runtime,
 					SolanaInstance,
 				>::CcmEgressInvalid {
-					egress_id: (ForeignChain::Solana, 1u64),
+					egress_id: (ForeignChain::Solana, 2u64),
 					error: ExecutexSwapAndCallError::FailedToBuildCcmForSolana(
 						SolanaTransactionBuildingError::InvalidCcm(
 							CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
