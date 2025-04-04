@@ -195,6 +195,8 @@ pub(super) struct BaseToQuote {}
 pub(super) struct QuoteToBase {}
 
 pub(super) trait SwapDirection {
+	type Inverse: SwapDirection;
+
 	/// The asset this type of swap sells, i.e. the asset the swapper provides
 	const INPUT_SIDE: Pairs;
 
@@ -211,6 +213,8 @@ pub(super) trait SwapDirection {
 	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96;
 }
 impl SwapDirection for BaseToQuote {
+	type Inverse = QuoteToBase;
+
 	const INPUT_SIDE: Pairs = Pairs::Base;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MIN_SQRT_PRICE;
@@ -227,6 +231,8 @@ impl SwapDirection for BaseToQuote {
 	}
 }
 impl SwapDirection for QuoteToBase {
+	type Inverse = BaseToQuote;
+
 	const INPUT_SIDE: Pairs = Pairs::Quote;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MAX_SQRT_PRICE;
