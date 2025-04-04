@@ -154,12 +154,6 @@ pub enum DepositFailedReason {
 	NotEnoughToPayFees,
 	TransactionRejectedByBroker,
 	DepositWitnessRejected(DispatchError),
-	InvalidDestinationAddress,
-	InvalidBrokerFees,
-	InvalidRefundParameters,
-	InvalidDcaParameters,
-	CcmUnsupportedForTargetChain,
-	CcmInvalidMetadata,
 	CanNotRejectRefunds,
 }
 
@@ -178,17 +172,13 @@ enum FullWitnessDepositOutcome {
 	DepositActionPerformed,
 }
 
-// Either all successfully validated data of a vault swap or the reason why the validation has
-// failed.
-type MaybeValidatedVaultSwap<AccountId> = Result<
-	(
-		BoundedVec<Beneficiary<AccountId>, ConstU32<6>>,
-		Option<CcmChannelMetadata>,
-		Option<ForeignChainAddress>,
-		ForeignChainAddress,
-	),
-	RefundReason,
->;
+#[derive(RuntimeDebug, Clone)]
+pub struct ValidatedVaultSwap<AccountId> {
+	pub broker_fees: BoundedVec<Beneficiary<AccountId>, ConstU32<6>>,
+	pub channel_metadata: Option<CcmChannelMetadata>,
+	pub source_address: Option<ForeignChainAddress>,
+	pub destination_address: ForeignChainAddress,
+}
 
 mod deposit_origin {
 
@@ -517,7 +507,6 @@ pub mod pallet {
 			refund_address: ForeignChainAddress,
 		},
 		Refund {
-			asset: C::ChainAsset,
 			reason: RefundReason,
 			refund_address: C::ChainAccount,
 		},
@@ -1969,7 +1958,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 				DepositAction::Swap { swap_request_id }
 			},
-			ChannelAction::Refund { asset, refund_address, reason } => {
+			ChannelAction::Refund { refund_address, reason } => {
 				let egress_id =
 					match Self::schedule_egress(asset, amount_after_fees, refund_address, None) {
 						Ok(egress_details) => Some(egress_details.egress_id),
@@ -2508,7 +2497,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn try_validate_vault_swap(
 		vault_deposit_witness: VaultDepositWitness<T, I>,
-	) -> MaybeValidatedVaultSwap<T::AccountId> {
+	) -> Result<ValidatedVaultSwap<T::AccountId>, RefundReason> {
 		let VaultDepositWitness {
 			input_asset: _,
 			deposit_address: _,
@@ -2580,7 +2569,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			};
 
-		Ok((broker_fees, channel_metadata, source_address, destination_address_internal))
+		Ok(ValidatedVaultSwap {
+			broker_fees,
+			channel_metadata,
+			source_address,
+			destination_address: destination_address_internal,
+		})
 	}
 
 	pub fn process_vault_swap_request_full_witness(
@@ -2606,15 +2600,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let (action, source_address) =
 			match Self::try_validate_vault_swap(vault_deposit_witness.clone()) {
-				Ok((
+				Ok(ValidatedVaultSwap {
 					broker_fees,
 					channel_metadata,
 					source_address,
-					destination_address_internal,
-				)) => (
+					destination_address,
+				}) => (
 					ChannelAction::Swap {
 						destination_asset,
-						destination_address: destination_address_internal,
+						destination_address,
 						broker_fees: broker_fees.clone(),
 						channel_metadata: channel_metadata.clone(),
 						refund_params: refund_params
@@ -2625,7 +2619,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				),
 				Err(reason) => (
 					ChannelAction::Refund {
-						asset: source_asset,
 						reason: reason.clone(),
 						refund_address: refund_params.refund_address,
 					},
