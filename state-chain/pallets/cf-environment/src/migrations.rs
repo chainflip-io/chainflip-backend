@@ -63,6 +63,7 @@ pub type PalletMigration<T> = (
 		<T as frame_system::Config>::DbWeight,
 	>,
 	PlaceholderMigration<14, Pallet<T>>,
+	// Migration from 14 to 15 in state-chain/runtime/src/migrations/assethub_integration.rs
 );
 
 #[cfg(test)]

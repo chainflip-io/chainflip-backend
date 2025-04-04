@@ -16,6 +16,8 @@ import { approveErc20 } from './approve_erc20';
 import { getCFTesterAbi } from './contract_interfaces';
 import { sendSol } from './send_sol';
 import { sendSolUsdc } from './send_solusdc';
+import { sendHubDot } from './send_hubdot';
+import { sendHubAsset } from './send_hubasset';
 import { Logger } from './utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
@@ -63,6 +65,13 @@ export async function send(logger: Logger, asset: Asset, address: string, amount
     }
     case 'SolUsdc':
       await sendSolUsdc(logger, address, amount ?? defaultAssetAmounts(asset));
+      break;
+    case 'HubDot':
+      await sendHubDot(address, amount ?? defaultAssetAmounts(asset));
+      break;
+    case 'HubUsdc':
+    case 'HubUsdt':
+      await sendHubAsset(asset, address, amount ?? defaultAssetAmounts(asset));
       break;
     default:
       throw new Error(`Unsupported asset type: ${asset}`);

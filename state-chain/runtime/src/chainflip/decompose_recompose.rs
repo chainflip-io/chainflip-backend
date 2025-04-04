@@ -17,7 +17,7 @@
 use crate::{
 	ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
 };
-use cf_chains::{arb::ArbitrumTrackedData, btc::BitcoinFeeInfo};
+use cf_chains::{arb::ArbitrumTrackedData, btc::BitcoinFeeInfo, instances::AssethubInstance};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
@@ -73,6 +73,15 @@ impl WitnessDataExtraction for RuntimeCall {
 				);
 				Some(tracked_data.encode())
 			},
+			RuntimeCall::AssethubChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				AssethubInstance,
+			>::update_chain_state {
+				ref mut new_chain_state,
+			}) => {
+				let fee_info = mem::take(&mut new_chain_state.tracked_data.median_tip);
+				Some(fee_info.encode())
+			},
 			_ => None,
 		}
 	}
@@ -116,6 +125,16 @@ impl WitnessDataExtraction for RuntimeCall {
 				if let Some(tracked_data) = arb_select_median_base_fees(data) {
 					new_chain_state.tracked_data = tracked_data;
 				},
+			RuntimeCall::AssethubChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				AssethubInstance,
+			>::update_chain_state {
+				new_chain_state,
+			}) => {
+				if let Some(median) = decode_and_select(data, select_median) {
+					new_chain_state.tracked_data.median_tip = median;
+				};
+			},
 			_ => {
 				log::warn!("No witness data injection for call {:?}", self);
 			},
@@ -199,7 +218,9 @@ mod tests {
 		btc::{BitcoinFeeInfo, BitcoinTrackedData},
 		dot::PolkadotTrackedData,
 		eth::EthereumTrackedData,
-		Bitcoin, Chain, ChainState, Ethereum, Polkadot,
+		hub::AssethubTrackedData,
+		instances::AssethubInstance,
+		Assethub, Bitcoin, Chain, ChainState, Ethereum, Polkadot,
 	};
 	use cf_primitives::{AccountRole, ForeignChain};
 	use cf_traits::EpochInfo;
@@ -253,6 +274,19 @@ mod tests {
 				}),
 			ForeignChain::Arbitrum => unimplemented!(),
 			ForeignChain::Solana => unimplemented!(),
+			ForeignChain::Assethub =>
+				RuntimeCall::AssethubChainTracking(pallet_cf_chain_tracking::Call::<
+					Runtime,
+					AssethubInstance,
+				>::update_chain_state {
+					new_chain_state: ChainState {
+						block_height: BLOCK_HEIGHT as u32,
+						tracked_data: AssethubTrackedData {
+							median_tip: fee.into(),
+							runtime_version: Default::default(),
+						},
+					},
+				}),
 		}
 	}
 
@@ -261,6 +295,7 @@ mod tests {
 		test_medians::<Ethereum>();
 		test_medians::<Bitcoin>();
 		test_medians::<Polkadot>();
+		test_medians::<Assethub>();
 		// we don't test medians for Arbitrum since there is no priority fee in arbitrum
 		// we don't test medians for Solana as we use a different method for Solana block height
 		// tracking

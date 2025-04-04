@@ -50,6 +50,7 @@ pub async fn start<StateChainClient>(
 	btc_client: BtcRetryRpcClient,
 	dot_client: DotRetryRpcClient,
 	sol_client: SolRetryRpcClient,
+	hub_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
@@ -142,14 +143,24 @@ where
 		arb_client,
 		witness_call.clone(),
 		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
+		db.clone(),
+	);
+
+	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
+
+	let start_hub = super::hub::start(
+		scope,
+		hub_client,
+		witness_call.clone(),
+		state_chain_client,
 		state_chain_stream,
 		epoch_source,
 		db,
 	);
 
-	let start_sol = super::sol::start(scope, sol_client, state_chain_client);
-
-	futures::future::try_join5(start_eth, start_btc, start_dot, start_arb, start_sol).await?;
+	futures_util::try_join!(start_eth, start_btc, start_dot, start_arb, start_sol, start_hub)?;
 
 	Ok(())
 }

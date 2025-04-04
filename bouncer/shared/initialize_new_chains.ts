@@ -35,6 +35,13 @@ export async function initializeSolanaChain(logger: Logger) {
   await solInitializationRequest;
 }
 
+export async function initializeAssethubChain(logger: Logger) {
+  logger.info('Initializing Assethub');
+  const hubInitializationRequest = observeEvent(logger, 'assethubVault:ChainInitialized').event;
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.assethubVault.initializeChain());
+  await hubInitializationRequest;
+}
+
 export async function initializeArbitrumContracts(
   logger: Logger,
   arbClient: Web3,

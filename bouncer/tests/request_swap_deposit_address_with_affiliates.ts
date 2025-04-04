@@ -20,6 +20,8 @@ function toEncodedAddress(chain: Chain, address: string) {
       return { Eth: hexToBytes(address) };
     case 'Polkadot':
       return { Dot: isHex(address) ? hexToBytes(address) : ss58.decode(address).data };
+    case 'Assethub':
+      return { Hub: isHex(address) ? hexToBytes(address) : ss58.decode(address).data };
     case 'Solana':
       return { Sol: isHex(address) ? hexToBytes(address) : base58.decode(address) };
     case 'Bitcoin':
@@ -46,7 +48,7 @@ export async function depositChannelCreation(testContext: TestContext) {
   const numberSchema = z.string().transform((n) => Number(n.replace(/,/g, '')));
   const bigintSchema = z.string().transform((n) => BigInt(n.replace(/,/g, '')));
 
-  const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol']);
+  const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol', 'Hub']);
 
   const addressTransforms = {
     Btc: (address: string) => address,
@@ -55,6 +57,8 @@ export async function depositChannelCreation(testContext: TestContext) {
     Dot: (address: string) =>
       isHex(address) ? ss58.encode({ data: address, ss58Format: 0 }) : address,
     Sol: (address: string) => (isHex(address) ? base58.encode(hexToBytes(address)) : address),
+    Hub: (address: string) =>
+      isHex(address) ? ss58.encode({ data: address, ss58Format: 0 }) : address,
   } as const;
 
   const eventSchema = z
@@ -106,7 +110,7 @@ export async function depositChannelCreation(testContext: TestContext) {
           gas_budget: `0x${BigInt(params.ccmParams.gasBudget).toString(16)}`,
           ccm_additional_data: params.ccmParams.ccmAdditionalData,
         },
-        getInternalAsset(params.srcAsset) === 'Btc' ? params.maxBoostFeeBps ?? 0 : 0,
+        getInternalAsset(params.srcAsset) === 'Btc' ? (params.maxBoostFeeBps ?? 0) : 0,
         (params.affiliates ?? []).map(({ account, commissionBps }) => ({
           account: isHex(account) ? account : bytesToHex(ss58.decode(account).data),
           bps: commissionBps,
@@ -216,6 +220,7 @@ export async function depositChannelCreation(testContext: TestContext) {
     Arbitrum: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
     Polkadot: ['1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo'],
     Solana: ['3yKDHJgzS2GbZB9qruoadRYtq8597HZifnRju7fHpdRC'],
+    Assethub: ['1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo'],
   } as const;
 
   const entries = Object.entries as <T>(o: T) => [keyof T, T[keyof T]][];

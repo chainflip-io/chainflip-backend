@@ -2512,6 +2512,9 @@ pub(crate) mod utilities {
 			Asset::ArbEth => ETH_ESTIMATION_CAP,
 			Asset::Btc => BTC_ESTIMATION_CAP,
 			Asset::Sol => SOL_ESTIMATION_CAP,
+			Asset::HubDot => DOT_ESTIMATION_CAP,
+			Asset::HubUsdc => USD_ESTIMATION_CAP,
+			Asset::HubUsdt => USD_ESTIMATION_CAP,
 		}
 	}
 
