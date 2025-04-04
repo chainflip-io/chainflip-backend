@@ -431,6 +431,12 @@ where
 			.map_err(|_| PoolClientError::PoolLockingError)?;
 
 		for attempt in 1..=MAX_POOL_SUBMISSION_RETRIES {
+			if attempt > 1 {
+				log::debug!(
+					target: "pool_client",
+					"Retrying submit_one to the transaction pool attempt: {attempt} ..."
+				);
+			}
 			let nonce = self.next_nonce().await?;
 			let extrinsic = self.create_signed_extrinsic(call.clone(), nonce)?;
 
@@ -440,14 +446,15 @@ where
 				.await
 			{
 				Ok(tx_hash) => return Ok(tx_hash),
-				Err(pool_error) => {
-					let (is_retriable, msg) = is_retriable_pool_error(&pool_error);
-					if is_retriable {
-						log::debug!("{msg}. Retrying submit_one to the transaction pool attempt: {attempt} ...");
+				Err(pool_error) =>
+					if let Some(retry_msg) = is_retriable_pool_error(&pool_error) {
+						log::debug!(
+							target: "pool_client",
+							"Recoverable error: {retry_msg}."
+						);
 					} else {
 						Err(PoolClientError::from(pool_error))?
-					}
-				},
+					},
 			}
 		}
 		Err(PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))
@@ -476,6 +483,12 @@ where
 			.map_err(|_| PoolClientError::PoolLockingError)?;
 
 		for attempt in 1..=MAX_POOL_SUBMISSION_RETRIES {
+			if attempt > 1 {
+				log::debug!(
+					target: "pool_client",
+					"Retrying submit_and_watch to the transaction pool attempt: {attempt}...",
+				);
+			}
 			let nonce = self.next_nonce().await?;
 			let extrinsic = self.create_signed_extrinsic(call.clone(), nonce)?;
 
@@ -492,14 +505,15 @@ where
 					maybe_status_stream = Some(status_stream);
 					break;
 				},
-				Err(pool_error) => {
-					let (is_retriable, msg) = is_retriable_pool_error(&pool_error);
-					if is_retriable {
-						log::debug!("{msg}. Retrying submit_and_watch to the transaction pool attempt: {attempt} ...");
+				Err(pool_error) =>
+					if let Some(retry_msg) = is_retriable_pool_error(&pool_error) {
+						log::debug!(
+							target: "pool_client",
+							"Recoverable error: {retry_msg}."
+						);
 					} else {
 						Err(PoolClientError::from(pool_error))?
-					}
-				},
+					},
 			};
 		}
 
@@ -554,15 +568,15 @@ where
 		Err(PoolClientError::TransactionStatusError("Unexpected end of status stream"))
 	}
 
-	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress. Once the
-	/// extrinsic is in a block, `ExtrinsicDetails` is returned. `ExtrinsicDetails` contains
-	/// static events (event types known at compile time) of type
-	/// `state_chain_runtime::RuntimeEvent`. This means if a runtime upgrade changes an event
-	/// signature, this function can't decode the changed event anymore. Use the alternative
-	/// `submit_watch_dynamic` to be able to dynamically decode events.
-	/// `until_finalized` param determines whether to wait until the extrinsic is in a block or in
-	/// a finalized block. This is a blocking call, if until_finalized == false it takes around 1
-	/// block and if until_finalized == true it takes >2 blocks
+	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
+	///
+	/// Returns statically decoded events ([state_chain_runtime::RuntimeEvent]).
+	///
+	/// Static event decoding means that if a runtime upgrade changes an event signature, this
+	/// function may fail to decode the changed event. Use the alternative
+	/// [SignedPoolClient::submit_watch_dynamic] to be able to dynamically decode events.
+	///
+	/// See [SignedPoolClient::submit_watch_generic] for more details.
 	pub async fn submit_watch_static(
 		&self,
 		call: RuntimeCall,
@@ -575,14 +589,15 @@ where
 		.await
 	}
 
-	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress. Once the
-	/// extrinsic is in a block, `ExtrinsicData` is returned. `ExtrinsicData` contains dynamic
-	/// events of type `DynamicEvents`, these events are decoded dynamically using the current
-	/// runtime metadata. This means that if a runtime upgrade changes the event signature, this
-	/// function can decode the changed event.
-	/// `until_finalized` param determines whether to wait until the extrinsic is in a block or in
-	/// a finalized block. This is a blocking call, if until_finalized == false it takes around 1
-	/// block and if until_finalized == true it takes >2 blocks
+	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
+	///
+	/// Returns dynamically decoded events ([DynamicEvents]).
+	///
+	/// Dynamic event decoding means that the events are decoded at runtime using the runtime
+	/// metadata. This means that if a runtime upgrade changes the event signature, this
+	/// function can still decode the changed event.
+	///
+	/// See [SignedPoolClient::submit_watch] for more details.
 	pub async fn submit_watch_dynamic(
 		&self,
 		call: RuntimeCall,
@@ -596,17 +611,19 @@ where
 	}
 }
 
-fn is_retriable_pool_error(pool_error: &sc_transaction_pool::error::Error) -> (bool, &'static str) {
+fn is_retriable_pool_error(pool_error: &sc_transaction_pool::error::Error) -> Option<&'static str> {
+	log::debug!(
+		target: "pool_client",
+		"Handling pool error: {pool_error}"
+	);
 	match pool_error {
 		sc_transaction_pool::error::Error::Pool(
 			sc_transaction_pool_api::error::Error::TooLowPriority { .. },
 		) => {
 			// This occurs when a transaction with the same nonce is in the transaction pool
 			// and the priority is <= priority of that existing tx
-			(
-				true,
-				"TooLowPriority error. More likely occurs when a transaction with the same nonce \
-					 is in the transaction pool",
+			Some(
+				"TooLowPriority error. Most likely occurs when a transaction with the same nonce is in the transaction pool",
 			)
 		},
 		sc_transaction_pool::error::Error::Pool(
@@ -616,7 +633,7 @@ fn is_retriable_pool_error(pool_error: &sc_transaction_pool::error::Error) -> (b
 		) => {
 			// This occurs when the nonce has already been *consumed* i.e
 			// a transaction with that nonce is in a block
-			(true, "InvalidTransaction::Stale error, more likely nonce too low")
+			Some("InvalidTransaction::Stale error, most likely nonce too low")
 		},
 		sc_transaction_pool::error::Error::Pool(
 			sc_transaction_pool_api::error::Error::InvalidTransaction(
@@ -625,8 +642,8 @@ fn is_retriable_pool_error(pool_error: &sc_transaction_pool::error::Error) -> (b
 		) => {
 			// This occurs when the extra details used to sign the extrinsic such as the
 			// runtimeVersion are different from the verification side
-			(true, "InvalidTransaction::BadProof error, more likely due to RuntimeVersion mismatch")
+			Some("InvalidTransaction::BadProof error, most likely due to RuntimeVersion mismatch")
 		},
-		_ => (false, ""),
+		_ => None,
 	}
 }
