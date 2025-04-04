@@ -1542,32 +1542,52 @@ fn bond_should_count_toward_restricted_balance() {
 
 #[test]
 fn skip_redemption_of_zero_flip() {
-	#[track_caller]
-	fn inner_test(funding_amount: FlipBalance, redemption_amount: RedemptionAmount<FlipBalance>) {
-		new_test_ext().execute_with(|| {
-			assert_ok!(Funding::funded(
-				RuntimeOrigin::root(),
-				ALICE,
-				funding_amount,
-				Default::default(),
-				Default::default(),
-			));
-			assert_ok!(Funding::redeem(
-				RuntimeOrigin::signed(ALICE),
-				redemption_amount,
-				Default::default(),
-				Default::default()
-			));
-			assert_event_sequence! {
-				Test,
-				_,
-				RuntimeEvent::Funding(Event::Funded {..}),
-				RuntimeEvent::Funding(Event::RedemptionAmountZero {..}),
-			};
-		});
-	}
+	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			100,
+			Default::default(),
+			Default::default(),
+		));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Exact(0),
+			Default::default(),
+			Default::default()
+		));
+		assert_event_sequence! {
+			Test,
+			_,
+			RuntimeEvent::Funding(Event::Funded {..}),
+			RuntimeEvent::Funding(Event::RedemptionAmountZero {..}),
+		};
+	});
+}
 
-	inner_test(100, RedemptionAmount::Exact(0));
+#[test]
+fn ignore_redemption_tax_when_redeeming_all() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			100,
+			Default::default(),
+			Default::default(),
+		));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			Default::default(),
+			Default::default()
+		));
+		assert_event_sequence! {
+			Test,
+			_,
+			RuntimeEvent::Funding(Event::Funded {..}),
+			RuntimeEvent::Funding(Event::RedemptionRequested { amount: 100, .. }),
+		};
+	});
 }
 
 #[test]
