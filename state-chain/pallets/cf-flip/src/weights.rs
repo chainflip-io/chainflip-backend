@@ -50,7 +50,6 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn on_initialize() -> Weight;
 	fn update_pallet_config() -> Weight;
-	fn reap_one_account() -> Weight;
 }
 
 /// Weights for pallet_cf_flip using the Substrate node and recommended hardware.
@@ -77,19 +76,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(4_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `Flip::Account` (r:1 w:1)
-	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::TotalIssuance` (r:1 w:1)
-	/// Proof: `Flip::TotalIssuance` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	fn reap_one_account() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `649`
-		//  Estimated: `3545`
-		// Minimum execution time: 10_000_000 picoseconds.
-		Weight::from_parts(11_000_000, 3545)
-			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
 }
 
 // For backwards compatibility and tests
@@ -114,18 +100,5 @@ impl WeightInfo for () {
 		// Minimum execution time: 3_000_000 picoseconds.
 		Weight::from_parts(4_000_000, 0)
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Flip::Account` (r:1 w:1)
-	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::TotalIssuance` (r:1 w:1)
-	/// Proof: `Flip::TotalIssuance` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	fn reap_one_account() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `649`
-		//  Estimated: `3545`
-		// Minimum execution time: 10_000_000 picoseconds.
-		Weight::from_parts(11_000_000, 3545)
-			.saturating_add(ParityDbWeight::get().reads(2_u64))
-			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 }

@@ -73,21 +73,5 @@ mod benchmarks {
 		assert_eq!(Pallet::<T>::slashing_rate(), slashing_rate)
 	}
 
-	#[benchmark]
-	fn reap_one_account() {
-		let caller: T::AccountId = whitelisted_caller();
-		Account::<T>::insert(
-			&caller,
-			FlipAccount { balance: T::Balance::from(0u32), bond: T::Balance::from(0u32) },
-		);
-
-		#[block]
-		{
-			BurnFlipAccount::<T>::on_killed_account(&caller);
-		}
-
-		assert!(!Account::<T>::contains_key(&caller));
-	}
-
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
 }
