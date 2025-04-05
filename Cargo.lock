@@ -4635,6 +4635,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "generic-typeinfo-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+]
+
+[[package]]
+name = "generic-typeinfo-derive-tests"
+version = "0.1.0"
+dependencies = [
+ "generic-typeinfo-derive",
+ "scale-info",
+]
+
+[[package]]
 name = "gethostname"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8116,6 +8133,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "log",
  "parity-scale-codec",
  "scale-info",
@@ -8177,6 +8195,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "itertools 0.13.0",
  "log",
  "nanorand",
@@ -8313,6 +8332,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "hex-literal",
  "log",
  "nanorand",
@@ -8439,6 +8459,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "hex-literal",
  "log",
  "pallet-cf-reputation",
