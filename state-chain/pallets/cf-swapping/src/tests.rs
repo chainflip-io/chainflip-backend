@@ -615,9 +615,10 @@ fn process_all_into_stable_swaps_first() {
 		assert_swaps_queue_is_empty();
 
 		let usdc_amount_swapped_after_fee =
-			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE, false).remaining_amount;
+			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE, MinFeePolicy::NotEnforced)
+				.remaining_amount;
 		let usdc_amount_deposited_after_fee =
-			Swapping::take_network_fee(AMOUNT, false).remaining_amount;
+			Swapping::take_network_fee(AMOUNT, MinFeePolicy::NotEnforced).remaining_amount;
 
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(
@@ -1334,6 +1335,7 @@ mod swap_batching {
 				broker_fee_taken: None,
 				stable_amount,
 				final_output: None,
+				stable_amount_before_fees: stable_amount,
 			}
 		}
 	}
@@ -1614,7 +1616,7 @@ mod internal_swaps {
 
 		new_test_ext()
 			.execute_with(|| {
-				MinimumNetworkFeePerChunk::<Test>::set(MIN_NETWORK_FEE);
+				MinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
 				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
