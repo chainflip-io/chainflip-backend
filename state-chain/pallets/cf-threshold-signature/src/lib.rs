@@ -141,6 +141,7 @@ pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
 pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen {
+		#[skip_name_expansion]
 		ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
 		response_status: KeygenResponseStatus<T, I>,
@@ -157,8 +158,10 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 		new_public_key: AggKeyFor<T, I>,
 	},
 	AwaitingKeyHandover {
+		#[skip_name_expansion]
 		ceremony_id: CeremonyId,
 		response_status: KeyHandoverResponseStatus<T, I>,
+		#[skip_name_expansion]
 		receiving_participants: BTreeSet<T::ValidatorId>,
 		#[skip_name_expansion]
 		next_epoch: EpochIndex,
@@ -173,6 +176,7 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for the threshold signatures for the rotation txs for chains under this key
 	/// to complete
 	AwaitingActivationSignatures {
+		#[skip_name_expansion]
 		request_ids: Vec<RequestId>,
 	},
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
@@ -180,6 +184,7 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	Complete,
 	/// The rotation has failed at one of the above stages.
 	Failed {
+		#[skip_name_expansion]
 		offenders: BTreeSet<T::ValidatorId>,
 	},
 	KeyHandoverFailed {
