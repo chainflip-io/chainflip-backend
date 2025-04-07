@@ -19,7 +19,6 @@ use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
-pub mod dca_state_migration;
 pub mod minimum_network_fee_migration;
 pub mod on_chain_trading_migration;
 
@@ -34,16 +33,9 @@ pub type PalletMigration<T> = (
 	VersionedMigration<
 		8,
 		9,
-		dca_state_migration::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	VersionedMigration<
-		9,
-		10,
 		minimum_network_fee_migration::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<10, Pallet<T>>,
+	PlaceholderMigration<9, Pallet<T>>,
 );
