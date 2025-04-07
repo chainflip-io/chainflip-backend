@@ -1506,14 +1506,13 @@ pub mod pallet {
 					"All swaps should have Stable amount set here"
 				);
 
-				let mut stable_amount = swap.stable_amount.unwrap_or_default();
-				swap.stable_amount_before_fees = Some(stable_amount);
+				swap.stable_amount_before_fees = swap.stable_amount;
 
 				for fee_type in &swap.swap.fees {
 					let remaining_amount = match fee_type {
 						FeeType::NetworkFee { min_fee_enforced } => {
 							let FeeTaken { remaining_amount, fee } = Self::take_network_fee(
-								stable_amount,
+								swap.stable_amount.unwrap_or_default(),
 								if *min_fee_enforced {
 									MinFeePolicy::Enforced {
 										swap_request_id: swap.swap.swap_request_id,
@@ -1526,19 +1525,19 @@ pub mod pallet {
 							remaining_amount
 						},
 						FeeType::BrokerFee(beneficiaries) => {
-							let FeeTaken { remaining_amount, fee } =
-								Self::take_broker_fees(stable_amount, beneficiaries);
+							let FeeTaken { remaining_amount, fee } = Self::take_broker_fees(
+								swap.stable_amount.unwrap_or_default(),
+								beneficiaries,
+							);
 							swap.broker_fee_taken = Some(fee);
 							remaining_amount
 						},
 					};
-					stable_amount = remaining_amount;
+					swap.stable_amount = Some(remaining_amount);
 				}
 
-				swap.stable_amount = Some(stable_amount);
-
 				if swap.output_asset() == STABLE_ASSET {
-					swap.final_output = Some(stable_amount);
+					swap.final_output = swap.stable_amount;
 				}
 			}
 

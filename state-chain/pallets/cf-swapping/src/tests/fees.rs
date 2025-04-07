@@ -133,7 +133,7 @@ fn test_network_fee_calculation() {
 		chunk_amount: AssetAmount,
 		network_fee_collected: AssetAmount,
 		accumulated_stable_amount: AssetAmount,
-		with_swap_request: bool,
+		swap_request_id: Option<SwapRequestId>,
 	) -> (AssetAmount, AssetAmount) {
 		// Set the network fee and minimum network fee to the given values
 		NetworkFee::set(Permill::from_percent(network_fee_percent));
@@ -168,48 +168,52 @@ fn test_network_fee_calculation() {
 			},
 		);
 
+		let collected_fees_before = CollectedNetworkFee::<Test>::get();
+
 		let FeeTaken { remaining_amount, fee } = Swapping::take_network_fee(
 			chunk_amount,
 			MinFeePolicy::Enforced {
-				swap_request_id: if with_swap_request {
-					SWAP_REQUEST_ID
-				} else {
-					SwapRequestId(u64::MAX)
-				},
+				swap_request_id: swap_request_id.unwrap_or(SwapRequestId(u64::MAX)),
 			},
 		);
+
+		// Sanity checks
+		assert_eq!(collected_fees_before + fee, CollectedNetworkFee::<Test>::get());
+		assert_eq!(remaining_amount + fee, chunk_amount);
+
 		(remaining_amount, fee)
 	}
 
 	new_test_ext().execute_with(|| {
+		const ID: Option<SwapRequestId> = Some(SWAP_REQUEST_ID);
 		// Normal network fee
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 0, true), (900, 100));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 10_000, true), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 0, ID), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 10_000, ID), (900, 100));
 
 		// Minimum network fee enforced
-		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, true), (800, 200));
-		assert_eq!(take_fees_from_swap(10, 1500, 1000, 1000, 10_000, true), (500, 500));
-		assert_eq!(take_fees_from_swap(10, 1500, 1000, 0, 0, true), (0, 1000));
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, ID), (800, 200));
+		assert_eq!(take_fees_from_swap(10, 1500, 1000, 1000, 10_000, ID), (500, 500));
+		assert_eq!(take_fees_from_swap(10, 1500, 1000, 0, 0, ID), (0, 1000));
 
 		// Minimum network fee was taken on previous chunk
-		assert_eq!(take_fees_from_swap(10, 200, 1000, 200, 1000, true), (1000, 0));
-		assert_eq!(take_fees_from_swap(10, 150, 1000, 150, 1000, true), (950, 50));
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 200, 1000, ID), (1000, 0));
+		assert_eq!(take_fees_from_swap(10, 150, 1000, 150, 1000, ID), (950, 50));
 
 		// Network fee changed after first chunk, so more or less is taken from this chunk
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 50, 1000, true), (850, 150));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 150, 1000, true), (950, 50));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 50, 1000, ID), (850, 150));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 150, 1000, ID), (950, 50));
 
 		// No swap request exists, should still enforce fee as if it was the first chunk
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 1000, false), (900, 100));
-		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, false), (800, 200));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 1000, None), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, None), (800, 200));
 
 		// Unrealistic scenarios, but just to make sure it can handle it.
-		assert_eq!(take_fees_from_swap(10, 20, 0, 100, 1000, true), (0, 0));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 10_000, true), (0, 1000));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 10_000, 0, true), (1000, 0));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, u128::MAX, u128::MAX, true), (1000, 0));
+		assert_eq!(take_fees_from_swap(10, 20, 0, 100, 1000, ID), (0, 0));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 10_000, ID), (0, 1000));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 10_000, 0, ID), (1000, 0));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, u128::MAX, u128::MAX, ID), (1000, 0));
 		assert_eq!(
-			take_fees_from_swap(10, 20, u128::MAX, 1000, 10_000, true),
+			take_fees_from_swap(10, 20, u128::MAX, 1000, 10_000, ID),
 			// Because the calculation saturates, the existing 1000 fee taken is deducted from the
 			// calculated fee
 			(
