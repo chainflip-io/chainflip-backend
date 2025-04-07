@@ -1474,7 +1474,7 @@ type MigrationsForV1_9 = (
 	VersionedMigration<
 		14,
 		15,
-		migrations::assethub_integration::AssethubSafemode,
+		migrations::assethub_integration::AssethubUpdate,
 		pallet_cf_environment::Pallet<Runtime>,
 		<Runtime as frame_system::Config>::DbWeight,
 	>,

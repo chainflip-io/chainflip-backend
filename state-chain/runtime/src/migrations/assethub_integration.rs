@@ -21,6 +21,7 @@ use frame_support::{
 	traits::{OnRuntimeUpgrade, UncheckedOnRuntimeUpgrade},
 	weights::Weight,
 };
+use sp_core::H256;
 
 pub mod old {
 	use crate::*;
@@ -77,10 +78,43 @@ impl OnRuntimeUpgrade for AssethubChainstate {
 	}
 }
 
-pub struct AssethubSafemode;
+pub struct AssethubUpdate;
 
-impl UncheckedOnRuntimeUpgrade for AssethubSafemode {
+impl UncheckedOnRuntimeUpgrade for AssethubUpdate {
 	fn on_runtime_upgrade() -> Weight {
+		// Update Assethub Genesis hash
+		match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
+			cf_runtime_utilities::genesis_hashes::BERGHAIN => {
+				pallet_cf_environment::AssethubGenesisHash::<Runtime>::put(H256(
+					hex_literal::hex!(
+						"68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f" /* Assethub mainnet */
+					),
+				));
+			},
+			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => {
+				pallet_cf_environment::AssethubGenesisHash::<Runtime>::put(H256(
+					hex_literal::hex!(
+						"4fb7a1b11ba4a38827cf211b3effc87971413e4a9fd79c6bcc2c633383496832" /* Assethub in PDot */
+					),
+				));
+			},
+			cf_runtime_utilities::genesis_hashes::SISYPHOS => {
+				pallet_cf_environment::AssethubGenesisHash::<Runtime>::put(H256(
+					hex_literal::hex!(
+						"d6ca94b515c4693ca4acc8a04afa935572c2896a796b691848f075d5749c6afc" /* Assethub in SisyDot */
+					),
+				));
+			},
+			_ => {
+				pallet_cf_environment::AssethubGenesisHash::<Runtime>::put(H256(
+					hex_literal::hex!(
+						"e58c46099b158aeb474d1020ea706f468d4edfa27e6e3e75688da1bb17fd6876" /* Assethub on localnet */
+					),
+				));
+			},
+		}
+
+		// Update runtime safemode
 		let _ = pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
 			|maybe_old: Option<old::RuntimeSafeMode>| {
 				maybe_old.map(|old| crate::safe_mode::RuntimeSafeMode {
@@ -121,6 +155,7 @@ impl UncheckedOnRuntimeUpgrade for AssethubSafemode {
 		).map_err(|_| {
 			log::warn!("Migration for Runtime Safe mode was not able to interpret the existing storage in the old format!")
 		});
+
 		Weight::zero()
 	}
 }
