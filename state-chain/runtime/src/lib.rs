@@ -72,6 +72,7 @@ use cf_chains::{
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
+	instances::ChainInstanceAlias,
 	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
 	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
 	TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
@@ -1039,6 +1040,7 @@ impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
 }
 
 impl pallet_cf_elections::Config<Instance5> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Solana as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;

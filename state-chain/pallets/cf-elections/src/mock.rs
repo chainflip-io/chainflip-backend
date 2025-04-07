@@ -37,6 +37,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_cf_elections::Config<Instance1> for Test {
+	const TYPE_INFO_SUFFIX: &'static str = "Test";
 	type RuntimeEvent = RuntimeEvent;
 
 	// TODO: Use Settings?
