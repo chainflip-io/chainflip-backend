@@ -20,13 +20,13 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 pub mod minimum_network_fee_migration;
-pub mod on_chain_trading_migration;
+pub mod swap_request_migration;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
 		7,
 		8,
-		on_chain_trading_migration::Migration<T>,
+		swap_request_migration::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
