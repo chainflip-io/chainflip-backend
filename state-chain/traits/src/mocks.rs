@@ -49,6 +49,7 @@ pub mod liability_tracker;
 pub mod offence_reporting;
 pub mod on_account_funded;
 pub mod pool_api;
+pub mod pool_price_api;
 pub mod qualify_node;
 pub mod reputation_resetter;
 pub mod safe_mode;

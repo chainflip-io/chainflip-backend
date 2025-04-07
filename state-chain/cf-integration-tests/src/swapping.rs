@@ -43,7 +43,9 @@ use cf_primitives::{
 	FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
-use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, SwapType};
+use cf_traits::{
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, OrderId, SwapType,
+};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
@@ -54,7 +56,7 @@ use pallet_cf_broadcast::{
 	RequestSuccessCallbacks,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepositWitness};
-use pallet_cf_pools::{HistoricalEarnedFees, OrderId, RangeOrderSize};
+use pallet_cf_pools::{HistoricalEarnedFees, RangeOrderSize};
 use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::{H160, U256};
 
@@ -659,7 +661,7 @@ fn failed_swaps_are_rolled_back() {
 		// swap will fail:
 		add_liquidity(&DORIS, Asset::Eth, 10_000_000 * DECIMALS, OrderType::RangeOrder, None);
 
-		// Get the current state of pools so we can compare agaist this later:
+		// Get the current state of pools so we can compare against this later:
 		let eth_pool = get_pool(Asset::Eth);
 		let flip_pool = get_pool(Asset::Flip);
 

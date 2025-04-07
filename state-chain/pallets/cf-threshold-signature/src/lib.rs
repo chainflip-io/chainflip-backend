@@ -31,12 +31,7 @@ pub mod weights;
 mod key_rotator;
 mod response_status;
 
-use response_status::ResponseStatus;
-
-use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::{build::Fields, Path, Type, TypeInfo};
-
-use cf_chains::ChainCrypto;
+use cf_chains::{instances::PalletInstanceAlias, ChainCrypto};
 use cf_primitives::{
 	AuthorityCount, CeremonyId, EpochIndex, FlipBalance, ThresholdSignatureRequestId as RequestId,
 };
@@ -47,6 +42,7 @@ use cf_traits::{
 	ThresholdSigner, ThresholdSignerNomination,
 };
 use cfe_events::ThresholdSignatureRequest;
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
@@ -58,6 +54,10 @@ use frame_support::{
 	weights::Weight,
 	RuntimeDebugNoBound,
 };
+use response_status::ResponseStatus;
+use scale_info::TypeInfo;
+
+use generic_typeinfo_derive::GenericTypeInfo;
 
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -126,22 +126,26 @@ pub enum ThresholdCeremonyType {
 	KeygenVerification,
 }
 
-#[derive(Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Default, RuntimeDebug)]
-#[scale_info(skip_type_params(T, I))]
+#[derive(Clone, Encode, Decode, GenericTypeInfo, PartialEq, Eq, Default, RuntimeDebug)]
+#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
 	pub signer: AggKeyFor<T, I>,
 	pub signature_result: AsyncResult<SignatureResultFor<T, I>>,
 }
 
 /// The current status of a key rotation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, EnumVariant, RuntimeDebugNoBound)]
-#[scale_info(skip_type_params(T, I))]
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, GenericTypeInfo, EnumVariant, RuntimeDebugNoBound,
+)]
+#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen {
+		#[skip_name_expansion]
 		ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
 		response_status: KeygenResponseStatus<T, I>,
+		#[skip_name_expansion]
 		new_epoch_index: EpochIndex,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
@@ -154,9 +158,12 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 		new_public_key: AggKeyFor<T, I>,
 	},
 	AwaitingKeyHandover {
+		#[skip_name_expansion]
 		ceremony_id: CeremonyId,
 		response_status: KeyHandoverResponseStatus<T, I>,
+		#[skip_name_expansion]
 		receiving_participants: BTreeSet<T::ValidatorId>,
+		#[skip_name_expansion]
 		next_epoch: EpochIndex,
 		new_public_key: AggKeyFor<T, I>,
 	},
@@ -169,6 +176,7 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for the threshold signatures for the rotation txs for chains under this key
 	/// to complete
 	AwaitingActivationSignatures {
+		#[skip_name_expansion]
 		request_ids: Vec<RequestId>,
 	},
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
@@ -176,10 +184,12 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	Complete,
 	/// The rotation has failed at one of the above stages.
 	Failed {
+		#[skip_name_expansion]
 		offenders: BTreeSet<T::ValidatorId>,
 	},
 	KeyHandoverFailed {
 		new_public_key: AggKeyFor<T, I>,
+		#[skip_name_expansion]
 		offenders: BTreeSet<T::ValidatorId>,
 	},
 }
@@ -251,6 +261,7 @@ macro_rules! handle_key_ceremony_report {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_chains::instances::PalletInstanceAlias;
 	use cf_primitives::FlipBalance;
 	use cf_traits::{
 		AccountRoleRegistry, AsyncResult, CfeMultisigRequest, ThresholdSignerNomination,
@@ -263,36 +274,45 @@ pub mod pallet {
 	};
 	use frame_system::ensure_none;
 	/// Context for tracking the progress of a threshold signature ceremony.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
 		/// The respondents that have yet to reply.
+		#[skip_name_expansion]
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each authority has received.
+		#[skip_name_expansion]
 		pub blame_counts: BTreeMap<T::ValidatorId, AuthorityCount>,
 		/// The candidates participating in the signing ceremony (ie. the threshold set).
+		#[skip_name_expansion]
 		pub candidates: BTreeSet<T::ValidatorId>,
 		/// The epoch in which the ceremony was started.
+		#[skip_name_expansion]
 		pub epoch: EpochIndex,
 		/// The key we want to sign with.
 		pub key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 		/// Determines how/if we deal with ceremony failure.
+		#[skip_name_expansion]
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
+		#[skip_name_expansion]
 		pub request_id: RequestId,
 		/// The number of ceremonies attempted so far, excluding the current one.
 		/// Currently we do not limit the number of retry attempts for ceremony type Standard.
 		/// Most transactions are critical, so we should retry until success.
+		#[skip_name_expansion]
 		pub attempt_count: AttemptCount,
 		/// The payload to be signed over.
 		pub payload: PayloadFor<T, I>,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	#[scale_info(skip_type_params(T, I))]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
 		pub request_type:
@@ -389,7 +409,7 @@ pub mod pallet {
 			+ From<Call<Self, I>>;
 
 		/// A marker trait identifying the chain that we are signing for.
-		type TargetChainCrypto: ChainCrypto;
+		type TargetChainCrypto: ChainCrypto + PalletInstanceAlias;
 
 		/// trait to activate chains that use this pallet's key
 		type VaultActivator: VaultActivator<Self::TargetChainCrypto>;
@@ -1206,88 +1226,6 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
 			Ok(())
 		}
-	}
-}
-
-macro_rules! append_chain_to_name {
-	($name:ident) => {
-		match T::TargetChainCrypto::NAME {
-			"EVM" => concat!(stringify!($name), "EVM"),
-			"Polkadot" => concat!(stringify!($name), "Polkadot"),
-			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
-			"Solana" => concat!(stringify!($name), "Solana"),
-			_ => concat!(stringify!($name), "Other"),
-		}
-	};
-}
-
-impl<T, I> TypeInfo for pallet::CeremonyContext<T, I>
-where
-	T: Config<I>,
-	I: 'static,
-{
-	type Identity = Self;
-	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new(append_chain_to_name!(CeremonyContext), module_path!()))
-			.composite(
-				Fields::named()
-					.field(|f| {
-						f.ty::<RequestContext<T, I>>()
-							.type_name(append_chain_to_name!(RequestContext))
-							.name("request_context")
-					})
-					.field(|f| {
-						f.ty::<BTreeSet<T::ValidatorId>>()
-							.type_name("BTreeSet<T::ValidatorId>")
-							.name("remaining_respondents")
-					})
-					.field(|f| {
-						f.ty::<BTreeMap<T::ValidatorId, AuthorityCount>>()
-							.type_name("BTreeMap<T::ValidatorId, AuthorityCount>")
-							.name("blame_counts")
-					})
-					.field(|f| {
-						f.ty::<BTreeSet<T::ValidatorId>>()
-							.type_name("BTreeSet<T::ValidatorId>")
-							.name("candidates")
-					})
-					.field(|f| f.ty::<EpochIndex>().type_name("EpochIndex").name("epoch"))
-					.field(|f| {
-						f.ty::<<T::TargetChainCrypto as ChainCrypto>::AggKey>()
-							.type_name(append_chain_to_name!(Key))
-							.name("key")
-					})
-					.field(|f| {
-						f.ty::<ThresholdCeremonyType>()
-							.type_name("ThresholdCeremonyType")
-							.name("threshold_ceremony_type")
-					}),
-			)
-	}
-}
-
-impl<T, I> TypeInfo for pallet::RequestContext<T, I>
-where
-	T: Config<I>,
-	I: 'static,
-{
-	type Identity = Self;
-	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new(append_chain_to_name!(RequestContext), module_path!()))
-			.composite(
-				Fields::named()
-					.field(|f| f.ty::<RequestId>().type_name("RequestId").name("request_id"))
-					.field(|f| {
-						f.ty::<AttemptCount>().type_name("AttemptCount").name("attempt_count")
-					})
-					.field(|f| {
-						f.ty::<PayloadFor<T, I>>()
-							.type_name(append_chain_to_name!(PayloadFor))
-							.name("payload")
-					}),
-			)
 	}
 }
 

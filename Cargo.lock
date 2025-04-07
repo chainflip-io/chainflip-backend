@@ -1481,6 +1481,7 @@ dependencies = [
  "cfe-events",
  "chainflip-node",
  "frame-executive",
+ "frame-metadata-hash-extension",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
@@ -1523,6 +1524,7 @@ dependencies = [
  "sp-consensus-grandpa",
  "sp-core 34.0.0",
  "sp-inherents",
+ "sp-keyring",
  "sp-offchain",
  "sp-runtime 39.0.0",
  "sp-session",
@@ -1541,6 +1543,7 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "cf-traits",
  "frame-metadata 16.0.0",
  "frame-metadata-hash-extension",
  "frame-support",
@@ -2733,16 +2736,22 @@ dependencies = [
  "anyhow",
  "cf-amm",
  "cf-chains",
+ "cf-node-client",
  "cf-primitives",
+ "cf-rpc-types",
  "frame-support",
  "frame-system",
+ "frame-system-rpc-runtime-api",
  "futures",
  "hex",
  "insta",
  "jsonrpsee 0.23.2",
  "log",
+ "pallet-cf-environment",
+ "pallet-cf-funding",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
+ "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-swapping",
  "pallet-cf-trading-strategy",
@@ -2752,14 +2761,21 @@ dependencies = [
  "sc-rpc",
  "sc-rpc-api",
  "sc-rpc-spec-v2",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "scale-info",
  "serde",
  "serde_json",
  "sp-api 34.0.0",
+ "sp-application-crypto 38.0.0",
+ "sp-block-builder",
  "sp-core 34.0.0",
  "sp-rpc",
  "sp-runtime 39.0.0",
  "sp-state-machine 0.43.0",
+ "sp-transaction-pool",
  "state-chain-runtime",
+ "substrate-frame-rpc-system",
  "thiserror 1.0.69",
  "utilities",
 ]
@@ -3487,7 +3503,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4616,6 +4632,23 @@ checksum = "e8c8444bc9d71b935156cc0ccab7f622180808af7867b1daae6547d773591703"
 dependencies = [
  "serde",
  "typenum",
+]
+
+[[package]]
+name = "generic-typeinfo-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+]
+
+[[package]]
+name = "generic-typeinfo-derive-tests"
+version = "0.1.0"
+dependencies = [
+ "generic-typeinfo-derive",
+ "scale-info",
 ]
 
 [[package]]
@@ -6232,7 +6265,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -7874,9 +7907,9 @@ dependencies = [
 
 [[package]]
 name = "openssl"
-version = "0.10.70"
+version = "0.10.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61cfb4e166a8bb8c9b55c500bc2308550148ece889be90f609377e58140f42c6"
+checksum = "fedfea7d58a1f73118430a55da6a286e7b044961736ce96a16a17068ea25e5da"
 dependencies = [
  "bitflags 2.8.0",
  "cfg-if",
@@ -7915,9 +7948,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.105"
+version = "0.9.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b22d5b84be05a8d6947c7cb71f7c849aa0f112acd4bf51c2a7c1c988ac0a9dc"
+checksum = "8288979acd84749c744a9014b4382d42b8f7b2592847b5afb2ed29e5d16ede07"
 dependencies = [
  "cc",
  "libc",
@@ -8100,6 +8133,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "log",
  "parity-scale-codec",
  "scale-info",
@@ -8161,6 +8195,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "itertools 0.13.0",
  "log",
  "nanorand",
@@ -8297,6 +8332,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "hex-literal",
  "log",
  "nanorand",
@@ -8423,6 +8459,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "hex-literal",
  "log",
  "pallet-cf-reputation",
@@ -10270,7 +10307,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -14229,7 +14266,7 @@ dependencies = [
  "getrandom 0.2.15",
  "once_cell",
  "rustix 0.38.43",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -14429,9 +14466,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.43.0"
+version = "1.44.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d61fa4ffa3de412bfea335c6ecff681de2b609ba3c77ef3e00e521813a9ed9e"
+checksum = "e6b88822cbe49de4185e3a4cbf8321dd487cf5fe0c5c65695fef6346371e9c48"
 dependencies = [
  "backtrace",
  "bytes",
@@ -15809,7 +15846,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

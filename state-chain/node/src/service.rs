@@ -21,6 +21,7 @@ use jsonrpsee::RpcModule;
 use sc_client_api::{Backend, BlockBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 use sc_consensus_grandpa::SharedVoterState;
+use sc_keystore::Keystore;
 use sc_rpc_spec_v2::{chain_spec as chain_spec_rpc, chain_spec::ChainSpecApiServer};
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpSyncParams};
 use sc_telemetry::{Telemetry, TelemetryWorker};
@@ -28,7 +29,12 @@ use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use std::{sync::Arc, time::Duration};
 
-use custom_rpc::{monitoring::MonitoringApiServer, CustomApiServer, CustomRpc};
+use custom_rpc::{
+	broker::{broker_crypto, BrokerSignedApiServer, BrokerSignedRpc},
+	lp::{lp_crypto, LpSignedApiServer, LpSignedRpc},
+	monitoring::MonitoringApiServer,
+	CustomApiServer, CustomRpc,
+};
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 
 pub(crate) type FullClient = sc_service::TFullClient<
@@ -263,6 +269,44 @@ pub fn new_full<
 		let pool = transaction_pool.clone();
 		let executor = Arc::new(task_manager.spawn_handle());
 		let chain_spec = config.chain_spec.cloned_box();
+		let keystore = keystore_container.local_keystore().clone();
+
+		// try to get the broker key pair from the node keystore
+		let broker_key_pair =
+			match keystore.sr25519_public_keys(broker_crypto::BROKER_KEY_TYPE_ID).as_slice() {
+				[pub_key] => {
+					let pub_key = broker_crypto::Public::from(*pub_key);
+
+					keystore
+						.key_pair(&pub_key)
+						.ok()
+						.flatten()
+						.map(|pair: broker_crypto::Pair| pair.into_inner())
+				},
+				[] => None, // No BROKER_KEY_TYPE_ID keys found
+				_ => {
+					log::warn!("Found more than one broker keys in the node keystore. Disabling broker API ...");
+					None
+				},
+			};
+
+		// try to get the lp key pair from the node keystore
+		let lp_key_pair = match keystore.sr25519_public_keys(lp_crypto::LP_KEY_TYPE_ID).as_slice() {
+			[pub_key] => {
+				let pub_key = lp_crypto::Public::from(*pub_key);
+
+				keystore
+					.key_pair(&pub_key)
+					.ok()
+					.flatten()
+					.map(|pair: lp_crypto::Pair| pair.into_inner())
+			},
+			[] => None, // No LP_KEY_TYPE_ID keys found
+			_ => {
+				log::warn!("Found more than one lp provider keys in the node keystore. Disabling LP API ...");
+				None
+			},
+		};
 
 		Box::new(move |deny_unsafe, subscription_executor| {
 			let build = || {
@@ -315,6 +359,28 @@ pub fn new_full<
 					backend.clone(),
 					executor.clone(),
 				)))?;
+
+				// Add broker RPCs if broker key was found
+				if let Some(pair) = broker_key_pair.clone() {
+					module.merge(BrokerSignedApiServer::into_rpc(BrokerSignedRpc::new(
+						client.clone(),
+						backend.clone(),
+						executor.clone(),
+						pool.clone(),
+						pair.clone(),
+					)))?;
+				}
+
+				// Add lp RPCs if lp key was found
+				if let Some(pair) = lp_key_pair.clone() {
+					module.merge(LpSignedApiServer::into_rpc(LpSignedRpc::new(
+						client.clone(),
+						backend.clone(),
+						executor.clone(),
+						pool.clone(),
+						pair.clone(),
+					)))?;
+				}
 
 				Ok(module)
 			};

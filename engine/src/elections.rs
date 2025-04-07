@@ -38,7 +38,7 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	sync::Arc,
 };
-use tracing::{debug, error, info, warn};
+use tracing::Level;
 use voter_api::CompositeVoterApi;
 
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
@@ -57,6 +57,7 @@ pub struct Voter<
 {
 	state_chain_client: Arc<StateChainClient>,
 	voter: RetrierClient<VoterClient>,
+	voter_name: &'static str,
 	_phantom: core::marker::PhantomData<Instance>,
 }
 
@@ -75,26 +76,38 @@ where
 		scope: &Scope<'_, anyhow::Error>,
 		state_chain_client: Arc<StateChainClient>,
 		voter: VoterClient,
+		voter_name: &'static str,
 	) -> Self {
 		Self {
 			state_chain_client,
 			voter: RetrierClient::new(
 				scope,
-				"Voter",
+				voter_name,
 				futures::future::ready(voter),
 				None,
 				INITIAL_VOTER_REQUEST_TIMEOUT,
 				MAXIMUM_CONCURRENT_VOTER_REQUESTS,
 			),
+			voter_name,
 			_phantom: Default::default(),
+		}
+	}
+
+	pub fn log(&self, level: Level, message: &str) {
+		match level {
+			Level::ERROR => tracing::error!(voter = self.voter_name, "{}", message),
+			Level::WARN => tracing::warn!(voter = self.voter_name, "{}", message),
+			Level::INFO => tracing::info!(voter = self.voter_name, "{}", message),
+			Level::DEBUG => tracing::debug!(voter = self.voter_name, "{}", message),
+			Level::TRACE => tracing::trace!(voter = self.voter_name, "{}", message),
 		}
 	}
 
 	pub async fn continuously_vote(self) {
 		loop {
-			info!("Beginning voting");
+			self.log(Level::INFO, "Beginning voting");
 			if let Err(error) = self.reset_and_continuously_vote().await {
-				error!("Voting reset due to error: '{}'", error);
+				self.log(Level::ERROR, &format!("Voting reset due to error: '{}'", error));
 			}
 		}
 	}
@@ -166,7 +179,7 @@ where
 					let state_chain_client = &self.state_chain_client;
 					async move {
 						for (election_identifier, _) in votes.iter() {
-							debug!("Submitting vote for election: '{:?}'", election_identifier);
+							self.log(Level::DEBUG, &format!("Submitting vote for election: '{:?}'", election_identifier));
 						}
 						// TODO: Use block hash you got this vote tasks details from as the based of the mortal of the extrinsic
 						state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::vote {
@@ -178,7 +191,7 @@ where
 			let (election_identifier, result_vote) = vote_tasks.next_or_pending() => {
 				match result_vote {
 					Ok(Some(vote)) => {
-						debug!("Voting task for election: '{:?}' succeeded.", election_identifier);
+						self.log(Level::DEBUG, &format!("Voting task for election: '{:?}' succeeded.", election_identifier));
 						// Create the partial_vote early so that SharedData can be provided as soon as the vote has been generated, rather than only after it is submitted.
 						let partial_vote = VoteStorageOf::<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>::vote_into_partial_vote(&vote, |shared_data| {
 							let shared_data_hash = SharedDataHash::of(&shared_data);
@@ -194,10 +207,10 @@ where
 						pending_submissions.insert(election_identifier,	(partial_vote, vote));
 					},
 					Ok(None) => {
-						debug!("Voting task for election '{:?}' returned 'None' (nothing to submit).", election_identifier);
+						self.log(Level::DEBUG, &format!("Voting task for election '{:?}' returned 'None' (nothing to submit).", election_identifier));
 					},
 					Err(error) => {
-						warn!("Voting task for election '{:?}' failed with error: '{:?}'.", election_identifier, error);
+						self.log(Level::WARN, &format!("Voting task for election '{:?}' failed with error: '{:?}'.", election_identifier, error));
 					}
 				}
 			},
@@ -215,11 +228,11 @@ where
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
 								if !vote_tasks.contains_key(&election_identifier) {
-									debug!("Voting task for election: '{:?}' initiated.", election_identifier);
+									self.log(Level::DEBUG, &format!("Voting task for election: '{:?}' initiated.", election_identifier));
 									vote_tasks.insert(
 										election_identifier,
 										Box::pin(self.voter.request_with_limit(
-											RequestLog::new("vote".to_string(), Some(format!("{election_identifier:?}"))), // Add some identifier for `Instance`.
+											RequestLog::new(format!("{} | {}", self.voter_name, "vote"), Some(format!("{election_identifier:?}"))),
 											Box::pin(move |client| {
 												let election_data = election_data.clone();
 												#[allow(clippy::redundant_async_block)]
@@ -234,7 +247,7 @@ where
 										))
 									);
 								} else {
-									debug!("Voting task for election: '{:?}' not initiated as a task is already running for that election.", election_identifier);
+									self.log(Level::DEBUG, &format!("Voting task for election: '{:?}' not initiated as a task is already running for that election.", election_identifier));
 								}
 							}
 						}
@@ -262,10 +275,10 @@ where
 					} else {
 						// We expect this to happen when a validator joins the set, since they won't be contributing, but will be a validator.
 						// Therefore they get Some() from `electoral_data` but `contributing` is false, until we reset the voting by throwing an error here.
-						return Err(anyhow!("Validator has just joined the authority set, or has been unexpectedly set as not contributing."));
+						return Err(anyhow!("{} | Validator has just joined the authority set, or has been unexpectedly set as not contributing.", self.voter_name));
 					}
 				} else {
-					info!("Not voting as not an authority.");
+					self.log(Level::INFO, "Not voting as not an authority.");
 				}
 			} else break Ok(()),
 		}

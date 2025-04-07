@@ -31,6 +31,7 @@ import {
   observeEvent,
   DisposableApiPromise,
 } from '../shared/utils/substrate';
+import { brokerApiEndpoint, lpApiEndpoint } from '../shared/json_rpc';
 
 async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
@@ -108,6 +109,9 @@ async function main(): Promise<void> {
 
   await using polkadot = await getPolkadotApi();
   await using assethub = await getAssethubApi();
+
+  logger.info(`LP endpoint set to: ${lpApiEndpoint}`);
+  logger.info(`Broker endpoint set to: ${brokerApiEndpoint}`);
 
   logger.info('Performing initial Vault setup');
 

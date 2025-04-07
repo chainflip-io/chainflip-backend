@@ -7,6 +7,7 @@ import {
   newAddress,
 } from './utils';
 import { Logger } from './utils/logger';
+import { brokerApiEndpoint } from './json_rpc';
 
 const defaultCommissionBps = 100; // 1%
 
@@ -30,8 +31,6 @@ export async function newSwap(
   const destinationAddress = isPolkadotAsset(destAsset)
     ? decodeDotAddressForContract(destAddress)
     : destAddress;
-  const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
-
   const defaultRefundAddress = await newAddress(sourceAsset, 'DEFAULT_REFUND');
 
   const defaultFillOrKillParams: FillOrKillParamsX128 = {
@@ -63,7 +62,7 @@ export async function newSwap(
           dcaParams,
         },
         {
-          url: brokerUrl,
+          url: brokerApiEndpoint,
         },
         'backspin',
       );

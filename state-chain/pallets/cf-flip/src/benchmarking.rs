@@ -17,6 +17,8 @@
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
 
+use cf_primitives::{AccountRole, Asset};
+use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -28,9 +30,39 @@ mod benchmarks {
 	use super::*;
 
 	#[benchmark]
-	fn set_slashing_rate() {
+	fn on_initialize() {
+		let whitelisted_callers = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::LiquidityProvider,
+			50,
+		)
+		.unwrap();
+
+		for account in whitelisted_callers {
+			for _ in 0..50 {
+				CallCounter::<T>::mutate(
+					OpaqueCallIndex::<T>(
+						(account.clone(), Asset::Eth).encode(),
+						Default::default(),
+					),
+					|count| {
+						*count += 1;
+					},
+				);
+			}
+		}
+
+		#[block]
+		{
+			Pallet::<T>::on_initialize(0u32.into());
+		}
+	}
+
+	#[benchmark]
+	fn update_pallet_config() {
 		let slashing_rate: Permill = Permill::one();
-		let call = Call::<T>::set_slashing_rate { slashing_rate };
+		let call = Call::<T>::update_pallet_config {
+			updates: vec![PalletConfigUpdate::SetSlashingRate(slashing_rate)].try_into().unwrap(),
+		};
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
 		#[block]
@@ -39,22 +71,6 @@ mod benchmarks {
 		}
 
 		assert_eq!(Pallet::<T>::slashing_rate(), slashing_rate)
-	}
-
-	#[benchmark]
-	fn reap_one_account() {
-		let caller: T::AccountId = whitelisted_caller();
-		Account::<T>::insert(
-			&caller,
-			FlipAccount { balance: T::Balance::from(0u32), bond: T::Balance::from(0u32) },
-		);
-
-		#[block]
-		{
-			BurnFlipAccount::<T>::on_killed_account(&caller);
-		}
-
-		assert!(!Account::<T>::contains_key(&caller));
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);

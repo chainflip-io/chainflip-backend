@@ -29,7 +29,7 @@ const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
 
 // Solana transactions have a length of 1232. Capping it to some reasonable values
 // that when construction the call the Solana length is not exceeded. Technically the
-// check should be tx lenght (dstAsset, srcAsset, ccmData, cf_parameters...) < 1232
+// check should be tx length (dstAsset, srcAsset, ccmData, cf_parameters...) < 1232
 const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 300;
 const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 150;
 
@@ -125,11 +125,11 @@ function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: num
       if (maxLength !== undefined) {
         bytesAvailable = Math.min(bytesAvailable, maxLength);
       }
-      const ccmAdditonalData = newSolanaCcmAdditionalData(bytesAvailable);
-      if (ccmAdditonalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
-        throw new Error(`CCM additional data length exceeds limit: ${ccmAdditonalData.length}`);
+      const ccmAdditionalData = newSolanaCcmAdditionalData(bytesAvailable);
+      if (ccmAdditionalData.slice(2).length / 2 > MAX_CCM_ADDITIONAL_DATA_LENGTH) {
+        throw new Error(`CCM additional data length exceeds limit: ${ccmAdditionalData.length}`);
       }
-      return ccmAdditonalData;
+      return ccmAdditionalData;
     }
     default:
       throw new Error(`Unsupported chain: ${destChain}`);

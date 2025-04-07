@@ -182,7 +182,7 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Stores the registered energency withdrawal address for an Account
+	/// Stores the registered emergency withdrawal address for an Account
 	#[pallet::storage]
 	pub type LiquidityRefundAddress<T: Config> = StorageDoubleMap<
 		_,
