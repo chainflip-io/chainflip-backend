@@ -11,7 +11,7 @@
 /// types. Typically you'd want to use it on types that also have
 /// #[scale_info(skip_type_params(T, I))]
 /// applied to it. All fields in the struct (or variants of an enum) will have their typename
-/// changed from "typename" to "typenameForXYZ", where you can specify the "XYZ" part by using
+/// changed from "typename" to "typenameXYZ", where you can specify the "XYZ" part by using
 /// #[expand_name_with("XYZ")]. The argument of expand_name_with can be any valid expression.
 /// If you don't want a field to be renamed, you can suppress it by using the #[skip_name_expansion]
 /// attribute. For example:
@@ -30,7 +30,7 @@
 /// expanded. Thus, the current SCALE libraries cannot uniquely determine the correct type
 /// based on the type name alone and will usually just fail. Using `#[derive(GenericTypeInfo)]` here
 /// will instead assume that `T::NAME` is a static string uniquely determining the type `T` (for
-/// example "Bitcoin") and will generate type names like `SpecialType<T, I>ForBitcoin` instead.
+/// example "Bitcoin") and will generate type names like `SpecialType<T, I>Bitcoin` instead.
 ///
 /// This code calls .leak(), but that is ok!
 /// The problem is that #derive macros like the one below get expanded into code before any generics
@@ -90,7 +90,7 @@ fn derive_fields(d: Fields, name_for_expansion: Expr) -> TokenStream2 {
 					))
 				} else {
 					quote!(.field(|f| {
-						let full_typename = scale_info::prelude::format!("{}For{}", #typename, #name_for_expansion).leak();
+						let full_typename = scale_info::prelude::format!("{}{}", #typename, #name_for_expansion).leak();
 						f.ty::<#ty>().type_name(full_typename).name(::core::stringify!(#name))}))
 				}
             }).collect();
@@ -109,7 +109,7 @@ fn derive_fields(d: Fields, name_for_expansion: Expr) -> TokenStream2 {
 						))
 					} else {
 						quote!(.field(|f| {
-							let full_typename = scale_info::prelude::format!("{}For{}", #typename, #name_for_expansion).leak();
+							let full_typename = scale_info::prelude::format!("{}{}", #typename, #name_for_expansion).leak();
 							f.ty::<#ty>().type_name(full_typename)}))
 					}
 				})
@@ -131,7 +131,7 @@ fn derive_struct(
 	quote!(impl #impl_generics TypeInfo for #ident #ty_generics {
 		type Identity = Self;
 		fn type_info() -> scale_info::Type {
-			let full_pathname = scale_info::prelude::format!("{}For{}", ::core::stringify!(#ident), #name_for_expansion).leak();
+			let full_pathname = scale_info::prelude::format!("{}{}", ::core::stringify!(#ident), #name_for_expansion).leak();
 			scale_info::Type::builder()
 				.path(scale_info::Path::new(full_pathname, ::core::module_path!()))
 				.composite(#fields)
@@ -153,15 +153,25 @@ fn derive_enum(
 		.map(|(index, variant)| {
 			let name = variant.ident;
 			let fields = derive_fields(variant.fields, name_for_expansion.clone());
-			quote!(.variant(::core::stringify!(#name), |v| {
-            v.index(#index as u8)
-                .fields(#fields)}))
+			let typename = match variant.attrs.iter().find(|attr| attr.path().is_ident("replace_typename_with")){
+				Some(attr) => attr.parse_args::<Ident>().expect("replace_typename_with requires an argument").to_string(),
+				None => clean_type_string(&quote!(#name).to_string())
+			};
+			if variant.attrs.iter().any(|attr| attr.path().is_ident("skip_name_expansion")){
+				quote!(.variant(#typename, |v|{
+					v.index(#index as u8)
+					.fields(#fields)}))
+			} else {
+				quote!(.variant(scale_info::prelude::format!("{}{}", #typename, #name_for_expansion).leak() as &'static str, |v|{
+					v.index(#index as u8)
+					.fields(#fields)}))
+			}
 		})
 		.collect();
 	quote!(impl #impl_generics TypeInfo for #ident #ty_generics {
 		type Identity = Self;
 		fn type_info() -> scale_info::Type {
-			let full_pathname = scale_info::prelude::format!("{}For{}", ::core::stringify!(#ident), #name_for_expansion).leak();
+			let full_pathname = scale_info::prelude::format!("{}{}", ::core::stringify!(#ident), #name_for_expansion).leak();
 			scale_info::Type::builder()
 			.path(scale_info::Path::new(full_pathname, ::core::module_path!()))
 			.variant(
