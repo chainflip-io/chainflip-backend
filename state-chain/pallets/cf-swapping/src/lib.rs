@@ -399,7 +399,7 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// Set the broker bond. This is the amount of FLIP that must be bonded to open a private
 	/// broker channel. The funds are getting freed when the channel is closed.
 	SetBrokerBond { bond: T::Amount },
-	/// Set the minimum fee in USDC paid per chunk
+	/// Set the minimum fee in USDC paid per swap request
 	SetMinimumNetworkFee { min_fee: AssetAmount },
 }
 
