@@ -139,34 +139,36 @@ fn test_network_fee_calculation() {
 		NetworkFee::set(Permill::from_percent(network_fee_percent));
 		MinimumNetworkFee::<Test>::set(minimum_network_fee);
 
-		// Create a swap request with the given params
-		SwapRequests::<Test>::insert(
-			SWAP_REQUEST_ID,
-			SwapRequest {
-				id: SWAP_REQUEST_ID,
-				input_asset: Asset::Usdc,
-				output_asset: Asset::Eth,
-				state: SwapRequestState::UserSwap {
-					refund_params: None,
-					output_action: SwapOutputAction::Egress {
-						ccm_deposit_metadata: None,
-						output_address: ForeignChainAddress::Eth(Default::default()),
+		if let Some(id) = swap_request_id {
+			// Create a swap request with the given params
+			SwapRequests::<Test>::insert(
+				id,
+				SwapRequest {
+					id,
+					input_asset: Asset::Usdc,
+					output_asset: Asset::Eth,
+					state: SwapRequestState::UserSwap {
+						refund_params: None,
+						output_action: SwapOutputAction::Egress {
+							ccm_deposit_metadata: None,
+							output_address: ForeignChainAddress::Eth(Default::default()),
+						},
+						dca_state: DcaState {
+							status: DcaStatus::ChunkScheduled(SwapId(1)),
+							// Not relevant for this test
+							remaining_input_amount: 0,
+							remaining_chunks: 0,
+							chunk_interval: 2,
+							accumulated_output_amount: 0,
+							// Use the given params
+							network_fee_collected,
+							accumulated_stable_amount,
+						},
+						broker_fees: Default::default(),
 					},
-					dca_state: DcaState {
-						status: DcaStatus::ChunkScheduled(SwapId(1)),
-						// Not relevant for this test
-						remaining_input_amount: 0,
-						remaining_chunks: 0,
-						chunk_interval: 2,
-						accumulated_output_amount: 0,
-						// Use the given params
-						network_fee_collected,
-						accumulated_stable_amount,
-					},
-					broker_fees: Default::default(),
 				},
-			},
-		);
+			);
+		}
 
 		let collected_fees_before = CollectedNetworkFee::<Test>::get();
 
