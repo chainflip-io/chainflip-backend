@@ -401,6 +401,12 @@ pub enum PalletConfigUpdate<T: Config> {
 	SetBrokerBond { bond: T::Amount },
 	/// Set the minimum fee in USDC paid per swap request
 	SetMinimumNetworkFee { min_fee: AssetAmount },
+	/// Set the network fee in USDC that will be used just for internal swaps (credit on-chain
+	/// swaps)
+	SetInternalSwapNetworkFee { fee: Permill },
+	/// Set the minimum network fee in USDC that will be used just for internal swaps (credit
+	/// on-chain swaps)
+	SetInternalSwapMinimumNetworkFee { min_fee: AssetAmount },
 }
 
 impl_pallet_safe_mode! {
@@ -605,6 +611,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MinimumNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
+	/// The network fee in USDC used just for internal swaps (credit on-chain swaps).
+	#[pallet::storage]
+	pub type InternalSwapNetworkFee<T: Config> = StorageValue<_, Permill, ValueQuery>;
+
+	/// The minimum network fee in USDC used just for internal swaps (credit on-chain
+	/// swaps).
+	#[pallet::storage]
+	pub type InternalSwapMinimumNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -754,6 +769,12 @@ pub mod pallet {
 			bond: T::Amount,
 		},
 		MinimumNetworkFeeSet {
+			min_fee: AssetAmount,
+		},
+		InternalSwapNetworkFeeSet {
+			fee: Permill,
+		},
+		InternalSwapMinimumNetworkFeeSet {
 			min_fee: AssetAmount,
 		},
 		// Account credited as a result of an on-chain swap
@@ -1056,6 +1077,16 @@ pub mod pallet {
 					PalletConfigUpdate::SetMinimumNetworkFee { min_fee } => {
 						MinimumNetworkFee::<T>::set(min_fee);
 						Self::deposit_event(Event::<T>::MinimumNetworkFeeSet { min_fee });
+					},
+					PalletConfigUpdate::SetInternalSwapNetworkFee { fee } => {
+						InternalSwapNetworkFee::<T>::set(fee);
+						Self::deposit_event(Event::<T>::InternalSwapNetworkFeeSet { fee });
+					},
+					PalletConfigUpdate::SetInternalSwapMinimumNetworkFee { min_fee } => {
+						InternalSwapMinimumNetworkFee::<T>::set(min_fee);
+						Self::deposit_event(Event::<T>::InternalSwapMinimumNetworkFeeSet {
+							min_fee,
+						});
 					},
 				}
 			}
@@ -2099,18 +2130,29 @@ pub mod pallet {
 			}
 
 			// Check if minimum network fee still needs to be filled for this swap request.
-			let network_fee = T::NetworkFee::get();
 			let fee = match minimum_fee_policy {
 				MinFeePolicy::Enforced { swap_request_id } => {
 					if let Some(swap_request) = SwapRequests::<T>::get(swap_request_id) {
 						match swap_request.state {
-							SwapRequestState::UserSwap { dca_state, .. } => {
+							SwapRequestState::UserSwap { dca_state, output_action, .. } => {
+								let (network_fee, minimum_network_fee) = if matches!(
+									output_action,
+									SwapOutputAction::CreditOnChain { .. }
+								) {
+									// Use alternate network fee for internal swaps
+									(
+										InternalSwapNetworkFee::<T>::get(),
+										InternalSwapMinimumNetworkFee::<T>::get(),
+									)
+								} else {
+									(T::NetworkFee::get(), MinimumNetworkFee::<T>::get())
+								};
 								let calculated_fee = max(
 									network_fee *
 										(dca_state
 											.accumulated_stable_amount
 											.saturating_add(input)),
-									MinimumNetworkFee::<T>::get(),
+									minimum_network_fee,
 								);
 								min(
 									calculated_fee.saturating_sub(dca_state.network_fee_collected),
@@ -2127,10 +2169,10 @@ pub mod pallet {
 					} else {
 						// No swap request found, so ignore fee collection history and do simple fee
 						// calculation.
-						max(network_fee * input, MinimumNetworkFee::<T>::get())
+						max(T::NetworkFee::get() * input, MinimumNetworkFee::<T>::get())
 					}
 				},
-				MinFeePolicy::NotEnforced => network_fee * input,
+				MinFeePolicy::NotEnforced => T::NetworkFee::get() * input,
 			};
 
 			if !fee.is_zero() {

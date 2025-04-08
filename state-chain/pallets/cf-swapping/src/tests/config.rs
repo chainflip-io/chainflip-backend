@@ -27,6 +27,8 @@ fn can_update_all_config_items() {
 		const MAX_SWAP_REQUEST_DURATION: u32 = 420_u32;
 		const NEW_MINIMUM_CHUNK_SIZE: AssetAmount = 10_000;
 		const NEW_MINIMUM_NETWORK_FEE: AssetAmount = 10;
+		const NEW_INTERNAL_SWAP_NETWORK_FEE: Permill = Permill::from_percent(5);
+		const NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE: AssetAmount = 50;
 
 		NetworkFee::set(Permill::from_perthousand(1));
 
@@ -39,6 +41,11 @@ fn can_update_all_config_items() {
 		assert_ne!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 		assert_ne!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE);
 		assert_ne!(MinimumNetworkFee::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
+		assert_ne!(InternalSwapNetworkFee::<Test>::get(), NEW_INTERNAL_SWAP_NETWORK_FEE);
+		assert_ne!(
+			InternalSwapMinimumNetworkFee::<Test>::get(),
+			NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE
+		);
 
 		// Update all config items at the same time, and updates 2 separate max swap amounts.
 		assert_ok!(Swapping::update_pallet_config(
@@ -61,6 +68,12 @@ fn can_update_all_config_items() {
 					size: NEW_MINIMUM_CHUNK_SIZE
 				},
 				PalletConfigUpdate::SetMinimumNetworkFee { min_fee: NEW_MINIMUM_NETWORK_FEE },
+				PalletConfigUpdate::SetInternalSwapNetworkFee {
+					fee: NEW_INTERNAL_SWAP_NETWORK_FEE
+				},
+				PalletConfigUpdate::SetInternalSwapMinimumNetworkFee {
+					min_fee: NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE
+				},
 			]
 			.try_into()
 			.unwrap()
@@ -75,6 +88,11 @@ fn can_update_all_config_items() {
 		assert_eq!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 		assert_eq!(MinimumChunkSize::<Test>::get(Asset::Usdc), NEW_MINIMUM_CHUNK_SIZE);
 		assert_eq!(MinimumNetworkFee::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
+		assert_eq!(InternalSwapNetworkFee::<Test>::get(), NEW_INTERNAL_SWAP_NETWORK_FEE);
+		assert_eq!(
+			InternalSwapMinimumNetworkFee::<Test>::get(),
+			NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE
+		);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -103,6 +121,12 @@ fn can_update_all_config_items() {
 			}),
 			RuntimeEvent::Swapping(Event::MinimumNetworkFeeSet {
 				min_fee: NEW_MINIMUM_NETWORK_FEE
+			}),
+			RuntimeEvent::Swapping(Event::InternalSwapNetworkFeeSet {
+				fee: NEW_INTERNAL_SWAP_NETWORK_FEE
+			}),
+			RuntimeEvent::Swapping(Event::InternalSwapMinimumNetworkFeeSet {
+				min_fee: NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE
 			}),
 		);
 

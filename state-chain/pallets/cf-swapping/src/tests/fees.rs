@@ -127,57 +127,87 @@ fn test_buy_back_flip() {
 
 #[test]
 fn test_network_fee_calculation() {
+	enum SwapRequestTest {
+		Normal(SwapRequestId),
+		Internal(SwapRequestId),
+		NoRequest,
+	}
+
 	fn take_fees_from_swap(
 		network_fee_percent: u32,
 		minimum_network_fee: AssetAmount,
 		chunk_amount: AssetAmount,
 		network_fee_collected: AssetAmount,
 		accumulated_stable_amount: AssetAmount,
-		swap_request_id: Option<SwapRequestId>,
+		swap_request_test: SwapRequestTest,
 	) -> (AssetAmount, AssetAmount) {
 		// Set the network fee and minimum network fee to the given values
-		NetworkFee::set(Permill::from_percent(network_fee_percent));
-		MinimumNetworkFee::<Test>::set(minimum_network_fee);
-
-		if let Some(id) = swap_request_id {
-			// Create a swap request with the given params
-			SwapRequests::<Test>::insert(
-				id,
-				SwapRequest {
-					id,
-					input_asset: Asset::Usdc,
-					output_asset: Asset::Eth,
-					state: SwapRequestState::UserSwap {
-						refund_params: None,
-						output_action: SwapOutputAction::Egress {
-							ccm_deposit_metadata: None,
-							output_address: ForeignChainAddress::Eth(Default::default()),
-						},
-						dca_state: DcaState {
-							status: DcaStatus::ChunkScheduled(SwapId(1)),
-							// Not relevant for this test
-							remaining_input_amount: 0,
-							remaining_chunks: 0,
-							chunk_interval: 2,
-							accumulated_output_amount: 0,
-							// Use the given params
-							network_fee_collected,
-							accumulated_stable_amount,
-						},
-						broker_fees: Default::default(),
-					},
-				},
-			);
+		if matches!(swap_request_test, SwapRequestTest::Internal(..)) {
+			// Set the value of the normal network fee settings to 0 so we can test that the
+			// internal settings are used
+			NetworkFee::set(Permill::from_percent(0));
+			MinimumNetworkFee::<Test>::set(0);
+			InternalSwapNetworkFee::<Test>::set(Permill::from_percent(network_fee_percent));
+			InternalSwapMinimumNetworkFee::<Test>::set(minimum_network_fee);
+		} else {
+			NetworkFee::set(Permill::from_percent(network_fee_percent));
+			MinimumNetworkFee::<Test>::set(minimum_network_fee);
+			InternalSwapNetworkFee::<Test>::set(Permill::from_percent(0));
+			InternalSwapMinimumNetworkFee::<Test>::set(0);
 		}
 
 		let collected_fees_before = CollectedNetworkFee::<Test>::get();
 
-		let FeeTaken { remaining_amount, fee } = Swapping::take_network_fee(
-			chunk_amount,
-			MinFeePolicy::Enforced {
-				swap_request_id: swap_request_id.unwrap_or(SwapRequestId(u64::MAX)),
+		let FeeTaken { remaining_amount, fee } = match swap_request_test {
+			SwapRequestTest::Internal(id) | SwapRequestTest::Normal(id) => {
+				// Create a swap request with the given params
+				SwapRequests::<Test>::insert(
+					id,
+					SwapRequest {
+						id,
+						input_asset: Asset::Usdc,
+						output_asset: Asset::Eth,
+						state: SwapRequestState::UserSwap {
+							refund_params: None,
+							output_action: if matches!(
+								swap_request_test,
+								SwapRequestTest::Internal(..)
+							) {
+								SwapOutputAction::CreditOnChain { account_id: ALICE }
+							} else {
+								SwapOutputAction::Egress {
+									ccm_deposit_metadata: None,
+									output_address: ForeignChainAddress::Eth(Default::default()),
+								}
+							},
+							dca_state: DcaState {
+								status: DcaStatus::ChunkScheduled(SwapId(1)),
+								// Not relevant for this test
+								remaining_input_amount: 0,
+								remaining_chunks: 0,
+								chunk_interval: 2,
+								accumulated_output_amount: 0,
+								// Use the given params
+								network_fee_collected,
+								accumulated_stable_amount,
+							},
+							broker_fees: Default::default(),
+						},
+					},
+				);
+				Swapping::take_network_fee(
+					chunk_amount,
+					MinFeePolicy::Enforced { swap_request_id: id },
+				)
 			},
-		);
+			_ => {
+				// Testing with no swap request
+				Swapping::take_network_fee(
+					chunk_amount,
+					MinFeePolicy::Enforced { swap_request_id: SwapRequestId(u64::MAX) },
+				)
+			},
+		};
 
 		// Sanity checks
 		assert_eq!(collected_fees_before + fee, CollectedNetworkFee::<Test>::get());
@@ -187,7 +217,7 @@ fn test_network_fee_calculation() {
 	}
 
 	new_test_ext().execute_with(|| {
-		const ID: Option<SwapRequestId> = Some(SWAP_REQUEST_ID);
+		const ID: SwapRequestTest = SwapRequestTest::Normal(SWAP_REQUEST_ID);
 		// Normal network fee
 		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 0, ID), (900, 100));
 		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 10_000, ID), (900, 100));
@@ -206,8 +236,14 @@ fn test_network_fee_calculation() {
 		assert_eq!(take_fees_from_swap(10, 20, 1000, 150, 1000, ID), (950, 50));
 
 		// No swap request exists, should still enforce fee as if it was the first chunk
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 1000, None), (900, 100));
-		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, None), (800, 200));
+		assert_eq!(
+			take_fees_from_swap(10, 20, 1000, 0, 1000, SwapRequestTest::NoRequest),
+			(900, 100)
+		);
+		assert_eq!(
+			take_fees_from_swap(10, 200, 1000, 0, 0, SwapRequestTest::NoRequest),
+			(800, 200)
+		);
 
 		// Unrealistic scenarios, but just to make sure it can handle it.
 		assert_eq!(take_fees_from_swap(10, 20, 0, 100, 1000, ID), (0, 0));
@@ -223,6 +259,16 @@ fn test_network_fee_calculation() {
 				Permill::from_percent(10) * u128::MAX - 1000
 			)
 		);
+
+		// Internal swaps use a different network fee
+		const INTERNAL_SWAP: SwapRequestTest = SwapRequestTest::Internal(SWAP_REQUEST_ID);
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 0, INTERNAL_SWAP), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 10_000, INTERNAL_SWAP), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 1000, INTERNAL_SWAP), (1000, 0));
+
+		// Internal swaps use a different minimum network fee
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, INTERNAL_SWAP), (800, 200));
+		assert_eq!(take_fees_from_swap(10, 1500, 1000, 1000, 10_000, INTERNAL_SWAP), (500, 500));
 	});
 }
 
