@@ -72,6 +72,7 @@ use cf_chains::{
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
+	instances::ChainInstanceAlias,
 	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
 	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
 	TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
@@ -93,8 +94,8 @@ use monitoring_apis::MonitoringDataV2;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{IngressOrEgress, OwedAmount, TargetChainAsset};
 use pallet_cf_pools::{
-	AskBidMap, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
-	PoolPriceV2, UnidirectionalPoolDepth,
+	AskBidMap, HistoricalEarnedFees, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
+	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{
 	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
@@ -162,8 +163,8 @@ pub use cf_primitives::{
 	SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, BoostApi, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
-	SwappingApi,
+	AccountInfo, BoostApi, Chainflip, EpochInfo, OrderId, PoolApi, QualifyNode,
+	SessionKeysRegistered, SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -334,6 +335,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type CcmValidityChecker = CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
+	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
 }
@@ -711,6 +713,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type OnAccountFunded = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
+	type CallIndexer = chainflip::LpOrderCallIndexer;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -1046,6 +1049,7 @@ impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
 }
 
 impl pallet_cf_elections::Config<Instance5> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Solana as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
@@ -1749,11 +1753,35 @@ impl_runtime_apis! {
 				));
 			}
 
+
+			// Initialize a dummy swap request so that the network fee calculation can be done when simulating the swap.
+			use cf_traits::SwapRequestHandler;
+			let swap_request_id = Swapping::init_swap_request(
+				input_asset,
+				amount_per_chunk,
+				output_asset,
+				cf_traits::SwapRequestType::Regular {
+					output_action: cf_traits::SwapOutputAction::CreditOnChain {
+						account_id: AccountId::new([0; 32]),
+					},
+				},
+				vec![Beneficiary {
+					account: AccountId::new([0xbb; 32]),
+					bps: broker_commission,
+				}]
+				.try_into()
+				.expect("Beneficiary with a length of 1 must be within length bound."),
+				None,
+				None,
+				cf_chains::SwapOrigin::OnChainAccount(AccountId::new([0xbb; 32])),
+			);
+
+			// Simulate the swap
 			let swap_output_per_chunk = Swapping::try_execute_without_violations(
 				vec![
 					Swap::new(
-						Default::default(),
-						Default::default(),
+						Default::default(), // Swap id
+						swap_request_id,
 						input_asset,
 						output_asset,
 						amount_per_chunk,
@@ -2046,12 +2074,7 @@ impl_runtime_apis! {
 					.cloned()
 					.collect();
 
-				let pool_sell_price = LiquidityPools::pool_price(base_asset, quote_asset).
-					expect("Pool should exist")
-					.sell
-					.map(|price| price.sqrt_price);
-
-				Swapping::get_scheduled_swap_legs(swaps, base_asset, pool_sell_price)
+				Swapping::get_scheduled_swap_legs(swaps, base_asset)
 					.into_iter()
 					.map(move |swap| (swap, execute_at))
 			}).collect()

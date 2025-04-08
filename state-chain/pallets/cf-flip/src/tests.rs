@@ -24,7 +24,7 @@ use crate::{
 use cf_primitives::FlipBalance;
 use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
 use frame_support::{
-	assert_noop,
+	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},
 };
 use quickcheck::{Arbitrary, Gen, TestResult};
@@ -284,7 +284,7 @@ impl FlipOperation {
 						expected_redeemable_balance
 					)
 					.is_ok(),
-					"expexted: {}, redeemable: {}",
+					"expected: {}, redeemable: {}",
 					expected_redeemable_balance,
 					<Flip as AccountInfo>::liquid_funds(account_id)
 				);
@@ -295,7 +295,7 @@ impl FlipOperation {
 				}
 			},
 			FlipOperation::SlashAccount(account_id, slashing_rate, bond, mint, blocks) => {
-				// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
+				// Mint some Flip for testing - 100 is not enough and unrealistic for this use case
 				Flip::settle(account_id, Flip::mint(*mint).into());
 				let initial_balance: u128 = Flip::total_balance_of(account_id);
 				Bonder::<Test>::update_bond(account_id, *bond);
@@ -563,7 +563,7 @@ mod test_tx_payments {
 			.expect("Alice can afford the fee.");
 
 			// Fee is in escrow.
-			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(FEE));
+			assert_eq!(escrow.as_ref().map(|(fee, _)| fee.peek()), Some(FEE));
 			// Issuance unchanged.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
@@ -625,7 +625,7 @@ mod test_tx_payments {
 			.expect("Alice can afford the fee.");
 
 			// Fee is in escrow.
-			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(PRE_FEE));
+			assert_eq!(escrow.as_ref().map(|(fee, _)| fee.peek()), Some(PRE_FEE));
 			// Issuance unchanged.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
@@ -642,18 +642,43 @@ mod test_tx_payments {
 			assert!(check_balance_integrity());
 			// Alice paid the adjusted fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 100 - POST_FEE);
-			// The fee was bured.
+			// The fee was burned.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000 - POST_FEE);
 		});
 	}
 }
 
 #[test]
-fn only_governance_can_set_slashing_rate() {
+fn update_pallet_config() {
 	new_test_ext().execute_with(|| {
+		// Only governance can update the pallet config
 		assert_noop!(
-			Flip::set_slashing_rate(RuntimeOrigin::signed(ALICE), Permill::from_percent(0)),
+			Flip::update_pallet_config(RuntimeOrigin::signed(ALICE), vec![].try_into().unwrap()),
 			sp_runtime::traits::BadOrigin,
 		);
+
+		// Slashing rate can be updated
+		let update_to_slashing_rate = Permill::from_percent(40);
+		assert_ne!(SlashingRate::<Test>::get(), update_to_slashing_rate);
+		assert_ok!(Flip::update_pallet_config(
+			RuntimeOrigin::root(),
+			vec![PalletConfigUpdate::SetSlashingRate(update_to_slashing_rate)]
+				.try_into()
+				.unwrap(),
+		));
+		assert_eq!(SlashingRate::<Test>::get(), update_to_slashing_rate);
+
+		// Fee scaling rate can be updated
+		let update_to_fee_scaling_rate =
+			FeeScalingRateConfig::DelayedExponential { threshold: 10, exponent: 2 };
+		// compare to fee we will update to with the fee before to see it updates
+		assert_ne!(FeeScalingRate::<Test>::get(), update_to_fee_scaling_rate);
+		assert_ok!(Flip::update_pallet_config(
+			RuntimeOrigin::root(),
+			vec![PalletConfigUpdate::SetFeeScalingRate(update_to_fee_scaling_rate)]
+				.try_into()
+				.unwrap(),
+		));
+		assert_eq!(FeeScalingRate::<Test>::get(), update_to_fee_scaling_rate);
 	});
 }

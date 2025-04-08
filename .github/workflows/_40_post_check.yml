@@ -15,11 +15,19 @@ on:
       node-count:
         type: number
         default: 1
+      broker-endpoint:
+        type: string
+        default: "http://127.0.0.1:9944"
+      lp-endpoint:
+        type: string
+        default: "http://127.0.0.1:9944"
 
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
   NODE_COUNT: "${{ inputs.node-count }}-node"
+  BROKER_ENDPOINT: "${{ inputs.broker-endpoint }}"
+  LP_ENDPOINT: "${{ inputs.lp-endpoint }}"
 
 permissions:
   packages: read
