@@ -1616,7 +1616,12 @@ mod internal_swaps {
 
 		new_test_ext()
 			.execute_with(|| {
+				// Internal swaps use a different network fee minimum than the regular swaps
+				InternalSwapMinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
+				// The refund fee is equal to the minimum network fee, so it needs to be set as
+				// well.
 				MinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
+
 				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
