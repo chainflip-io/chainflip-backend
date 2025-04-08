@@ -595,7 +595,7 @@ fn restore_restricted_balance_when_redemption_expires() {
 			));
 
 			let (total_funds, restricted_amount) = if redeem_amount == RedemptionAmount::Max {
-				(TOTAL_FUNDS, RESTRICTED_AMOUNT - REDEMPTION_TAX)
+				(TOTAL_FUNDS, RESTRICTED_AMOUNT)
 			} else {
 				(TOTAL_FUNDS - REDEMPTION_TAX, RESTRICTED_AMOUNT - REDEMPTION_TAX)
 			};
