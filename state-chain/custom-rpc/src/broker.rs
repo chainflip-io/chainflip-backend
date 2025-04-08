@@ -369,20 +369,23 @@ where
 	}
 
 	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()> {
-		match tx_id {
-			TransactionInId::Bitcoin(tx_id) =>
-				self.signed_pool_client
-					.submit_watch_dynamic(
-						RuntimeCall::BitcoinIngressEgress(
-							pallet_cf_ingress_egress::Call::mark_transaction_for_rejection {
-								tx_id,
-							},
-						),
-						false,
-						true,
-					)
-					.await,
-		}?;
+		self.signed_pool_client
+			.submit_watch_dynamic(
+				match tx_id {
+					TransactionInId::Bitcoin(tx_id) => RuntimeCall::BitcoinIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+					TransactionInId::Ethereum(tx_id) => RuntimeCall::EthereumIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+					TransactionInId::Arbitrum(tx_id) => RuntimeCall::ArbitrumIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+				},
+				false,
+				true,
+			)
+			.await?;
 		Ok(())
 	}
 

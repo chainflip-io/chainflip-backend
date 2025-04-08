@@ -9,4 +9,3 @@ scale-info = { workspace = true, features = ["derive"] }
 
 [lints]
 workspace = true
-
