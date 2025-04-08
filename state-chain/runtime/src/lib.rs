@@ -1744,11 +1744,35 @@ impl_runtime_apis! {
 				));
 			}
 
+
+			// Initialize a dummy swap request so that the network fee calculation can be done when simulating the swap.
+			use cf_traits::SwapRequestHandler;
+			let swap_request_id = Swapping::init_swap_request(
+				input_asset,
+				amount_per_chunk,
+				output_asset,
+				cf_traits::SwapRequestType::Regular {
+					output_action: cf_traits::SwapOutputAction::CreditOnChain {
+						account_id: AccountId::new([0; 32]),
+					},
+				},
+				vec![Beneficiary {
+					account: AccountId::new([0xbb; 32]),
+					bps: broker_commission,
+				}]
+				.try_into()
+				.expect("Beneficiary with a length of 1 must be within length bound."),
+				None,
+				None,
+				cf_chains::SwapOrigin::OnChainAccount(AccountId::new([0xbb; 32])),
+			);
+
+			// Simulate the swap
 			let swap_output_per_chunk = Swapping::try_execute_without_violations(
 				vec![
 					Swap::new(
-						Default::default(),
-						Default::default(),
+						Default::default(), // Swap id
+						swap_request_id,
 						input_asset,
 						output_asset,
 						amount_per_chunk,
