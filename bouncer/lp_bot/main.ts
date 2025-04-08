@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { initializeLiquidityProviderBot, depositUsdcLiquidity, manageRangeOrder } from './lp_bot';
+import { initializeLiquidityProviderBot } from './lp_bot';
 import { cancelAllOrdersForLp } from './utils';
 import { globalLogger as logger } from '../shared/utils/logger';
 import { startSwapSimulator } from './swap_simulator';

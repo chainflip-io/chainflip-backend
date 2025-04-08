@@ -4,7 +4,71 @@ import { handleSubstrateError } from "../shared/utils";
 import { globalLogger as logger } from '../shared/utils/logger';
 
 /**
- * Cancels all orders.
+ * The status of an order.
+ */
+enum OrderStatus {
+    Accepted = 'accepted',
+    Filled = 'filled',
+    Cancelled = 'cancelled'
+}
+
+/**
+ * The type of an order.
+ */
+enum OrderType {
+    Limit = 'limit',
+    Range = 'range'
+}
+
+/**
+ * An order.
+ */
+class Order {
+    constructor(
+        public orderId: number,
+        public status: OrderStatus,
+        public orderType: OrderType,
+        public asset: Asset,
+        public side: Side,
+        public amount: number,
+        public price: number,
+    ) { }
+}
+
+/**
+ * The side of an order.
+ */
+enum Side {
+    Buy = 'buy',
+    Sell = 'sell'
+}
+
+/**
+ * A swap.
+ */
+type Swap = {
+    swapId: number;
+    baseAsset: { chain: string; asset: string };
+    quoteAsset: { chain: string; asset: string };
+    side: Side;
+    amount: number;
+}
+
+/**
+ * A trade decision.
+ */
+type TradeDecision = {
+    shouldTrade: boolean;
+    side: Side;
+    asset: Asset;
+    amount: number;
+    price: number;
+}
+
+/**
+ * Cancels all orders for a given liquidity provider.
+ * 
+ * @param lpAccount - The account of the liquidity provider.
  */
 const cancelAllOrdersForLp = async (lpAccount: string) => {
     await using chainflip = await getChainflipApi();
@@ -64,4 +128,4 @@ const cancelAllOrdersForLp = async (lpAccount: string) => {
     }
 }
 
-export { cancelAllOrdersForLp };
+export { cancelAllOrdersForLp, Order, Side, OrderStatus, OrderType, Swap, TradeDecision };

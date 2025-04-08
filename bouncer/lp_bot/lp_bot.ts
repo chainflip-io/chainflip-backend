@@ -6,70 +6,9 @@ import { lpApiRpc } from '../shared/json_rpc';
 import { Asset, createStateChainKeypair, getContractAddress } from '../shared/utils';
 import { globalLogger as logger } from '../shared/utils/logger';
 import { sendErc20 } from '../shared/send_erc20';
+import { Order, Side, OrderStatus, OrderType, Swap, TradeDecision } from './utils';
 
 (global as any).WebSocket = WebSocket;
-
-/**
- * The status of an order.
- */
-enum OrderStatus {
-    Accepted = 'accepted',
-    Filled = 'filled',
-    Cancelled = 'cancelled'
-}
-
-/**
- * The type of an order.
- */
-enum OrderType {
-    Limit = 'limit',
-    Range = 'range'
-}
-
-/**
- * An order.
- */
-class Order {
-    constructor(
-        public orderId: number,
-        public status: OrderStatus,
-        public orderType: OrderType,
-        public asset: Asset,
-        public side: Side,
-        public amount: number,
-        public price: number,
-    ) { }
-}
-
-/**
- * The side of an order.
- */
-enum Side {
-    Buy = 'buy',
-    Sell = 'sell'
-}
-
-/**
- * A swap.
- */
-type Swap = {
-    swapId: number;
-    baseAsset: { chain: string; asset: string };
-    quoteAsset: { chain: string; asset: string };
-    side: Side;
-    amount: number;
-}
-
-/**
- * A trade decision.
- */
-type TradeDecision = {
-    shouldTrade: boolean;
-    side: Side;
-    asset: Asset;
-    amount: number;
-    price: number;
-}
 
 // Todo: Upgrade to a persistent state
 declare global {
@@ -86,7 +25,6 @@ declare global {
  */
 const tradingStrategy = (swap: Swap): TradeDecision => {
 
-    // Only handle USDT pairs
     if (swap.baseAsset.asset !== 'USDT') {
         return { shouldTrade: false, side: swap.side, asset: swap.baseAsset, amount: 0, price: 0 };
     }
