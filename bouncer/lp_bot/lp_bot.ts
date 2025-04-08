@@ -3,7 +3,7 @@ import { Observable, from, merge } from 'rxjs';
 import { filter, map, mergeMap } from 'rxjs/operators';
 import WebSocket from 'ws';
 import { lpApiRpc } from '../shared/json_rpc';
-import { Asset, getContractAddress } from '../shared/utils';
+import { Asset, createStateChainKeypair, getContractAddress } from '../shared/utils';
 import { globalLogger as logger } from '../shared/utils/logger';
 import { sendErc20 } from '../shared/send_erc20';
 
@@ -13,7 +13,6 @@ import { sendErc20 } from '../shared/send_erc20';
  * The status of an order.
  */
 enum OrderStatus {
-    Submitted = 'submitted',
     Accepted = 'accepted',
     Filled = 'filled',
     Cancelled = 'cancelled'
@@ -76,6 +75,7 @@ type TradeDecision = {
 declare global {
     var ORDER_BOOK: Map<number, Order>;
     var SWAPS: Map<number, Swap>;
+    var LP_ACCOUNT: string;
 }
 
 /**
@@ -96,7 +96,7 @@ const tradingStrategy = (swap: Swap): TradeDecision => {
         side: swap.side === Side.Sell ? Side.Buy : Side.Sell, // If someone sells we buy and vice versa
         asset: swap.baseAsset,
         amount: swap.amount,
-        price: 0,
+        price: 0, // We always use the current pool price
     };
 };
 
@@ -108,26 +108,18 @@ const tradingStrategy = (swap: Swap): TradeDecision => {
  */
 const manageLimitOrders = async (decision: TradeDecision) => {
     let orderId;
-    let orderPayload;
-    let setOrUpdate = 'SET';
 
-    const currentOpenOrderForAsset = Array.from(global.ORDER_BOOK.values()).find(order => order.asset === decision.asset && order.orderType === OrderType.Limit);
+    const currentOpenOrderForAsset = Array.from(global.ORDER_BOOK.values()).find(order => order.asset === decision.asset && order.orderType === OrderType.Limit && order.amount >= decision.amount);
 
     if (currentOpenOrderForAsset) {
-        let order = global.ORDER_BOOK.get(currentOpenOrderForAsset.orderId)!;
-        let lastPrice = order.price;
-        orderId = order.orderId;
-        order.amount = decision.amount;
-        order.price = decision.price;
-        setOrUpdate = 'UPDATE';
-    } else {
-        orderId = Math.floor(Math.random() * 10000) + 1;
-        global.ORDER_BOOK.set(orderId, new Order(orderId, OrderStatus.Submitted, OrderType.Limit, decision.asset, decision.side, decision.amount, decision.price));
+        logger.info(`Found existing order for asset: ${decision.asset}`);
+        return currentOpenOrderForAsset.orderId;
     }
 
+    orderId = Math.floor(Math.random() * 10000) + 1;
+
     try {
-        logger.info(`Executing ${setOrUpdate} order: ${JSON.stringify(orderPayload, null, 2)}`);
-        await lpApiRpc(logger, setOrUpdate === 'SET' ? 'lp_set_limit_order' : 'lp_update_limit_order', [
+        await lpApiRpc(logger, 'lp_set_limit_order', [
             decision.asset,
             { chain: 'Ethereum', asset: 'USDC' },
             decision.side,
@@ -135,6 +127,7 @@ const manageLimitOrders = async (decision: TradeDecision) => {
             0,
             decision.amount,
         ]);
+        global.ORDER_BOOK.set(orderId, new Order(orderId, OrderStatus.Accepted, OrderType.Limit, decision.asset, decision.side, decision.amount, decision.price));
         return orderId;
     } catch (error) {
         logger.error(`Failed to execute order: ${error}`);
@@ -152,7 +145,6 @@ const createSwapStream = (wsConnection: any): Observable<Swap> => {
     return wsConnection.pipe(
         filter((msg: any) => msg.method === 'cf_subscribe_scheduled_swaps'),
         map((msg: any) => {
-            logger.info(`Swap received: ${JSON.stringify(msg.params.result.swaps, null, 2)}`);
             return msg.params.result.swaps;
         }),
         mergeMap((swaps: any[]) => from(swaps)),
@@ -167,6 +159,7 @@ const createSwapStream = (wsConnection: any): Observable<Swap> => {
             if (global.SWAPS.has(swap.swapId)) {
                 return false;
             }
+            logger.info(`New swap received: ${swap.swapId}`);
             global.SWAPS.set(swap.swapId, swap);
             return true;
         })
@@ -209,59 +202,66 @@ const createOrderFillStream = (wsConnection: any): Observable<any> => {
     return wsConnection.pipe(
         filter((msg: any) => msg.method === 'lp_subscribe_order_fills'),
         map((msg: any) => {
-            if (msg.params.result.fills.length > 0) {
-                logger.info(`Order fills received: ${JSON.stringify(msg.params.result.fills, null, 2)}`);
-            }
             return msg.params.result.fills;
         }),
         mergeMap((fills: any[]) => from(fills))
     );
 };
 
-const manageRangeOrder = async (baseAsset: Asset, tick1: number, tick2: number, size: number) => {
-    logger.info(`Managing range order for ${baseAsset} with tick1: ${tick1}, tick2: ${tick2}, size: ${size}`);
-    let orderId = Math.floor(Math.random() * 10000) + 1;
-    global.ORDER_BOOK.set(orderId, new Order(orderId, OrderStatus.Submitted, OrderType.Range, baseAsset, Side.Sell, size, tick1));
-    try {
-        await lpApiRpc(logger, 'lp_set_range_order', [
-            baseAsset,
-            { chain: 'Ethereum', asset: 'USDC' },
-            orderId,
-            [tick1, tick2],
-            size,
-        ]);
-        logger.info(`Range order set: ${orderId}`);
-    } catch (error) {
-        logger.error(`Failed to execute order: ${error}`);
-    }
-}
+// const manageRangeOrder = async (baseAsset: Asset, tick1: number, tick2: number, size: number) => {
+//     logger.info(`Managing range order for ${baseAsset} with tick1: ${tick1}, tick2: ${tick2}, size: ${size}`);
+//     let orderId = Math.floor(Math.random() * 10000) + 1;
+//     logger.info(`Sending order...`);
+//     const range = { start: tick1, end: tick2 };
+//     try {
+//         let response = await lpApiRpc(logger, 'lp_set_range_order', [
+//             {
+//                 chain: 'Ethereum',
+//                 asset: 'USDT'
+//             },
+//             'USDC',
+//             orderId,
+//             range,
+//             {
+//                 AssetAmounts: {
+//                     maximum: { base: size, quote: size },
+//                     minimum: { base: 0, quote: 0 },
+//                 },
+//             },
+//             'InBlock'
+//         ]);
+//         logger.info(`Range order set: ${orderId}`);
+//         logger.info(`Response: ${JSON.stringify(response, null, 2)}`);
+//     } catch (error) {
+//         logger.error(`Failed to execute order: ${error}`);
+//     }
+// }
 
 /** 
  * Deposits USDC liquidity.
  * 
  * @param amount - The amount of USDC to deposit.
  */
-const depositUsdcLiquidity = async (amount: string) => {
+const depositUsdcLiquidity = async (amount: string, asset: Asset) => {
     const contractAddress = getContractAddress('Ethereum', 'Usdc');
     const liquidityDepositAddress = await lpApiRpc(logger, 'lp_liquidity_deposit', [{ chain: 'Ethereum', asset: 'USDC' }, 'InBlock']);
     await sendErc20(logger, 'Ethereum', liquidityDepositAddress.tx_details.response, contractAddress, amount);
     logger.info(`Liquidity deposited: ${amount} USDC!`);
 }
 
+
+/**
+ * Creates a pool price stream.
+ * 
+ * @param wsConnection - The WebSocket connection.
+ * @returns The pool price stream.
+ */
 const createPoolPriceStream = (wsConnection: any): Observable<any> => {
     return wsConnection.pipe(
         filter((msg: any) => msg.method === 'cf_subscribe_pool_price_v2'),
         map((msg: any) => msg.params.result)
     );
 };
-
-/**
- * Cancels all orders.
- */
-const cancelAllOrders = async () => {
-    logger.info("Cancelling all orders");
-    await lpApiRpc(logger, 'lp_cancel_all_orders', []);
-}
 
 /**
  * Initializes the liquidity provider bot.
@@ -274,32 +274,41 @@ const initializeLiquidityProviderBot = () => {
     global.ORDER_BOOK = new Map<number, Order>();
     global.SWAPS = new Map<number, Swap>();
 
+    global.LP_ACCOUNT = createStateChainKeypair('//LP_API').address;
+
+    logger.info(`LP Account: ${global.LP_ACCOUNT}`);
+
     const stateChainWsConnection = webSocket('ws://127.0.0.1:9944');
     const lpWsConnection = webSocket('ws://127.0.0.1:10589');
 
     logger.info('Setting up reactive pipeline');
 
     // Create our reactive pipeline
-    // const swaps$ = createSwapStream(stateChainWsConnection);
-    // const tradeDecisions$ = createTradeDecisionStream(swaps$);
-    // const orders$ = createOrderStream(tradeDecisions$);
+    const swaps$ = createSwapStream(stateChainWsConnection);
+    const tradeDecisions$ = createTradeDecisionStream(swaps$);
+    const orders$ = createOrderStream(tradeDecisions$);
+
     const orderFills$ = createOrderFillStream(lpWsConnection);
     const poolPrices$ = createPoolPriceStream(lpWsConnection);
 
     // Subscribe to the final stream to start the flow
-    // orders$.subscribe({
-    //     next: (orderId) => {
-    //         if (orderId) {
-    //             logger.info(`Submitted order: ${orderId} successfully!`);
-    //             const order = global.ORDER_BOOK.get(orderId)!;
-    //             order.status = OrderStatus.Submitted;
-    //             logger.info(`OrderBook State: `);
-    //             console.log(global.ORDER_BOOK);
-    //         }
-    //     },
-    //     error: (err) => logger.error('Error in order stream:', err),
-    //     complete: () => logger.info('Order stream completed')
-    // });
+    orders$.subscribe({
+        next: (orderId) => {
+            if (orderId) {
+                logger.info(`Submitted order: ${orderId} successfully!`);
+            }
+        },
+        error: (err) => logger.error('Error in order stream:', err),
+        complete: () => logger.info('Order stream completed')
+    });
+
+    swaps$.subscribe({
+        next: (swap) => {
+            logger.info(`Received swap: ${JSON.stringify(swap, null, 2)}`);
+        },
+        error: (err) => logger.error('Error in swap stream:', err),
+        complete: () => logger.info('Swap stream completed')
+    });
 
     stateChainWsConnection.next({
         id: 1,
@@ -314,7 +323,15 @@ const initializeLiquidityProviderBot = () => {
     // Subscribe to order fills stream
     orderFills$.subscribe({
         next: (fill) => {
-            logger.info(`Received order fill: ${JSON.stringify(fill, null, 2)}`);
+            if (fill.limit_order) {
+                if (fill.limit_order.lp === global.LP_ACCOUNT) {
+                    logger.info(`We won a swap 🎉🕺!`);
+                    let idAsNumber = parseInt(fill.limit_order.id);
+                    let order = global.ORDER_BOOK.get(idAsNumber)!;
+                    order.status = OrderStatus.Filled;
+                    global.ORDER_BOOK.set(idAsNumber, order);
+                }
+            }
         },
         error: (err) => logger.error('Error in order fills stream:', err),
         complete: () => logger.info('Order fills stream completed')
@@ -322,7 +339,7 @@ const initializeLiquidityProviderBot = () => {
 
     poolPrices$.subscribe({
         next: (poolPrice) => {
-            logger.info(`Received pool price: ${JSON.stringify(poolPrice, null, 2)}`);
+            logger.info(`Received pool price change: ${JSON.stringify(poolPrice, null, 2)}`);
         },
         error: (err) => logger.error('Error in pool price stream:', err),
         complete: () => logger.info('Pool price stream completed')
@@ -338,13 +355,13 @@ const initializeLiquidityProviderBot = () => {
     lpWsConnection.next({
         "id": 1,
         "jsonrpc": "2.0",
-        "method": "cf_subscribe_pool_price_v2",
+        "method": "cf_subscribe_pool_price",
         "params": {
-            "base_asset": {
+            "from_asset": {
                 "chain": "Ethereum",
                 "asset": "USDT"
             },
-            "quote_asset": {
+            "to_asset": {
                 "chain": "Ethereum",
                 "asset": "USDC"
             }
@@ -354,4 +371,4 @@ const initializeLiquidityProviderBot = () => {
     return [stateChainWsConnection, lpWsConnection];
 };
 
-export { initializeLiquidityProviderBot, depositUsdcLiquidity, cancelAllOrders, manageRangeOrder };
+export { initializeLiquidityProviderBot, depositUsdcLiquidity };

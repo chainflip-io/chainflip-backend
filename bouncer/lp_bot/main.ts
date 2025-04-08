@@ -1,24 +1,22 @@
 #!/usr/bin/env -S pnpm tsx
-import { initializeLiquidityProviderBot, depositUsdcLiquidity, cancelAllOrders, manageRangeOrder } from './lp_bot';
+import { initializeLiquidityProviderBot, depositUsdcLiquidity, manageRangeOrder } from './lp_bot';
+import { cancelAllOrdersForLp } from './utils';
 import { globalLogger as logger } from '../shared/utils/logger';
 import { startSwapSimulator } from './swap_simulator';
-import { Asset } from '../shared/utils';
 
 const main = async () => {
-    await cancelAllOrders();
-    await depositUsdcLiquidity('100000');
-    // await manageRangeOrder('Usdt', 1, 10, 1000);
+    await cancelAllOrdersForLp('//LP_API');
+    await cancelAllOrdersForLp('//LP_1');
+    await cancelAllOrdersForLp('//LP_2');
 
     const [stateChainWsConnection, lpWsConnection] = initializeLiquidityProviderBot();
 
-    const abortController = new AbortController();
-    startSwapSimulator(1000, abortController.signal);
+    startSwapSimulator(100);
 
     process.on('SIGINT', () => {
         logger.info('Received SIGINT, closing connection');
         stateChainWsConnection.complete();
         lpWsConnection.complete();
-        abortController.abort();
         process.exit();
     });
 };

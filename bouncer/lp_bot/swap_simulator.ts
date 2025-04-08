@@ -44,7 +44,7 @@ async function doSwap(amountToSwap: string) {
  * @param limit - The number of swaps to perform.
  * @param signal - The signal to abort the swaps.
  */
-async function startSwapSimulator(limit?: number, signal?: AbortSignal) {
+async function startSwapSimulator(limit?: number) {
     logger.info(`Lets swap!`);
 
     if (limit) {
@@ -57,13 +57,6 @@ async function startSwapSimulator(limit?: number, signal?: AbortSignal) {
         let amountToSwap = Math.floor(Math.random() * 1000);
         await doSwap(amountToSwap.toString());
         await sleep(2000);
-
-        if (signal) {
-            signal.addEventListener('abort', () => {
-                logger.info('Aborting swap simulator early!');
-                return;
-            });
-        }
 
         swaps++;
         if (limit && swaps >= limit) {
