@@ -364,80 +364,80 @@ pub enum XcmCall {
 	#[codec(index = 1u8)]
 	teleport_assets {
 		#[allow(missing_docs)]
-		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[allow(missing_docs)]
 		fee_asset_itme: u32,
 	},
 	#[codec(index = 2u8)]
 	reserve_transfer_assets {
 		#[allow(missing_docs)]
-		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[allow(missing_docs)]
 		fee_asset_itme: u32,
 	},
 	#[codec(index = 8u8)]
 	limited_reserve_transfer_assets {
 		#[allow(missing_docs)]
-		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[allow(missing_docs)]
 		fee_asset_itme: u32,
 		#[allow(missing_docs)]
-		weight_limit: xcm_types::runtime_types::xcm::v3::WeightLimit,
+		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
 	#[codec(index = 9u8)]
 	limited_teleport_assets {
 		#[allow(missing_docs)]
-		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[allow(missing_docs)]
 		fee_asset_itme: u32,
 		#[allow(missing_docs)]
-		weight_limit: xcm_types::runtime_types::xcm::v3::WeightLimit,
+		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
 	#[codec(index = 11u8)]
 	transfer_assets {
 		#[allow(missing_docs)]
-		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		beneficiary: xcm_types::runtime_types::xcm::VersionedLocation,
+		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[allow(missing_docs)]
 		fee_asset_itme: u32,
 		#[allow(missing_docs)]
-		weight_limit: xcm_types::runtime_types::xcm::v3::WeightLimit,
+		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
 	#[codec(index = 13u8)]
 	transfer_assets_using_type_and_then {
 		#[allow(missing_docs)]
-		dest: xcm_types::runtime_types::xcm::VersionedLocation,
+		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
 		#[allow(missing_docs)]
-		assets: xcm_types::runtime_types::xcm::VersionedAssets,
+		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[allow(missing_docs)]
 		assets_transfer_type: api::TransferType,
 		#[allow(missing_docs)]
-		remote_fees_id: xcm_types::runtime_types::xcm::VersionedAssetId,
+		remote_fees_id: xcm_types::hub_runtime_types::xcm::VersionedAssetId,
 		#[allow(missing_docs)]
 		fees_transfer_type: api::TransferType,
 		#[allow(missing_docs)]
-		custom_xcm_on_dest: xcm_types::runtime_types::xcm::VersionedXcm,
+		custom_xcm_on_dest: xcm_types::hub_runtime_types::xcm::VersionedXcm,
 		#[allow(missing_docs)]
-		weight_limit: xcm_types::runtime_types::xcm::v3::WeightLimit,
+		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
 }
 

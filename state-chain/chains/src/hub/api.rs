@@ -271,5 +271,5 @@ pub enum TransferType {
 	/// should reserve-transfer `asset` to `dest`, using `dest` as reserve
 	DestinationReserve,
 	/// should reserve-transfer `asset` to `dest`, using remote chain `Location` as reserve
-	RemoteReserve(hub::xcm_types::runtime_types::xcm::VersionedLocation),
+	RemoteReserve(hub::xcm_types::hub_runtime_types::xcm::VersionedLocation),
 }
