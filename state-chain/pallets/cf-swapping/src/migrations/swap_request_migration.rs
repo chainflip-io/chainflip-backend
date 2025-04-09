@@ -32,6 +32,16 @@ pub mod old {
 	use cf_primitives::{Asset, Beneficiaries};
 	use frame_support::Twox64Concat;
 
+	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+	pub struct DcaState {
+		pub status: DcaStatus,
+		pub remaining_input_amount: AssetAmount,
+		pub remaining_chunks: u32,
+		pub chunk_interval: u32,
+		pub accumulated_output_amount: AssetAmount,
+		// Migration will add the 2 new fields here
+	}
+
 	#[allow(clippy::large_enum_variant)]
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub enum SwapRequestState<T: Config> {
@@ -101,7 +111,19 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 							ccm_deposit_metadata,
 							output_address,
 						},
-						dca_state,
+						dca_state: DcaState {
+							status: dca_state.status,
+							remaining_input_amount: dca_state.remaining_input_amount,
+							remaining_chunks: dca_state.remaining_chunks,
+							chunk_interval: dca_state.chunk_interval,
+							accumulated_output_amount: dca_state.accumulated_output_amount,
+							// Setting the new fields to 0. This will cause the network fee to be
+							// calculated as normal for all remaining chunks. It may also
+							// cause the minimum network fee to be charged for the next chunk, but
+							// that is acceptable.
+							network_fee_collected: 0,
+							accumulated_stable_amount: 0,
+						},
 						broker_fees,
 					},
 					old::SwapRequestState::NetworkFee => SwapRequestState::NetworkFee,

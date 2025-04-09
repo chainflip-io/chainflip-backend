@@ -380,8 +380,6 @@ pub mod pallet {
 				}
 			}
 
-			let redemption_fee = RedemptionTax::<T>::get();
-
 			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
 				ensure!(
 					bound_address == address || restricted_balances.contains_key(&address),
@@ -407,6 +405,12 @@ pub mod pallet {
 						restricted_balances.get(&address).copied().unwrap_or_default(),
 				),
 			));
+
+			let redemption_fee = match amount {
+				RedemptionAmount::Max if liquid_balance == T::Flip::balance(&account_id) =>
+					Zero::zero(),
+				_ => RedemptionTax::<T>::get(),
+			};
 
 			let (debit_amount, redeem_amount) = match amount {
 				RedemptionAmount::Max =>

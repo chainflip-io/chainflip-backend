@@ -91,7 +91,7 @@ fn test_buy_back_flip() {
 
 		// Get some network fees, just like we did a swap.
 		let FeeTaken { remaining_amount, fee: network_fee } =
-			Swapping::take_network_fee(SWAP_AMOUNT, false);
+			Swapping::take_network_fee(SWAP_AMOUNT, MinFeePolicy::NotEnforced);
 
 		// Sanity check the network fee.
 		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
@@ -127,45 +127,103 @@ fn test_buy_back_flip() {
 
 #[test]
 fn test_network_fee_calculation() {
-	const MIN_FEE: u128 = 0;
+	fn take_fees_from_swap(
+		network_fee_percent: u32,
+		minimum_network_fee: AssetAmount,
+		chunk_amount: AssetAmount,
+		network_fee_collected: AssetAmount,
+		accumulated_stable_amount: AssetAmount,
+		swap_request_id: Option<SwapRequestId>,
+	) -> (AssetAmount, AssetAmount) {
+		// Set the network fee and minimum network fee to the given values
+		NetworkFee::set(Permill::from_percent(network_fee_percent));
+		MinimumNetworkFee::<Test>::set(minimum_network_fee);
 
-	// Show we can never overflow and panic
-	utilities::calculate_network_fee(Permill::from_percent(100), MIN_FEE, AssetAmount::MAX);
-	// 200 bps (2%) of 1000 = 20
-	assert_eq!(
-		utilities::calculate_network_fee(Permill::from_percent(2u32), MIN_FEE, 1000),
-		(980, 20)
-	);
-	// 2220 bps = 22 % of 199 = 43,78
-	assert_eq!(
-		utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), MIN_FEE, 199),
-		(155, 44)
-	);
-	// 2220 bps = 22 % of 234 = 51,26
-	assert_eq!(
-		utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), MIN_FEE, 233),
-		(181, 52)
-	);
-	// 10 bps = 0,1% of 30000 = 30
-	assert_eq!(
-		utilities::calculate_network_fee(Permill::from_rational(1u32, 1000u32), MIN_FEE, 30000),
-		(29970, 30)
-	);
+		if let Some(id) = swap_request_id {
+			// Create a swap request with the given params
+			SwapRequests::<Test>::insert(
+				id,
+				SwapRequest {
+					id,
+					input_asset: Asset::Usdc,
+					output_asset: Asset::Eth,
+					state: SwapRequestState::UserSwap {
+						refund_params: None,
+						output_action: SwapOutputAction::Egress {
+							ccm_deposit_metadata: None,
+							output_address: ForeignChainAddress::Eth(Default::default()),
+						},
+						dca_state: DcaState {
+							status: DcaStatus::ChunkScheduled(SwapId(1)),
+							// Not relevant for this test
+							remaining_input_amount: 0,
+							remaining_chunks: 0,
+							chunk_interval: 2,
+							accumulated_output_amount: 0,
+							// Use the given params
+							network_fee_collected,
+							accumulated_stable_amount,
+						},
+						broker_fees: Default::default(),
+					},
+				},
+			);
+		}
 
-	{
-		const MIN_FEE: u128 = 10;
-		// Minimum fee is enforced (0.1% of 3000 should be 3, but we epxect to charge 10)
-		assert_eq!(
-			utilities::calculate_network_fee(Permill::from_perthousand(1), MIN_FEE, 3000),
-			(2990, 10)
+		let collected_fees_before = CollectedNetworkFee::<Test>::get();
+
+		let FeeTaken { remaining_amount, fee } = Swapping::take_network_fee(
+			chunk_amount,
+			MinFeePolicy::Enforced {
+				swap_request_id: swap_request_id.unwrap_or(SwapRequestId(u64::MAX)),
+			},
 		);
-		// If input is (somehow) smaller than min network fee the behaviour is still reasonable
-		// (all of itput is consumed as network fee):
-		assert_eq!(
-			utilities::calculate_network_fee(Permill::from_perthousand(1), MIN_FEE, 5),
-			(0, 5)
-		);
+
+		// Sanity checks
+		assert_eq!(collected_fees_before + fee, CollectedNetworkFee::<Test>::get());
+		assert_eq!(remaining_amount + fee, chunk_amount);
+
+		(remaining_amount, fee)
 	}
+
+	new_test_ext().execute_with(|| {
+		const ID: Option<SwapRequestId> = Some(SWAP_REQUEST_ID);
+		// Normal network fee
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 0, ID), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 10_000, ID), (900, 100));
+
+		// Minimum network fee enforced
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, ID), (800, 200));
+		assert_eq!(take_fees_from_swap(10, 1500, 1000, 1000, 10_000, ID), (500, 500));
+		assert_eq!(take_fees_from_swap(10, 1500, 1000, 0, 0, ID), (0, 1000));
+
+		// Minimum network fee was taken on previous chunk
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 200, 1000, ID), (1000, 0));
+		assert_eq!(take_fees_from_swap(10, 150, 1000, 150, 1000, ID), (950, 50));
+
+		// Network fee changed after first chunk, so more or less is taken from this chunk
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 50, 1000, ID), (850, 150));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 150, 1000, ID), (950, 50));
+
+		// No swap request exists, should still enforce fee as if it was the first chunk
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 1000, None), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, None), (800, 200));
+
+		// Unrealistic scenarios, but just to make sure it can handle it.
+		assert_eq!(take_fees_from_swap(10, 20, 0, 100, 1000, ID), (0, 0));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 10_000, ID), (0, 1000));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 10_000, 0, ID), (1000, 0));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, u128::MAX, u128::MAX, ID), (1000, 0));
+		assert_eq!(
+			take_fees_from_swap(10, 20, u128::MAX, 1000, 10_000, ID),
+			// Because the calculation saturates, the existing 1000 fee taken is deducted from the
+			// calculated fee
+			(
+				Permill::from_percent(90) * u128::MAX + 1 + 1000,
+				Permill::from_percent(10) * u128::MAX - 1000
+			)
+		);
+	});
 }
 
 #[test]
@@ -584,7 +642,7 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 	new_test_ext()
 		.execute_with(|| {
 			NetworkFee::set(NETWORK_FEE);
-			MinimumNetworkFeePerChunk::<Test>::set(MIN_NETWORK_FEE);
+			MinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
 
 			// Check that min fee applies to regular swaps:
 			Swapping::init_swap_request(
@@ -637,9 +695,119 @@ fn min_network_fee_is_enforced_in_regular_swaps() {
 }
 
 #[test]
+fn minimum_network_fee_is_enforced_on_dca_swap() {
+	const INPUT_AMOUNT: u128 = 300;
+	const NUMBER_OF_CHUNKS: u32 = 3;
+	const CHUNK_SIZE: u128 = INPUT_AMOUNT / NUMBER_OF_CHUNKS as u128;
+
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const CHUNK_3_BLOCK: u64 = CHUNK_2_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+	// We set network fee so that the amount is small enough that the min network fee
+	// will be enforced on the first chunk, but large enough that the rest of the chunks fees will
+	// be above the minimum. And also large enough that the second chunk will only be partially
+	// charged a fee.
+	const NETWORK_FEE: Permill = Permill::from_percent(10);
+	const BROKER_FEE_BPS: u16 = 100;
+	const MIN_NETWORK_FEE: u128 = 30;
+	assert!(MIN_NETWORK_FEE > NETWORK_FEE * CHUNK_SIZE * 2);
+	assert!(MIN_NETWORK_FEE < NETWORK_FEE * CHUNK_SIZE * 4);
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_eq!(System::block_number(), INIT_BLOCK);
+			NetworkFee::set(NETWORK_FEE);
+			MinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
+
+			Swapping::init_swap_request(
+				// Doing a 2 leg swap, swap rate is 2, so output without fees is x4 and network fee
+				// is applied to x2 of input (after first leg).
+				Asset::Btc,
+				INPUT_AMOUNT,
+				Asset::ArbEth,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address: ForeignChainAddress::Eth([1; 20].into()),
+						ccm_deposit_metadata: None,
+					},
+				},
+				vec![Beneficiary { account: BROKER, bps: BROKER_FEE_BPS }].try_into().unwrap(),
+				None,
+				Some(DcaParameters { number_of_chunks: NUMBER_OF_CHUNKS, chunk_interval: 2 }),
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: Some(BROKER),
+				},
+			);
+		})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: SwapId(1),
+					input_amount: CHUNK_SIZE,
+					// The first chunk has the minimum network fee enforced.
+					// With swap rate at 2, output is (100*2-30-2)*2
+					output_amount: 336,
+					network_fee: 30,
+					broker_fee: 2,
+					..
+				})
+			);
+		})
+		.then_process_blocks_until_block(CHUNK_2_BLOCK)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: SwapId(2),
+					input_amount: CHUNK_SIZE,
+					// The second chunk will only partially be charged the network fee because the
+					// amount that was already charged to the first chunk has covered part of
+					// its fee already.
+					output_amount: 376,
+					network_fee: 10,
+					broker_fee: 2,
+					..
+				})
+			);
+		})
+		.then_process_blocks_until_block(CHUNK_3_BLOCK)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: SwapId(3),
+					input_amount: CHUNK_SIZE,
+					// The rest of the chunks will be charged the normal network fee.
+					output_amount: 356,
+					network_fee: 20,
+					broker_fee: 2,
+					..
+				})
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: SWAP_REQUEST_ID,
+					// The final output should be 4x input amount minus the network fee and broker
+					// fee. 1200 - 11%
+					amount: 1068,
+					..
+				})
+			);
+		});
+}
+
+#[test]
 fn test_refund_fee_calculation() {
 	new_test_ext().execute_with(|| {
-		MinimumNetworkFeePerChunk::<Test>::set(10);
+		MinimumNetworkFee::<Test>::set(10);
 
 		// Usdc, no conversion needed, so the refund fee is just 10
 		assert_eq!(Swapping::take_refund_fee(1000, Asset::Usdc), Ok(990));
