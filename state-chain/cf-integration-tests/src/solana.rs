@@ -44,6 +44,7 @@ use frame_support::{
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
 use pallet_cf_elections::{
+	electoral_system::ElectoralReadAccess,
 	electoral_systems::composite::tuple_7_impls::CompositeElectionIdentifierExtra,
 	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
 	AuthorityVoteOf, ElectionIdentifier, ElectionIdentifierOf, UniqueMonotonicIdentifier,
@@ -456,6 +457,120 @@ fn can_send_solana_ccm_v1() {
 					egress_id: (ForeignChain::Solana, 2),
 				},
 			));
+		});
+}
+
+#[test]
+fn ccms_can_contain_overlapping_alts() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			(ALICE, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			(BOB, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			setup_sol_environments();
+
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_ok!(RuntimeCall::SolanaVault(
+				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
+			)
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
+
+			register_refund_addresses(&DORIS);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+
+			testnet.move_to_the_next_epoch();
+
+			// Register 2 CCMs with overlapping ALTs
+			let user_alts = [SolAddress([0xF0; 32]), SolAddress([0xF1; 32]), SolAddress([0xF2; 32])];
+			let mut ccm_0 = sol_test_values::ccm_parameter().channel_metadata;
+			ccm_0.ccm_additional_data =
+				codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
+					ccm_accounts: sol_test_values::ccm_accounts(),
+					alts: vec![user_alts[0], user_alts[1]],
+				})
+				.try_into()
+				.unwrap();
+			let mut ccm_1 = sol_test_values::ccm_parameter().channel_metadata;
+			ccm_1.ccm_additional_data =
+				codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
+					ccm_accounts: sol_test_values::ccm_accounts(),
+					alts: vec![user_alts[1], user_alts[2]],
+				})
+				.try_into()
+				.unwrap();
+
+			assert_eq!(
+				schedule_deposit_to_swap(
+					ALICE,
+					Asset::Sol,
+					Asset::SolUsdc,
+					Some(ccm_0)
+				),
+				1.into()
+			);
+			assert_eq!(
+				schedule_deposit_to_swap(
+					BOB,
+					Asset::SolUsdc,
+					Asset::Sol,
+					Some(ccm_1)
+				),
+				3.into()
+			);
+
+			testnet.move_forward_blocks(2);
+
+			// Let election come into Consensus
+			vote_for_alt_election(
+				29,
+				vec![SolAddressLookupTableAccount {
+					key: user_alts[0].into(),
+					addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
+				},
+				SolAddressLookupTableAccount {
+					key: user_alts[1].into(),
+					addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
+				}],
+			);
+			vote_for_alt_election(
+				30,
+				vec![SolAddressLookupTableAccount {
+					key: user_alts[1].into(),
+					addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
+				},
+				SolAddressLookupTableAccount {
+					key: user_alts[2].into(),
+					addresses: vec![SolPubkey([0xE4; 32]), SolPubkey([0xE5; 32])],
+				}],
+			);
+
+			// TODO Fix this test once this problem is fixed.
+			// Currently only 1 ccm can be egressed, the other will hang forever.
+			testnet.move_forward_blocks(1);
+
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id: 3,
+					egress_id: (ForeignChain::Solana, 1),
+				},
+			));
+
+			testnet.move_forward_blocks(100);
+			// ALT table 0 and 1 is consumed, 2 is left and the other CCM is stuck
+			assert_eq!(pallet_cf_ingress_egress::ScheduledEgressCcm::<Runtime, SolanaInstance>::decode_len(), Some(1));
+			assert!(state_chain_runtime::chainflip::solana_elections::SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(&user_alts[0]).unwrap().is_none());
+			assert!(state_chain_runtime::chainflip::solana_elections::SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(&user_alts[1]).unwrap().is_none());
+			assert!(state_chain_runtime::chainflip::solana_elections::SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(&user_alts[2]).unwrap().is_some());
 		});
 }
 

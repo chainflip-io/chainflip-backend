@@ -778,6 +778,8 @@ impl<T, E> From<Result<T, E>> for AltConsensusResult<T> {
 }
 
 impl<T> AltConsensusResult<T> {
+	/// Group a vec of results into a single result.
+	/// Only return `ValidConsensusAlts` if all individual results are `ValidConsensusAlts`.
 	pub fn group(individuals: Vec<AltConsensusResult<T>>) -> AltConsensusResult<Vec<T>> {
 		individuals
 			.into_iter()
