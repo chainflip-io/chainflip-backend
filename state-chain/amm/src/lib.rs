@@ -186,10 +186,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	>(
 		&mut self,
 	) -> Option<SqrtPriceQ64F96> {
-		match (
-			self.limit_orders.current_sqrt_price::<SD>(),
-			self.range_orders.current_sqrt_price::<SD>(),
-		) {
+		let limit_orders_sqrt_price = self.limit_orders.current_sqrt_price::<SD>();
+		let range_orders_sqrt_price =
+			self.range_orders.current_sqrt_price::<SD>().map(|sqrt_price| {
+				sqrt_price_adjusted_by_pool_fee::<SD>(
+					sqrt_price,
+					self.range_orders.fee_hundredth_pips,
+				)
+			});
+
+		match (limit_orders_sqrt_price, range_orders_sqrt_price) {
 			(Some(limit_order_sqrt_price), Some(range_order_sqrt_price)) =>
 				if SD::sqrt_price_op_more_than(limit_order_sqrt_price, range_order_sqrt_price) {
 					Some(range_order_sqrt_price)
@@ -570,26 +576,16 @@ fn grow_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
 	)
 }
 
-/// Returns the ratio between price between prices with and without accounting for the pool fee
-/// as a fixed point number (same representation as Price).
-fn pool_fee_scaling_factor(side: Side, fee_hundredth_pips: u32) -> U256 {
-	use cf_amm_math::PRICE_FRACTIONAL_BITS;
-	match side {
-		Side::Buy => grow_by_pool_fee(U256::one() << PRICE_FRACTIONAL_BITS, fee_hundredth_pips),
-		Side::Sell => reduce_by_pool_fee(U256::one() << PRICE_FRACTIONAL_BITS, fee_hundredth_pips),
-	}
-}
-
 fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(
 	sqrt_price: SqrtPriceQ64F96,
 	fee_hundredth_pips: u32,
 ) -> SqrtPriceQ64F96 {
-	use cf_amm_math::SQRT_PRICE_FRACTIONAL_BITS;
+	let price = sqrt_price_to_price(sqrt_price);
 
-	let fee_factor = pool_fee_scaling_factor(SD::INPUT_SIDE.sell_order(), fee_hundredth_pips);
-	// fee_factor isn't price, but we can use the same code as for the price
-	// because they use the same fixed point representation:
-	let sqrt_fee_factor = price_to_sqrt_price(fee_factor);
+	let adjusted_price = match SD::INPUT_SIDE.sell_order() {
+		Side::Buy => grow_by_pool_fee(price, fee_hundredth_pips),
+		Side::Sell => reduce_by_pool_fee(price, fee_hundredth_pips),
+	};
 
-	mul_div_floor(sqrt_price, sqrt_fee_factor, U256::one() << SQRT_PRICE_FRACTIONAL_BITS)
+	price_to_sqrt_price(adjusted_price)
 }
