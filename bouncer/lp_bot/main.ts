@@ -5,11 +5,15 @@ import { globalLogger as logger } from '../shared/utils/logger';
 import { startSwapSimulator } from './swap_simulator';
 
 const main = async () => {
-    await cancelAllOrdersForLp('//LP_API');
-    await cancelAllOrdersForLp('//LP_1');
-    await cancelAllOrdersForLp('//LP_2');
 
-    const [stateChainWsConnection, lpWsConnection] = initializeLiquidityProviderBot();
+    const chain = 'Ethereum';
+    const asset = 'USDT';
+
+    await cancelAllOrdersForLp('//LP_API', chain, asset);
+    await cancelAllOrdersForLp('//LP_1', chain, asset);
+    await cancelAllOrdersForLp('//LP_2', chain, asset);
+
+    const [stateChainWsConnection, lpWsConnection] = initializeLiquidityProviderBot(chain, asset);
 
     startSwapSimulator(100);
 
