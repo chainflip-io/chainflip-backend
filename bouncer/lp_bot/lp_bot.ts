@@ -207,7 +207,7 @@ const createPoolPriceStream = (wsConnection: any): Observable<any> => {
  * @returns The state chain and liquidity provider WebSocket connections.
  */
 const initializeLiquidityProviderBot = () => {
-    logger.info('Initializing liquidity provider bot');
+    logger.info('Initializing liquidity provider bot 🤖.');
 
     global.ORDER_BOOK = new Map<number, Order>();
     global.SWAPS = new Map<number, Swap>();
@@ -218,8 +218,6 @@ const initializeLiquidityProviderBot = () => {
 
     const stateChainWsConnection = webSocket('ws://127.0.0.1:9944');
     const lpWsConnection = webSocket('ws://127.0.0.1:10589');
-
-    logger.info('Setting up reactive pipeline');
 
     // Create our reactive pipeline
     const swaps$ = createSwapStream(stateChainWsConnection);
@@ -233,7 +231,7 @@ const initializeLiquidityProviderBot = () => {
     orders$.subscribe({
         next: (orderId) => {
             if (orderId) {
-                logger.info(`Submitted order: ${orderId} successfully!`);
+                logger.info(`Submitted order: ${orderId} successfully ✅.`);
             }
         },
         error: (err) => logger.error('Error in order stream:', err),
@@ -242,7 +240,7 @@ const initializeLiquidityProviderBot = () => {
 
     swaps$.subscribe({
         next: (swap) => {
-            logger.info(`Received swap: ${JSON.stringify(swap, null, 2)}`);
+            logger.info(`Received new swap Id: ${swap.swapId}, amount: ${swap.amount}, side: ${swap.side}, baseAsset: ${swap.baseAsset}, quoteAsset: ${swap.quoteAsset} 🔄.`);
         },
         error: (err) => logger.error('Error in swap stream:', err),
         complete: () => logger.info('Swap stream completed')
@@ -263,7 +261,7 @@ const initializeLiquidityProviderBot = () => {
         next: (fill) => {
             if (fill.limit_order) {
                 if (fill.limit_order.lp === global.LP_ACCOUNT) {
-                    logger.info(`We won a swap 🎉🕺!`);
+                    logger.info(`We won a swap 🕺!`);
                     let idAsNumber = parseInt(fill.limit_order.id);
                     let order = global.ORDER_BOOK.get(idAsNumber)!;
                     order.status = OrderStatus.Filled;
@@ -277,7 +275,7 @@ const initializeLiquidityProviderBot = () => {
 
     poolPrices$.subscribe({
         next: (poolPrice) => {
-            logger.info(`Received pool price change: ${JSON.stringify(poolPrice, null, 2)}`);
+            logger.info(`Received pool price change: ${JSON.stringify(poolPrice, null, 2)} 📈.`);
         },
         error: (err) => logger.error('Error in pool price stream:', err),
         complete: () => logger.info('Pool price stream completed')
