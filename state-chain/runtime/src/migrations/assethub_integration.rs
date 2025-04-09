@@ -82,6 +82,9 @@ pub struct AssethubUpdate;
 
 impl UncheckedOnRuntimeUpgrade for AssethubUpdate {
 	fn on_runtime_upgrade() -> Weight {
+		// Initialize Assethub derived account id
+		pallet_cf_environment::AssethubOutputAccountId::<Runtime>::set(1);
+
 		// Update Assethub Genesis hash
 		match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 			cf_runtime_utilities::genesis_hashes::BERGHAIN => {
