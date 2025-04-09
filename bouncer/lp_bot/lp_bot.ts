@@ -3,18 +3,24 @@ import { Observable, from, merge } from 'rxjs';
 import { filter, map, mergeMap } from 'rxjs/operators';
 import WebSocket from 'ws';
 import { lpApiRpc } from '../shared/json_rpc';
-import { Asset, createStateChainKeypair, getContractAddress } from '../shared/utils';
+import { Asset, Chain, createStateChainKeypair, getContractAddress } from '../shared/utils';
 import { globalLogger as logger } from '../shared/utils/logger';
 import { sendErc20 } from '../shared/send_erc20';
 import { Order, Side, OrderStatus, OrderType, Swap, TradeDecision } from './utils';
+import { fromEvent } from 'rxjs';
+import { EventEmitter } from 'events';
 
 (global as any).WebSocket = WebSocket;
+
+const customEmitter = new EventEmitter();
 
 // Todo: Upgrade to a persistent state
 declare global {
     var ORDER_BOOK: Map<number, Order>;
     var SWAPS: Map<number, Swap>;
     var LP_ACCOUNT: string;
+    var CHAIN: string;
+    var ASSET: string;
 }
 
 /**
@@ -24,11 +30,6 @@ declare global {
  * @returns The trade decision.
  */
 const tradingStrategy = (swap: Swap): TradeDecision => {
-
-    if (swap.baseAsset.asset !== 'USDT') {
-        return { shouldTrade: false, side: swap.side, asset: swap.baseAsset, amount: 0, price: 0 };
-    }
-
     return {
         shouldTrade: true,
         side: swap.side === Side.Sell ? Side.Buy : Side.Sell, // If someone sells we buy and vice versa
@@ -69,6 +70,7 @@ const manageLimitOrders = async (decision: TradeDecision) => {
         return orderId;
     } catch (error) {
         logger.error(`Failed to execute order: ${error}`);
+        customEmitter.emit('outOfLiquidity', { side: decision.side, asset: decision.asset, amount: decision.amount });
         return null;
     }
 };
@@ -97,7 +99,6 @@ const createSwapStream = (wsConnection: any): Observable<Swap> => {
             if (global.SWAPS.has(swap.swapId)) {
                 return false;
             }
-            logger.info(`New swap received: ${swap.swapId}`);
             global.SWAPS.set(swap.swapId, swap);
             return true;
         })
@@ -146,47 +147,17 @@ const createOrderFillStream = (wsConnection: any): Observable<any> => {
     );
 };
 
-// const manageRangeOrder = async (baseAsset: Asset, tick1: number, tick2: number, size: number) => {
-//     logger.info(`Managing range order for ${baseAsset} with tick1: ${tick1}, tick2: ${tick2}, size: ${size}`);
-//     let orderId = Math.floor(Math.random() * 10000) + 1;
-//     logger.info(`Sending order...`);
-//     const range = { start: tick1, end: tick2 };
-//     try {
-//         let response = await lpApiRpc(logger, 'lp_set_range_order', [
-//             {
-//                 chain: 'Ethereum',
-//                 asset: 'USDT'
-//             },
-//             'USDC',
-//             orderId,
-//             range,
-//             {
-//                 AssetAmounts: {
-//                     maximum: { base: size, quote: size },
-//                     minimum: { base: 0, quote: 0 },
-//                 },
-//             },
-//             'InBlock'
-//         ]);
-//         logger.info(`Range order set: ${orderId}`);
-//         logger.info(`Response: ${JSON.stringify(response, null, 2)}`);
-//     } catch (error) {
-//         logger.error(`Failed to execute order: ${error}`);
-//     }
-// }
-
 /** 
  * Deposits USDC liquidity.
  * 
  * @param amount - The amount of USDC to deposit.
  */
-const depositUsdcLiquidity = async (amount: string, asset: Asset) => {
-    const contractAddress = getContractAddress('Ethereum', 'Usdc');
-    const liquidityDepositAddress = await lpApiRpc(logger, 'lp_liquidity_deposit', [{ chain: 'Ethereum', asset: 'USDC' }, 'InBlock']);
-    await sendErc20(logger, 'Ethereum', liquidityDepositAddress.tx_details.response, contractAddress, amount);
-    logger.info(`Liquidity deposited: ${amount} USDC!`);
+const depositLiquidity = async (chain: Chain, asset: Asset, amount: string) => {
+    const contractAddress = getContractAddress(chain, asset);
+    const liquidityDepositAddress = await lpApiRpc(logger, 'lp_liquidity_deposit', [{ chain, asset }, 'InBlock']);
+    await sendErc20(logger, chain, liquidityDepositAddress.tx_details.response, contractAddress, amount);
+    logger.info(`Liquidity deposited: ${amount} ${asset}!`);
 }
-
 
 /**
  * Creates a pool price stream.
@@ -206,13 +177,14 @@ const createPoolPriceStream = (wsConnection: any): Observable<any> => {
  * 
  * @returns The state chain and liquidity provider WebSocket connections.
  */
-const initializeLiquidityProviderBot = () => {
+const initializeLiquidityProviderBot = (chain: string, asset: string) => {
     logger.info('Initializing liquidity provider bot 🤖.');
 
     global.ORDER_BOOK = new Map<number, Order>();
     global.SWAPS = new Map<number, Swap>();
-
     global.LP_ACCOUNT = createStateChainKeypair('//LP_API').address;
+    global.CHAIN = chain;
+    global.ASSET = asset;
 
     logger.info(`LP Account: ${global.LP_ACCOUNT}`);
 
@@ -251,8 +223,8 @@ const initializeLiquidityProviderBot = () => {
         jsonrpc: "2.0",
         method: "cf_subscribe_scheduled_swaps",
         params: {
-            base_asset: { chain: "Ethereum", asset: "USDT" },
-            quote_asset: { chain: "Ethereum", asset: "USDC" }
+            base_asset: { chain: global.CHAIN, asset: global.ASSET },
+            quote_asset: { chain: 'Ethereum', asset: 'USDC' }
         }
     });
 
@@ -261,7 +233,7 @@ const initializeLiquidityProviderBot = () => {
         next: (fill) => {
             if (fill.limit_order) {
                 if (fill.limit_order.lp === global.LP_ACCOUNT) {
-                    logger.info(`We won a swap 🕺!`);
+                    logger.info(`We won a swap 🕺 !`);
                     let idAsNumber = parseInt(fill.limit_order.id);
                     let order = global.ORDER_BOOK.get(idAsNumber)!;
                     order.status = OrderStatus.Filled;
@@ -294,8 +266,8 @@ const initializeLiquidityProviderBot = () => {
         "method": "cf_subscribe_pool_price",
         "params": {
             "from_asset": {
-                "chain": "Ethereum",
-                "asset": "USDT"
+                "chain": global.CHAIN,
+                "asset": global.ASSET
             },
             "to_asset": {
                 "chain": "Ethereum",
@@ -304,7 +276,16 @@ const initializeLiquidityProviderBot = () => {
         }
     });
 
+    const outOfLiquidity$ = fromEvent(customEmitter, 'outOfLiquidity');
+
+    outOfLiquidity$.subscribe({
+        next: (event) => {
+            logger.info('Out of liquidity 💸!');
+            logger.info(`Received event: ${JSON.stringify(event, null, 2)}`);
+        }
+    });
+
     return [stateChainWsConnection, lpWsConnection];
 };
 
-export { initializeLiquidityProviderBot, depositUsdcLiquidity };
+export { initializeLiquidityProviderBot };
