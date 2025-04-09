@@ -1,6 +1,6 @@
 import { describe } from 'vitest';
 import { testBoostingSwap } from './boost';
-import { testVaultSwapFeeCollection } from './vault_swap_fee_collection';
+import { testVaultSwap } from './vault_swap_tests';
 import { testPolkadotRuntimeUpdate } from './polkadot_runtime_update';
 import { checkSolEventAccountsClosure } from '../shared/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from '../shared/utils';
