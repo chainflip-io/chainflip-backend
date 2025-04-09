@@ -712,10 +712,6 @@ pub mod pallet {
 			direction: SwapLeg,
 			amount: AssetAmount,
 		},
-		MaximumSwapAmountSet {
-			asset: Asset,
-			amount: Option<AssetAmount>,
-		},
 		SwapAmountConfiscated {
 			swap_request_id: SwapRequestId,
 			asset: Asset,
@@ -734,23 +730,6 @@ pub mod pallet {
 			amount: AssetAmount,
 			reason: DispatchError,
 		},
-		BuyIntervalSet {
-			buy_interval: BlockNumberFor<T>,
-		},
-		SwapRetryDelaySet {
-			swap_retry_delay: BlockNumberFor<T>,
-		},
-		// TODO: add SwapFailed?
-		MaxSwapRetryDurationSet {
-			blocks: BlockNumber,
-		},
-		MaxSwapRequestDurationSet {
-			blocks: BlockNumber,
-		},
-		MinimumChunkSizeSet {
-			asset: Asset,
-			amount: AssetAmount,
-		},
 		PrivateBrokerChannelOpened {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
@@ -765,18 +744,6 @@ pub mod pallet {
 			withdrawal_address: EthereumAddress,
 			affiliate_id: T::AccountId,
 		},
-		BrokerBondSet {
-			bond: T::Amount,
-		},
-		MinimumNetworkFeeSet {
-			min_fee: AssetAmount,
-		},
-		InternalSwapNetworkFeeSet {
-			fee: Permill,
-		},
-		InternalSwapMinimumNetworkFeeSet {
-			min_fee: AssetAmount,
-		},
 		// Account credited as a result of an on-chain swap
 		CreditedOnChain {
 			swap_request_id: SwapRequestId,
@@ -790,6 +757,9 @@ pub mod pallet {
 			account_id: T::AccountId,
 			asset: Asset,
 			amount: AssetAmount,
+		},
+		PalletConfigUpdated {
+			update: PalletConfigUpdate<T>,
 		},
 	}
 	#[pallet::error]
@@ -1034,7 +1004,6 @@ pub mod pallet {
 				match update {
 					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
 						MaximumSwapAmount::<T>::set(asset, amount);
-						Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
 					},
 					PalletConfigUpdate::SwapRetryDelay { delay } => {
 						ensure!(
@@ -1042,9 +1011,6 @@ pub mod pallet {
 							Error::<T>::ZeroSwapRetryDelayNotAllowed
 						);
 						SwapRetryDelay::<T>::set(delay);
-						Self::deposit_event(Event::<T>::SwapRetryDelaySet {
-							swap_retry_delay: delay,
-						});
 					},
 					PalletConfigUpdate::FlipBuyInterval { interval } => {
 						ensure!(
@@ -1052,11 +1018,9 @@ pub mod pallet {
 							Error::<T>::ZeroBuyIntervalNotAllowed
 						);
 						FlipBuyInterval::<T>::set(interval);
-						Self::deposit_event(Event::<T>::BuyIntervalSet { buy_interval: interval });
 					},
 					PalletConfigUpdate::SetMaxSwapRetryDuration { blocks } => {
 						MaxSwapRetryDurationBlocks::<T>::set(blocks);
-						Self::deposit_event(Event::<T>::MaxSwapRetryDurationSet { blocks });
 					},
 					PalletConfigUpdate::SetMaxSwapRequestDuration { blocks } => {
 						ensure!(
@@ -1064,31 +1028,24 @@ pub mod pallet {
 							Error::<T>::MaxSwapRequestDurationTooShort
 						);
 						MaxSwapRequestDurationBlocks::<T>::set(blocks);
-						Self::deposit_event(Event::<T>::MaxSwapRequestDurationSet { blocks });
 					},
 					PalletConfigUpdate::SetMinimumChunkSize { asset, size: amount } => {
 						MinimumChunkSize::<T>::set(asset, amount);
-						Self::deposit_event(Event::<T>::MinimumChunkSizeSet { asset, amount });
 					},
 					PalletConfigUpdate::SetBrokerBond { bond } => {
 						BrokerBond::<T>::set(bond);
-						Self::deposit_event(Event::<T>::BrokerBondSet { bond });
 					},
 					PalletConfigUpdate::SetMinimumNetworkFee { min_fee } => {
 						MinimumNetworkFee::<T>::set(min_fee);
-						Self::deposit_event(Event::<T>::MinimumNetworkFeeSet { min_fee });
 					},
 					PalletConfigUpdate::SetInternalSwapNetworkFee { fee } => {
 						InternalSwapNetworkFee::<T>::set(fee);
-						Self::deposit_event(Event::<T>::InternalSwapNetworkFeeSet { fee });
 					},
 					PalletConfigUpdate::SetInternalSwapMinimumNetworkFee { min_fee } => {
 						InternalSwapMinimumNetworkFee::<T>::set(min_fee);
-						Self::deposit_event(Event::<T>::InternalSwapMinimumNetworkFeeSet {
-							min_fee,
-						});
 					},
 				}
+				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
 			}
 
 			Ok(())
