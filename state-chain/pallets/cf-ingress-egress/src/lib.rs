@@ -151,7 +151,6 @@ pub enum DepositFailedReason {
 	NotEnoughToPayFees,
 	TransactionRejectedByBroker,
 	DepositWitnessRejected(DispatchError),
-	CanNotRejectRefunds,
 }
 
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -2466,10 +2465,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// Collect to ensure that the iterator is fully consumed.
 						.collect::<Vec<_>>()
 						.is_empty();
-                    
-					if matches!(action, ChannelAction::Refund { .. }) {
-						return Err(DepositFailedReason::CanNotRejectRefunds);
-					}
 
 					if is_marked_by_broker_or_screening_id {
 						let refund_address = match &action {
@@ -2477,7 +2472,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								refund_params.refund_address.clone(),
 							ChannelAction::LiquidityProvision { refund_address, .. } =>
 								refund_address.clone(),
-                            ChannelAction::Refund { .. } => unreachable!("Condition checked above!"),
+							ChannelAction::Refund { refund_address, .. } =>
+								refund_address.clone().into_foreign_chain_address(),
 						};
 
 						ScheduledTransactionsForRejection::<T, I>::append(
