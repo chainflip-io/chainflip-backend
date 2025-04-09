@@ -39,7 +39,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 360);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 800);
-  concurrentTest('VaultSwapFeeCollection', testVaultSwapFeeCollection, 800);
+  concurrentTest('VaultSwapFeeCollection', testVaultSwap, 800);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
