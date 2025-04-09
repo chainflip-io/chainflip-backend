@@ -85,6 +85,7 @@ use cf_primitives::{
 	DcaParameters,
 };
 
+use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster,
@@ -92,8 +93,8 @@ use cf_traits::{
 	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
 	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
+use pallet_cf_elections::electoral_system::{ElectoralReadAccess, ElectoralWriteAccess};
 
-use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -620,10 +621,30 @@ impl ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTa
 	for SolEnvironment
 {
 	fn lookup(
-		_alts: Vec<SolAddress>,
+		alts: Vec<SolAddress>,
 	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
-		// TODO: To be implemented with ALT election refactor
-		Some(AltConsensusResult::ValidConsensusAlts(vec![]))
+		let mut res = vec![];
+
+		// Verify all the data is ready
+		for alt in &alts {
+			if let Ok(Some(consensus)) =
+				solana_elections::SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
+			{
+				res.push(consensus);
+			} else {
+				// If any table isn't witnessed/ready, return None
+				return None
+			}
+		}
+
+		// If all the data is ready, remove them from storage
+		alts.into_iter().for_each(|alt| {
+			solana_elections::SolanaAltWitnessingElectoralAccess::set_unsynchronised_state_map(
+				alt, None,
+			)
+		});
+
+		Some(AltConsensusResult::group(res))
 	}
 }
 

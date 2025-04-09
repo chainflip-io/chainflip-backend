@@ -767,3 +767,28 @@ pub enum AltConsensusResult<T> {
 	ValidConsensusAlts(T),
 	AltsInvalidNoConsensus,
 }
+
+impl<T, E> From<Result<T, E>> for AltConsensusResult<T> {
+	fn from(value: Result<T, E>) -> Self {
+		match value {
+			Ok(r) => AltConsensusResult::ValidConsensusAlts(r),
+			Err(_) => AltConsensusResult::AltsInvalidNoConsensus,
+		}
+	}
+}
+
+impl<T> AltConsensusResult<T> {
+	pub fn group(individuals: Vec<AltConsensusResult<T>>) -> AltConsensusResult<Vec<T>> {
+		individuals
+			.into_iter()
+			.map(|individual| {
+				if let AltConsensusResult::ValidConsensusAlts(ind) = individual {
+					Ok(ind)
+				} else {
+					Err(())
+				}
+			})
+			.collect::<Result<Vec<T>, ()>>()
+			.into()
+	}
+}

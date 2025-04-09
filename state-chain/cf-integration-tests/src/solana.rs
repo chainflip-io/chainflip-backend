@@ -25,7 +25,7 @@ use cf_chains::{
 	ccm_checker::{CcmValidityError, DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	sol::{
 		api::{AltConsensusResult, SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
-		sol_tx_core::sol_test_values,
+		sol_tx_core::sol_test_values::{self, user_alt},
 		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolAddressLookupTableAccount, SolCcmAccounts, SolCcmAddress, SolHash,
 		SolPubkey, SolanaCrypto,
@@ -414,7 +414,7 @@ fn can_send_solana_ccm_v1() {
 					ALICE,
 					Asset::Sol,
 					Asset::SolUsdc,
-					Some(sol_test_values::ccm_parameter_v1().channel_metadata)
+					Some(sol_test_values::ccm_parameter().channel_metadata)
 				),
 				1.into()
 			);
@@ -428,43 +428,28 @@ fn can_send_solana_ccm_v1() {
 				3.into()
 			);
 
-			// Wait until calls are built, signed and broadcasted.
-			testnet.move_forward_blocks(1);
-			System::assert_has_event(
-				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
-					Runtime,
-					SolanaInstance,
-				>::BatchBroadcastRequested {
-					broadcast_id: 2,
-					egress_ids: vec![],
-				}),
-			);
+			testnet.move_forward_blocks(2);
 
-			vote_for_alt_election(
-				27,
-				vec![SolAddressLookupTableAccount {
-					key: Default::default(),
-					addresses: vec![Default::default()],
-				}],
-			);
-
-			vote_for_alt_election(
-				28,
-				vec![SolAddressLookupTableAccount {
-					key: Default::default(),
-					addresses: vec![Default::default()],
-				}],
-			);
-
-			// 2 calls should be built - one for each CCM.
-			testnet.move_forward_blocks(1);
-
+			// CCM without ALT can be dispatched immediately
 			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
 					broadcast_id: 3,
 					egress_id: (ForeignChain::Solana, 1),
 				},
 			));
+
+			// Wait until swap is complete and ALT election started
+			vote_for_alt_election(
+				29,
+				vec![SolAddressLookupTableAccount {
+					key: user_alt().key,
+					addresses: vec![Default::default()],
+				}],
+			);
+
+			// With consensus on ALT witnessing election, v1 CCM call is ready to be built.
+			testnet.move_forward_blocks(1);
+
 			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
 					broadcast_id: 4,
