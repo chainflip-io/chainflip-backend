@@ -1652,16 +1652,19 @@ pub mod pallet {
 					};
 
 					let total_input_remaining = swap.input_amount + *remaining_input_amount;
-					let amount_to_refund =
-						match Self::take_refund_fee(total_input_remaining, request.input_asset) {
-							Ok(remaining) => remaining,
-							Err(e) => {
-								log_or_panic!(
+					let amount_to_refund = match Self::take_refund_fee(
+						total_input_remaining,
+						request.input_asset,
+						matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
+					) {
+						Ok(remaining) => remaining,
+						Err(e) => {
+							log_or_panic!(
 								"Failed to calculate refund fee for swap request {swap_request_id}: {e:?}"
 							);
-								total_input_remaining
-							},
-						};
+							total_input_remaining
+						},
+					};
 
 					if amount_to_refund > 0 {
 						match &refund_params.refund_destination {
@@ -2124,8 +2127,9 @@ pub mod pallet {
 							},
 						}
 					} else {
-						// No swap request found, so ignore fee collection history and do simple fee
-						// calculation.
+						log_or_panic!(
+							"Swap request {swap_request_id} not found, ignoring fee collection history for network fee calculation"
+						);
 						max(T::NetworkFee::get() * input, MinimumNetworkFee::<T>::get())
 					}
 				},
@@ -2197,8 +2201,13 @@ pub mod pallet {
 		pub(super) fn take_refund_fee(
 			total_input_amount: AssetAmount,
 			input_asset: Asset,
+			is_internal_swap: bool,
 		) -> Result<AssetAmount, DispatchError> {
-			let refund_fee_usdc = MinimumNetworkFee::<T>::get();
+			let refund_fee_usdc = if is_internal_swap {
+				InternalSwapMinimumNetworkFee::<T>::get()
+			} else {
+				MinimumNetworkFee::<T>::get()
+			};
 			if refund_fee_usdc.is_zero() || total_input_amount.is_zero() {
 				return Ok(total_input_amount)
 			}
