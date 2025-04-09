@@ -436,7 +436,7 @@ mod tests {
 				safemode_enabled: MockHook::new(safemode_enabled),
 				block_processor: BlockProcessor {
 					blocks_data: Default::default(),
-					reorg_events: Default::default(),
+					processed_events: Default::default(),
 					rules: Default::default(),
 					execute: Default::default(),
 				},
