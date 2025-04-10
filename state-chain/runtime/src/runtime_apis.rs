@@ -315,13 +315,15 @@ pub struct ChainAccounts {
 pub enum ChannelActionType {
 	Swap,
 	LiquidityProvision,
+	Refund,
 }
 
-impl<AccountId> From<ChannelAction<AccountId>> for ChannelActionType {
-	fn from(action: ChannelAction<AccountId>) -> Self {
+impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionType {
+	fn from(action: ChannelAction<AccountId, C>) -> Self {
 		match action {
 			ChannelAction::Swap { .. } => ChannelActionType::Swap,
 			ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
+			ChannelAction::Refund { .. } => ChannelActionType::Refund,
 		}
 	}
 }
