@@ -42,7 +42,7 @@ use cf_traits::{
 	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RefCount};
 use pallet_cf_elections::{
 	electoral_system::{
 		ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes, ElectoralWriteAccess,
@@ -62,7 +62,7 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_runtime::DispatchResult;
+use sp_runtime::{DispatchResult, Saturating};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -202,9 +202,7 @@ pub type SolanaVaultSwapTracking =
 	Ord,
 	PartialOrd,
 )]
-pub struct SolanaAltWitnessingIdentifier {
-	pub alt_addresses: Vec<SolAddress>,
-}
+pub struct SolanaAltWitnessingIdentifier(pub Vec<SolAddress>);
 
 pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 	SolanaAltWitnessingIdentifier,
@@ -216,7 +214,7 @@ pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
 	SolAddress,
-	AltConsensusResult<SolAddressLookupTableAccount>,
+	(AltConsensusResult<SolAddressLookupTableAccount>, RefCount),
 >;
 
 pub type SolanaAltWitnessingElectoralAccess =
@@ -234,22 +232,35 @@ impl
 		alt_identifier: SolanaAltWitnessingIdentifier,
 		alts: AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	) {
-		// use set_unsynchronised_state_map to write result onto the state map
-		match alts {
-			AltConsensusResult::ValidConsensusAlts(res) => res.into_iter().for_each(|r| {
-				SolanaAltWitnessingElectoralAccess::set_unsynchronised_state_map(
-					r.key.into(),
-					Some(AltConsensusResult::ValidConsensusAlts(r)),
-				)
-			}),
-			AltConsensusResult::AltsInvalidNoConsensus =>
-				alt_identifier.alt_addresses.into_iter().for_each(|alt| {
-					SolanaAltWitnessingElectoralAccess::set_unsynchronised_state_map(
-						alt,
-						Some(AltConsensusResult::AltsInvalidNoConsensus),
-					)
-				}),
+		// Store the Consensus result into the Unsynchronised state map, increment ref count by 1
+		let res = match alts {
+			AltConsensusResult::AltsInvalidNoConsensus => alt_identifier
+				.0
+				.into_iter()
+				.map(|alt| (alt, AltConsensusResult::AltsInvalidNoConsensus))
+				.collect::<Vec<_>>(),
+			AltConsensusResult::ValidConsensusAlts(res) => res
+				.into_iter()
+				.map(|r| (r.key.into(), AltConsensusResult::ValidConsensusAlts(r)))
+				.collect::<Vec<_>>(),
 		};
+
+		res.into_iter().for_each(|(key, value)| {
+			// This will only fail if Election storage is corrupted.
+			let _ = SolanaAltWitnessingElectoralAccess::mutate_unsynchronised_state_map(
+				key,
+				|maybe_state| {
+					if let Some((_, ref_count)) = maybe_state.as_mut() {
+						// If value already exists, increment the ref count by 1.
+						ref_count.saturating_accrue(1);
+					} else {
+						// If None, insert the new value.
+						*maybe_state = Some((value, 1))
+					}
+					Ok(())
+				},
+			);
+		});
 	}
 }
 
@@ -726,7 +737,7 @@ pub(crate) fn initiate_solana_alt_election(alts: Vec<SolAddress>) {
 				SolanaAltWitnessing,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
 			>,
-		>(SolanaAltWitnessingIdentifier { alt_addresses: alts })
+		>(SolanaAltWitnessingIdentifier(alts))
 	})
 	.unwrap_or_else(|e| {
 		log::error!("Cannot start Solana ALT witnessing election: {:?}", e);

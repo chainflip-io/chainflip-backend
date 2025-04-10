@@ -101,8 +101,8 @@ use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
 	sp_runtime::{
-		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
-		FixedPointNumber, FixedU64,
+		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto, Zero},
+		FixedPointNumber, FixedU64, Saturating,
 	},
 	traits::{Defensive, Get},
 };
@@ -623,28 +623,36 @@ impl ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTa
 	fn lookup(
 		alts: Vec<SolAddress>,
 	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
-		let mut res = vec![];
-
-		// Verify all the data is ready
-		for alt in &alts {
-			if let Ok(Some(consensus)) =
-				solana_elections::SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
-			{
-				res.push(consensus);
-			} else {
-				// If any table isn't witnessed/ready, return None
-				return None
-			}
+		// Verify that all the data is ready
+		if alts.iter().any(|alt| {
+			solana_elections::SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
+				.unwrap_or_default()
+				.is_none()
+		}) {
+			return None;
 		}
 
-		// If all the data is ready, remove them from storage
-		alts.into_iter().for_each(|alt| {
-			solana_elections::SolanaAltWitnessingElectoralAccess::set_unsynchronised_state_map(
-				alt, None,
-			)
-		});
+		// If all the data is ready, reduce ref count by 1 from storage
+		Some(AltConsensusResult::group(
+			alts.into_iter()
+				.map(|alt| {
+					solana_elections::SolanaAltWitnessingElectoralAccess::mutate_unsynchronised_state_map(
+						alt,
+						|maybe_state| {
+							let (value, ref_count) = maybe_state.as_mut().expect("Data is guaranteed to be Some()");
+							ref_count.saturating_reduce(1);
 
-		Some(AltConsensusResult::group(res))
+							let res = value.clone();
+							if ref_count.is_zero() {
+								*maybe_state = None;
+							}
+							Ok(res)
+						},
+					)
+				})
+				.collect::<Result<Vec<_>, _>>()
+				.ok()?,
+		))
 	}
 }
 

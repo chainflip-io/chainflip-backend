@@ -231,4 +231,22 @@ pub trait RunnerStorageAccessTrait {
 		Self::set_unsynchronised_state(unsynchronised_state);
 		Ok(t)
 	}
+
+	/// Allows you to mutate the value of a unsynchronised state map.
+	fn mutate_unsynchronised_state_map<
+		T,
+		F: for<'a> FnOnce(
+			&Self,
+			&'a mut Option<<Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue>,
+		) -> Result<T, CorruptStorageError>,
+	>(
+		&self,
+		key: <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,
+		f: F,
+	) -> Result<T, CorruptStorageError>{
+		let mut unsynchronised_state_map = Self::unsynchronised_state_map(&key);
+		let t = f(self, &mut unsynchronised_state_map)?;
+		Self::set_unsynchronised_state_map(key, unsynchronised_state_map);
+		Ok(t)
+	}
 }
