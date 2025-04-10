@@ -3,6 +3,7 @@ import {
   decodeDotAddressForContract,
   chainFromAsset,
   stateChainAssetFromAsset,
+  isPolkadotAsset,
   newAddress,
 } from './utils';
 import { Logger } from './utils/logger';
@@ -27,9 +28,9 @@ export async function newSwap(
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
 ): Promise<void> {
-  const destinationAddress =
-    destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress;
-
+  const destinationAddress = isPolkadotAsset(destAsset)
+    ? decodeDotAddressForContract(destAddress)
+    : destAddress;
   const defaultRefundAddress = await newAddress(sourceAsset, 'DEFAULT_REFUND');
 
   const defaultFillOrKillParams: FillOrKillParamsX128 = {

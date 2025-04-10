@@ -1914,7 +1914,7 @@ mod test {
 	use super::*;
 	use cf_chains::{assets::sol, btc::ScriptPubkey};
 	use cf_primitives::{
-		chains::assets::{any, arb, btc, dot, eth},
+		chains::assets::{any, arb, btc, dot, eth, hub},
 		FLIPPERINOS_PER_FLIP,
 	};
 	use sp_core::H160;
@@ -2016,6 +2016,7 @@ mod test {
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
 					sol: sol::AssetMap { sol: 2u32.into(), usdc: 4u32.into() },
+					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 				boost_balances: any::AssetMap {
 					btc: btc::AssetMap {
@@ -2076,6 +2077,7 @@ mod test {
 					dot: dot::AssetMap { dot: None },
 					arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()) },
 					sol: sol::AssetMap { sol: None, usdc: None },
+					hub: hub::AssetMap { dot: None, usdc: None, usdt: None },
 				},
 				network_fee_hundredth_pips: Permill::from_percent(100),
 				swap_retry_delay_blocks: 5,
@@ -2092,6 +2094,7 @@ mod test {
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: 101112_u32.into() },
 					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 			},
 			ingress_egress: IngressEgressEnvironment {
@@ -2106,6 +2109,7 @@ mod test {
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
 					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 				ingress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -2118,6 +2122,11 @@ mod test {
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 					sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None },
+					hub: hub::AssetMap {
+						dot: Some((u64::MAX / 2 - 1).into()),
+						usdc: None,
+						usdt: None,
+					},
 				},
 				egress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -2130,6 +2139,11 @@ mod test {
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 					sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None },
+					hub: hub::AssetMap {
+						dot: Some((u64::MAX / 2 - 1).into()),
+						usdc: None,
+						usdt: None,
+					},
 				},
 				witness_safety_margins: HashMap::from([
 					(ForeignChain::Bitcoin, Some(3u64)),
@@ -2137,6 +2151,7 @@ mod test {
 					(ForeignChain::Polkadot, None),
 					(ForeignChain::Arbitrum, None),
 					(ForeignChain::Solana, None),
+					(ForeignChain::Assethub, None),
 				]),
 				egress_dust_limits: any::AssetMap {
 					eth: eth::AssetMap {
@@ -2149,6 +2164,7 @@ mod test {
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
 					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 				channel_opening_fees: HashMap::from([
 					(ForeignChain::Bitcoin, 0u32.into()),
@@ -2156,6 +2172,7 @@ mod test {
 					(ForeignChain::Polkadot, 1000u32.into()),
 					(ForeignChain::Arbitrum, 1000u32.into()),
 					(ForeignChain::Solana, 1000u32.into()),
+					(ForeignChain::Assethub, 1000u32.into()),
 				]),
 			},
 			funding: FundingEnvironment {
@@ -2184,6 +2201,11 @@ mod test {
 						dot: dot::AssetMap { dot: Some(pool_info) },
 						arb: arb::AssetMap { eth: Some(pool_info), usdc: Some(pool_info) },
 						sol: sol::AssetMap { sol: Some(pool_info), usdc: None },
+						hub: hub::AssetMap {
+							dot: Some(pool_info),
+							usdc: Some(pool_info),
+							usdt: Some(pool_info),
+						},
 					},
 				}
 			},
