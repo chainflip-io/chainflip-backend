@@ -32,6 +32,7 @@ use pallet_cf_elections::{
 use pallet_cf_validator::SetSizeParameters;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
+use sp_core::H160;
 use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::{
@@ -300,6 +301,11 @@ impl ExtBuilder {
 					(Default::default(), Default::default()),
 					(Default::default(), Default::default()),
 				],
+				// Exact values not important, but should be different from each other.
+				eth_key_manager_address: H160::repeat_byte(0x01),
+				eth_vault_address: H160::repeat_byte(0x02),
+				state_chain_gateway_address: H160::repeat_byte(0x03),
+				flip_token_address: H160::repeat_byte(0x04),
 				..Default::default()
 			},
 			polkadot_threshold_signer: Default::default(),
