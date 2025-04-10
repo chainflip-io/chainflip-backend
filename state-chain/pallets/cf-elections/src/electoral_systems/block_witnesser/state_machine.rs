@@ -70,7 +70,7 @@ pub trait BWProcessorTypes: Sized {
 		+ 'static;
 	type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
 
-	type Event: Serde + Debug + Clone + Eq;
+	type Event: Serde + Debug + Clone + Eq + Ord;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
 	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + Serde + Debug + Clone + Eq;
 }
@@ -436,7 +436,7 @@ mod tests {
 				safemode_enabled: MockHook::new(safemode_enabled),
 				block_processor: BlockProcessor {
 					blocks_data: Default::default(),
-					reorg_events: Default::default(),
+					processed_events: Default::default(),
 					rules: Default::default(),
 					execute: Default::default(),
 				},
