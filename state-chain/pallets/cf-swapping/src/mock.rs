@@ -169,6 +169,10 @@ impl WeightInfo for MockWeightInfo {
 	fn affiliate_withdrawal_request() -> Weight {
 		Weight::from_parts(100, 0)
 	}
+
+	fn set_vault_swap_minimum_broker_fee() -> Weight {
+		Weight::from_parts(100, 0)
+	}
 }
 
 pub struct AlwaysValid;

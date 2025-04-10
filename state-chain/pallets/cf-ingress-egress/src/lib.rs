@@ -2157,6 +2157,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	// Look up the minimum broker fee that has been set by the broker and increase the given broker
+	// fee to it if needed.
+	fn enforce_broker_fee_minimum(
+		broker_fee: Beneficiary<T::AccountId>,
+	) -> Beneficiary<T::AccountId> {
+		Beneficiary {
+			bps: core::cmp::max(
+				broker_fee.bps,
+				T::SwapLimitsProvider::get_minimum_fee_for_broker(&broker_fee.account),
+			),
+			account: broker_fee.account,
+		}
+	}
+
 	/// Returns the broker fee and affiliate fees for a vault swap.
 	///
 	/// If the broker fee is not set or the account is not a broker, the function returns None.
@@ -2603,9 +2617,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			..
 		} = vault_deposit_witness.clone();
 
-		let Some(broker_fees) =
-			Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone())
-		else {
+		let Some(broker_fees) = Self::assemble_broker_fees(
+			broker_fee.map(|broker_fee| Self::enforce_broker_fee_minimum(broker_fee)),
+			affiliate_fees.clone(),
+		) else {
 			return Err(RefundReason::InvalidBrokerFees);
 		};
 

@@ -255,5 +255,18 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn set_vault_swap_minimum_broker_fee() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
+
+		#[extrinsic_call]
+		set_vault_swap_minimum_broker_fee(RawOrigin::Signed(caller.clone()), 100);
+
+		assert_eq!(VaultSwapMinimumBrokerFee::<T>::get(caller.clone()), 100);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

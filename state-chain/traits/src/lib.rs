@@ -1061,6 +1061,7 @@ pub trait SwapLimitsProvider {
 	fn validate_broker_fees(
 		broker_fees: &Beneficiaries<Self::AccountId>,
 	) -> Result<(), DispatchError>;
+	fn get_minimum_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints;
 }
 
 /// API for interacting with the asset-balance pallet.

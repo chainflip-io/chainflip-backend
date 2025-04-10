@@ -532,6 +532,27 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			}
 		)
 	}
+
+	async fn set_vault_swap_minimum_broker_fee(
+		&self,
+		minimum_fee_bps: BasisPoints,
+	) -> Result<H256> {
+		let (tx_hash, events, ..) = self
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::set_vault_swap_minimum_broker_fee { minimum_fee_bps },
+			)
+			.await?
+			.until_in_block()
+			.await?;
+
+		extract_event!(
+			events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::VaultSwapMinimumBrokerFeeSet,
+			{ .. },
+			tx_hash
+		)
+	}
 }
 
 #[async_trait]

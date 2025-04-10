@@ -61,6 +61,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		funding_info::MockFundingInfo,
+		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
 	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
@@ -2187,6 +2188,47 @@ fn rejects_invalid_swap_by_witnesser() {
 		));
 
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+	});
+}
+
+#[test]
+fn vault_swap_minimum_broker_fee_is_enforced() {
+	new_test_ext().execute_with(|| {
+		let output_address = ForeignChainAddress::Eth([1; 20].into());
+
+		const MINIMUM_BROKER_FEE_BPS: u16 = 100;
+		MockSwapLimitsProvider::set_minimum_broker_fee(BROKER, MINIMUM_BROKER_FEE_BPS);
+
+		assert_ok!(submit_vault_swap_request(
+			Asset::Eth,
+			Asset::Flip,
+			10_000,
+			Default::default(),
+			MockAddressConverter::to_encoded_address(output_address.clone()),
+			None,
+			Default::default(),
+			DepositDetails { tx_hashes: None },
+			// Using a broker fee below the minimum
+			Beneficiary { account: BROKER, bps: MINIMUM_BROKER_FEE_BPS - 10 },
+			Default::default(),
+			ETH_REFUND_PARAMS,
+			None,
+			0
+		));
+
+		assert_eq!(
+			MockSwapRequestHandler::<Test>::get_swap_requests()
+				.first()
+				.unwrap()
+				.broker_fees
+				.first()
+				.unwrap(),
+			&Beneficiary {
+				account: BROKER,
+				// Broker fee was increased to the minimum:
+				bps: MINIMUM_BROKER_FEE_BPS
+			}
+		);
 	});
 }
 

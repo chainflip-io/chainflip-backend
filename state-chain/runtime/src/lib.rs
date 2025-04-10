@@ -2357,6 +2357,17 @@ impl_runtime_apis! {
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
 
+			// Validate broker fee
+			if broker_commission < pallet_cf_swapping::Pallet::<Runtime>::get_minimum_fee_for_broker(&broker_id) {
+				return Err(DispatchErrorWithMessage::from("Broker commission is too low"));
+			}
+			let beneficiaries = pallet_cf_swapping::Pallet::<Runtime>::assemble_broker_fees(
+				broker_id.clone(),
+				broker_commission,
+				affiliate_fees.clone(),
+			);
+			pallet_cf_swapping::Pallet::<Runtime>::validate_broker_fees(&beneficiaries)?;
+
 			// Validate refund duration.
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
 				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
@@ -2413,8 +2424,6 @@ impl_runtime_apis! {
 						retry_duration,
 					}
 				) => {
-					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
-
 					crate::chainflip::vault_swaps::bitcoin_vault_swap(
 						broker_id,
 						destination_asset,
