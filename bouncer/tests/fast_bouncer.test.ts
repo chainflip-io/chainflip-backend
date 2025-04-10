@@ -42,7 +42,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 800);
   concurrentTest('VaultSwapFeeCollection', testVaultSwap, 800);
   concurrentTest('AssethubXCM', testAssethubXcm, 120);
-  
+
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
     concurrentTest('PolkadotRuntimeUpdate', testPolkadotRuntimeUpdate, 1300);
