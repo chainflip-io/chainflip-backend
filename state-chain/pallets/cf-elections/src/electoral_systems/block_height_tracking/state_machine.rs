@@ -11,7 +11,7 @@ use codec::{Decode, Encode};
 use frame_support::pallet_prelude::MaxEncodedLen;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
+use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
 
 //------------------------ inputs ---------------------------
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -144,6 +144,7 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 	fn step_specification(
 		before: &mut Self::State,
 		input: &Self::Input,
+		_output: &Self::Output,
 		_settings: &Self::Settings,
 		after: &Self::State,
 	) {
@@ -251,13 +252,13 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
 	use crate::{
 		electoral_systems::{
 			block_height_tracking::BlockHeightChangeHook,
 			block_witnesser::state_machine::HookTypeFor,
-			state_machine::core::hook_test_utils::MockHook,
+			state_machine::core::{hook_test_utils::MockHook, Serde},
 		},
 		prop_do,
 	};
@@ -331,33 +332,36 @@ mod tests {
 		.prop_map(|state| BHWStateWrapper { state, block_height_update: Default::default() })
 	}
 
-	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
-	struct TestTypes1 {}
-	impl HWTypes for TestTypes1 {
+	impl<
+			N: Serde
+				+ Copy
+				+ Ord
+				+ SaturatingStep
+				+ BlockZero
+				+ sp_std::fmt::Debug
+				+ Default
+				+ 'static,
+		> HWTypes for N
+	{
 		const BLOCK_BUFFER_SIZE: usize = 6;
-		type ChainBlockNumber = u32;
-		type ChainBlockHash = bool;
+		type ChainBlockNumber = N;
+		type ChainBlockHash = Vec<char>;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
 	#[test]
 	pub fn test_dsm() {
-		BlockHeightTrackingSM::<TestTypes1>::test(
-			module_path!(),
-			generate_state(),
-			Just(()),
-			|indices| {
-				prop_oneof![
-					Just(SMInput::Context(())),
-					prop_do! {
-						let index in select(indices);
-						let input in generate_input(index);
-						return SMInput::Consensus((index, input))
-					}
-				]
-				.boxed()
-			},
-		);
+		BlockHeightTrackingSM::<u32>::test(module_path!(), generate_state(), Just(()), |indices| {
+			prop_oneof![
+				Just(SMInput::Context(())),
+				prop_do! {
+					let index in select(indices);
+					let input in generate_input(index);
+					return SMInput::Consensus((index, input))
+				}
+			]
+			.boxed()
+		});
 	}
 
 	struct TestChain {}
