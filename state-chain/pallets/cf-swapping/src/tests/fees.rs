@@ -127,22 +127,17 @@ fn test_buy_back_flip() {
 
 #[test]
 fn test_network_fee_calculation() {
-	enum SwapRequestTest {
-		Normal(SwapRequestId),
-		Internal(SwapRequestId),
-		NoRequest,
-	}
-
 	fn take_fees_from_swap(
 		network_fee_percent: u32,
 		minimum_network_fee: AssetAmount,
 		chunk_amount: AssetAmount,
 		network_fee_collected: AssetAmount,
 		accumulated_stable_amount: AssetAmount,
-		swap_request_test: SwapRequestTest,
+		swap_request_id: SwapRequestId,
+		is_internal: bool,
 	) -> (AssetAmount, AssetAmount) {
 		// Set the network fee and minimum network fee to the given values
-		if matches!(swap_request_test, SwapRequestTest::Internal(..)) {
+		if is_internal {
 			// Set the value of the normal network fee settings to 0 so we can test that the
 			// internal settings are used
 			NetworkFee::set(Permill::from_percent(0));
@@ -158,56 +153,41 @@ fn test_network_fee_calculation() {
 
 		let collected_fees_before = CollectedNetworkFee::<Test>::get();
 
-		let FeeTaken { remaining_amount, fee } = match swap_request_test {
-			SwapRequestTest::Internal(id) | SwapRequestTest::Normal(id) => {
-				// Create a swap request with the given params
-				SwapRequests::<Test>::insert(
-					id,
-					SwapRequest {
-						id,
-						input_asset: Asset::Usdc,
-						output_asset: Asset::Eth,
-						state: SwapRequestState::UserSwap {
-							refund_params: None,
-							output_action: if matches!(
-								swap_request_test,
-								SwapRequestTest::Internal(..)
-							) {
-								SwapOutputAction::CreditOnChain { account_id: ALICE }
-							} else {
-								SwapOutputAction::Egress {
-									ccm_deposit_metadata: None,
-									output_address: ForeignChainAddress::Eth(Default::default()),
-								}
-							},
-							dca_state: DcaState {
-								status: DcaStatus::ChunkScheduled(SwapId(1)),
-								// Not relevant for this test
-								remaining_input_amount: 0,
-								remaining_chunks: 0,
-								chunk_interval: 2,
-								accumulated_output_amount: 0,
-								// Use the given params
-								network_fee_collected,
-								accumulated_stable_amount,
-							},
-							broker_fees: Default::default(),
-						},
+		// Create a swap request with the given params
+		SwapRequests::<Test>::insert(
+			swap_request_id,
+			SwapRequest {
+				id: swap_request_id,
+				input_asset: Asset::Usdc,
+				output_asset: Asset::Eth,
+				state: SwapRequestState::UserSwap {
+					refund_params: None,
+					output_action: if is_internal {
+						SwapOutputAction::CreditOnChain { account_id: ALICE }
+					} else {
+						SwapOutputAction::Egress {
+							ccm_deposit_metadata: None,
+							output_address: ForeignChainAddress::Eth(Default::default()),
+						}
 					},
-				);
-				Swapping::take_network_fee(
-					chunk_amount,
-					MinFeePolicy::Enforced { swap_request_id: id },
-				)
+					dca_state: DcaState {
+						status: DcaStatus::ChunkScheduled(SwapId(1)),
+						// Not relevant for this test
+						remaining_input_amount: 0,
+						remaining_chunks: 0,
+						chunk_interval: 2,
+						accumulated_output_amount: 0,
+						// Use the given params
+						network_fee_collected,
+						accumulated_stable_amount,
+					},
+					broker_fees: Default::default(),
+				},
 			},
-			_ => {
-				// Testing with no swap request
-				Swapping::take_network_fee(
-					chunk_amount,
-					MinFeePolicy::Enforced { swap_request_id: SwapRequestId(u64::MAX) },
-				)
-			},
-		};
+		);
+
+		let FeeTaken { remaining_amount, fee } =
+			Swapping::take_network_fee(chunk_amount, MinFeePolicy::Enforced { swap_request_id });
 
 		// Sanity checks
 		assert_eq!(collected_fees_before + fee, CollectedNetworkFee::<Test>::get());
@@ -217,41 +197,31 @@ fn test_network_fee_calculation() {
 	}
 
 	new_test_ext().execute_with(|| {
-		const ID: SwapRequestTest = SwapRequestTest::Normal(SWAP_REQUEST_ID);
+		const ID: SwapRequestId = SWAP_REQUEST_ID;
 		// Normal network fee
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 0, ID), (900, 100));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 10_000, ID), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 0, ID, false), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 10_000, ID, false), (900, 100));
 
 		// Minimum network fee enforced
-		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, ID), (800, 200));
-		assert_eq!(take_fees_from_swap(10, 1500, 1000, 1000, 10_000, ID), (500, 500));
-		assert_eq!(take_fees_from_swap(10, 1500, 1000, 0, 0, ID), (0, 1000));
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, ID, false), (800, 200));
+		assert_eq!(take_fees_from_swap(10, 1500, 1000, 1000, 10_000, ID, false), (500, 500));
+		assert_eq!(take_fees_from_swap(10, 1500, 1000, 0, 0, ID, false), (0, 1000));
 
 		// Minimum network fee was taken on previous chunk
-		assert_eq!(take_fees_from_swap(10, 200, 1000, 200, 1000, ID), (1000, 0));
-		assert_eq!(take_fees_from_swap(10, 150, 1000, 150, 1000, ID), (950, 50));
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 200, 1000, ID, false), (1000, 0));
+		assert_eq!(take_fees_from_swap(10, 150, 1000, 150, 1000, ID, false), (950, 50));
 
 		// Network fee changed after first chunk, so more or less is taken from this chunk
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 50, 1000, ID), (850, 150));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 150, 1000, ID), (950, 50));
-
-		// No swap request exists, should still enforce fee as if it was the first chunk
-		assert_eq!(
-			take_fees_from_swap(10, 20, 1000, 0, 1000, SwapRequestTest::NoRequest),
-			(900, 100)
-		);
-		assert_eq!(
-			take_fees_from_swap(10, 200, 1000, 0, 0, SwapRequestTest::NoRequest),
-			(800, 200)
-		);
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 50, 1000, ID, false), (850, 150));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 150, 1000, ID, false), (950, 50));
 
 		// Unrealistic scenarios, but just to make sure it can handle it.
-		assert_eq!(take_fees_from_swap(10, 20, 0, 100, 1000, ID), (0, 0));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 10_000, ID), (0, 1000));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 10_000, 0, ID), (1000, 0));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, u128::MAX, u128::MAX, ID), (1000, 0));
+		assert_eq!(take_fees_from_swap(10, 20, 0, 100, 1000, ID, false), (0, 0));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 10_000, ID, false), (0, 1000));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 10_000, 0, ID, false), (1000, 0));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, u128::MAX, u128::MAX, ID, false), (1000, 0));
 		assert_eq!(
-			take_fees_from_swap(10, 20, u128::MAX, 1000, 10_000, ID),
+			take_fees_from_swap(10, 20, u128::MAX, 1000, 10_000, ID, false),
 			// Because the calculation saturates, the existing 1000 fee taken is deducted from the
 			// calculated fee
 			(
@@ -261,14 +231,13 @@ fn test_network_fee_calculation() {
 		);
 
 		// Internal swaps use a different network fee
-		const INTERNAL_SWAP: SwapRequestTest = SwapRequestTest::Internal(SWAP_REQUEST_ID);
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 0, INTERNAL_SWAP), (900, 100));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 10_000, INTERNAL_SWAP), (900, 100));
-		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 1000, INTERNAL_SWAP), (1000, 0));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 0, 0, ID, true), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 10_000, ID, true), (900, 100));
+		assert_eq!(take_fees_from_swap(10, 20, 1000, 1000, 1000, ID, true), (1000, 0));
 
 		// Internal swaps use a different minimum network fee
-		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, INTERNAL_SWAP), (800, 200));
-		assert_eq!(take_fees_from_swap(10, 1500, 1000, 1000, 10_000, INTERNAL_SWAP), (500, 500));
+		assert_eq!(take_fees_from_swap(10, 200, 1000, 0, 0, ID, true), (800, 200));
+		assert_eq!(take_fees_from_swap(10, 1500, 1000, 1000, 10_000, ID, true), (500, 500));
 	});
 }
 
