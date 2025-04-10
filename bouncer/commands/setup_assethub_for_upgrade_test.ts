@@ -117,24 +117,24 @@ async function main(): Promise<void> {
 
   logger.info('funding pools with assethub assets');
   const lp1Deposits = Promise.all([
-    depositLiquidity(logger, 'HubDot', 10000, false, '//LP_1'),
-    depositLiquidity(logger, 'HubUsdc', 250000, false, '//LP_1'),
-    depositLiquidity(logger, 'HubUsdt', 250000, false, '//LP_1'),
+    depositLiquidity(logger, 'HubDot', 100000, false, '//LP_1'),
+    depositLiquidity(logger, 'HubUsdc', 2500000, false, '//LP_1'),
+    depositLiquidity(logger, 'HubUsdt', 2500000, false, '//LP_1'),
   ]);
 
   const lpApiDeposits = Promise.all([
-    depositLiquidity(logger, 'HubDot', 2000, false, '//LP_API'),
-    depositLiquidity(logger, 'HubUsdc', 250000, false, '//LP_API'),
-    depositLiquidity(logger, 'HubUsdt', 250000, false, '//LP_API'),
+    depositLiquidity(logger, 'HubDot', 200000, false, '//LP_API'),
+    depositLiquidity(logger, 'HubUsdc', 2500000, false, '//LP_API'),
+    depositLiquidity(logger, 'HubUsdt', 2500000, false, '//LP_API'),
   ]);
 
   await Promise.all([lpApiDeposits, lp1Deposits]);
 
   logger.info('creating orders for assethub assets');
   await Promise.all([
-    rangeOrder(logger, 'HubDot', 10000 * 0.9999),
-    rangeOrder(logger, 'HubUsdc', 250000 * 0.9999),
-    rangeOrder(logger, 'HubUsdt', 250000 * 0.9999),
+    rangeOrder(logger, 'HubDot', 100000 * 0.9999),
+    rangeOrder(logger, 'HubUsdc', 2500000 * 0.9999),
+    rangeOrder(logger, 'HubUsdt', 2500000 * 0.9999),
   ]);
 }
 
