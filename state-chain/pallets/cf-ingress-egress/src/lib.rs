@@ -169,7 +169,7 @@ enum FullWitnessDepositOutcome {
 }
 
 #[derive(RuntimeDebug, Clone)]
-pub struct ValidatedVaultSwap<AccountId> {
+pub struct ValidatedVaultSwapParams<AccountId> {
 	pub broker_fees: BoundedVec<Beneficiary<AccountId>, ConstU32<6>>,
 	pub channel_metadata: Option<CcmChannelMetadata>,
 	pub source_address: Option<ForeignChainAddress>,
@@ -2352,7 +2352,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
 		);
 
-		if let Ok(ValidatedVaultSwap {
+		if let Ok(ValidatedVaultSwapParams {
 			broker_fees,
 			channel_metadata,
 			source_address,
@@ -2589,7 +2589,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn try_validate_vault_swap(
 		vault_deposit_witness: VaultDepositWitness<T, I>,
-	) -> Result<ValidatedVaultSwap<T::AccountId>, RefundReason> {
+	) -> Result<ValidatedVaultSwapParams<T::AccountId>, RefundReason> {
 		let VaultDepositWitness {
 			output_asset: destination_asset,
 			destination_address,
@@ -2604,7 +2604,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let Some(broker_fees) =
 			Self::assemble_broker_fees(broker_fee.clone(), affiliate_fees.clone())
 		else {
-			log::warn!("Failed to process vault swap due to invalid broker fees");
 			return Err(RefundReason::InvalidBrokerFees);
 		};
 
@@ -2620,7 +2619,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 			.is_err()
 			{
-				log::warn!("Failed to process vault swap due to invalid CCM metadata");
 				return Err(RefundReason::CcmInvalidMetadata);
 			}
 
@@ -2637,13 +2635,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Err(_err) =
 			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
 		{
-			log::warn!("Failed to process vault swap due to invalid refund parameters");
 			return Err(RefundReason::InvalidRefundParameters);
 		}
 
 		if let Some(params) = &dca_params {
 			if T::SwapLimitsProvider::validate_dca_params(params).is_err() {
-				log::warn!("Failed to process vault swap due to invalid DCA parameters");
 				return Err(RefundReason::InvalidDcaParameters);
 			}
 		}
@@ -2655,12 +2651,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			) {
 				Ok(address) => address,
 				Err(_) => {
-					log::warn!("Failed to process vault swap due to invalid destination address");
 					return Err(RefundReason::InvalidDestinationAddress);
 				},
 			};
 
-		Ok(ValidatedVaultSwap {
+		Ok(ValidatedVaultSwapParams {
 			broker_fees,
 			channel_metadata,
 			source_address,
@@ -2689,7 +2684,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let (action, source_address) =
 			match Self::try_validate_vault_swap(vault_deposit_witness.clone()) {
-				Ok(ValidatedVaultSwap {
+				Ok(ValidatedVaultSwapParams {
 					broker_fees,
 					channel_metadata,
 					source_address,
