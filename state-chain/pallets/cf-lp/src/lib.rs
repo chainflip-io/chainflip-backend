@@ -45,7 +45,7 @@ use cf_chains::address::EncodedAddress;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
-impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, internal_swaps_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -142,6 +142,8 @@ pub mod pallet {
 		BoostedFundsRemaining,
 		/// The input amount of on-chain swaps must be at least the minimum deposit amount.
 		InternalSwapBelowMinimumDepositAmount,
+		/// Internal swaps disabled due to safe mode.
+		InternalSwapsDisabled,
 	}
 
 	#[pallet::event]
@@ -355,6 +357,8 @@ pub mod pallet {
 			min_price: Price,
 			dca_params: Option<DcaParameters>,
 		) -> DispatchResult {
+			ensure!(T::SafeMode::get().internal_swaps_enabled, Error::<T>::InternalSwapsDisabled);
+
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			ensure!(

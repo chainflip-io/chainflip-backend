@@ -27,12 +27,18 @@ pub mod old {
 	use crate::*;
 	use frame_support::pallet_prelude::*;
 
+	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+	pub struct LpSafeMode {
+		pub deposit_enabled: bool,
+		pub withdrawal_enabled: bool,
+	}
+
 	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct RuntimeSafeMode {
 		pub emissions: pallet_cf_emissions::PalletSafeMode,
 		pub funding: pallet_cf_funding::PalletSafeMode,
 		pub swapping: pallet_cf_swapping::PalletSafeMode,
-		pub liquidity_provider: pallet_cf_lp::PalletSafeMode,
+		pub liquidity_provider: LpSafeMode,
 		pub validator: pallet_cf_validator::PalletSafeMode,
 		pub pools: pallet_cf_pools::PalletSafeMode,
 		pub reputation: pallet_cf_reputation::PalletSafeMode,
@@ -124,7 +130,11 @@ impl UncheckedOnRuntimeUpgrade for AssethubUpdate {
 					emissions: old.emissions,
 					funding: old.funding,
 					swapping: old.swapping,
-					liquidity_provider: old.liquidity_provider,
+					liquidity_provider: pallet_cf_lp::PalletSafeMode {
+						deposit_enabled: old.liquidity_provider.deposit_enabled,
+						withdrawal_enabled: old.liquidity_provider.withdrawal_enabled,
+						internal_swaps_enabled: true,
+					},
 					validator: old.validator,
 					pools: old.pools,
 					trading_strategies:
