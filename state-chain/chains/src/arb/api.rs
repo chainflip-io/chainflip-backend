@@ -201,11 +201,10 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 	}
 
 	fn refresh_replay_protection(&mut self) {
-		map_over_api_variants!(
-			self,
-			call,
-			call.refresh_replay_protection(E::replay_protection(E::key_manager_address()))
-		)
+		let EvmReplayProtection { contract_address, .. } =
+			map_over_api_variants!(self, call, call.replay_protection());
+		let new_replay_protection = E::replay_protection(contract_address);
+		map_over_api_variants!(self, call, call.refresh_replay_protection(new_replay_protection))
 	}
 
 	fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
