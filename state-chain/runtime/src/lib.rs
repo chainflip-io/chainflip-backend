@@ -582,6 +582,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
+	type ScreeningBrokerId = ScreeningBrokerId;
 }
 
 impl pallet_cf_pools::Config for Runtime {

@@ -1779,12 +1779,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset,
 					deposit_address,
 					deposit_fetch_id,
-					amount,
+					amount: _amount,
 				} => {
 					fetch_params.push(FetchAssetParams {
 						deposit_fetch_id: deposit_fetch_id.expect("Checked in extract_if"),
 						asset,
-						amount,
 					});
 					addresses.push(deposit_address.clone());
 				},

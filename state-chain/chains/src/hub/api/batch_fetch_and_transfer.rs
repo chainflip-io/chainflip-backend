@@ -130,20 +130,14 @@ mod test_batch_fetch {
 		let keypair_proxy = PolkadotPair::from_seed(&RAW_SEED_2);
 
 		let dummy_fetch_params: Vec<FetchAssetParams<Assethub>> = vec![
-			FetchAssetParams::<Assethub> {
-				deposit_fetch_id: 1,
-				asset: assets::hub::Asset::HubDot,
-				amount: 44,
-			},
+			FetchAssetParams::<Assethub> { deposit_fetch_id: 1, asset: assets::hub::Asset::HubDot },
 			FetchAssetParams::<Assethub> {
 				deposit_fetch_id: 2,
 				asset: assets::hub::Asset::HubUsdc,
-				amount: 55,
 			},
 			FetchAssetParams::<Assethub> {
 				deposit_fetch_id: 3,
 				asset: assets::hub::Asset::HubUsdt,
-				amount: 66,
 			},
 		];
 
@@ -197,7 +191,6 @@ mod test_batch_fetch {
 		let fetch_param = FetchAssetParams::<Assethub> {
 			deposit_fetch_id: 0x0004_0003_0002_0001,
 			asset: assets::hub::Asset::HubDot,
-			amount: 123456,
 		};
 		let vault_account = PolkadotAccountId::from_aliased([1u8; 32]);
 		let call = utility_fetch(fetch_param, vault_account);
@@ -227,7 +220,6 @@ mod test_batch_fetch {
 		let fetch_param = FetchAssetParams::<Assethub> {
 			deposit_fetch_id: 1,
 			asset: assets::hub::Asset::HubUsdc,
-			amount: 123456,
 		};
 		let vault_account = PolkadotAccountId::from_aliased([1u8; 32]);
 		let call = utility_fetch(fetch_param, vault_account);
@@ -250,12 +242,10 @@ mod test_batch_fetch {
 		let fetch_param_1 = FetchAssetParams::<Assethub> {
 			deposit_fetch_id: 0x0000_0000_0000_0001,
 			asset: assets::hub::Asset::HubDot,
-			amount: 123456,
 		};
 		let fetch_param_2 = FetchAssetParams::<Assethub> {
 			deposit_fetch_id: 0x0000_0000_0001_0000,
 			asset: assets::hub::Asset::HubDot,
-			amount: 123456,
 		};
 		let vault_account = PolkadotAccountId::from_aliased([1u8; 32]);
 		let call_1 = utility_fetch(fetch_param_1, vault_account);
