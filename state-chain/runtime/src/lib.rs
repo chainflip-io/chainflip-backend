@@ -1493,6 +1493,7 @@ type MigrationsForV1_9 = (
 		<Runtime as frame_system::Config>::DbWeight,
 	>,
 	migrations::assethub_integration::AssethubChainstate,
+	migrations::assethub_integration::AssethubIngressEgressConfig,
 	instanced_migrations!(
 		module: pallet_cf_broadcast,
 		migration: migrations::sol_versioned_transactions::SolVersionedTransactionBroadcastPallet,

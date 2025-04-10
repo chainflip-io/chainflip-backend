@@ -78,6 +78,37 @@ impl OnRuntimeUpgrade for AssethubChainstate {
 	}
 }
 
+pub struct AssethubIngressEgressConfig;
+
+impl OnRuntimeUpgrade for AssethubIngressEgressConfig {
+	fn on_runtime_upgrade() -> Weight {
+		match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
+			cf_runtime_utilities::genesis_hashes::BERGHAIN => {
+				pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, AssethubInstance>::put(
+					24 * 3600 / 12,
+				);
+			},
+			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => {
+				pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, AssethubInstance>::put(
+					2 * 60 * 60 / 12,
+				);
+			},
+			cf_runtime_utilities::genesis_hashes::SISYPHOS => {
+				pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, AssethubInstance>::put(
+					2 * 60 * 60 / 12,
+				);
+			},
+			_ => {
+				pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, AssethubInstance>::put(
+					10 * 60 / 12,
+				);
+			},
+		}
+
+		Weight::zero()
+	}
+}
+
 pub struct AssethubUpdate;
 
 impl UncheckedOnRuntimeUpgrade for AssethubUpdate {
