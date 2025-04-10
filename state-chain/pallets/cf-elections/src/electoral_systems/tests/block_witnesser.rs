@@ -28,7 +28,7 @@ use crate::{
 			primitives::ElectionTracker,
 			state_machine::{
 				BWElectionProperties, BWProcessorTypes, ElectionPropertiesHook, ExecuteHook,
-				HookTypeFor, RulesHook, SafeModeEnabledHook,
+				HookTypeFor, LogEventHook, RulesHook, SafeModeEnabledHook,
 			},
 			*,
 		},
@@ -73,6 +73,7 @@ impl BWProcessorTypes for Types {
 	type Event = ();
 	type Rules = MockHook<HookTypeFor<Self, RulesHook>, "rules">;
 	type Execute = MockHook<HookTypeFor<Self, ExecuteHook>, "execute">;
+	type LogEventHook = MockHook<HookTypeFor<Self, LogEventHook>, "delete">;
 }
 
 /// Associating BW types to the struct
