@@ -578,7 +578,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
