@@ -534,12 +534,12 @@ function checkTransactionInMatches(actual: any, expected: TransactionOriginId): 
       ('Bitcoin' in actual.Vault.txId &&
         expected.type === TransactionOrigin.VaultSwapBitcoin &&
         actual.Vault.txId.Bitcoin ===
-          // Reverse byte order of BTC transactions
-          '0x' +
-            // eslint-disable-next-line @typescript-eslint/no-use-before-define
-            [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
-              .map((x) => x.toString(16).padStart(2, '0'))
-              .join(''))
+        // Reverse byte order of BTC transactions
+        '0x' +
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+        [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
+          .map((x) => x.toString(16).padStart(2, '0'))
+          .join(''))
     );
   }
   if ('OnChainAccount' in actual) {
@@ -632,6 +632,33 @@ export function chainFromAsset(asset: Asset): Chain {
   if (isSDKAsset(asset)) return assetConstants[asset].chain;
   if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
   throw new Error(`Unsupported asset: ${asset}`);
+}
+
+export function toRpcAsset(asset: Asset): string {
+  return asset.toUpperCase();
+}
+
+export function toAsset(rpcAsset: string): Asset {
+  switch (rpcAsset) {
+    case 'ETH':
+      return 'Eth';
+    case 'ARBETH':
+      return 'ArbEth';
+    case 'USDC':
+      return 'Usdc';
+    case 'USDT':
+      return 'Usdt';
+    case 'DOT':
+      return 'Dot';
+    case 'BTC':
+      return 'Btc';
+    case 'SOL':
+      return 'Sol';
+    case 'SOLUSDC':
+      return 'SolUsdc';
+    default:
+      throw new Error(`Unsupported asset: ${rpcAsset}`);
+  }
 }
 
 export function getEvmEndpoint(chain: Chain): string {

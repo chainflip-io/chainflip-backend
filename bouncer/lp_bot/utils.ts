@@ -1,5 +1,5 @@
 import { getChainflipApi } from '../shared/utils/substrate';
-import { createStateChainKeypair } from "../shared/utils";
+import { Chain, createStateChainKeypair } from "../shared/utils";
 import { handleSubstrateError } from "../shared/utils";
 import { globalLogger as logger } from '../shared/utils/logger';
 import { Asset } from '../shared/utils';
@@ -29,7 +29,7 @@ class Order {
         public orderId: number,
         public status: OrderStatus,
         public orderType: OrderType,
-        public asset: Asset,
+        public asset: string,
         public side: Side,
         public amount: number,
         public price: number,
@@ -61,9 +61,18 @@ type Swap = {
 type TradeDecision = {
     shouldTrade: boolean;
     side: Side;
-    asset: Asset;
+    asset: string;
     amount: number;
     price: number;
+}
+
+/**
+ * An out of liquidity event.
+ */
+type OutOfLiquidityEvent = {
+    side: Side;
+    asset: string;
+    amount: number;
 }
 
 /**
@@ -160,4 +169,4 @@ const cancelAllOrdersForLp = async (lpAccount: string, chain: string, asset: str
 //     }
 // }
 
-export { cancelAllOrdersForLp, Order, Side, OrderStatus, OrderType, Swap, TradeDecision };
+export { cancelAllOrdersForLp, Order, Side, OrderStatus, OrderType, Swap, TradeDecision, OutOfLiquidityEvent };
