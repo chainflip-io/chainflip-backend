@@ -262,6 +262,8 @@ mod benchmarks {
 		)
 		.unwrap();
 
+		assert_eq!(VaultSwapMinimumBrokerFee::<T>::get(caller.clone()), 0);
+
 		#[extrinsic_call]
 		set_vault_swap_minimum_broker_fee(RawOrigin::Signed(caller.clone()), 100);
 

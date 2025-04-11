@@ -97,14 +97,12 @@ impl SwapLimitsProvider for MockSwapLimitsProvider {
 		Ok(())
 	}
 
-	fn get_minimum_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints {
+	fn get_minimum_vault_swap_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints {
 		let minimums = <Self as MockPalletStorage>::get_value::<
 			BTreeMap<Self::AccountId, BasisPoints>,
 		>(MINIMUM_BROKER_FEE);
-		if let Some(minimums) = minimums {
-			minimums.get(broker_id).copied().unwrap_or_default()
-		} else {
-			0
-		}
+		minimums
+			.and_then(|minimums| minimums.get(broker_id).copied())
+			.unwrap_or_default()
 	}
 }

@@ -1137,12 +1137,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let beneficiaries = Pallet::<T>::assemble_broker_fees(
+			let beneficiaries = Pallet::<T>::assemble_and_validate_broker_fees(
 				broker.clone(),
 				broker_commission,
 				affiliate_fees.clone(),
-			);
-			Pallet::<T>::validate_broker_fees(&beneficiaries)?;
+			)?;
 
 			let destination_address_internal =
 				T::AddressConverter::decode_and_validate_address_for_asset(
@@ -2254,12 +2253,12 @@ pub mod pallet {
 			Ok(remaining_amount_to_refund)
 		}
 
-		pub fn assemble_broker_fees(
+		pub fn assemble_and_validate_broker_fees(
 			broker_id: T::AccountId,
 			broker_commission: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
-		) -> Beneficiaries<T::AccountId> {
-			[Beneficiary { account: broker_id, bps: broker_commission }]
+		) -> Result<Beneficiaries<T::AccountId>, DispatchError> {
+			let beneficiaries = [Beneficiary { account: broker_id, bps: broker_commission }]
 				.into_iter()
 				.chain(affiliate_fees.iter().cloned())
 				.filter_map(
@@ -2275,7 +2274,9 @@ pub mod pallet {
 				.try_into()
 				.expect(
 					"We are pushing affiliates + 1 which is exactly the maximum Beneficiaries size",
-				)
+				);
+			Pallet::<T>::validate_broker_fees(&beneficiaries)?;
+			Ok(beneficiaries)
 		}
 	}
 
@@ -2556,7 +2557,7 @@ impl<T: Config> SwapLimitsProvider for Pallet<T> {
 		Ok(())
 	}
 
-	fn get_minimum_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints {
+	fn get_minimum_vault_swap_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints {
 		VaultSwapMinimumBrokerFee::<T>::get(broker_id)
 	}
 }

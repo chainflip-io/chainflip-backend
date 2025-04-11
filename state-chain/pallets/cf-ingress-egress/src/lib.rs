@@ -2165,7 +2165,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Beneficiary {
 			bps: core::cmp::max(
 				broker_fee.bps,
-				T::SwapLimitsProvider::get_minimum_fee_for_broker(&broker_fee.account),
+				T::SwapLimitsProvider::get_minimum_vault_swap_fee_for_broker(&broker_fee.account),
 			),
 			account: broker_fee.account,
 		}
