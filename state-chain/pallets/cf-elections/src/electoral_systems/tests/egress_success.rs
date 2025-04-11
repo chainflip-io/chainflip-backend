@@ -24,16 +24,12 @@ use cf_primitives::AuthorityCount;
 
 thread_local! {
 	pub static HOOK_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	pub static SHOULD_EXPIRE_ELECTION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 pub struct MockHook;
 impl ExactValueHook<(), EgressData> for MockHook {
 	fn on_consensus(_id: (), _egress_data: EgressData) {
 		HOOK_CALLED.with(|hook_called| hook_called.set(true));
-	}
-	fn should_expire_election(_id: ()) -> bool {
-		SHOULD_EXPIRE_ELECTION.with(|should_expire_election| should_expire_election.get())
 	}
 }
 
@@ -44,7 +40,7 @@ impl MockHook {
 }
 
 type EgressData = u64;
-type SimpleEgressSuccess = ExactValue<(), EgressData, (), MockHook, (), u32>;
+type SimpleEgressSuccess = ExactValue<(), EgressData, (), MockHook, (), u32, (), ()>;
 
 register_checks! {
 	SimpleEgressSuccess {

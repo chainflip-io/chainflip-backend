@@ -31,7 +31,17 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// This electoral system detects if something occurred or not. Voters simply vote if something
 /// happened, and if they haven't seen it happen, they don't vote.
-pub struct ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber> {
+#[allow(clippy::type_complexity)]
+pub struct ExactValue<
+	Identifier,
+	Value,
+	Settings,
+	Hook,
+	ValidatorId,
+	StateChainBlockNumber,
+	UnsynchronisedStateMapKey,
+	UnsynchronisedStateMapValue,
+> {
 	_phantom: core::marker::PhantomData<(
 		Identifier,
 		Value,
@@ -39,12 +49,13 @@ pub struct ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChain
 		Hook,
 		ValidatorId,
 		StateChainBlockNumber,
+		UnsynchronisedStateMapKey,
+		UnsynchronisedStateMapValue,
 	)>,
 }
 
 pub trait ExactValueHook<Identifier, Value> {
 	fn on_consensus(id: Identifier, value: Value);
-	fn should_expire_election(id: Identifier) -> bool;
 }
 
 impl<
@@ -54,7 +65,19 @@ impl<
 		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
+		UnsynchronisedStateMapKey: Parameter + Member,
+		UnsynchronisedStateMapValue: Parameter + Member,
+	>
+	ExactValue<
+		Identifier,
+		Value,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+		UnsynchronisedStateMapKey,
+		UnsynchronisedStateMapValue,
+	>
 {
 	pub fn witness_exact_value<
 		ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
@@ -73,14 +96,25 @@ impl<
 		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		UnsynchronisedStateMapKey: Parameter + Member,
+		UnsynchronisedStateMapValue: Parameter + Member,
 	> ElectoralSystemTypes
-	for ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
+	for ExactValue<
+		Identifier,
+		Value,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+		UnsynchronisedStateMapKey,
+		UnsynchronisedStateMapValue,
+	>
 {
 	type ValidatorId = ValidatorId;
 	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = ();
-	type ElectoralUnsynchronisedStateMapKey = ();
-	type ElectoralUnsynchronisedStateMapValue = ();
+	type ElectoralUnsynchronisedStateMapKey = UnsynchronisedStateMapKey;
+	type ElectoralUnsynchronisedStateMapValue = UnsynchronisedStateMapValue;
 
 	type ElectoralUnsynchronisedSettings = ();
 	type ElectoralSettings = Settings;
@@ -100,8 +134,19 @@ impl<
 		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		UnsynchronisedStateMapKey: Parameter + Member,
+		UnsynchronisedStateMapValue: Parameter + Member,
 	> ElectoralSystem
-	for ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
+	for ExactValue<
+		Identifier,
+		Value,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+		UnsynchronisedStateMapKey,
+		UnsynchronisedStateMapValue,
+	>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -138,9 +183,7 @@ impl<
 			let election_access = ElectoralAccess::election_mut(election_identifier);
 			let identifier = election_access.properties()?;
 			if let Some(witnessed_value) = election_access.check_consensus()?.has_consensus() {
-				election_access.delete();
 				Hook::on_consensus(identifier, witnessed_value);
-			} else if Hook::should_expire_election(identifier) {
 				election_access.delete();
 			}
 		}
