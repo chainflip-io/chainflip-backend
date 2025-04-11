@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{mock::*, Error, Event, LiquidityRefundAddress};
+use crate::{mock::*, Error, Event, LiquidityRefundAddress, PalletSafeMode};
 
 use cf_chains::{address::EncodedAddress, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
@@ -22,7 +22,8 @@ use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_test_utilities::assert_events_match;
 use cf_traits::{
 	mocks::swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
-	AccountRoleRegistry, BalanceApi, Chainflip, SetSafeMode, SwapOutputAction, SwapRequestType,
+	AccountRoleRegistry, BalanceApi, Chainflip, SafeMode, SetSafeMode, SwapOutputAction,
+	SwapRequestType,
 };
 use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
 
@@ -484,5 +485,48 @@ fn schedule_swap_checks() {
 			}]
 		);
 
+	});
+}
+
+#[test]
+fn safe_mode_prevents_internal_swaps() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: AssetAmount = 1000;
+
+		MockBalanceApi::credit_account(&LP_ACCOUNT, Asset::Eth, AMOUNT);
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			OriginTrait::signed(LP_ACCOUNT),
+			EncodedAddress::Eth([0x01; 20])
+		));
+
+		let schedule_swap = || {
+			LiquidityProvider::schedule_swap(
+				RuntimeOrigin::signed(LP_ACCOUNT),
+				AMOUNT,
+				Asset::Eth,
+				Asset::Flip,
+				0,
+				Default::default(),
+				None,
+			)
+		};
+
+		// LP should not be able to schedule an internal swaps due to safe mode:
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			liquidity_provider: PalletSafeMode {
+				internal_swaps_enabled: false,
+				..PalletSafeMode::CODE_GREEN
+			},
+		});
+
+		assert_err!(schedule_swap(), Error::<Test>::InternalSwapsDisabled);
+
+		// As soon as we enable internal swaps the LP should be able to schedule a swap:
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			liquidity_provider: PalletSafeMode::CODE_GREEN,
+		});
+
+		assert_ok!(schedule_swap());
 	});
 }
