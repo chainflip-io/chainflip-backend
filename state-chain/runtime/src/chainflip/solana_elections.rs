@@ -42,11 +42,9 @@ use cf_traits::{
 	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
-use frame_system::{pallet_prelude::BlockNumberFor, RefCount};
+use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
-	electoral_system::{
-		ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes, ElectoralWriteAccess,
-	},
+	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		self,
 		blockchain::delta_based_ingress::BackoffSettings,
@@ -62,7 +60,7 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_runtime::{DispatchResult, Saturating};
+use sp_runtime::DispatchResult;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -157,8 +155,6 @@ pub type SolanaEgressWitnessing = electoral_systems::exact_value::ExactValue<
 	SolanaEgressWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
-	(),
-	(),
 >;
 
 pub type SolanaLiveness = electoral_systems::liveness::Liveness<
@@ -213,9 +209,19 @@ pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 	SolanaAltWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
-	SolAddress,
-	(AltWitnessingConsensusResult<SolAddressLookupTableAccount>, RefCount),
 >;
+
+pub fn solana_alt_result(
+	alts: Vec<SolAddress>,
+) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+	SolanaAltWitnessing::election_result::<
+		DerivedElectoralAccess<
+			_,
+			SolanaAltWitnessing,
+			RunnerStorageAccess<Runtime, SolanaInstance>,
+		>,
+	>(SolanaAltWitnessingIdentifier(alts))
+}
 
 pub type SolanaAltWitnessingElectoralAccess =
 	DerivedElectoralAccess<GG, SolanaAltWitnessing, RunnerStorageAccess<Runtime, SolanaInstance>>;
@@ -228,39 +234,17 @@ impl
 		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	> for SolanaAltWitnessingHook
 {
+	type StorageKey = SolanaAltWitnessingIdentifier;
+	type StorageValue = AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>;
+
 	fn on_consensus(
 		alt_identifier: SolanaAltWitnessingIdentifier,
 		alts: AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
-	) {
-		// Store the Consensus result into the Unsynchronised state map, increment ref count by 1
-		match alts {
-			AltWitnessingConsensusResult::InvalidNoConsensus => alt_identifier
-				.0
-				.into_iter()
-				.map(|alt| (alt, AltWitnessingConsensusResult::InvalidNoConsensus))
-				.collect::<Vec<_>>(),
-			AltWitnessingConsensusResult::ValidConsensus(witnessed_alts) => witnessed_alts
-				.into_iter()
-				.map(|r| (r.key.into(), AltWitnessingConsensusResult::ValidConsensus(r)))
-				.collect::<Vec<_>>(),
-		}
-		.into_iter()
-		.for_each(|(key, value)| {
-			// This will only fail if Election storage is corrupted.
-			let _ = SolanaAltWitnessingElectoralAccess::mutate_unsynchronised_state_map(
-				key,
-				|maybe_state| {
-					if let Some((_, ref_count)) = maybe_state.as_mut() {
-						// If value already exists, increment the ref count by 1.
-						ref_count.saturating_accrue(1);
-					} else {
-						// If None, insert the new value.
-						*maybe_state = Some((value, 1))
-					}
-					Ok(())
-				},
-			);
-		});
+	) -> Option<(
+		SolanaAltWitnessingIdentifier,
+		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	)> {
+		Some((alt_identifier, alts))
 	}
 }
 
@@ -275,10 +259,13 @@ pub struct TransactionSuccessDetails {
 pub struct SolanaEgressWitnessingHook;
 
 impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
+	type StorageKey = ();
+	type StorageValue = ();
+
 	fn on_consensus(
 		signature: SolSignature,
 		TransactionSuccessDetails { tx_fee, transaction_successful }: TransactionSuccessDetails,
-	) {
+	) -> Option<((), ())> {
 		use cf_traits::KeyProvider;
 		if !transaction_successful {
 			// On CCM failure, we need to refund the user using their fallback info.
@@ -309,6 +296,8 @@ impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWit
 				err
 			)
 		}
+
+		None
 	}
 }
 
