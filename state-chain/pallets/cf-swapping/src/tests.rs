@@ -39,7 +39,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
 };
-use cf_test_utilities::{assert_event_sequence, assert_events_eq, assert_has_matching_event};
+use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
@@ -1604,8 +1604,8 @@ mod internal_swaps {
 		const NEW_SWAP_RATE: f64 = DEFAULT_SWAP_RATE as f64 / 2.0;
 		const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
 
-		// We require the minimum network fee to be non-zero for the refund fee to work, so this
-		// must be taken into account in the min_price calculation.
+		// We require the internal swap minimum network fee to be non-zero for the refund fee to
+		// work, so this must be taken into account in the min_price calculation.
 		// Note that the `NetworkFee` is set to 0 by default, so the minimum network fee will be
 		// charged instead.
 		let min_price = U256::from(
@@ -1616,7 +1616,10 @@ mod internal_swaps {
 
 		new_test_ext()
 			.execute_with(|| {
-				MinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
+				// Internal swaps use a different network fee minimum than the regular swaps.
+				// This minimum network fee is used as the refund fee.
+				InternalSwapMinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
+
 				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,

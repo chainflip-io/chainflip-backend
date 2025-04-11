@@ -42,17 +42,25 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		let fee = old::MinimumNetworkFeePerChunk::<T>::take();
-		crate::MinimumNetworkFee::<T>::put(fee);
+		// Rename MinimumNetworkFeePerChunk to MinimumNetworkFee
+		let min_fee = old::MinimumNetworkFeePerChunk::<T>::take();
+		crate::MinimumNetworkFee::<T>::put(min_fee);
+
+		// Also set the new Internal Swap Network Fee to the normal Network Fee values to start with
+		crate::InternalSwapMinimumNetworkFee::<T>::put(min_fee);
+		crate::InternalSwapNetworkFee::<T>::put(T::NetworkFee::get());
+
 		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let new_fee = crate::MinimumNetworkFee::<T>::get();
 		let old_fee = AssetAmount::decode(&mut state.as_slice())
 			.map_err(|_| DispatchError::from("Failed to decode state"))?;
-		assert_eq!(new_fee, old_fee);
+		assert_eq!(old_fee, crate::MinimumNetworkFee::<T>::get());
+		assert_eq!(old_fee, crate::InternalSwapMinimumNetworkFee::<T>::get());
+
+		assert_eq!(T::NetworkFee::get(), crate::InternalSwapNetworkFee::<T>::get());
 
 		Ok(())
 	}

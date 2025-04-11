@@ -401,6 +401,12 @@ pub enum PalletConfigUpdate<T: Config> {
 	SetBrokerBond { bond: T::Amount },
 	/// Set the minimum fee in USDC paid per swap request
 	SetMinimumNetworkFee { min_fee: AssetAmount },
+	/// Set the network fee in USDC that will be used just for internal swaps (credit on-chain
+	/// swaps)
+	SetInternalSwapNetworkFee { fee: Permill },
+	/// Set the minimum network fee in USDC that will be used just for internal swaps (credit
+	/// on-chain swaps)
+	SetInternalSwapMinimumNetworkFee { min_fee: AssetAmount },
 }
 
 impl_pallet_safe_mode! {
@@ -605,6 +611,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MinimumNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
+	/// The network fee in USDC used just for internal swaps (credit on-chain swaps).
+	#[pallet::storage]
+	pub type InternalSwapNetworkFee<T: Config> = StorageValue<_, Permill, ValueQuery>;
+
+	/// The minimum network fee in USDC used just for internal swaps (credit on-chain
+	/// swaps).
+	#[pallet::storage]
+	pub type InternalSwapMinimumNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
 	/// Set by the broker, this is the minimum broker commission that the broker will accept for a
 	/// vault swap.
 	#[pallet::storage]
@@ -703,10 +718,6 @@ pub mod pallet {
 			direction: SwapLeg,
 			amount: AssetAmount,
 		},
-		MaximumSwapAmountSet {
-			asset: Asset,
-			amount: Option<AssetAmount>,
-		},
 		SwapAmountConfiscated {
 			swap_request_id: SwapRequestId,
 			asset: Asset,
@@ -725,23 +736,6 @@ pub mod pallet {
 			amount: AssetAmount,
 			reason: DispatchError,
 		},
-		BuyIntervalSet {
-			buy_interval: BlockNumberFor<T>,
-		},
-		SwapRetryDelaySet {
-			swap_retry_delay: BlockNumberFor<T>,
-		},
-		// TODO: add SwapFailed?
-		MaxSwapRetryDurationSet {
-			blocks: BlockNumber,
-		},
-		MaxSwapRequestDurationSet {
-			blocks: BlockNumber,
-		},
-		MinimumChunkSizeSet {
-			asset: Asset,
-			amount: AssetAmount,
-		},
 		PrivateBrokerChannelOpened {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
@@ -756,12 +750,6 @@ pub mod pallet {
 			withdrawal_address: EthereumAddress,
 			affiliate_id: T::AccountId,
 		},
-		BrokerBondSet {
-			bond: T::Amount,
-		},
-		MinimumNetworkFeeSet {
-			min_fee: AssetAmount,
-		},
 		// Account credited as a result of an on-chain swap
 		CreditedOnChain {
 			swap_request_id: SwapRequestId,
@@ -775,6 +763,9 @@ pub mod pallet {
 			account_id: T::AccountId,
 			asset: Asset,
 			amount: AssetAmount,
+		},
+		PalletConfigUpdated {
+			update: PalletConfigUpdate<T>,
 		},
 		VaultSwapMinimumBrokerFeeSet {
 			broker_id: T::AccountId,
@@ -1021,7 +1012,6 @@ pub mod pallet {
 				match update {
 					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
 						MaximumSwapAmount::<T>::set(asset, amount);
-						Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
 					},
 					PalletConfigUpdate::SwapRetryDelay { delay } => {
 						ensure!(
@@ -1029,9 +1019,6 @@ pub mod pallet {
 							Error::<T>::ZeroSwapRetryDelayNotAllowed
 						);
 						SwapRetryDelay::<T>::set(delay);
-						Self::deposit_event(Event::<T>::SwapRetryDelaySet {
-							swap_retry_delay: delay,
-						});
 					},
 					PalletConfigUpdate::FlipBuyInterval { interval } => {
 						ensure!(
@@ -1039,11 +1026,9 @@ pub mod pallet {
 							Error::<T>::ZeroBuyIntervalNotAllowed
 						);
 						FlipBuyInterval::<T>::set(interval);
-						Self::deposit_event(Event::<T>::BuyIntervalSet { buy_interval: interval });
 					},
 					PalletConfigUpdate::SetMaxSwapRetryDuration { blocks } => {
 						MaxSwapRetryDurationBlocks::<T>::set(blocks);
-						Self::deposit_event(Event::<T>::MaxSwapRetryDurationSet { blocks });
 					},
 					PalletConfigUpdate::SetMaxSwapRequestDuration { blocks } => {
 						ensure!(
@@ -1051,21 +1036,24 @@ pub mod pallet {
 							Error::<T>::MaxSwapRequestDurationTooShort
 						);
 						MaxSwapRequestDurationBlocks::<T>::set(blocks);
-						Self::deposit_event(Event::<T>::MaxSwapRequestDurationSet { blocks });
 					},
 					PalletConfigUpdate::SetMinimumChunkSize { asset, size: amount } => {
 						MinimumChunkSize::<T>::set(asset, amount);
-						Self::deposit_event(Event::<T>::MinimumChunkSizeSet { asset, amount });
 					},
 					PalletConfigUpdate::SetBrokerBond { bond } => {
 						BrokerBond::<T>::set(bond);
-						Self::deposit_event(Event::<T>::BrokerBondSet { bond });
 					},
 					PalletConfigUpdate::SetMinimumNetworkFee { min_fee } => {
 						MinimumNetworkFee::<T>::set(min_fee);
-						Self::deposit_event(Event::<T>::MinimumNetworkFeeSet { min_fee });
+					},
+					PalletConfigUpdate::SetInternalSwapNetworkFee { fee } => {
+						InternalSwapNetworkFee::<T>::set(fee);
+					},
+					PalletConfigUpdate::SetInternalSwapMinimumNetworkFee { min_fee } => {
+						InternalSwapMinimumNetworkFee::<T>::set(min_fee);
 					},
 				}
+				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
 			}
 
 			Ok(())
@@ -1702,16 +1690,19 @@ pub mod pallet {
 					};
 
 					let total_input_remaining = swap.input_amount + *remaining_input_amount;
-					let amount_to_refund =
-						match Self::take_refund_fee(total_input_remaining, request.input_asset) {
-							Ok(remaining) => remaining,
-							Err(e) => {
-								log_or_panic!(
+					let amount_to_refund = match Self::take_refund_fee(
+						total_input_remaining,
+						request.input_asset,
+						matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
+					) {
+						Ok(remaining) => remaining,
+						Err(e) => {
+							log_or_panic!(
 								"Failed to calculate refund fee for swap request {swap_request_id}: {e:?}"
 							);
-								total_input_remaining
-							},
-						};
+							total_input_remaining
+						},
+					};
 
 					if amount_to_refund > 0 {
 						match &refund_params.refund_destination {
@@ -2137,18 +2128,29 @@ pub mod pallet {
 			}
 
 			// Check if minimum network fee still needs to be filled for this swap request.
-			let network_fee = T::NetworkFee::get();
 			let fee = match minimum_fee_policy {
 				MinFeePolicy::Enforced { swap_request_id } => {
 					if let Some(swap_request) = SwapRequests::<T>::get(swap_request_id) {
 						match swap_request.state {
-							SwapRequestState::UserSwap { dca_state, .. } => {
+							SwapRequestState::UserSwap { dca_state, output_action, .. } => {
+								let (network_fee, minimum_network_fee) = if matches!(
+									output_action,
+									SwapOutputAction::CreditOnChain { .. }
+								) {
+									// Use alternate network fee for internal swaps
+									(
+										InternalSwapNetworkFee::<T>::get(),
+										InternalSwapMinimumNetworkFee::<T>::get(),
+									)
+								} else {
+									(T::NetworkFee::get(), MinimumNetworkFee::<T>::get())
+								};
 								let calculated_fee = max(
 									network_fee *
 										(dca_state
 											.accumulated_stable_amount
 											.saturating_add(input)),
-									MinimumNetworkFee::<T>::get(),
+									minimum_network_fee,
 								);
 								min(
 									calculated_fee.saturating_sub(dca_state.network_fee_collected),
@@ -2163,12 +2165,13 @@ pub mod pallet {
 							},
 						}
 					} else {
-						// No swap request found, so ignore fee collection history and do simple fee
-						// calculation.
-						max(network_fee * input, MinimumNetworkFee::<T>::get())
+						log_or_panic!(
+							"Swap request {swap_request_id} not found, ignoring fee collection history for network fee calculation"
+						);
+						max(T::NetworkFee::get() * input, MinimumNetworkFee::<T>::get())
 					}
 				},
-				MinFeePolicy::NotEnforced => network_fee * input,
+				MinFeePolicy::NotEnforced => T::NetworkFee::get() * input,
 			};
 
 			if !fee.is_zero() {
@@ -2236,8 +2239,13 @@ pub mod pallet {
 		pub(super) fn take_refund_fee(
 			total_input_amount: AssetAmount,
 			input_asset: Asset,
+			is_internal_swap: bool,
 		) -> Result<AssetAmount, DispatchError> {
-			let refund_fee_usdc = MinimumNetworkFee::<T>::get();
+			let refund_fee_usdc = if is_internal_swap {
+				InternalSwapMinimumNetworkFee::<T>::get()
+			} else {
+				MinimumNetworkFee::<T>::get()
+			};
 			if refund_fee_usdc.is_zero() || total_input_amount.is_zero() {
 				return Ok(total_input_amount)
 			}
