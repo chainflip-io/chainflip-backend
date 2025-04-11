@@ -179,7 +179,13 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			ChainProgressInner::Reorg(range) => {
 				last_block = (*range.start()).saturating_backward(1);
 				for n in range {
-					let _block_data = self.blocks_data.remove(&n);
+					let block_data = self.blocks_data.remove(&n);
+
+					if let Some(block_info) = block_data {
+						let _events = self.process_rules_for_ages_and_block(
+							n, 0..block_info.next_age_to_process, &block_info.block_data, block_info.safety_margin
+						);
+					}
 				}
 			},
 		}
