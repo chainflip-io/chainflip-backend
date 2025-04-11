@@ -2179,9 +2179,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		affiliate_fees: Affiliates<AffiliateShortId>,
 	) -> Option<Beneficiaries<T::AccountId>> {
 		broker_fee
-			.as_ref()
 			.filter(|Beneficiary { account, .. }| {
-				if T::AccountRoleRegistry::has_account_role(account, AccountRole::Broker) {
+				if T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker) {
 					true
 				} else {
 					Self::deposit_event(Event::<T, I>::UnknownBroker {
@@ -2190,6 +2189,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					false
 				}
 			})
+			.map(Self::enforce_broker_fee_minimum)
 			.map(|primary_broker_fee| {
 				let primary_broker = primary_broker_fee.account.clone();
 				core::iter::once(primary_broker_fee.clone())
@@ -2617,10 +2617,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			..
 		} = vault_deposit_witness.clone();
 
-		let Some(broker_fees) = Self::assemble_broker_fees(
-			broker_fee.map(|broker_fee| Self::enforce_broker_fee_minimum(broker_fee)),
-			affiliate_fees.clone(),
-		) else {
+		let Some(broker_fees) = Self::assemble_broker_fees(broker_fee, affiliate_fees.clone())
+		else {
 			return Err(RefundReason::InvalidBrokerFees);
 		};
 
