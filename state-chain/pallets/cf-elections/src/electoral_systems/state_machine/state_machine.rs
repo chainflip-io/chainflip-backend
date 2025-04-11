@@ -97,6 +97,7 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 	fn step_specification(
 		_before: &mut Self::State,
 		_input: &Self::Input,
+		_output: &Self::Output,
 		_settings: &Self::Settings,
 		_after: &Self::State,
 	) {
@@ -153,10 +154,8 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 						let mut prev_state = state.clone();
 
 						// run step function and ensure that output is valid
-						assert!(
-							Self::step(&mut state, input.clone(), &settings).is_valid().is_ok(),
-							"step function failed"
-						);
+						let output = Self::step(&mut state, input.clone(), &settings);
+						assert!(output.is_valid().is_ok(), "step function failed");
 
 						// ensure that state is still well formed
 						assert!(
@@ -166,7 +165,13 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 						);
 
 						// ensure that step function computed valid state
-						Self::step_specification(&mut prev_state, &input, &settings, &state);
+						Self::step_specification(
+							&mut prev_state,
+							&input,
+							&output,
+							&settings,
+							&state,
+						);
 
 						println!("done test");
 						Ok(())
