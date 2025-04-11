@@ -43,7 +43,7 @@ use cf_traits::{
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		pool_api::MockPoolApi,
-		swap_limits_provider::MockSwapParameterValidation,
+		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry, DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
