@@ -7,7 +7,7 @@ use std::{
 	hash::DefaultHasher,
 };
 
-use proptest::test_runner::TestRunner;
+use proptest::test_runner::{Config, TestRunner};
 
 use crate::electoral_systems::{
 	block_height_tracking::HeightWitnesserProperties,
@@ -109,7 +109,10 @@ pub fn test_all() {
 		}
 	}
 
-	let mut runner = TestRunner::default();
+	let mut runner = TestRunner::new(Config {
+        cases: 256 * 16,
+        ..Default::default()
+    });
 	runner.run(&generate_chain_progression(), |mut chains| {
 
         let mut bhw_state: BHWStateWrapper<N> = BHWStateWrapper {
@@ -132,7 +135,7 @@ pub fn test_all() {
         };
         let bw_settings = BlockWitnesserSettings {
             max_concurrent_elections: 4,
-            safety_margin: 6,
+            safety_margin: 7,
         };
 
         #[derive(Clone, Debug)]

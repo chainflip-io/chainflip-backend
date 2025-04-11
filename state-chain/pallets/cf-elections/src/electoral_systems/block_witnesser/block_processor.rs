@@ -19,24 +19,6 @@ use sp_std::{
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-pub fn past_events<T: BWProcessorTypes>(
-	store: &mut BTreeMap<T::ChainBlockNumber, BlockProcessingInfo<T::BlockData>>,
-) -> Vec<T::Event> {
-	store
-		.iter()
-		.flat_map(|(height, block_info)| {
-			let mut x: BlockProcessor<T> = Default::default();
-			x.rules.run((
-				*height,
-				(0..block_info.next_age_to_process),
-				block_info.block_data.clone(),
-				block_info.safety_margin,
-			))
-		})
-		.map(|(_number, event)| event)
-		.collect()
-}
-
 ///
 /// BlockProcessor
 /// ===================================
@@ -177,13 +159,13 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 				last_block = last_height;
 			},
 			ChainProgressInner::Reorg(range) => {
-				last_block = (*range.start()).saturating_backward(1);
+				last_block = *range.end();
 				for n in range {
 					let block_data = self.blocks_data.remove(&n);
 
 					if let Some(block_info) = block_data {
 						let _events = self.process_rules_for_ages_and_block(
-							n, 0..block_info.next_age_to_process, &block_info.block_data, block_info.safety_margin
+							n, last_block, 0..block_info.next_age_to_process, &block_info.block_data, block_info.safety_margin
 						);
 					}
 				}
@@ -221,6 +203,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 					(block_info.next_age_to_process)..new_age.saturating_add(1) as u32;
 				last_events.extend(self.process_rules_for_ages_and_block(
 					block_height,
+					block_height,
 					age_range,
 					&block_info.block_data,
 					block_info.safety_margin,
@@ -257,6 +240,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	fn process_rules_for_ages_and_block(
 		&mut self,
 		block_number: T::ChainBlockNumber,
+		block_number_for_expiry: T::ChainBlockNumber,
 		age: Range<u32>,
 		data: &T::BlockData,
 		safety_margin: u32,
@@ -267,7 +251,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		events
 			.into_iter()
 			.filter(|(block_number, event)| {
-				let expiry = block_number.saturating_forward(safety_margin as usize);
+				let expiry = block_number_for_expiry.saturating_forward(safety_margin as usize);
 				match self.processed_events.get_mut(event) {
 					Some(stored_expiry) => {
 						if *stored_expiry < expiry {
@@ -511,6 +495,7 @@ pub(crate) mod tests {
 		// We reprocessed the reorged blocks, now all the deposit end up in block 11
 		let result = processor.process_rules_for_ages_and_block(
 			11,
+			11,
 			0..1,
 			&vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
 			SAFETY_MARGIN,
@@ -530,7 +515,7 @@ pub(crate) mod tests {
 		);
 		// we receive next block which contains a deposit already processed (reorg detected later)
 		let result =
-			processor.process_rules_for_ages_and_block(10, 0..1, &vec![3, 4, 5], SAFETY_MARGIN);
+			processor.process_rules_for_ages_and_block(10, 10, 0..1, &vec![3, 4, 5], SAFETY_MARGIN);
 		// The already processed events are saved, hence only the new one are present when
 		// processing the new block
 		assert_eq!(
