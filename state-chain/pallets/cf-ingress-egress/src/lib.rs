@@ -27,8 +27,6 @@ pub mod migrations;
 #[cfg(test)]
 mod mocks;
 #[cfg(test)]
-use mocks::{mock_btc, mock_eth};
-#[cfg(test)]
 mod tests;
 pub mod weights;
 
