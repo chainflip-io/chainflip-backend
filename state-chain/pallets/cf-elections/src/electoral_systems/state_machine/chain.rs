@@ -216,6 +216,7 @@ pub fn make_events(len: usize) -> Vec<char> {
 		.into_iter()
 		.map(|x| (b'a' + x) as char)
 		.chain((0..26u8).into_iter().map(|x| (b'A' + x) as char))
+		.chain((0..10u8).into_iter().map(|x| (b'0' + x) as char))
 		.take(len)
 		.collect()
 }
