@@ -45,6 +45,7 @@ use jsonrpsee::{
 	PendingSubscriptionSink,
 };
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
@@ -176,6 +177,13 @@ pub trait Rpc {
 
 	#[method(name = "get_vault_addresses", aliases = ["broker_getVaultAddresses"])]
 	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
+
+	#[method(name = "set_vault_swap_minimum_broker_fee", aliases =
+	["broker_setVaultSwapMinimumBrokerFee"])]
+	async fn set_vault_swap_minimum_broker_fee(
+		&self,
+		minimum_fee_bps: BasisPoints,
+	) -> RpcResult<H256>;
 }
 
 pub struct RpcServerImpl {
@@ -365,6 +373,13 @@ impl RpcServer for RpcServerImpl {
 
 	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
 		Ok(self.api.raw_client().cf_vault_addresses(None).await?)
+	}
+
+	async fn set_vault_swap_minimum_broker_fee(
+		&self,
+		minimum_fee_bps: BasisPoints,
+	) -> RpcResult<H256> {
+		Ok(self.api.broker_api().set_vault_swap_minimum_broker_fee(minimum_fee_bps).await?)
 	}
 }
 

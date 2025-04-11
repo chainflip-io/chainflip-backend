@@ -137,6 +137,12 @@ pub trait BrokerSignedApi {
 
 	#[method(name = "get_vault_addresses", aliases = ["broker_getVaultAddresses"])]
 	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
+
+	#[method(name = "set_vault_swap_minimum_broker_fee", aliases = ["broker_setVaultSwapMinimumBrokerFee"])]
+	async fn set_vault_swap_minimum_broker_fee(
+		&self,
+		minimum_fee_bps: BasisPoints,
+	) -> RpcResult<()>;
 }
 
 /// A Broker signed RPC extension for the state chain node.
@@ -528,5 +534,21 @@ where
 			.runtime_api()
 			.cf_vault_addresses(self.rpc_backend.client.info().best_hash)
 			.map_err(CfApiError::RuntimeApiError)
+	}
+
+	async fn set_vault_swap_minimum_broker_fee(
+		&self,
+		minimum_fee_bps: BasisPoints,
+	) -> RpcResult<()> {
+		self.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_swapping::Call::set_vault_swap_minimum_broker_fee {
+					minimum_fee_bps,
+				}),
+				false,
+				true,
+			)
+			.await?;
+		Ok(())
 	}
 }

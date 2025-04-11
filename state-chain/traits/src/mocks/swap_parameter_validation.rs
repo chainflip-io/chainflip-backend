@@ -14,14 +14,37 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::BlockNumber;
+use std::collections::BTreeMap;
+
+use cf_primitives::{BasisPoints, BlockNumber};
 use frame_support::sp_runtime::DispatchError;
 
-use crate::{SwapLimits, SwapLimitsProvider};
+use crate::{SwapLimits, SwapParameterValidation};
 
-pub struct MockSwapLimitsProvider;
+use super::{MockPallet, MockPalletStorage};
 
-impl SwapLimitsProvider for MockSwapLimitsProvider {
+const MINIMUM_BROKER_FEE: &[u8] = b"MINIMUM_BROKER_FEE";
+
+pub struct MockSwapParameterValidation;
+
+impl MockPallet for MockSwapParameterValidation {
+	const PREFIX: &'static [u8] = b"MockSwapParameterValidation";
+}
+
+impl MockSwapParameterValidation {
+	pub fn set_minimum_broker_fee(broker_id: u64, minimum_fee: BasisPoints) {
+		<Self as MockPalletStorage>::mutate_value::<BTreeMap<u64, BasisPoints>, _, _>(
+			MINIMUM_BROKER_FEE,
+			|minimums| {
+				let mut map = minimums.clone().unwrap_or_default();
+				map.insert(broker_id, minimum_fee);
+				*minimums = Some(map);
+			},
+		);
+	}
+}
+
+impl SwapParameterValidation for MockSwapParameterValidation {
 	type AccountId = u64;
 
 	fn get_swap_limits() -> SwapLimits {
@@ -72,5 +95,14 @@ impl SwapLimitsProvider for MockSwapLimitsProvider {
 		};
 
 		Ok(())
+	}
+
+	fn get_minimum_vault_swap_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints {
+		let minimums = <Self as MockPalletStorage>::get_value::<
+			BTreeMap<Self::AccountId, BasisPoints>,
+		>(MINIMUM_BROKER_FEE);
+		minimums
+			.and_then(|minimums| minimums.get(broker_id).copied())
+			.unwrap_or_default()
 	}
 }

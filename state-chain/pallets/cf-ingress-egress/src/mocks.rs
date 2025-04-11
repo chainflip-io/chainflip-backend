@@ -43,7 +43,7 @@ use cf_traits::{
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		pool_api::MockPoolApi,
-		swap_limits_provider::MockSwapLimitsProvider,
+		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry, DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
@@ -136,7 +136,7 @@ impl Config<Instance1> for Test {
 	type AssetWithholding = MockAssetWithholding;
 	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
-	type SwapLimitsProvider = MockSwapLimitsProvider;
+	type SwapParameterValidation = MockSwapParameterValidation;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
@@ -165,7 +165,7 @@ impl Config<Instance2> for Test {
 	type AssetWithholding = MockAssetWithholding;
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
-	type SwapLimitsProvider = MockSwapLimitsProvider;
+	type SwapParameterValidation = MockSwapParameterValidation;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;

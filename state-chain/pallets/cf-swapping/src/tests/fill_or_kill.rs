@@ -477,7 +477,7 @@ fn fok_test_zero_refund_duration(is_ccm: bool) {
 
 #[test]
 fn test_refund_parameter_validation() {
-	use cf_traits::SwapLimitsProvider;
+	use cf_traits::SwapParameterValidation;
 
 	new_test_ext().execute_with(|| {
 		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<Test>::get();

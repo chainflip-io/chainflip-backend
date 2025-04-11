@@ -85,7 +85,7 @@ use cf_primitives::{
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, MinimumDeposit, NoLimit, SwapLimits,
-	SwapLimitsProvider,
+	SwapParameterValidation,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -433,7 +433,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
@@ -462,7 +462,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
@@ -491,7 +491,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
@@ -520,7 +520,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
@@ -549,7 +549,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
@@ -578,7 +578,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
@@ -2357,6 +2357,16 @@ impl_runtime_apis! {
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
 
+			// Validate broker fee
+			if broker_commission < pallet_cf_swapping::Pallet::<Runtime>::get_minimum_vault_swap_fee_for_broker(&broker_id) {
+				return Err(DispatchErrorWithMessage::from("Broker commission is too low"));
+			}
+			let _beneficiaries = pallet_cf_swapping::Pallet::<Runtime>::assemble_and_validate_broker_fees(
+				broker_id.clone(),
+				broker_commission,
+				affiliate_fees.clone(),
+			)?;
+
 			// Validate refund duration.
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
 				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
@@ -2413,8 +2423,6 @@ impl_runtime_apis! {
 						retry_duration,
 					}
 				) => {
-					pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
-
 					crate::chainflip::vault_swaps::bitcoin_vault_swap(
 						broker_id,
 						destination_asset,
