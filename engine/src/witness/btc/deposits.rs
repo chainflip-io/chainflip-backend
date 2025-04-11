@@ -245,7 +245,7 @@ pub mod tests {
 				asset: btc::Asset::Btc,
 				state: deposit_address,
 			},
-			action: ChannelAction::<AccountId32>::LiquidityProvision {
+			action: ChannelAction::<AccountId32, Bitcoin>::LiquidityProvision {
 				lp_account: AccountId32::new([0xab; 32]),
 				refund_address: ForeignChainAddress::Btc(ScriptPubkey::P2PKH([0; 20])),
 			},

@@ -65,6 +65,23 @@ export type VaultSwapParams = {
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
+export type HubAsset = 'HubUsdc' | 'HubUsdt';
+
+export function isPolkadotAsset(asset: string): boolean {
+  return asset === 'Dot' || asset === 'HubDot' || asset === 'HubUsdc' || asset === 'HubUsdt';
+}
+
+export function getHubAssetId(asset: HubAsset) {
+  switch (asset) {
+    case 'HubUsdc':
+      return 1337;
+    case 'HubUsdt':
+      return 1984;
+    default:
+      throw new Error(`Unsupported Assethub asset: ${asset}`);
+  }
+}
+
 // Nonces deployed in two stages
 export const solanaNumberOfNonces: number = 10;
 export const solanaNumberOfAdditionalNonces: number = 40;
@@ -188,6 +205,10 @@ export function shortChainFromAsset(asset: Asset) {
     case 'Sol':
     case 'SolUsdc':
       return 'Sol';
+    case 'HubDot':
+    case 'HubUsdc':
+    case 'HubUsdt':
+      return 'Hub';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -209,12 +230,15 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'ArbEth':
       return '5';
     case 'Dot':
+    case 'HubDot':
       return '50';
     case 'Usdc':
     case 'Usdt':
     case 'ArbUsdc':
     case 'Flip':
     case 'SolUsdc':
+    case 'HubUsdc':
+    case 'HubUsdt':
       return '500';
     case 'Sol':
       return '100';
@@ -250,6 +274,8 @@ export function chainGasAsset(chain: Chain): Asset {
       return Assets.ArbEth;
     case 'Solana':
       return Assets.Sol;
+    case 'Assethub':
+      return Assets.HubDot;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -319,6 +345,7 @@ export const deferredPromise = <T>(): {
 export { sleep };
 
 export const polkadotSigningMutex = new Mutex();
+export const assethubSigningMutex = new Mutex();
 
 const toLowerCase = <const T extends string>(string: T) => string.toLowerCase() as Lowercase<T>;
 
@@ -328,7 +355,7 @@ export function ingressEgressPalletForChain(chain: Chain) {
     case 'Bitcoin':
     case 'Polkadot':
     case 'Arbitrum':
-      return `${toLowerCase(chain)}IngressEgress` as const;
+    case 'Assethub':
     case 'Solana':
       return `${toLowerCase(chain)}IngressEgress` as const;
     default:
@@ -582,6 +609,9 @@ export async function newAddress(
       rawAddress = newEvmAddress(seed);
       break;
     case Assets.Dot:
+    case Assets.HubDot:
+    case Assets.HubUsdc:
+    case Assets.HubUsdt:
       rawAddress = await newDotAddress(seed);
       break;
     case Assets.Btc:
@@ -888,6 +918,10 @@ export async function observeCcmReceived(
         sourceAddress ?? null,
         messageMetadata,
       );
+    case 'Assethub':
+      // In Assethub XCM it is not clear what destination chain the XCM call should be observed
+      // Instead, we check the success manually in the appropriate test.
+      return Promise.resolve(undefined);
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
   }

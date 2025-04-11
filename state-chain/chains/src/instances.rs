@@ -20,7 +20,7 @@ use crate::{
 	evm::EvmCrypto,
 	none::{NoneChain, NoneChainCrypto},
 	sol::SolanaCrypto,
-	AnyChain, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana,
+	AnyChain, Arbitrum, Assethub, Bitcoin, Ethereum, Polkadot, Solana,
 };
 use frame_support::instances::*;
 
@@ -30,6 +30,7 @@ pub type ChainInstanceFor<C> = <C as ChainInstanceAlias>::Instance;
 /// Allows a type to be used as an alias for a pallet `Instance`.
 pub trait PalletInstanceAlias {
 	type Instance: Send + Sync + 'static;
+	const TYPE_INFO_SUFFIX: &'static str;
 }
 
 /// Allows a type to be used as an alias for a [Chain] `Instance`.
@@ -38,11 +39,13 @@ pub trait PalletInstanceAlias {
 /// implies a [ChainCryptoInstanceAlias].
 pub trait ChainInstanceAlias: ChainCryptoInstanceAlias + PalletInstanceAlias {
 	type Instance: Send + Sync + 'static;
+	const TYPE_INFO_SUFFIX: &'static str;
 }
 
 /// Allows a type to be used as an alias for a [ChainCrypto] `Instance`.
 pub trait ChainCryptoInstanceAlias: PalletInstanceAlias {
 	type Instance: Send + Sync + 'static;
+	const TYPE_INFO_SUFFIX: &'static str;
 }
 
 /// Declare pallet instance aliases.
@@ -72,6 +75,7 @@ macro_rules! decl_instance_aliases {
 		$(
 			impl $crate::instances::PalletInstanceAlias for $chain_or_crypto {
 				type Instance = $instance;
+				const TYPE_INFO_SUFFIX: &'static str = ::core::stringify!($chain_or_crypto);
 			}
 			pub type $name = <$chain_or_crypto as $crate::instances::PalletInstanceAlias>::Instance;
 		)+
@@ -114,13 +118,16 @@ macro_rules! impl_instance_alias_traits {
 		$(
 			impl ChainCryptoInstanceAlias for $crypto {
 				type Instance = <$crypto as $crate::instances::PalletInstanceAlias>::Instance;
+					const TYPE_INFO_SUFFIX: &'static str = <$crypto as $crate::instances::PalletInstanceAlias>::TYPE_INFO_SUFFIX;
 			}
 			$(
 				impl ChainInstanceAlias for $chain {
 					type Instance = <$chain as $crate::instances::PalletInstanceAlias>::Instance;
+					const TYPE_INFO_SUFFIX: &'static str = <$chain as $crate::instances::PalletInstanceAlias>::TYPE_INFO_SUFFIX;
 				}
 				impl ChainCryptoInstanceAlias for $chain {
 					type Instance = <$crypto as $crate::instances::PalletInstanceAlias>::Instance;
+					const TYPE_INFO_SUFFIX: &'static str = <$crypto as $crate::instances::PalletInstanceAlias>::TYPE_INFO_SUFFIX;
 				}
 			)+
 		)+
@@ -130,13 +137,14 @@ macro_rules! impl_instance_alias_traits {
 decl_instance_aliases!(
 	Ethereum => EthereumInstance, Instance1,
 	Polkadot => PolkadotInstance, Instance2,
-	PolkadotCrypto => PolkadotCryptoInstance, Instance2,
+	PolkadotCrypto => PolkadotCryptoInstance, Instance15,
 	Bitcoin => BitcoinInstance, Instance3,
 	BitcoinCrypto => BitcoinCryptoInstance, Instance3,
 	Arbitrum => ArbitrumInstance, Instance4,
 	EvmCrypto => EvmInstance, Instance16,
 	Solana => SolanaInstance, Instance5,
 	SolanaCrypto => SolanaCryptoInstance, Instance5,
+	Assethub => AssethubInstance, Instance6,
 	NoneChain => NoneChainInstance, (),
 	NoneChainCrypto => NoneChainCryptoInstance, (),
 	AnyChain => AnyChainInstance, (),
@@ -145,7 +153,7 @@ decl_instance_aliases!(
 impl_instance_alias_traits!(
 	EvmCrypto => { Ethereum, Arbitrum },
 	BitcoinCrypto => { Bitcoin },
-	PolkadotCrypto => { Polkadot },
+	PolkadotCrypto => { Polkadot, Assethub },
 	SolanaCrypto => { Solana },
 	NoneChainCrypto => { NoneChain, AnyChain },
 );

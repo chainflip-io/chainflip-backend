@@ -49,6 +49,7 @@ use frame_support::{
 	Twox64Concat,
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
+use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
@@ -80,7 +81,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::benchmarking_value::BenchmarkValue;
+	use cf_chains::{benchmarking_value::BenchmarkValue, instances::PalletInstanceAlias};
 	use cf_traits::{AccountRoleRegistry, BroadcastNomination, LiabilityTracker, OnBroadcastReady};
 	use frame_support::{
 		pallet_prelude::{OptionQuery, *},
@@ -125,13 +126,15 @@ pub mod pallet {
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
 
 	/// All data contained in a Broadcast
-	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
-	#[scale_info(skip_type_params(T, I))]
+	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct BroadcastData<T: Config<I>, I: 'static> {
+		#[skip_name_expansion]
 		pub broadcast_id: BroadcastId,
 		pub transaction_payload: TransactionFor<T, I>,
 		pub threshold_signature_payload: PayloadFor<T, I>,
 		pub transaction_out_id: TransactionOutIdFor<T, I>,
+		#[skip_name_expansion]
 		pub nominee: Option<T::ValidatorId>,
 	}
 
@@ -159,7 +162,7 @@ pub mod pallet {
 		type Offence: From<PalletOffence>;
 
 		/// A marker trait identifying the chain that we are broadcasting to.
-		type TargetChain: Chain;
+		type TargetChain: Chain + PalletInstanceAlias;
 
 		/// The api calls supported by this broadcaster.
 		type ApiCall: ApiCall<<<Self as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto>

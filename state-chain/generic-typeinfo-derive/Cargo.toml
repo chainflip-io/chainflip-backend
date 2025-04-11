@@ -1,0 +1,11 @@
+[package]
+name = "generic-typeinfo-derive-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+generic-typeinfo-derive = { workspace = true }
+scale-info = { workspace = true, features = ["derive"] }
+
+[lints]
+workspace = true

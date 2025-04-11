@@ -27,6 +27,8 @@ fn can_update_all_config_items() {
 		const MAX_SWAP_REQUEST_DURATION: u32 = 420_u32;
 		const NEW_MINIMUM_CHUNK_SIZE: AssetAmount = 10_000;
 		const NEW_MINIMUM_NETWORK_FEE: AssetAmount = 10;
+		const NEW_INTERNAL_SWAP_NETWORK_FEE: Permill = Permill::from_percent(5);
+		const NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE: AssetAmount = 50;
 
 		NetworkFee::set(Permill::from_perthousand(1));
 
@@ -38,34 +40,42 @@ fn can_update_all_config_items() {
 		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_ne!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 		assert_ne!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE);
-		assert_ne!(MinimumNetworkFeePerChunk::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
+		assert_ne!(MinimumNetworkFee::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
+		assert_ne!(InternalSwapNetworkFee::<Test>::get(), NEW_INTERNAL_SWAP_NETWORK_FEE);
+		assert_ne!(
+			InternalSwapMinimumNetworkFee::<Test>::get(),
+			NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE
+		);
 
-		// Update all config items at the same time, and updates 2 separate max swap amounts.
+		// Define the updates in a reusable vec
+		let updates = vec![
+			PalletConfigUpdate::MaximumSwapAmount {
+				asset: Asset::Btc,
+				amount: NEW_MAX_SWAP_AMOUNT_BTC,
+			},
+			PalletConfigUpdate::MaximumSwapAmount {
+				asset: Asset::Dot,
+				amount: NEW_MAX_SWAP_AMOUNT_DOT,
+			},
+			PalletConfigUpdate::SwapRetryDelay { delay: new_swap_retry_delay },
+			PalletConfigUpdate::FlipBuyInterval { interval: new_flip_buy_interval },
+			PalletConfigUpdate::SetMaxSwapRetryDuration { blocks: NEW_MAX_SWAP_RETRY_DURATION },
+			PalletConfigUpdate::SetMaxSwapRequestDuration { blocks: MAX_SWAP_REQUEST_DURATION },
+			PalletConfigUpdate::SetMinimumChunkSize {
+				asset: Asset::Usdc,
+				size: NEW_MINIMUM_CHUNK_SIZE,
+			},
+			PalletConfigUpdate::SetMinimumNetworkFee { min_fee: NEW_MINIMUM_NETWORK_FEE },
+			PalletConfigUpdate::SetInternalSwapNetworkFee { fee: NEW_INTERNAL_SWAP_NETWORK_FEE },
+			PalletConfigUpdate::SetInternalSwapMinimumNetworkFee {
+				min_fee: NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE,
+			},
+		];
+
+		// Update all config items at the same time
 		assert_ok!(Swapping::update_pallet_config(
 			OriginTrait::root(),
-			vec![
-				PalletConfigUpdate::MaximumSwapAmount {
-					asset: Asset::Btc,
-					amount: NEW_MAX_SWAP_AMOUNT_BTC
-				},
-				PalletConfigUpdate::MaximumSwapAmount {
-					asset: Asset::Dot,
-					amount: NEW_MAX_SWAP_AMOUNT_DOT
-				},
-				PalletConfigUpdate::SwapRetryDelay { delay: new_swap_retry_delay },
-				PalletConfigUpdate::FlipBuyInterval { interval: new_flip_buy_interval },
-				PalletConfigUpdate::SetMaxSwapRetryDuration { blocks: NEW_MAX_SWAP_RETRY_DURATION },
-				PalletConfigUpdate::SetMaxSwapRequestDuration { blocks: MAX_SWAP_REQUEST_DURATION },
-				PalletConfigUpdate::SetMinimumChunkSize {
-					asset: Asset::Usdc,
-					size: NEW_MINIMUM_CHUNK_SIZE
-				},
-				PalletConfigUpdate::SetMinimumNetworkFeePerChunk {
-					min_fee: NEW_MINIMUM_NETWORK_FEE
-				},
-			]
-			.try_into()
-			.unwrap()
+			updates.clone().try_into().unwrap()
 		));
 
 		// Check that the new values were set
@@ -76,37 +86,19 @@ fn can_update_all_config_items() {
 		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_eq!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 		assert_eq!(MinimumChunkSize::<Test>::get(Asset::Usdc), NEW_MINIMUM_CHUNK_SIZE);
-		assert_eq!(MinimumNetworkFeePerChunk::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
-
-		// Check that the events were emitted
-		assert_events_eq!(
-			Test,
-			RuntimeEvent::Swapping(Event::MaximumSwapAmountSet {
-				asset: Asset::Btc,
-				amount: NEW_MAX_SWAP_AMOUNT_BTC,
-			}),
-			RuntimeEvent::Swapping(Event::MaximumSwapAmountSet {
-				asset: Asset::Dot,
-				amount: NEW_MAX_SWAP_AMOUNT_DOT,
-			}),
-			RuntimeEvent::Swapping(Event::SwapRetryDelaySet {
-				swap_retry_delay: new_swap_retry_delay
-			}),
-			RuntimeEvent::Swapping(Event::BuyIntervalSet { buy_interval: new_flip_buy_interval }),
-			RuntimeEvent::Swapping(Event::MaxSwapRetryDurationSet {
-				blocks: NEW_MAX_SWAP_RETRY_DURATION
-			}),
-			RuntimeEvent::Swapping(Event::MaxSwapRequestDurationSet {
-				blocks: MAX_SWAP_REQUEST_DURATION
-			}),
-			RuntimeEvent::Swapping(Event::MinimumChunkSizeSet {
-				asset: Asset::Usdc,
-				amount: NEW_MINIMUM_CHUNK_SIZE
-			}),
-			RuntimeEvent::Swapping(Event::MinimumNetworkFeeSet {
-				min_fee: NEW_MINIMUM_NETWORK_FEE
-			}),
+		assert_eq!(MinimumNetworkFee::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
+		assert_eq!(InternalSwapNetworkFee::<Test>::get(), NEW_INTERNAL_SWAP_NETWORK_FEE);
+		assert_eq!(
+			InternalSwapMinimumNetworkFee::<Test>::get(),
+			NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE
 		);
+
+		// Check that the PalletConfigUpdate event was emitted for each update
+		for update in updates {
+			cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::Swapping(
+				Event::PalletConfigUpdated { update },
+			));
+		}
 
 		// Make sure that only governance can update the config
 		assert_noop!(
@@ -205,17 +197,15 @@ fn can_set_maximum_swap_amount() {
 		assert_eq!(MaximumSwapAmount::<Test>::get(asset), amount);
 		assert_eq!(Swapping::maximum_swap_amount(asset), amount);
 
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MaximumSwapAmountSet {
-			asset,
-			amount,
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::PalletConfigUpdated {
+			update: PalletConfigUpdate::MaximumSwapAmount { asset, amount },
 		}));
 
 		// Can remove maximum swap amount
 		set_maximum_swap_amount(asset, None);
 		assert!(MaximumSwapAmount::<Test>::get(asset).is_none());
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MaximumSwapAmountSet {
-			asset,
-			amount: None,
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::PalletConfigUpdated {
+			update: PalletConfigUpdate::MaximumSwapAmount { asset, amount: None },
 		}));
 	});
 }

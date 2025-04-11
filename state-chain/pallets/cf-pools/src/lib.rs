@@ -18,7 +18,7 @@
 use cf_amm::{
 	common::{PoolPairsMap, Side},
 	limit_orders::{self, Collected, PositionInfo},
-	math::{bounded_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick},
+	math::{bounded_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
@@ -26,8 +26,8 @@ use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, BalanceApi, Chainflip, LpOrdersWeightsProvider, PoolApi,
-	SwapRequestHandler, SwappingApi,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, LpOrdersWeightsProvider,
+	PoolApi, SwapRequestHandler, SwappingApi,
 };
 
 pub use cf_traits::{IncreaseOrDecrease, OrderId};
@@ -44,11 +44,10 @@ use cf_traits::HistoricalFeeMigration;
 
 use cf_traits::LpRegistration;
 use frame_system::{pallet_prelude::OriginFor, WeightInfo as SystemWeightInfo};
+pub use pallet::*;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{SaturatedConversion, Zero};
 use sp_std::{boxed::Box, vec::Vec};
-
-pub use pallet::*;
 
 mod benchmarking;
 pub mod migrations;
@@ -188,7 +187,7 @@ pub enum PalletConfigUpdate {
 	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -196,7 +195,6 @@ pub mod pallet {
 		math::Tick,
 		range_orders::{self, Liquidity},
 	};
-	use cf_traits::AccountRoleRegistry;
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::collections::btree_map::BTreeMap;
 
@@ -334,6 +332,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+
 			for LimitOrderUpdate { ref lp, id, call } in
 				ScheduledLimitOrderUpdates::<T>::take(current_block)
 			{
@@ -535,6 +534,7 @@ pub mod pallet {
 				T::SafeMode::get().range_order_update_enabled,
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
+
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
 				&lp,
@@ -597,7 +597,6 @@ pub mod pallet {
 					}),
 					NoOpStatus::Error,
 				)?;
-
 				Ok(())
 			})
 		}
@@ -788,27 +787,10 @@ pub mod pallet {
 				Error::<T>::InvalidFeeAmount
 			);
 			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
-			Self::try_mutate_pool(asset_pair, |asset_pair: &AssetPair, pool| {
+			Self::try_mutate_pool(asset_pair, |_asset_pair: &AssetPair, pool| {
 				pool.pool_state
-					.set_fees(fee_hundredth_pips)
-					.map_err(|_| Error::<T>::InvalidFeeAmount)?
-					.try_map_with_pair(|asset, collected_fees| {
-						for ((lp, id), tick, collected, position_info) in collected_fees.into_iter()
-						{
-							Self::process_limit_order_update(
-								pool,
-								asset_pair,
-								&lp,
-								asset.sell_order(),
-								id,
-								tick,
-								collected,
-								position_info,
-								IncreaseOrDecrease::Increase(0),
-							)?;
-						}
-						Result::<(), DispatchError>::Ok(())
-					})
+					.set_range_order_fees(fee_hundredth_pips)
+					.map_err(|_| Error::<T>::InvalidFeeAmount)
 			})?;
 
 			Self::deposit_event(Event::<T>::PoolFeeSet {
@@ -2277,6 +2259,34 @@ impl<T: Config> Pallet<T> {
 		}
 		Ok(())
 	}
+
+	fn set_pool_fee_for_limit_orders(
+		pool: &mut Pool<T>,
+		asset_pair: &AssetPair,
+		fee_hundredth_pips: u32,
+	) -> DispatchResult {
+		pool.pool_state
+			.set_limit_order_fees(fee_hundredth_pips)
+			.map_err(|_| Error::<T>::InvalidFeeAmount)?
+			.try_map_with_pair(|asset, collected_fees| {
+				for ((lp, id), tick, collected, position_info) in collected_fees.into_iter() {
+					Self::process_limit_order_update(
+						pool,
+						asset_pair,
+						&lp,
+						asset.sell_order(),
+						id,
+						tick,
+						collected,
+						position_info,
+						IncreaseOrDecrease::Increase(0),
+					)?;
+				}
+				Result::<(), DispatchError>::Ok(())
+			})?;
+
+		Ok(())
+	}
 }
 
 impl<T: Config> HistoricalFeeMigration for Pallet<T> {
@@ -2302,5 +2312,28 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeleteHistoricalEarnedFees<T> 
 impl<T: Config> LpOrdersWeightsProvider for Pallet<T> {
 	fn update_limit_order_weight() -> Weight {
 		T::WeightInfo::update_limit_order()
+	}
+}
+
+impl<T: Config> cf_traits::PoolPriceProvider for Pallet<T> {
+	fn pool_price(
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> Result<cf_traits::PoolPrice, DispatchError> {
+		use cf_amm::math::sqrt_price_to_price;
+
+		// NOTE: we can default to max price because None is only ever returned by
+		// Self::pool_price when the range order is at its maximum tick (irrespective
+		// of whether the pool has liquidity)
+		Self::pool_price(base_asset, quote_asset).map(|price| cf_traits::PoolPrice {
+			sell: price
+				.sell
+				.map(|p| p.price)
+				.unwrap_or_else(|| sqrt_price_to_price(MAX_SQRT_PRICE)),
+			buy: price
+				.buy
+				.map(|p| p.price)
+				.unwrap_or_else(|| sqrt_price_to_price(MAX_SQRT_PRICE)),
+		})
 	}
 }

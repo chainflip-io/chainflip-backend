@@ -23,7 +23,7 @@ use crate::{
 		fund_authorities_and_join_auction, new_account, register_refund_addresses,
 		setup_account_and_peer_mapping, Cli, Network,
 	},
-	witness_call, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts,
+	witness_call, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts, BROKER,
 };
 use cf_amm::{
 	math::{price_at_tick, Price, Tick},
@@ -39,11 +39,13 @@ use cf_chains::{
 	RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
-	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, EgressId, SwapId,
-	FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, EgressId,
+	SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
-use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, SwapType};
+use cf_traits::{
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, OrderId, SwapType,
+};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
@@ -54,7 +56,7 @@ use pallet_cf_broadcast::{
 	RequestSuccessCallbacks,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepositWitness};
-use pallet_cf_pools::{HistoricalEarnedFees, OrderId, RangeOrderSize};
+use pallet_cf_pools::{HistoricalEarnedFees, RangeOrderSize};
 use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::{H160, U256};
 
@@ -605,7 +607,7 @@ fn vault_swap_deposit_witness(
 		deposit_metadata: Some(ccm_deposit_metadata_mock()),
 		tx_id: Default::default(),
 		deposit_details: DepositDetails { tx_hashes: None },
-		broker_fee: None,
+		broker_fee: Some(Beneficiary { account: BROKER.into(), bps: 0 }),
 		affiliate_fees: Default::default(),
 		refund_params: ETH_REFUND_PARAMS,
 		dca_params: None,
@@ -659,7 +661,7 @@ fn failed_swaps_are_rolled_back() {
 		// swap will fail:
 		add_liquidity(&DORIS, Asset::Eth, 10_000_000 * DECIMALS, OrderType::RangeOrder, None);
 
-		// Get the current state of pools so we can compare agaist this later:
+		// Get the current state of pools so we can compare against this later:
 		let eth_pool = get_pool(Asset::Eth);
 		let flip_pool = get_pool(Asset::Flip);
 
@@ -846,7 +848,7 @@ fn can_resign_failed_ccm() {
 			testnet.move_to_the_next_epoch();
 			// the rotation tx for ethereum is the third broadcast overall (2 broadcasts already
 			// created above) whereas for other chains it is the first broadcast
-			witness_rotation_broadcasts([3, 1, 1, 1, 1]);
+			witness_rotation_broadcasts([3, 1, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(2);
 
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
@@ -860,7 +862,7 @@ fn can_resign_failed_ccm() {
 			// the rotation tx for ethereum is the fourth broadcast overall (3 broadcasts already
 			// created above) whereas for other chains it is the second broadcast (first broadcast
 			// was the previous rotation)
-			witness_rotation_broadcasts([4, 2, 2, 2, 2]);
+			witness_rotation_broadcasts([4, 2, 2, 2, 2, 2]);
 			testnet.move_forward_blocks(2);
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
 			assert_eq!(
@@ -951,7 +953,7 @@ fn can_handle_failed_vault_transfer() {
 			testnet.move_to_the_next_epoch();
 			// the rotation tx for ethereum is the third broadcast (2 broadcasts already created
 			// above) whereas for other chains it is the first broadcast
-			witness_rotation_broadcasts([3, 1, 1, 1, 1]);
+			witness_rotation_broadcasts([3, 1, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(2);
 
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);

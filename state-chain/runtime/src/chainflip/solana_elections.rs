@@ -94,7 +94,7 @@ pub fn initial_state(
 ) -> InitialStateOf<Runtime, Instance> {
 	InitialState {
 		unsynchronised_state: (
-			// The initial chaintracking value does not matter, as we don't care about the vault
+			// The initial chain tracking value does not matter, as we don't care about the vault
 			// start blocks.
 			Default::default(),
 			(),

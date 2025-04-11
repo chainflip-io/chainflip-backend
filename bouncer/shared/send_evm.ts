@@ -97,13 +97,13 @@ export async function sendEvmNative(
   ethAmount: string,
 ) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals('Eth'));
-  await signAndSendTxEvm(logger, chain, evmAddress, weiAmount, undefined, undefined);
+  return signAndSendTxEvm(logger, chain, evmAddress, weiAmount, undefined, undefined);
 }
 
 export async function spamEvm(
   logger: Logger,
   chain: Chain,
-  periodMilisec: number,
+  periodMilliSec: number,
   spam?: () => boolean,
 ) {
   const continueSpam = spam ?? (() => true);
@@ -118,7 +118,7 @@ export async function spamEvm(
       undefined,
       undefined,
     );
-    await sleep(periodMilisec);
+    await sleep(periodMilliSec);
   }
 }
 
@@ -136,6 +136,6 @@ export async function estimateCcmCfTesterGas(destChain: Chain, message: string) 
     web3.eth.abi.encodeParameters(['uint256'], [messageLength]).slice(2) +
     message.slice(2);
 
-  // Estimate needs to be done using "from: vault" to prevent logic revertion
+  // Estimate needs to be done using "from: vault" to prevent logic reversion
   return (await web3.eth.estimateGas({ data, to: cfTester, from: vault })) - EVM_BASE_GAS_LIMIT;
 }

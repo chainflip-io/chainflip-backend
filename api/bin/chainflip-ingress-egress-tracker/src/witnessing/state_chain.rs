@@ -23,8 +23,9 @@ use cf_chains::{
 	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
-	AnyChain, Arbitrum, Bitcoin, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
-	Ethereum, IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
+	AnyChain, Arbitrum, Assethub, Bitcoin, CcmDepositMetadata, Chain, ChainCrypto,
+	ChannelRefundParameters, Ethereum, IntoTransactionInIdForAnyChain, Polkadot,
+	TransactionInIdForAnyChain,
 };
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
 use chainflip_api::primitives::{
@@ -71,6 +72,7 @@ enum TransactionRef {
 	Ethereum { hash: H256 },
 	Polkadot { transaction_id: PolkadotTransactionId },
 	Arbitrum { hash: H256 },
+	Assethub { transaction_id: PolkadotTransactionId },
 }
 
 #[derive(Serialize)]
@@ -80,6 +82,7 @@ enum TransactionId {
 	Ethereum { signature: SchnorrVerificationComponents },
 	Polkadot { signature: DotSignature },
 	Arbitrum { signature: SchnorrVerificationComponents },
+	Assethub { signature: DotSignature },
 }
 
 #[derive(Serialize)]
@@ -163,6 +166,7 @@ impl WitnessInformation {
 				TransactionId::Ethereum { .. } => ForeignChain::Ethereum,
 				TransactionId::Polkadot { .. } => ForeignChain::Polkadot,
 				TransactionId::Arbitrum { .. } => ForeignChain::Arbitrum,
+				TransactionId::Assethub { .. } => ForeignChain::Assethub,
 			},
 			Self::VaultDeposit { input_asset: asset, .. } => (*asset).into(),
 		}
@@ -217,6 +221,7 @@ impl IntoDepositDetailsAnyChain for u32 {
 		Some(DepositDetails::Polkadot { extrinsic_index: self })
 	}
 }
+
 impl IntoDepositDetailsAnyChain for Vec<H256> {
 	fn into_any_chain(self) -> Option<DepositDetails> {
 		Some(DepositDetails::Arbitrum { tx_hashes: self })
@@ -355,6 +360,18 @@ impl BroadcastIntoWitnessInformation for BroadcastDetails<Polkadot> {
 				signature: DotSignature(*self.tx_out_id.aliased_ref()),
 			},
 			tx_ref: TransactionRef::Polkadot { transaction_id: self.tx_ref },
+		})
+	}
+}
+
+impl BroadcastIntoWitnessInformation for BroadcastDetails<Assethub> {
+	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
+		Ok(WitnessInformation::Broadcast {
+			broadcast_id: self.broadcast_id,
+			tx_out_id: TransactionId::Assethub {
+				signature: DotSignature(*self.tx_out_id.aliased_ref()),
+			},
+			tx_ref: TransactionRef::Assethub { transaction_id: self.tx_ref },
 		})
 	}
 }
@@ -513,6 +530,10 @@ where
 			deposit_witnesses,
 			block_height,
 		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
+		AssethubIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
 		EthereumIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
 			save_vault_deposit_witness(
 				store,
@@ -558,6 +579,16 @@ where
 				chainflip_network,
 			)
 			.await?,
+		AssethubIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
+			save_vault_deposit_witness(
+				store,
+				*deposit,
+				block_height,
+				state_chain_client,
+				chainflip_network,
+			)
+			.await?,
+
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,
@@ -615,12 +646,34 @@ where
 			transaction_ref: _,
 			..
 		}) => todo!(),
+		AssethubBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
+			let broadcast_id =
+				get_broadcast_id::<Assethub, StateChainClient>(state_chain_client, &tx_out_id)
+					.await;
+
+			if let Some(broadcast_id) = broadcast_id {
+				store
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Assethub {
+							signature: DotSignature(*tx_out_id.aliased_ref()),
+						},
+						tx_ref: TransactionRef::Assethub { transaction_id: transaction_ref },
+					})
+					.await?;
+			}
+		},
 
 		EthereumIngressEgress(_) |
 		BitcoinIngressEgress(_) |
 		PolkadotIngressEgress(_) |
 		ArbitrumIngressEgress(_) |
 		SolanaIngressEgress(_) |
+		AssethubIngressEgress(_) |
 		System(_) |
 		Timestamp(_) |
 		Environment(_) |
@@ -640,11 +693,13 @@ where
 		PolkadotChainTracking(_) |
 		ArbitrumChainTracking(_) |
 		SolanaChainTracking(_) |
+		AssethubChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
 		ArbitrumVault(_) |
 		SolanaVault(_) |
+		AssethubVault(_) |
 		EvmThresholdSigner(_) |
 		PolkadotThresholdSigner(_) |
 		BitcoinThresholdSigner(_) |
@@ -654,6 +709,7 @@ where
 		BitcoinBroadcaster(_) |
 		ArbitrumBroadcaster(_) |
 		SolanaBroadcaster(_) |
+		AssethubBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) |

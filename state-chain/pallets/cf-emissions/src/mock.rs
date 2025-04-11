@@ -81,6 +81,7 @@ impl pallet_cf_flip::Config for Test {
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
+	type CallIndexer = ();
 }
 
 pub const EMISSION_RATE: u128 = 10;

@@ -29,6 +29,7 @@ use cf_chains::{
 	eth::Address as EthereumAddress,
 	CcmChannelMetadata, Chain, VaultSwapExtraParametersRpc, MAX_CCM_MSG_LENGTH,
 };
+use cf_node_client::events_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
@@ -69,9 +70,9 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		ChannelActionType, CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi,
+		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
 		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
@@ -84,8 +85,11 @@ use std::{
 };
 
 pub mod backend;
+pub mod broker;
+pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
+pub mod pool_client;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -978,6 +982,12 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultAddresses>;
 
+	#[method(name = "all_open_deposit_channels")]
+	fn cf_all_open_deposit_channels(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>>;
+
 	#[method(name = "get_trading_strategies")]
 	fn cf_get_trading_strategies(
 		&self,
@@ -1085,6 +1095,12 @@ pub enum CfApiError {
 	DispatchError(#[from] DispatchErrorWithMessage),
 	#[error("{0:?}")]
 	RuntimeApiError(#[from] ApiError),
+	#[error("{0:?}")]
+	SubstrateClientError(#[from] sc_client_api::blockchain::Error),
+	#[error("{0:?}")]
+	PoolClientError(#[from] pool_client::PoolClientError),
+	#[error("{0:?}")]
+	DynamicEventsError(#[from] events_decoder::DynamicEventError),
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
 	#[error(transparent)]
@@ -1130,6 +1146,9 @@ impl From<CfApiError> for ErrorObjectOwned {
 			},
 			CfApiError::ErrorObject(object) => object,
 			CfApiError::OtherError(error) => internal_error(error),
+			CfApiError::SubstrateClientError(error) => call_error(error),
+			CfApiError::PoolClientError(error) => call_error(error),
+			CfApiError::DynamicEventsError(error) => call_error(error),
 		}
 	}
 }
@@ -1240,6 +1259,7 @@ where
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_vault_addresses() -> VaultAddresses,
+		cf_all_open_deposit_channels() -> Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 	}
 
@@ -1894,7 +1914,7 @@ mod test {
 	use super::*;
 	use cf_chains::{assets::sol, btc::ScriptPubkey};
 	use cf_primitives::{
-		chains::assets::{any, arb, btc, dot, eth},
+		chains::assets::{any, arb, btc, dot, eth, hub},
 		FLIPPERINOS_PER_FLIP,
 	};
 	use sp_core::H160;
@@ -1996,6 +2016,7 @@ mod test {
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
 					sol: sol::AssetMap { sol: 2u32.into(), usdc: 4u32.into() },
+					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 				boost_balances: any::AssetMap {
 					btc: btc::AssetMap {
@@ -2056,6 +2077,7 @@ mod test {
 					dot: dot::AssetMap { dot: None },
 					arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()) },
 					sol: sol::AssetMap { sol: None, usdc: None },
+					hub: hub::AssetMap { dot: None, usdc: None, usdt: None },
 				},
 				network_fee_hundredth_pips: Permill::from_percent(100),
 				swap_retry_delay_blocks: 5,
@@ -2072,6 +2094,7 @@ mod test {
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: 101112_u32.into() },
 					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 			},
 			ingress_egress: IngressEgressEnvironment {
@@ -2086,6 +2109,7 @@ mod test {
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
 					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 				ingress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -2098,6 +2122,11 @@ mod test {
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 					sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None },
+					hub: hub::AssetMap {
+						dot: Some((u64::MAX / 2 - 1).into()),
+						usdc: None,
+						usdt: None,
+					},
 				},
 				egress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -2110,6 +2139,11 @@ mod test {
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 					sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None },
+					hub: hub::AssetMap {
+						dot: Some((u64::MAX / 2 - 1).into()),
+						usdc: None,
+						usdt: None,
+					},
 				},
 				witness_safety_margins: HashMap::from([
 					(ForeignChain::Bitcoin, Some(3u64)),
@@ -2117,6 +2151,7 @@ mod test {
 					(ForeignChain::Polkadot, None),
 					(ForeignChain::Arbitrum, None),
 					(ForeignChain::Solana, None),
+					(ForeignChain::Assethub, None),
 				]),
 				egress_dust_limits: any::AssetMap {
 					eth: eth::AssetMap {
@@ -2129,6 +2164,7 @@ mod test {
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
 					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 				channel_opening_fees: HashMap::from([
 					(ForeignChain::Bitcoin, 0u32.into()),
@@ -2136,6 +2172,7 @@ mod test {
 					(ForeignChain::Polkadot, 1000u32.into()),
 					(ForeignChain::Arbitrum, 1000u32.into()),
 					(ForeignChain::Solana, 1000u32.into()),
+					(ForeignChain::Assethub, 1000u32.into()),
 				]),
 			},
 			funding: FundingEnvironment {
@@ -2164,6 +2201,11 @@ mod test {
 						dot: dot::AssetMap { dot: Some(pool_info) },
 						arb: arb::AssetMap { eth: Some(pool_info), usdc: Some(pool_info) },
 						sol: sol::AssetMap { sol: Some(pool_info), usdc: None },
+						hub: hub::AssetMap {
+							dot: Some(pool_info),
+							usdc: Some(pool_info),
+							usdt: Some(pool_info),
+						},
 					},
 				}
 			},

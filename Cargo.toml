@@ -23,6 +23,8 @@ members = [
   "state-chain/cfe-events",
   "state-chain/chains",
   "state-chain/custom-rpc",
+  "state-chain/generic-typeinfo-derive",
+  "state-chain/generic-typeinfo-derive/macro",
   "state-chain/node",
   "state-chain/pallets/cf-account-roles",
   "state-chain/pallets/cf-asset-balances",
@@ -152,7 +154,7 @@ syn = { version = "2.0.53" }
 tempfile = { version = "3.8.1" }
 thiserror = { version = "1.0.50", default-features = false }
 tiny-bip39 = { version = "1.0.0" }
-tokio = { version = "1.40.0" }
+tokio = { version = "1.44.2" }
 tokio-stream = { version = "0.1.14" }
 toml = { version = "0.8.10" }
 tracing = { version = "0.1.37" }
@@ -293,6 +295,7 @@ engine-upgrade-utils = { path = "engine-upgrade-utils" }
 multisig = { path = "engine/multisig" }
 scale-json = { path = "utilities/scale-json", default-features = false }
 sol-prim = { path = "foreign-chains/solana/sol-prim", default-features = false }
+generic-typeinfo-derive = { path = "state-chain/generic-typeinfo-derive/macro" }
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of

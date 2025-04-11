@@ -28,7 +28,7 @@ use crate::{
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapQueue,
 	SwapType,
 };
-use cf_amm::math::{price_to_sqrt_price, PRICE_FRACTIONAL_BITS};
+use cf_amm::math::PRICE_FRACTIONAL_BITS;
 use cf_chains::{
 	self,
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -39,7 +39,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
 };
-use cf_test_utilities::{assert_event_sequence, assert_events_eq, assert_has_matching_event};
+use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
@@ -47,6 +47,7 @@ use cf_traits::{
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
+		pool_price_api::MockPoolPriceApi,
 	},
 	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode,
 };
@@ -614,9 +615,10 @@ fn process_all_into_stable_swaps_first() {
 		assert_swaps_queue_is_empty();
 
 		let usdc_amount_swapped_after_fee =
-			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE, false).remaining_amount;
+			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE, MinFeePolicy::NotEnforced)
+				.remaining_amount;
 		let usdc_amount_deposited_after_fee =
-			Swapping::take_network_fee(AMOUNT, false).remaining_amount;
+			Swapping::take_network_fee(AMOUNT, MinFeePolicy::NotEnforced).remaining_amount;
 
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(
@@ -1114,7 +1116,7 @@ fn test_get_scheduled_swap_legs() {
 		assert_ne!(INIT_AMOUNT, INTERMEDIATE_AMOUNT);
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Flip, None),
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Flip),
 			vec![
 				SwapLegInfo {
 					swap_id: SwapId(1),
@@ -1187,10 +1189,16 @@ fn test_get_scheduled_swap_legs_fallback() {
 		// The swap simulation must fail for it to use the fallback price estimation
 		MockSwappingApi::set_swaps_should_fail(true);
 
-		let sqrt_price = price_to_sqrt_price((U256::from(PRICE)) << PRICE_FRACTIONAL_BITS);
+		// Only setting pool price for FLIP to make sure that the test would fail
+		// if the code tried to use the price of some other asset
+		MockPoolPriceApi::set_pool_price(
+			Asset::Flip,
+			STABLE_ASSET,
+			U256::from(PRICE) << PRICE_FRACTIONAL_BITS,
+		);
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth, Some(sqrt_price)),
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth),
 			vec![
 				SwapLegInfo {
 					swap_id: SwapId(1),
@@ -1236,7 +1244,7 @@ fn test_get_scheduled_swap_legs_for_dca() {
 			vec![create_test_swap(1, Asset::Flip, Asset::Eth, INIT_AMOUNT, Some(dca_params))];
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth, None),
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth),
 			vec![SwapLegInfo {
 				swap_id: SwapId(1),
 				swap_request_id: SwapRequestId(1),
@@ -1327,6 +1335,7 @@ mod swap_batching {
 				broker_fee_taken: None,
 				stable_amount,
 				final_output: None,
+				stable_amount_before_fees: stable_amount,
 			}
 		}
 	}
@@ -1595,8 +1604,8 @@ mod internal_swaps {
 		const NEW_SWAP_RATE: f64 = DEFAULT_SWAP_RATE as f64 / 2.0;
 		const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
 
-		// We require the minimum network fee to be non-zero for the refund fee to work, so this
-		// must be taken into account in the min_price calculation.
+		// We require the internal swap minimum network fee to be non-zero for the refund fee to
+		// work, so this must be taken into account in the min_price calculation.
 		// Note that the `NetworkFee` is set to 0 by default, so the minimum network fee will be
 		// charged instead.
 		let min_price = U256::from(
@@ -1607,7 +1616,10 @@ mod internal_swaps {
 
 		new_test_ext()
 			.execute_with(|| {
-				MinimumNetworkFeePerChunk::<Test>::set(MIN_NETWORK_FEE);
+				// Internal swaps use a different network fee minimum than the regular swaps.
+				// This minimum network fee is used as the refund fee.
+				InternalSwapMinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
+
 				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,

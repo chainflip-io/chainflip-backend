@@ -18,10 +18,12 @@
 
 use cf_utilities::assert_ok;
 use core::convert::Infallible;
+use sp_core::crypto::AccountId32;
 
 use crate::range_orders::Liquidity;
 use cf_amm_math::{
-	sqrt_price_to_price, Price, MAX_SQRT_PRICE, MIN_SQRT_PRICE, PRICE_FRACTIONAL_BITS,
+	price_at_tick, sqrt_price_to_price, Price, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
+	PRICE_FRACTIONAL_BITS,
 };
 
 use super::*;
@@ -231,4 +233,76 @@ fn test_sqrt_price_to_price() {
 		Price::from(1) << PRICE_FRACTIONAL_BITS
 	);
 	assert!(sqrt_price_to_price(MIN_SQRT_PRICE) < sqrt_price_to_price(MAX_SQRT_PRICE));
+}
+
+// Test that we can correctly switch from executing limit orders to range orders
+// and back:
+#[test]
+fn alternating_range_and_limit_orders() {
+	use range_orders::Size;
+
+	const LP: AccountId32 = AccountId32::new([1; 32]);
+	const TICK_RANGE: core::ops::Range<i32> = -100..100;
+
+	let mut pool = PoolState::new(500, price_at_tick(0).unwrap()).unwrap();
+	pool.collect_and_mint_limit_order(&LP, Side::Buy, 0, 1_000_000.into()).unwrap();
+
+	pool.collect_and_mint_range_order(
+		&LP,
+		TICK_RANGE,
+		Size::Liquidity { liquidity: 1_000_000_000_000 },
+		Result::<_, Infallible>::Ok,
+	)
+	.unwrap();
+
+	pool.collect_and_mint_limit_order(&LP, Side::Buy, 10, 1_000_000.into()).unwrap();
+
+	assert_eq!(pool.limit_order(&LP, Side::Buy, 0).unwrap().0.sold_amount, 0.into());
+	assert_eq!(pool.limit_order(&LP, Side::Buy, 10).unwrap().0.sold_amount, 0.into());
+	assert_eq!(pool.range_order(&LP, TICK_RANGE).unwrap().0.fees.base, 0.into());
+
+	pool.swap(Side::Sell, 3_000_000.into(), None);
+
+	// Check that all three orders have been used in the swap:
+	assert!(pool.limit_order(&LP, Side::Buy, 0).unwrap().0.sold_amount > 0.into());
+	assert!(pool.limit_order(&LP, Side::Buy, 10).unwrap().0.sold_amount > 0.into());
+	assert!(pool.range_order(&LP, TICK_RANGE).unwrap().0.fees.base > 0.into());
+}
+
+#[test]
+fn check_price_adjustment_by_pool_fee() {
+	use cf_amm_math::price_at_tick;
+	use limit_orders::SwapDirection;
+	use sp_core::U256;
+
+	#[track_caller]
+	fn test_case<SD: SwapDirection>(tick: i32, fee_hundredth_pips: u32) {
+		let input = U256::from(100_000_000u32);
+
+		let price = price_at_tick(tick).unwrap();
+
+		// Output is computed by reducing the input amount:
+		let expected_output = {
+			let input_minus_fees = reduce_by_pool_fee(input, fee_hundredth_pips);
+			SD::output_amount_floor(input_minus_fees, price)
+		};
+
+		// Output is computed by adjusting the price instead:
+		let output = {
+			let sqrt_price = price_to_sqrt_price(price);
+			let adjusted_sqrt_price =
+				sqrt_price_adjusted_by_pool_fee::<SD>(sqrt_price, fee_hundredth_pips);
+			let adjusted_price = sqrt_price_to_price(adjusted_sqrt_price);
+
+			SD::output_amount_floor(input, adjusted_price)
+		};
+
+		// This shows that adjusting the price is equivalent to reducing the input amount:
+		assert_eq!(output, expected_output);
+	}
+
+	for (tick, fee) in [(100, 500), (20_000, 500), (-20_000, 50_000), (-100, 0), (0, 0)] {
+		test_case::<BaseToQuote>(tick, fee);
+		test_case::<QuoteToBase>(tick, fee);
+	}
 }

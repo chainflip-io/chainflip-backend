@@ -32,7 +32,7 @@ cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true }
 pallet-cf-pools = { workspace = true, default-features = true }
 cf-amm = { workspace = true, default-features = true }
-
+cf-traits = { workspace = true }
 
 
 [dev-dependencies]

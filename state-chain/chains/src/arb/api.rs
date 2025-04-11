@@ -166,9 +166,26 @@ impl<E> From<EvmTransactionBuilder<transfer_fallback::TransferFallback>> for Arb
 	}
 }
 
-impl<E> RejectCall<Arbitrum> for ArbitrumApi<E> where
-	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>
+impl<E> RejectCall<Arbitrum> for ArbitrumApi<E>
+where
+	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
+	fn new_unsigned(
+		_deposit_details: <Arbitrum as Chain>::DepositDetails,
+		refund_address: <Arbitrum as Chain>::ChainAccount,
+		refund_amount: <Arbitrum as Chain>::ChainAmount,
+		asset: <Arbitrum as Chain>::ChainAsset,
+		deposit_fetch_id: Option<<Arbitrum as Chain>::DepositFetchId>,
+	) -> Result<Self, RejectError> {
+		Ok(Self::AllBatch(evm_all_batch_builder::<Arbitrum, _>(
+			deposit_fetch_id
+				.map(|id| vec![FetchAssetParams { deposit_fetch_id: id, asset }])
+				.unwrap_or_default(),
+			vec![TransferAssetParams { asset, amount: refund_amount, to: refund_address }],
+			E::token_address,
+			E::replay_protection(E::vault_address()),
+		)?))
+	}
 }
 
 macro_rules! map_over_api_variants {
@@ -217,11 +234,10 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 	}
 
 	fn refresh_replay_protection(&mut self) {
-		map_over_api_variants!(
-			self,
-			call,
-			call.refresh_replay_protection(E::replay_protection(E::key_manager_address()))
-		)
+		let EvmReplayProtection { contract_address, .. } =
+			map_over_api_variants!(self, call, call.replay_protection());
+		let new_replay_protection = E::replay_protection(contract_address);
+		map_over_api_variants!(self, call, call.refresh_replay_protection(new_replay_protection))
 	}
 
 	fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {

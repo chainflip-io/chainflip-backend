@@ -357,19 +357,30 @@ where
 							previous_item = Some(new_item.clone());
 							previous_state = Some(new_state);
 
-							if let Ok(Some(header)) = client.header(hash) {
-								Some(Ok(BlockUpdate {
+							match client.header(hash) {
+								Ok(Some(header)) => Some(Ok(BlockUpdate {
 									block_hash: hash,
 									block_number: *header.number(),
 									data: new_item,
-								}))
-							} else if end_on_error {
-								Some(Err(internal_error(format!(
-									"Could not fetch block header for block {:?}",
-									hash
-								))))
-							} else {
-								None
+								})),
+								Ok(None) =>
+									if end_on_error {
+										Some(Err(internal_error(format!(
+											"Could not fetch block header for block {:?}",
+											hash
+										))))
+									} else {
+										None
+									},
+								Err(e) =>
+									if end_on_error {
+										Some(Err(internal_error(format!(
+											"Couldn't fetch block header for block {:?}: {}",
+											hash, e
+										))))
+									} else {
+										None
+									},
 							}
 						},
 						Err(error) => {
