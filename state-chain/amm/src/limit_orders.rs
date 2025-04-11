@@ -48,9 +48,7 @@ use scale_info::TypeInfo;
 use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
-use crate::common::{
-	BaseToQuote, PoolPairsMap, QuoteToBase, SetFeesError, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS,
-};
+use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase, SetFeesError, MAX_LP_FEE};
 use cf_amm_math::{
 	is_tick_valid, mul_div_ceil, mul_div_floor, output_amount_floor, sqrt_price_at_tick,
 	sqrt_price_to_price, tick_at_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick,
@@ -454,7 +452,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				position.clone(),
 				self.fixed_pools[!SD::INPUT_SIDE].get(sqrt_price),
 				sqrt_price_to_price(*sqrt_price),
-				self.fee_hundredth_pips,
 			);
 
 			(
@@ -544,6 +541,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPriceQ64F96>,
+		range_orders_pool_fee_hundredth_pips: u32,
 	) -> (Amount, Amount) {
 		let mut total_output_amount = U256::zero();
 
@@ -552,39 +550,30 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.and_then(|()| SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]))
 			.map(|entry| (*entry.key(), entry))
 			.filter(|(sqrt_price, _)| {
+				let sqrt_price_adjusted = super::sqrt_price_adjusted_by_pool_fee::<SD::Inverse>(
+					*sqrt_price,
+					range_orders_pool_fee_hundredth_pips,
+				);
+
 				sqrt_price_limit.is_none_or(|sqrt_price_limit| {
-					!SD::sqrt_price_op_more_than(*sqrt_price, sqrt_price_limit)
+					!SD::sqrt_price_op_more_than(sqrt_price_adjusted, sqrt_price_limit)
 				})
 			}) {
 			let fixed_pool = fixed_pool_entry.get_mut();
-
-			let amount_minus_fees = mul_div_floor(
-				amount,
-				U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
-				U256::from(ONE_IN_HUNDREDTH_PIPS),
-			); /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */
 
 			let price = sqrt_price_to_price(sqrt_price);
 			let amount_required_to_consume_pool =
 				SD::input_amount_ceil(fixed_pool.available, price);
 
-			let (output_amount, swapped_amount, fees_taken) = if amount_minus_fees >=
-				amount_required_to_consume_pool
-			{
+			let (output_amount, swapped_amount) = if amount >= amount_required_to_consume_pool {
 				let fixed_pool = fixed_pool_entry.remove();
 
-				let fees = mul_div_ceil(
-					amount_required_to_consume_pool,
-					U256::from(self.fee_hundredth_pips),
-					U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
-				); /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */
+				// Cannot underflow as amount >= amount_required_to_consume_pool
+				amount -= amount_required_to_consume_pool;
 
-				// Cannot underflow as amount_minus_fees >= amount_required_to_consume_pool
-				amount -= amount_required_to_consume_pool + fees;
-
-				(fixed_pool.available, amount_required_to_consume_pool, fees)
+				(fixed_pool.available, amount_required_to_consume_pool)
 			} else {
-				let initial_output_amount = SD::output_amount_floor(amount_minus_fees, price);
+				let initial_output_amount = SD::output_amount_floor(amount, price);
 
 				// We calculate (output_amount, next_percent_remaining) so that
 				// next_percent_remaining is an under-estimate of the remaining liquidity, but also
@@ -616,16 +605,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				fixed_pool.percent_remaining = next_percent_remaining;
 				fixed_pool.available -= output_amount;
 
-				let fees_taken = amount - amount_minus_fees;
+				let swapped_amount = amount;
+
 				amount = Amount::zero();
 
-				(output_amount, amount_minus_fees, fees_taken)
+				(output_amount, swapped_amount)
 			};
 
 			self.total_swap_inputs[SD::INPUT_SIDE] =
 				self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(swapped_amount);
-			self.total_fees_earned[SD::INPUT_SIDE] =
-				self.total_fees_earned[SD::INPUT_SIDE].saturating_add(fees_taken);
 
 			total_output_amount = total_output_amount.saturating_add(output_amount);
 		}
@@ -640,7 +628,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		mut position: Position,
 		fixed_pool: Option<&FixedPool>,
 		price: Price,
-		fee_hundredth_pips: u32,
 	) -> (Collected, Option<Position>) {
 		let previous_position = position.clone();
 		let (used_liquidity, option_position) = if let Some(fixed_pool) =
@@ -672,24 +659,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		};
 
 		let bought_amount = SD::input_amount_floor(used_liquidity, price);
-		let fees = /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */ mul_div_floor(
-			bought_amount,
-			U256::from(fee_hundredth_pips),
-			U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
-		);
-		let accumulative_fees = previous_position.accumulative_fees.saturating_add(fees);
+
 		(
 			Collected {
-				fees,
+				fees: 0.into(),
 				bought_amount,
 				sold_amount: used_liquidity,
-				accumulative_fees,
+				accumulative_fees: 0.into(),
 				original_amount: previous_position.original_amount,
 			},
-			option_position.map(|mut position| {
-				position.accumulative_fees = accumulative_fees;
-				position
-			}),
+			option_position,
 		)
 	}
 
@@ -717,12 +696,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let option_fixed_pool = fixed_pools.get(&sqrt_price);
 			let (collected_amounts, option_position) =
 				if let Some(position) = positions.get(&(sqrt_price, lp.clone())).cloned() {
-					Self::collect_from_position::<SD>(
-						position,
-						option_fixed_pool,
-						price,
-						self.fee_hundredth_pips,
-					)
+					Self::collect_from_position::<SD>(position, option_fixed_pool, price)
 				} else {
 					(Default::default(), None)
 				};
@@ -819,12 +793,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.clone();
 			let option_fixed_pool = fixed_pools.get(&sqrt_price);
 
-			let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
-				position,
-				option_fixed_pool,
-				price,
-				self.fee_hundredth_pips,
-			);
+			let (collected_amounts, option_position) =
+				Self::collect_from_position::<SD>(position, option_fixed_pool, price);
 			Ok(if let Some(mut position) = option_position {
 				let mut fixed_pool = option_fixed_pool.unwrap().clone(); // Position having liquidity remaining implies fixed pool existing before collect.
 
@@ -885,7 +855,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.clone(),
 			fixed_pools.get(&sqrt_price),
 			price,
-			self.fee_hundredth_pips,
 		);
 
 		Ok((
@@ -922,7 +891,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.clone(),
 			fixed_pools.get(&sqrt_price),
 			price,
-			self.fee_hundredth_pips,
 		);
 
 		Ok((

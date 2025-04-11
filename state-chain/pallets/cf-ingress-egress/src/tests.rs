@@ -25,7 +25,7 @@ use crate::{
 	Event, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit,
 	NetworkFeeDeductionFromBoostPercent, Pallet, PalletConfigUpdate, PalletSafeMode,
 	PrewitnessedDepositIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
-	VaultDepositWitness,
+	VaultDepositWitness, WitnessSafetyMargin,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -33,13 +33,16 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, DepositOriginType,
-	ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin, TransactionInIdForAnyChain,
-	TransferAssetParams,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, DepositChannel,
+	DepositOriginType, ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin,
+	TransactionInIdForAnyChain, TransferAssetParams,
 };
+
+use crate::RefundReason;
 
 use cf_chains::eth::Address as EthereumAddress;
 
+use crate::FailedRejections;
 use cf_primitives::{
 	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,
 	DcaParameters, ForeignChain, MAX_AFFILIATES,
@@ -72,7 +75,7 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::{bounded_vec, H160};
+use sp_core::{bounded_vec, H160, U256};
 use sp_runtime::{DispatchError, DispatchResult, Percent};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -431,6 +434,7 @@ fn addresses_are_getting_reused() {
 			source_asset: EthAsset::Eth,
 			destination_asset: EthAsset::Flip,
 			destination_address: ForeignChainAddress::Eth(Default::default()),
+			refund_address: ALICE_ETH_ADDRESS,
 		}])
 		// The address should have been taken from the pool and the id counter unchanged.
 		.then_execute_with_keep_context(|_| {
@@ -1486,7 +1490,7 @@ fn can_update_all_config_items() {
 		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
 		const NEW_DEPOSIT_CHANNEL_LIFETIME: u64 = 99;
 		const NETWORK_FEE_DEDUCTION: Percent = Percent::from_parts(50);
-
+		const NEW_WITNESS_SAFETY_MARGIN: u64 = 300;
 		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Flip), 0);
@@ -1511,7 +1515,8 @@ fn can_update_all_config_items() {
 				},
 				PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
 					deduction_percent: NETWORK_FEE_DEDUCTION
-				}
+				},
+				PalletConfigUpdate::SetWitnessSafetyMargin { margin: NEW_WITNESS_SAFETY_MARGIN }
 			]
 			.try_into()
 			.unwrap()
@@ -1523,6 +1528,7 @@ fn can_update_all_config_items() {
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Eth), NEW_MIN_DEPOSIT_ETH);
 		assert_eq!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
 		assert_eq!(NetworkFeeDeductionFromBoostPercent::<Test, _>::get(), NETWORK_FEE_DEDUCTION);
+		assert_eq!(WitnessSafetyMargin::<Test, _>::get(), Some(NEW_WITNESS_SAFETY_MARGIN));
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -2069,30 +2075,7 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 			0
 		));
 
-		// The request is recorded as not having any broker fees:
-		assert_eq!(
-			MockSwapRequestHandler::<Test>::get_swap_requests(),
-			vec![MockSwapRequest {
-				input_asset: INPUT_ASSET,
-				output_asset: OUTPUT_ASSET,
-				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular {
-					output_action: SwapOutputAction::Egress {
-						output_address,
-						ccm_deposit_metadata: None
-					}
-				},
-				broker_fees: Default::default(),
-				origin: SwapOrigin::Vault {
-					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(NOT_A_BROKER),
-				},
-			},]
-		);
-
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::UnknownBroker {
-			broker_id: NOT_A_BROKER,
-		}));
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
 }
 
@@ -2232,7 +2215,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			Some(ccm_deposit_metadata.clone()),
 			Default::default(),
 			DepositDetails { tx_hashes: None },
-			Beneficiary { account: 0, bps: 0 },
+			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
 			ETH_REFUND_PARAMS,
 			None,
@@ -2241,8 +2224,11 @@ fn failed_ccm_deposit_can_deposit_event() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(Event::DepositFailed {
-				reason: DepositFailedReason::CcmUnsupportedForTargetChain,
+			RuntimeEvent::IngressEgress(Event::DepositFinalised {
+				action: DepositAction::Refund {
+					reason: RefundReason::CcmUnsupportedForTargetChain,
+					..
+				},
 				..
 			})
 		);
@@ -2335,7 +2321,10 @@ fn assembling_broker_fees() {
 			Beneficiary { account: 50, bps: 5 },
 		];
 
-		assert_eq!(IngressEgress::assemble_broker_fees(Some(broker_fee), affiliate_fees), expected);
+		assert_eq!(
+			IngressEgress::assemble_broker_fees(Some(broker_fee), affiliate_fees),
+			Some(expected)
+		);
 	});
 }
 
@@ -2390,4 +2379,811 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 		)
 		.is_ok());
 	});
+}
+
+#[cfg(test)]
+mod evm_transaction_rejection {
+	use super::*;
+	use crate::{
+		boost_pool, BoostPools, ScheduledTransactionsForRejection, TransactionRejectionDetails,
+		TransactionRejectionStatus, TransactionsMarkedForRejection,
+	};
+	use cf_chains::{
+		assets::eth::Asset as EthAsset, evm::H256, ChannelLifecycleHooks,
+		DepositDetailsToTransactionInId,
+	};
+	use cf_traits::{
+		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
+	};
+	use std::str::FromStr;
+
+	const ETH: EthAsset = EthAsset::Eth;
+
+	#[test]
+	fn deposit_with_multiple_txs() {
+		new_test_ext().execute_with(|| {
+			let tx_ids = vec![
+				H256::from_str(
+					"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+				)
+				.unwrap(),
+				H256::from_str(
+					"0x3214567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+				)
+				.unwrap(),
+			];
+
+			let (_, deposit_address, block, _) = IngressEgress::request_liquidity_deposit_address(
+				BROKER,
+				ETH,
+				0,
+				ForeignChainAddress::Eth(Default::default()),
+			)
+			.unwrap();
+
+			assert_ok!(IngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_ids[0],
+			));
+
+			assert!(TransactionsMarkedForRejection::<Test, ()>::get(BROKER, tx_ids[0]).is_some());
+
+			let deposit_details = DepositDetails { tx_hashes: Some(tx_ids.clone()) };
+
+			let deposit_address: <Ethereum as Chain>::ChainAccount =
+				deposit_address.try_into().unwrap();
+
+			IngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
+					deposit_address,
+					asset: ETH,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details: deposit_details.clone(),
+				},
+				block,
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFailed {
+					reason: DepositFailedReason::TransactionRejectedByBroker,
+					details:DepositFailedDetails::DepositChannel {
+						deposit_witness: DepositWitness {
+							deposit_address: event_address,
+							deposit_details: event_deposit_details,
+							..
+						}
+					},
+					..
+				}) if *event_deposit_details == deposit_details && *event_address == deposit_address
+			);
+
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
+			assert_eq!(scheduled_tx_for_reject.len(), 1);
+
+			IngressEgress::on_finalize(2);
+
+			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
+			assert_eq!(scheduled_tx_for_reject.len(), 0);
+		});
+	}
+
+	#[test]
+	fn deposit_with_single_tx() {
+		new_test_ext().execute_with(|| {
+			let tx_id = H256::from_str(
+				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			)
+			.unwrap();
+			let (_, deposit_address, block, _) = IngressEgress::request_liquidity_deposit_address(
+				BROKER,
+				ETH,
+				0,
+				ForeignChainAddress::Eth(Default::default()),
+			)
+			.unwrap();
+			let deposit_address: <Ethereum as Chain>::ChainAccount =
+				deposit_address.try_into().unwrap();
+			let deposit_details = DepositDetails { tx_hashes: Some(vec![tx_id]) };
+			// Report the tx as marked for rejection
+			assert_ok!(IngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+
+			assert!(TransactionsMarkedForRejection::<Test, ()>::get(BROKER, tx_id).is_some());
+			// Process the deposit
+			IngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
+					deposit_address,
+					asset: ETH,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details,
+				},
+				block,
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFailed {
+					reason: DepositFailedReason::TransactionRejectedByBroker,
+					details:DepositFailedDetails::DepositChannel {
+						deposit_witness: DepositWitness {
+							deposit_details,
+							..
+						}
+					},
+					..
+				}) if deposit_details.deposit_ids().unwrap().contains(&tx_id)
+			);
+
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
+			assert_eq!(scheduled_tx_for_reject.len(), 1);
+
+			assert_eq!(
+				scheduled_tx_for_reject[0].deposit_details.deposit_ids().unwrap(),
+				vec![tx_id]
+			);
+
+			IngressEgress::on_finalize(2);
+
+			let scheduled_tx_for_reject = ScheduledTransactionsForRejection::<Test, ()>::get();
+			assert_eq!(scheduled_tx_for_reject.len(), 0);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(
+					crate::Event::<Test, ()>::TransactionRejectedByBroker { tx_id, .. }
+				) if tx_id == tx_id
+			);
+
+			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
+
+			assert_eq!(pending_api_calls.len(), 1);
+			let api_call = pending_api_calls[0].clone();
+
+			match api_call {
+				MockEthereumApiCall::RejectCall { deposit_details, deposit_fetch_id, .. } => {
+					assert_eq!(deposit_details.deposit_ids().unwrap(), vec![tx_id]);
+					assert!(deposit_fetch_id.is_some());
+				},
+				_ => panic!("Expected a RejectCall"),
+			}
+		});
+	}
+
+	#[test]
+	fn whitelisted_broker_can_mark_tx_for_rejection_for_lp() {
+		new_test_ext().execute_with(|| {
+			let tx_id = H256::from_str(
+				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			)
+			.unwrap();
+
+			assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&ALICE,
+			));
+
+			let (_, deposit_address, block, _) = IngressEgress::request_liquidity_deposit_address(
+				ALICE,
+				ETH,
+				0,
+				ForeignChainAddress::Eth(Default::default()),
+			)
+			.unwrap();
+
+			let deposit_address: <Ethereum as Chain>::ChainAccount =
+				deposit_address.try_into().unwrap();
+			let deposit_details = DepositDetails { tx_hashes: Some(vec![tx_id]) };
+
+			// Report the tx as marked for rejection
+			assert_ok!(IngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(WHITELISTED_BROKER),
+				tx_id,
+			));
+			assert!(TransactionsMarkedForRejection::<Test, ()>::get(SCREENING_ID, tx_id).is_some());
+
+			// Process the deposit
+			IngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
+					deposit_address,
+					asset: ETH,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details,
+				},
+				block,
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFailed {
+					reason: DepositFailedReason::TransactionRejectedByBroker,
+					details:DepositFailedDetails::DepositChannel {
+						deposit_witness: DepositWitness {
+							deposit_details,
+							..
+						}
+					},
+					..
+				}) if deposit_details.deposit_ids().unwrap().contains(&tx_id)
+			);
+
+			assert!(TransactionsMarkedForRejection::<Test, ()>::get(SCREENING_ID, tx_id).is_none());
+
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+		});
+	}
+
+	#[test]
+	fn whitelisted_broker_can_reject_two_concurrent_swap_deposits() {
+		const TAINTED_TX_ID_1: H256 = H256::repeat_byte(0xaa);
+		const TAINTED_TX_ID_2: H256 = H256::repeat_byte(0xbb);
+		const COMMINGLED_TX_ID: H256 = H256::repeat_byte(0xcc);
+		const CLEAN_TX_ID: H256 = H256::repeat_byte(0xdd);
+
+		new_test_ext()
+			.request_deposit_addresses(&[DepositRequest::SimpleSwap {
+				source_asset: ETH_ETH,
+				destination_asset: ETH_FLIP,
+				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
+			}])
+			.then_apply_extrinsics(|_| {
+				[
+					(
+						OriginTrait::signed(WHITELISTED_BROKER),
+						crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_1 },
+						Ok(()),
+					),
+					(
+						OriginTrait::signed(WHITELISTED_BROKER),
+						crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_2 },
+						Ok(()),
+					),
+				]
+			})
+			// we can't use `then_apply_extrinsics` because at the moment there's no way to
+			// distinguish between pre-witness and witness origins.
+			.then_execute_at_next_block(|deposits| {
+				for (_, _, deposit_address) in &deposits {
+					Pallet::<Test, _>::process_channel_deposit_full_witness(
+						DepositWitness {
+							deposit_address: *deposit_address,
+							asset: ETH,
+							amount: DEFAULT_DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails {
+								tx_hashes: Some(vec![COMMINGLED_TX_ID, TAINTED_TX_ID_1]),
+							},
+						},
+						100,
+					);
+				}
+				deposits
+			})
+			.then_process_events(|_, event| match event {
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFetchesScheduled { .. }) => {
+					panic!("Scheduled a fetch for a tainted tx");
+				},
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFailed {
+					reason: DepositFailedReason::TransactionRejectedByBroker,
+					details:
+						DepositFailedDetails::DepositChannel {
+							deposit_witness: DepositWitness { deposit_details, .. },
+						},
+					..
+				}) => {
+					assert!(deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_1));
+					None
+				},
+				RuntimeEvent::IngressEgress(PalletEvent::TransactionRejectedByBroker {
+					broadcast_id,
+					tx_id,
+				}) if tx_id.deposit_ids().unwrap().contains(&TAINTED_TX_ID_1) => Some(broadcast_id),
+				_ => None,
+			})
+			.then_process_blocks(1)
+			.then_execute_with(|(deposits, broadcast_ids)| {
+				assert_eq!(broadcast_ids.len(), 1, "Expected 1 broadcast id");
+				let _ = MockEgressBroadcaster::get_success_pending_callbacks()
+					.pop()
+					.expect("Expected a callback");
+
+				MockEgressBroadcaster::get_pending_api_calls()
+					.into_iter()
+					.filter_map(|call| match call {
+						MockEthereumApiCall::RejectCall { deposit_details, .. } =>
+							Some(deposit_details.deposit_ids().unwrap()),
+						_ => None,
+					})
+					.flatten()
+					.find(|tx_id| *tx_id == TAINTED_TX_ID_1)
+					.expect("Expected the tainted tx to be rejected");
+
+				let (_, _, deposit_address) = deposits[0];
+				let channel_details = DepositChannelLookup::<Test, _>::get(deposit_address)
+					.expect("Channel ID should exist");
+				assert!(
+					!channel_details.deposit_channel.state.can_fetch(),
+					"Channel should be pending and therefore unfetchable"
+				);
+				deposits
+			})
+			// Another deposit: we can't refund this one because the channel is pending and we can't
+			// fetch the deposit.
+			.then_execute_at_next_block(|deposits| {
+				for (_, _, deposit_address) in &deposits {
+					Pallet::<Test, _>::process_channel_deposit_full_witness(
+						DepositWitness {
+							deposit_address: *deposit_address,
+							asset: ETH,
+							amount: DEFAULT_DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails {
+								tx_hashes: Some(vec![TAINTED_TX_ID_2]),
+							},
+						},
+						100,
+					);
+				}
+				deposits
+			})
+			.then_execute_at_next_block(|deposits| {
+				for (_, _, deposit_address) in &deposits {
+					Pallet::<Test, _>::process_channel_deposit_full_witness(
+						DepositWitness {
+							deposit_address: *deposit_address,
+							asset: ETH,
+							amount: DEFAULT_DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails { tx_hashes: Some(vec![CLEAN_TX_ID]) },
+						},
+						100,
+					);
+				}
+				deposits
+			})
+			.then_execute_at_next_block(|deposits| {
+				assert!(ScheduledTransactionsForRejection::<Test>::get().iter().any(
+					|TransactionRejectionDetails { deposit_details, .. }| {
+						deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_2)
+					}
+				));
+				deposits
+			})
+			// Still pending at next block.
+			.then_execute_at_next_block(|deposits| {
+				assert!(ScheduledTransactionsForRejection::<Test>::get().iter().any(
+					|TransactionRejectionDetails { deposit_details, .. }| {
+						deposit_details.deposit_ids().unwrap().contains(&TAINTED_TX_ID_2)
+					}
+				));
+				deposits
+			})
+			// Simulate success -> apply success callbacks
+			.then_apply_extrinsics(|_| {
+				MockEgressBroadcaster::get_success_pending_callbacks()
+					.iter()
+					.map(|call| (OriginTrait::root(), call.clone(), Ok(())))
+					.collect::<Vec<_>>()
+			})
+			.then_process_blocks(1)
+			.then_execute_with_keep_context(|_| {
+				assert!(
+					ScheduledTransactionsForRejection::<Test>::get().is_empty(),
+					"Expected no pending txs, but got {:#?}",
+					ScheduledTransactionsForRejection::<Test>::get()
+				);
+				let rejected_ids = MockEgressBroadcaster::get_pending_api_calls()
+					.into_iter()
+					.filter_map(|call| match call {
+						MockEthereumApiCall::RejectCall { deposit_details, .. } =>
+							Some(deposit_details.deposit_ids().unwrap()),
+						_ => None,
+					})
+					.flatten()
+					.collect::<Vec<_>>();
+				assert!(
+					rejected_ids.contains(&TAINTED_TX_ID_1) &&
+						rejected_ids.contains(&TAINTED_TX_ID_2) &&
+						rejected_ids.contains(&COMMINGLED_TX_ID) &&
+						!rejected_ids.contains(&CLEAN_TX_ID),
+					"Expected the tainted and commingled txs to be rejected, but not the clean one."
+				);
+			});
+	}
+
+	#[test]
+	fn mark_after_prewitness_has_no_effect() {
+		const TAINTED_TX_ID: H256 = H256::repeat_byte(0xab);
+
+		new_test_ext()
+			// Add boost liquidity
+			.then_execute_at_next_block(|_| {
+				BoostPools::<Test, _>::insert(ETH_ETH, 10, {
+					let mut pool = boost_pool::BoostPool::new(10);
+					pool.add_funds(1234, 1_000_000);
+					pool
+				});
+			})
+			.request_deposit_addresses(&[DepositRequest::SimpleSwap {
+				source_asset: ETH_ETH,
+				destination_asset: ETH_FLIP,
+				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
+			}])
+			// Simulate a prewitness call.
+			// we can't use `then_apply_extrinsics` because at the moment there's no way to
+			// distinguish between pre-witness and witness origins.
+			.then_execute_at_next_block(|deposits| {
+				for (_, _, deposit_address) in &deposits {
+					assert_ok!(Pallet::<Test, _>::process_channel_deposit_prewitness(
+						DepositWitness::<Ethereum> {
+							deposit_address: *deposit_address,
+							asset: ETH_ETH,
+							amount: 1_000_000,
+							deposit_details: DepositDetails {
+								tx_hashes: Some(vec![TAINTED_TX_ID])
+							}
+						},
+						100,
+					));
+				}
+				deposits
+			})
+			.then_apply_extrinsics(|_| {
+				[(
+					OriginTrait::signed(BROKER),
+					crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID },
+					Ok(()),
+				)]
+			})
+			.then_execute_with_keep_context(|deposits| {
+				assert!(TransactionsMarkedForRejection::<Test, ()>::get(
+					SCREENING_ID,
+					TAINTED_TX_ID
+				)
+				.is_none());
+				assert!(
+					TransactionsMarkedForRejection::<Test, ()>::get(SCREENING_ID, TAINTED_TX_ID)
+						.is_none(),
+					"Tx was not reported by whitelisted broker."
+				);
+				assert!(matches!(
+					TransactionsMarkedForRejection::<Test, ()>::get(BROKER, TAINTED_TX_ID)
+						.expect("Tx was marked by broker"),
+					TransactionRejectionStatus { prewitnessed: false, .. }
+				));
+				assert!(
+					matches!(
+						DepositChannelLookup::<Test, _>::get(deposits[0].2)
+							.expect("Deposit channel is not expired")
+							.boost_status,
+						BoostStatus::Boosted { .. },
+					),
+					"Deposit channel should be boosted, but is {:?}",
+					DepositChannelLookup::<Test, _>::get(deposits[0].2).unwrap()
+				);
+			})
+			.then_execute_at_next_block(|deposits| {
+				for (_, _, deposit_address) in &deposits {
+					Pallet::<Test, _>::process_channel_deposit_full_witness(
+						DepositWitness {
+							deposit_address: *deposit_address,
+							asset: ETH,
+							amount: DEFAULT_DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails {
+								tx_hashes: Some(vec![TAINTED_TX_ID]),
+							},
+						},
+						100,
+					);
+				}
+				deposits
+			})
+			.then_process_events(|_, event| match event {
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFailed { .. }) => {
+					panic!("Prewitnessed Deposit should not fail.");
+				},
+				RuntimeEvent::IngressEgress(PalletEvent::TransactionRejectedByBroker {
+					..
+				}) => panic!("Prewitnessed Transaction should not be rejected"),
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFetchesScheduled {
+					channel_id,
+					..
+				}) => Some(channel_id),
+				_ => None,
+			})
+			.inspect_context(|(deposits, scheduled_fetch_ids)| {
+				assert_eq!(scheduled_fetch_ids.len(), 1, "Expected 1 fetch.");
+				assert_eq!(
+					*scheduled_fetch_ids,
+					deposits.iter().map(|(_, id, _)| *id).collect::<Vec<_>>()
+				);
+			});
+	}
+
+	#[test]
+	fn boosted_transaction_can_be_rejected_by_whitelisted_broker_or_owner() {
+		const TAINTED_TX_ID_1: H256 = H256::repeat_byte(0xab);
+		const TAINTED_TX_ID_2: H256 = H256::repeat_byte(0xcd);
+
+		new_test_ext()
+			// Add boost liquidity
+			.then_execute_at_next_block(|_| {
+				BoostPools::<Test, _>::insert(ETH_ETH, 10, {
+					let mut pool = boost_pool::BoostPool::new(10);
+					pool.add_funds(1234, 1_000_000);
+					pool
+				});
+			})
+			.request_deposit_addresses(&[DepositRequest::SimpleSwap {
+				source_asset: ETH_ETH,
+				destination_asset: ETH_FLIP,
+				destination_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+				refund_address: ALICE_ETH_ADDRESS,
+			}])
+			.assert_calls_ok(&[WHITELISTED_BROKER, BROKER][..], |id| {
+				if *id == WHITELISTED_BROKER {
+					crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_1 }
+				} else {
+					crate::Call::mark_transaction_for_rejection { tx_id: TAINTED_TX_ID_2 }
+				}
+			})
+			.then_execute_with_keep_context(|_| {
+				assert!(TransactionsMarkedForRejection::<Test, ()>::get(
+					SCREENING_ID,
+					TAINTED_TX_ID_1
+				)
+				.is_some());
+				assert!(TransactionsMarkedForRejection::<Test, ()>::get(BROKER, TAINTED_TX_ID_2)
+					.is_some());
+			})
+			.then_execute_with_keep_context(|deposit_details| {
+				let (_, _, deposit_address) = deposit_details[0];
+				assert_ok!(Pallet::<Test, _>::process_deposits(
+					OriginTrait::root(), // defaults to pre-witness origin
+					[TAINTED_TX_ID_1, TAINTED_TX_ID_2]
+						.into_iter()
+						.map(|tx_id| DepositWitness {
+							deposit_address,
+							asset: ETH_ETH,
+							amount: DEFAULT_DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
+						})
+						.collect::<Vec<_>>(),
+					100,
+				));
+			})
+			.then_process_events(|_, event| match event {
+				RuntimeEvent::IngressEgress(PalletEvent::DepositBoosted { .. }) => {
+					panic!("Boosted a fetch for a tainted tx");
+				},
+				_ => None::<()>,
+			})
+			.then_process_blocks(1)
+			.then_execute_with_keep_context(|(deposit_details, _)| {
+				let (_, _, deposit_address) = deposit_details[0];
+				for tx_id in [TAINTED_TX_ID_1, TAINTED_TX_ID_2] {
+					Pallet::<Test, _>::process_channel_deposit_full_witness(
+						DepositWitness {
+							deposit_address,
+							asset: ETH_ETH,
+							amount: DEFAULT_DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
+						},
+						100,
+					);
+				}
+			})
+			.then_process_events(|_, event| match event {
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFailed {
+					reason: DepositFailedReason::TransactionRejectedByBroker,
+					details:
+						DepositFailedDetails::DepositChannel {
+							deposit_witness: DepositWitness { deposit_details, .. },
+						},
+					..
+				}) => Some(deposit_details.deposit_ids().unwrap().clone()),
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFetchesScheduled { .. }) |
+				RuntimeEvent::IngressEgress(PalletEvent::DepositFinalised { .. }) => {
+					panic!("Processed a deposit for a tainted tx");
+				},
+				_ => None,
+			})
+			.inspect_context(|(_, deposit_ids)| {
+				let deposit_ids = deposit_ids.iter().flatten().collect::<Vec<_>>();
+				assert_eq!(deposit_ids.len(), 2, "Expected 2 DepositIgnored events");
+				assert!(deposit_ids.contains(&&TAINTED_TX_ID_1));
+				assert!(deposit_ids.contains(&&TAINTED_TX_ID_2));
+			});
+	}
+
+	#[test]
+	fn rejecting_vault_swap() {
+		let tx_id =
+			H256::from_str("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+				.unwrap();
+
+		new_test_ext()
+			.then_execute_with(|_| {
+				assert_ok!(IngressEgress::mark_transaction_for_rejection(
+					OriginTrait::signed(BROKER),
+					tx_id,
+				));
+			})
+			.then_execute_at_next_block(|_| {
+				assert_ok!(submit_vault_swap_request(
+					Asset::Eth,
+					Asset::Flip,
+					DEFAULT_DEPOSIT_AMOUNT,
+					Default::default(),
+					MockAddressConverter::to_encoded_address(ForeignChainAddress::Eth(
+						ALICE_ETH_ADDRESS
+					)),
+					None,
+					tx_id,
+					DepositDetails { tx_hashes: Some(vec![tx_id]) },
+					Beneficiary { account: BROKER, bps: 0 },
+					bounded_vec![],
+					ETH_REFUND_PARAMS,
+					None,
+					0
+				));
+				assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+				let scheduled_txs = ScheduledTransactionsForRejection::<Test, ()>::get();
+
+				assert_eq!(scheduled_txs.len(), 1);
+				assert_eq!(scheduled_txs[0].deposit_details.deposit_ids().unwrap(), vec![tx_id]);
+			})
+			.then_process_events(|_, event| match event {
+				RuntimeEvent::IngressEgress(PalletEvent::TransactionRejectedByBroker {
+					tx_id,
+					..
+				}) => Some(tx_id.tx_hashes.expect("Should not be empty.")),
+				_ => None,
+			})
+			.then_execute_with(|(_, tx_hashes)| {
+				assert_eq!(tx_hashes, vec![vec![tx_id]], "Expected exactly one rejection.");
+				assert!(FailedRejections::<Test, ()>::get().is_empty());
+
+				let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
+
+				assert_eq!(pending_api_calls.len(), 1);
+				let api_call = pending_api_calls[0].clone();
+
+				match api_call {
+					MockEthereumApiCall::RejectCall {
+						deposit_details, deposit_fetch_id, ..
+					} => {
+						assert_eq!(deposit_details.deposit_ids().unwrap(), vec![tx_id]);
+						assert!(deposit_fetch_id.is_none());
+					},
+					_ => panic!("Expected a RejectCall"),
+				}
+			});
+	}
+}
+
+#[test]
+fn test_various_refund_reasons() {
+	fn test_vault_swap_refund(
+		vault_swap: VaultDepositWitness<Test, ()>,
+		expected_reason: RefundReason,
+	) {
+		new_test_ext().execute_with(|| {
+			IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
+
+			assert_eq!(
+				ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+				0,
+				"Refund broadcast should not have been scheduled!"
+			);
+
+			IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
+
+			assert!(
+				MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
+				"No swaps should have been triggered!"
+			);
+
+			assert_eq!(
+				ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+				1,
+				"Refund broadcast should have been scheduled!"
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(Event::DepositFinalised {
+					action: DepositAction::Refund {
+						egress_id: _,
+						amount: _,
+						reason,
+					},
+					..
+				}) if *reason == expected_reason
+			);
+
+			System::reset_events();
+			ScheduledEgressFetchOrTransfer::<Test, ()>::kill();
+		});
+	}
+
+	// Test case 1: Invalid broker fees
+	test_vault_swap_refund(
+		VaultDepositWitness {
+			input_asset: Asset::Eth.try_into().unwrap(),
+			deposit_address: Default::default(),
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details: Default::default(),
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			deposit_metadata: Default::default(),
+			tx_id: H256::default(),
+			broker_fee: None,
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParameters {
+				retry_duration: 0,
+				min_price: U256::from(0),
+				refund_address: H160::default(),
+			},
+			dca_params: None,
+			boost_fee: 0,
+		},
+		RefundReason::InvalidBrokerFees,
+	);
+
+	// Test case 2: Invalid refund parameters - retry duration too high
+	test_vault_swap_refund(
+		VaultDepositWitness {
+			input_asset: Asset::Eth.try_into().unwrap(),
+			deposit_address: Default::default(),
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details: Default::default(),
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			deposit_metadata: Default::default(),
+			tx_id: H256::default(),
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParameters {
+				retry_duration: 700,
+				min_price: U256::from(0),
+				refund_address: H160::default(),
+			},
+			dca_params: None,
+			boost_fee: 0,
+		},
+		RefundReason::InvalidRefundParameters,
+	);
+
+	// Test case 3: Invalid DCA parameters - number of chunks is 0
+	test_vault_swap_refund(
+		VaultDepositWitness {
+			input_asset: Asset::Eth.try_into().unwrap(),
+			deposit_address: Default::default(),
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details: Default::default(),
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			deposit_metadata: Default::default(),
+			tx_id: H256::default(),
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParameters {
+				retry_duration: 0,
+				min_price: U256::from(0),
+				refund_address: H160::default(),
+			},
+			dca_params: Some(DcaParameters { number_of_chunks: 0, chunk_interval: 100 }),
+			boost_fee: 0,
+		},
+		RefundReason::InvalidDcaParameters,
+	);
 }

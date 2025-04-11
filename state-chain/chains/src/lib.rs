@@ -77,6 +77,7 @@ pub mod btc;
 pub mod dot;
 pub mod eth;
 pub mod evm;
+pub mod hub;
 pub mod none;
 pub mod sol;
 
@@ -567,6 +568,15 @@ pub enum RejectError {
 	Other,
 }
 
+impl From<AllBatchError> for RejectError {
+	fn from(e: AllBatchError) -> Self {
+		match e {
+			AllBatchError::UnsupportedToken => RejectError::NotSupportedForAsset,
+			_ => RejectError::Other,
+		}
+	}
+}
+
 pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
 }
@@ -576,6 +586,8 @@ pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		_deposit_details: C::DepositDetails,
 		_refund_address: C::ChainAccount,
 		_refund_amount: C::ChainAmount,
+		_asset: C::ChainAsset,
+		_deposit_fetch_id: Option<C::DepositFetchId>,
 	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
@@ -596,6 +608,8 @@ pub enum ExecutexSwapAndCallError {
 	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
 	/// Some other DispatchError occurred.
 	DispatchError(DispatchError),
+	/// No vault account exists yet.
+	NoVault,
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -1025,7 +1039,7 @@ pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 }
 
 pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
-	fn deposit_id(&self) -> Option<C::TransactionInId> {
+	fn deposit_ids(&self) -> Option<Vec<C::TransactionInId>> {
 		None
 	}
 }

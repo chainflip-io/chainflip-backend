@@ -30,7 +30,8 @@ type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EvmInstance, PolkadotInstance, Runtime, RuntimeCall, SolanaInstance,
+	AccountId, BitcoinInstance, EvmInstance, PolkadotCryptoInstance, Runtime, RuntimeCall,
+	SolanaInstance,
 };
 use std::{
 	collections::BTreeSet,
@@ -252,6 +253,7 @@ pub async fn start<
 	dot_rpc: DotRpc,
 	btc_rpc: BtcRpc,
 	sol_rpc: SolRpc,
+	hub_rpc: DotRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
@@ -345,7 +347,7 @@ where
                                     }
                                     CfeEvent::DotThresholdSignatureRequest(req) => {
 
-                                        handle_signing_request::<_, _, _, PolkadotInstance>(
+                                        handle_signing_request::<_, _, _, PolkadotCryptoInstance>(
                                             scope,
                                             &dot_multisig_client,
                                             state_chain_client.clone(),
@@ -410,7 +412,7 @@ where
                                         ).await;
                                     }
                                     CfeEvent::DotKeygenRequest(req) => {
-                                        handle_keygen_request::<_, _, _, PolkadotInstance>(
+                                        handle_keygen_request::<_, _, _, PolkadotCryptoInstance>(
                                             scope,
                                             &dot_multisig_client,
                                             state_chain_client.clone(),
@@ -608,8 +610,31 @@ where
                                             });
                                         }
                                     }
-                                }}
-                            }
+                                    CfeEvent::HubTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
+                                        if nominee == account_id {
+                                            let hub_rpc = hub_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                match hub_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
+                                                    Ok(tx_hash) => info!("Assethub TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        error!("Error on Assethub TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            RuntimeCall::AssethubBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_failed {
+                                                                    broadcast_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
+                                                }
+                                                Ok(())
+                                            });
+                                        }
+                                    }
+                                }
+                            }}
                         }
                         Err(error) => {
                             error!("Failed to decode events at block {}. {error}", current_block.number);
@@ -697,7 +722,7 @@ where
 			state_chain_client
 				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 					state_chain_runtime::Runtime,
-					state_chain_runtime::PolkadotInstance,
+					state_chain_runtime::PolkadotCryptoInstance,
 				>>(block_hash)
 				.await
 				.context("Failed to get Polkadot CeremonyIdCounter from SC")?

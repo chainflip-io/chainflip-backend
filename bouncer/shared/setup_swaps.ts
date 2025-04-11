@@ -5,7 +5,7 @@ import { Asset } from './utils';
 import { Logger } from './utils/logger';
 
 export const deposits = new Map<Asset, number>([
-  ['Dot', 200000],
+  ['Dot', 20000],
   ['Eth', 1000],
   ['ArbEth', 1000],
   ['Btc', 100],
@@ -15,6 +15,9 @@ export const deposits = new Map<Asset, number>([
   ['Flip', 100000],
   ['Sol', 1000],
   ['SolUsdc', 1000000],
+  ['HubDot', 10000],
+  ['HubUsdc', 250000],
+  ['HubUsdt', 250000],
 ]);
 
 const price = new Map<Asset, number>([
@@ -28,6 +31,9 @@ const price = new Map<Asset, number>([
   ['Flip', 10],
   ['Sol', 100],
   ['SolUsdc', 1],
+  ['HubDot', 10],
+  ['HubUsdc', 1],
+  ['HubUsdt', 1],
 ]);
 
 export async function setupSwaps(logger: Logger): Promise<void> {
@@ -43,6 +49,9 @@ export async function setupSwaps(logger: Logger): Promise<void> {
     createLpPool(logger, 'ArbUsdc', price.get('ArbUsdc')!),
     createLpPool(logger, 'Sol', price.get('Sol')!),
     createLpPool(logger, 'SolUsdc', price.get('SolUsdc')!),
+    createLpPool(logger, 'HubDot', price.get('HubDot')!),
+    createLpPool(logger, 'HubUsdc', price.get('HubUsdc')!),
+    createLpPool(logger, 'HubUsdt', price.get('HubUsdt')!),
   ]);
 
   const lp1Deposits = Promise.all([
@@ -56,6 +65,9 @@ export async function setupSwaps(logger: Logger): Promise<void> {
     depositLiquidity(logger, 'ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_1'),
     depositLiquidity(logger, 'Sol', deposits.get('Sol')!, false, '//LP_1'),
     depositLiquidity(logger, 'SolUsdc', deposits.get('SolUsdc')!, false, '//LP_1'),
+    depositLiquidity(logger, 'HubDot', deposits.get('HubDot')!, false, '//LP_1'),
+    depositLiquidity(logger, 'HubUsdc', deposits.get('HubUsdc')!, false, '//LP_1'),
+    depositLiquidity(logger, 'HubUsdt', deposits.get('HubUsdt')!, false, '//LP_1'),
   ]);
 
   const lpApiDeposits = Promise.all([
@@ -69,9 +81,12 @@ export async function setupSwaps(logger: Logger): Promise<void> {
     depositLiquidity(logger, 'ArbUsdc', 1000, false, '//LP_API'),
     depositLiquidity(logger, 'Sol', 500, false, '//LP_API'),
     depositLiquidity(logger, 'SolUsdc', 1000, false, '//LP_API'),
+    depositLiquidity(logger, 'HubDot', 2000, false, '//LP_API'),
+    depositLiquidity(logger, 'HubUsdc', 1000, false, '//LP_API'),
+    depositLiquidity(logger, 'HubUsdt', 1000, false, '//LP_API'),
   ]);
 
-  await Promise.all([lp1Deposits, lpApiDeposits]);
+  await Promise.all([lpApiDeposits, lp1Deposits]);
 
   await Promise.all([
     rangeOrder(logger, 'Eth', deposits.get('Eth')! * 0.9999),
@@ -83,6 +98,9 @@ export async function setupSwaps(logger: Logger): Promise<void> {
     rangeOrder(logger, 'ArbUsdc', deposits.get('ArbUsdc')! * 0.9999),
     rangeOrder(logger, 'Sol', deposits.get('Sol')! * 0.9999),
     rangeOrder(logger, 'SolUsdc', deposits.get('SolUsdc')! * 0.9999),
+    rangeOrder(logger, 'HubDot', deposits.get('HubDot')! * 0.9999),
+    rangeOrder(logger, 'HubUsdc', deposits.get('HubUsdc')! * 0.9999),
+    rangeOrder(logger, 'HubUsdt', deposits.get('HubUsdt')! * 0.9999),
   ]);
 
   logger.debug('Range orders placed');

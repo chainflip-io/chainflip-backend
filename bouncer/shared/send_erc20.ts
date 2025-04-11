@@ -27,5 +27,5 @@ export async function sendErc20(
 
   logger.trace(`Transferring ${amount} ${symbol} to ${destinationAddress}`);
 
-  await signAndSendTxEvm(logger, chain, contractAddress, '0', txData, undefined);
+  return signAndSendTxEvm(logger, chain, contractAddress, '0', txData, undefined);
 }
