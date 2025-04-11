@@ -95,21 +95,9 @@ mod test_batch_fetch {
 		let keypair_proxy = PolkadotPair::from_seed(&RAW_SEED_2);
 
 		let dummy_fetch_params: Vec<FetchAssetParams<Polkadot>> = vec![
-			FetchAssetParams::<Polkadot> {
-				deposit_fetch_id: 1,
-				asset: assets::dot::Asset::Dot,
-				amount: 44,
-			},
-			FetchAssetParams::<Polkadot> {
-				deposit_fetch_id: 2,
-				asset: assets::dot::Asset::Dot,
-				amount: 55,
-			},
-			FetchAssetParams::<Polkadot> {
-				deposit_fetch_id: 3,
-				asset: assets::dot::Asset::Dot,
-				amount: 66,
-			},
+			FetchAssetParams::<Polkadot> { deposit_fetch_id: 1, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { deposit_fetch_id: 2, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { deposit_fetch_id: 3, asset: assets::dot::Asset::Dot },
 		];
 
 		let dummy_transfer_params: Vec<TransferAssetParams<Polkadot>> = vec![

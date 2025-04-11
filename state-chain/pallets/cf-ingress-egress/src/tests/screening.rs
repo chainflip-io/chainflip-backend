@@ -31,6 +31,11 @@ use frame_support::{
 use cf_chains::ChannelRefundParametersDecoded;
 use sp_core::U256;
 
+use cf_primitives::Beneficiary;
+
+use crate::{Asset, ScheduledEgressFetchOrTransfer, VaultDepositWitness};
+use cf_chains::{address::EncodedAddress, ChannelRefundParameters};
+
 use cf_chains::{
 	btc::{deposit_address::DepositAddress, Hash, ScriptPubkey, UtxoId},
 	ForeignChainAddress,
@@ -525,5 +530,62 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 		);
 
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+	});
+}
+
+#[test]
+fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
+	new_test_ext().execute_with(|| {
+		let tx_id = Hash::random();
+		let deposit_details = helpers::generate_btc_deposit(tx_id);
+
+		let vault_swap = VaultDepositWitness {
+			input_asset: Asset::Btc.try_into().unwrap(),
+			deposit_address: Default::default(),
+			channel_id: Some(0),
+			deposit_amount: 100,
+			deposit_details,
+			output_asset: Asset::Eth,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			deposit_metadata: Default::default(),
+			tx_id,
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParameters {
+				retry_duration: 0,
+				min_price: U256::from(0),
+				refund_address: ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS),
+			},
+			dca_params: None,
+			boost_fee: 0,
+		};
+
+		assert_ok!(IngressEgress::mark_transaction_for_rejection(
+			OriginTrait::signed(BROKER),
+			tx_id,
+		));
+
+		IngressEgress::process_vault_swap_request_prewitness(0, vault_swap.clone());
+
+		assert_eq!(
+			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+			0,
+			"Refund broadcast should not have been scheduled!"
+		);
+
+		IngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
+
+		assert!(
+			MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),
+			"No swaps should have been triggered!"
+		);
+
+		assert_eq!(
+			ScheduledEgressFetchOrTransfer::<Test, ()>::get().len(),
+			0,
+			"Refund broadcast should not have been scheduled!"
+		);
+
+		assert_eq!(ScheduledTransactionsForRejection::<Test, ()>::decode_len(), Some(1));
 	});
 }

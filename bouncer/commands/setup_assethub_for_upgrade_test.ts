@@ -117,13 +117,13 @@ async function main(): Promise<void> {
 
   logger.info('funding pools with assethub assets');
   const lp1Deposits = Promise.all([
-    depositLiquidity(logger, 'HubDot', 10000, false, '//LP_1'),
+    depositLiquidity(logger, 'HubDot', 20000, false, '//LP_1'),
     depositLiquidity(logger, 'HubUsdc', 250000, false, '//LP_1'),
     depositLiquidity(logger, 'HubUsdt', 250000, false, '//LP_1'),
   ]);
 
   const lpApiDeposits = Promise.all([
-    depositLiquidity(logger, 'HubDot', 2000, false, '//LP_API'),
+    depositLiquidity(logger, 'HubDot', 20000, false, '//LP_API'),
     depositLiquidity(logger, 'HubUsdc', 250000, false, '//LP_API'),
     depositLiquidity(logger, 'HubUsdt', 250000, false, '//LP_API'),
   ]);
@@ -132,7 +132,7 @@ async function main(): Promise<void> {
 
   logger.info('creating orders for assethub assets');
   await Promise.all([
-    rangeOrder(logger, 'HubDot', 10000 * 0.9999),
+    rangeOrder(logger, 'HubDot', 20000 * 0.9999),
     rangeOrder(logger, 'HubUsdc', 250000 * 0.9999),
     rangeOrder(logger, 'HubUsdt', 250000 * 0.9999),
   ]);

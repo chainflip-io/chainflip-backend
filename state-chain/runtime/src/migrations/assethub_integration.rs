@@ -27,7 +27,7 @@ pub mod old {
 	use crate::*;
 	use frame_support::pallet_prelude::*;
 
-	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct LpSafeMode {
 		pub deposit_enabled: bool,
 		pub withdrawal_enabled: bool,
@@ -80,6 +80,37 @@ impl OnRuntimeUpgrade for AssethubChainstate {
 				},
 			);
 		}
+		Weight::zero()
+	}
+}
+
+pub struct AssethubIngressEgressConfig;
+
+impl OnRuntimeUpgrade for AssethubIngressEgressConfig {
+	fn on_runtime_upgrade() -> Weight {
+		match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
+			cf_runtime_utilities::genesis_hashes::BERGHAIN => {
+				pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, AssethubInstance>::put(
+					24 * 3600 / 12,
+				);
+			},
+			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => {
+				pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, AssethubInstance>::put(
+					2 * 60 * 60 / 12,
+				);
+			},
+			cf_runtime_utilities::genesis_hashes::SISYPHOS => {
+				pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, AssethubInstance>::put(
+					2 * 60 * 60 / 12,
+				);
+			},
+			_ => {
+				pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, AssethubInstance>::put(
+					10 * 60 / 12,
+				);
+			},
+		}
+
 		Weight::zero()
 	}
 }

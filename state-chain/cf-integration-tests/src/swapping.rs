@@ -23,7 +23,7 @@ use crate::{
 		fund_authorities_and_join_auction, new_account, register_refund_addresses,
 		setup_account_and_peer_mapping, Cli, Network,
 	},
-	witness_call, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts,
+	witness_call, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts, BROKER,
 };
 use cf_amm::{
 	math::{price_at_tick, Price, Tick},
@@ -39,8 +39,8 @@ use cf_chains::{
 	RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
-	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, EgressId, SwapId,
-	FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, EgressId,
+	SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
@@ -607,7 +607,7 @@ fn vault_swap_deposit_witness(
 		deposit_metadata: Some(ccm_deposit_metadata_mock()),
 		tx_id: Default::default(),
 		deposit_details: DepositDetails { tx_hashes: None },
-		broker_fee: None,
+		broker_fee: Some(Beneficiary { account: BROKER.into(), bps: 0 }),
 		affiliate_fees: Default::default(),
 		refund_params: ETH_REFUND_PARAMS,
 		dca_params: None,

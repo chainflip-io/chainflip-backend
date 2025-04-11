@@ -582,6 +582,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
+	type ScreeningBrokerId = ScreeningBrokerId;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -1492,6 +1493,7 @@ type MigrationsForV1_9 = (
 		<Runtime as frame_system::Config>::DbWeight,
 	>,
 	migrations::assethub_integration::AssethubChainstate,
+	migrations::assethub_integration::AssethubIngressEgressConfig,
 	instanced_migrations!(
 		module: pallet_cf_broadcast,
 		migration: migrations::sol_versioned_transactions::SolVersionedTransactionBroadcastPallet,
