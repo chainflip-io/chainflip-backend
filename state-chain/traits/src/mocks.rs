@@ -54,7 +54,7 @@ pub mod qualify_node;
 pub mod reputation_resetter;
 pub mod safe_mode;
 pub mod signer_nomination;
-pub mod swap_limits_provider;
+pub mod swap_parameter_validation;
 pub mod swap_request_api;
 pub mod threshold_signer;
 pub mod time_source;

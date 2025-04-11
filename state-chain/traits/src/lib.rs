@@ -1052,7 +1052,7 @@ pub struct SwapLimits {
 	pub max_swap_retry_duration_blocks: BlockNumber,
 	pub max_swap_request_duration_blocks: BlockNumber,
 }
-pub trait SwapLimitsProvider {
+pub trait SwapParameterValidation {
 	type AccountId;
 
 	fn get_swap_limits() -> SwapLimits;

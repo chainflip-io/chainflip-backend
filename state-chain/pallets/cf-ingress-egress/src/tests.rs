@@ -61,7 +61,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		funding_info::MockFundingInfo,
-		swap_limits_provider::MockSwapLimitsProvider,
+		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
 	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
@@ -2197,7 +2197,7 @@ fn vault_swap_minimum_broker_fee_is_enforced() {
 		let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 		const MINIMUM_BROKER_FEE_BPS: u16 = 100;
-		MockSwapLimitsProvider::set_minimum_broker_fee(BROKER, MINIMUM_BROKER_FEE_BPS);
+		MockSwapParameterValidation::set_minimum_broker_fee(BROKER, MINIMUM_BROKER_FEE_BPS);
 
 		assert_ok!(submit_vault_swap_request(
 			Asset::Eth,

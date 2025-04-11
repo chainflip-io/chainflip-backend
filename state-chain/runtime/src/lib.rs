@@ -85,7 +85,7 @@ use cf_primitives::{
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, MinimumDeposit, NoLimit, SwapLimits,
-	SwapLimitsProvider,
+	SwapParameterValidation,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -433,7 +433,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
@@ -462,7 +462,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
@@ -491,7 +491,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
@@ -520,7 +520,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
@@ -549,7 +549,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
-	type SwapLimitsProvider = Swapping;
+	type SwapParameterValidation = Swapping;
 	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;

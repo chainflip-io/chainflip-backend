@@ -34,8 +34,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, SwapLimitsProvider,
-	SwapOutputAction, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, SwapOutputAction,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
 	SwappingApi,
 };
 use frame_support::{
@@ -2504,7 +2504,7 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	}
 }
 
-impl<T: Config> SwapLimitsProvider for Pallet<T> {
+impl<T: Config> SwapParameterValidation for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	fn get_swap_limits() -> cf_traits::SwapLimits {

@@ -751,7 +751,7 @@ fn test_minimum_chunk_size() {
 
 #[test]
 fn test_dca_parameter_validation() {
-	use cf_traits::SwapLimitsProvider;
+	use cf_traits::SwapParameterValidation;
 
 	fn validate_dca_params(
 		number_of_chunks: u32,

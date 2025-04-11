@@ -63,8 +63,8 @@ use cf_traits::{
 	AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapLimitsProvider,
-	SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapOutputAction,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -356,7 +356,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{address::EncodedAddress, ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{OnDeposit, SwapLimitsProvider};
+	use cf_traits::{OnDeposit, SwapParameterValidation};
 	use core::marker::PhantomData;
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -629,7 +629,7 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 
-		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
+		type SwapParameterValidation: SwapParameterValidation<AccountId = Self::AccountId>;
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
@@ -2165,7 +2165,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Beneficiary {
 			bps: core::cmp::max(
 				broker_fee.bps,
-				T::SwapLimitsProvider::get_minimum_vault_swap_fee_for_broker(&broker_fee.account),
+				T::SwapParameterValidation::get_minimum_vault_swap_fee_for_broker(
+					&broker_fee.account,
+				),
 			),
 			account: broker_fee.account,
 		}
@@ -2624,7 +2626,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Err(RefundReason::InvalidBrokerFees);
 		};
 
-		if T::SwapLimitsProvider::validate_broker_fees(&broker_fees).is_err() {
+		if T::SwapParameterValidation::validate_broker_fees(&broker_fees).is_err() {
 			return Err(RefundReason::InvalidBrokerFees);
 		}
 
@@ -2650,13 +2652,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		if let Err(_err) =
-			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
+			T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)
 		{
 			return Err(RefundReason::InvalidRefundParameters);
 		}
 
 		if let Some(params) = &dca_params {
-			if T::SwapLimitsProvider::validate_dca_params(params).is_err() {
+			if T::SwapParameterValidation::validate_dca_params(params).is_err() {
 				return Err(RefundReason::InvalidDcaParameters);
 			}
 		}
@@ -3134,9 +3136,9 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)?;
+		T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)?;
 		if let Some(params) = &dca_params {
-			T::SwapLimitsProvider::validate_dca_params(params)?;
+			T::SwapParameterValidation::validate_dca_params(params)?;
 		}
 
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(

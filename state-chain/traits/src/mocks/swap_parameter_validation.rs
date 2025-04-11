@@ -19,19 +19,19 @@ use std::collections::BTreeMap;
 use cf_primitives::{BasisPoints, BlockNumber};
 use frame_support::sp_runtime::DispatchError;
 
-use crate::{SwapLimits, SwapLimitsProvider};
+use crate::{SwapLimits, SwapParameterValidation};
 
 use super::{MockPallet, MockPalletStorage};
 
 const MINIMUM_BROKER_FEE: &[u8] = b"MINIMUM_BROKER_FEE";
 
-pub struct MockSwapLimitsProvider;
+pub struct MockSwapParameterValidation;
 
-impl MockPallet for MockSwapLimitsProvider {
-	const PREFIX: &'static [u8] = b"MockSwapLimitsProvider";
+impl MockPallet for MockSwapParameterValidation {
+	const PREFIX: &'static [u8] = b"MockSwapParameterValidation";
 }
 
-impl MockSwapLimitsProvider {
+impl MockSwapParameterValidation {
 	pub fn set_minimum_broker_fee(broker_id: u64, minimum_fee: BasisPoints) {
 		<Self as MockPalletStorage>::mutate_value::<BTreeMap<u64, BasisPoints>, _, _>(
 			MINIMUM_BROKER_FEE,
@@ -44,7 +44,7 @@ impl MockSwapLimitsProvider {
 	}
 }
 
-impl SwapLimitsProvider for MockSwapLimitsProvider {
+impl SwapParameterValidation for MockSwapParameterValidation {
 	type AccountId = u64;
 
 	fn get_swap_limits() -> SwapLimits {

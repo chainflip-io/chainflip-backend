@@ -38,7 +38,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		pool_api::MockPoolApi,
-		swap_limits_provider::MockSwapLimitsProvider,
+		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
@@ -125,7 +125,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type AssetWithholding = MockAssetWithholding;
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
-	type SwapLimitsProvider = MockSwapLimitsProvider;
+	type SwapParameterValidation = MockSwapParameterValidation;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
