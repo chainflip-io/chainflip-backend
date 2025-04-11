@@ -48,6 +48,8 @@ use state_chain_observer::client::{
 	STATE_CHAIN_CONNECTION,
 };
 
+use std::{fs::File, io::Write};
+
 use self::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
@@ -386,4 +388,75 @@ async fn run_main(
 		.boxed()
 	})
 	.await
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::state_chain_observer::client::storage_api::StorageMapAssociatedTypes;
+
+	use super::*;
+	use cf_chains::instances::ArbitrumInstance;
+	use codec::Encode;
+
+	#[tokio::test]
+	async fn create_kill_storage_for_old_tx_out_ids() {
+		task_scope(|scope| {
+			async move {
+				let (_state_chain_stream, _unfinalised_state_chain_stream, state_chain_client) =
+					state_chain_observer::client::StateChainClient::connect_without_account(
+						scope,
+						&"wss://archive.perseverance.chainflip.io",
+					)
+					.await?;
+
+				// get all transaction out ids
+				let arb_tx_out_ids: Vec<(_, _)> = state_chain_client
+					.storage_map::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
+						state_chain_runtime::Runtime,
+						ArbitrumInstance,
+					>, _>(state_chain_client.latest_finalized_block().hash)
+					.await
+					.unwrap();
+
+				// any broadcast ids below 600
+				let (arb_ids_to_delete, arb_ids_to_keep): (Vec<(_, _)>, Vec<(_, _)>) =
+					arb_tx_out_ids.into_iter().partition(|(_, value)| value.0 < 600);
+
+				println!("arb_ids_to_delete: {:?}", arb_ids_to_delete.len());
+				println!("arb_ids_to_keep: {:?}", arb_ids_to_keep.len());
+
+				use frame_support::StorageHasher;
+
+				let kill_storage_call =
+					state_chain_runtime::RuntimeCall::System(frame_system::Call::kill_storage {
+						keys: arb_ids_to_delete
+							.into_iter()
+							.map(|(key, _)| {
+								// Get the prefix hash of the storage map
+								let prefix_hash =
+									pallet_cf_broadcast::TransactionOutIdToBroadcastId::<
+										state_chain_runtime::Runtime,
+										ArbitrumInstance,
+									>::_prefix_hash();
+
+								let hashed_key = frame_support::Twox64Concat::hash(&key.encode());
+
+								[prefix_hash.0.as_slice(), &hashed_key].concat()
+							})
+							.collect(),
+					})
+					.encode();
+
+				let kill_storage_call_hex = hex::encode(kill_storage_call);
+
+				let mut file = File::create("extrinsic_bytes.txt").unwrap();
+				file.write_all(&kill_storage_call_hex.as_bytes()).unwrap();
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap()
+	}
 }
