@@ -22,6 +22,7 @@ use crate::{
 	},
 	vote_storage, CorruptStorageError,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -32,16 +33,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 /// This electoral system detects if something occurred or not. Voters simply vote if something
 /// happened, and if they haven't seen it happen, they don't vote.
 #[allow(clippy::type_complexity)]
-pub struct ExactValue<
-	Identifier,
-	Value,
-	Settings,
-	Hook,
-	ValidatorId,
-	StateChainBlockNumber,
-	UnsynchronisedStateMapKey,
-	UnsynchronisedStateMapValue,
-> {
+pub struct ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber> {
 	_phantom: core::marker::PhantomData<(
 		Identifier,
 		Value,
@@ -49,13 +41,17 @@ pub struct ExactValue<
 		Hook,
 		ValidatorId,
 		StateChainBlockNumber,
-		UnsynchronisedStateMapKey,
-		UnsynchronisedStateMapValue,
 	)>,
 }
 
 pub trait ExactValueHook<Identifier, Value> {
-	fn on_consensus(id: Identifier, value: Value);
+	type StorageKey: Parameter + Member;
+	type StorageValue: Parameter + Member;
+
+	/// Called when a consensus is reached. The hook can return a tuple of `(Self::StorageKey,
+	/// Self::StorageValue)` to be stored in the unsynchronised state map.
+	fn on_consensus(id: Identifier, value: Value)
+		-> Option<(Self::StorageKey, Self::StorageValue)>;
 }
 
 impl<
@@ -65,19 +61,7 @@ impl<
 		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
-		UnsynchronisedStateMapKey: Parameter + Member,
-		UnsynchronisedStateMapValue: Parameter + Member,
-	>
-	ExactValue<
-		Identifier,
-		Value,
-		Settings,
-		Hook,
-		ValidatorId,
-		StateChainBlockNumber,
-		UnsynchronisedStateMapKey,
-		UnsynchronisedStateMapValue,
-	>
+	> ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	pub fn witness_exact_value<
 		ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
@@ -86,6 +70,27 @@ impl<
 	) -> Result<(), CorruptStorageError> {
 		ElectoralAccess::new_election((), identifier, ())?;
 		Ok(())
+	}
+
+	pub fn election_result<
+		ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
+	>(
+		id: Hook::StorageKey,
+	) -> Option<Hook::StorageValue> {
+		ElectoralAccess::mutate_unsynchronised_state_map(id.clone(), |storage| {
+			Ok(if let Some((counter, value)) = storage.take() {
+				if counter > 1 {
+					let _ = storage.insert((counter - 1, value.clone()));
+				}
+				Some(value)
+			} else {
+				None
+			})
+		})
+		.unwrap_or_else(|_| {
+			log_or_panic!("Failed to get election result for el {:?} due to corrupted storage", id);
+			None
+		})
 	}
 }
 
@@ -96,25 +101,14 @@ impl<
 		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
-		UnsynchronisedStateMapKey: Parameter + Member,
-		UnsynchronisedStateMapValue: Parameter + Member,
 	> ElectoralSystemTypes
-	for ExactValue<
-		Identifier,
-		Value,
-		Settings,
-		Hook,
-		ValidatorId,
-		StateChainBlockNumber,
-		UnsynchronisedStateMapKey,
-		UnsynchronisedStateMapValue,
-	>
+	for ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
 	type StateChainBlockNumber = StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = ();
-	type ElectoralUnsynchronisedStateMapKey = UnsynchronisedStateMapKey;
-	type ElectoralUnsynchronisedStateMapValue = UnsynchronisedStateMapValue;
+	type ElectoralUnsynchronisedStateMapKey = Hook::StorageKey;
+	type ElectoralUnsynchronisedStateMapValue = (u16, Hook::StorageValue);
 
 	type ElectoralUnsynchronisedSettings = ();
 	type ElectoralSettings = Settings;
@@ -134,19 +128,8 @@ impl<
 		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
-		UnsynchronisedStateMapKey: Parameter + Member,
-		UnsynchronisedStateMapValue: Parameter + Member,
 	> ElectoralSystem
-	for ExactValue<
-		Identifier,
-		Value,
-		Settings,
-		Hook,
-		ValidatorId,
-		StateChainBlockNumber,
-		UnsynchronisedStateMapKey,
-		UnsynchronisedStateMapValue,
-	>
+	for ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -183,7 +166,16 @@ impl<
 			let election_access = ElectoralAccess::election_mut(election_identifier);
 			let identifier = election_access.properties()?;
 			if let Some(witnessed_value) = election_access.check_consensus()?.has_consensus() {
-				Hook::on_consensus(identifier, witnessed_value);
+				if let Some((key, value)) = Hook::on_consensus(identifier, witnessed_value) {
+					ElectoralAccess::mutate_unsynchronised_state_map(key, |storage| {
+						if let Some((old_counter, _)) = storage.replace((1, value)) {
+							if let Some((counter, _)) = storage.as_mut() {
+								*counter = old_counter + 1;
+							};
+						}
+						Ok(())
+					})?;
+				}
 				election_access.delete();
 			}
 		}

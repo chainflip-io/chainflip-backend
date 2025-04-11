@@ -28,8 +28,12 @@ thread_local! {
 
 pub struct MockHook;
 impl ExactValueHook<(), EgressData> for MockHook {
-	fn on_consensus(_id: (), _egress_data: EgressData) {
+	type StorageKey = ();
+	type StorageValue = EgressData;
+
+	fn on_consensus(id: (), egress_data: EgressData) -> Option<((), EgressData)> {
 		HOOK_CALLED.with(|hook_called| hook_called.set(true));
+		Some((id, egress_data))
 	}
 }
 
@@ -40,17 +44,27 @@ impl MockHook {
 }
 
 type EgressData = u64;
-type SimpleEgressSuccess = ExactValue<(), EgressData, (), MockHook, (), u32, (), ()>;
+type SimpleEgressSuccess = ExactValue<(), EgressData, (), MockHook, (), u32>;
 
 register_checks! {
 	SimpleEgressSuccess {
-		hook_called(_pre, _post) {
+		hook_called(_pre, post) {
 			assert!(MockHook::called(), "Hook should have been called!");
+			assert!(
+				post.unsynchronised_state_map
+					.contains_key(&()),
+				"State should have been set!"
+			)
 		},
-		hook_not_called(_pre, _post) {
+		hook_not_called(pre, post) {
 			assert!(
 				!MockHook::called(),
 				"Hook should not have been called!"
+			);
+			assert_eq!(
+				pre,
+				post,
+				"State should not have changed!"
 			);
 		},
 	}
