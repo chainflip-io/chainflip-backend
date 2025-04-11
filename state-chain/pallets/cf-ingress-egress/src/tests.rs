@@ -2274,7 +2274,7 @@ fn rejects_invalid_swap_by_witnesser() {
 		// No swap request created -> the call was ignored
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
-		// Invalid BTC address:
+		// Invalid combination of Asset/Destination.
 		assert_ok!(submit_vault_swap_request(
 			Asset::Eth,
 			Asset::Dot,
