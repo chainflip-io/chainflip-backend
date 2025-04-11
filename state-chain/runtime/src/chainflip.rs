@@ -68,9 +68,9 @@ use cf_chains::{
 	instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance, SolanaInstance},
 	sol::{
 		api::{
-			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
-			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
-			SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
+			RecoverDurableNonce, SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
@@ -617,12 +617,15 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
-impl ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
-	for SolEnvironment
+impl
+	ChainEnvironment<
+		Vec<SolAddress>,
+		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	> for SolEnvironment
 {
 	fn lookup(
 		alts: Vec<SolAddress>,
-	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+	) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
 		// Verify that all the data is ready
 		if alts.iter().any(|alt| {
 			solana_elections::SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
@@ -633,13 +636,14 @@ impl ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTa
 		}
 
 		// If all the data is ready, reduce ref count by 1 from storage
-		Some(AltConsensusResult::group(
-			alts.into_iter()
+		Some(
+			match alts
+				.into_iter()
 				.map(|alt| {
 					solana_elections::SolanaAltWitnessingElectoralAccess::mutate_unsynchronised_state_map(
 						alt,
 						|maybe_state| {
-							let (value, ref_count) = maybe_state.as_mut().expect("Data is guaranteed to be Some()");
+							let (value, ref_count) = maybe_state.as_mut().expect("Checked that the state is Some() above");
 							ref_count.saturating_reduce(1);
 
 							let res = value.clone();
@@ -651,8 +655,21 @@ impl ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTa
 					)
 				})
 				.collect::<Result<Vec<_>, _>>()
-				.ok()?,
-		))
+				.ok()?
+				.into_iter()
+				.map(|consensus_res| {
+					if let AltWitnessingConsensusResult::ValidConsensus(alt) = consensus_res {
+						Ok(alt)
+					} else {
+						Err(())
+					}
+				})
+				.collect::<Result<Vec<_>, ()>>()
+			{
+				Ok(alts) => AltWitnessingConsensusResult::ValidConsensus(alts),
+				Err(_) => AltWitnessingConsensusResult::InvalidNoConsensus,
+			},
+		)
 	}
 }
 

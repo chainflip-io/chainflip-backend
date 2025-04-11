@@ -86,8 +86,10 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
-	+ ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
-	+ RecoverDurableNonce
+	+ ChainEnvironment<
+		Vec<SolAddress>,
+		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	> + RecoverDurableNonce
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
 		Self::lookup(ComputePrice).ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
@@ -123,8 +125,9 @@ pub trait SolanaEnvironment:
 		alts: Vec<SolAddress>,
 	) -> Result<Vec<SolAddressLookupTableAccount>, SolanaTransactionBuildingError> {
 		match Self::lookup(alts) {
-			Some(AltConsensusResult::ValidConsensusAlts(res)) => Ok(res),
-			Some(AltConsensusResult::AltsInvalidNoConsensus) =>
+			Some(AltWitnessingConsensusResult::ValidConsensus(witnessed_alts)) =>
+				Ok(witnessed_alts),
+			Some(AltWitnessingConsensusResult::InvalidNoConsensus) =>
 				Err(SolanaTransactionBuildingError::AltsInvalid),
 			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed),
 		}
@@ -763,34 +766,7 @@ impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {}
 	Ord,
 	PartialOrd,
 )]
-pub enum AltConsensusResult<T> {
-	ValidConsensusAlts(T),
-	AltsInvalidNoConsensus,
-}
-
-impl<T, E> From<Result<T, E>> for AltConsensusResult<T> {
-	fn from(value: Result<T, E>) -> Self {
-		match value {
-			Ok(r) => AltConsensusResult::ValidConsensusAlts(r),
-			Err(_) => AltConsensusResult::AltsInvalidNoConsensus,
-		}
-	}
-}
-
-impl<T> AltConsensusResult<T> {
-	/// Group a vec of results into a single result.
-	/// Only return `ValidConsensusAlts` if all individual results are `ValidConsensusAlts`.
-	pub fn group(individuals: Vec<AltConsensusResult<T>>) -> AltConsensusResult<Vec<T>> {
-		individuals
-			.into_iter()
-			.map(|individual| {
-				if let AltConsensusResult::ValidConsensusAlts(ind) = individual {
-					Ok(ind)
-				} else {
-					Err(())
-				}
-			})
-			.collect::<Result<Vec<T>, ()>>()
-			.into()
-	}
+pub enum AltWitnessingConsensusResult<T> {
+	ValidConsensus(T),
+	InvalidNoConsensus,
 }

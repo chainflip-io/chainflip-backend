@@ -24,8 +24,8 @@ use cf_chains::{
 	instances::{ChainInstanceAlias, SolanaInstance},
 	sol::{
 		api::{
-			AltConsensusResult, SolanaApi, SolanaTransactionBuildingError, SolanaTransactionType,
-			VaultSwapAccountAndSender,
+			AltWitnessingConsensusResult, SolanaApi, SolanaTransactionBuildingError,
+			SolanaTransactionType, VaultSwapAccountAndSender,
 		},
 		compute_units_costs::MIN_COMPUTE_PRICE,
 		sol_tx_core::SlotNumber,
@@ -208,13 +208,13 @@ pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 	SolanaAltWitnessingIdentifier,
 	// We also want to allow for the election to come to consensus on the fact that one or more
 	// alts provided were invalid and so we cant witness all alts.
-	AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	(),
 	SolanaAltWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
 	SolAddress,
-	(AltConsensusResult<SolAddressLookupTableAccount>, RefCount),
+	(AltWitnessingConsensusResult<SolAddressLookupTableAccount>, RefCount),
 >;
 
 pub type SolanaAltWitnessingElectoralAccess =
@@ -225,27 +225,27 @@ pub struct SolanaAltWitnessingHook;
 impl
 	ExactValueHook<
 		SolanaAltWitnessingIdentifier,
-		AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
+		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	> for SolanaAltWitnessingHook
 {
 	fn on_consensus(
 		alt_identifier: SolanaAltWitnessingIdentifier,
-		alts: AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
+		alts: AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	) {
 		// Store the Consensus result into the Unsynchronised state map, increment ref count by 1
-		let res = match alts {
-			AltConsensusResult::AltsInvalidNoConsensus => alt_identifier
+		match alts {
+			AltWitnessingConsensusResult::InvalidNoConsensus => alt_identifier
 				.0
 				.into_iter()
-				.map(|alt| (alt, AltConsensusResult::AltsInvalidNoConsensus))
+				.map(|alt| (alt, AltWitnessingConsensusResult::InvalidNoConsensus))
 				.collect::<Vec<_>>(),
-			AltConsensusResult::ValidConsensusAlts(res) => res
+			AltWitnessingConsensusResult::ValidConsensus(witnessed_alts) => witnessed_alts
 				.into_iter()
-				.map(|r| (r.key.into(), AltConsensusResult::ValidConsensusAlts(r)))
+				.map(|r| (r.key.into(), AltWitnessingConsensusResult::ValidConsensus(r)))
 				.collect::<Vec<_>>(),
-		};
-
-		res.into_iter().for_each(|(key, value)| {
+		}
+		.into_iter()
+		.for_each(|(key, value)| {
 			// This will only fail if Election storage is corrupted.
 			let _ = SolanaAltWitnessingElectoralAccess::mutate_unsynchronised_state_map(
 				key,

@@ -25,8 +25,8 @@ use cf_chains::{
 	ccm_checker::{CcmValidityError, DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	sol::{
 		api::{
-			AltConsensusResult, SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError,
-			SolanaTransactionType,
+			AltWitnessingConsensusResult, SolanaApi, SolanaEnvironment,
+			SolanaTransactionBuildingError, SolanaTransactionType,
 		},
 		sol_tx_core::sol_test_values::{self, user_alt},
 		transaction_builder::SolanaTransactionBuilder,
@@ -182,7 +182,7 @@ fn schedule_deposit_to_swap(
 
 fn vote_for_alt_election(
 	election_identifier: u64,
-	res: AltConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	res: AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
 ) {
 	let mut vote = BoundedBTreeMap::new();
 	vote.try_insert(
@@ -504,7 +504,7 @@ fn can_send_solana_ccm_v1() {
 			// Wait until swap is complete and ALT election started
 			vote_for_alt_election(
 				29,
-				AltConsensusResult::ValidConsensusAlts(vec![SolAddressLookupTableAccount {
+				AltWitnessingConsensusResult::ValidConsensus(vec![SolAddressLookupTableAccount {
 					key: user_alt().key,
 					addresses: vec![Default::default()],
 				}]),
@@ -586,7 +586,7 @@ fn ccms_can_contain_overlapping_alts() {
 			// Let election come into Consensus
 			vote_for_alt_election(
 				29,
-				AltConsensusResult::ValidConsensusAlts(vec![
+				AltWitnessingConsensusResult::ValidConsensus(vec![
 					SolAddressLookupTableAccount {
 						key: user_alts[0].into(),
 						addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
@@ -599,7 +599,7 @@ fn ccms_can_contain_overlapping_alts() {
 			);
 			vote_for_alt_election(
 				30,
-				AltConsensusResult::ValidConsensusAlts(vec![
+				AltWitnessingConsensusResult::ValidConsensus(vec![
 					SolAddressLookupTableAccount {
 						key: user_alts[1].into(),
 						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
@@ -611,8 +611,6 @@ fn ccms_can_contain_overlapping_alts() {
 				]),
 			);
 
-			// TODO Fix this test once this problem is fixed.
-			// Currently only 1 ccm can be egressed, the other will hang forever.
 			testnet.move_forward_blocks(1);
 
 			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
@@ -1100,7 +1098,7 @@ fn invalid_alt_triggers_refund_transfer() {
 
 			testnet.move_forward_blocks(1);
 
-			vote_for_alt_election(13, AltConsensusResult::AltsInvalidNoConsensus);
+			vote_for_alt_election(13, AltWitnessingConsensusResult::InvalidNoConsensus);
 
 			// Let the election come to consensus.
 			testnet.move_forward_blocks(1);
@@ -1143,7 +1141,7 @@ fn solana_election_result_reference_counting_works() {
 		// on_consensus adds result to the state map with ref counting
 		SolanaAltWitnessingHook::on_consensus(
 			SolanaAltWitnessingIdentifier(vec![alt_a, alt_b]),
-			AltConsensusResult::ValidConsensusAlts(vec![
+			AltWitnessingConsensusResult::ValidConsensus(vec![
 				SolAddressLookupTableAccount {
 					key: SolPubkey([0xA0; 32]),
 					addresses: vec![SolPubkey([0xA1; 32]), SolPubkey([0xA2; 32])],
@@ -1157,7 +1155,7 @@ fn solana_election_result_reference_counting_works() {
 
 		SolanaAltWitnessingHook::on_consensus(
 			SolanaAltWitnessingIdentifier(vec![alt_a, alt_b, alt_c]),
-			AltConsensusResult::ValidConsensusAlts(vec![
+			AltWitnessingConsensusResult::ValidConsensus(vec![
 				SolAddressLookupTableAccount {
 					key: SolPubkey([0xA0; 32]),
 					addresses: vec![SolPubkey([0xA1; 32]), SolPubkey([0xA2; 32])],
@@ -1177,37 +1175,35 @@ fn solana_election_result_reference_counting_works() {
 			]),
 		);
 
-		let assert_ref_count = |alt: &SolAddress, ref_count: RefCount| {
-			if ref_count.is_zero() {
-				assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
-					.unwrap()
-					.is_none());
-			} else {
-				assert_matches!(
-					SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
+		let assert_ref_counts = |inputs: Vec<(&SolAddress, RefCount)>| {
+			inputs.into_iter().for_each(|(alt, ref_count)| {
+				if ref_count.is_zero() {
+					assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
 						.unwrap()
-						.unwrap(),
-					(AltConsensusResult::ValidConsensusAlts(_), count) if count == ref_count
-				);
-			}
+						.is_none());
+				} else {
+					assert_matches!(
+						SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
+							.unwrap()
+							.unwrap(),
+						(AltWitnessingConsensusResult::ValidConsensus(_), count) if count == ref_count
+					);
+				}
+			});
 		};
 
-		assert_ref_count(&alt_a, 2);
-		assert_ref_count(&alt_b, 2);
-		assert_ref_count(&alt_c, 1);
+		assert_ref_counts(vec![(&alt_a, 2), (&alt_b, 2), (&alt_c, 1)]);
 
 		// Only `take` when all ALTs are ready.
 		assert_eq!(
 			SolEnvironment::get_address_lookup_tables(vec![alt_a, alt_b, alt_c, alt_d]),
 			Err(SolanaTransactionBuildingError::AltsNotYetWitnessed)
 		);
-		assert_ref_count(&alt_a, 2);
-		assert_ref_count(&alt_b, 2);
-		assert_ref_count(&alt_c, 1);
+		assert_ref_counts(vec![(&alt_a, 2), (&alt_b, 2), (&alt_c, 1)]);
 
 		SolanaAltWitnessingHook::on_consensus(
 			SolanaAltWitnessingIdentifier(vec![alt_d]),
-			AltConsensusResult::AltsInvalidNoConsensus,
+			AltWitnessingConsensusResult::InvalidNoConsensus,
 		);
 
 		// Successful lookup "takes" the result.
@@ -1215,15 +1211,9 @@ fn solana_election_result_reference_counting_works() {
 			SolEnvironment::get_address_lookup_tables(vec![alt_a, alt_b, alt_c, alt_d]),
 			Err(SolanaTransactionBuildingError::AltsInvalid)
 		);
-		assert_ref_count(&alt_a, 1);
-		assert_ref_count(&alt_b, 1);
-		assert_ref_count(&alt_c, 0);
-		assert_ref_count(&alt_d, 0);
+		assert_ref_counts(vec![(&alt_a, 1), (&alt_b, 1), (&alt_c, 0), (&alt_d, 0)]);
 
 		assert!(SolEnvironment::get_address_lookup_tables(vec![alt_a, alt_b]).is_ok());
-		assert_ref_count(&alt_a, 0);
-		assert_ref_count(&alt_b, 0);
-		assert_ref_count(&alt_c, 0);
-		assert_ref_count(&alt_d, 0);
+		assert_ref_counts(vec![(&alt_a, 0), (&alt_b, 0), (&alt_c, 0), (&alt_d, 0)]);
 	});
 }
