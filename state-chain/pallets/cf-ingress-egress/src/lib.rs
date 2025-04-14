@@ -2180,7 +2180,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Option<Beneficiaries<T::AccountId>> {
 		broker_fee
 			.filter(|Beneficiary { account, .. }| {
-				if T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker) {
+				if T::AccountRoleRegistry::has_account_role(account, AccountRole::Broker) {
 					true
 				} else {
 					Self::deposit_event(Event::<T, I>::UnknownBroker {
