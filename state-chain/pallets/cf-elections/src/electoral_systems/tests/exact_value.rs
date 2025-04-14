@@ -107,9 +107,10 @@ fn solana_election_result_reference_counting_works() {
 			id(2),
 			ConsensusStatus::Gained { most_recent: None, new: vec![22, 23] },
 		);
+		// Storage map should update with the new value
 		MockStorageAccess::set_consensus_status::<WitnessExactValueWithStorage>(
 			id(3),
-			ConsensusStatus::Gained { most_recent: None, new: vec![11, 12] },
+			ConsensusStatus::Gained { most_recent: None, new: vec![31, 32] },
 		);
 
 		assert_ok!(WitnessExactValueWithStorage::on_finalize::<
@@ -121,7 +122,7 @@ fn solana_election_result_reference_counting_works() {
 			WitnessExactValueWithStorage::election_result::<MockAccess<WitnessExactValueWithStorage>>(
 				first_id.clone()
 			),
-			Some(vec![11, 12])
+			Some(vec![31, 32])
 		);
 		assert_eq!(
 			WitnessExactValueWithStorage::election_result::<MockAccess<WitnessExactValueWithStorage>>(
@@ -133,7 +134,7 @@ fn solana_election_result_reference_counting_works() {
 			WitnessExactValueWithStorage::election_result::<MockAccess<WitnessExactValueWithStorage>>(
 				first_id.clone()
 			),
-			Some(vec![11, 12])
+			Some(vec![31, 32])
 		);
 
 		assert!(WitnessExactValueWithStorage::election_result::<
