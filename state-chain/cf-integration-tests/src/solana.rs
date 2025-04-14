@@ -47,12 +47,9 @@ use frame_support::{
 	assert_err,
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
-use frame_system::RefCount;
 use pallet_cf_elections::{
 	electoral_system::ElectoralReadAccess,
-	electoral_systems::{
-		composite::tuple_7_impls::CompositeElectionIdentifierExtra, exact_value::ExactValueHook,
-	},
+	electoral_systems::composite::tuple_7_impls::CompositeElectionIdentifierExtra,
 	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
 	AuthorityVoteOf, ElectionIdentifier, ElectionIdentifierOf, UniqueMonotonicIdentifier,
 	MAXIMUM_VOTES_PER_EXTRINSIC,
@@ -63,13 +60,13 @@ use pallet_cf_ingress_egress::{
 };
 use pallet_cf_validator::RotationPhase;
 use sp_core::ConstU32;
-use sp_runtime::{traits::Zero, BoundedBTreeMap};
+use sp_runtime::BoundedBTreeMap;
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation,
 		solana_elections::{
-			SolanaAltWitnessingElectoralAccess, SolanaAltWitnessingHook,
-			SolanaAltWitnessingIdentifier, TransactionSuccessDetails,
+			SolanaAltWitnessingElectoralAccess, SolanaAltWitnessingIdentifier,
+			TransactionSuccessDetails,
 		},
 		ChainAddressConverter, SolEnvironment,
 		SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
@@ -523,7 +520,7 @@ fn can_send_solana_ccm_v1() {
 }
 
 #[test]
-fn ccms_can_contain_overlapping_alts() {
+fn ccms_can_contain_overlapping_and_identical_alts() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
@@ -573,12 +570,16 @@ fn ccms_can_contain_overlapping_alts() {
 				.unwrap();
 
 			assert_eq!(
-				schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, Some(ccm_0)),
+				schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, Some(ccm_0.clone())),
 				1.into()
 			);
 			assert_eq!(
 				schedule_deposit_to_swap(BOB, Asset::SolUsdc, Asset::Sol, Some(ccm_1)),
 				3.into()
+			);
+			assert_eq!(
+				schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, Some(ccm_0)),
+				4.into()
 			);
 
 			testnet.move_forward_blocks(2);
@@ -610,7 +611,19 @@ fn ccms_can_contain_overlapping_alts() {
 					},
 				]),
 			);
-
+			vote_for_alt_election(
+				31,
+				AltWitnessingConsensusResult::ValidConsensus(vec![
+					SolAddressLookupTableAccount {
+						key: user_alts[0].into(),
+						addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
+					},
+					SolAddressLookupTableAccount {
+						key: user_alts[1].into(),
+						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
+					},
+				]),
+			);
 			testnet.move_forward_blocks(1);
 
 			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
@@ -625,6 +638,12 @@ fn ccms_can_contain_overlapping_alts() {
 					egress_id: (ForeignChain::Solana, 2),
 				},
 			));
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id: 5,
+					egress_id: (ForeignChain::Solana, 3),
+				},
+			));
 
 			// All CCMs are egressed successfully. Unsynchronised map states are consumed correctly.
 			assert_eq!(
@@ -632,15 +651,16 @@ fn ccms_can_contain_overlapping_alts() {
 				),
 				Some(0)
 			);
-			assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(&user_alts[0])
-				.unwrap()
-				.is_none());
-			assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(&user_alts[1])
-				.unwrap()
-				.is_none());
-			assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(&user_alts[2])
-				.unwrap()
-				.is_none());
+			assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(
+				&SolanaAltWitnessingIdentifier(vec![user_alts[0], user_alts[1]])
+			)
+			.unwrap()
+			.is_none());
+			assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(
+				&SolanaAltWitnessingIdentifier(vec![user_alts[1], user_alts[2]])
+			)
+			.unwrap()
+			.is_none());
 		});
 }
 
@@ -1128,92 +1148,4 @@ fn invalid_alt_triggers_refund_transfer() {
 				Some(SolanaApi { call_type: SolanaTransactionType::Transfer, .. })
 			));
 		});
-}
-
-#[test]
-fn solana_election_result_reference_counting_works() {
-	super::genesis::with_test_defaults().build().execute_with(|| {
-		let alt_a = SolAddress([0xA0; 32]);
-		let alt_b = SolAddress([0xB0; 32]);
-		let alt_c = SolAddress([0xC0; 32]);
-		let alt_d = SolAddress([0xD0; 32]);
-
-		// on_consensus adds result to the state map with ref counting
-		SolanaAltWitnessingHook::on_consensus(
-			SolanaAltWitnessingIdentifier(vec![alt_a, alt_b]),
-			AltWitnessingConsensusResult::ValidConsensus(vec![
-				SolAddressLookupTableAccount {
-					key: SolPubkey([0xA0; 32]),
-					addresses: vec![SolPubkey([0xA1; 32]), SolPubkey([0xA2; 32])],
-				},
-				SolAddressLookupTableAccount {
-					key: SolPubkey([0xB0; 32]),
-					addresses: vec![SolPubkey([0xB1; 32])],
-				},
-			]),
-		);
-
-		SolanaAltWitnessingHook::on_consensus(
-			SolanaAltWitnessingIdentifier(vec![alt_a, alt_b, alt_c]),
-			AltWitnessingConsensusResult::ValidConsensus(vec![
-				SolAddressLookupTableAccount {
-					key: SolPubkey([0xA0; 32]),
-					addresses: vec![SolPubkey([0xA1; 32]), SolPubkey([0xA2; 32])],
-				},
-				SolAddressLookupTableAccount {
-					key: SolPubkey([0xB0; 32]),
-					addresses: vec![SolPubkey([0xB1; 32])],
-				},
-				SolAddressLookupTableAccount {
-					key: SolPubkey([0xC0; 32]),
-					addresses: vec![
-						SolPubkey([0xC1; 32]),
-						SolPubkey([0xC2; 32]),
-						SolPubkey([0xC3; 32]),
-					],
-				},
-			]),
-		);
-
-		let assert_ref_counts = |inputs: Vec<(&SolAddress, RefCount)>| {
-			inputs.into_iter().for_each(|(alt, ref_count)| {
-				if ref_count.is_zero() {
-					assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
-						.unwrap()
-						.is_none());
-				} else {
-					assert_matches!(
-						SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
-							.unwrap()
-							.unwrap(),
-						(AltWitnessingConsensusResult::ValidConsensus(_), count) if count == ref_count
-					);
-				}
-			});
-		};
-
-		assert_ref_counts(vec![(&alt_a, 2), (&alt_b, 2), (&alt_c, 1)]);
-
-		// Only `take` when all ALTs are ready.
-		assert_eq!(
-			SolEnvironment::get_address_lookup_tables(vec![alt_a, alt_b, alt_c, alt_d]),
-			Err(SolanaTransactionBuildingError::AltsNotYetWitnessed)
-		);
-		assert_ref_counts(vec![(&alt_a, 2), (&alt_b, 2), (&alt_c, 1)]);
-
-		SolanaAltWitnessingHook::on_consensus(
-			SolanaAltWitnessingIdentifier(vec![alt_d]),
-			AltWitnessingConsensusResult::InvalidNoConsensus,
-		);
-
-		// Successful lookup "takes" the result.
-		assert_eq!(
-			SolEnvironment::get_address_lookup_tables(vec![alt_a, alt_b, alt_c, alt_d]),
-			Err(SolanaTransactionBuildingError::AltsInvalid)
-		);
-		assert_ref_counts(vec![(&alt_a, 1), (&alt_b, 1), (&alt_c, 0), (&alt_d, 0)]);
-
-		assert!(SolEnvironment::get_address_lookup_tables(vec![alt_a, alt_b]).is_ok());
-		assert_ref_counts(vec![(&alt_a, 0), (&alt_b, 0), (&alt_c, 0), (&alt_d, 0)]);
-	});
 }
