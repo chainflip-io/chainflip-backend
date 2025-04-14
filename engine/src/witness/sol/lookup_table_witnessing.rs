@@ -1,4 +1,4 @@
-use cf_chains::sol::{api::AltConsensusResult, SolAddress};
+use cf_chains::sol::{api::AltWitnessingConsensusResult, SolAddress};
 
 use crate::sol::{
 	commitment_config::CommitmentConfig,
@@ -19,7 +19,7 @@ use std::str::FromStr;
 pub async fn get_lookup_table_state<SolRetryRpcClient>(
 	sol_rpc: &SolRetryRpcClient,
 	lookup_table_addresses: Vec<SolAddress>,
-) -> Result<AltConsensusResult<Vec<AddressLookupTableAccount>>, anyhow::Error>
+) -> Result<AltWitnessingConsensusResult<Vec<AddressLookupTableAccount>>, anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
@@ -42,8 +42,8 @@ where
 		})
 		.collect::<Result<Option<_>, _>>()
 		.map(|maybe_consensus_alts| match maybe_consensus_alts {
-			Some(alts) => AltConsensusResult::ValidConsensusAlts(alts),
-			None => AltConsensusResult::AltsInvalidNoConsensus,
+			Some(alts) => AltWitnessingConsensusResult::ValidConsensus(alts),
+			None => AltWitnessingConsensusResult::InvalidNoConsensus,
 		})
 }
 fn parse_alt_account_info(
@@ -296,7 +296,7 @@ mod tests {
 				let addresses =
 					get_lookup_table_state(&client, vec![mainnet_empty_address]).await.unwrap();
 
-				assert_eq!(addresses, AltConsensusResult::AltsInvalidNoConsensus);
+				assert_eq!(addresses, AltWitnessingConsensusResult::InvalidNoConsensus);
 
 				let mainnet_nonce_account: SolAddress =
 					SolAddress::from_str("3bVqyf58hQHsxbjnqnSkopnoyEHB9v9KQwhZj7h1DucW").unwrap();
@@ -304,7 +304,7 @@ mod tests {
 				let addresses =
 					get_lookup_table_state(&client, vec![mainnet_nonce_account]).await.unwrap();
 
-				assert_eq!(addresses, AltConsensusResult::AltsInvalidNoConsensus);
+				assert_eq!(addresses, AltWitnessingConsensusResult::InvalidNoConsensus);
 
 				Ok(())
 			}

@@ -68,9 +68,9 @@ use cf_chains::{
 	instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance, SolanaInstance},
 	sol::{
 		api::{
-			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
-			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
-			SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
+			RecoverDurableNonce, SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
@@ -85,6 +85,7 @@ use cf_primitives::{
 	DcaParameters,
 };
 
+use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster,
@@ -93,7 +94,6 @@ use cf_traits::{
 	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
-use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -616,14 +616,16 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
-impl ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
-	for SolEnvironment
+impl
+	ChainEnvironment<
+		Vec<SolAddress>,
+		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	> for SolEnvironment
 {
 	fn lookup(
-		_alts: Vec<SolAddress>,
-	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
-		// TODO: To be implemented with ALT election refactor
-		Some(AltConsensusResult::ValidConsensusAlts(vec![]))
+		alts: Vec<SolAddress>,
+	) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+		solana_elections::solana_alt_result(alts)
 	}
 }
 
