@@ -295,8 +295,9 @@ impl ChainCrypto for MockEthereumChainCrypto {
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
 	type TransactionInId = [u8; 4];
-	// TODO: Use a different type here? So we can get better coverage
-	type TransactionOutId = [u8; 4];
+	// The transaction out id is derived from the signed api call. Therefore we can use the
+	// signature itself as a proxy for this.
+	type TransactionOutId = Self::ThresholdSignature;
 	type KeyHandoverIsRequired = MockKeyHandoverIsRequired;
 	type GovKey = [u8; 32];
 
@@ -351,8 +352,6 @@ impl_default_benchmark_value!([u8; 4]);
 impl_default_benchmark_value!(MockThresholdSignature<MockAggKey, [u8; 4]>);
 impl_default_benchmark_value!(MockTransaction);
 
-pub const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
-
 pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 	TransactionFee { effective_gas_price: 200, gas_used: 100 };
 
@@ -365,7 +364,6 @@ pub struct MockApiCall<C: ChainCrypto> {
 	pub payload: <C as ChainCrypto>::Payload,
 	pub signer_and_signature:
 		Option<(<C as ChainCrypto>::AggKey, <C as ChainCrypto>::ThresholdSignature)>,
-	pub tx_out_id: <C as ChainCrypto>::TransactionOutId,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -377,7 +375,6 @@ impl<C: ChainCrypto> BenchmarkValue for MockApiCall<C> {
 				<C as ChainCrypto>::AggKey::benchmark_value(),
 				<C as ChainCrypto>::ThresholdSignature::benchmark_value(),
 			)),
-			tx_out_id: <C as ChainCrypto>::TransactionOutId::benchmark_value(),
 		}
 	}
 }
@@ -388,7 +385,10 @@ impl<C: ChainCrypto> MaxEncodedLen for MockApiCall<C> {
 	}
 }
 
-impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
+impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C>
+where
+	C::TransactionOutId: From<<C as ChainCrypto>::ThresholdSignature>,
+{
 	fn threshold_signature_payload(&self) -> <C as ChainCrypto>::Payload {
 		self.payload.clone()
 	}
@@ -409,8 +409,14 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 		self.signer_and_signature.is_some()
 	}
 
+	#[track_caller]
 	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId {
-		self.tx_out_id.clone()
+		self.signer_and_signature
+			.as_ref()
+			.expect("Should only be trying to get the transaction_out_id() after we've signed")
+			.1
+			.clone()
+			.into()
 	}
 
 	fn refresh_replay_protection(&mut self) {

@@ -911,7 +911,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	/// Start a broadcast by try to select a nominee.
 	fn start_broadcast_attempt(mut broadcast_data: BroadcastData<T, I>) {
 		let broadcast_id = broadcast_data.broadcast_id;
 		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_data.transaction_payload);
@@ -1098,8 +1097,9 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		AbortedBroadcasts::<T, I>::mutate(|aborted| {
 			aborted.remove(&broadcast_id);
 		});
-		let mut api_call = Self::clean_up_broadcast_storage(broadcast_id)
-			.ok_or(Error::<T, I>::ApiCallUnavailable)?;
+
+		let mut api_call =
+			PendingApiCalls::<T, I>::get(broadcast_id).ok_or(Error::<T, I>::ApiCallUnavailable)?;
 
 		PendingBroadcasts::<T, I>::try_mutate(|pending| {
 			if pending.contains(&broadcast_id) {
