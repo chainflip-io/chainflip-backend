@@ -1553,7 +1553,7 @@ mod delayed_boosting {
 
 			assert_eq!(
 				BoostedVaultTransactions::<Test, ()>::get(&TX_ID),
-				Some(BoostStatus::BoostPending)
+				BoostStatus::BoostPending
 			);
 
 			// EDGE CASE: full witness arrives before the delayed prewitness is processed,
@@ -1613,7 +1613,7 @@ mod delayed_boosting {
 
 				assert_eq!(
 					BoostedVaultTransactions::<Test, ()>::get(&tx_id),
-					Some(BoostStatus::BoostPending)
+					BoostStatus::BoostPending
 				);
 
 				(deposit, tx_id)
@@ -1630,7 +1630,7 @@ mod delayed_boosting {
 
 				assert_matches!(
 					BoostedVaultTransactions::<Test, ()>::get(&tx_id),
-					Some(BoostStatus::Boosted { .. })
+					BoostStatus::Boosted { .. }
 				);
 
 				IngressEgress::process_vault_swap_request_full_witness(
