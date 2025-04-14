@@ -120,7 +120,11 @@ fn get_available_amount(asset: EthAsset, fee_tier: BoostPoolTier) -> AssetAmount
 fn setup() {
 	assert_ok!(Pallet::<Test, Instance1>::create_boost_pools(
 		RuntimeOrigin::root(),
-		vec![BoostPoolId { asset: EthAsset::Eth, tier: TIER_5_BPS },]
+		vec![
+			BoostPoolId { asset: EthAsset::Eth, tier: TIER_5_BPS },
+			BoostPoolId { asset: EthAsset::Eth, tier: TIER_10_BPS },
+			BoostPoolId { asset: EthAsset::Eth, tier: TIER_30_BPS },
+		]
 	));
 
 	assert_ok!(
@@ -458,7 +462,12 @@ fn assert_boosted(
 			assert_eq!(prewitnessed_deposit_id, expected_prewitnessed_deposit_id);
 			assert_eq!(pools, Vec::from_iter(expected_pools.into_iter()));
 		},
-		_ => panic!("The channel is not boosted"),
+		_ => panic!(
+			"The channel is not boosted, status is: {:?}",
+			DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+				.unwrap()
+				.boost_status
+		),
 	}
 }
 
@@ -1378,8 +1387,8 @@ mod delayed_boosting {
 	use sp_runtime::traits::BlockNumberProvider;
 
 	const BOOST_DELAY: u64 = 1;
-	const PERWITNESSED_AT_BLOCK: u64 = 1;
-	const PROCESSED_AT_BLOCK: u64 = PERWITNESSED_AT_BLOCK + BOOST_DELAY;
+	const PREWITNESSED_AT_BLOCK: u64 = 1;
+	const PROCESSED_AT_BLOCK: u64 = PREWITNESSED_AT_BLOCK + BOOST_DELAY;
 
 	const INPUT_ASSET: EthAsset = EthAsset::Eth;
 	const OUTPUT_ASSET: EthAsset = EthAsset::Flip;
@@ -1394,12 +1403,12 @@ mod delayed_boosting {
 		// and processed as previously boosted when the finslised deposit arrives.
 		new_test_ext()
 			.execute_with(|| {
-				BoostDelayBlocks::<Test, ()>::set(BOOST_DELAY);
-				assert_eq!(System::current_block_number(), PERWITNESSED_AT_BLOCK);
+				BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
+				assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
 
 				setup();
 
-				assert_ok!(IngressEgress::add_boost_funds(
+				assert_ok!(EthereumIngressEgress::add_boost_funds(
 					RuntimeOrigin::signed(BOOSTER_1),
 					INPUT_ASSET.into(),
 					DEPOSIT_AMOUNT,
@@ -1410,12 +1419,14 @@ mod delayed_boosting {
 				let _ = prewitness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
 
 				assert_eq!(
-					PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(),
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(&PROCESSED_AT_BLOCK).len(),
 					1
 				);
 
 				assert_eq!(
-					DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().boost_status,
+					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+						.unwrap()
+						.boost_status,
 					BoostStatus::BoostPending
 				);
 
@@ -1424,28 +1435,38 @@ mod delayed_boosting {
 			.then_execute_at_next_block(|deposit_address| {
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::IngressEgress(Event::DepositBoosted { .. }),
+					RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted { .. }),
 				);
 
 				assert_eq!(
-					PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(),
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(&PROCESSED_AT_BLOCK).len(),
 					0
 				);
 
-				assert_matches!(
-					DepositChannelLookup::<Test, ()>::get(&deposit_address).unwrap().boost_status,
-					BoostStatus::Boosted { .. }
+				assert!(
+					matches!(
+						DepositChannelLookup::<Test, Instance1>::get(&deposit_address)
+							.unwrap()
+							.boost_status,
+						BoostStatus::Boosted { .. }
+					),
+					"Expected tx to be marked as boosted, got: {:#?}",
+					DepositChannelLookup::<Test, Instance1>::get(&deposit_address)
+						.unwrap()
+						.boost_status
 				);
 
 				witness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
 
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::IngressEgress(Event::DepositFinalised { .. }),
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised { .. }),
 				);
 
 				assert_eq!(
-					DepositChannelLookup::<Test, ()>::get(&deposit_address).unwrap().boost_status,
+					DepositChannelLookup::<Test, Instance1>::get(&deposit_address)
+						.unwrap()
+						.boost_status,
 					BoostStatus::NotBoosted
 				);
 			});
@@ -1457,46 +1478,68 @@ mod delayed_boosting {
 		// it the finalised deposit arrives and processed an not boosted.
 		// Importantly, we cancel the processing of the prewitnessed deposit.
 
-		new_test_ext().execute_with(|| {
-			BoostDelayBlocks::<Test, ()>::set(BOOST_DELAY);
-			assert_eq!(System::current_block_number(), PERWITNESSED_AT_BLOCK);
+		new_test_ext()
+			.execute_with(|| {
+				BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
+				assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
 
-			setup();
+				setup();
 
-			assert_ok!(IngressEgress::add_boost_funds(
-				RuntimeOrigin::signed(BOOSTER_1),
-				INPUT_ASSET.into(),
-				DEPOSIT_AMOUNT,
-				TIER_5_BPS
-			));
+				assert_ok!(EthereumIngressEgress::add_boost_funds(
+					RuntimeOrigin::signed(BOOSTER_1),
+					INPUT_ASSET.into(),
+					DEPOSIT_AMOUNT,
+					TIER_5_BPS
+				));
 
-			let (_, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 5);
-			let _ = prewitness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
+				let (_, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 5);
+				let _ = prewitness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
 
-			assert_eq!(PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(), 1);
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(&PROCESSED_AT_BLOCK).len(),
+					1
+				);
 
-			assert_eq!(
-				DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().boost_status,
-				BoostStatus::BoostPending
-			);
+				assert_eq!(
+					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+						.unwrap()
+						.boost_status,
+					BoostStatus::BoostPending
+				);
 
-			witness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
+				witness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
 
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::IngressEgress(Event::DepositFinalised { .. }),
-			);
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised { .. }),
+				);
 
-			assert_eq!(
-				DepositChannelLookup::<Test, ()>::get(&deposit_address).unwrap().boost_status,
-				BoostStatus::NotBoosted
-			);
-
-			assert_eq!(PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(), 0);
-		});
+				assert_eq!(
+					DepositChannelLookup::<Test, Instance1>::get(&deposit_address)
+						.unwrap()
+						.boost_status,
+					BoostStatus::NotBoosted
+				);
+			})
+			.then_execute_at_block(PROCESSED_AT_BLOCK, |_| {
+				assert!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(&PROCESSED_AT_BLOCK)
+						.is_empty(),
+					"Pending prewitnessed deposits should have been cleared"
+				);
+			})
+			.then_process_events(|(), event| match event {
+				RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted { .. }) => {
+					panic!("Deposit should not be boosted");
+				},
+				RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised { .. }) => {
+					panic!("Deposit should not be finalised");
+				},
+				_ => None::<()>,
+			});
 	}
 
-	fn vault_deposit_witness_mock() -> VaultDepositWitness<Test, ()> {
+	fn vault_deposit_witness_mock() -> VaultDepositWitness<Test, Instance1> {
 		VaultDepositWitness {
 			input_asset: INPUT_ASSET,
 			deposit_address: Some([1; 20].into()),
@@ -1529,49 +1572,67 @@ mod delayed_boosting {
 		const DEPOSIT_BLOCK_HEIGHT: u64 = 10;
 		const TX_ID: H256 = H256([9u8; 32]);
 
-		new_test_ext().execute_with(|| {
-			BoostDelayBlocks::<Test, ()>::set(BOOST_DELAY);
-			assert_eq!(System::current_block_number(), PERWITNESSED_AT_BLOCK);
+		new_test_ext()
+			.execute_with(|| {
+				BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
+				assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
 
-			setup();
+				setup();
 
-			assert_ok!(IngressEgress::add_boost_funds(
-				RuntimeOrigin::signed(BOOSTER_1),
-				INPUT_ASSET,
-				DEPOSIT_AMOUNT,
-				TIER_5_BPS
-			));
+				assert_ok!(EthereumIngressEgress::add_boost_funds(
+					RuntimeOrigin::signed(BOOSTER_1),
+					INPUT_ASSET,
+					DEPOSIT_AMOUNT,
+					TIER_5_BPS
+				));
 
-			let deposit = vault_deposit_witness_mock();
+				let deposit = vault_deposit_witness_mock();
 
-			IngressEgress::process_vault_swap_request_prewitness(
-				DEPOSIT_BLOCK_HEIGHT,
-				deposit.clone(),
-			);
+				EthereumIngressEgress::process_vault_swap_request_prewitness(
+					DEPOSIT_BLOCK_HEIGHT,
+					deposit.clone(),
+				);
 
-			assert_eq!(PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(), 1);
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(&PROCESSED_AT_BLOCK).len(),
+					1
+				);
 
-			assert_eq!(
-				BoostedVaultTransactions::<Test, ()>::get(&TX_ID),
-				BoostStatus::BoostPending
-			);
+				assert_eq!(
+					BoostedVaultTransactions::<Test, Instance1>::get(&TX_ID),
+					BoostStatus::BoostPending
+				);
 
-			// EDGE CASE: full witness arrives before the delayed prewitness is processed,
-			//
-			IngressEgress::process_vault_swap_request_full_witness(
-				DEPOSIT_BLOCK_HEIGHT,
-				deposit.clone(),
-			);
+				// EDGE CASE: full witness arrives before the delayed prewitness is processed,
+				//
+				EthereumIngressEgress::process_vault_swap_request_full_witness(
+					DEPOSIT_BLOCK_HEIGHT,
+					deposit.clone(),
+				);
 
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::IngressEgress(Event::DepositFinalised { .. }),
-			);
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised { .. }),
+				);
 
-			assert!(!BoostedVaultTransactions::<Test, ()>::contains_key(TX_ID));
-
-			assert!(PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).is_empty());
-		});
+				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(TX_ID));
+			})
+			.then_execute_at_block(PROCESSED_AT_BLOCK, |_| {
+				assert!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(&PROCESSED_AT_BLOCK)
+						.is_empty(),
+					"Pending prewitnessed deposits should have been cleared"
+				);
+			})
+			.then_process_events(|(), event| match event {
+				RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted { .. }) => {
+					panic!("Deposit should not be boosted");
+				},
+				RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised { .. }) => {
+					panic!("Deposit should not be finalised");
+				},
+				_ => None::<()>,
+			});
 	}
 
 	#[test]
@@ -1585,12 +1646,12 @@ mod delayed_boosting {
 
 		new_test_ext()
 			.execute_with(|| {
-				BoostDelayBlocks::<Test, ()>::set(BOOST_DELAY);
-				assert_eq!(System::current_block_number(), PERWITNESSED_AT_BLOCK);
+				BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
+				assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
 
 				setup();
 
-				assert_ok!(IngressEgress::add_boost_funds(
+				assert_ok!(EthereumIngressEgress::add_boost_funds(
 					RuntimeOrigin::signed(BOOSTER_1),
 					INPUT_ASSET,
 					DEPOSIT_AMOUNT,
@@ -1601,18 +1662,18 @@ mod delayed_boosting {
 
 				let deposit = vault_deposit_witness_mock();
 
-				IngressEgress::process_vault_swap_request_prewitness(
+				EthereumIngressEgress::process_vault_swap_request_prewitness(
 					DEPOSIT_BLOCK_HEIGHT,
 					deposit.clone(),
 				);
 
 				assert_eq!(
-					PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(),
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(&PROCESSED_AT_BLOCK).len(),
 					1
 				);
 
 				assert_eq!(
-					BoostedVaultTransactions::<Test, ()>::get(&tx_id),
+					BoostedVaultTransactions::<Test, Instance1>::get(&tx_id),
 					BoostStatus::BoostPending
 				);
 
@@ -1621,29 +1682,32 @@ mod delayed_boosting {
 			.then_execute_at_next_block(|(deposit, tx_id)| {
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::IngressEgress(Event::DepositBoosted { .. }),
+					RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted { .. }),
 				);
+
+				assert!(PendingPrewitnessedDeposits::<Test, Instance1>::get(&PROCESSED_AT_BLOCK)
+					.is_empty());
 
 				assert!(
-					PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).is_empty()
+					matches!(
+						BoostedVaultTransactions::<Test, Instance1>::get(&tx_id),
+						BoostStatus::Boosted { .. }
+					),
+					"Expected tx to be marked as boosted, got: {:#?}",
+					BoostedVaultTransactions::<Test, Instance1>::get(&tx_id)
 				);
 
-				assert_matches!(
-					BoostedVaultTransactions::<Test, ()>::get(&tx_id),
-					BoostStatus::Boosted { .. }
-				);
-
-				IngressEgress::process_vault_swap_request_full_witness(
+				EthereumIngressEgress::process_vault_swap_request_full_witness(
 					DEPOSIT_BLOCK_HEIGHT,
 					deposit.clone(),
 				);
 
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::IngressEgress(Event::DepositFinalised { .. }),
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised { .. }),
 				);
 
-				assert!(!BoostedVaultTransactions::<Test, ()>::contains_key(tx_id));
+				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
 			});
 	}
 }
