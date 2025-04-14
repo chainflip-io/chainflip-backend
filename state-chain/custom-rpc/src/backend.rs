@@ -14,7 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{internal_error, CfApiError, RpcResult};
+use crate::CfApiError;
+use cf_rpc_apis::{internal_error, RpcApiError};
 use futures::{stream, stream::StreamExt, FutureExt};
 use jsonrpsee::{
 	types::{error::ErrorObjectOwned, SubscriptionId},
@@ -77,11 +78,11 @@ where
 		&self,
 		at: Option<Hash>,
 		f: impl FnOnce(&C::Api, Hash) -> Result<R, E>,
-	) -> RpcResult<R>
+	) -> Result<R, RpcApiError>
 	where
 		CfApiError: From<E>,
 	{
-		Ok(f(&*self.client.runtime_api(), self.unwrap_or_best(at))?)
+		Ok(f(&*self.client.runtime_api(), self.unwrap_or_best(at)).map_err(CfApiError::from)?)
 	}
 }
 
@@ -205,7 +206,7 @@ where
 
 	pub async fn new_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
-		F: Fn(&C, state_chain_runtime::Hash) -> Result<T, CfApiError> + Send + Clone + 'static,
+		F: Fn(&C, state_chain_runtime::Hash) -> Result<T, RpcApiError> + Send + Clone + 'static,
 	>(
 		&self,
 		notification_behaviour: NotificationBehaviour,
@@ -233,7 +234,7 @@ where
 		T: Serialize + Send + Clone + Eq + 'static,
 		// State to carry forward between calls to the closure.
 		S: 'static + Clone + Send,
-		F: Fn(&C, state_chain_runtime::Hash, Option<&S>) -> Result<(T, S), CfApiError>
+		F: Fn(&C, state_chain_runtime::Hash, Option<&S>) -> Result<(T, S), RpcApiError>
 			+ Send
 			+ Clone
 			+ 'static,

@@ -2045,6 +2045,7 @@ version = "1.9.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-rpc-apis",
  "clap",
  "custom-rpc",
  "frame-benchmarking",
@@ -2747,6 +2748,7 @@ dependencies = [
  "cf-chains",
  "cf-node-client",
  "cf-primitives",
+ "cf-rpc-apis",
  "cf-rpc-types",
  "frame-support",
  "frame-system",

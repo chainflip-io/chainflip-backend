@@ -307,7 +307,8 @@ where
 				false,
 				true,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(tx_hash)
 	}
@@ -340,7 +341,8 @@ where
 					wait_for.unwrap_or_default(),
 					false,
 				)
-				.await?
+				.await
+				.map_err(CfApiError::from)?
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 				WaitForDynamicResult::Data(ExtrinsicData { tx_hash, events, .. }) =>
@@ -355,7 +357,8 @@ where
 								deposit_chain_expiry_block,
 							}
 						}
-					)?,
+					)
+					.map_err(CfApiError::from)?,
 			},
 		)
 	}
@@ -376,7 +379,8 @@ where
 				false,
 				false,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(tx_hash)
 	}
@@ -407,7 +411,8 @@ where
 					wait_for.unwrap_or_default(),
 					false,
 				)
-				.await?
+				.await
+				.map_err(CfApiError::from)?
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 				WaitForDynamicResult::Data(data) => {
@@ -420,7 +425,8 @@ where
 							tx_hash,
 							response: (egress_id.0 .0, egress_id.1)
 						}
-					)?
+					)
+					.map_err(CfApiError::from)?
 				},
 			},
 		)
@@ -448,7 +454,8 @@ where
 				false,
 				false,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(tx_hash)
 	}
@@ -475,9 +482,11 @@ where
 					wait_for.unwrap_or_default(),
 					false,
 				)
-				.await?,
+				.await
+				.map_err(CfApiError::from)?,
 			filter_range_orders,
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn set_range_order(
@@ -502,9 +511,11 @@ where
 					wait_for.unwrap_or_default(),
 					false,
 				)
-				.await?,
+				.await
+				.map_err(CfApiError::from)?,
 			filter_range_orders,
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn update_limit_order(
@@ -560,15 +571,16 @@ where
 	}
 
 	async fn free_balances(&self) -> RpcResult<AssetMap<U256>> {
-		self.rpc_backend
+		Ok(self
+			.rpc_backend
 			.client
 			.runtime_api()
 			.cf_free_balances(
 				self.rpc_backend.client.info().finalized_hash,
 				self.signed_pool_client.account_id(),
 			)
-			.map_err(CfApiError::RuntimeApiError)
-			.map(|asset_map| asset_map.map(Into::into))
+			.map_err(CfApiError::from)?
+			.map(Into::into))
 	}
 
 	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels> {
@@ -605,7 +617,8 @@ where
 				false,
 				true,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(tx_hash)
 	}
@@ -640,7 +653,8 @@ where
 			.rpc_backend
 			.client
 			.runtime_api()
-			.cf_pools(self.rpc_backend.client.info().best_hash)?;
+			.cf_pools(self.rpc_backend.client.info().best_hash)
+			.map_err(CfApiError::from)?;
 
 		for pool in pool_pairs {
 			let orders = match self.rpc_backend.client.runtime_api().cf_pool_orders(
@@ -739,7 +753,8 @@ where
 					wait_for.unwrap_or_default(),
 					false,
 				)
-				.await?
+				.await
+				.map_err(CfApiError::from)?
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 				WaitForDynamicResult::Data(data) => {
@@ -749,7 +764,8 @@ where
 						cf_static_runtime::swapping::events::SwapRequested,
 						{ swap_request_id },
 						ApiWaitForResult::TxDetails { tx_hash, response: swap_request_id.0.into() }
-					)?
+					)
+					.map_err(CfApiError::from)?
 				},
 			},
 		)
@@ -789,9 +805,11 @@ where
 					wait_for.unwrap_or_default(),
 					false,
 				)
-				.await?,
+				.await
+				.map_err(CfApiError::from)?,
 			filter_orders,
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn scheduled_or_immediate(
@@ -811,14 +829,17 @@ where
 						wait_for,
 						false,
 					)
-					.await?
+					.await
+					.map_err(CfApiError::from)?
 			} else {
 				self.signed_pool_client
 					.submit_wait_for_result_dynamic(RuntimeCall::from(call), wait_for, false)
-					.await?
+					.await
+					.map_err(CfApiError::from)?
 			},
 			filter_limit_orders,
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	pub async fn get_open_swap_channels_for_chain<CH: Chain>(

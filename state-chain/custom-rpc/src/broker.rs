@@ -17,7 +17,7 @@
 use crate::{
 	backend::{CustomRpcBackend, NotificationBehaviour},
 	pool_client::SignedPoolClient,
-	CfApiError, RpcResult,
+	CfApiError,
 };
 pub use cf_chains::eth::Address as EthereumAddress;
 use cf_chains::{
@@ -27,11 +27,15 @@ use cf_chains::{
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
 };
-use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId, DcaParameters};
-use cf_rpc_types::broker::{
-	GetOpenDepositChannelsQuery, SwapDepositAddress, TransactionInId, WithdrawFeesDetail,
+use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId};
+use cf_rpc_apis::{
+	broker::{
+		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
+		TransactionInId, WithdrawFeesDetail, H256,
+	},
+	RpcResult,
 };
-use jsonrpsee::{core::async_trait, proc_macros::rpc, PendingSubscriptionSink};
+use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
 use pallet_cf_swapping::AffiliateDetails;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
@@ -42,10 +46,8 @@ use sp_api::CallApiAt;
 use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
 use state_chain_runtime::{
-	chainflip::BlockUpdate,
 	runtime_apis::{
-		ChainAccounts, CustomRuntimeApi, TransactionScreeningEvents, VaultAddresses,
-		VaultSwapDetails,
+		ChainAccounts, ChannelActionType, CustomRuntimeApi, VaultAddresses, VaultSwapDetails,
 	},
 	AccountId, Nonce, RuntimeCall,
 };
@@ -57,92 +59,6 @@ pub mod broker_crypto {
 	pub const BROKER_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"brok");
 
 	app_crypto!(sr25519, BROKER_KEY_TYPE_ID);
-}
-
-#[rpc(server, client, namespace = "broker")]
-pub trait BrokerSignedApi {
-	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
-	async fn register_account(&self) -> RpcResult<String>;
-
-	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
-	async fn request_swap_deposit_address(
-		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: RefundParametersRpc,
-		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<SwapDepositAddress>;
-
-	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
-	async fn withdraw_fees(
-		&self,
-		asset: Asset,
-		destination_address: AddressString,
-	) -> RpcResult<WithdrawFeesDetail>;
-
-	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
-	async fn request_swap_parameter_encoding(
-		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		extra_parameters: VaultSwapExtraParametersRpc,
-		channel_metadata: Option<CcmChannelMetadata>,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<VaultSwapDetails<AddressString>>;
-
-	#[method(name = "mark_transaction_for_rejection", aliases = ["broker_MarkTransactionForRejection"])]
-	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()>;
-
-	#[method(name = "get_open_deposit_channels", aliases = ["broker_getOpenDepositChannels"])]
-	async fn get_open_deposit_channels(
-		&self,
-		query: GetOpenDepositChannelsQuery,
-	) -> RpcResult<ChainAccounts>;
-
-	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
-	async fn subscribe_transaction_screening_events(&self);
-
-	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]
-	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId>;
-
-	#[method(name = "close_private_btc_channel", aliases = ["broker_closePrivateBtcChannel"])]
-	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId>;
-
-	#[method(name = "register_affiliate", aliases = ["broker_registerAffiliate"])]
-	async fn register_affiliate(
-		&self,
-		withdrawal_address: EthereumAddress,
-	) -> RpcResult<AccountId32>;
-
-	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
-	async fn get_affiliates(
-		&self,
-		affiliate: Option<AccountId32>,
-	) -> RpcResult<Vec<(AccountId32, AffiliateDetails)>>;
-
-	#[method(name = "affiliate_withdrawal_request", aliases = ["broker_affiliateWithdrawalRequest"])]
-	async fn affiliate_withdrawal_request(
-		&self,
-		affiliate_account_id: AccountId32,
-	) -> RpcResult<WithdrawFeesDetail>;
-
-	#[method(name = "get_vault_addresses", aliases = ["broker_getVaultAddresses"])]
-	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
-
-	#[method(name = "set_vault_swap_minimum_broker_fee", aliases = ["broker_setVaultSwapMinimumBrokerFee"])]
-	async fn set_vault_swap_minimum_broker_fee(
-		&self,
-		minimum_fee_bps: BasisPoints,
-	) -> RpcResult<()>;
 }
 
 /// A Broker signed RPC extension for the state chain node.
@@ -207,7 +123,7 @@ where
 }
 
 #[async_trait]
-impl<C, B, BE> BrokerSignedApiServer for BrokerSignedRpc<C, B, BE>
+impl<C, B, BE> BrokerRpcApiServer for BrokerSignedRpc<C, B, BE>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 	BE: Send + Sync + 'static + Backend<B>,
@@ -238,7 +154,8 @@ where
 				false,
 				true,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(format!("{:#x}", tx_hash))
 	}
@@ -277,7 +194,8 @@ where
 				false,
 				true,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(extract_from_first_matching_event!(
 			events,
@@ -300,7 +218,8 @@ where
 					AddressString::from_encoded_address(&refund_address.0)
 				}),
 			}
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn withdraw_fees(
@@ -320,7 +239,8 @@ where
 				false,
 				false,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(extract_from_first_matching_event!(
 			events,
@@ -338,7 +258,8 @@ where
 				egress_fee: egress_fee.into(),
 				destination_address: AddressString::from_encoded_address(destination_address.0),
 			}
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	// This is also defined in custom-rpc. // TODO: try to define only in one place
@@ -370,7 +291,9 @@ where
 				boost_fee.unwrap_or_default(),
 				affiliate_fees.unwrap_or_default(),
 				dca_parameters,
-			)??
+			)
+			.map_err(CfApiError::from)?
+			.map_err(CfApiError::from)?
 			.map_btc_address(Into::into))
 	}
 
@@ -391,7 +314,8 @@ where
 				false,
 				true,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 		Ok(())
 	}
 
@@ -404,11 +328,23 @@ where
 			GetOpenDepositChannelsQuery::Mine => Some(self.signed_pool_client.account_id()),
 		};
 
-		self.rpc_backend
+		Ok(self
+			.rpc_backend
 			.client
 			.runtime_api()
 			.cf_get_open_deposit_channels(self.rpc_backend.client.info().best_hash, account_id)
-			.map_err(CfApiError::RuntimeApiError)
+			.map_err(CfApiError::from)?)
+	}
+
+	async fn all_open_deposit_channels(
+		&self,
+	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>> {
+		Ok(self
+			.rpc_backend
+			.client
+			.runtime_api()
+			.cf_all_open_deposit_channels(self.rpc_backend.client.info().best_hash)
+			.map_err(CfApiError::from)?)
 	}
 
 	async fn subscribe_transaction_screening_events(&self, pending_sink: PendingSubscriptionSink) {
@@ -419,7 +355,9 @@ where
 				true,
 				pending_sink,
 				move |client, hash| {
-					Ok((*client.runtime_api()).cf_transaction_screening_events(hash)?)
+					Ok((*client.runtime_api())
+						.cf_transaction_screening_events(hash)
+						.map_err(CfApiError::from)?)
 				},
 			)
 			.await;
@@ -433,14 +371,16 @@ where
 				false,
 				true,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(extract_from_first_matching_event!(
 			events,
 			cf_static_runtime::swapping::events::PrivateBrokerChannelOpened,
 			{ channel_id },
 			channel_id
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
@@ -451,14 +391,16 @@ where
 				false,
 				true,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(extract_from_first_matching_event!(
 			events,
 			cf_static_runtime::swapping::events::PrivateBrokerChannelClosed,
 			{ channel_id },
 			channel_id
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn register_affiliate(
@@ -474,21 +416,24 @@ where
 				false,
 				true,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(extract_from_first_matching_event!(
 			events,
 			cf_static_runtime::swapping::events::AffiliateRegistration,
 			{ affiliate_id },
 			AccountId32::from(affiliate_id.0)
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn get_affiliates(
 		&self,
 		affiliate: Option<AccountId32>,
 	) -> RpcResult<Vec<(AccountId32, AffiliateDetails)>> {
-		self.rpc_backend
+		Ok(self
+			.rpc_backend
 			.client
 			.runtime_api()
 			.cf_affiliate_details(
@@ -496,7 +441,7 @@ where
 				self.signed_pool_client.account_id(),
 				affiliate,
 			)
-			.map_err(CfApiError::RuntimeApiError)
+			.map_err(CfApiError::from)?)
 	}
 
 	async fn affiliate_withdrawal_request(
@@ -512,7 +457,8 @@ where
 				false,
 				true,
 			)
-			.await?;
+			.await
+			.map_err(CfApiError::from)?;
 
 		Ok(extract_from_first_matching_event!(
 			events,
@@ -525,22 +471,25 @@ where
 				egress_fee: egress_fee.into(),
 				destination_address: AddressString::from_encoded_address(destination_address.0),
 			}
-		)?)
+		)
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
-		self.rpc_backend
+		Ok(self
+			.rpc_backend
 			.client
 			.runtime_api()
 			.cf_vault_addresses(self.rpc_backend.client.info().best_hash)
-			.map_err(CfApiError::RuntimeApiError)
+			.map_err(CfApiError::from)?)
 	}
 
 	async fn set_vault_swap_minimum_broker_fee(
 		&self,
 		minimum_fee_bps: BasisPoints,
-	) -> RpcResult<()> {
-		self.signed_pool_client
+	) -> RpcResult<H256> {
+		let ExtrinsicData { tx_hash, .. } = self
+			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::set_vault_swap_minimum_broker_fee {
 					minimum_fee_bps,
@@ -548,7 +497,9 @@ where
 				false,
 				true,
 			)
-			.await?;
-		Ok(())
+			.await
+			.map_err(CfApiError::from)?;
+
+		Ok(tx_hash)
 	}
 }

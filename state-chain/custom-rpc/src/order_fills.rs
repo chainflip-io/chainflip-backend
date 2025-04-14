@@ -74,9 +74,12 @@ where
 		+ StorageProvider<B, BE>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	let header = client.header(hash).map_err(|e| call_error(e))?.ok_or_else(|| {
-		internal_error(format!("Could not fetch block header for block {:?}", hash))
-	})?;
+	let header = client
+		.header(hash)
+		.map_err(|e| call_error(e, CfErrorCode::OtherError))?
+		.ok_or_else(|| {
+			internal_error(format!("Could not fetch block header for block {:?}", hash))
+		})?;
 
 	let pools = StorageQueryApi::new(client)
 		.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(hash)?;
@@ -84,7 +87,7 @@ where
 	let prev_pools = StorageQueryApi::new(client)
 		.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(header.parent_hash)?;
 
-	let lp_events = client.runtime_api().cf_lp_events(hash)?;
+	let lp_events = client.runtime_api().cf_lp_events(hash).map_err(CfApiError::from)?;
 
 	Ok(BlockUpdate::<OrderFills> {
 		block_hash: hash,

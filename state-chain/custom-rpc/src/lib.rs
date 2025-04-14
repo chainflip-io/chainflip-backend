@@ -35,6 +35,7 @@ use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
 	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
+use cf_rpc_apis::{call_error, internal_error, CfErrorCode, RpcApiError, RpcResult};
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
@@ -1083,7 +1084,7 @@ where
 		hash: <B as BlockT>::Hash,
 		f: impl Fn() -> R,
 	) -> RpcResult<R> {
-		Ok(self.0.state_at(hash)?.inspect_state(f))
+		Ok(self.0.state_at(hash).map_err(CfApiError::from)?.inspect_state(f))
 	}
 }
 
@@ -1106,49 +1107,47 @@ pub enum CfApiError {
 	#[error(transparent)]
 	OtherError(#[from] anyhow::Error),
 }
-pub type RpcResult<T> = Result<T, CfApiError>;
 
-fn internal_error(error: impl core::fmt::Debug) -> ErrorObjectOwned {
-	log::error!(target: "cf_rpc", "Internal error: {:?}", error);
-	ErrorObject::owned(
-		ErrorCode::InternalError.code(),
-		"Internal error while processing request.",
-		None::<()>,
-	)
-}
-fn call_error(error: impl Into<Box<dyn core::error::Error + Sync + Send>>) -> ErrorObjectOwned {
-	let error = error.into();
-	log::debug!(target: "cf_rpc", "Call error: {}", error);
-	ErrorObject::owned(ErrorCode::InternalError.code(), format!("{error}"), None::<()>)
-}
-
-impl From<CfApiError> for ErrorObjectOwned {
+impl From<CfApiError> for RpcApiError {
 	fn from(error: CfApiError) -> Self {
 		match error {
-			CfApiError::ClientError(client_error) => match client_error {
-				jsonrpsee::core::client::Error::Call(obj) => obj,
-				other => internal_error(other),
-			},
+			CfApiError::ClientError(client_error) => RpcApiError::ClientError(client_error),
 			CfApiError::DispatchError(dispatch_error) => match dispatch_error {
 				DispatchErrorWithMessage::Module(message) |
 				DispatchErrorWithMessage::RawMessage(message) => match std::str::from_utf8(&message) {
-					Ok(message) => call_error(std::format!("DispatchError: {message}")),
-					Err(error) =>
-						internal_error(format!("Unable to decode Module Error Message: {error}")),
+					Ok(message) => RpcApiError::ErrorObject(call_error(
+						std::format!("DispatchError: {message}"),
+						CfErrorCode::DispatchError,
+					)),
+					Err(error) => RpcApiError::ErrorObject(internal_error(format!(
+						"Unable to decode Module Error Message: {error}"
+					))),
 				},
-				DispatchErrorWithMessage::Other(error) =>
-					internal_error(format!("Unable to decode DispatchError: {error:?}")),
+				DispatchErrorWithMessage::Other(error) => RpcApiError::ErrorObject(internal_error(
+					format!("Unable to decode DispatchError: {error:?}"),
+				)),
 			},
 			CfApiError::RuntimeApiError(error) => match error {
-				ApiError::Application(error) => call_error(format!("Application error: {error}")),
-				ApiError::UnknownBlock(error) => call_error(format!("Unknown block: {error}")),
-				other => internal_error(format!("Unexpected ApiError: {other}")),
+				ApiError::Application(error) => RpcApiError::ErrorObject(call_error(
+					format!("Application error: {error}"),
+					CfErrorCode::RuntimeApiError,
+				)),
+				ApiError::UnknownBlock(error) => RpcApiError::ErrorObject(call_error(
+					format!("Unknown block: {error}"),
+					CfErrorCode::RuntimeApiError,
+				)),
+				other => RpcApiError::ErrorObject(internal_error(format!(
+					"Unexpected ApiError: {other}"
+				))),
 			},
-			CfApiError::ErrorObject(object) => object,
-			CfApiError::OtherError(error) => internal_error(error),
-			CfApiError::SubstrateClientError(error) => call_error(error),
-			CfApiError::PoolClientError(error) => call_error(error),
-			CfApiError::DynamicEventsError(error) => call_error(error),
+			CfApiError::ErrorObject(object) => RpcApiError::ErrorObject(object),
+			CfApiError::OtherError(error) => RpcApiError::ErrorObject(internal_error(error)),
+			CfApiError::SubstrateClientError(error) =>
+				RpcApiError::ErrorObject(call_error(error, CfErrorCode::SubstrateClientError)),
+			CfApiError::PoolClientError(error) =>
+				RpcApiError::ErrorObject(call_error(error, CfErrorCode::PoolClientError)),
+			CfApiError::DynamicEventsError(error) =>
+				RpcApiError::ErrorObject(call_error(error, CfErrorCode::DynamicEventsError)),
 		}
 	}
 }
@@ -1181,9 +1180,10 @@ macro_rules! pass_through_and_flatten {
 
 fn flatten_into_error<R, E1, E2>(res: Result<Result<R, E1>, E2>) -> Result<R, E2>
 where
-	E2: From<E1>,
+	CfApiError: From<E1>,
+	E2: From<CfApiError>,
 {
-	match res.map(|inner| inner.map_err(Into::into)) {
+	match res.map(|inner| inner.map_err(CfApiError::from).map_err(Into::into)) {
 		Ok(Ok(r)) => Ok(r),
 		Ok(Err(e)) => Err(e),
 		Err(e) => Err(e),
@@ -1464,7 +1464,7 @@ where
 
 		if let Some(CcmData { message_length, .. }) = ccm_data {
 			if message_length > MAX_CCM_MSG_LENGTH {
-				return Err(CfApiError::ErrorObject(ErrorObject::owned(
+				return Err(RpcApiError::ErrorObject(ErrorObject::owned(
 					ErrorCode::InvalidParams.code(),
 					"CCM message size too large.",
 					None::<()>,
@@ -1586,7 +1586,7 @@ where
 			Ok::<_, CfApiError>(PoolsEnvironment {
 				fees: {
 					let mut map = AssetMap::default();
-					for asset_pair in api.cf_pools(hash)? {
+					for asset_pair in api.cf_pools(hash).map_err(CfApiError::from)? {
 						map[asset_pair.base] = self
 							.cf_pool_info(asset_pair.base, asset_pair.quote, at)
 							.ok()
@@ -1620,7 +1620,9 @@ where
 				false,              /* end_on_error */
 				pending_sink,
 				move |client, hash| {
-					Ok((*client.runtime_api()).cf_pool_price(hash, from_asset, to_asset)?)
+					Ok((*client.runtime_api())
+						.cf_pool_price(hash, from_asset, to_asset)
+						.map_err(CfApiError::from)?)
 				},
 			)
 			.await
@@ -1642,11 +1644,10 @@ where
 					Ok(PoolPriceV2 {
 						base_asset,
 						quote_asset,
-						price: (*client.runtime_api()).cf_pool_price_v2(
-							hash,
-							base_asset,
-							quote_asset,
-						)??,
+						price: (*client.runtime_api())
+							.cf_pool_price_v2(hash, base_asset, quote_asset)
+							.map_err(CfApiError::from)?
+							.map_err(CfApiError::from)?,
 					})
 				},
 			)
@@ -1664,7 +1665,9 @@ where
 				true,                             /* end_on_error */
 				pending_sink,
 				move |client, hash| {
-					Ok((*client.runtime_api()).cf_transaction_screening_events(hash)?)
+					Ok((*client.runtime_api())
+						.cf_transaction_screening_events(hash)
+						.map_err(CfApiError::from)?)
 				},
 			)
 			.await;
@@ -1682,7 +1685,9 @@ where
 			base_asset,
 			quote_asset,
 		) else {
-			pending_sink.reject(call_error("requested pool does not exist")).await;
+			pending_sink
+				.reject(call_error("requested pool does not exist", CfErrorCode::OtherError))
+				.await;
 			return;
 		};
 
@@ -1695,7 +1700,8 @@ where
 				move |client, hash| {
 					Ok(SwapResponse {
 						swaps: (*client.runtime_api())
-							.cf_scheduled_swaps(hash, base_asset, quote_asset)?
+							.cf_scheduled_swaps(hash, base_asset, quote_asset)
+							.map_err(CfApiError::from)?
 							.into_iter()
 							.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
 							.collect(),
@@ -1712,11 +1718,9 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<ScheduledSwap>> {
 		// Check that the requested pool exists:
-		let _ = (*self.rpc_backend.client.runtime_api()).cf_pool_info(
-			self.rpc_backend.client.info().best_hash,
-			base_asset,
-			quote_asset,
-		)?;
+		let _ = (*self.rpc_backend.client.runtime_api())
+			.cf_pool_info(self.rpc_backend.client.info().best_hash, base_asset, quote_asset)
+			.map_err(CfApiError::from)?;
 
 		self.rpc_backend
 			.with_runtime_api(at, |api, hash| api.cf_scheduled_swaps(hash, base_asset, quote_asset))
@@ -1860,14 +1864,16 @@ where
 	) -> RpcResult<Vec<TradingStrategyInfo<NumberOrHex>>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			let api_version = api
-				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)?
+				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
+				.map_err(CfApiError::from)?
 				.unwrap_or_default();
 
 			let strategies = if api_version < 4 {
 				// Strategies didn't exist in earlier versions:
 				vec![]
 			} else {
-				api.cf_get_trading_strategies(hash, lp)?
+				api.cf_get_trading_strategies(hash, lp)
+					.map_err(CfApiError::from)?
 					.into_iter()
 					.map(|info| TradingStrategyInfo {
 						lp_id: info.lp_id,
@@ -1882,7 +1888,7 @@ where
 					.collect()
 			};
 
-			RpcResult::Ok(strategies)
+			Ok::<_, CfApiError>(strategies)
 		})
 	}
 }

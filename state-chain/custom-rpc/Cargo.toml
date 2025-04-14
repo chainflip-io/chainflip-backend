@@ -48,6 +48,7 @@ frame-system = { workspace = true, default-features = true }
 frame-support = { workspace = true, default-features = true }
 lru = { workspace = true, default-features = true }
 
+cf-rpc-apis = { workspace = true }
 cf-rpc-types = { workspace = true }
 cf-node-client = { workspace = true }
 sp-application-crypto = { workspace = true }
