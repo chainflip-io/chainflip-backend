@@ -16,10 +16,7 @@
 
 use crate::{internal_error, CfApiError, RpcResult};
 use futures::{stream, stream::StreamExt, FutureExt};
-use jsonrpsee::{
-	types::{error::ErrorObjectOwned, SubscriptionId},
-	PendingSubscriptionSink, RpcModule,
-};
+use jsonrpsee::{types::error::ErrorObjectOwned, PendingSubscriptionSink, RpcModule};
 
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
@@ -112,7 +109,7 @@ const MAX_RETAINED_PINNED_BLOCKS: usize = 64;
 /// then each (subscription, block) tuple must be unpinned individually.
 struct SubscriptionCleaner<B: BlockT, BE: Backend<B>, C> {
 	chain_head_client: Arc<RpcModule<ChainHead<BE, B, C>>>,
-	sub_id: SubscriptionId<'static>,
+	sub_id: String,
 	pinned_hashes: Arc<Mutex<lru::LruCache<Hash, ()>>>,
 }
 
@@ -129,12 +126,12 @@ impl<B: BlockT, BE: Backend<B>, C> Clone for SubscriptionCleaner<B, BE, C> {
 impl<B: BlockT, BE: Backend<B>, C> SubscriptionCleaner<B, BE, C> {
 	pub fn new(
 		chain_head_client: Arc<RpcModule<ChainHead<BE, B, C>>>,
-		sub_id: SubscriptionId<'_>,
+		sub_id: String,
 		capacity: usize,
 	) -> Self {
 		Self {
 			chain_head_client,
-			sub_id: sub_id.clone().into_owned(),
+			sub_id,
 			pinned_hashes: Arc::new(Mutex::new(lru::LruCache::new(
 				NonZero::new(if capacity == 0 { 1 } else { capacity }).unwrap(),
 			))),
@@ -255,8 +252,17 @@ where
 			return;
 		};
 
+		let Ok(subscription_id) = serde_json::to_string(&subscription.subscription_id()) else {
+			pending_sink
+				.reject(internal_error(format!(
+					"Unable to serialize subscription id {:?}",
+					subscription.subscription_id()
+				)))
+				.await;
+			return;
+		};
+
 		// construct either best, new or finalized blocks stream from the chain head subscription
-		let subscription_id = subscription.subscription_id().clone().into_owned();
 		let blocks_stream = stream::unfold(
 			(
 				subscription,
