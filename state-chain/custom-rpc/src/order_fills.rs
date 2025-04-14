@@ -19,7 +19,7 @@ use std::collections::HashSet;
 use super::*;
 
 use cf_primitives::AccountId;
-use cf_rpc_types::{OrderFilled, OrderFills};
+use cf_rpc_apis::{OrderFilled, OrderFills};
 use pallet_cf_pools::{AssetPair, OrderId, Pool};
 use state_chain_runtime::Runtime;
 

@@ -35,8 +35,7 @@ use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
 	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
-use cf_rpc_apis::{call_error, internal_error, CfErrorCode, RpcApiError, RpcResult};
-use cf_rpc_types::OrderFills;
+use cf_rpc_apis::{call_error, internal_error, CfErrorCode, OrderFills, RpcApiError, RpcResult};
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{

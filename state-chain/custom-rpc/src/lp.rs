@@ -39,12 +39,11 @@ use cf_primitives::{
 	ApiWaitForResult, Asset, BasisPoints, BlockNumber, DcaParameters, EgressId, ForeignChain,
 	Price, WaitFor,
 };
-use cf_rpc_apis::lp::LpRpcApiServer;
-use cf_rpc_types::{
+use cf_rpc_apis::{
 	lp::{
 		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
-		OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
-		SwapRequestResponse,
+		LpRpcApiServer, OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange,
+		RangeOrderSizeJson, SwapRequestResponse,
 	},
 	OrderFills, RedemptionAmount, SwapChannelInfo,
 };

@@ -33,9 +33,8 @@ use cf_rpc_apis::{
 		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
 		TransactionInId, WithdrawFeesDetail,
 	},
-	RpcResult,
+	RpcResult, H256,
 };
-use cf_rpc_types::H256;
 use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
 use pallet_cf_swapping::AffiliateDetails;
 use sc_client_api::{

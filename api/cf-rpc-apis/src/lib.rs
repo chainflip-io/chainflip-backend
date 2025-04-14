@@ -19,6 +19,8 @@ use jsonrpsee::{
 	types::{error::ErrorObjectOwned, ErrorCode, ErrorObject},
 };
 
+pub use cf_rpc_types::*;
+
 pub mod broker;
 pub mod lp;
 
