@@ -81,19 +81,15 @@ macro_rules! extract_from_first_matching_event {
 	) => {
 
 		match $dynamic_events
-			.find_static_event::<$cf_static_event_variant>(false)?
+			.find_static_event::<$cf_static_event_variant>(false)
 		{
-			Some($cf_static_event_variant {
-				$(
-					$field,
-				)*
-				..
-			}) => Ok($result),
-			None => Err(
-				$crate::events_decoder::DynamicEventError::StaticEventNotFound(
-					stringify!($cf_static_event_variant)
-				)
-			),
+			Ok(maybe_event) => match maybe_event {
+				Some($cf_static_event_variant { $($field),*, .. } ) => Ok($result),
+				None => Err($crate::events_decoder::DynamicEventError::StaticEventNotFound(stringify!($cf_static_event_variant)))
+			},
+			Err(err) => {
+				Err($crate::events_decoder::DynamicEventError::from(err))
+			}
 		}
 	};
 }
