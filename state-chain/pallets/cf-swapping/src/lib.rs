@@ -26,16 +26,16 @@ use cf_chains::{
 	RefundParametersExtended, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
-	ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
+	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
 	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
 	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, SwapLimitsProvider,
-	SwapOutputAction, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, SwapOutputAction,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
 	SwappingApi,
 };
 use frame_support::{
@@ -620,6 +620,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type InternalSwapMinimumNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
+	/// Set by the broker, this is the minimum broker commission that the broker will accept for a
+	/// vault swap.
+	#[pallet::storage]
+	pub type VaultSwapMinimumBrokerFee<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, BasisPoints, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -760,6 +766,10 @@ pub mod pallet {
 		},
 		PalletConfigUpdated {
 			update: PalletConfigUpdate<T>,
+		},
+		VaultSwapMinimumBrokerFeeSet {
+			broker_id: T::AccountId,
+			minimum_fee_bps: BasisPoints,
 		},
 	}
 	#[pallet::error]
@@ -1115,19 +1125,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let mut beneficiaries = Beneficiaries::new();
-			for beneficiary in [Beneficiary { account: broker.clone(), bps: broker_commission }]
-				.into_iter()
-				.chain(affiliate_fees.iter().cloned())
-			{
-				if beneficiary.bps > 0 {
-					beneficiaries.try_push(beneficiary).expect(
-						"We are pushing affiliates + 1 which is exactly the maximum Beneficiaries size",
-					);
-				}
-			}
-
-			Pallet::<T>::validate_broker_fees(&beneficiaries)?;
+			let beneficiaries = Pallet::<T>::assemble_and_validate_broker_fees(
+				broker.clone(),
+				broker_commission,
+				affiliate_fees.clone(),
+			)?;
 
 			let destination_address_internal =
 				T::AddressConverter::decode_and_validate_address_for_asset(
@@ -1173,6 +1175,14 @@ pub mod pallet {
 					refund_params_internal,
 					dca_parameters.clone(),
 				)?;
+
+			// TODO: deduplicate this with assemble_and_validate_broker_fees
+			let affiliate_fees = affiliate_fees
+				.into_iter()
+				.filter(|beneficiary| beneficiary.bps > 0)
+				.collect::<Vec<_>>()
+				.try_into()
+				.expect("Filtering out will always fit");
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
@@ -1333,6 +1343,36 @@ pub mod pallet {
 				Asset::Usdc,
 				ForeignChainAddress::Eth(details.withdrawal_address),
 			)?;
+			Ok(())
+		}
+
+		/// Sets the brokers personal minimum fee for vault swaps.
+		/// This minimum is used to stop encoding vault swaps with a lower broker fee.
+		/// If a swap is witnessed with a lower fee, it will be changed to the minimum.
+		///
+		/// ## Events
+		///
+		/// - [VaultSwapMinimumBrokerFeeSet](Event::VaultSwapMinimumBrokerFeeSet)
+		#[pallet::call_index(17)]
+		#[pallet::weight(T::WeightInfo::set_vault_swap_minimum_broker_fee())]
+		pub fn set_vault_swap_minimum_broker_fee(
+			origin: OriginFor<T>,
+			minimum_fee_bps: BasisPoints,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			Pallet::<T>::validate_broker_fees(
+				&vec![Beneficiary { account: broker_id.clone(), bps: minimum_fee_bps }]
+					.try_into()
+					.expect("Single broker will fit"),
+			)?;
+
+			VaultSwapMinimumBrokerFee::<T>::insert(broker_id.clone(), minimum_fee_bps);
+			Self::deposit_event(Event::<T>::VaultSwapMinimumBrokerFeeSet {
+				broker_id,
+				minimum_fee_bps,
+			});
+
 			Ok(())
 		}
 	}
@@ -2228,6 +2268,32 @@ pub mod pallet {
 
 			Ok(remaining_amount_to_refund)
 		}
+
+		pub fn assemble_and_validate_broker_fees(
+			broker_id: T::AccountId,
+			broker_commission: BasisPoints,
+			affiliate_fees: Affiliates<T::AccountId>,
+		) -> Result<Beneficiaries<T::AccountId>, DispatchError> {
+			let beneficiaries = [Beneficiary { account: broker_id, bps: broker_commission }]
+				.into_iter()
+				.chain(affiliate_fees.iter().cloned())
+				.filter_map(
+					|beneficiary| {
+						if beneficiary.bps > 0 {
+							Some(beneficiary)
+						} else {
+							None
+						}
+					},
+				)
+				.collect::<Vec<_>>()
+				.try_into()
+				.expect(
+					"We are pushing affiliates + 1 which is exactly the maximum Beneficiaries size",
+				);
+			Pallet::<T>::validate_broker_fees(&beneficiaries)?;
+			Ok(beneficiaries)
+		}
 	}
 
 	impl<T: Config> SwapRequestHandler for Pallet<T> {
@@ -2454,7 +2520,7 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	}
 }
 
-impl<T: Config> SwapLimitsProvider for Pallet<T> {
+impl<T: Config> SwapParameterValidation for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	fn get_swap_limits() -> cf_traits::SwapLimits {
@@ -2505,6 +2571,10 @@ impl<T: Config> SwapLimitsProvider for Pallet<T> {
 		ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
 
 		Ok(())
+	}
+
+	fn get_minimum_vault_swap_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints {
+		VaultSwapMinimumBrokerFee::<T>::get(broker_id)
 	}
 }
 

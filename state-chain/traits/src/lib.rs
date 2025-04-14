@@ -1052,7 +1052,7 @@ pub struct SwapLimits {
 	pub max_swap_retry_duration_blocks: BlockNumber,
 	pub max_swap_request_duration_blocks: BlockNumber,
 }
-pub trait SwapLimitsProvider {
+pub trait SwapParameterValidation {
 	type AccountId;
 
 	fn get_swap_limits() -> SwapLimits;
@@ -1061,6 +1061,7 @@ pub trait SwapLimitsProvider {
 	fn validate_broker_fees(
 		broker_fees: &Beneficiaries<Self::AccountId>,
 	) -> Result<(), DispatchError>;
+	fn get_minimum_vault_swap_fee_for_broker(broker_id: &Self::AccountId) -> BasisPoints;
 }
 
 /// API for interacting with the asset-balance pallet.

@@ -54,6 +54,7 @@ jobs:
       full-bouncer: true
       broker-endpoint: "http://127.0.0.1:10997"
       lp-endpoint: "http://127.0.0.1:10589"
+      log-postfix: "-post-check-old-rpcs"
 
   upgrade-check:
     needs: [build-try-runtime]
