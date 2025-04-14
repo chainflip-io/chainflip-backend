@@ -26,11 +26,10 @@ use crate::{
 	RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
-	evm::SchnorrVerificationComponents,
 	mocks::{
-		ChainChoice, MockApiCall, MockBroadcastBarriers, MockEthereum, MockEthereumChainCrypto,
-		MockEthereumTransactionMetadata, MockTransactionBuilder, ETH_TX_FEE,
-		MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
+		ChainChoice, MockAggKey, MockApiCall, MockBroadcastBarriers, MockEthereum,
+		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
+		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
 	ChainCrypto, FeeRefundCalculator, ForeignChain,
 };
@@ -496,8 +495,8 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 		});
 }
 
-pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
-	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+pub const ETH_DUMMY_SIG: <MockEthereumChainCrypto as ChainCrypto>::ThresholdSignature =
+	MockThresholdSignature { signing_key: MockAggKey([0xcf; 4]), signed_payload: [0xcf; 4] };
 
 #[test]
 fn threshold_sign_and_broadcast_with_callback() {
@@ -513,7 +512,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 				None
 			});
 
-		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+		MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
 		assert_eq!(
 			RequestSuccessCallbacks::<Test, Instance1>::get(broadcast_id),
@@ -971,7 +970,7 @@ fn initiate_and_sign_broadcast(
 		),
 	};
 
-	EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+	MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
 	broadcast_id
 }

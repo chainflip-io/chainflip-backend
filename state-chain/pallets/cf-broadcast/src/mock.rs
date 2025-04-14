@@ -23,7 +23,6 @@ use crate::{
 };
 use cf_chains::{
 	eth::Ethereum,
-	evm::EvmCrypto,
 	mocks::{MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder},
 	Chain, ChainCrypto, RetryPolicy,
 };
@@ -71,8 +70,6 @@ thread_local! {
 	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
 	pub static VALID_METADATA: RefCell<bool> = RefCell::new(true);
 }
-
-pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback;
