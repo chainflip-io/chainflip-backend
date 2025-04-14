@@ -29,7 +29,10 @@ use frame_support::{assert_noop, instances::Instance1};
 use sp_runtime::Percent;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
-use crate::{BoostPoolId, BoostPoolTier, BoostPools, Event, PalletSafeMode};
+use crate::{
+	BoostDelayBlocks, BoostPoolId, BoostPoolTier, BoostPools, Event, PalletSafeMode,
+	PendingPrewitnessedDeposits,
+};
 
 type AccountId = u64;
 
@@ -117,11 +120,7 @@ fn get_available_amount(asset: EthAsset, fee_tier: BoostPoolTier) -> AssetAmount
 fn setup() {
 	assert_ok!(Pallet::<Test, Instance1>::create_boost_pools(
 		RuntimeOrigin::root(),
-		vec![
-			BoostPoolId { asset: EthAsset::Eth, tier: TIER_5_BPS },
-			BoostPoolId { asset: EthAsset::Eth, tier: TIER_10_BPS },
-			BoostPoolId { asset: EthAsset::Eth, tier: TIER_30_BPS },
-		]
+		vec![BoostPoolId { asset: EthAsset::Eth, tier: TIER_5_BPS },]
 	));
 
 	assert_ok!(
@@ -1369,5 +1368,282 @@ mod vault_swaps {
 				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
 			}
 		});
+	}
+}
+
+mod delayed_boosting {
+
+	use super::*;
+	use crate::BoostedVaultTransactions;
+	use sp_runtime::traits::BlockNumberProvider;
+
+	const BOOST_DELAY: u64 = 1;
+	const PERWITNESSED_AT_BLOCK: u64 = 1;
+	const PROCESSED_AT_BLOCK: u64 = PERWITNESSED_AT_BLOCK + BOOST_DELAY;
+
+	const INPUT_ASSET: EthAsset = EthAsset::Eth;
+	const OUTPUT_ASSET: EthAsset = EthAsset::Flip;
+	const DEPOSIT_AMOUNT: AssetAmount = 500_000_000;
+
+	const TX_ID: H256 = H256([9u8; 32]);
+	const CHANNEL_ID: ChannelId = 1;
+
+	#[test]
+	fn channel_deposit_boosted_after_delay() {
+		// Common case: deposit is prewitnessed, then boosted after a short delay,
+		// and processed as previously boosted when the finslised deposit arrives.
+		new_test_ext()
+			.execute_with(|| {
+				BoostDelayBlocks::<Test, ()>::set(BOOST_DELAY);
+				assert_eq!(System::current_block_number(), PERWITNESSED_AT_BLOCK);
+
+				setup();
+
+				assert_ok!(IngressEgress::add_boost_funds(
+					RuntimeOrigin::signed(BOOSTER_1),
+					INPUT_ASSET.into(),
+					DEPOSIT_AMOUNT,
+					TIER_5_BPS
+				));
+
+				let (_, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 5);
+				let _ = prewitness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
+
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(),
+					1
+				);
+
+				assert_eq!(
+					DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().boost_status,
+					BoostStatus::BoostPending
+				);
+
+				deposit_address
+			})
+			.then_execute_at_next_block(|deposit_address| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::IngressEgress(Event::DepositBoosted { .. }),
+				);
+
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(),
+					0
+				);
+
+				assert_matches!(
+					DepositChannelLookup::<Test, ()>::get(&deposit_address).unwrap().boost_status,
+					BoostStatus::Boosted { .. }
+				);
+
+				witness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::IngressEgress(Event::DepositFinalised { .. }),
+				);
+
+				assert_eq!(
+					DepositChannelLookup::<Test, ()>::get(&deposit_address).unwrap().boost_status,
+					BoostStatus::NotBoosted
+				);
+			});
+	}
+
+	#[test]
+	fn channel_deposit_arrives_before_boost() {
+		// Edge case: deposit is prewitnessed, but while we are waiting to process
+		// it the finalised deposit arrives and processed an not boosted.
+		// Importantly, we cancel the processing of the prewitnessed deposit.
+
+		new_test_ext().execute_with(|| {
+			BoostDelayBlocks::<Test, ()>::set(BOOST_DELAY);
+			assert_eq!(System::current_block_number(), PERWITNESSED_AT_BLOCK);
+
+			setup();
+
+			assert_ok!(IngressEgress::add_boost_funds(
+				RuntimeOrigin::signed(BOOSTER_1),
+				INPUT_ASSET.into(),
+				DEPOSIT_AMOUNT,
+				TIER_5_BPS
+			));
+
+			let (_, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 5);
+			let _ = prewitness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
+
+			assert_eq!(PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(), 1);
+
+			assert_eq!(
+				DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().boost_status,
+				BoostStatus::BoostPending
+			);
+
+			witness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(Event::DepositFinalised { .. }),
+			);
+
+			assert_eq!(
+				DepositChannelLookup::<Test, ()>::get(&deposit_address).unwrap().boost_status,
+				BoostStatus::NotBoosted
+			);
+
+			assert_eq!(PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(), 0);
+		});
+	}
+
+	fn vault_deposit_witness_mock() -> VaultDepositWitness<Test, ()> {
+		VaultDepositWitness {
+			input_asset: INPUT_ASSET,
+			deposit_address: Some([1; 20].into()),
+			channel_id: Some(CHANNEL_ID),
+			deposit_amount: DEPOSIT_AMOUNT,
+			deposit_details: Default::default(),
+			output_asset: OUTPUT_ASSET.into(),
+			destination_address: MockAddressConverter::to_encoded_address(
+				ForeignChainAddress::Eth([1; 20].into()),
+			),
+			deposit_metadata: None,
+			tx_id: TX_ID.clone(),
+			broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
+			affiliate_fees: Default::default(),
+			refund_params: ChannelRefundParameters {
+				retry_duration: 2,
+				refund_address: [2; 20].into(),
+				min_price: Default::default(),
+			},
+			dca_params: None,
+			boost_fee: 5,
+		}
+	}
+
+	#[test]
+	fn vault_deposit_arrives_before_boost() {
+		// Common case: deposit is prewitnessed, then boosted after a short delay,
+		// and processed as previously boosted when the finslised deposit arrives.
+
+		const DEPOSIT_BLOCK_HEIGHT: u64 = 10;
+		const TX_ID: H256 = H256([9u8; 32]);
+
+		new_test_ext().execute_with(|| {
+			BoostDelayBlocks::<Test, ()>::set(BOOST_DELAY);
+			assert_eq!(System::current_block_number(), PERWITNESSED_AT_BLOCK);
+
+			setup();
+
+			assert_ok!(IngressEgress::add_boost_funds(
+				RuntimeOrigin::signed(BOOSTER_1),
+				INPUT_ASSET,
+				DEPOSIT_AMOUNT,
+				TIER_5_BPS
+			));
+
+			let deposit = vault_deposit_witness_mock();
+
+			IngressEgress::process_vault_swap_request_prewitness(
+				DEPOSIT_BLOCK_HEIGHT,
+				deposit.clone(),
+			);
+
+			assert_eq!(PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(), 1);
+
+			assert_eq!(
+				BoostedVaultTransactions::<Test, ()>::get(&TX_ID),
+				Some(BoostStatus::BoostPending)
+			);
+
+			// EDGE CASE: full witness arrives before the delayed prewitness is processed,
+			//
+			IngressEgress::process_vault_swap_request_full_witness(
+				DEPOSIT_BLOCK_HEIGHT,
+				deposit.clone(),
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::IngressEgress(Event::DepositFinalised { .. }),
+			);
+
+			assert!(!BoostedVaultTransactions::<Test, ()>::contains_key(TX_ID));
+
+			assert!(PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).is_empty());
+		});
+	}
+
+	#[test]
+	fn vault_deposit_boosted_after_delay() {
+		// Edge case: deposit is prewitnessed, but while we are waiting to process
+		// it the finalised deposit arrives and processed an not boosted.
+		// Importantly, we cancel the processing of the prewitnessed deposit.
+
+		const CHANNEL_ID: ChannelId = 1;
+		const DEPOSIT_BLOCK_HEIGHT: u64 = 10;
+
+		new_test_ext()
+			.execute_with(|| {
+				BoostDelayBlocks::<Test, ()>::set(BOOST_DELAY);
+				assert_eq!(System::current_block_number(), PERWITNESSED_AT_BLOCK);
+
+				setup();
+
+				assert_ok!(IngressEgress::add_boost_funds(
+					RuntimeOrigin::signed(BOOSTER_1),
+					INPUT_ASSET,
+					DEPOSIT_AMOUNT,
+					TIER_5_BPS
+				));
+
+				let tx_id: H256 = [9u8; 32].into();
+
+				let deposit = vault_deposit_witness_mock();
+
+				IngressEgress::process_vault_swap_request_prewitness(
+					DEPOSIT_BLOCK_HEIGHT,
+					deposit.clone(),
+				);
+
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).len(),
+					1
+				);
+
+				assert_eq!(
+					BoostedVaultTransactions::<Test, ()>::get(&tx_id),
+					Some(BoostStatus::BoostPending)
+				);
+
+				(deposit, tx_id)
+			})
+			.then_execute_at_next_block(|(deposit, tx_id)| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::IngressEgress(Event::DepositBoosted { .. }),
+				);
+
+				assert!(
+					PendingPrewitnessedDeposits::<Test, ()>::get(&PROCESSED_AT_BLOCK).is_empty()
+				);
+
+				assert_matches!(
+					BoostedVaultTransactions::<Test, ()>::get(&tx_id),
+					Some(BoostStatus::Boosted { .. })
+				);
+
+				IngressEgress::process_vault_swap_request_full_witness(
+					DEPOSIT_BLOCK_HEIGHT,
+					deposit.clone(),
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::IngressEgress(Event::DepositFinalised { .. }),
+				);
+
+				assert!(!BoostedVaultTransactions::<Test, ()>::contains_key(tx_id));
+			});
 	}
 }
