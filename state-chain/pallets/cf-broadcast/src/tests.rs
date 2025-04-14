@@ -20,10 +20,11 @@ use core::cmp::max;
 
 use crate::{
 	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
-	BroadcastId, ChainBlockNumberFor, Config, DelayedBroadcastRetryQueue, Error,
-	Event as BroadcastEvent, Event, FailedBroadcasters, Instance1, PalletConfigUpdate,
-	PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks,
-	RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
+	BroadcastId, BroadcastIdToTransactionOutIds, ChainBlockNumberFor, Config,
+	DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, Event, FailedBroadcasters,
+	Instance1, PalletConfigUpdate, PalletOffence, PendingApiCalls, PendingBroadcasts,
+	RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts, TransactionMetadata,
+	TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	mocks::{
@@ -158,6 +159,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	// if re-signing occurs.
 	assert!(!TransactionOutIdToBroadcastId::<Test, Instance1>::iter()
 		.any(|(_, (b_id, _))| b_id == broadcast_id));
+	assert!(BroadcastIdToTransactionOutIds::<Test, Instance1>::get(broadcast_id).is_empty());
 	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
 	assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
 	assert!(PendingApiCalls::<Test, Instance1>::get(broadcast_id).is_none());
