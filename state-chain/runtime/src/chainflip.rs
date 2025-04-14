@@ -93,7 +93,6 @@ use cf_traits::{
 	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
 	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
-use pallet_cf_elections::electoral_system::{ElectoralReadAccess, ElectoralWriteAccess};
 
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
@@ -101,8 +100,8 @@ use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
 	sp_runtime::{
-		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto, Zero},
-		FixedPointNumber, FixedU64, Saturating,
+		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
+		FixedPointNumber, FixedU64,
 	},
 	traits::{Defensive, Get},
 };
@@ -626,50 +625,7 @@ impl
 	fn lookup(
 		alts: Vec<SolAddress>,
 	) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
-		// Verify that all the data is ready
-		if alts.iter().any(|alt| {
-			solana_elections::SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(alt)
-				.unwrap_or_default()
-				.is_none()
-		}) {
-			return None;
-		}
-
-		// If all the data is ready, reduce ref count by 1 from storage
-		Some(
-			match alts
-				.into_iter()
-				.map(|alt| {
-					solana_elections::SolanaAltWitnessingElectoralAccess::mutate_unsynchronised_state_map(
-						alt,
-						|maybe_state| {
-							let (value, ref_count) = maybe_state.as_mut().expect("Checked that the state is Some() above");
-							ref_count.saturating_reduce(1);
-
-							let res = value.clone();
-							if ref_count.is_zero() {
-								*maybe_state = None;
-							}
-							Ok(res)
-						},
-					)
-				})
-				.collect::<Result<Vec<_>, _>>()
-				.ok()?
-				.into_iter()
-				.map(|consensus_res| {
-					if let AltWitnessingConsensusResult::ValidConsensus(alt) = consensus_res {
-						Ok(alt)
-					} else {
-						Err(())
-					}
-				})
-				.collect::<Result<Vec<_>, ()>>()
-			{
-				Ok(alts) => AltWitnessingConsensusResult::ValidConsensus(alts),
-				Err(_) => AltWitnessingConsensusResult::InvalidNoConsensus,
-			},
-		)
+		solana_elections::solana_alt_result(alts)
 	}
 }
 
