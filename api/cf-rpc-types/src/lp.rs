@@ -21,17 +21,17 @@ use cf_primitives::{
 	*,
 };
 use cf_utilities::rpc::NumberOrHex;
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{OrderId, RangeOrderSize};
 use sp_core::serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-use crate::SwapChannelInfo;
+use crate::{SwapChannelInfo, U256};
 
 pub use cf_amm::{
 	common::{PoolPairsMap, Side},
 	math::Tick,
 };
-pub use sp_core::U256;
+pub use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RangeOrder {

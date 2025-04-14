@@ -36,6 +36,7 @@ use cf_primitives::{
 	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_rpc_apis::{call_error, internal_error, CfErrorCode, RpcApiError, RpcResult};
+use cf_rpc_types::OrderFills;
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
@@ -47,7 +48,6 @@ use jsonrpsee::{
 	},
 	PendingSubscriptionSink,
 };
-use order_fills::OrderFills;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,

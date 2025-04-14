@@ -24,10 +24,10 @@ pub mod stream_api;
 use async_trait::async_trait;
 
 use anyhow::{anyhow, bail, Context, Result};
-use cf_primitives::{AccountRole, SemVer};
+use cf_primitives::{AccountRole, SemVer, WaitFor};
 use futures::{StreamExt, TryStreamExt};
 
-use cf_node_client::{signer, subxt_state_chain_config::StateChainConfig, WaitFor, WaitForResult};
+use cf_node_client::{signer, subxt_state_chain_config::StateChainConfig, WaitForResult};
 use cf_primitives::CfeCompatibility;
 use futures_core::future::BoxFuture;
 use futures_util::FutureExt;

@@ -18,7 +18,7 @@ use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
 use cf_rpc_apis::{
 	broker::{
 		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
-		TransactionInId, WithdrawFeesDetail, H256,
+		TransactionInId, WithdrawFeesDetail,
 	},
 	RpcApiError, RpcResult,
 };
@@ -32,6 +32,7 @@ use chainflip_api::{
 		state_chain_runtime::runtime_apis::{ChainAccounts, VaultAddresses, VaultSwapDetails},
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
 	},
+	rpc_types::H256,
 	settings::StateChain,
 	AccountId32, AddressString, BrokerApi, ChannelActionType, ChannelId, DepositMonitorApi,
 	EthereumAddress, OperatorApi, SignedExtrinsicApi, StateChainApi,

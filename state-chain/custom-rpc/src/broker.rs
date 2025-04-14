@@ -31,10 +31,11 @@ use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId};
 use cf_rpc_apis::{
 	broker::{
 		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
-		TransactionInId, WithdrawFeesDetail, H256,
+		TransactionInId, WithdrawFeesDetail,
 	},
 	RpcResult,
 };
+use cf_rpc_types::H256;
 use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
 use pallet_cf_swapping::AffiliateDetails;
 use sc_client_api::{

@@ -15,10 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
-use cf_rpc_apis::broker::BrokerRpcApiServer;
+use cf_rpc_apis::{broker::BrokerRpcApiServer, lp::LpRpcApiServer};
 use custom_rpc::{
 	broker::{broker_crypto, BrokerSignedRpc},
-	lp::{lp_crypto, LpSignedApiServer, LpSignedRpc},
+	lp::{lp_crypto, LpSignedRpc},
 	monitoring::MonitoringApiServer,
 	CustomApiServer, CustomRpc,
 };
@@ -372,7 +372,7 @@ pub fn new_full<
 
 				// Add lp RPCs if lp key was found
 				if let Some(pair) = lp_key_pair.clone() {
-					module.merge(LpSignedApiServer::into_rpc(LpSignedRpc::new(
+					module.merge(LpRpcApiServer::into_rpc(LpSignedRpc::new(
 						client.clone(),
 						backend.clone(),
 						executor.clone(),

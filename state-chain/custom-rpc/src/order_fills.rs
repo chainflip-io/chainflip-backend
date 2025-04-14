@@ -19,39 +19,9 @@ use std::collections::HashSet;
 use super::*;
 
 use cf_primitives::AccountId;
+use cf_rpc_types::{OrderFilled, OrderFills};
 use pallet_cf_pools::{AssetPair, OrderId, Pool};
 use state_chain_runtime::Runtime;
-
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq, Eq)]
-pub struct OrderFills {
-	pub(super) fills: Vec<OrderFilled>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum OrderFilled {
-	LimitOrder {
-		lp: AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		id: U256,
-		tick: Tick,
-		sold: U256,
-		bought: U256,
-		fees: U256,
-		remaining: U256,
-	},
-	RangeOrder {
-		lp: AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
-		id: U256,
-		range: Range<Tick>,
-		fees: PoolPairsMap<U256>,
-		liquidity: U256,
-	},
-}
 
 pub(crate) fn order_fills_for_block<C, B, BE>(
 	client: &C,

@@ -26,7 +26,7 @@ use frame_support::sp_runtime::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::{ConstU32, Get, U256};
+use sp_core::{ConstU32, Get, H256, U256};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
 	collections::btree_map::BTreeMap,
@@ -493,5 +493,41 @@ impl<const N: u128> Get<BTreeMap<Asset, AssetAmount>> for StablecoinDefaults<N> 
 			.into_iter()
 			.map(|asset| (asset, N))
 			.collect()
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
+pub enum WaitFor {
+	// Return immediately after the extrinsic is submitted
+	NoWait,
+	// Wait until the extrinsic is included in a block
+	InBlock,
+	// Wait until the extrinsic is in a finalized block
+	#[default]
+	Finalized,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiWaitForResult<T> {
+	TxHash(H256),
+	TxDetails { tx_hash: H256, response: T },
+}
+
+impl<T> ApiWaitForResult<T> {
+	pub fn map_details<R>(self, f: impl FnOnce(T) -> R) -> ApiWaitForResult<R> {
+		match self {
+			ApiWaitForResult::TxHash(hash) => ApiWaitForResult::TxHash(hash),
+			ApiWaitForResult::TxDetails { response, tx_hash } =>
+				ApiWaitForResult::TxDetails { tx_hash, response: f(response) },
+		}
+	}
+
+	#[track_caller]
+	pub fn unwrap_details(self) -> T {
+		match self {
+			ApiWaitForResult::TxHash(_) => panic!("unwrap_details called on TransactionHash"),
+			ApiWaitForResult::TxDetails { response, .. } => response,
+		}
 	}
 }

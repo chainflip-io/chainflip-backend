@@ -2018,6 +2018,7 @@ version = "1.9.0"
 dependencies = [
  "anyhow",
  "cf-primitives",
+ "cf-rpc-apis",
  "chainflip-api",
  "clap",
  "custom-rpc",

@@ -20,8 +20,9 @@ use cf_node_client::{
 	events_decoder::{self, DynamicEvents},
 	runtime_decoder::RuntimeDecoder,
 	signer::PairSigner,
-	ExtrinsicData, WaitFor, WaitForDynamicResult, WaitForResult,
+	ExtrinsicData, WaitForDynamicResult, WaitForResult,
 };
+use cf_primitives::WaitFor;
 use codec::{Decode, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::StreamExt;

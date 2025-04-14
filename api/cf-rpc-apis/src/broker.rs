@@ -17,10 +17,10 @@
 use crate::RpcResult;
 
 use cf_chains::{eth::Address as EthereumAddress, CcmChannelMetadata, VaultSwapExtraParametersRpc};
+use cf_rpc_types::{AccountId32, BlockUpdate, H256};
 use jsonrpsee::proc_macros::rpc;
 
 pub use cf_primitives::DcaParameters;
-// re-export all cf_rpc_types::broker types to only depend on this crate
 pub use cf_rpc_types::broker::*;
 
 #[rpc(server, client, namespace = "broker")]

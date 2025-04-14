@@ -23,10 +23,10 @@ pub use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{address::AddressString, ForeignChain};
-use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
+use cf_node_client::WaitForResult;
 use cf_primitives::{
-	AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId, Price,
-	SwapRequestId,
+	AccountId, ApiWaitForResult, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters,
+	EgressId, Price, SwapRequestId, WaitFor,
 };
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
