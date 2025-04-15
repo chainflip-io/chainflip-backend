@@ -1381,7 +1381,6 @@ mod vault_swaps {
 }
 
 mod delayed_boosting {
-
 	use super::*;
 	use crate::BoostedVaultTransactions;
 	use sp_runtime::traits::BlockNumberProvider;
@@ -1393,28 +1392,36 @@ mod delayed_boosting {
 	const INPUT_ASSET: EthAsset = EthAsset::Eth;
 	const OUTPUT_ASSET: EthAsset = EthAsset::Flip;
 	const DEPOSIT_AMOUNT: AssetAmount = 500_000_000;
+	const DEPOSIT_BLOCK_HEIGHT: u64 = 10;
 
 	const TX_ID: H256 = H256([9u8; 32]);
 	const CHANNEL_ID: ChannelId = 1;
 
-	#[test]
-	fn channel_deposit_boosted_after_delay() {
-		// Common case: deposit is prewitnessed, then boosted after a short delay,
-		// and processed as previously boosted when the finslised deposit arrives.
-		new_test_ext()
-			.execute_with(|| {
-				BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
-				assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
+	fn setup_with_boost_pools() -> TestRunner<()> {
+		new_test_ext().execute_with(|| {
+			BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
+			assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
 
-				setup();
+			setup();
+			assert_ok!(EthereumIngressEgress::add_boost_funds(
+				RuntimeOrigin::signed(BOOSTER_1),
+				INPUT_ASSET,
+				DEPOSIT_AMOUNT,
+				TIER_5_BPS
+			));
+		})
+	}
 
-				assert_ok!(EthereumIngressEgress::add_boost_funds(
-					RuntimeOrigin::signed(BOOSTER_1),
-					INPUT_ASSET,
-					DEPOSIT_AMOUNT,
-					TIER_5_BPS
-				));
+	trait PrewitnessedDeposits {
+		fn with_prewitnessed_channel_deposit(self) -> TestRunner<H160>;
+		fn with_prewitnessed_vault_deposit(
+			self,
+		) -> TestRunner<VaultDepositWitness<Test, Instance1>>;
+	}
 
+	impl PrewitnessedDeposits for TestRunner<()> {
+		fn with_prewitnessed_channel_deposit(self) -> TestRunner<H160> {
+			self.execute_with(|| {
 				let (_, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 5);
 				let _ = prewitness_deposit(deposit_address, INPUT_ASSET, DEPOSIT_AMOUNT);
 
@@ -1432,6 +1439,40 @@ mod delayed_boosting {
 
 				deposit_address
 			})
+		}
+
+		fn with_prewitnessed_vault_deposit(
+			self,
+		) -> TestRunner<VaultDepositWitness<Test, Instance1>> {
+			self.execute_with(|| {
+				let deposit = vault_deposit_witness_mock();
+
+				EthereumIngressEgress::process_vault_swap_request_prewitness(
+					DEPOSIT_BLOCK_HEIGHT,
+					deposit.clone(),
+				);
+
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
+					1
+				);
+
+				assert_eq!(
+					BoostedVaultTransactions::<Test, Instance1>::get(TX_ID),
+					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
+				);
+
+				deposit
+			})
+		}
+	}
+
+	#[test]
+	fn channel_deposit_boosted_after_delay() {
+		// Common case: deposit is prewitnessed, then boosted after a short delay,
+		// and processed as previously boosted when the finslised deposit arrives.
+		setup_with_boost_pools()
+			.with_prewitnessed_channel_deposit()
 			.then_execute_at_next_block(|deposit_address| {
 				assert_has_matching_event!(
 					Test,
@@ -1478,35 +1519,9 @@ mod delayed_boosting {
 		// it the finalised deposit arrives and processed an not boosted.
 		// Importantly, we cancel the processing of the prewitnessed deposit.
 
-		new_test_ext()
-			.execute_with(|| {
-				BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
-				assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
-
-				setup();
-
-				assert_ok!(EthereumIngressEgress::add_boost_funds(
-					RuntimeOrigin::signed(BOOSTER_1),
-					INPUT_ASSET,
-					DEPOSIT_AMOUNT,
-					TIER_5_BPS
-				));
-
-				let (_, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 5);
-				let _ = prewitness_deposit(deposit_address, INPUT_ASSET, DEPOSIT_AMOUNT);
-
-				assert_eq!(
-					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
-					1
-				);
-
-				assert_eq!(
-					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
-						.unwrap()
-						.boost_status,
-					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
-				);
-
+		setup_with_boost_pools()
+			.with_prewitnessed_channel_deposit()
+			.then_execute_with(|deposit_address| {
 				witness_deposit(deposit_address, INPUT_ASSET, DEPOSIT_AMOUNT);
 
 				assert_has_matching_event!(
@@ -1569,40 +1584,11 @@ mod delayed_boosting {
 		// Common case: deposit is prewitnessed, then boosted after a short delay,
 		// and processed as previously boosted when the finslised deposit arrives.
 
-		const DEPOSIT_BLOCK_HEIGHT: u64 = 10;
 		const TX_ID: H256 = H256([9u8; 32]);
 
-		new_test_ext()
-			.execute_with(|| {
-				BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
-				assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
-
-				setup();
-
-				assert_ok!(EthereumIngressEgress::add_boost_funds(
-					RuntimeOrigin::signed(BOOSTER_1),
-					INPUT_ASSET,
-					DEPOSIT_AMOUNT,
-					TIER_5_BPS
-				));
-
-				let deposit = vault_deposit_witness_mock();
-
-				EthereumIngressEgress::process_vault_swap_request_prewitness(
-					DEPOSIT_BLOCK_HEIGHT,
-					deposit.clone(),
-				);
-
-				assert_eq!(
-					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
-					1
-				);
-
-				assert_eq!(
-					BoostedVaultTransactions::<Test, Instance1>::get(TX_ID),
-					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
-				);
-
+		setup_with_boost_pools()
+			.with_prewitnessed_vault_deposit()
+			.then_execute_with(|deposit| {
 				// EDGE CASE: full witness arrives before the delayed prewitness is processed,
 				//
 				EthereumIngressEgress::process_vault_swap_request_full_witness(
@@ -1643,34 +1629,10 @@ mod delayed_boosting {
 
 		const DEPOSIT_BLOCK_HEIGHT: u64 = 10;
 
-		new_test_ext()
-			.execute_with(|| {
-				BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
-				assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
-
-				setup();
-
-				assert_ok!(EthereumIngressEgress::add_boost_funds(
-					RuntimeOrigin::signed(BOOSTER_1),
-					INPUT_ASSET,
-					DEPOSIT_AMOUNT,
-					TIER_5_BPS
-				));
-
+		setup_with_boost_pools()
+			.with_prewitnessed_vault_deposit()
+			.then_execute_with(|deposit| {
 				let tx_id: H256 = [9u8; 32].into();
-
-				let deposit = vault_deposit_witness_mock();
-
-				EthereumIngressEgress::process_vault_swap_request_prewitness(
-					DEPOSIT_BLOCK_HEIGHT,
-					deposit.clone(),
-				);
-
-				assert_eq!(
-					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
-					1
-				);
-
 				assert_eq!(
 					BoostedVaultTransactions::<Test, Instance1>::get(tx_id),
 					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
