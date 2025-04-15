@@ -998,6 +998,8 @@ pub mod pallet {
 		TransactionAlreadyPrewitnessed,
 		/// Assethub's Vault Account does not exist in storage.
 		MissingAssethubVault,
+		/// The account id is not a member of the boost pool.
+		AccountNotFoundInBoostPool,
 	}
 
 	#[pallet::hooks]
@@ -1466,7 +1468,10 @@ pub mod pallet {
 			let (unlocked_amount, pending_boosts) =
 				BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
 					let pool = pool.as_mut().ok_or(Error::<T, I>::BoostPoolDoesNotExist)?;
-					pool.stop_boosting(booster.clone())
+					pool.stop_boosting(booster.clone()).map_err(|e| match e {
+						boost_pool::Error::AccountNotFoundInBoostPool =>
+							Error::<T, I>::AccountNotFoundInBoostPool,
+					})
 				})?;
 
 			T::Balance::credit_account(&booster, asset.into(), unlocked_amount.into());

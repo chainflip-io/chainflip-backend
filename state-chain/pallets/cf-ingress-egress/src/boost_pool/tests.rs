@@ -163,7 +163,7 @@ fn withdrawing_twice_is_no_op() {
 
 	check_pool(&pool, [(BOOSTER_2, AMOUNT_2)]);
 
-	assert!(pool.stop_boosting(BOOSTER_1).is_err());
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Err(Error::AccountNotFoundInBoostPool));
 
 	// No changes:
 	check_pool(&pool, [(BOOSTER_2, AMOUNT_2)]);
