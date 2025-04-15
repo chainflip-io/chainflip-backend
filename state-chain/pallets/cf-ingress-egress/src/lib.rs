@@ -413,6 +413,9 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	SetWitnessSafetyMargin {
 		margin: TargetChainBlockNumber<T, I>,
 	},
+	SetBoostDelay {
+		delay_blocks: BlockNumberFor<T>,
+	},
 }
 
 #[frame_support::pallet]
@@ -1033,6 +1036,9 @@ pub mod pallet {
 		WitnessSafetyMarginSet {
 			margin: TargetChainBlockNumber<T, I>,
 		},
+		BoostDelaySet {
+			delay_blocks: BlockNumberFor<T>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1510,6 +1516,10 @@ pub mod pallet {
 					PalletConfigUpdate::SetWitnessSafetyMargin { margin } => {
 						WitnessSafetyMargin::<T, I>::set(Some(margin));
 						Self::deposit_event(Event::<T, I>::WitnessSafetyMarginSet { margin });
+					},
+					PalletConfigUpdate::SetBoostDelay { delay_blocks } => {
+						BoostDelayBlocks::<T, I>::set(delay_blocks);
+						Self::deposit_event(Event::<T, I>::BoostDelaySet { delay_blocks });
 					},
 				}
 			}
