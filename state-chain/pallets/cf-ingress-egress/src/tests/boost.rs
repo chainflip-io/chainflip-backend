@@ -1671,4 +1671,46 @@ mod delayed_boosting {
 				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(tx_id));
 			});
 	}
+
+	#[test]
+	fn two_identical_deposits_one_boosted_one_rejected() {
+		setup_with_boost_pools()
+			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
+				source_asset: INPUT_ASSET,
+				destination_asset: OUTPUT_ASSET,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
+				refund_address: Default::default(),
+			}])
+			.then_execute_with(|mut details| {
+				let (_, _, deposit_address) = details[0].clone();
+				const TX_ID_1: H256 = H256([1u8; 32]);
+				const TX_ID_2: H256 = H256([2u8; 32]);
+
+				assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
+					OriginTrait::signed(WHITELISTED_BROKER),
+					TX_ID_1
+				));
+				for tx_id in [TX_ID_1, TX_ID_2] {
+					assert_ok!(EthereumIngressEgress::process_channel_deposit_prewitness(
+						DepositWitness::<Ethereum> {
+							deposit_address,
+							asset: INPUT_ASSET,
+							amount: DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) }
+						},
+						0
+					));
+				}
+				deposit_address
+			})
+			.then_execute_at_next_block(|deposit_address| {
+				todo!(
+					"Check:
+					- One deposit is boosted, the other rejected.
+					- On finalisation, the rejected deposit is not finalised.
+					- Repeat the same test with tx order reversed (ie. [TX_ID_2, TX_ID_1])
+					"
+				)
+			});
+	}
 }
