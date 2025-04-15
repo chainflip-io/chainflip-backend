@@ -18,6 +18,7 @@ use crate::{internal_error, CfApiError, RpcResult};
 use futures::{stream, stream::StreamExt, FutureExt};
 use jsonrpsee::{types::error::ErrorObjectOwned, PendingSubscriptionSink, RpcModule};
 
+use jsonrpsee::tokio::sync::Mutex;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
@@ -29,12 +30,7 @@ use serde::Serialize;
 use sp_api::CallApiAt;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use state_chain_runtime::{chainflip::BlockUpdate, runtime_apis::CustomRuntimeApi, Hash};
-use std::{
-	fmt::Debug,
-	marker::PhantomData,
-	num::NonZero,
-	sync::{Arc, Mutex},
-};
+use std::{fmt::Debug, marker::PhantomData, num::NonZero, sync::Arc};
 
 /// The CustomRpcBackend struct provides common logic implementation for providing RPC endpoints.
 ///
@@ -141,32 +137,35 @@ impl<B: BlockT, BE: Backend<B>, C> SubscriptionCleaner<B, BE, C> {
 	pub async fn add(&self, new_hashes: &[Hash]) {
 		let old_hashes = {
 			// Ensure that the lock is released before the `await` point.
-			let mut pinned_blocks = self.pinned_hashes.lock().unwrap();
+			let mut pinned_blocks = self.pinned_hashes.lock().await;
 			new_hashes
 				.iter()
 				.filter_map(|new_hash| match pinned_blocks.push(*new_hash, ()) {
+					// If the returned key is different from the new hash, it indicates that an
+					// eviction occurred in the LRU cache.
 					Some((old_hash, _)) if old_hash != *new_hash => Some(old_hash),
-					Some(_) => {
-						log::debug!("Block {} is already pinned.", new_hash);
-						None
-					},
-					None => {
-						log::debug!("Block {} is pinned.", new_hash);
-						None
-					},
+
+					// If the returned key is the same as the new hash, it indicates that the block
+					// already exists in the cache, and it is just moved to the head of the queue.
+					Some(_) => None,
+
+					// If the lru.push returns None, it indicates that the block is not present in
+					// the cache. It is simply added and no eviction occurred (cache has capacity).
+					None => None,
 				})
 				.collect::<Vec<_>>()
 		};
 
-		for old_hash in old_hashes {
+		if old_hashes.len() > 0 {
 			if let Err(e) = self
 				.chain_head_client
-				.call::<_, ()>("chainHead_v1_unpin", jsonrpsee::rpc_params![&self.sub_id, old_hash])
+				.call::<_, ()>(
+					"chainHead_v1_unpin",
+					jsonrpsee::rpc_params!(&self.sub_id, &old_hashes),
+				)
 				.await
 			{
-				log::warn!("Failed to unpin block for subscription: {:?} , {:?}", &self.sub_id, e);
-			} else {
-				log::debug!("Block {} is unpinned.", old_hash);
+				log::warn!("Failed to unpin blocks for subscription: {:?} , {:?}", &self.sub_id, e);
 			}
 		}
 	}
@@ -242,9 +241,13 @@ where
 		pending_sink: PendingSubscriptionSink,
 		f: F,
 	) {
-		// subscribe to the chain head
-		let Ok(subscription) =
-			self.chain_head_api().subscribe_unbounded("chainHead_v1_follow", [false]).await
+		// Make sure to use the same chain head client for both subscription and cleaner
+		let chain_head_client = Arc::new(self.chain_head_api());
+
+		let Ok(subscription) = chain_head_client
+			.clone()
+			.subscribe_unbounded("chainHead_v1_follow", [false])
+			.await
 		else {
 			pending_sink
 				.reject(internal_error("chainHead_v1_follow subscription failed"))
@@ -267,7 +270,7 @@ where
 			(
 				subscription,
 				SubscriptionCleaner::new(
-					Arc::new(self.chain_head_api()),
+					chain_head_client,
 					subscription_id,
 					MAX_RETAINED_PINNED_BLOCKS,
 				),
