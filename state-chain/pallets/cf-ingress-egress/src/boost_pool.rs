@@ -106,6 +106,11 @@ pub struct OwedAmount<AmountT> {
 	pub fee: AmountT,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Error {
+	AccountNotFoundInBoostPool,
+}
+
 /// Boosted amount is the amount provided by the pool plus boost fee,
 /// (and the sum of all boosted amounts from each participating pool
 /// must be equal the deposit amount being boosted). The fee is payed
@@ -446,9 +451,9 @@ where
 	pub fn stop_boosting(
 		&mut self,
 		booster_id: AccountId,
-	) -> Result<(C::ChainAmount, BTreeSet<PrewitnessedDepositId>), &'static str> {
+	) -> Result<(C::ChainAmount, BTreeSet<PrewitnessedDepositId>), Error> {
 		let Some(booster_active_amount) = self.amounts.remove(&booster_id) else {
-			return Err("Account not found in boost pool")
+			return Err(Error::AccountNotFoundInBoostPool);
 		};
 
 		self.available_amount.saturating_reduce(booster_active_amount);
