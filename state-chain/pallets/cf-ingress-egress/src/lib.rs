@@ -95,7 +95,9 @@ pub enum BoostStatus<ChainAmount> {
 	},
 	#[default]
 	NotBoosted,
-	BoostPending,
+	BoostPending {
+		amount: ChainAmount,
+	},
 }
 
 #[derive(
@@ -223,8 +225,10 @@ pub enum RefundReason {
 }
 
 enum FullWitnessDepositOutcome {
-	BoostFinalised,
-	DepositActionPerformed,
+	/// Either boost has been finalised, or it was still pending (due to a delay)
+	/// and should no longer be scheduled for processing
+	BoostConsumed,
+	BoostNotConsumed,
 }
 
 #[derive(RuntimeDebug, Clone)]
@@ -1161,7 +1165,7 @@ pub mod pallet {
 				// Sanity/invariant check: boost status should be BoostPending
 				let boost_status_lookup = deposit.boost_status_lookup.clone();
 
-				if boost_status_lookup.resolve() == BoostStatus::BoostPending {
+				if matches!(boost_status_lookup.resolve(), BoostStatus::BoostPending { .. }) {
 					boost_status_lookup.set(Self::process_prewitness_deposit_inner(deposit));
 				} else {
 					// Do nothing - the deposit is not pending.
@@ -2098,7 +2102,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let new_boost_status = if delay > Default::default() {
 				let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
 				PendingPrewitnessedDeposits::<T, I>::append(process_at_block, deposit);
-				BoostStatus::BoostPending
+				BoostStatus::BoostPending { amount }
 			} else {
 				Self::process_prewitness_deposit_inner(deposit)
 			};
@@ -2237,13 +2241,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			block_height,
 			deposit_origin,
 		) {
-			Ok(_) => {
-				DepositChannelLookup::<T, I>::mutate(deposit_address, |details| {
-					if let Some(details) = details {
-						// This allows the channel to be boosted again:
-						details.boost_status = BoostStatus::NotBoosted;
-					}
-				});
+			Ok(outcome) => {
+				if matches!(outcome, FullWitnessDepositOutcome::BoostConsumed) {
+					DepositChannelLookup::<T, I>::mutate(deposit_address, |details| {
+						if let Some(details) = details {
+							// This allows the channel to be boosted again:
+							details.boost_status = BoostStatus::NotBoosted;
+						}
+					});
+				}
 			},
 			Err(reason) => {
 				Self::deposit_event(Event::<T, I>::DepositFailed {
@@ -2513,7 +2519,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
 
 					PendingPrewitnessedDeposits::<T, I>::append(process_at_block, deposit);
-					BoostStatus::BoostPending
+					BoostStatus::BoostPending { amount }
 				} else {
 					// Process immediately
 					Self::process_prewitness_deposit_inner(deposit)
@@ -2539,6 +2545,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_height: TargetChainBlockNumber<T, I>,
 		origin: DepositOrigin<T, I>,
 	) -> Result<FullWitnessDepositOutcome, DepositFailedReason> {
+		// Don't not reject deposit for any reason since boosters
+		// would be losing funds:
 		if !matches!(boost_status, BoostStatus::Boosted { .. }) {
 			if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
 				// If the deposit amount is below the minimum allowed, the deposit is ignored.
@@ -2617,93 +2625,72 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Add the deposit to the balance.
 		T::DepositHandler::on_deposit_made(deposit_details.clone());
 
+		enum ActionToPerform {
+			FinaliseBoost {
+				prewitnessed_deposit_id: PrewitnessedDepositId,
+				used_pools: Vec<BoostPoolTier>,
+			},
+			PerformChannelAction {
+				should_cancel_pending_boost: bool,
+			},
+		}
+
 		// We received a deposit on a channel. If channel has been boosted earlier
 		// (i.e. awaiting finalisation), *and* the boosted amount matches the amount
 		// in this deposit, finalise the boost by crediting boost pools with the deposit.
 		// Process as non-boosted deposit otherwise:
-		let maybe_boost_to_process = match boost_status {
+		let action_to_perform = match boost_status {
 			BoostStatus::Boosted { prewitnessed_deposit_id, pools, amount }
 				if amount == deposit_amount =>
-				Some((prewitnessed_deposit_id, pools)),
-			_ => None,
+				ActionToPerform::FinaliseBoost { prewitnessed_deposit_id, used_pools: pools },
+			// If there is a pending boost matching the deposit we should cancel it:
+			BoostStatus::BoostPending { amount } if amount == deposit_amount =>
+				ActionToPerform::PerformChannelAction { should_cancel_pending_boost: true },
+			_ => ActionToPerform::PerformChannelAction { should_cancel_pending_boost: false },
 		};
 
-		if let Some((prewitnessed_deposit_id, used_pools)) = maybe_boost_to_process {
-			let mut total_amount_credited_to_boosters: TargetChainAmount<T, I> = 0u32.into();
-			// Note that ingress fee is not payed here, as it has already been payed at the time
-			// of boosting
-			for boost_tier in used_pools {
-				BoostPools::<T, I>::mutate(asset, boost_tier, |maybe_pool| {
-					if let Some(pool) = maybe_pool {
-						let DepositFinalisationOutcomeForPool {
-							unlocked_funds,
-							amount_credited_to_boosters,
-						} = pool.process_deposit_as_finalised(prewitnessed_deposit_id);
+		match action_to_perform {
+			ActionToPerform::FinaliseBoost { prewitnessed_deposit_id, used_pools } => {
+				let mut total_amount_credited_to_boosters: TargetChainAmount<T, I> = 0u32.into();
+				// Note that ingress fee is not payed here, as it has already been payed at the time
+				// of boosting
+				for boost_tier in used_pools {
+					BoostPools::<T, I>::mutate(asset, boost_tier, |maybe_pool| {
+						if let Some(pool) = maybe_pool {
+							let DepositFinalisationOutcomeForPool {
+								unlocked_funds,
+								amount_credited_to_boosters,
+							} = pool.process_deposit_as_finalised(prewitnessed_deposit_id);
 
-						total_amount_credited_to_boosters
-							.saturating_accrue(amount_credited_to_boosters);
+							total_amount_credited_to_boosters
+								.saturating_accrue(amount_credited_to_boosters);
 
-						for (booster_id, finalised_withdrawn_amount) in unlocked_funds {
-							T::Balance::credit_account(
-								&booster_id,
-								asset.into(),
-								finalised_withdrawn_amount.into(),
-							);
+							for (booster_id, finalised_withdrawn_amount) in unlocked_funds {
+								T::Balance::credit_account(
+									&booster_id,
+									asset.into(),
+									finalised_withdrawn_amount.into(),
+								);
+							}
 						}
-					}
-				});
-			}
+					});
+				}
 
-			// Any excess amount is charged as network fee:
-			let network_fee_from_boost =
-				deposit_amount.saturating_sub(total_amount_credited_to_boosters);
+				// Any excess amount is charged as network fee:
+				let network_fee_from_boost =
+					deposit_amount.saturating_sub(total_amount_credited_to_boosters);
 
-			let network_fee_swap_request_id = if network_fee_from_boost > 0u32.into() {
-				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work, and
-				// it seems easiest to not write a special case (esp if we only support boost for
-				// BTC)
-				Some(T::SwapRequestHandler::init_network_fee_swap_request(
-					asset.into(),
-					network_fee_from_boost.into(),
-				))
-			} else {
-				None
-			};
-
-			Self::deposit_event(Event::DepositFinalised {
-				deposit_address,
-				asset,
-				amount: deposit_amount,
-				block_height,
-				deposit_details,
-				// no ingress fee as it was already charged at the time of boosting
-				ingress_fee: 0u32.into(),
-				max_boost_fee_bps,
-				action: DepositAction::BoostersCredited {
-					prewitnessed_deposit_id,
-					network_fee_from_boost,
-					network_fee_swap_request_id,
-				},
-				channel_id,
-				origin_type: origin.into(),
-			});
-
-			Ok(FullWitnessDepositOutcome::BoostFinalised)
-		} else {
-			let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
-				Self::conditionally_withhold_ingress_fee(asset, deposit_amount, &origin);
-
-			if amount_after_fees.is_zero() {
-				Err(DepositFailedReason::NotEnoughToPayFees)
-			} else {
-				// Processing as a non-boosted deposit:
-				let action = Self::perform_channel_action(
-					action,
-					asset,
-					source_address,
-					amount_after_fees,
-					origin.clone(),
-				);
+				let network_fee_swap_request_id = if network_fee_from_boost > 0u32.into() {
+					// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work,
+					// and it seems easiest to not write a special case (esp if we only support
+					// boost for BTC)
+					Some(T::SwapRequestHandler::init_network_fee_swap_request(
+						asset.into(),
+						network_fee_from_boost.into(),
+					))
+				} else {
+					None
+				};
 
 				Self::deposit_event(Event::DepositFinalised {
 					deposit_address,
@@ -2711,15 +2698,60 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount: deposit_amount,
 					block_height,
 					deposit_details,
-					ingress_fee: fees_withheld,
+					// no ingress fee as it was already charged at the time of boosting
+					ingress_fee: 0u32.into(),
 					max_boost_fee_bps,
-					action,
+					action: DepositAction::BoostersCredited {
+						prewitnessed_deposit_id,
+						network_fee_from_boost,
+						network_fee_swap_request_id,
+					},
 					channel_id,
 					origin_type: origin.into(),
 				});
 
-				Ok(FullWitnessDepositOutcome::DepositActionPerformed)
-			}
+				Ok(FullWitnessDepositOutcome::BoostConsumed)
+			},
+			ActionToPerform::PerformChannelAction { should_cancel_pending_boost } => {
+				let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
+					Self::conditionally_withhold_ingress_fee(asset, deposit_amount, &origin);
+
+				if amount_after_fees.is_zero() {
+					Err(DepositFailedReason::NotEnoughToPayFees)
+				} else {
+					// Processing as a non-boosted deposit:
+					let action = Self::perform_channel_action(
+						action,
+						asset,
+						source_address,
+						amount_after_fees,
+						origin.clone(),
+					);
+
+					Self::deposit_event(Event::DepositFinalised {
+						deposit_address,
+						asset,
+						amount: deposit_amount,
+						block_height,
+						deposit_details,
+						ingress_fee: fees_withheld,
+						max_boost_fee_bps,
+						action,
+						channel_id,
+						origin_type: origin.into(),
+					});
+
+					if should_cancel_pending_boost {
+						// We should cancel the pending boost since we
+						// already processed the full deposit witness:
+						Ok(FullWitnessDepositOutcome::BoostConsumed)
+					} else {
+						// Either there was no boost on the channel, or it
+						// was for the wrong deopsit/amount:
+						Ok(FullWitnessDepositOutcome::BoostNotConsumed)
+					}
+				}
+			},
 		}
 	}
 
@@ -2861,9 +2893,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
 			),
 		) {
-			Ok(_) => {
-				BoostedVaultTransactions::<T, I>::take(&tx_id);
-			},
+			Ok(outcome) =>
+				if matches!(outcome, FullWitnessDepositOutcome::BoostConsumed) {
+					BoostedVaultTransactions::<T, I>::take(&tx_id);
+				},
 			Err(reason) => {
 				Self::deposit_event(Event::<T, I>::DepositFailed {
 					block_height,

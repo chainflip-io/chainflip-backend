@@ -1427,7 +1427,7 @@ mod delayed_boosting {
 					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
 						.unwrap()
 						.boost_status,
-					BoostStatus::BoostPending
+					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
 				);
 
 				deposit_address
@@ -1504,7 +1504,7 @@ mod delayed_boosting {
 					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
 						.unwrap()
 						.boost_status,
-					BoostStatus::BoostPending
+					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
 				);
 
 				witness_deposit(deposit_address, INPUT_ASSET.into(), DEPOSIT_AMOUNT);
@@ -1600,7 +1600,7 @@ mod delayed_boosting {
 
 				assert_eq!(
 					BoostedVaultTransactions::<Test, Instance1>::get(&TX_ID),
-					BoostStatus::BoostPending
+					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
 				);
 
 				// EDGE CASE: full witness arrives before the delayed prewitness is processed,
@@ -1674,7 +1674,7 @@ mod delayed_boosting {
 
 				assert_eq!(
 					BoostedVaultTransactions::<Test, Instance1>::get(&tx_id),
-					BoostStatus::BoostPending
+					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
 				);
 
 				(deposit, tx_id)
