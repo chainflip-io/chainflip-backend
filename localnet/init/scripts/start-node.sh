@@ -24,6 +24,7 @@ RUST_LOG=runtime=debug $BINARY_ROOT_PATH/chainflip-node --chain=$CHAIN \
   --base-path=/tmp/chainflip/$NODE_NAME/chaindata \
   --node-key-file=$KEYS_DIR/$NODE_NAME/node_key_file \
   --validator \
+  --max-runtime-instances 32 \
   --force-authoring \
   --rpc-cors=all \
   --unsafe-rpc-external \
