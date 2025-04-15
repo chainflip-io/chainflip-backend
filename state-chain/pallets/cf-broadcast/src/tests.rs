@@ -989,7 +989,7 @@ fn timed_out_broadcasters_are_reported() {
 }
 
 #[test]
-fn broadcast_can_be_aborted_due_to_time_out() {
+fn broadcast_can_be_aborted_due_to_timeout() {
 	new_test_ext()
 		.execute_with(|| {
 			let broadcast_id = start_mock_broadcast(SIG1);
@@ -1392,6 +1392,13 @@ fn broadcast_re_signing() {
 			System::assert_last_event(RuntimeEvent::Broadcaster(Event::BroadcastAborted {
 				broadcast_id,
 			}));
+
+			assert_eq!(TransactionOutIdToBroadcastId::<Test, Instance1>::iter().count(), 1);
+			assert_eq!(
+				TransactionOutIdToBroadcastId::<Test, Instance1>::get(SIG1).unwrap().0,
+				broadcast_id
+			);
+
 			broadcast_id
 		})
 		.then_execute_at_next_block(|broadcast_id| {
@@ -1417,9 +1424,34 @@ fn broadcast_re_signing() {
 				true,
 				false,
 			));
+
 			// Check that the broadcast is re-scheduled
 			assert!(PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 			assert!(!AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+			broadcast_id
+		})
+		.then_execute_at_next_block(|broadcast_id| {
+			// Signed, creating another TransactionOutId for the same broadcast id.
+			MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::execute_signature_result_against_last_request(Ok(SIG2));
+			broadcast_id
+		})
+		.then_execute_at_next_block(|broadcast_id| {
+			assert_eq!(TransactionOutIdToBroadcastId::<Test, Instance1>::iter().count(), 2);
+			assert!(PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+			assert!(!AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+
+			// Succeed the second, resigned transaction out id.
+			assert_ok!(Broadcaster::transaction_succeeded(
+				RuntimeOrigin::root(),
+				SIG2,
+				Default::default(),
+				ETH_TX_FEE,
+				MOCK_TX_METADATA,
+				Default::default(),
+			));
+
+			// All transactinon out ids should be cleaned up for this broadcast id.
+			assert!(!TransactionOutIdToBroadcastId::<Test, Instance1>::iter().any(|(_, (b_id, _))| b_id == broadcast_id));
 		});
 }
 
