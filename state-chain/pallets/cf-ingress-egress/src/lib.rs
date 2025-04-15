@@ -2563,8 +2563,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_height: TargetChainBlockNumber<T, I>,
 		origin: DepositOrigin<T, I>,
 	) -> Result<FullWitnessDepositOutcome, DepositFailedReason> {
-		// Don't not reject deposit for any reason since boosters
-		// would be losing funds:
+		// Deposits can only fail or be rejected if we haven't already boosted.
 		if !matches!(boost_status, BoostStatus::Boosted { .. }) {
 			if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
 				// If the deposit amount is below the minimum allowed, the deposit is ignored.
@@ -2649,7 +2648,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				used_pools: Vec<BoostPoolTier>,
 			},
 			PerformChannelAction {
-				should_cancel_pending_boost: bool,
+				deposit_outcome: FullWitnessDepositOutcome,
 			},
 		}
 
@@ -2658,13 +2657,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// in this deposit, finalise the boost by crediting boost pools with the deposit.
 		// Process as non-boosted deposit otherwise:
 		let action_to_perform = match boost_status {
+			// If there is a boosted amount that matches the deposit amount, we can finalise the
+			// boost:
 			BoostStatus::Boosted { prewitnessed_deposit_id, pools, amount }
 				if amount == deposit_amount =>
 				ActionToPerform::FinaliseBoost { prewitnessed_deposit_id, used_pools: pools },
-			// If there is a pending boost matching the deposit we should cancel it:
+			// If there is a pending amount matching the deposit amount, we can cancel the pending
+			// boost:
 			BoostStatus::BoostPending { amount } if amount == deposit_amount =>
-				ActionToPerform::PerformChannelAction { should_cancel_pending_boost: true },
-			_ => ActionToPerform::PerformChannelAction { should_cancel_pending_boost: false },
+				ActionToPerform::PerformChannelAction {
+					deposit_outcome: FullWitnessDepositOutcome::BoostConsumed,
+				},
+			// Anything else we consider as a non-boosted deposit:
+			_ => ActionToPerform::PerformChannelAction {
+				deposit_outcome: FullWitnessDepositOutcome::BoostNotConsumed,
+			},
 		};
 
 		match action_to_perform {
@@ -2730,7 +2737,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				Ok(FullWitnessDepositOutcome::BoostConsumed)
 			},
-			ActionToPerform::PerformChannelAction { should_cancel_pending_boost } => {
+			ActionToPerform::PerformChannelAction { deposit_outcome } => {
 				let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 					Self::conditionally_withhold_ingress_fee(asset, deposit_amount, &origin);
 
@@ -2759,15 +2766,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						origin_type: origin.into(),
 					});
 
-					if should_cancel_pending_boost {
-						// We should cancel the pending boost since we
-						// already processed the full deposit witness:
-						Ok(FullWitnessDepositOutcome::BoostConsumed)
-					} else {
-						// Either there was no boost on the channel, or it
-						// was for the wrong deopsit/amount:
-						Ok(FullWitnessDepositOutcome::BoostNotConsumed)
-					}
+					Ok(deposit_outcome)
 				}
 			},
 		}
