@@ -156,7 +156,6 @@ struct PendingPrewitnessedDeposit<T: Config<I>, I: 'static> {
 	boost_fee: u16,
 	channel_id: Option<u64>,
 	origin: DepositOrigin<T, I>,
-	boost_status_lookup: BoostStatusLookup<T, I>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -875,7 +874,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		BlockNumberFor<T>,
-		Vec<PendingPrewitnessedDeposit<T, I>>,
+		Vec<PendingPrewitnessedDepositEntry<T, I>>,
 		ValueQuery,
 	>;
 
@@ -1167,10 +1166,10 @@ pub mod pallet {
 		}
 
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			for deposit in PendingPrewitnessedDeposits::<T, I>::take(n) {
+			for PendingPrewitnessedDepositEntry { boost_status_lookup, deposit } in
+				PendingPrewitnessedDeposits::<T, I>::take(n)
+			{
 				// Sanity/invariant check: boost status should be BoostPending
-				let boost_status_lookup = deposit.boost_status_lookup.clone();
-
 				if matches!(boost_status_lookup.resolve(), BoostStatus::BoostPending { .. }) {
 					boost_status_lookup.set(Self::process_prewitness_deposit_inner(deposit));
 				} else {
@@ -1180,7 +1179,7 @@ pub mod pallet {
 					log::debug!(
 						"Prewitnessed deposit was no longer pending at block {:?}, boost status: {:?}",
 						n,
-						deposit.boost_status_lookup,
+						boost_status_lookup,
 					);
 				}
 			}
@@ -2104,14 +2103,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					block_height,
 					owner.clone(),
 				),
-				boost_status_lookup: boost_status_lookup.clone(),
 			};
 
 			let delay = BoostDelayBlocks::<T, I>::get();
 
 			let new_boost_status = if delay > Default::default() {
 				let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
-				PendingPrewitnessedDeposits::<T, I>::append(process_at_block, deposit);
+				PendingPrewitnessedDeposits::<T, I>::append(
+					process_at_block,
+					PendingPrewitnessedDepositEntry {
+						boost_status_lookup: boost_status_lookup.clone(),
+						deposit,
+					},
+				);
 				BoostStatus::BoostPending { amount }
 			} else {
 				Self::process_prewitness_deposit_inner(deposit)
@@ -2357,7 +2361,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			channel_id,
 			block_height,
 			origin,
-			boost_status_lookup,
 		}: PendingPrewitnessedDeposit<T, I>,
 	) -> BoostStatus<TargetChainAmount<T, I>> {
 		if amount < MinimumDeposit::<T, I>::get(asset) {
@@ -2520,7 +2523,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					boost_fee,
 					channel_id,
 					origin,
-					boost_status_lookup: boost_status_lookup.clone(),
 				};
 
 				let delay = BoostDelayBlocks::<T, I>::get();
@@ -2528,7 +2530,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let new_boost_status = if delay > 0u32.into() {
 					let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
 
-					PendingPrewitnessedDeposits::<T, I>::append(process_at_block, deposit);
+					PendingPrewitnessedDeposits::<T, I>::append(
+						process_at_block,
+						PendingPrewitnessedDepositEntry {
+							boost_status_lookup: boost_status_lookup.clone(),
+							deposit,
+						},
+					);
 					BoostStatus::BoostPending { amount }
 				} else {
 					// Process immediately
