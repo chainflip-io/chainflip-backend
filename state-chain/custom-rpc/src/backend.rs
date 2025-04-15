@@ -156,7 +156,7 @@ impl<B: BlockT, BE: Backend<B>, C> SubscriptionCleaner<B, BE, C> {
 				.collect::<Vec<_>>()
 		};
 
-		if old_hashes.len() > 0 {
+		if !old_hashes.is_empty() {
 			if let Err(e) = self
 				.chain_head_client
 				.call::<_, ()>(
