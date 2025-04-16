@@ -21,8 +21,7 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{
-	assert_events_eq, assert_events_match, assert_has_matching_event, assert_matching_event_count,
-	last_event,
+	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
 };
 use cf_traits::{mocks::balance_api::MockBalance, BalanceApi, PoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
