@@ -366,6 +366,7 @@ impl ExtBuilder {
 							usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 						},
 					),
+					block_shared_data_lifetime: Default::default(),
 				}),
 			},
 			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {

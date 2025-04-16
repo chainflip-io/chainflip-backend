@@ -91,6 +91,7 @@ pub fn initial_state(
 	vault_program: SolAddress,
 	usdc_token_mint_pubkey: SolAddress,
 	swap_endpoint_data_account_address: SolAddress,
+	block_shared_data_lifetime: BlockNumberFor<Runtime>,
 ) -> InitialStateOf<Runtime, Instance> {
 	InitialState {
 		unsynchronised_state: (
@@ -115,6 +116,7 @@ pub fn initial_state(
 			LIVENESS_CHECK_DURATION,
 			SolanaVaultSwapsSettings { swap_endpoint_data_account_address, usdc_token_mint_pubkey },
 		),
+		block_shared_data_lifetime,
 	}
 }
 
