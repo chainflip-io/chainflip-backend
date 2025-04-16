@@ -21,7 +21,7 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{
-	assert_events_eq, assert_events_match, assert_has_matching_event, last_event,
+	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
 };
 use cf_traits::{mocks::balance_api::MockBalance, BalanceApi, PoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -223,27 +223,28 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		assert_eq!(pallet_limit_orders.base.get(&ALICE), None);
 		assert_eq!(pallet_limit_orders.base.get(&BOB).unwrap().get(&0), Some(&tick));
 
-		assert_has_matching_event!(
+		// Expect two events: one event for creation, one for sweeping.
+		assert_matching_event_count!(
 			Test,
 			RuntimeEvent::LiquidityPools(Event::LimitOrderUpdated {
 				lp: ALICE,
 				side: Side::Sell,
 				..
-			}),
+			}) => 2
 		);
 
-		assert_has_matching_event!(
+		assert_matching_event_count!(
 			Test,
-			RuntimeEvent::LiquidityPools(Event::LimitOrderUpdated { lp: BOB, side: Side::Buy, .. }),
+			RuntimeEvent::LiquidityPools(Event::LimitOrderUpdated { lp: BOB, side: Side::Buy, .. }) => 2
 		);
 
-		assert_has_matching_event!(
+		assert_matching_event_count!(
 			Test,
 			RuntimeEvent::LiquidityPools(Event::LimitOrderUpdated {
 				lp: BOB,
 				side: Side::Sell,
 				..
-			})
+			}) => 2
 		);
 	});
 }

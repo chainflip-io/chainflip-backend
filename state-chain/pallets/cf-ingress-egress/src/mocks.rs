@@ -341,7 +341,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 	where
 		Test: Config<I>,
 	{
-		self.then_execute_at_next_block(|_| {
+		self.then_execute_with(|_| {
 			requests
 				.iter()
 				.cloned()
