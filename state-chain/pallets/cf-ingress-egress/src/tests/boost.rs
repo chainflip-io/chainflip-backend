@@ -99,13 +99,18 @@ fn prewitness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmoun
 
 #[track_caller]
 fn witness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmount) {
+	witness_deposit_with_details(deposit_address, asset, amount, Default::default());
+}
+
+#[track_caller]
+fn witness_deposit_with_details(
+	deposit_address: H160,
+	asset: EthAsset,
+	amount: AssetAmount,
+	deposit_details: DepositDetails,
+) {
 	assert_ok!(Pallet::<Test, Instance1>::process_channel_deposit_full_witness_inner(
-		&DepositWitness::<Ethereum> {
-			deposit_address,
-			asset,
-			amount,
-			deposit_details: Default::default(),
-		},
+		&DepositWitness::<Ethereum> { deposit_address, asset, amount, deposit_details },
 		Default::default(),
 	));
 }
@@ -1382,7 +1387,7 @@ mod vault_swaps {
 
 mod delayed_boosting {
 	use super::*;
-	use crate::BoostedVaultTransactions;
+	use crate::{BoostedVaultTransactions, ScheduledTransactionsForRejection};
 	use sp_runtime::traits::BlockNumberProvider;
 
 	const BOOST_DELAY: u64 = 1;
@@ -1581,8 +1586,9 @@ mod delayed_boosting {
 
 	#[test]
 	fn vault_deposit_arrives_before_boost() {
-		// Common case: deposit is prewitnessed, then boosted after a short delay,
-		// and processed as previously boosted when the finslised deposit arrives.
+		// Edge case: deposit is prewitnessed, but while we are waiting to process
+		// it the finalised deposit arrives and processed as not boosted.
+		// Importantly, we cancel the processing of the prewitnessed deposit.
 
 		const TX_ID: H256 = H256([9u8; 32]);
 
@@ -1623,9 +1629,8 @@ mod delayed_boosting {
 
 	#[test]
 	fn vault_deposit_boosted_after_delay() {
-		// Edge case: deposit is prewitnessed, but while we are waiting to process
-		// it the finalised deposit arrives and processed an not boosted.
-		// Importantly, we cancel the processing of the prewitnessed deposit.
+		// Common case: deposit is prewitnessed, then boosted after a short delay,
+		// and processed as previously boosted when the finslised deposit arrives.
 
 		const DEPOSIT_BLOCK_HEIGHT: u64 = 10;
 
@@ -1673,7 +1678,10 @@ mod delayed_boosting {
 	}
 
 	#[test]
-	fn two_identical_deposits_one_boosted_one_rejected() {
+	fn two_identical_deposits_first_rejected() {
+		const TX_ID_1: H256 = H256([1u8; 32]);
+		const TX_ID_2: H256 = H256([2u8; 32]);
+
 		setup_with_boost_pools()
 			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
 				source_asset: INPUT_ASSET,
@@ -1681,10 +1689,8 @@ mod delayed_boosting {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				refund_address: Default::default(),
 			}])
-			.then_execute_with(|mut details| {
-				let (_, _, deposit_address) = details[0].clone();
-				const TX_ID_1: H256 = H256([1u8; 32]);
-				const TX_ID_2: H256 = H256([2u8; 32]);
+			.then_execute_with(|details| {
+				let (_, _, deposit_address) = details[0];
 
 				assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
 					OriginTrait::signed(WHITELISTED_BROKER),
@@ -1701,16 +1707,147 @@ mod delayed_boosting {
 						0
 					));
 				}
+
+				// There can only be one pending boost, so the other prewitnessed deposit is
+				// ignored:
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
+					1
+				);
+
 				deposit_address
 			})
 			.then_execute_at_next_block(|deposit_address| {
-				todo!(
-					"Check:
-					- One deposit is boosted, the other rejected.
-					- On finalisation, the rejected deposit is not finalised.
-					- Repeat the same test with tx order reversed (ie. [TX_ID_2, TX_ID_1])
-					"
-				)
+				// Normally we would process the pending boost at this point, but here it is
+				// rejected instead
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
+					0
+				);
+
+				assert_eq!(
+					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+						.unwrap()
+						.boost_status,
+					BoostStatus::NotBoosted
+				);
+
+				deposit_address
+			})
+			.then_execute_at_next_block(|deposit_address| {
+				// Now when finalised deposit finaly arrive one should be rejcted, while the other
+				// one should be processed as haven't been boosted:
+				witness_deposit_with_details(
+					deposit_address,
+					INPUT_ASSET,
+					DEPOSIT_AMOUNT,
+					DepositDetails { tx_hashes: Some(vec![TX_ID_1]) },
+				);
+
+				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+
+				witness_deposit_with_details(
+					deposit_address,
+					INPUT_ASSET,
+					DEPOSIT_AMOUNT,
+					DepositDetails { tx_hashes: Some(vec![TX_ID_2]) },
+				);
+
+				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {
+						action: DepositAction::Swap { .. },
+						..
+					})
+				);
+			});
+	}
+
+	#[test]
+	fn two_identical_deposits_second_rejected() {
+		const TX_ID_1: H256 = H256([1u8; 32]);
+		const TX_ID_2: H256 = H256([2u8; 32]);
+
+		setup_with_boost_pools()
+			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
+				source_asset: INPUT_ASSET,
+				destination_asset: OUTPUT_ASSET,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
+				refund_address: Default::default(),
+			}])
+			.then_execute_with(|details| {
+				let (_, _, deposit_address) = details[0];
+
+				assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
+					OriginTrait::signed(WHITELISTED_BROKER),
+					TX_ID_2
+				));
+				for tx_id in [TX_ID_1, TX_ID_2] {
+					assert_ok!(EthereumIngressEgress::process_channel_deposit_prewitness(
+						DepositWitness::<Ethereum> {
+							deposit_address,
+							asset: INPUT_ASSET,
+							amount: DEPOSIT_AMOUNT,
+							deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) }
+						},
+						0
+					));
+				}
+
+				// There can only be one pending boost, so the other prewitnessed deposit is
+				// ignored:
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
+					1
+				);
+
+				deposit_address
+			})
+			.then_execute_at_next_block(|deposit_address| {
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
+					0
+				);
+
+				assert_matches!(
+					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+						.unwrap()
+						.boost_status,
+					BoostStatus::Boosted { .. }
+				);
+
+				deposit_address
+			})
+			.then_execute_at_next_block(|deposit_address| {
+				// The first deposit is not rejected and is used to finalise the boost:
+				witness_deposit_with_details(
+					deposit_address,
+					INPUT_ASSET,
+					DEPOSIT_AMOUNT,
+					DepositDetails { tx_hashes: Some(vec![TX_ID_1]) },
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {
+						action: DepositAction::BoostersCredited { .. },
+						..
+					})
+				);
+
+				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 0);
+
+				// The second deposit is rejected:
+				witness_deposit_with_details(
+					deposit_address,
+					INPUT_ASSET,
+					DEPOSIT_AMOUNT,
+					DepositDetails { tx_hashes: Some(vec![TX_ID_2]) },
+				);
+
+				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
 			});
 	}
 }
