@@ -1387,7 +1387,9 @@ mod vault_swaps {
 
 mod delayed_boosting {
 	use super::*;
-	use crate::{BoostedVaultTransactions, ScheduledTransactionsForRejection};
+	use crate::{
+		BoostedVaultTransactions, ScheduledTransactionsForRejection, TransactionRejectionDetails,
+	};
 	use sp_runtime::traits::BlockNumberProvider;
 
 	const BOOST_DELAY: u64 = 1;
@@ -1735,8 +1737,8 @@ mod delayed_boosting {
 				deposit_address
 			})
 			.then_execute_at_next_block(|deposit_address| {
-				// Now when finalised deposit finaly arrive one should be rejcted, while the other
-				// one should be processed as haven't been boosted:
+				// Now when the finalised deposit finally arrives, one should be rejected, while the
+				// other one should be processed as neither been boosted:
 				witness_deposit_with_details(
 					deposit_address,
 					INPUT_ASSET,
@@ -1847,7 +1849,22 @@ mod delayed_boosting {
 					DepositDetails { tx_hashes: Some(vec![TX_ID_2]) },
 				);
 
-				assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+				assert!(matches!(
+					&ScheduledTransactionsForRejection::<Test, Instance1>::get()[..],
+					[TransactionRejectionDetails {
+						deposit_details: DepositDetails { tx_hashes: Some(tx_ids) },
+						..
+					}] if *tx_ids == vec![TX_ID_2]
+				));
+
+				// No further deposits should be finalised.
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {
+						action: DepositAction::BoostersCredited { .. },
+						..
+					}),
+				);
 			});
 	}
 }
