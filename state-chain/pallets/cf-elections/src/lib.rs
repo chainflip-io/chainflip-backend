@@ -316,21 +316,24 @@ pub mod pallet {
 		ElectoralUnsynchronisedState,
 		ElectoralUnsynchronisedSettings,
 		ElectoralSettings,
+		BlockNumber,
 	> {
 		pub unsynchronised_state: ElectoralUnsynchronisedState,
 		pub unsynchronised_settings: ElectoralUnsynchronisedSettings,
 		pub settings: ElectoralSettings,
+		pub shared_data_reference_lifetime: BlockNumber,
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	impl<A: BenchmarkValue, B: BenchmarkValue, C: BenchmarkValue> BenchmarkValue
-		for InitialState<A, B, C>
+	impl<A: BenchmarkValue, B: BenchmarkValue, C: BenchmarkValue, D: BenchmarkValue> BenchmarkValue
+		for InitialState<A, B, C, D>
 	{
 		fn benchmark_value() -> Self {
-			InitialState::<A, B, C> {
+			InitialState::<A, B, C, D> {
 				unsynchronised_state: A::benchmark_value(),
 				unsynchronised_settings: B::benchmark_value(),
 				settings: C::benchmark_value(),
+				shared_data_reference_lifetime: D::benchmark_value(),
 			}
 		}
 	}
@@ -340,6 +343,7 @@ pub mod pallet {
 		<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 		<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
 		<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralSettings,
+		BlockNumberFor<T>,
 	>;
 
 	#[pallet::genesis_config]
@@ -1686,6 +1690,7 @@ pub mod pallet {
 				initial_state.settings,
 			);
 			Status::<T, I>::put(ElectionPalletStatus::Running);
+			SharedDataReferenceLifetime::<T, I>::put(initial_state.shared_data_reference_lifetime);
 			Ok(())
 		}
 

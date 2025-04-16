@@ -31,7 +31,7 @@ use cf_primitives::{
 	chains::Solana, AccountRole, AuthorityCount, NetworkEnvironment,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 };
-use common::FLIPPERINOS_PER_FLIP;
+use common::{FLIPPERINOS_PER_FLIP, SHARED_DATA_REFERENCE_LIFETIME};
 pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -448,6 +448,7 @@ pub fn inner_cf_development_config(
 					sol_vault_program,
 					sol_usdc_token_mint_pubkey,
 					sol_swap_endpoint_program_data_account,
+					SHARED_DATA_REFERENCE_LIFETIME,
 				)),
 			},
 		))
@@ -627,6 +628,7 @@ macro_rules! network_spec {
 								sol_vault_program,
 								sol_usdc_token_mint_pubkey,
 								sol_swap_endpoint_program_data_account,
+								SHARED_DATA_REFERENCE_LIFETIME,
 							)),
 						},
 					))

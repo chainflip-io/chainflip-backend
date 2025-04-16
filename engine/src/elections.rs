@@ -156,6 +156,7 @@ where
 			)
 		>::default();
 
+		let mut authority_count = 1;
 		cf_utilities::loop_select! {
 			let _ = submit_interval.tick() => {
 				stream::iter(core::mem::take(&mut pending_submissions).into_iter()).chunks(MAXIMUM_VOTES_PER_EXTRINSIC as usize /*We use the same constant as if it is reasonable for the extrinsic maximum this should also be reasonable for the RPC maximum*/).map(|votes| {
@@ -166,12 +167,17 @@ where
 						(votes, filtered_votes)
 					}
 				}).buffer_unordered(MAXIMUM_CONCURRENT_FILTER_REQUESTS).flat_map(|(mut votes, filtered_votes)| {
+					let submit_full_vote = rng.gen_bool(required_full_vote_probability(authority_count, 0.0025));
+
 					stream::iter(filtered_votes.into_iter().filter_map(move |election_identifier| {
-						votes.remove(&election_identifier).map(|(_partial_vote, vote)| {
+						votes.remove(&election_identifier).map(|(partial_vote, vote)| {
 							(
 								election_identifier,
-								// TODO: Only provide PartialVote most of the time, ideally this behaviour is configured by governance on a per-electoral system based.
-								AuthorityVote::Vote(vote),
+								if submit_full_vote {
+									AuthorityVote::Vote(vote)
+								} else {
+									AuthorityVote::PartialVote(partial_vote)
+								}
 							)
 						})
 					}))
@@ -224,6 +230,7 @@ where
 				});
 
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
+					authority_count = core::cmp::max(electoral_data.authority_count, 1);
 					if electoral_data.contributing {
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
@@ -254,21 +261,14 @@ where
 
 						for (unprovided_shared_data_hash, reference_details) in electoral_data.unprovided_shared_data_hashes {
 							if let Some((shared_data, _)) = shared_data_cache.get(&unprovided_shared_data_hash) {
-								if (reference_details.created..reference_details.expires).contains(&block_info.number) {
-									// Increase probability until expiry
-									let lerp_factor = ((block_info.number - reference_details.created + 1) as f64) / ((reference_details.expires - reference_details.created) as f64);
-
-									// Starting with a low probability avoids problems were everyone has in-flight votes (i.e. has the shared data), but only a few validators have votes in_blocks. Ideally we would only try to submit shared data if one of the associated votes we made was "in_block".
-									let initial_probability = 1.0 / (core::cmp::max(1, electoral_data.authority_count) as f64);
-
-									// `Vote`s should not contain the same `SharedData` value repeatedly as this will make this under-estimate the probability each engine should use when providing that SharedData, as `reference_details.count` will not be an accurate estimate of the number of authorities that have this SharedData and therefore are going to try and submit it.
-									let final_probability = 1.0 / (core::cmp::max(1, core::cmp::min(reference_details.count, electoral_data.authority_count)) as f64);
-
-									if rng.gen_bool((1.0 - lerp_factor) * initial_probability + lerp_factor * final_probability) {
-										self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::provide_shared_data {
-											shared_data: shared_data.clone(),
-										}).await;
-									}
+								// We hit this branch *only if* no authority provided the full vote hence we can use a higher falure rate here (i.e. 1%)
+								// The probability of no authority submitting the shared data is then:
+								// probability of no authority submitting full vote * (probability of no authority submitting the shared data)^number of times we retry to submit the shared data
+								// which keeps decreasing exponentially (i.e. with the current values => 2 blocks delay: 1 in 40k, 3 blocks delay: 1 in 4million ...)
+								if (reference_details.created..reference_details.expires).contains(&block_info.number) && rng.gen_bool(required_full_vote_probability(authority_count, 0.01)) {
+									self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::provide_shared_data {
+										shared_data: shared_data.clone(),
+									}).await;
 								}
 							}
 						}
@@ -283,4 +283,16 @@ where
 			} else break Ok(()),
 		}
 	}
+}
+
+/// This function calculates the probability of submitting a full-vote
+/// given the number of authority in the active set and the acceptable failure_rate.
+/// Failure rate is defined as the probability of no authority submitting a full-vote hence
+/// delaying consensus by 1 block. p is the probability of submitting a full-vote
+///
+/// Given that (1 - p)^authority_count = failure_rate
+/// 1 - p = failure_rate^(1 / authority_count)
+/// p = 1 - failure_rate^(1 / authority_count)
+fn required_full_vote_probability(authority_count: u32, failure_rate: f64) -> f64 {
+	1.0 - failure_rate.powf(1.0 / authority_count as f64)
 }
