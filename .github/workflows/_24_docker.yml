@@ -134,8 +134,6 @@ jobs:
           push: ${{ inputs.save_tags == '' }}
           load: ${{ inputs.save_tags != '' }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           file: ${{ needs.set-dockerfile-name.outputs.dockerfile_path }}/${{ matrix.target }}.Dockerfile
           build-args: |
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
@@ -217,8 +215,6 @@ jobs:
           push: ${{ inputs.publish_public_images }}
           load: ${{ inputs.save_tags != '' }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           file: ${{ needs.set-dockerfile-name.outputs.dockerfile_path }}/${{ matrix.target }}.Dockerfile
           build-args: |
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
