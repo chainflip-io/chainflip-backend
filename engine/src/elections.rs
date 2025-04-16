@@ -264,7 +264,7 @@ where
 								// We hit this branch *only if* no authority provided the full vote hence we can use a higher falure rate here (i.e. 1%)
 								// The probability of no authority submitting the shared data is then:
 								// probability of no authority submitting full vote * (probability of no authority submitting the shared data)^number of times we retry to submit the shared data
-								// which keeps decreasing exponentially (i.e. with the current values => 2 blocks delay: 1 in 40k, 3 blocks delay: 1 in 4millions ...)
+								// which keeps decreasing exponentially (i.e. with the current values => 2 blocks delay: 1 in 40k, 3 blocks delay: 1 in 4million ...)
 								if (reference_details.created..reference_details.expires).contains(&block_info.number) && rng.gen_bool(required_full_vote_probability(authority_count, 0.01)) {
 									self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::provide_shared_data {
 										shared_data: shared_data.clone(),
