@@ -70,7 +70,7 @@ impl Default for TestSetup {
 				unsynchronised_state: (),
 				unsynchronised_settings: (),
 				settings: (),
-				block_shared_data_lifetime: Default::default(),
+				shared_data_reference_lifetime: Default::default(),
 			},
 			num_contributing_authorities: 3,
 			num_non_contributing_authorities: 0,

@@ -321,7 +321,7 @@ pub mod pallet {
 		pub unsynchronised_state: ElectoralUnsynchronisedState,
 		pub unsynchronised_settings: ElectoralUnsynchronisedSettings,
 		pub settings: ElectoralSettings,
-		pub block_shared_data_lifetime: BlockNumber,
+		pub shared_data_reference_lifetime: BlockNumber,
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -333,7 +333,7 @@ pub mod pallet {
 				unsynchronised_state: A::benchmark_value(),
 				unsynchronised_settings: B::benchmark_value(),
 				settings: C::benchmark_value(),
-				block_shared_data_lifetime: D::benchmark_value(),
+				shared_data_reference_lifetime: D::benchmark_value(),
 			}
 		}
 	}
@@ -1690,7 +1690,7 @@ pub mod pallet {
 				initial_state.settings,
 			);
 			Status::<T, I>::put(ElectionPalletStatus::Running);
-			SharedDataReferenceLifetime::<T, I>::put(initial_state.block_shared_data_lifetime);
+			SharedDataReferenceLifetime::<T, I>::put(initial_state.shared_data_reference_lifetime);
 			Ok(())
 		}
 
