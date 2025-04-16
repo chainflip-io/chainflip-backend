@@ -291,6 +291,12 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Maps broadcast id to multiple transaction out ids.
+	/// A broadcast id can have multiple transaction out ids if it is refreshed/resigned.
+	#[pallet::storage]
+	pub type BroadcastIdToTransactionOutIds<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, Vec<TransactionOutIdFor<T, I>>, ValueQuery>;
+
 	/// The list of failed broadcasts that will be retried in some future block.
 	#[pallet::storage]
 	pub type DelayedBroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
@@ -553,6 +559,8 @@ pub mod pallet {
 					(broadcast_id, initiated_at),
 				);
 
+				BroadcastIdToTransactionOutIds::<T, I>::append(broadcast_id, &transaction_out_id);
+
 				let broadcast_data = BroadcastData::<T, I> {
 					broadcast_id,
 					transaction_payload: T::TransactionBuilder::build_transaction(&signed_api_call),
@@ -795,9 +803,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {
 		AwaitingBroadcast::<T, I>::remove(broadcast_id);
 		TransactionMetadata::<T, I>::remove(broadcast_id);
-		PendingApiCalls::<T, I>::take(broadcast_id).inspect(|api_call| {
-			TransactionOutIdToBroadcastId::<T, I>::remove(api_call.transaction_out_id());
-		})
+		for transaction_out_id in BroadcastIdToTransactionOutIds::<T, I>::take(broadcast_id) {
+			TransactionOutIdToBroadcastId::<T, I>::remove(transaction_out_id);
+		}
+		PendingApiCalls::<T, I>::take(broadcast_id)
 	}
 
 	pub fn remove_pending_broadcast(broadcast_id: &BroadcastId) {
@@ -911,7 +920,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	/// Start a broadcast by try to select a nominee.
 	fn start_broadcast_attempt(mut broadcast_data: BroadcastData<T, I>) {
 		let broadcast_id = broadcast_data.broadcast_id;
 		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_data.transaction_payload);
@@ -1098,8 +1106,9 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		AbortedBroadcasts::<T, I>::mutate(|aborted| {
 			aborted.remove(&broadcast_id);
 		});
-		let mut api_call = Self::clean_up_broadcast_storage(broadcast_id)
-			.ok_or(Error::<T, I>::ApiCallUnavailable)?;
+
+		let mut api_call =
+			PendingApiCalls::<T, I>::get(broadcast_id).ok_or(Error::<T, I>::ApiCallUnavailable)?;
 
 		PendingBroadcasts::<T, I>::try_mutate(|pending| {
 			if pending.contains(&broadcast_id) {
