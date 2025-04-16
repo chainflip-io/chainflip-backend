@@ -43,15 +43,38 @@ pub fn assert_has_event<T: frame_system::Config>(event: <T as frame_system::Conf
 #[macro_export]
 macro_rules! assert_has_matching_event {
 	( $runtime:ty, $event:pat $(if $guard:expr )? $(,)? ) => {
-		let events = frame_system::Pallet::<$runtime>::events()
+		$crate::assert_matching_event_count!($runtime, $event $(if $guard)? => 1);
+	};
+}
+
+#[macro_export]
+macro_rules! assert_matching_event_count {
+	( $runtime:ty, $event:pat $(if $guard:expr )? => $value:literal $(,)? ) => {
+		$crate::assert_matching_event_count!($runtime, $event $(if $guard)? => |count| count == $value);
+	};
+	( $runtime:ty, $event:pat $(if $guard:expr )? => $predicate:expr $(,)? ) => {
+		let matching_events = frame_system::Pallet::<$runtime>::events()
 			.into_iter()
 			.map(|e| e.event)
+			.filter(|e| matches!(e, $event $(if $guard)?))
 			.collect::<Vec<_>>();
+		let count = matching_events
+			.len();
 		assert!(
-			events.iter().any(|e| matches!(e, $event $(if $guard)?)),
-			"No event matching {:#?} found in {:#?}",
-			stringify!($event $(if $guard)?),
-			events,
+			$predicate(count),
+			"Expected match event count to satisfy `{}`, but got {count} matching events. {}",
+			stringify!($event $(if $guard)? => $predicate),
+			if count == 0 {
+				format!(
+					"Available events: {:#?}",
+					frame_system::Pallet::<$runtime>::events()
+						.into_iter()
+						.map(|e| e.event)
+						.collect::<Vec<_>>(),
+				)
+			} else {
+				format!("Matching events: {:#?}", matching_events)
+			},
 		);
 	};
 }
