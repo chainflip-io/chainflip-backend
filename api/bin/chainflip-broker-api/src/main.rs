@@ -15,6 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
+use cf_rpc_apis::{
+	broker::{
+		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
+		TransactionInId, WithdrawFeesDetail,
+	},
+	RpcApiError, RpcResult,
+};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
@@ -22,169 +29,23 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::{
-			ChainAccounts, ChannelActionType, TransactionScreeningEvents, VaultAddresses,
-			VaultSwapDetails,
-		},
+		state_chain_runtime::runtime_apis::{ChainAccounts, VaultAddresses, VaultSwapDetails},
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints, CcmChannelMetadata,
-		DcaParameters,
 	},
+	rpc_types::H256,
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, BrokerApi, ChannelId, DepositMonitorApi,
-	EthereumAddress, OperatorApi, SignedExtrinsicApi, StateChainApi, SwapDepositAddress,
-	TransactionInId, WithdrawFeesDetail,
+	AccountId32, AddressString, BrokerApi, ChannelActionType, ChannelId, DepositMonitorApi,
+	EthereumAddress, OperatorApi, SignedExtrinsicApi, StateChainApi,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
 use futures::{stream, FutureExt, StreamExt};
-use jsonrpsee::{
-	core::{async_trait, ClientError},
-	proc_macros::rpc,
-	server::ServerBuilder,
-	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
-	PendingSubscriptionSink,
-};
-use serde::{Deserialize, Serialize};
-use sp_core::H256;
+use jsonrpsee::{core::async_trait, server::ServerBuilder, PendingSubscriptionSink};
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::log;
-
-#[derive(thiserror::Error, Debug)]
-pub enum BrokerApiError {
-	#[error(transparent)]
-	ErrorObject(#[from] ErrorObjectOwned),
-	#[error(transparent)]
-	ClientError(#[from] jsonrpsee::core::ClientError),
-	#[error(transparent)]
-	Other(#[from] anyhow::Error),
-}
-
-type RpcResult<T> = Result<T, BrokerApiError>;
-
-impl From<BrokerApiError> for ErrorObjectOwned {
-	fn from(error: BrokerApiError) -> Self {
-		match error {
-			BrokerApiError::ErrorObject(error) => error,
-			BrokerApiError::ClientError(error) => match error {
-				ClientError::Call(obj) => obj,
-				internal => {
-					log::error!("Internal rpc client error: {internal:?}");
-					ErrorObject::owned(
-						ErrorCode::InternalError.code(),
-						"Internal rpc client error",
-						None::<()>,
-					)
-				},
-			},
-			BrokerApiError::Other(error) => jsonrpsee::types::error::ErrorObjectOwned::owned(
-				ErrorCode::ServerError(0xcf).code(),
-				error.to_string(),
-				None::<()>,
-			),
-		}
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-pub enum GetOpenDepositChannelsQuery {
-	All,
-	Mine,
-}
-
-#[rpc(server, client, namespace = "broker")]
-pub trait Rpc {
-	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
-	async fn register_account(&self) -> RpcResult<String>;
-
-	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
-	async fn request_swap_deposit_address(
-		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: RefundParametersRpc,
-		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<SwapDepositAddress>;
-
-	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
-	async fn withdraw_fees(
-		&self,
-		asset: Asset,
-		destination_address: AddressString,
-	) -> RpcResult<WithdrawFeesDetail>;
-
-	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
-	async fn request_swap_parameter_encoding(
-		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		extra_parameters: VaultSwapExtraParametersRpc,
-		channel_metadata: Option<CcmChannelMetadata>,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<VaultSwapDetails<AddressString>>;
-
-	#[method(name = "mark_transaction_for_rejection", aliases = ["broker_MarkTransactionForRejection"])]
-	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()>;
-
-	#[method(name = "get_open_deposit_channels", aliases = ["broker_getOpenDepositChannels"])]
-	async fn get_open_deposit_channels(
-		&self,
-		query: GetOpenDepositChannelsQuery,
-	) -> RpcResult<ChainAccounts>;
-
-	#[method(name = "all_open_deposit_channels", aliases = ["broker_allOpenDepositChannels"])]
-	async fn all_open_deposit_channels(
-		&self,
-	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>>;
-
-	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
-	async fn subscribe_transaction_screening_events(&self);
-
-	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]
-	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId>;
-
-	#[method(name = "close_private_btc_channel", aliases = ["broker_closePrivateBtcChannel"])]
-	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId>;
-
-	#[method(name = "register_affiliate", aliases = ["broker_registerAffiliate"])]
-	async fn register_affiliate(
-		&self,
-		withdrawal_address: EthereumAddress,
-	) -> RpcResult<AccountId32>;
-
-	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
-	async fn get_affiliates(
-		&self,
-		affiliate: Option<AccountId32>,
-	) -> RpcResult<Vec<(AccountId32, AffiliateDetails)>>;
-
-	#[method(name = "affiliate_withdrawal_request", aliases = ["broker_affiliateWithdrawalRequest"])]
-	async fn affiliate_withdrawal_request(
-		&self,
-		affiliate_account_id: AccountId32,
-	) -> RpcResult<WithdrawFeesDetail>;
-
-	#[method(name = "get_vault_addresses", aliases = ["broker_getVaultAddresses"])]
-	async fn vault_addresses(&self) -> RpcResult<VaultAddresses>;
-
-	#[method(name = "set_vault_swap_minimum_broker_fee", aliases =
-	["broker_setVaultSwapMinimumBrokerFee"])]
-	async fn set_vault_swap_minimum_broker_fee(
-		&self,
-		minimum_fee_bps: BasisPoints,
-	) -> RpcResult<H256>;
-}
 
 pub struct RpcServerImpl {
 	api: StateChainApi,
@@ -203,7 +64,7 @@ impl RpcServerImpl {
 }
 
 #[async_trait]
-impl RpcServer for RpcServerImpl {
+impl BrokerRpcApiServer for RpcServerImpl {
 	async fn register_account(&self) -> RpcResult<String> {
 		Ok(self
 			.api
@@ -286,7 +147,7 @@ impl RpcServer for RpcServerImpl {
 			.deposit_monitor_api()
 			.mark_transaction_for_rejection(tx_id)
 			.await
-			.map_err(BrokerApiError::Other)?;
+			.map_err(RpcApiError::Other)?;
 		Ok(())
 	}
 
@@ -303,7 +164,7 @@ impl RpcServer for RpcServerImpl {
 			.raw_client()
 			.cf_get_open_deposit_channels(account_id, None)
 			.await
-			.map_err(BrokerApiError::ClientError)
+			.map_err(RpcApiError::ClientError)
 	}
 
 	async fn all_open_deposit_channels(
@@ -313,7 +174,7 @@ impl RpcServer for RpcServerImpl {
 			.raw_client()
 			.cf_all_open_deposit_channels(None)
 			.await
-			.map_err(BrokerApiError::ClientError)
+			.map_err(RpcApiError::ClientError)
 	}
 
 	async fn subscribe_transaction_screening_events(&self, pending_sink: PendingSubscriptionSink) {
@@ -333,7 +194,7 @@ impl RpcServer for RpcServerImpl {
 				});
 			},
 			Err(e) => {
-				pending_sink.reject(BrokerApiError::ClientError(e)).await;
+				pending_sink.reject(RpcApiError::ClientError(e)).await;
 			},
 		}
 	}

@@ -28,6 +28,7 @@ state-chain-runtime = { workspace = true, default-features = true }
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }
+cf-rpc-apis = { workspace = true }
 cf-utilities = { workspace = true, default-features = true }
 sol-prim = { workspace = true, default-features = true }
 

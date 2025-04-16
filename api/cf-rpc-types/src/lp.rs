@@ -14,25 +14,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use cf_chains::{address::AddressString, AnyChain, Arbitrum, Chain, Solana};
-use cf_primitives::*;
-use sp_core::{
-	serde::{Deserialize, Serialize},
-	U256,
+use cf_primitives::{
+	chains::{assets::any, Bitcoin, Ethereum, Polkadot},
+	*,
 };
+use cf_utilities::rpc::NumberOrHex;
+use pallet_cf_pools::{OrderId, RangeOrderSize};
+use sp_core::serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-use anyhow::anyhow;
-use cf_primitives::chains::{assets::any, Bitcoin, Ethereum, Polkadot};
-use cf_utilities::rpc::NumberOrHex;
+use crate::{SwapChannelInfo, U256};
 
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize};
-
-use crate::SwapChannelInfo;
 pub use cf_amm::{
 	common::{PoolPairsMap, Side},
 	math::Tick,
 };
+pub use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RangeOrder {

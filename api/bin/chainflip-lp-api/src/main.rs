@@ -17,8 +17,9 @@
 use anyhow::anyhow;
 use cf_primitives::{
 	chains::{Arbitrum, Solana},
-	BasisPoints, BlockNumber, DcaParameters, EgressId, Price,
+	ApiWaitForResult, BasisPoints, BlockNumber, DcaParameters, EgressId, Price, WaitFor,
 };
+use cf_rpc_apis::{lp::LpRpcApiServer, RpcApiError, RpcResult};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -35,21 +36,15 @@ use chainflip_api::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash,
 	},
-	rpc_types::{lp::SwapRequestResponse, RedemptionAmount},
+	rpc_types::{lp::SwapRequestResponse, OrderFills, RedemptionAmount},
 	settings::StateChain,
-	AccountId32, AddressString, ApiWaitForResult, BlockUpdate, ChainApi, EthereumAddress,
-	OperatorApi, SignedExtrinsicApi, StateChainApi, WaitFor,
+	AccountId32, AddressString, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
+	SignedExtrinsicApi, StateChainApi,
 };
 use clap::Parser;
-use custom_rpc::{order_fills::OrderFills, CustomApiClient};
+use custom_rpc::CustomApiClient;
 use futures::{stream, FutureExt, StreamExt};
-use jsonrpsee::{
-	core::{async_trait, ClientError},
-	proc_macros::rpc,
-	server::ServerBuilder,
-	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
-	PendingSubscriptionSink,
-};
+use jsonrpsee::{core::async_trait, server::ServerBuilder, PendingSubscriptionSink};
 use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
 use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
 use std::{
@@ -58,146 +53,6 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::log;
-
-#[rpc(server, client, namespace = "lp")]
-pub trait Rpc {
-	#[method(name = "register_account")]
-	async fn register_account(&self) -> RpcResult<Hash>;
-
-	#[deprecated(note = "Use `request_liquidity_deposit_address` instead")]
-	#[method(name = "liquidity_deposit")]
-	async fn request_liquidity_deposit_address_legacy(
-		&self,
-		asset: Asset,
-		wait_for: Option<WaitFor>,
-		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<ApiWaitForResult<AddressString>>;
-
-	#[method(name = "request_liquidity_deposit_address")]
-	async fn request_liquidity_deposit_address(
-		&self,
-		asset: Asset,
-		wait_for: Option<WaitFor>,
-		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<ApiWaitForResult<LiquidityDepositChannelDetails>>;
-
-	#[method(name = "register_liquidity_refund_address")]
-	async fn register_liquidity_refund_address(
-		&self,
-		chain: ForeignChain,
-		address: AddressString,
-	) -> RpcResult<Hash>;
-
-	#[method(name = "withdraw_asset")]
-	async fn withdraw_asset(
-		&self,
-		amount: NumberOrHex,
-		asset: Asset,
-		destination_address: AddressString,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<EgressId>>;
-
-	#[method(name = "transfer_asset")]
-	async fn transfer_asset(
-		&self,
-		amount: U256,
-		asset: Asset,
-		destination_account: AccountId32,
-	) -> RpcResult<Hash>;
-
-	#[method(name = "update_range_order")]
-	async fn update_range_order(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		id: OrderIdJson,
-		tick_range: Option<Range<Tick>>,
-		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
-
-	#[method(name = "set_range_order")]
-	async fn set_range_order(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		id: OrderIdJson,
-		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSizeJson,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
-
-	#[method(name = "update_limit_order")]
-	async fn update_limit_order(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		id: OrderIdJson,
-		tick: Option<Tick>,
-		amount_change: IncreaseOrDecrease<NumberOrHex>,
-		dispatch_at: Option<BlockNumber>,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
-
-	#[method(name = "set_limit_order")]
-	async fn set_limit_order(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		id: OrderIdJson,
-		tick: Option<Tick>,
-		sell_amount: NumberOrHex,
-		dispatch_at: Option<BlockNumber>,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
-
-	#[method(name = "free_balances", aliases = ["lp_asset_balances"])]
-	async fn free_balances(&self) -> RpcResult<AssetMap<U256>>;
-
-	#[method(name = "get_open_swap_channels")]
-	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels>;
-
-	#[method(name = "request_redemption")]
-	async fn request_redemption(
-		&self,
-		redeem_address: EthereumAddress,
-		exact_amount: Option<NumberOrHex>,
-		executor_address: Option<EthereumAddress>,
-	) -> RpcResult<Hash>;
-
-	#[subscription(name = "subscribe_order_fills", item = BlockUpdate<OrderFills>)]
-	async fn subscribe_order_fills(&self);
-
-	#[method(name = "order_fills")]
-	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
-
-	#[method(name = "cancel_all_orders")]
-	async fn cancel_all_orders(
-		&self,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>>;
-
-	#[method(name = "cancel_orders_batch")]
-	async fn cancel_orders_batch(
-		&self,
-		orders: BoundedVec<CloseOrderJson, ConstU32<MAX_ORDERS_DELETE>>,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
-
-	#[method(name = "schedule_swap")]
-	async fn schedule_swap(
-		&self,
-		amount: NumberOrHex,
-		input_asset: Asset,
-		output_asset: Asset,
-		retry_duration: BlockNumber,
-		min_price: Price,
-		dca_params: Option<DcaParameters>,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;
-}
 
 pub struct RpcServerImpl {
 	api: StateChainApi,
@@ -215,44 +70,8 @@ impl RpcServerImpl {
 	}
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum LpApiError {
-	#[error(transparent)]
-	ErrorObject(#[from] ErrorObjectOwned),
-	#[error(transparent)]
-	ClientError(#[from] jsonrpsee::core::ClientError),
-	#[error(transparent)]
-	Other(#[from] anyhow::Error),
-}
-
-type RpcResult<T> = Result<T, LpApiError>;
-
-impl From<LpApiError> for ErrorObjectOwned {
-	fn from(error: LpApiError) -> Self {
-		match error {
-			LpApiError::ErrorObject(error) => error,
-			LpApiError::ClientError(error) => match error {
-				ClientError::Call(obj) => obj,
-				internal => {
-					log::error!("Internal rpc client error: {internal:?}");
-					ErrorObject::owned(
-						ErrorCode::InternalError.code(),
-						"Internal rpc client error",
-						None::<()>,
-					)
-				},
-			},
-			LpApiError::Other(error) => jsonrpsee::types::error::ErrorObjectOwned::owned(
-				ErrorCode::ServerError(0xcf).code(),
-				error.to_string(),
-				None::<()>,
-			),
-		}
-	}
-}
-
 #[async_trait]
-impl RpcServer for RpcServerImpl {
+impl LpRpcApiServer for RpcServerImpl {
 	async fn request_liquidity_deposit_address_legacy(
 		&self,
 		asset: Asset,
@@ -498,7 +317,7 @@ impl RpcServer for RpcServerImpl {
 				});
 			},
 			Err(e) => {
-				pending_sink.reject(LpApiError::ClientError(e)).await;
+				pending_sink.reject(RpcApiError::ClientError(e)).await;
 			},
 		}
 	}
@@ -508,7 +327,7 @@ impl RpcServer for RpcServerImpl {
 			.raw_client()
 			.cf_lp_get_order_fills(at)
 			.await
-			.map_err(LpApiError::ClientError)
+			.map_err(RpcApiError::ClientError)
 	}
 
 	async fn cancel_all_orders(

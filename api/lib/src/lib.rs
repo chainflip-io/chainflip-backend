@@ -44,7 +44,7 @@ pub mod primitives {
 	pub use state_chain_runtime::{self, BlockNumber, Hash};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
-pub use cf_node_client::{ApiWaitForResult, WaitFor, WaitForResult};
+pub use cf_node_client::WaitForResult;
 
 pub use chainflip_engine::{
 	settings,

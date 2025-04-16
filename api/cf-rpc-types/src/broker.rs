@@ -16,16 +16,20 @@
 
 use anyhow::bail;
 
-pub use cf_chains::{address::AddressString, RefundParametersRpc};
+use crate::{H256, U256};
 use cf_chains::{Chain, ChainCrypto, ChannelRefundParameters, ForeignChain};
 use cf_primitives::AffiliateShortId;
-pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_utilities::rpc::NumberOrHex;
-use sp_core::{
-	serde::{Deserialize, Serialize},
-	H256, U256,
-};
+use sp_core::serde::{Deserialize, Serialize};
 use std::fmt;
+
+pub use cf_chains::{address::AddressString, RefundParametersRpc};
+pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
+pub use pallet_cf_swapping::AffiliateDetails;
+pub use state_chain_runtime::runtime_apis::{
+	ChainAccounts, ChannelActionType, CustomRuntimeApi, TransactionScreeningEvents, VaultAddresses,
+	VaultSwapDetails,
+};
 
 pub type RefundParameters = ChannelRefundParameters<AddressString>;
 

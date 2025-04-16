@@ -15,7 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
-
+use cf_rpc_apis::{broker::BrokerRpcApiServer, lp::LpRpcApiServer};
+use custom_rpc::{
+	broker::{broker_crypto, BrokerSignedRpc},
+	lp::{lp_crypto, LpSignedRpc},
+	monitoring::MonitoringApiServer,
+	CustomApiServer, CustomRpc,
+};
 use futures::FutureExt;
 use jsonrpsee::RpcModule;
 use sc_client_api::{Backend, BlockBackend};
@@ -27,15 +33,8 @@ use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpS
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
-use std::{sync::Arc, time::Duration};
-
-use custom_rpc::{
-	broker::{broker_crypto, BrokerSignedApiServer, BrokerSignedRpc},
-	lp::{lp_crypto, LpSignedApiServer, LpSignedRpc},
-	monitoring::MonitoringApiServer,
-	CustomApiServer, CustomRpc,
-};
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
+use std::{sync::Arc, time::Duration};
 
 pub(crate) type FullClient = sc_service::TFullClient<
 	Block,
@@ -362,7 +361,7 @@ pub fn new_full<
 
 				// Add broker RPCs if broker key was found
 				if let Some(pair) = broker_key_pair.clone() {
-					module.merge(BrokerSignedApiServer::into_rpc(BrokerSignedRpc::new(
+					module.merge(BrokerRpcApiServer::into_rpc(BrokerSignedRpc::new(
 						client.clone(),
 						backend.clone(),
 						executor.clone(),
@@ -373,7 +372,7 @@ pub fn new_full<
 
 				// Add lp RPCs if lp key was found
 				if let Some(pair) = lp_key_pair.clone() {
-					module.merge(LpSignedApiServer::into_rpc(LpSignedRpc::new(
+					module.merge(LpRpcApiServer::into_rpc(LpSignedRpc::new(
 						client.clone(),
 						backend.clone(),
 						executor.clone(),

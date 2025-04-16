@@ -1552,7 +1552,6 @@ dependencies = [
  "pallet-cf-pools",
  "parity-scale-codec",
  "scale-info",
- "serde",
  "sp-api 34.0.0",
  "sp-core 34.0.0",
  "sp-runtime 39.0.0",
@@ -1583,6 +1582,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-rpc-apis"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cf-chains",
+ "cf-primitives",
+ "cf-rpc-types",
+ "jsonrpsee 0.23.2",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "cf-rpc-types"
 version = "0.1.0"
 dependencies = [
@@ -1593,6 +1604,7 @@ dependencies = [
  "frame-support",
  "pallet-cf-funding",
  "pallet-cf-pools",
+ "pallet-cf-swapping",
  "serde",
  "sp-core 34.0.0",
  "state-chain-runtime",
@@ -1800,18 +1812,14 @@ version = "1.9.0"
 dependencies = [
  "anyhow",
  "cf-chains",
+ "cf-rpc-apis",
  "chainflip-api",
  "clap",
  "custom-rpc",
  "futures",
- "hex",
  "jsonrpsee 0.23.2",
  "sc-rpc",
- "serde",
- "sp-core 34.0.0",
- "sp-rpc",
  "substrate-build-script-utils",
- "thiserror 1.0.69",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2009,21 +2017,16 @@ version = "1.9.0"
 dependencies = [
  "anyhow",
  "cf-primitives",
+ "cf-rpc-apis",
  "chainflip-api",
  "clap",
  "custom-rpc",
- "frame-system",
  "futures",
- "hex",
  "jsonrpsee 0.23.2",
  "pallet-cf-pools",
  "sc-rpc",
- "serde",
- "serde_json",
  "sp-core 34.0.0",
- "sp-rpc",
  "substrate-build-script-utils",
- "thiserror 1.0.69",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2036,6 +2039,7 @@ version = "1.9.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-rpc-apis",
  "clap",
  "custom-rpc",
  "frame-benchmarking",
@@ -2738,7 +2742,7 @@ dependencies = [
  "cf-chains",
  "cf-node-client",
  "cf-primitives",
- "cf-rpc-types",
+ "cf-rpc-apis",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
@@ -2771,7 +2775,6 @@ dependencies = [
  "sp-application-crypto 38.0.0",
  "sp-block-builder",
  "sp-core 34.0.0",
- "sp-rpc",
  "sp-runtime 39.0.0",
  "sp-state-machine 0.43.0",
  "sp-transaction-pool",

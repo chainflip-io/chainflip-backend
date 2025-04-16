@@ -12,7 +12,6 @@ workspace = true
 [dependencies]
 codec = { workspace = true, default-features = true }
 scale-info = { workspace = true, features = ["derive"] }
-serde = { workspace = true, default-features = true, features = ["derive"] }
 thiserror = { workspace = true }
 
 state-chain-runtime = { workspace = true, default-features = true }

@@ -31,7 +31,7 @@ use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
 	lp::LiquidityDepositChannelDetails,
-	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
+	primitives::{state_chain_runtime, WaitFor, FLIPPERINOS_PER_FLIP},
 	rpc_types::RedemptionAmount,
 	BrokerApi,
 };
@@ -39,6 +39,7 @@ use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
 use std::{io::Write, path::PathBuf, sync::Arc};
+
 mod settings;
 
 #[tokio::main]
@@ -102,7 +103,7 @@ async fn run_cli() -> Result<()> {
 							.lp_api()
 							.request_liquidity_deposit_address(
 								asset,
-								api::WaitFor::InBlock,
+								WaitFor::InBlock,
 								boost_fee,
 							)
 							.await?

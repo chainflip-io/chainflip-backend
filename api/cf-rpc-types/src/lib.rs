@@ -14,11 +14,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_amm::common::{PoolPairsMap, Side};
 /// cf-rpc-types module defines all RPC related types
 /// Common types are defined in here
 use cf_chains::{address::ToHumanreadableAddress, Chain};
-use cf_primitives::{Asset, FlipBalance};
+use cf_primitives::{AccountId, Asset, FlipBalance, Tick};
 use frame_support::{Deserialize, Serialize};
+use std::ops::Range;
+
+pub use cf_chains::eth::Address as EthereumAddress;
+pub use cf_utilities::rpc::NumberOrHex;
+pub use sp_core::{bounded::BoundedVec, crypto::AccountId32, ConstU32, H256, U256};
+pub use state_chain_runtime::{chainflip::BlockUpdate, Hash};
 
 /// Defines all broker related RPC types
 pub mod broker;
@@ -32,4 +39,35 @@ pub struct SwapChannelInfo<C: Chain> {
 	pub deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
 	pub source_asset: Asset,
 	pub destination_asset: Asset,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq, Eq)]
+pub struct OrderFills {
+	pub fills: Vec<OrderFilled>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OrderFilled {
+	LimitOrder {
+		lp: AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: U256,
+		tick: Tick,
+		sold: U256,
+		bought: U256,
+		fees: U256,
+		remaining: U256,
+	},
+	RangeOrder {
+		lp: AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: U256,
+		range: Range<Tick>,
+		fees: PoolPairsMap<U256>,
+		liquidity: U256,
+	},
 }

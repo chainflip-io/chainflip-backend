@@ -27,17 +27,13 @@ chainflip-api = { workspace = true }
 cf-chains = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }
+cf-rpc-apis = { workspace = true }
 
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 futures = { workspace = true }
-hex = { workspace = true, default-features = true }
 jsonrpsee = { workspace = true, features = ["full"] }
-serde = { workspace = true, default-features = true, features = ["derive"] }
-sp-core = { workspace = true, default-features = true }
-sp-rpc = { workspace = true, default-features = true }
 sc-rpc = { workspace = true, default-features = true }
-thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
