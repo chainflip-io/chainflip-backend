@@ -512,20 +512,26 @@ impl<T> Future for ScopedJoinHandle<T> {
 	type Output = T;
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		match Pin::new(&mut self.as_mut().receiver).poll(cx) {
-			Poll::Ready(result) => match result {
-				Ok(t) => Poll::Ready(t),
-				Err(_) => Poll::Pending, /* Await forever. This is ok as this means the
-				                          * associated task returned an
-				                          * error, and so the task_scope is
-				                          * exiting/aborting, and so where we are awaiting on
-				                          * this future, it is going to
-				                          * be cancelled (TODO: Add lifetime
-				                          * to ScopedJoinHandle to guarantee ScopedJoinHandle
-				                          * cannot be await'ed on outside of its associated
-				                          * task_scope) */
-			},
-			Poll::Pending => Poll::Pending,
+		let pinned_receiver = Pin::new(&mut self.receiver);
+		if pinned_receiver.is_terminated() {
+			// If we've already returned a result, then we are shutting down.
+			Poll::Pending
+		} else {
+			match pinned_receiver.poll(cx) {
+				Poll::Ready(result) => match result {
+					Ok(t) => Poll::Ready(t),
+					Err(_) => Poll::Pending, /* Await forever. This is ok as this means the
+					                          * associated task returned an
+					                          * error, and so the task_scope is
+					                          * exiting/aborting, and so where we are awaiting on
+					                          * this future, it is going to
+					                          * be cancelled (TODO: Add lifetime
+					                          * to ScopedJoinHandle to guarantee ScopedJoinHandle
+					                          * cannot be await'ed on outside of its associated
+					                          * task_scope) */
+				},
+				Poll::Pending => Poll::Pending,
+			}
 		}
 	}
 }
