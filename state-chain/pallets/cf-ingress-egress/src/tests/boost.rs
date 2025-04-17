@@ -1441,7 +1441,10 @@ mod delayed_boosting {
 					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
 						.unwrap()
 						.boost_status,
-					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
+					BoostStatus::BoostPending {
+						amount: DEPOSIT_AMOUNT,
+						process_at_block: PROCESSED_AT_BLOCK
+					}
 				);
 
 				deposit_address
@@ -1466,7 +1469,10 @@ mod delayed_boosting {
 
 				assert_eq!(
 					BoostedVaultTransactions::<Test, Instance1>::get(TX_ID),
-					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
+					BoostStatus::BoostPending {
+						amount: DEPOSIT_AMOUNT,
+						process_at_block: PROCESSED_AT_BLOCK
+					}
 				);
 
 				deposit
@@ -1648,7 +1654,10 @@ mod delayed_boosting {
 				let tx_id: H256 = [9u8; 32].into();
 				assert_eq!(
 					BoostedVaultTransactions::<Test, Instance1>::get(tx_id),
-					BoostStatus::BoostPending { amount: DEPOSIT_AMOUNT }
+					BoostStatus::BoostPending {
+						amount: DEPOSIT_AMOUNT,
+						process_at_block: PROCESSED_AT_BLOCK
+					}
 				);
 
 				(deposit, tx_id)
@@ -1937,7 +1946,10 @@ mod delayed_boosting {
 					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
 						.unwrap()
 						.boost_status,
-					BoostStatus::BoostPending { amount: OTHER_AMONT }
+					BoostStatus::BoostPending {
+						amount: OTHER_AMONT,
+						process_at_block: PROCESSED_AT_BLOCK
+					}
 				);
 
 				deposit_address
