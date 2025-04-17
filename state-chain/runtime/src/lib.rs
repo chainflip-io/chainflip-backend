@@ -99,7 +99,8 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{
-	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
+	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, NetworkFeeTracker,
+	Swap,
 };
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use runtime_apis::ChainAccounts;
@@ -1848,7 +1849,10 @@ impl_runtime_apis! {
 			let mut fees_vec = vec![];
 
 			if include_fee(FeeTypes::Network) {
-				fees_vec.push(FeeType::NetworkFee { min_fee_enforced: true });
+				fees_vec.push(FeeType::NetworkFee(NetworkFeeTracker::new(
+					pallet_cf_swapping::MinimumNetworkFee::<Runtime>::get(),
+					NetworkFee::get(),
+				)));
 			}
 
 			if broker_commission > 0 {
@@ -1862,35 +1866,12 @@ impl_runtime_apis! {
 				));
 			}
 
-
-			// Initialize a dummy swap request so that the network fee calculation can be done when simulating the swap.
-			use cf_traits::SwapRequestHandler;
-			let swap_request_id = Swapping::init_swap_request(
-				input_asset,
-				amount_per_chunk,
-				output_asset,
-				cf_traits::SwapRequestType::Regular {
-					output_action: cf_traits::SwapOutputAction::CreditOnChain {
-						account_id: AccountId::new([0; 32]),
-					},
-				},
-				vec![Beneficiary {
-					account: AccountId::new([0xbb; 32]),
-					bps: broker_commission,
-				}]
-				.try_into()
-				.expect("Beneficiary with a length of 1 must be within length bound."),
-				None,
-				None,
-				cf_chains::SwapOrigin::OnChainAccount(AccountId::new([0xbb; 32])),
-			);
-
 			// Simulate the swap
 			let swap_output_per_chunk = Swapping::try_execute_without_violations(
 				vec![
 					Swap::new(
 						Default::default(), // Swap id
-						swap_request_id,
+						Default::default(), // Swap request id
 						input_asset,
 						output_asset,
 						amount_per_chunk,

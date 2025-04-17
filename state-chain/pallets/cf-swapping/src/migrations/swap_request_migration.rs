@@ -13,8 +13,6 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-
-use cf_chains::ChannelRefundParameters;
 use frame_support::traits::UncheckedOnRuntimeUpgrade;
 
 use crate::Config;
@@ -28,9 +26,26 @@ use codec::{Decode, Encode};
 
 pub mod old {
 	use super::*;
-	use cf_chains::{CcmDepositMetadata, ChannelRefundParametersDecoded, ForeignChainAddress};
 	use cf_primitives::{Asset, Beneficiaries};
 	use frame_support::Twox64Concat;
+
+	#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub enum FeeType<T: Config> {
+		// Changing this NetworkFee a new struct
+		NetworkFee { min_fee_enforced: bool },
+		BrokerFee(Beneficiaries<T::AccountId>),
+	}
+
+	#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct Swap<T: Config> {
+		swap_id: SwapId,
+		swap_request_id: SwapRequestId,
+		pub from: Asset,
+		pub to: Asset,
+		input_amount: AssetAmount,
+		fees: Vec<FeeType<T>>,
+		refund_params: Option<SwapRefundParameters>,
+	}
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct DcaState {
@@ -39,16 +54,19 @@ pub mod old {
 		pub remaining_chunks: u32,
 		pub chunk_interval: u32,
 		pub accumulated_output_amount: AssetAmount,
-		// Migration will add the 2 new fields here
+		// Moving these 2 fields to the swaps FeeType struct
+		pub network_fee_collected: AssetAmount,
+		pub accumulated_stable_amount: AssetAmount,
 	}
 
 	#[allow(clippy::large_enum_variant)]
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub enum SwapRequestState<T: Config> {
 		UserSwap {
-			ccm_deposit_metadata: Option<CcmDepositMetadata>,
-			output_address: ForeignChainAddress,
+			refund_params: Option<RefundParametersExtended<T::AccountId>>,
+			output_action: SwapOutputAction<T::AccountId>,
 			dca_state: DcaState,
+			// Removing this field
 			broker_fees: Beneficiaries<T::AccountId>,
 		},
 		NetworkFee,
@@ -60,14 +78,16 @@ pub mod old {
 		pub id: SwapRequestId,
 		pub input_asset: Asset,
 		pub output_asset: Asset,
-		// This is to be moved into swap request state
-		pub refund_params: Option<ChannelRefundParametersDecoded>,
 		pub state: SwapRequestState<T>,
 	}
 
 	#[frame_support::storage_alias]
 	pub type SwapRequests<T: Config> =
 		StorageMap<Pallet<T>, Twox64Concat, SwapRequestId, SwapRequest<T>>;
+
+	#[frame_support::storage_alias]
+	pub type SwapQueue<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, BlockNumberFor<T>, Vec<Swap<T>>, ValueQuery>;
 }
 
 pub struct Migration<T: Config>(PhantomData<T>);
@@ -87,44 +107,22 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				output_asset: old_swap_request.output_asset,
 				state: match old_swap_request.state {
 					old::SwapRequestState::UserSwap {
-						ccm_deposit_metadata,
-						output_address,
+						refund_params,
+						output_action,
 						dca_state,
-						broker_fees,
+						broker_fees: _broker_fees,
 					} => SwapRequestState::UserSwap {
-						refund_params: old_swap_request.refund_params.map(
-							|ChannelRefundParameters {
-							     retry_duration,
-							     refund_address,
-							     min_price,
-							 }| {
-								RefundParametersExtended {
-									retry_duration,
-									refund_destination: AccountOrAddress::ExternalAddress(
-										refund_address,
-									),
-									min_price,
-								}
-							},
-						),
-						output_action: SwapOutputAction::Egress {
-							ccm_deposit_metadata,
-							output_address,
-						},
+						refund_params,
+						output_action,
 						dca_state: DcaState {
 							status: dca_state.status,
 							remaining_input_amount: dca_state.remaining_input_amount,
 							remaining_chunks: dca_state.remaining_chunks,
 							chunk_interval: dca_state.chunk_interval,
 							accumulated_output_amount: dca_state.accumulated_output_amount,
-							// Setting the new fields to 0. This will cause the network fee to be
-							// calculated as normal for all remaining chunks. It may also
-							// cause the minimum network fee to be charged for the next chunk, but
-							// that is acceptable.
-							network_fee_collected: 0,
-							accumulated_stable_amount: 0,
+							// TODO JAMIE: grab the network_fee_collected and
+							// accumulated_stable_amount from here and migrate them
 						},
-						broker_fees,
 					},
 					old::SwapRequestState::NetworkFee => SwapRequestState::NetworkFee,
 					old::SwapRequestState::IngressEgressFee => SwapRequestState::IngressEgressFee,

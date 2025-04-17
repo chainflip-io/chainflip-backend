@@ -24,18 +24,18 @@ pub mod swap_request_migration;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
-		7,
-		8,
+		9,
+		10,
 		swap_request_migration::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	VersionedMigration<
-		8,
-		9,
-		minimum_network_fee_migration::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<9, Pallet<T>>,
+	// VersionedMigration<
+	// 	8,
+	// 	9,
+	// 	minimum_network_fee_migration::Migration<T>,
+	// 	Pallet<T>,
+	// 	<T as frame_system::Config>::DbWeight,
+	// >,
+	PlaceholderMigration<10, Pallet<T>>,
 );

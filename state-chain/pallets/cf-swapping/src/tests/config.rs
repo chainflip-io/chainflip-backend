@@ -158,25 +158,9 @@ fn max_swap_amount_can_be_removed() {
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
 			vec![
-				Swap::new(
-					1.into(),
-					1.into(),
-					from,
-					to,
-					max_swap,
-					None,
-					[FeeType::NetworkFee { min_fee_enforced: true }]
-				),
+				Swap::new(1.into(), 1.into(), from, to, max_swap, None, vec![ZERO_NETWORK_FEES],),
 				// New swap takes the full amount.
-				Swap::new(
-					2.into(),
-					2.into(),
-					from,
-					to,
-					amount,
-					None,
-					[FeeType::NetworkFee { min_fee_enforced: true }]
-				),
+				Swap::new(2.into(), 2.into(), from, to, amount, None, vec![ZERO_NETWORK_FEES],),
 			]
 		);
 		// No no funds are confiscated.
@@ -244,15 +228,7 @@ fn can_swap_below_max_amount() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(
-				1.into(),
-				1.into(),
-				from,
-				to,
-				amount,
-				None,
-				[FeeType::NetworkFee { min_fee_enforced: true }]
-			),]
+			vec![Swap::new(1.into(), 1.into(), from, to, amount, None, vec![ZERO_NETWORK_FEES],),]
 		);
 	});
 }
