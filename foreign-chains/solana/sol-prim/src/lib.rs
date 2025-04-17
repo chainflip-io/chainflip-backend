@@ -181,6 +181,10 @@ impl Instruction {
 		let data = bincode::serde::encode_to_vec(data, bincode::config::legacy()).unwrap();
 		Self { program_id, accounts, data }
 	}
+
+	pub fn deserialize_data_with_borsh<T: BorshDeserialize>(data: Vec<u8>) -> Option<T> {
+		T::deserialize(&mut &data[..]).ok()
+	}
 }
 
 /// Describes a single account read or written by a program during instruction

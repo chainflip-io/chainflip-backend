@@ -121,6 +121,7 @@ mod test {
 		sol::{
 			signing_key::SolSigningKey,
 			sol_tx_core::{
+				self,
 				consts::{const_address, MAX_TRANSACTION_LENGTH},
 				sol_test_values::*,
 			},
@@ -157,6 +158,7 @@ mod test {
 		229, 147, 69, 73, 190, 10, 208, 151, 131, 194, 205, 116, 232,
 	];
 	const FROM: SolAddress = const_address("EwgZksaPybTUyhcEMn3aR46HZokR4NH6d1Wy8d51qZ6G");
+	const FROM_TOKEN: SolAddress = const_address("4dTsLjw5c75UXF59KAKHqyeBJVKZibA9a4LsDLc1CPbB");
 
 	const EVENT_DATA_ACCOUNT_KEY_BYTES: [u8; 32] = [
 		133, 220, 70, 223, 197, 127, 106, 46, 178, 73, 164, 200, 88, 128, 97, 144, 20, 132, 211,
@@ -388,6 +390,98 @@ mod test {
 			expected_serialized_tx,
 			vec![from_signing_key, event_data_account_signing_key].into(),
 			BLOCKHASH.into(),
+		);
+	}
+
+	#[test]
+	fn instruction_accounts_len_matches_consts() {
+		assert_eq!(
+			SolanaInstructionBuilder::x_swap_native(
+				api_env(),
+				agg_key().into(),
+				Asset::Eth,
+				DESTINATION_ADDRESS_ETH,
+				FROM.into(),
+				EVENT_DATA_ACCOUNT.into(),
+				INPUT_AMOUNT,
+				cf_parameter(false),
+				None,
+			)
+			.accounts
+			.len(),
+			sol_tx_core::consts::X_SWAP_NATIVE_ACC_LEN as usize
+		);
+
+		assert_eq!(
+			SolanaInstructionBuilder::x_swap_usdc(
+				api_env(),
+				Asset::Sol,
+				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
+				Default::default(),
+				Default::default(),
+				EVENT_DATA_ACCOUNT.into(),
+				TOKEN_SUPPORTED_ACCOUNT.into(),
+				INPUT_AMOUNT,
+				cf_parameter(true),
+				Some(ccm_parameter().channel_metadata)
+			)
+			.accounts
+			.len(),
+			sol_tx_core::consts::X_SWAP_TOKEN_ACC_LEN as usize
+		);
+	}
+
+	#[test]
+	fn instruction_accounts_location_matches_consts() {
+		let native_instruction_acc = SolanaInstructionBuilder::x_swap_native(
+			api_env(),
+			agg_key().into(),
+			Asset::Eth,
+			DESTINATION_ADDRESS_ETH,
+			FROM.into(),
+			EVENT_DATA_ACCOUNT.into(),
+			INPUT_AMOUNT,
+			cf_parameter(false),
+			None,
+		)
+		.accounts;
+
+		assert_eq!(
+			native_instruction_acc[sol_tx_core::consts::X_SWAP_FROM_ACC_IDX as usize].pubkey,
+			FROM.into()
+		);
+		assert_eq!(
+			native_instruction_acc[sol_tx_core::consts::X_SWAP_NATIVE_EVENT_DATA_ACC_IDX as usize]
+				.pubkey,
+			EVENT_DATA_ACCOUNT.into()
+		);
+
+		let token_instruction_acc = SolanaInstructionBuilder::x_swap_usdc(
+			api_env(),
+			Asset::Sol,
+			EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
+			FROM.into(),
+			FROM_TOKEN.into(),
+			EVENT_DATA_ACCOUNT.into(),
+			TOKEN_SUPPORTED_ACCOUNT.into(),
+			INPUT_AMOUNT,
+			cf_parameter(true),
+			Some(ccm_parameter().channel_metadata),
+		)
+		.accounts;
+		assert_eq!(
+			token_instruction_acc[sol_tx_core::consts::X_SWAP_FROM_ACC_IDX as usize].pubkey,
+			FROM.into()
+		);
+		assert_eq!(
+			token_instruction_acc[sol_tx_core::consts::X_SWAP_TOKEN_FROM_TOKEN_ACC_IDX as usize]
+				.pubkey,
+			FROM_TOKEN.into()
+		);
+		assert_eq!(
+			token_instruction_acc[sol_tx_core::consts::X_SWAP_TOKEN_EVENT_DATA_ACC_IDX as usize]
+				.pubkey,
+			EVENT_DATA_ACCOUNT.into()
 		);
 	}
 }
