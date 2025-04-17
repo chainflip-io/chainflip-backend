@@ -1216,6 +1216,10 @@ pub trait AffiliateRegistry {
 		affiliate_id: &Self::AccountId,
 	) -> Option<AffiliateShortId>;
 
+	/// Return the full mapping from account id to affiliate short id. This is used for efficient
+	/// repeated lookups.
+	fn full_mapping(broker_id: &Self::AccountId) -> BTreeMap<AffiliateShortId, Self::AccountId>;
+
 	/// Return the reverse mapping from account id to affiliate short id.
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId>;
 }

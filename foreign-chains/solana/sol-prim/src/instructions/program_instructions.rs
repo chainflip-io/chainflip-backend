@@ -361,10 +361,10 @@ macro_rules! solana_program {
 		}
 
 		$(
-			#[derive(BorshSerialize, Debug, Clone, PartialEq, Eq)]
+			#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 			pub struct $call {
 				$(
-					$call_arg: $arg_type,
+					pub $call_arg: $arg_type,
 				)*
 			}
 
