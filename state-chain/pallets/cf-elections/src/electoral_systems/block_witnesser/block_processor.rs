@@ -136,13 +136,23 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			},
 			ChainProgressInner::Reorg(range) => {
 				last_block = (*range.start()).saturating_backward(1);
-				for n in range {
-					let _block_data = self.blocks_data.remove(&n);
+				let mut highest_safety_margin = 0u32;
+				for n in range.clone() {
+					if let Some(block_info) = self.blocks_data.remove(&n) {
+						if block_info.safety_margin > highest_safety_margin {
+							highest_safety_margin = block_info.safety_margin;
+						}
+					}
+				}
+				for (_event, stored_expiry) in self.processed_events.iter_mut() {
+					let mut expiry = range.end().saturating_forward(highest_safety_margin as usize);
+					let new_expiry = stored_expiry.max(&mut expiry);
+					*stored_expiry = *new_expiry;
 				}
 			},
 		}
 		let events = self.process_rules(last_block);
-		self.execute.run(events.clone());
+		self.execute.run(events);
 		self.clean_old(last_block);
 	}
 
@@ -210,13 +220,16 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		data: &T::BlockData,
 		safety_margin: u32,
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
+		let last_age = age.end;
 		let events: Vec<(T::ChainBlockNumber, T::Event)> =
 			self.rules.run((block_number, age, data.clone(), safety_margin));
 
 		events
 			.into_iter()
 			.filter(|(block_number, event)| {
-				let expiry = block_number.saturating_forward(safety_margin as usize);
+				let expiry = block_number
+					.saturating_forward(safety_margin as usize)
+					.saturating_forward(last_age as usize);
 				match self.processed_events.get_mut(event) {
 					Some(stored_expiry) => {
 						if *stored_expiry < expiry {
@@ -494,8 +507,123 @@ pub(crate) mod test {
 
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(3)),
-			Some(10u64.saturating_add((SAFETY_MARGIN * 2).into())).as_ref()
+			Some(10u64.saturating_add((SAFETY_MARGIN * 2).into()).saturating_add(1)).as_ref()
 		);
+	}
+
+	// When we encounter a reorg, expiry block for all the already processed events gets bumped to
+	// the max between the end of the reorg + the highest safety_margin and the currently stored
+	// expiry
+	#[test]
+	fn reorg_cause_expiry_block_to_be_bumped() {
+		let mut processor = BlockProcessor::<Types>::default();
+
+		processor.process_block_data(
+			ChainProgressInner::Progress(101),
+			Some((101, vec![1], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(102),
+			Some((102, vec![], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(103),
+			Some((103, vec![], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(104),
+			Some((104, vec![], SAFETY_MARGIN)),
+		);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(101u64.saturating_add((SAFETY_MARGIN).into()).saturating_add(1)).as_ref(),
+		);
+		processor
+			.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(101, 105)), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(105u64.saturating_add((SAFETY_MARGIN).into())).as_ref(),
+		);
+	}
+
+	// When we encounter an event already processed we update its expiry to be the max between
+	// last_seen_height + safety_margin and the currently stored expiry
+	#[test]
+	fn already_processed_events_expiry_is_updated_based_on_last_seen_height() {
+		let mut processor = BlockProcessor::<Types>::default();
+
+		processor.process_block_data(
+			ChainProgressInner::Progress(101),
+			Some((101, vec![1, 2], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(102),
+			Some((102, vec![3], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(ChainProgressInner::Progress(103), None);
+
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(101u64.saturating_add((SAFETY_MARGIN).into()).saturating_add(1)).as_ref(),
+		);
+		processor
+			.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(101, 103)), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(103u64.saturating_add((SAFETY_MARGIN).into())).as_ref(),
+		);
+
+		processor.process_block_data(
+			ChainProgressInner::Progress(104),
+			Some((101, vec![1], SAFETY_MARGIN)),
+		);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(104u64.saturating_add((SAFETY_MARGIN).into()).saturating_add(1)).as_ref(),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(104),
+			Some((102, vec![2], SAFETY_MARGIN)),
+		);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(2)),
+			Some(104u64.saturating_add((SAFETY_MARGIN).into()).saturating_add(1)).as_ref(),
+		);
+	}
+
+	// The expiry block cannot be lowered, and the highest value is always kept, even in case we
+	// update the safety margin
+	#[test]
+	fn change_in_safety_margin_do_not_impact_expiry_block() {
+		let mut processor = BlockProcessor::<Types>::default();
+
+		processor.process_block_data(
+			ChainProgressInner::Progress(101),
+			Some((101, vec![1, 2], SAFETY_MARGIN * 2)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(102),
+			Some((102, vec![3], SAFETY_MARGIN * 2)),
+		);
+		processor.process_block_data(ChainProgressInner::Progress(103), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(101u64.saturating_add((SAFETY_MARGIN * 2).into()).saturating_add(1)).as_ref(),
+		);
+		processor
+			.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(101, 103)), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(103u64.saturating_add((SAFETY_MARGIN * 2).into())).as_ref(),
+		);
+		processor.process_block_data(ChainProgressInner::Progress(101), Some((101, vec![1, 2], 1)));
+		processor.process_block_data(ChainProgressInner::Progress(102), Some((102, vec![3], 1)));
+		processor.process_block_data(ChainProgressInner::Progress(103), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(103u64.saturating_add((SAFETY_MARGIN * 2).into())).as_ref(),
+		);
+		println!("{:?}", processor.processed_events);
 	}
 }
 
