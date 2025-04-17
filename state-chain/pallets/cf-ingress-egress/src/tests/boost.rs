@@ -1542,13 +1542,16 @@ mod delayed_boosting {
 						.boost_status,
 					BoostStatus::NotBoosted
 				);
-			})
-			.then_execute_at_block(PROCESSED_AT_BLOCK, |_| {
+
 				assert!(
 					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK)
 						.is_empty(),
 					"Pending prewitnessed deposits should have been cleared"
 				);
+			})
+			.then_execute_at_block(PROCESSED_AT_BLOCK, |_| {
+				// The prewitnessed deposit would have been processed here if not for the full
+				// witness that arrived earlier
 			})
 			.then_process_events(|(), event| match event {
 				RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted { .. }) => {
@@ -1610,13 +1613,16 @@ mod delayed_boosting {
 				);
 
 				assert!(!BoostedVaultTransactions::<Test, Instance1>::contains_key(TX_ID));
-			})
-			.then_execute_at_block(PROCESSED_AT_BLOCK, |_| {
+
 				assert!(
 					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK)
 						.is_empty(),
 					"Pending prewitnessed deposits should have been cleared"
 				);
+			})
+			.then_execute_at_block(PROCESSED_AT_BLOCK, |_| {
+				// The prewitnessed deposit would have been processed here if not for the full
+				// witness that arrived earlier
 			})
 			.then_process_events(|(), event| match event {
 				RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted { .. }) => {
@@ -1722,9 +1728,10 @@ mod delayed_boosting {
 			.then_execute_at_next_block(|deposit_address| {
 				// Normally we would process the pending boost at this point, but here it is
 				// rejected instead
-				assert_eq!(
-					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
-					0
+				assert!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK)
+						.is_empty(),
+					"Pending prewitnessed deposits should have been cleared"
 				);
 
 				assert_eq!(
@@ -1808,9 +1815,10 @@ mod delayed_boosting {
 				deposit_address
 			})
 			.then_execute_at_next_block(|deposit_address| {
-				assert_eq!(
-					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
-					0
+				assert!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK)
+						.is_empty(),
+					"Pending prewitnessed deposits should have been cleared"
 				);
 
 				assert_matches!(
@@ -1865,6 +1873,110 @@ mod delayed_boosting {
 						..
 					}),
 				);
+			});
+	}
+
+	#[test]
+	fn second_deposit_before_pending_boost_would_be_processed() {
+		const OTHER_AMONT: AssetAmount = 1;
+
+		setup_with_boost_pools()
+			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
+				source_asset: INPUT_ASSET,
+				destination_asset: OUTPUT_ASSET,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
+				refund_address: Default::default(),
+			}])
+			.then_execute_with(|details| {
+				let (_, _, deposit_address) = details[0];
+
+				prewitness_deposit(deposit_address, INPUT_ASSET, DEPOSIT_AMOUNT);
+
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
+					1
+				);
+
+				// Full witness arrives before the prewitnessed deposit is processed
+				witness_deposit(deposit_address, INPUT_ASSET, DEPOSIT_AMOUNT);
+
+				// Channel goes back to not boosted
+				assert_eq!(
+					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+						.unwrap()
+						.boost_status,
+					BoostStatus::NotBoosted
+				);
+
+				// And the pending boost should be cleared:
+				assert!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK)
+						.is_empty(),
+					"Pending prewitnessed deposits should have been cleared"
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {
+						action: DepositAction::Swap { .. },
+						..
+					}),
+				);
+
+				// Immediately we receive another prewitness on the same channel, but it shouldn't
+				// interfere with the first prewitness since we already cleaned up any associated
+				// state:
+				prewitness_deposit(deposit_address, INPUT_ASSET, OTHER_AMONT);
+
+				assert_eq!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
+					1
+				);
+
+				assert_eq!(
+					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+						.unwrap()
+						.boost_status,
+					BoostStatus::BoostPending { amount: OTHER_AMONT }
+				);
+
+				deposit_address
+			})
+			.then_execute_at_next_block(|deposit_address| {
+				// The second deposit is handled as expected: boosted at the next (this)
+				// block and boosters are credited after its full witness arrives.
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted {
+						action: DepositAction::Swap { .. },
+						..
+					}),
+				);
+
+				assert!(
+					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK)
+						.is_empty(),
+					"Pending prewitnessed deposits should have been cleared"
+				);
+
+				witness_deposit(deposit_address, INPUT_ASSET, OTHER_AMONT);
+
+				assert_eq!(
+					DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+						.unwrap()
+						.boost_status,
+					BoostStatus::NotBoosted
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {
+						action: DepositAction::BoostersCredited { .. },
+						..
+					}),
+				);
+
+				deposit_address
 			});
 	}
 }
