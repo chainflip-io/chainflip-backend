@@ -2,8 +2,8 @@ mod boost;
 mod screening;
 
 use crate::{
-	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
-	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
+	mock_eth::*, BoostDelayBlocks, BoostStatus, Call as PalletCall, ChannelAction,
+	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
 	DepositOrigin, DepositWitness, DisabledEgressAssets, EgressDustLimit, Event as PalletEvent,
 	Event, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit,
@@ -1469,11 +1469,13 @@ fn can_update_all_config_items() {
 		const NEW_DEPOSIT_CHANNEL_LIFETIME: u64 = 99;
 		const NETWORK_FEE_DEDUCTION: Percent = Percent::from_parts(50);
 		const NEW_WITNESS_SAFETY_MARGIN: u64 = 300;
+		const NEW_BOOST_DELAY_BLOCKS: u64 = 20;
 		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Flip), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Eth), 0);
 		assert_ne!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
+		assert_eq!(BoostDelayBlocks::<Test, _>::get(), 0);
 
 		// Update all config items at the same time, and updates 2 separate min deposit amounts.
 		assert_ok!(IngressEgress::update_pallet_config(
@@ -1494,7 +1496,8 @@ fn can_update_all_config_items() {
 				PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
 					deduction_percent: NETWORK_FEE_DEDUCTION
 				},
-				PalletConfigUpdate::SetWitnessSafetyMargin { margin: NEW_WITNESS_SAFETY_MARGIN }
+				PalletConfigUpdate::SetWitnessSafetyMargin { margin: NEW_WITNESS_SAFETY_MARGIN },
+				PalletConfigUpdate::SetBoostDelay { delay_blocks: NEW_BOOST_DELAY_BLOCKS }
 			]
 			.try_into()
 			.unwrap()
@@ -1507,6 +1510,7 @@ fn can_update_all_config_items() {
 		assert_eq!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
 		assert_eq!(NetworkFeeDeductionFromBoostPercent::<Test, _>::get(), NETWORK_FEE_DEDUCTION);
 		assert_eq!(WitnessSafetyMargin::<Test, _>::get(), Some(NEW_WITNESS_SAFETY_MARGIN));
+		assert_eq!(BoostDelayBlocks::<Test, _>::get(), NEW_BOOST_DELAY_BLOCKS);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -1525,6 +1529,9 @@ fn can_update_all_config_items() {
 			}),
 			RuntimeEvent::IngressEgress(Event::NetworkFeeDeductionFromBoostSet {
 				deduction_percent: NETWORK_FEE_DEDUCTION
+			}),
+			RuntimeEvent::IngressEgress(Event::BoostDelaySet {
+				delay_blocks: NEW_BOOST_DELAY_BLOCKS
 			}),
 		);
 

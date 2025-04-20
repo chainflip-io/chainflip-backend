@@ -232,7 +232,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 		self,
 		requests: &[DepositRequest],
 	) -> TestExternalities<Test, Vec<(DepositRequest, ChannelId, TestChainAccount)>> {
-		self.then_execute_at_next_block(|_| {
+		self.then_execute_with(|_| {
 			requests
 				.iter()
 				.cloned()

@@ -31,7 +31,7 @@ pub mod old {
 		pub expires_at: TargetChainBlockNumber<T, I>,
 		pub action: ChannelAction<T::AccountId>,
 		pub boost_fee: BasisPoints,
-		pub boost_status: BoostStatus<TargetChainAmount<T, I>>,
+		pub boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
 	}
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]

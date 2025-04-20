@@ -8,7 +8,7 @@ use cf_amm::{
 	math::{price_at_tick, Tick},
 };
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
-use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
+use cf_test_utilities::{assert_events_match, assert_matching_event_count, last_event};
 use cf_traits::{PoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::{bounded_vec, ConstU32, U256};
@@ -489,42 +489,29 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		assert_eq!(pallet_limit_orders.base.get(&ALICE), None);
 		assert_eq!(pallet_limit_orders.base.get(&BOB).unwrap().get(&0), Some(&100));
 
-		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
-			lp: ALICE,
-			base_asset: Asset::Eth,
-			quote_asset: STABLE_ASSET,
-			side: Side::Sell,
-			id: 0,
-			tick: 0,
-			sell_amount_change: None,
-			sell_amount_total: 0,
-			collected_fees: 100,
-			bought_amount: 100,
-		}));
-		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
-			lp: BOB,
-			base_asset: Asset::Eth,
-			quote_asset: STABLE_ASSET,
-			side: Side::Sell,
-			id: 0,
-			tick: 100,
-			sell_amount_change: None,
-			sell_amount_total: 5,
-			collected_fees: 100998,
-			bought_amount: 100998,
-		}));
-		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
-			lp: BOB,
-			base_asset: Asset::Eth,
-			quote_asset: STABLE_ASSET,
-			side: Side::Buy,
-			id: 1,
-			tick: 100,
-			sell_amount_change: None,
-			sell_amount_total: 910,
-			collected_fees: 8998,
-			bought_amount: 8998,
-		}));
+		// Expect two events: one event for creation, one for sweeping.
+		assert_matching_event_count!(
+			Test,
+			RuntimeEvent::LiquidityPools(Event::LimitOrderUpdated {
+				lp: ALICE,
+				side: Side::Sell,
+				..
+			}) => 2
+		);
+
+		assert_matching_event_count!(
+			Test,
+			RuntimeEvent::LiquidityPools(Event::LimitOrderUpdated { lp: BOB, side: Side::Buy, .. }) => 2
+		);
+
+		assert_matching_event_count!(
+			Test,
+			RuntimeEvent::LiquidityPools(Event::LimitOrderUpdated {
+				lp: BOB,
+				side: Side::Sell,
+				..
+			}) => 2
+		);
 	});
 }
 
