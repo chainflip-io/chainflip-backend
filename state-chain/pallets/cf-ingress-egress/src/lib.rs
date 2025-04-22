@@ -562,8 +562,8 @@ pub mod pallet {
 		pub fees_withheld: TargetChainAmount<T, I>,
 	}
 
-	/// Determines the action to take when a deposit is made to a
-	/// channel.
+	/// Determines the action to take when a deposit is made to a channel.
+	#[allow(clippy::large_enum_variant)]
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(C))]
 	#[allow(clippy::large_enum_variant)]
