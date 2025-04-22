@@ -86,6 +86,7 @@ impl BWTypes for Types {
 /// Associating the ES related types to the struct
 impl ElectoralSystemTypes for Types {
 	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = u64;
 	type ElectoralUnsynchronisedState = BlockWitnesserState<Self>;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();

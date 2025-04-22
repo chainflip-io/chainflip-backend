@@ -715,8 +715,8 @@ where
 		LiquidityPools(_) |
 		SolanaElections(_) |
 		BitcoinElections(_) |
-        TradingStrategy(_) => {},
-    };
+		TradingStrategy(_) => {},
+	};
 
 	Ok(())
 }

@@ -33,7 +33,7 @@ use cf_chains::{
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
 	CcmDepositMetadata, Chain, ChannelRefundParameters, FeeEstimationApi,
-	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, Solana,
+	FetchAndCloseSolanaVaultSwapAccounts, Solana,
 };
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
 use cf_runtime_utilities::log_or_panic;
@@ -59,13 +59,12 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_runtime::DispatchResult;
+use sp_std::vec::Vec;
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
 use electoral_systems::liveness::Liveness;
-use sol_prim::SlotNumber;
 
 use super::SolEnvironment;
 

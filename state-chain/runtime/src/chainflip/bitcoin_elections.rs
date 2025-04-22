@@ -68,6 +68,7 @@ pub type BitcoinElectoralSystemRunner = CompositeRunner<
 		BitcoinLiveness,
 	),
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 	RunnerStorageAccess<Runtime, BitcoinInstance>,
 	BitcoinElectionHooks,
 >;
@@ -108,6 +109,7 @@ impls! {
 		type Consensus = InputHeaders<Self>;
 		type OnFinalizeContext = Vec<()>;
 		type OnFinalizeReturn = Vec<ChainProgress<btc::BlockNumber>>;
+		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -180,6 +182,7 @@ impls! {
 		type Consensus = BlockDataDepositChannel;
 		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
 		type OnFinalizeReturn = Vec<()>;
+		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -266,6 +269,7 @@ impls! {
 		type Consensus = BlockDataVaultDeposit;
 		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
 		type OnFinalizeReturn = Vec<()>;
+		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -361,6 +365,7 @@ impls! {
 		type Consensus = EgressBlockData;
 		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
 		type OnFinalizeReturn = Vec<()>;
+		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -409,6 +414,7 @@ pub type BitcoinLiveness = Liveness<
 	cf_primitives::BlockNumber,
 	ReportFailedLivenessCheck<Bitcoin>,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub struct BitcoinFeeUpdateHook;
@@ -427,6 +433,7 @@ pub type BitcoinFeeTracking = UnsafeMedian<
 	(),
 	BitcoinFeeUpdateHook,
 	<Runtime as Chainflip>::ValidatorId,
+	BlockNumberFor<Runtime>,
 >;
 
 pub struct BitcoinElectionHooks;
@@ -571,5 +578,6 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 			Default::default(),
 			LIVENESS_CHECK_DURATION,
 		),
+		shared_data_reference_lifetime: 8,
 	}
 }
