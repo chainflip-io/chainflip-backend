@@ -1419,8 +1419,8 @@ pub mod pallet {
 
 			swaps
 				.into_iter()
-				.filter_map(|swap| {
-					let swap_request = SwapRequests::<T>::get(swap.swap.swap_request_id)
+				.filter_map(|state| {
+					let swap_request = SwapRequests::<T>::get(state.swap.swap_request_id)
 						.expect("Swap request should exist");
 					let dca_state = match swap_request.state {
 						SwapRequestState::UserSwap { dca_state, .. } => Some(dca_state),
@@ -1431,30 +1431,30 @@ pub mod pallet {
 					let chunk_interval =
 						dca_state.map(|dca| dca.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS);
 
-					if swap.input_asset() == base_asset {
+					if state.input_asset() == base_asset {
 						Some(SwapLegInfo {
-							swap_id: swap.swap_id(),
-							swap_request_id: swap.swap.swap_request_id,
+							swap_id: state.swap_id(),
+							swap_request_id: state.swap.swap_request_id,
 							base_asset,
 							// All swaps from `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
 							side: Side::Sell,
-							amount: swap.input_amount(),
+							amount: state.input_amount(),
 							source_asset: None,
 							source_amount: None,
 							remaining_chunks,
 							chunk_interval,
 						})
-					} else if swap.output_asset() == base_asset {
+					} else if state.output_asset() == base_asset {
 						// In case the swap is "simulated", the amount is just an estimate,
 						// so we additionally include `source_asset` and `source_amount`:
-						let (source_asset, source_amount) = if swap.input_asset() != STABLE_ASSET {
-							(Some(swap.input_asset()), Some(swap.input_amount()))
+						let (source_asset, source_amount) = if state.input_asset() != STABLE_ASSET {
+							(Some(state.input_asset()), Some(state.input_amount()))
 						} else {
 							(None, None)
 						};
 
-						let amount = swap.stable_amount.or_else(|| {
+						let amount = state.stable_amount.or_else(|| {
 							// If the swap into stable asset failed, fallback to estimating the
 							// amount via pool price.
 
@@ -1462,13 +1462,13 @@ pub mod pallet {
 							// should exist as we wouldn't need to estimate if input asset
 							// was already STABLE_ASSET):
 							let sell_price =
-								T::PoolPriceApi::pool_price(swap.input_asset(), STABLE_ASSET)
+								T::PoolPriceApi::pool_price(state.input_asset(), STABLE_ASSET)
 									.ok()
 									.map(|price| price.sell)?;
 
 							Some(
 								output_amount_ceil(
-									cf_amm::math::Amount::from(swap.input_amount()),
+									cf_amm::math::Amount::from(state.input_amount()),
 									sell_price,
 								)
 								.saturated_into(),
@@ -1476,8 +1476,8 @@ pub mod pallet {
 						})?;
 
 						Some(SwapLegInfo {
-							swap_id: swap.swap_id(),
-							swap_request_id: swap.swap.swap_request_id,
+							swap_id: state.swap_id(),
+							swap_request_id: state.swap.swap_request_id,
 							base_asset,
 							// All swaps to `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
@@ -1568,37 +1568,37 @@ pub mod pallet {
 
 			// Take fees as required:
 			let mut total_network_fee_taken = 0_u128;
-			for swap in swaps.iter_mut() {
+			for state in swaps.iter_mut() {
 				debug_assert!(
-					swap.stable_amount.is_some(),
+					state.stable_amount.is_some(),
 					"All swaps should have Stable amount set here"
 				);
 
-				swap.stable_amount_before_fees = swap.stable_amount;
+				state.stable_amount_before_fees = state.stable_amount;
 
-				for fee_type in swap.swap.fees.iter_mut() {
+				for fee_type in state.swap.fees.iter_mut() {
 					let remaining_amount = match fee_type {
 						FeeType::NetworkFee(fee_tracker) => {
 							let FeeTaken { remaining_amount, fee } =
-								fee_tracker.take_fee(swap.stable_amount.unwrap_or_default());
-							swap.network_fee_taken = Some(fee);
+								fee_tracker.take_fee(state.stable_amount.unwrap_or_default());
+							state.network_fee_taken = Some(fee);
 							total_network_fee_taken.saturating_accrue(fee);
 							remaining_amount
 						},
 						FeeType::BrokerFee(beneficiaries) => {
 							let FeeTaken { remaining_amount, fee } = Self::take_broker_fees(
-								swap.stable_amount.unwrap_or_default(),
+								state.stable_amount.unwrap_or_default(),
 								beneficiaries,
 							);
-							swap.broker_fee_taken = Some(fee);
+							state.broker_fee_taken = Some(fee);
 							remaining_amount
 						},
 					};
-					swap.stable_amount = Some(remaining_amount);
+					state.stable_amount = Some(remaining_amount);
 				}
 
-				if swap.output_asset() == STABLE_ASSET {
-					swap.final_output = swap.stable_amount;
+				if state.output_asset() == STABLE_ASSET {
+					state.final_output = state.stable_amount;
 				}
 			}
 
@@ -1806,45 +1806,45 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
 		}
 
-		fn process_swap_outcome(swap: SwapState<T>) {
-			let swap_request_id = swap.swap.swap_request_id;
+		fn process_swap_outcome(state: SwapState<T>) {
+			let swap_request_id = state.swap.swap_request_id;
 
 			let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
 				log_or_panic!("Swap request {swap_request_id} not found");
 				return;
 			};
 
-			let Some(output_amount) = swap.final_output else {
-				log_or_panic!("Swap {} is not completed yet!", swap.swap_id());
+			let Some(output_amount) = state.final_output else {
+				log_or_panic!("Swap {} is not completed yet!", state.swap_id());
 				return;
 			};
 
 			Self::deposit_event(Event::<T>::SwapExecuted {
 				swap_request_id,
-				swap_id: swap.swap_id(),
+				swap_id: state.swap_id(),
 				// To be consistent with `swap_output` and `intermediate_amount` (which do
 				// not include the network fee), we report input amount without the network fee
 				// for swaps from STABLE_ASSET:
-				input_amount: if swap.input_asset() == STABLE_ASSET {
-					swap.stable_amount.unwrap_or_else(|| {
+				input_amount: if state.input_asset() == STABLE_ASSET {
+					state.stable_amount.unwrap_or_else(|| {
 						log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
-						swap.input_amount()
+						state.input_amount()
 					})
 				} else {
-					swap.input_amount()
+					state.input_amount()
 				},
-				input_asset: swap.input_asset(),
-				network_fee: swap.network_fee_taken.unwrap_or_default(),
-				broker_fee: swap.broker_fee_taken.unwrap_or_default(),
-				output_asset: swap.output_asset(),
+				input_asset: state.input_asset(),
+				network_fee: state.network_fee_taken.unwrap_or_default(),
+				broker_fee: state.broker_fee_taken.unwrap_or_default(),
+				output_asset: state.output_asset(),
 				output_amount,
-				intermediate_amount: swap.intermediate_amount(),
+				intermediate_amount: state.intermediate_amount(),
 			});
 
 			let request_completed = match &mut request.state {
 				SwapRequestState::UserSwap { output_action, dca_state, refund_params, .. } =>
 					if let Some(chunk_input_amount) =
-						dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
+						dca_state.prepare_next_chunk(Some((state.swap_id(), output_amount)))
 					{
 						let swap_id = Self::schedule_swap(
 							request.input_asset,
@@ -1852,7 +1852,7 @@ pub mod pallet {
 							chunk_input_amount,
 							refund_params.as_ref(),
 							SwapType::Swap,
-							swap.swap.fees.clone(),
+							state.swap.fees.clone(),
 							request.id,
 							dca_state.chunk_interval.into(),
 						);
@@ -1868,7 +1868,7 @@ pub mod pallet {
 								Self::egress_for_swap(
 									swap_request_id,
 									dca_state.accumulated_output_amount,
-									swap.output_asset(),
+									state.output_asset(),
 									output_address.clone(),
 									ccm_deposit_metadata.clone(),
 									false, /* refund */
@@ -1893,28 +1893,29 @@ pub mod pallet {
 						true
 					},
 				SwapRequestState::NetworkFee => {
-					if swap.output_asset() == Asset::Flip {
+					if state.output_asset() == Asset::Flip {
 						FlipToBurn::<T>::mutate(|total| {
 							total.saturating_accrue(output_amount);
 						});
 					} else {
 						log_or_panic!(
 							"NetworkFee burning should not be in asset: {:?}",
-							swap.output_asset()
+							state.output_asset()
 						);
 					}
 					true
 				},
 				SwapRequestState::IngressEgressFee => {
-					if swap.output_asset() == ForeignChain::from(swap.output_asset()).gas_asset() {
+					if state.output_asset() == ForeignChain::from(state.output_asset()).gas_asset()
+					{
 						T::IngressEgressFeeHandler::accrue_withheld_fee(
-							swap.output_asset(),
+							state.output_asset(),
 							output_amount,
 						);
 					} else {
 						log_or_panic!(
 							"IngressEgressFee swap should not be to non-gas asset: {:?}",
-							swap.output_asset()
+							state.output_asset()
 						);
 					}
 
@@ -1988,10 +1989,10 @@ pub mod pallet {
 			)
 			.map_err(|_| bundle_input)?;
 
-			for swap in swaps.iter_mut() {
+			for state in swaps.iter_mut() {
 				let swap_output = if bundle_input > 0 {
 					multiply_by_rational_with_rounding(
-						swap.swap_amount(direction).unwrap_or_default(),
+						state.swap_amount(direction).unwrap_or_default(),
 						bundle_output,
 						bundle_input,
 						Rounding::Down,
@@ -2003,7 +2004,7 @@ pub mod pallet {
 					0
 				};
 
-				swap.update_swap_result(direction, swap_output);
+				state.update_swap_result(direction, swap_output);
 
 				if swap_output == 0 {
 					// This is unlikely but theoretically possible if, for example, the initial swap
@@ -2012,7 +2013,7 @@ pub mod pallet {
 					log::warn!(
 						"Swap {:?} in bundle {{ input: {bundle_input}, output: {bundle_output} }}
 						resulted in swap output of zero.",
-						swap.swap
+						state.swap
 					);
 				}
 			}
