@@ -2550,11 +2550,10 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 		Ok(())
 	}
 
-	// TODO: We probably want to merge this with validate_refund_params but there's even rpc
-	// calls that use that so we might need to untangle it. Also the checking and decoding
-	// might need to be updated after PR-5762.
-	// Also, having them separately it's actually useful for Invalid Vault swap refunds
-	// because a failing `validate_refund_params` should cause a refund while a failing
+	// TODO: We might want to merge this with validate_refund_params but there's even rpc
+	// calls that use that so we might need to untangle it. However, having them separate
+	// is actually useful for Invalid Vault swap refunds because a failing
+	// `validate_refund_params` should cause a refund while a failing
 	// `validate_ccm_refund_params` should not, since the CCM refund data is invalid.
 	fn validate_ccm_refund_params(
 		asset: cf_primitives::Asset,

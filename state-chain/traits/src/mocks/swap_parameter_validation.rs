@@ -66,20 +66,13 @@ impl SwapParameterValidation for MockSwapParameterValidation {
 		asset: cf_primitives::Asset,
 		refund_params: cf_chains::ChannelRefundParametersEncoded,
 	) -> Result<(), DispatchError> {
-		let limits = Self::get_swap_limits();
-		if refund_params.retry_duration > limits.max_swap_retry_duration_blocks {
-			return Err(DispatchError::Other("Retry duration too high"));
-		}
-
 		if let Some(_ccm) = refund_params.refund_ccm_metadata.as_ref() {
 			let source_chain: cf_chains::ForeignChain = (asset).into();
 			if !source_chain.ccm_support() {
 				return Err(DispatchError::Other("Ccm not supported"));
 			}
 
-			// TODO: Add this check as in the real pallet with a mock?!
-			// let _ =
-			// T::CcmValidityChecker::check_and_decode(ccm, asset, refund_params.refund_address)?;
+			// TODO: Add CcmValidityChecker::check_and_decode mock check as in the real pallet?
 		}
 
 		Ok(())
