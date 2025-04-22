@@ -61,7 +61,6 @@ export type ChannelRefundParameters = {
   retry_duration: number;
   refund_address: string;
   min_price: string;
-  // We could use CcmDepositMetadata but it's camel case.
   refund_ccm_metadata:
     | {
         message: string;
