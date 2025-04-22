@@ -254,7 +254,9 @@ impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo)]
+#[derive(
+	Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct MockThresholdSignature<K, P> {
 	pub signing_key: K,
 	pub signed_payload: P,

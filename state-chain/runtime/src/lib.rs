@@ -1133,6 +1133,7 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 }
 
 impl pallet_cf_elections::Config<Instance3> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Bitcoin as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::bitcoin_elections::BitcoinElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;

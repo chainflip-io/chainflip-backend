@@ -38,9 +38,8 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	sync::Arc,
 };
-use tracing::Level;
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::Level;
 use voter_api::CompositeVoterApi;
 
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
@@ -79,8 +78,8 @@ where
 		scope: &Scope<'_, anyhow::Error>,
 		state_chain_client: Arc<StateChainClient>,
 		voter: VoterClient,
-		voter_name: &'static str,
 		cache_invalidation_senders: Option<Vec<mpsc::Sender<()>>>,
+		voter_name: &'static str,
 	) -> Self {
 		Self {
 			state_chain_client,
@@ -241,7 +240,7 @@ where
 						if let Some(caches) = &self.cache_invalidation_senders {
 							for sender in caches {
 								if let Err(e) = sender.send(()).await {
-									warn!("Cache receiver dropped: {e}")
+									self.log(Level::WARN, &format!("Cache receiver dropped: {e}"))
 								}
 							}
 						}

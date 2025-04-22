@@ -300,8 +300,4 @@ macro_rules! generate_vote_storage_tuple_impls {
     }
 }
 
-generate_vote_storage_tuple_impls!(tuple_1_impls: (A));
-generate_vote_storage_tuple_impls!(tuple_3_impls: (A, B, C));
-generate_vote_storage_tuple_impls!(tuple_4_impls: (A, B, C, D));
 generate_vote_storage_tuple_impls!(tuple_6_impls: (A, B, C, D, EE, FF));
-generate_vote_storage_tuple_impls!(tuple_7_impls: (A, B, C, D, EE, FF, GG));

@@ -478,7 +478,7 @@ export async function testBrokerLevelScreeningBitcoin(
       throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
     }
     logger.debug(`Marked Bitcoin transaction was rejected and refunded 👍.`);
-
+  }
   // // 3. -- Test boost and late tx report --
   // // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
   // testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
