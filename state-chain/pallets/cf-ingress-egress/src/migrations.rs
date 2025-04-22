@@ -32,8 +32,8 @@ pub type PalletMigration<T, I> = (
 		<T as frame_system::Config>::DbWeight,
 	>,
 	VersionedMigration<
-		23,
 		24,
+		25,
 		transaction_rejection_details_ccm_migration::Migration<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,

@@ -1590,6 +1590,7 @@ mod delayed_boosting {
 				retry_duration: 2,
 				refund_address: [2; 20].into(),
 				min_price: Default::default(),
+				refund_ccm_metadata: None,
 			},
 			dca_params: None,
 			boost_fee: 5,
