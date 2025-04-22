@@ -22,7 +22,7 @@ use cf_utilities::make_periodic_tick;
 use futures_util::stream;
 
 use crate::{
-	btc::retry_rpc::BtcRetryRpcApi,
+	btc::rpc::BtcRpcApi,
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
 		ExternalChainSource,
@@ -51,7 +51,7 @@ pub struct BtcSourceState {
 #[async_trait::async_trait]
 impl<C> ChainSource for BtcSource<C>
 where
-	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()>,
+	C: BtcRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()>,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
@@ -101,8 +101,14 @@ where
 
 						tick.tick().await;
 
-						let best_block_header = client.best_block_header().await;
-
+                        let best_block_hash = client
+                            .best_block_hash()
+                            .await
+                            .expect("TODO: This whole source will be deleted ");
+                        let best_block_header = client
+                            .block_header(best_block_hash)
+                            .await
+                            .expect("TODO: This whole source will be deleted ");
 						let yield_new_best_header: bool = match &mut stream_state {
 							Some(state)
 								// We want to immediately yield the new best header if we've reorged on the same block
@@ -156,7 +162,7 @@ where
 
 impl<C> ExternalChainSource for BtcSource<C>
 where
-	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
+	C: BtcRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
 {
 	type Chain = cf_chains::Bitcoin;
 }

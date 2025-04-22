@@ -713,9 +713,10 @@ where
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) |
-		SolanaElections(_) => {},
-		TradingStrategy(_) => {},
-	};
+		SolanaElections(_) |
+		BitcoinElections(_) |
+        TradingStrategy(_) => {},
+    };
 
 	Ok(())
 }

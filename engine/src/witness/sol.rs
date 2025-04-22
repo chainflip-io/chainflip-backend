@@ -76,6 +76,25 @@ impl VoterApi<SolanaBlockHeightTracking> for SolanaBlockHeightTrackingVoter {
 	}
 }
 
+// This will be removed soon, but we have to delete the electoral system, which requires a
+// migration. So we're leaving a dummy implementation here for now. PRO-1960
+#[derive(Clone)]
+struct SolanaFeeTrackingVoter;
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaFeeTracking> for SolanaFeeTrackingVoter {
+	async fn vote(
+		&self,
+		_settings: <SolanaFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
+		_properties: <SolanaFeeTracking as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<SolanaFeeTracking>>, anyhow::Error> {
+		// Note, this won't actually be submitted, because no elections will be created (they have
+		// been disabled inside the UnsafeMedian electoral system) this is just to provide
+		// something so we compile.
+		Ok(Some(SolanaChainTrackingProvider::priority_fee()))
+	}
+}
+
 #[derive(Clone)]
 struct SolanaIngressTrackingVoter {
 	client: SolRetryRpcClient,
@@ -245,6 +264,7 @@ where
 						SolanaVaultSwapsVoter { client },
 					)),
 					"Solana",
+					None,
 				)
 				.continuously_vote()
 				.await;
