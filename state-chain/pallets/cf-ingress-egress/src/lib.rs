@@ -1739,7 +1739,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// rely on the fact that BLS is not supported in Solana.
 				// NOTE: This could be appending a rejection that might have an already succesful
 				// fetch (RejectCall) but not the CCM refund. We must ensure that
-				// FailedRejections are not being  retried (we don't do that currently).
+				// FailedRejections are not being retried (we don't do that currently).
 				FailedRejections::<T, I>::append(tx.clone());
 				Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
 					tx_id: tx.deposit_details.clone(),
