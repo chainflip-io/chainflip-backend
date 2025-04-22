@@ -19,11 +19,9 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 mod deposit_channel_details_migration;
-mod mandatory_refund_params;
 mod transaction_rejection_details_ccm_migration;
 
 pub type PalletMigration<T, I> = (
-	VersionedMigration<22, 23, mandatory_refund_params::Migration<T, I>, Pallet<T, I>, ()>,
 	VersionedMigration<
 		23,
 		24,

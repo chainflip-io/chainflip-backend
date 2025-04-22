@@ -19,7 +19,6 @@ use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
-pub mod minimum_network_fee_migration;
 pub mod swap_request_migration;
 
 pub type PalletMigration<T> = (

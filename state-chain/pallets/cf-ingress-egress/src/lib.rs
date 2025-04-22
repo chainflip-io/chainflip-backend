@@ -542,6 +542,7 @@ pub mod pallet {
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
+	#[allow(clippy::large_enum_variant)]
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(C))]
 	pub enum ChannelAction<AccountId, C: Chain> {

@@ -12,7 +12,7 @@ importers:
         specifier: 1.9.0-assethub.0
         version: 1.9.0-assethub.0(axios@1.8.4)(bufferutil@4.0.9)(ethers@6.13.4(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.8.3)(utf-8-validate@5.0.10)
       '@chainflip/utils':
-        specifier: ^0.4.0
+        specifier: ^0.4.12
         version: 0.4.16
       '@coral-xyz/anchor':
         specifier: ^0.30.1
