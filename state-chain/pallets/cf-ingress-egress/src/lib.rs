@@ -73,10 +73,6 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
-use scale_info::{
-	build::{Fields, Variants},
-	Path, Type,
-};
 use serde::{Deserialize, Serialize};
 use sp_runtime::{traits::UniqueSaturatedInto, Percent};
 use sp_std::{
@@ -477,13 +473,12 @@ pub mod pallet {
 		EqNoBound,
 		Encode,
 		Decode,
-		TypeInfo,
 		Serialize,
 		Deserialize,
 		OrdNoBound,
 		PartialOrdNoBound,
+		GenericTypeInfo,
 	)]
-	#[scale_info(skip_type_params(T, I))]
 	#[serde(bound(
 		serialize = "
 		TargetChainAsset<T, I>: Serialize,
@@ -502,8 +497,8 @@ pub mod pallet {
 		Option<Beneficiary<T::AccountId>>: Deserialize<'de>,
 	"
 	))]
-    #[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
-    pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
+	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
 		pub deposit_address: Option<TargetChainAccount<T, I>>,
 		#[skip_name_expansion]

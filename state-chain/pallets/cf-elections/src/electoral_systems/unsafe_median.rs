@@ -42,13 +42,19 @@ pub trait UpdateFeeHook<Value> {
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId, StateChainBlockNumber>
-{
+pub struct UnsafeMedian<
+	Value,
+	UnsynchronisedSettings,
+	Settings,
+	Hook,
+	ValidatorId,
+	StateChainBlockNumber,
+> {
 	_phantom: core::marker::PhantomData<(
 		Value,
 		UnsynchronisedSettings,
 		Settings,
-        Hook,
+		Hook,
 		ValidatorId,
 		StateChainBlockNumber,
 	)>,
@@ -59,8 +65,9 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: UpdateFeeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-        StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
-> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId, StateChainBlockNumber>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystemTypes
+	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
 	type StateChainBlockNumber = StateChainBlockNumber;
@@ -85,8 +92,8 @@ impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-        Hook: UpdateFeeHook<Value> + 'static,
-        ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		Hook: UpdateFeeHook<Value> + 'static,
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystem
 	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId, StateChainBlockNumber>

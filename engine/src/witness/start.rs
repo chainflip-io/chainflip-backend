@@ -16,8 +16,6 @@
 
 use std::sync::Arc;
 
-use cf_utilities::task_scope::Scope;
-
 use crate::{
 	btc::cached_rpc::BtcCachingClient,
 	db::PersistentKeyDB,
@@ -32,6 +30,8 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
+use cf_utilities::task_scope::Scope;
+use futures::try_join;
 use state_chain_runtime::{BitcoinInstance, SolanaInstance};
 
 use super::common::epoch_source::EpochSource;
@@ -139,6 +139,8 @@ where
 
 	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
 
+	let start_btc = super::btc::start(scope, btc_client, state_chain_client.clone());
+
 	let start_hub = super::hub::start(
 		scope,
 		hub_client,
@@ -149,11 +151,7 @@ where
 		db,
 	);
 
-	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
-
-	let start_btc = super::btc::start(scope, btc_client, state_chain_client);
-
-	futures::future::try_join5(start_eth, start_dot, start_arb, start_sol, start_btc, start_hub).await?;
+	try_join!(start_eth, start_dot, start_arb, start_sol, start_btc, start_hub)?;
 
 	Ok(())
 }

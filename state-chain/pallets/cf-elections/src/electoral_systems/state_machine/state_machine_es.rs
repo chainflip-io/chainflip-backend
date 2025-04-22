@@ -158,6 +158,7 @@ impl<Bounds: StatemachineElectoralSystemTypes> ElectoralSystemTypes
 	for StatemachineElectoralSystem<Bounds>
 {
 	type ValidatorId = Bounds::ValidatorId;
+	type StateChainBlockNumber = Bounds::StateChainBlockNumber;
 	type ElectoralUnsynchronisedState = Bounds::ElectoralUnsynchronisedState;
 	type ElectoralUnsynchronisedStateMapKey = Bounds::ElectoralUnsynchronisedStateMapKey;
 	type ElectoralUnsynchronisedStateMapValue = Bounds::ElectoralUnsynchronisedStateMapValue;

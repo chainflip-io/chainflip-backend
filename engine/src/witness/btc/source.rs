@@ -101,14 +101,14 @@ where
 
 						tick.tick().await;
 
-                        let best_block_hash = client
-                            .best_block_hash()
-                            .await
-                            .expect("TODO: This whole source will be deleted ");
-                        let best_block_header = client
-                            .block_header(best_block_hash)
-                            .await
-                            .expect("TODO: This whole source will be deleted ");
+						let best_block_hash = client
+							.best_block_hash()
+							.await
+							.expect("TODO: This whole source will be deleted ");
+						let best_block_header = client
+							.block_header(best_block_hash)
+							.await
+							.expect("TODO: This whole source will be deleted ");
 						let yield_new_best_header: bool = match &mut stream_state {
 							Some(state)
 								// We want to immediately yield the new best header if we've reorged on the same block

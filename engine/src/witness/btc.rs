@@ -345,6 +345,7 @@ where
 						BitcoinLivenessVoter { client: client.clone() },
 					)),
 					Some(client.cache_invalidation_senders),
+					"Bitcoin",
 				)
 				.continuously_vote()
 				.await;
