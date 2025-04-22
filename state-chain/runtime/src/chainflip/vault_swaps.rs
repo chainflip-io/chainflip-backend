@@ -407,7 +407,7 @@ pub fn decode_bitcoin_vault_swap(
 	})
 }
 
-pub fn decode_solana_vault_swap<A>(
+pub fn decode_solana_vault_swap(
 	instruction: SolInstruction,
 ) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage> {
 	let DecodedXSwapParams {

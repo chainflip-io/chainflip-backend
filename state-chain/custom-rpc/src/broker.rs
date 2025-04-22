@@ -22,7 +22,7 @@ use crate::{
 pub use cf_chains::eth::Address as EthereumAddress;
 use cf_chains::{
 	address::AddressString, CcmChannelMetadata, ChannelRefundParameters, RefundParametersRpc,
-	VaultSwapExtraParametersRpc,
+	VaultSwapExtraParametersRpc, VaultSwapInputRpc,
 };
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
@@ -262,7 +262,7 @@ where
 		.map_err(CfApiError::from)?)
 	}
 
-	// This is also defined in custom-rpc. // TODO: try to define only in one place
+	// This is also defined in custom-rpc.
 	async fn request_swap_parameter_encoding(
 		&self,
 		source_asset: Asset,
@@ -295,6 +295,24 @@ where
 			.map_err(CfApiError::from)?
 			.map_err(CfApiError::from)?
 			.map_btc_address(Into::into))
+	}
+
+	async fn decode_vault_swap_parameter(
+		&self,
+		vault_swap: VaultSwapDetails<AddressString>,
+	) -> RpcResult<VaultSwapInputRpc> {
+		Ok(self
+			.rpc_backend
+			.client
+			.runtime_api()
+			.cf_decode_vault_swap_parameter(
+				self.rpc_backend.client.info().best_hash,
+				self.signed_pool_client.account_id(),
+				vault_swap.map_btc_address(Into::into),
+			)
+			.map_err(CfApiError::from)?
+			.map_err(CfApiError::from)?
+			.into())
 	}
 
 	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()> {

@@ -27,7 +27,7 @@ use cf_amm::{
 use cf_chains::{
 	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	eth::Address as EthereumAddress,
-	CcmChannelMetadata, Chain, VaultSwapExtraParametersRpc, MAX_CCM_MSG_LENGTH,
+	CcmChannelMetadata, Chain, VaultSwapExtraParametersRpc, VaultSwapInputRpc, MAX_CCM_MSG_LENGTH,
 };
 use cf_node_client::events_decoder;
 use cf_primitives::{
@@ -955,6 +955,14 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapDetails<AddressString>>;
 
+	#[method(name = "decode_vault_swap_parameter")]
+	fn cf_decode_vault_swap_parameter(
+		&self,
+		broker_id: state_chain_runtime::AccountId,
+		vault_swap: VaultSwapDetails<AddressString>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultSwapInputRpc>;
+
 	#[method(name = "get_open_deposit_channels")]
 	fn cf_get_open_deposit_channels(
 		&self,
@@ -1844,6 +1852,24 @@ where
 					dca_parameters,
 				)??
 				.map_btc_address(Into::into),
+			)
+		})
+	}
+
+	fn cf_decode_vault_swap_parameter(
+		&self,
+		broker_id: AccountId32,
+		vault_swap: VaultSwapDetails<AddressString>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultSwapInputRpc> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			Ok::<_, CfApiError>(
+				api.cf_decode_vault_swap_parameter(
+					hash,
+					broker_id,
+					vault_swap.map_btc_address(Into::into),
+				)??
+				.into(),
 			)
 		})
 	}

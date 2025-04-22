@@ -1197,7 +1197,7 @@ impl From<VaultSwapExtraParametersEncoded> for VaultSwapExtraParametersRpc {
 	}
 }
 
-#[derive(Clone, Debug, Encode, Decode, Serialize, Deserialize)]
+#[derive(Clone, Debug, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct VaultSwapInput<Address, Amount> {
 	pub broker_id: cf_primitives::AccountId,
 	pub source_asset: Option<AnyChainAsset>,

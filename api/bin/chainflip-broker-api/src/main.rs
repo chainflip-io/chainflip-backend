@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
+use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc, VaultSwapInputRpc};
 use cf_rpc_apis::{
 	broker::{
 		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
@@ -137,6 +137,21 @@ impl BrokerRpcApiServer for RpcServerImpl {
 				boost_fee,
 				affiliate_fees,
 				dca_parameters,
+				None,
+			)
+			.await?)
+	}
+
+	async fn decode_vault_swap_parameter(
+		&self,
+		vault_swap: VaultSwapDetails<AddressString>,
+	) -> RpcResult<VaultSwapInputRpc> {
+		Ok(self
+			.api
+			.raw_client()
+			.cf_decode_vault_swap_parameter(
+				self.api.state_chain_client.account_id(),
+				vault_swap,
 				None,
 			)
 			.await?)

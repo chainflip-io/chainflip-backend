@@ -154,6 +154,16 @@ impl From<Instruction> for InstructionRpc {
 	}
 }
 
+impl From<InstructionRpc> for Instruction {
+	fn from(value: InstructionRpc) -> Self {
+		Instruction {
+			program_id: value.program_id.into(),
+			accounts: value.accounts.into_iter().map(|a| a.into()).collect(),
+			data: value.data,
+		}
+	}
+}
+
 impl Instruction {
 	pub fn new_with_borsh<T: BorshSerialize>(
 		program_id: Pubkey,
@@ -220,6 +230,16 @@ pub type AccountMetaRpc = AccountMeta<Address>;
 impl From<AccountMeta> for AccountMetaRpc {
 	fn from(value: AccountMeta) -> Self {
 		AccountMetaRpc {
+			pubkey: value.pubkey.into(),
+			is_signer: value.is_signer,
+			is_writable: value.is_writable,
+		}
+	}
+}
+
+impl From<AccountMetaRpc> for AccountMeta {
+	fn from(value: AccountMetaRpc) -> Self {
+		AccountMeta {
 			pubkey: value.pubkey.into(),
 			is_signer: value.is_signer,
 			is_writable: value.is_writable,
