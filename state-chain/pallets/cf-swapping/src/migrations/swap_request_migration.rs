@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
+
 use frame_support::traits::UncheckedOnRuntimeUpgrade;
 
 use crate::Config;
