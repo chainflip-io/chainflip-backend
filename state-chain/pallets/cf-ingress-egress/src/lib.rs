@@ -201,6 +201,7 @@ pub enum RefundReason {
 	CcmUnsupportedForTargetChain,
 	CcmInvalidMetadata,
 	InvalidDestinationAddress,
+	InvalidCcmRefundParameters,
 }
 
 enum FullWitnessDepositOutcome {
@@ -2733,18 +2734,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(None, None)
 		};
 
-		if T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration).is_err() ||
-			T::SwapParameterValidation::validate_ccm_refund_params(
-				source_asset.into(),
-				refund_params.map_address(|addr| {
-					T::AddressConverter::to_encoded_address(
-						<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(addr),
-					)
-				}),
-			)
-			.is_err()
+		if T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration).is_err()
 		{
 			return Err(RefundReason::InvalidRefundParameters);
+		}
+
+		if T::SwapParameterValidation::validate_ccm_refund_params(
+			source_asset.into(),
+			refund_params.map_address(|addr| {
+				T::AddressConverter::to_encoded_address(
+					<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(addr),
+				)
+			}),
+		)
+		.is_err()
+		{
+			return Err(RefundReason::InvalidCcmRefundParameters);
 		}
 
 		if let Some(params) = &dca_params {
@@ -2799,9 +2804,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					source_address,
 				),
+				Err(RefundReason::InvalidCcmRefundParameters) => return,
 				Err(reason) => (
-					// TODO: The try_validate_vault_swap could have failed validating the refund
-					// ccm metadata. We need to ensure it's not problematic.
 					ChannelAction::Refund {
 						reason: reason.clone(),
 						refund_address: refund_params.refund_address,
