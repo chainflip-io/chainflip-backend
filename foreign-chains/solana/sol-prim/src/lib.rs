@@ -192,8 +192,10 @@ impl Instruction {
 		Self { program_id, accounts, data }
 	}
 
-	pub fn deserialize_data_with_borsh<T: BorshDeserialize>(data: Vec<u8>) -> Option<T> {
-		T::deserialize(&mut &data[..]).ok()
+	pub fn deserialize_data_with_borsh<T: BorshDeserialize>(
+		data: Vec<u8>,
+	) -> Result<T, borsh::io::Error> {
+		T::deserialize(&mut &data[..])
 	}
 }
 
