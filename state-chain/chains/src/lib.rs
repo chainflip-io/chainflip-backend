@@ -945,8 +945,6 @@ pub struct SwapRefundParameters {
 	pub min_output: cf_primitives::AssetAmount,
 }
 
-// TODO: Maybe define a type RefundCcmMetadata = Option<CcmDepositMetadata> and use it.
-// To address depending on PR-5762, depending on how the metadata types changes.
 #[derive(
 	Clone,
 	Debug,
