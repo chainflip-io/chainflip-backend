@@ -16,10 +16,10 @@
 
 use std::collections::HashMap;
 
-use cf_primitives::EpochIndex;
+use cf_primitives::{AccountId, ChannelId, EpochIndex};
 use futures_core::Future;
 use itertools::Itertools;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness, VaultDepositWitness};
 use state_chain_runtime::BitcoinInstance;
 
 use super::{
@@ -31,9 +31,12 @@ use super::{
 };
 use crate::{
 	btc::rpc::VerboseTransaction,
-	witness::common::{
-		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
-		RuntimeHasChain,
+	witness::{
+		btc::vault_swaps::try_extract_vault_swap_witness,
+		common::{
+			chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
+			RuntimeCallHasChain, RuntimeHasChain,
+		},
 	},
 };
 use bitcoin::{hashes::Hash, BlockHash};
@@ -42,6 +45,7 @@ use cf_chains::{
 	btc::{deposit_address::DepositAddress, Utxo, UtxoId},
 	Bitcoin,
 };
+use pallet_cf_broadcast::TransactionConfirmation;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn btc_deposits<ProcessCall, ProcessingFut>(
@@ -144,7 +148,23 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	}
 }
 
-fn deposit_witnesses(
+pub fn vault_deposits(
+	txs: &[VerboseTransaction],
+	vaults: &Vec<(DepositAddress, AccountId, ChannelId)>,
+) -> Vec<VaultDepositWitness<state_chain_runtime::Runtime, BitcoinInstance>> {
+	txs.iter()
+		.filter_map(|tx| {
+			for (vault, broker, id) in vaults {
+				if let Some(vault_swap) = try_extract_vault_swap_witness(tx, vault, *id, broker) {
+					return Some(vault_swap);
+				}
+			}
+			None
+		})
+		.collect()
+}
+
+pub fn deposit_witnesses(
 	txs: &[VerboseTransaction],
 	deposit_addresses: &HashMap<Vec<u8>, DepositAddress>,
 ) -> Vec<DepositWitness<Bitcoin>> {
@@ -183,7 +203,35 @@ fn deposit_witnesses(
 		.collect()
 }
 
-fn map_script_addresses(
+pub fn egress_witnessing(
+	txs: &[VerboseTransaction],
+	monitored_tx_hashes: Vec<cf_chains::btc::Hash>,
+) -> Vec<TransactionConfirmation<state_chain_runtime::Runtime, BitcoinInstance>> {
+	monitored_tx_hashes
+		.into_iter()
+		.filter_map(|hash| {
+			for tx in txs {
+				let tx_hash: cf_chains::btc::Hash = tx.txid.to_byte_array().into();
+				if hash == tx_hash {
+					return Some(TransactionConfirmation {
+						tx_out_id: hash,
+						// we don't care about this value for btc (we don't refund out aggkey)
+						// the correct value to put here should be the aggKey which signed the tx
+						// (either current or previous) I guess we can derive it from
+						// VerobseTransaction, if yes how?
+						signer_id: DepositAddress::new([0; 32], 0).script_pubkey(),
+						tx_fee: tx.fee.unwrap_or_default().to_sat(),
+						tx_metadata: (),
+						transaction_ref: hash,
+					});
+				}
+			}
+			None
+		})
+		.collect::<Vec<_>>()
+}
+
+pub fn map_script_addresses(
 	deposit_channels: Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>,
 ) -> HashMap<Vec<u8>, DepositAddress> {
 	deposit_channels

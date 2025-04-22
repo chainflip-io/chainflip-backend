@@ -34,7 +34,6 @@ mod boost_pool;
 
 pub use boost_pool::OwedAmount;
 use boost_pool::{BoostPool, DepositFinalisationOutcomeForPool};
-
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
@@ -65,6 +64,8 @@ use cf_traits::{
 	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
+	OrdNoBound, PartialOrdNoBound,
+	__private::sp_tracing::warn,
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Permill, Saturating},
 	transactional,
@@ -72,6 +73,11 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
+use scale_info::{
+	build::{Fields, Variants},
+	Path, Type,
+};
+use serde::{Deserialize, Serialize};
 use sp_runtime::{traits::UniqueSaturatedInto, Percent};
 use sp_std::{
 	boxed::Box,
@@ -443,7 +449,20 @@ pub mod pallet {
 	pub type TransactionInIdFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[derive(
+		Clone,
+		RuntimeDebug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+		Ord,
+		PartialOrd,
+	)]
 	pub struct DepositWitness<C: Chain> {
 		pub deposit_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
@@ -458,10 +477,33 @@ pub mod pallet {
 		EqNoBound,
 		Encode,
 		Decode,
-		GenericTypeInfo,
+		TypeInfo,
+		Serialize,
+		Deserialize,
+		OrdNoBound,
+		PartialOrdNoBound,
 	)]
-	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
-	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
+	#[scale_info(skip_type_params(T, I))]
+	#[serde(bound(
+		serialize = "
+		TargetChainAsset<T, I>: Serialize,
+		Option<TargetChainAccount<T, I>>: Serialize,
+		<T::TargetChain as Chain>::ChainAmount: Serialize,
+		<T::TargetChain as Chain>::DepositDetails: Serialize,
+		TransactionInIdFor<T, I>: Serialize,
+		Option<Beneficiary<T::AccountId>>: Serialize,
+	",
+		deserialize = "
+		TargetChainAsset<T, I>: Deserialize<'de>,
+		Option<TargetChainAccount<T, I>>: Deserialize<'de>,
+		<T::TargetChain as Chain>::ChainAmount: Deserialize<'de>,
+		<T::TargetChain as Chain>::DepositDetails: Deserialize<'de>,
+		TransactionInIdFor<T, I>: Deserialize<'de>,
+		Option<Beneficiary<T::AccountId>>: Deserialize<'de>,
+	"
+	))]
+    #[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
+    pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
 		pub deposit_address: Option<TargetChainAccount<T, I>>,
 		#[skip_name_expansion]
@@ -796,6 +838,9 @@ pub mod pallet {
 
 	// Determines the number of block confirmations is required for a block on
 	// an external chain before CFE can submit any witness extrinsics for it.
+	//
+	// This storage item won't be used for any chains using the elections witnessing and
+	// will be removed once all chains are migrated
 	#[pallet::storage]
 	#[pallet::getter(fn witness_safety_margin)]
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
@@ -878,6 +923,12 @@ pub mod pallet {
 		Vec<PendingPrewitnessedDepositEntry<T, I>>,
 		ValueQuery,
 	>;
+
+	/// What the witnessing says we've processed up to. This allows us to expire channels safely. If
+	/// the witnessing has processed up to a block, then we can safely recycle the channels.
+	#[pallet::storage]
+	pub type ProcessedUpTo<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -1115,7 +1166,11 @@ pub mod pallet {
 							Self::take_recyclable_addresses(
 								recycle_queue,
 								maximum_addresses_to_recycle,
-								T::ChainTracking::get_block_height(),
+								if T::TargetChain::NAME == "Bitcoin" {
+									ProcessedUpTo::<T, I>::get()
+								} else {
+									T::ChainTracking::get_block_height()
+								},
 							)
 						}
 					});
@@ -2078,7 +2133,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Err("Insufficient boost funds".into())
 	}
 
-	fn process_channel_deposit_prewitness(
+	pub fn process_channel_deposit_prewitness(
 		DepositWitness { deposit_address, asset, amount, deposit_details }: DepositWitness<
 			T::TargetChain,
 		>,
@@ -2199,7 +2254,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	// A wrapper around `process_channel_deposit_full_witness_inner` that catches any
 	// error and emits a rejection event
-	fn process_channel_deposit_full_witness(
+	pub fn process_channel_deposit_full_witness(
 		deposit_witness: DepositWitness<T::TargetChain>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) {
@@ -2436,6 +2491,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if T::SafeMode::get().boost_deposits_enabled && boost_fee > 0 {
 			match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {
 				Ok(BoostOutput { used_pools, total_fee: boost_fee_amount }) => {
+					warn!("Try boosting successfull");
 					let amount_after_boost_fee = amount.saturating_sub(boost_fee_amount);
 
 					// Note that ingress fee is deducted at the time of boosting rather than the
@@ -2476,6 +2532,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					BoostStatus::Boosted { prewitnessed_deposit_id, pools: used_pool_tiers, amount }
 				},
 				Err(_) => {
+					warn!("Try boosting failed!!!!");
 					Self::deposit_event(Event::InsufficientBoostLiquidity {
 						prewitnessed_deposit_id,
 						asset,
@@ -2491,7 +2548,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn process_vault_swap_request_prewitness(
+	pub fn process_vault_swap_request_prewitness(
 		block_height: TargetChainBlockNumber<T, I>,
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) {
@@ -3227,6 +3284,54 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			},
 		);
+	}
+
+	// TODO: Write test
+
+	// This should only be used if we're using ProcessedUpTo to track the block height.
+	pub fn active_deposit_channels_at(
+		block_height: TargetChainBlockNumber<T, I>,
+	) -> Vec<DepositChannelDetails<T, I>> {
+		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(block_height));
+
+		// Opened at: 1, Expires at: 122, Processed up to: 0, not active at 163
+		DepositChannelLookup::<T, I>::iter_values()
+			.filter_map(|details| {
+				// TODO: Subtract safety from opened_at
+				if details.opened_at <= block_height &&
+					(
+						block_height <= details.expires_at
+						// QUESTION: The following code should be discussed, I don't think we have
+						// to account for `ProcessedUpTo` in this place.
+						//
+						// &&
+						// // If we have not yet processed the expires_at block, then we shouldn't
+						// expire it yet. i.e. we should include it as an active channel.
+						// ProcessedUpTo::<T, I>::get() < details.expires_at)
+					) {
+					// TODO: Filter not filter_map
+					log::info!(
+						"Include channel: {:?} for height: {}",
+						details.deposit_channel,
+						block_height
+					);
+					Some(details)
+				} else {
+					log::info!(
+						"Don't include channel {:?} as it's not active at block height {:?}",
+						details.deposit_channel,
+						block_height
+					);
+					log::info!(
+						"Opened at: {:?}, Expires at: {:?}, Processed up to: {:?}",
+						details.opened_at,
+						details.expires_at,
+						ProcessedUpTo::<T, I>::get()
+					);
+					None
+				}
+			})
+			.collect()
 	}
 }
 

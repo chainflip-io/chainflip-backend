@@ -44,7 +44,7 @@ use state_chain_runtime::{
 	opaque::SessionKeys,
 	test_runner::*,
 	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, AssethubChainTrackingConfig,
-	BitcoinChainTrackingConfig, EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig,
+	BitcoinChainTrackingConfig, BitcoinElectionsConfig, EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig,
 	EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
 	PolkadotChainTrackingConfig, ReputationConfig, SessionConfig, SolanaChainTrackingConfig,
 	SolanaElectionsConfig, ValidatorConfig,
@@ -369,6 +369,7 @@ impl ExtBuilder {
 					shared_data_reference_lifetime: Default::default(),
 				}),
 			},
+			bitcoin_elections: BitcoinElectionsConfig { option_initial_state: None },
 			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
 				broadcast_timeout: 5 * BLOCKS_PER_MINUTE_ETHEREUM,
 			},

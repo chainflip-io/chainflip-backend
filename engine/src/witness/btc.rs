@@ -14,41 +14,360 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-mod chain_tracking;
-mod deposits;
+pub mod deposits;
 pub mod source;
 pub mod vault_swaps;
 
-use crate::{
-	btc::{
-		retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
-		rpc::VerboseTransaction,
-	},
-	db::PersistentKeyDB,
-	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi,
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
-	},
-};
+use crate::btc::rpc::{BtcRpcApi, VerboseTransaction};
 use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
-use cf_primitives::{EpochIndex, NetworkEnvironment};
-use cf_utilities::task_scope::Scope;
+use cf_primitives::EpochIndex;
 use futures_core::Future;
-use source::BtcSource;
-use std::sync::Arc;
 
-use super::common::{
-	chain_source::{extension::ChainSourceExt, Header},
-	epoch_source::{EpochSourceBuilder, Vault},
+use cf_chains::witness_period::BlockWitnessRange;
+use cf_utilities::task_scope::{self, Scope};
+use futures::FutureExt;
+use pallet_cf_elections::{
+	electoral_system::ElectoralSystemTypes,
+	electoral_systems::{
+		block_height_tracking::{
+			primitives::Header, state_machine::InputHeaders, HWTypes, HeightWitnesserProperties,
+		},
+		block_witnesser::state_machine::BWElectionProperties,
+	},
+	VoteOf,
+};
+use sp_core::bounded::alloc::collections::VecDeque;
+use state_chain_runtime::{
+	chainflip::{
+		bitcoin_elections::{
+			BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingES,
+			BitcoinDepositChannelWitnessingES, BitcoinElectoralSystemRunner, BitcoinLiveness,
+		},
+		elections::TypesFor,
+	},
+	BitcoinInstance,
 };
 
+use crate::{
+	btc::rpc::BlockHeader,
+	elections::voter_api::{CompositeVoter, VoterApi},
+	state_chain_observer::client::{
+		chain_api::ChainApi, electoral_api::ElectoralApi,
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
+	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
+};
 use anyhow::Result;
+
+use sp_core::H256;
+use state_chain_runtime::chainflip::bitcoin_elections::{
+	BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinVaultDepositWitnessingES,
+};
+use std::sync::Arc;
+
+use crate::{
+	btc::cached_rpc::BtcCachingClient,
+	witness::btc::deposits::{egress_witnessing, vault_deposits},
+};
+
+#[derive(Clone)]
+pub struct BitcoinDepositChannelWitnessingVoter {
+	client: BtcCachingClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnessingVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessingES>>, anyhow::Error> {
+		let BWElectionProperties {
+			block_height: witness_range, properties: deposit_addresses, ..
+		} = properties;
+		let witness_range = BlockWitnessRange::try_new(witness_range)
+			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
+		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
+
+		let mut txs = vec![];
+		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+		tracing::info!("Witness range: {:?}", witness_range);
+		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
+			tracing::info!("Checking block {:?}", block);
+
+			let block_hash = self.client.block_hash(block).await?;
+
+			let block = self.client.block(block_hash).await?;
+
+			txs.extend(block.txdata);
+		}
+
+		let deposit_addresses = map_script_addresses(deposit_addresses);
+
+		let witnesses = deposit_witnesses(&txs, &deposit_addresses);
+
+		Ok(Some(witnesses))
+	}
+}
+
+#[derive(Clone)]
+pub struct BitcoinVaultDepositWitnessingVoter {
+	client: BtcCachingClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessingVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinVaultDepositWitnessingES>>, anyhow::Error> {
+		let BWElectionProperties { block_height: witness_range, properties: vaults, .. } =
+			properties;
+		let witness_range = BlockWitnessRange::try_new(witness_range)
+			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
+
+		let mut txs = vec![];
+		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+		tracing::info!("Witness range: {:?}", witness_range);
+		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
+			tracing::info!("Checking block {:?}", block);
+
+			let block_hash = self.client.block_hash(block).await?;
+
+			let block = self.client.block(block_hash).await?;
+
+			txs.extend(block.txdata);
+		}
+
+		let witnesses = vault_deposits(&txs, &vaults);
+		Ok(Some(witnesses))
+	}
+}
+
+#[derive(Clone)]
+pub struct BitcoinBlockHeightTrackingVoter {
+	client: BtcCachingClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectoralSettings,
+		// We could use 0 as a special case (to avoid requiring an Option)
+		properties: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightTrackingES>>, anyhow::Error> {
+		tracing::info!("Block height tracking called properties: {:?}", properties);
+		let HeightWitnesserProperties { witness_from_index: latest_block_height } = properties;
+
+		let mut headers = VecDeque::new();
+
+		let header_from_btc_header =
+			|header: BlockHeader| -> anyhow::Result<Header<btc::Hash, btc::BlockNumber>> {
+				Ok(Header {
+					block_height: header.height,
+					hash: header.hash.to_byte_array().into(),
+					parent_hash: header
+						.previous_block_hash
+						.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
+						.to_byte_array()
+						.into(),
+				})
+			};
+
+		let get_header = |index: BlockNumber| {
+			async move {
+				let block_hash = self.client.block_hash(index).await?;
+				let header = self.client.block_header(block_hash).await?;
+				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
+				// Order from lowest to highest block index.
+				header_from_btc_header(header)
+			}
+		};
+
+		let best_block_hash = self.client.best_block_hash().await?;
+		let best_block_header = self.client.block_header(best_block_hash).await?;
+		if best_block_hash != best_block_header.hash {
+			return Err(anyhow::anyhow!("best_block_hash do not match best header hash"))
+		}
+		let best_block_header = header_from_btc_header(best_block_header)?;
+		if best_block_header.block_height <= latest_block_height {
+			tracing::info!("btc: no new blocks found since best block height is {} for witness_from={latest_block_height}", best_block_header.block_height);
+			return Ok(None)
+		} else {
+			let witness_from_index = if latest_block_height == 0 {
+				tracing::info!(
+					"bht: election_property=0, best_block_height={}, submitting last 6 blocks.",
+					best_block_header.block_height
+				);
+				best_block_header.block_height.saturating_sub(
+					TypesFor::<BitcoinBlockHeightTracking>::BLOCK_BUFFER_SIZE as u64,
+				)
+			} else {
+				latest_block_height
+			};
+
+			// fetch the headers we haven't got yet
+			for index in witness_from_index..best_block_header.block_height {
+				// let header = self.client.block_header(index).await?;
+				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
+				// Order from lowest to highest block index.
+				headers.push_back(get_header(index).await?);
+			}
+
+			headers.push_back(best_block_header);
+			tracing::info!(
+				"bht: Voting for block height tracking: {:?}",
+				headers.iter().map(|h| h.block_height)
+			);
+
+			// We should have a chain of hashees.
+			if headers.iter().zip(headers.iter().skip(1)).all(|(a, b)| a.hash == b.parent_hash) {
+				tracing::info!(
+					"bht: Submitting vote for (witness_from={latest_block_height})with {} headers",
+					headers.len()
+				);
+				Ok(Some(InputHeaders(headers)))
+			} else {
+				Err(anyhow::anyhow!("bht: Headers do not form a chain"))
+			}
+		}
+	}
+}
+
+#[derive(Clone)]
+pub struct BitcoinEgressWitnessingVoter {
+	client: BtcCachingClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinEgressWitnessingES>>, anyhow::Error> {
+		let BWElectionProperties { block_height: witness_range, properties: tx_hashes, .. } =
+			properties;
+		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
+
+		let mut txs = vec![];
+		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+		tracing::info!("Witness range: {:?}", witness_range);
+		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
+			tracing::info!("Checking block {:?}", block);
+
+			let block_hash = self.client.block_hash(block).await?;
+
+			let block = self.client.block(block_hash).await?;
+
+			txs.extend(block.txdata);
+		}
+
+		let witnesses = egress_witnessing(&txs, tx_hashes);
+
+		if witnesses.is_empty() {
+			tracing::info!("No witnesses found for BTCE");
+		} else {
+			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
+		}
+
+		Ok(Some(witnesses))
+	}
+}
+
+#[derive(Clone)]
+pub struct BitcoinFeeVoter {
+	client: BtcCachingClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinFeeTracking> for BitcoinFeeVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
+		_properties: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinFeeTracking>>, anyhow::Error> {
+		if let Some(fee) = self.client.next_block_fee_rate().await? {
+			Ok(Some(fee))
+		} else {
+			let hash = self.client.best_block_hash().await?;
+			Ok(Some(self.client.average_block_fee_rate(hash).await?))
+		}
+	}
+}
+
+#[derive(Clone)]
+pub struct BitcoinLivenessVoter {
+	client: BtcCachingClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<BitcoinLiveness> for BitcoinLivenessVoter {
+	async fn vote(
+		&self,
+		_settings: <BitcoinLiveness as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinLiveness as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<BitcoinLiveness>>, anyhow::Error> {
+		Ok(Some(H256::from_slice(&self.client.block_hash(properties).await?.to_byte_array())))
+	}
+}
+
+pub async fn start<StateChainClient>(
+	scope: &Scope<'_, anyhow::Error>,
+	client: BtcCachingClient,
+	state_chain_client: Arc<StateChainClient>,
+) -> Result<()>
+where
+	StateChainClient: StorageApi
+		+ ChainApi
+		+ SignedExtrinsicApi
+		+ ElectoralApi<BitcoinInstance>
+		+ 'static
+		+ Send
+		+ Sync,
+{
+	tracing::info!("Starting BTC witness");
+	scope.spawn(async move {
+		task_scope::task_scope(|scope| {
+			async {
+				crate::elections::Voter::new(
+					scope,
+					state_chain_client,
+					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
+						BitcoinBlockHeightTrackingVoter { client: client.clone() },
+						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
+						BitcoinVaultDepositWitnessingVoter { client: client.clone() },
+						BitcoinEgressWitnessingVoter { client: client.clone() },
+						BitcoinFeeVoter { client: client.clone() },
+						BitcoinLivenessVoter { client: client.clone() },
+					)),
+					Some(client.cache_invalidation_senders),
+				)
+				.continuously_vote()
+				.await;
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+	});
+
+	Ok(())
+}
+
+use super::common::epoch_source::Vault;
 
 pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoricInfo>(
 	epoch: Vault<cf_chains::Bitcoin, ExtraInfo, ExtraHistoricInfo>,
-	header: Header<u64, BlockHash, (Vec<VerboseTransaction>, Vec<(btc::Hash, BlockNumber)>)>,
+	header: super::common::chain_source::Header<
+		u64,
+		BlockHash,
+		(Vec<VerboseTransaction>, Vec<(btc::Hash, BlockNumber)>),
+	>,
 	process_call: ProcessCall,
 ) where
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
@@ -78,128 +397,6 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 		)
 		.await;
 	}
-}
-
-pub async fn start<
-	StateChainClient,
-	StateChainStream,
-	ProcessCall,
-	ProcessingFut,
-	PrewitnessCall,
-	PrewitnessFut,
->(
-	scope: &Scope<'_, anyhow::Error>,
-	btc_client: BtcRetryRpcClient,
-	process_call: ProcessCall,
-	prewitness_call: PrewitnessCall,
-	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: StateChainStream,
-	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
-	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
-	db: Arc<PersistentKeyDB>,
-) -> Result<()>
-where
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StreamApi<FINALIZED> + Clone,
-	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	ProcessingFut: Future<Output = ()> + Send + 'static,
-	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	PrewitnessFut: Future<Output = ()> + Send + 'static,
-{
-	let btc_source = BtcSource::new(btc_client.clone()).strictly_monotonic().shared(scope);
-
-	btc_source
-		.clone()
-		.chunk_by_time(epoch_source.clone(), scope)
-		.chain_tracking(state_chain_client.clone(), btc_client.clone())
-		.logging("chain tracking")
-		.spawn(scope);
-
-	let vaults = epoch_source.vaults::<cf_chains::Bitcoin>().await;
-
-	let block_source = btc_source
-		.then({
-			let btc_client = btc_client.clone();
-			move |header| {
-				let btc_client = btc_client.clone();
-				async move {
-					let block = btc_client.block(header.hash).await;
-					(header.data, block.txdata)
-				}
-			}
-		})
-		.shared(scope);
-
-	// Pre-witnessing stream.
-	block_source
-		.clone()
-		.chunk_by_vault(vaults.clone(), scope)
-		.deposit_addresses(
-			scope,
-			unfinalised_state_chain_stream.clone(),
-			state_chain_client.clone(),
-		)
-		.await
-		.private_deposit_channels(scope, unfinalised_state_chain_stream, state_chain_client.clone())
-		.await
-		.btc_deposits(prewitness_call)
-		.logging("pre-witnessing")
-		.spawn(scope);
-
-	let btc_safety_margin = match state_chain_client
-		.storage_value::<pallet_cf_ingress_egress::WitnessSafetyMargin<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>(state_chain_stream.cache().hash)
-		.await?
-	{
-		Some(margin) => margin,
-		None => {
-			use chainflip_node::chain_spec::{berghain, devnet, perseverance};
-			match state_chain_client
-				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
-					state_chain_stream.cache().hash,
-				)
-				.await?
-			{
-				NetworkEnvironment::Mainnet => berghain::BITCOIN_SAFETY_MARGIN,
-				NetworkEnvironment::Testnet => perseverance::BITCOIN_SAFETY_MARGIN,
-				NetworkEnvironment::Development => devnet::BITCOIN_SAFETY_MARGIN,
-			}
-		},
-	};
-
-	tracing::info!("Safety margin for Bitcoin is set to {btc_safety_margin} blocks.",);
-
-	// Full witnessing stream.
-	block_source
-		.lag_safety(btc_safety_margin)
-		.logging("safe block produced")
-		.chunk_by_vault(vaults, scope)
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		.private_deposit_channels(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		.btc_deposits(process_call.clone())
-		.egress_items(scope, state_chain_stream, state_chain_client.clone())
-		.await
-		.then({
-			let process_call = process_call.clone();
-			move |epoch, header| process_egress(epoch, header, process_call.clone())
-		})
-		.continuous("Bitcoin".to_string(), db)
-		.logging("witnessing")
-		.spawn(scope);
-
-	Ok(())
 }
 
 fn success_witnesses<'a>(
