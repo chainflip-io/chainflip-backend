@@ -246,7 +246,7 @@ services:
       start_period: 10s
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-3df7ee4eac84fd58f240699baabf5e4cff683b9c}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-dev-3df7ee4eac84fd58f240699baabf5e4cff683b9c}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
@@ -259,6 +259,7 @@ services:
     volumes:
       - "/tmp/chainflip/data/deposit-monitor:/persistent_state"
     environment:
+      - CFDM_NETWORK=localnet
       - CFDM_RUNNING_IN_MOCK_ENVIRONMENT=true
       - CFDM_BITCOIN_NETWORK=regtest
       - CFDM_ETHEREUM_NETWORK=Mainnet
