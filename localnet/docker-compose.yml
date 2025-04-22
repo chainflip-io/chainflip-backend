@@ -128,8 +128,8 @@ services:
           "CMD-SHELL",
           "curl",
           "-H 'Content-Type: application/json;'",
-          "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9947"
+          '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''',
+          "http://localhost:9947",
         ]
       interval: 10s
       timeout: 5s
@@ -168,14 +168,13 @@ services:
           "CMD-SHELL",
           "curl",
           "-H 'Content-Type: application/json;'",
-          "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9948"
+          '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''',
+          "http://localhost:9948",
         ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
-
 
   assethub:
     container_name: assethub
@@ -212,8 +211,8 @@ services:
           "CMD-SHELL",
           "curl",
           "-H 'Content-Type: application/json;'",
-          "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9955"
+          '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''',
+          "http://localhost:9955",
         ]
       interval: 10s
       timeout: 5s
@@ -238,8 +237,8 @@ services:
           "curl",
           "--user flip:flip",
           "-H 'Content-Type: text/plain;'",
-          "-d '{\"jsonrpc\":\"1.0\", \"id\": \"1\", \"method\": \"getblockchaininfo\", \"params\" : []}'",
-          "http://127.0.0.1:8332"
+          '-d ''{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}''',
+          "http://127.0.0.1:8332",
         ]
       interval: 10s
       timeout: 5s
@@ -247,7 +246,7 @@ services:
       start_period: 10s
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-dev-3c6c614f942cb6a3fc9bbf0f4cea586d0836cda6}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-3df7ee4eac84fd58f240699baabf5e4cff683b9c}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
@@ -302,4 +301,3 @@ services:
       - CFDM_BLACKLIST_CHAINFLIP_URL=""
       - CFDM_BLACKLIST_CHAINFLIP_UPDATE_INTERVAL_SECS=6
       - CFDM_BLACKLIST_CHAINFLIP_FOUND_RISKSCORE=10.0
-
