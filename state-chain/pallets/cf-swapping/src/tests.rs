@@ -69,6 +69,13 @@ const BROKER_FEE_BPS: u16 = 10;
 const INPUT_ASSET: Asset = Asset::Usdc;
 const OUTPUT_ASSET: Asset = Asset::Eth;
 
+const ZERO_NETWORK_FEES: FeeType<Test> = FeeType::NetworkFee(NetworkFeeTracker {
+	minimum: 0,
+	rate: Permill::zero(),
+	accumulated_stable_amount: 0,
+	accumulated_fee: 0,
+});
+
 static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
 
@@ -134,7 +141,7 @@ impl TestRefundParams {
 	}
 }
 
-/// Creates a test swap and corresponding swap request. Both use the same ID.
+/// Creates a test swap and corresponding swap request. Both use the same ID and no fees
 fn create_test_swap(
 	id: u64,
 	input_asset: Asset,
@@ -155,20 +162,11 @@ fn create_test_swap(
 					output_address: ForeignChainAddress::Eth(H160::zero()),
 				},
 				dca_state: DcaState::create_with_first_chunk(amount, dca_params).0,
-				broker_fees: Default::default(),
 			},
 		},
 	);
 
-	Swap::new(
-		id.into(),
-		id.into(),
-		input_asset,
-		output_asset,
-		amount,
-		None,
-		[FeeType::NetworkFee { min_fee_enforced: true }],
-	)
+	Swap::new(id.into(), id.into(), input_asset, output_asset, amount, None, vec![])
 }
 
 // Returns some test data
@@ -515,7 +513,7 @@ fn swap_by_deposit_happy_path() {
 					OUTPUT_ASSET,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee { min_fee_enforced: true }],
+					vec![ZERO_NETWORK_FEES],
 				)]
 			);
 
@@ -542,7 +540,15 @@ fn process_all_into_stable_swaps_first() {
 	const SWAP_EXECUTION_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const AMOUNT: AssetAmount = 1_000_000;
 	new_test_ext().execute_with(|| {
-		NetworkFee::set(Permill::from_parts(100));
+		const NETWORK_FEE: Permill = Permill::from_parts(100);
+		NetworkFee::set(NETWORK_FEE);
+
+		const NETWORK_FEE_DETAILS: FeeType<Test> = FeeType::NetworkFee(NetworkFeeTracker {
+			minimum: 0,
+			rate: NETWORK_FEE,
+			accumulated_stable_amount: 0,
+			accumulated_fee: 0,
+		});
 
 		[Asset::Flip, Asset::Btc, Asset::Dot, Asset::Usdc]
 			.into_iter()
@@ -577,7 +583,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee { min_fee_enforced: true }]
+					vec![NETWORK_FEE_DETAILS],
 				),
 				Swap::new(
 					2.into(),
@@ -586,7 +592,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee { min_fee_enforced: true }]
+					vec![NETWORK_FEE_DETAILS],
 				),
 				Swap::new(
 					3.into(),
@@ -595,7 +601,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee { min_fee_enforced: true }]
+					vec![NETWORK_FEE_DETAILS],
 				),
 				Swap::new(
 					4.into(),
@@ -604,7 +610,7 @@ fn process_all_into_stable_swaps_first() {
 					Asset::Eth,
 					AMOUNT,
 					None,
-					[FeeType::NetworkFee { min_fee_enforced: true }]
+					vec![NETWORK_FEE_DETAILS],
 				),
 			]
 		);
@@ -614,11 +620,10 @@ fn process_all_into_stable_swaps_first() {
 		Swapping::on_finalize(SWAP_EXECUTION_BLOCK);
 		assert_swaps_queue_is_empty();
 
-		let usdc_amount_swapped_after_fee =
-			Swapping::take_network_fee(AMOUNT * DEFAULT_SWAP_RATE, MinFeePolicy::NotEnforced)
-				.remaining_amount;
-		let usdc_amount_deposited_after_fee =
-			Swapping::take_network_fee(AMOUNT, MinFeePolicy::NotEnforced).remaining_amount;
+		let network_fee_amount = NETWORK_FEE * AMOUNT;
+		let usdc_amount_swapped_after_fee: AssetAmount =
+			(AMOUNT - network_fee_amount) * DEFAULT_SWAP_RATE;
+		let usdc_amount_deposited_after_fee: AssetAmount = AMOUNT - network_fee_amount;
 
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(
@@ -812,15 +817,7 @@ fn swap_excess_are_confiscated() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(
-				1.into(),
-				1.into(),
-				from,
-				to,
-				MAX_SWAP,
-				None,
-				[FeeType::NetworkFee { min_fee_enforced: true }]
-			)]
+			vec![Swap::new(1.into(), 1.into(), from, to, MAX_SWAP, None, vec![ZERO_NETWORK_FEES],)]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
 	});
