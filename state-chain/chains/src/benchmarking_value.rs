@@ -38,6 +38,7 @@ use crate::{
 	btc::{Utxo, UtxoId},
 	dot::PolkadotTransactionId,
 	evm::{DepositDetails, EvmFetchId, EvmTransactionMetadata},
+	ccm_checker::DecodedCcmAdditionalData,
 };
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
@@ -376,3 +377,16 @@ impl_tuple_benchmark_value!(A, B, C, D);
 impl_tuple_benchmark_value!(A, B, C, D, EE);
 impl_tuple_benchmark_value!(A, B, C, D, EE, F);
 impl_tuple_benchmark_value!(A, B, C, D, EE, F, G);
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for ccm_checker::DecodedCcmAdditionalData {
+	fn benchmark_value() -> Self {
+		DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V1 {
+			ccm_accounts: SolCcmAccounts {
+				pubkey: SolPubkey([0xf0; 32]),
+				is_writable: true,
+			}, 
+			alts: vec![SolAddress([0xf0; 32], [0xf1; 32])],
+		})
+	}
+}

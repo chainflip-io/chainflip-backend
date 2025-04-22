@@ -385,6 +385,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 							retry_duration: 5,
 							refund_address: refund_address.clone().into_foreign_chain_address(),
 							min_price: U256::zero(),
+							refund_ccm_metadata: None,
 						},
 						None,
 					)

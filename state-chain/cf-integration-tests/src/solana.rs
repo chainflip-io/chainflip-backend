@@ -92,6 +92,7 @@ const REFUND_PARAMS: ChannelRefundParameters<EncodedAddress> = ChannelRefundPara
 	retry_duration: 0,
 	refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
 	min_price: sp_core::U256::zero(),
+	refund_ccm_metadata: None,
 };
 
 type SolanaElectionVote = BoundedBTreeMap<

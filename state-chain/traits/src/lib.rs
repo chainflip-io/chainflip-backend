@@ -1074,6 +1074,10 @@ pub trait SwapParameterValidation {
 	fn get_swap_limits() -> SwapLimits;
 	fn validate_dca_params(dca_params: &DcaParameters) -> Result<(), DispatchError>;
 	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError>;
+	fn validate_ccm_refund_params(
+		asset: Asset,
+		refund_params: cf_chains::ChannelRefundParametersEncoded,
+	) -> Result<(), DispatchError>;
 	fn validate_broker_fees(
 		broker_fees: &Beneficiaries<Self::AccountId>,
 	) -> Result<(), DispatchError>;

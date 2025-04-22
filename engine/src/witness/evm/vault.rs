@@ -32,7 +32,9 @@ use super::{
 
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
-	cf_parameters::VaultSwapParameters,
+	cf_parameters::{
+		CfParameters, CfParametersRefundCcm, VaultSwapParameters, VersionedCfParameters,
+	},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain,
@@ -52,13 +54,27 @@ where
 	RefundAddress: Decode,
 	CcmData: Default + Decode,
 {
-	cf_chains::cf_parameters::decode_cf_parameters(cf_parameters)
-		.inspect_err(|_| {
-			tracing::warn!(
-				"Failed to decode cf_parameters: {cf_parameters:?} at block {block_height}"
-			)
-		})
-		.map_err(|e| anyhow::anyhow!(e))
+	let (ccm_additional_data, vault_swap_parameters) = {
+		match VersionedCfParameters::decode(&mut &cf_parameters[..])
+			.inspect_err(|_| {
+				tracing::warn!(
+					"Failed to decode cf_parameters: {cf_parameters:?} at block {block_height}"
+				)
+			})
+			.map_err(|e| anyhow!(e))?
+		{
+			VersionedCfParameters::V0(CfParameters {
+				ccm_additional_data,
+				vault_swap_parameters,
+			}) => (ccm_additional_data, vault_swap_parameters.into()),
+			VersionedCfParameters::V1(CfParametersRefundCcm {
+				ccm_additional_data,
+				vault_swap_parameters,
+			}) => (ccm_additional_data, vault_swap_parameters),
+		}
+	};
+
+	Ok((vault_swap_parameters, ccm_additional_data))
 }
 
 pub fn call_from_event<
