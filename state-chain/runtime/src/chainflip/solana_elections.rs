@@ -15,9 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	AccountId, Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
-	SolanaIngressEgress, SolanaThresholdSigner,
+	chainflip::ReportFailedLivenessCheck, AccountId, Environment, Runtime, SolanaBroadcaster,
+	SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner,
 };
+
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, sol::Asset as SolAsset},
@@ -37,8 +38,8 @@ use cf_chains::{
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
-	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
+	AdjustedFeeEstimationApi, Broadcaster, Chainflip, ElectionEgressWitnesser, GetBlockHeight,
+	IngressSource, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -49,7 +50,6 @@ use pallet_cf_elections::{
 		blockchain::delta_based_ingress::BackoffSettings,
 		composite::{tuple_6_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
-		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
 		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
@@ -59,11 +59,13 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_runtime::DispatchResult;
+use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
+use electoral_systems::liveness::Liveness;
+use sol_prim::SlotNumber;
 
 use super::SolEnvironment;
 
@@ -155,22 +157,15 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	BlockNumberFor<Runtime>,
 >;
 
-pub type SolanaLiveness = electoral_systems::liveness::Liveness<
+pub type SolanaLiveness = Liveness<
 	<Solana as Chain>::ChainBlockNumber,
 	SolHash,
 	cf_primitives::BlockNumber,
-	OnCheckCompleteHook,
+	ReportFailedLivenessCheck<Solana>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
 >;
 
-pub struct OnCheckCompleteHook;
-
-impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHook {
-	fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
-		Reputation::report_many(Offence::FailedLivenessCheck(ForeignChain::Solana), validator_ids);
-	}
-}
 pub type SolanaVaultSwapTracking =
 	electoral_systems::solana_vault_swap_accounts::SolanaVaultSwapAccounts<
 		VaultSwapAccountAndSender,
