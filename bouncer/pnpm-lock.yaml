@@ -5855,6 +5855,14 @@ packages:
       }
     hasBin: true
 
+  valibot@0.38.0:
+    resolution: {integrity: sha512-RCJa0fetnzp+h+KN9BdgYOgtsMAG9bfoJ9JSjIhFHobKWVWyzM3jjaeNTdpFK9tQtf3q1sguXeERJ/LcmdFE7w==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   varint@5.0.2:
     resolution:
       {
@@ -6397,6 +6405,48 @@ snapshots:
       - utf-8-validate
 
   '@chainflip/utils@0.4.16':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.3.0
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.6.0':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.3.0
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.7.2-assethub.2':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.3.0
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.8.6':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.3.0
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.6.0':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.2.1
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.7.2-assethub.2':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.2.1
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.8.3':
+    dependencies:
+      '@date-fns/utc': 2.1.0
+      bignumber.js: 9.2.1
+      date-fns: 4.1.0
+
+  '@chainflip/utils@0.8.6':
     dependencies:
       '@date-fns/utc': 2.1.0
       bignumber.js: 9.3.0
@@ -7733,6 +7783,11 @@ snapshots:
 
   bip174@2.1.1: {}
 
+  bip174@3.0.0-rc.1:
+    dependencies:
+      uint8array-tools: 0.0.9
+      varuint-bitcoin: 2.0.0
+
   bitcoin-core@4.2.0:
     dependencies:
       '@uphold/request-logger': 2.0.0(request@2.88.2)
@@ -7967,6 +8022,8 @@ snapshots:
     dependencies:
       mimic-response: 1.0.1
 
+  cluster-key-slot@1.1.2: {}
+
   color-convert@2.0.1:
     dependencies:
       color-name: 1.1.4
@@ -8143,6 +8200,8 @@ snapshots:
   delay@5.0.0: {}
 
   delayed-stream@1.0.0: {}
+
+  denque@2.1.0: {}
 
   depd@2.0.0: {}
 
@@ -9253,6 +9312,10 @@ snapshots:
     dependencies:
       p-locate: 5.0.0
 
+  lodash.defaults@4.2.0: {}
+
+  lodash.isarguments@3.1.0: {}
+
   lodash.merge@4.6.2: {}
 
   lodash@4.17.21: {}
@@ -9858,6 +9921,8 @@ snapshots:
 
   scale-ts@1.6.0: {}
 
+  scale-ts@1.6.1: {}
+
   scrypt-js@3.0.1: {}
 
   secp256k1@4.0.4:
@@ -10022,6 +10087,8 @@ snapshots:
       tweetnacl: 0.14.5
 
   stackback@0.0.2: {}
+
+  standard-as-callback@2.1.0: {}
 
   standard-error@1.1.0: {}
 
@@ -10270,6 +10337,10 @@ snapshots:
 
   uint8array-tools@0.0.7: {}
 
+  uint8array-tools@0.0.8: {}
+
+  uint8array-tools@0.0.9: {}
+
   ultron@1.1.1: {}
 
   unbox-primitive@1.1.0:
@@ -10326,6 +10397,10 @@ snapshots:
   varuint-bitcoin@1.1.2:
     dependencies:
       safe-buffer: 5.2.1
+
+  varuint-bitcoin@2.0.0:
+    dependencies:
+      uint8array-tools: 0.0.8
 
   vary@1.1.2: {}
 
