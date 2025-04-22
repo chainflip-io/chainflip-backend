@@ -657,6 +657,7 @@ pub enum ConsolidationError {
 #[derive(Debug)]
 pub enum RejectError {
 	NotSupportedForAsset,
+	NotRequired,
 	Other,
 }
 
@@ -664,11 +665,11 @@ impl From<AllBatchError> for RejectError {
 	fn from(e: AllBatchError) -> Self {
 		match e {
 			AllBatchError::UnsupportedToken => RejectError::NotSupportedForAsset,
+			AllBatchError::NotRequired => RejectError::NotRequired,
 			_ => RejectError::Other,
 		}
 	}
 }
-
 pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
 }
@@ -677,7 +678,7 @@ pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		_deposit_details: C::DepositDetails,
 		_refund_address: C::ChainAccount,
-		_refund_amount: C::ChainAmount,
+		_refund_amount: Option<C::ChainAmount>,
 		_asset: C::ChainAsset,
 		_deposit_fetch_id: Option<C::DepositFetchId>,
 	) -> Result<Self, RejectError> {
@@ -1030,7 +1031,18 @@ impl<T> From<CcmChannelMetadata<T>> for CcmParams {
 }
 
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord, Serialize, Deserialize,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+	MaxEncodedLen,
 )]
 pub struct CcmDepositMetadata<Address, AdditionalData> {
 	pub channel_metadata: CcmChannelMetadata<AdditionalData>,
@@ -1166,6 +1178,7 @@ pub struct SwapRefundParameters {
 	pub min_output: cf_primitives::AssetAmount,
 }
 
+// TODO: Maybe define a type RefundCcmMetadata = Option<CcmDepositMetadata> and use it
 #[derive(
 	Clone,
 	Debug,
@@ -1180,10 +1193,11 @@ pub struct SwapRefundParameters {
 	PartialOrd,
 	Ord,
 )]
-pub struct ChannelRefundParameters<A> {
+pub struct ChannelRefundParameters<A, RefundCcm = Option<CcmChannelMetadataChecked>> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
+	pub refund_ccm_metadata: RefundCcm,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
@@ -1191,6 +1205,7 @@ pub struct RefundParametersExtendedGeneric<Address, AccountId> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_destination: AccountOrAddress<Address, AccountId>,
 	pub min_price: Price,
+	pub refund_ccm_metadata: Option<CcmDepositMetadataChecked<Address>>,
 }
 
 pub type RefundParametersExtended<AccountId> =
@@ -1211,6 +1226,13 @@ impl<AccountId> RefundParametersExtended<AccountId> {
 					AccountOrAddress::InternalAccount(account_id),
 			},
 			min_price: self.min_price,
+			refund_ccm_metadata: self.refund_ccm_metadata.map(|metadata| {
+				CcmDepositMetadataChecked {
+					channel_metadata: metadata.channel_metadata,
+					source_chain: metadata.source_chain,
+					source_address: metadata.source_address.map(Converter::to_encoded_address),
+				}
+			}),
 		}
 	}
 
@@ -1236,6 +1258,7 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
 			retry_duration: BenchmarkValue::benchmark_value(),
 			refund_address: BenchmarkValue::benchmark_value(),
 			min_price: BenchmarkValue::benchmark_value(),
+			refund_ccm_metadata: Some(BenchmarkValue::benchmark_value()),
 		}
 	}
 }
@@ -1249,6 +1272,7 @@ impl<A: Clone> ChannelRefundParameters<A> {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone()),
 			min_price: self.min_price,
+			refund_ccm_metadata: self.refund_ccm_metadata.clone(),
 		}
 	}
 	pub fn try_map_address<B, E, F: FnOnce(A) -> Result<B, E>>(
@@ -1259,6 +1283,7 @@ impl<A: Clone> ChannelRefundParameters<A> {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone())?,
 			min_price: self.min_price,
+			refund_ccm_metadata: self.refund_ccm_metadata.clone(),
 		})
 	}
 }

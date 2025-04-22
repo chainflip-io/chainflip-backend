@@ -2335,12 +2335,26 @@ impl_runtime_apis! {
 			)?;
 
 			// Validate refund duration.
-			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(match &extra_parameters {
-				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
-				VaultSwapExtraParametersEncoded::Ethereum(extra_params) => extra_params.refund_parameters.retry_duration,
-				VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => extra_params.refund_parameters.retry_duration,
-				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
-			})?;
+			{
+				let retry_duration = match &extra_parameters {
+					VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => {
+						*retry_duration
+					}
+					VaultSwapExtraParametersEncoded::Ethereum(extra_params) => {
+						pallet_cf_swapping::Pallet::<Runtime>::validate_ccm_refund_params(source_asset, extra_params.refund_parameters.clone())?;
+						extra_params.refund_parameters.retry_duration
+					}
+					VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => {
+						pallet_cf_swapping::Pallet::<Runtime>::validate_ccm_refund_params(source_asset, extra_params.refund_parameters.clone())?;
+						extra_params.refund_parameters.retry_duration
+					}
+					VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
+						pallet_cf_swapping::Pallet::<Runtime>::validate_ccm_refund_params(source_asset, refund_parameters.clone())?;
+						refund_parameters.retry_duration
+					}
+				};
+				pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
+			}
 
 			// Validate CCM.
 			if let Some(channel_metadata) = channel_metadata.as_ref() {

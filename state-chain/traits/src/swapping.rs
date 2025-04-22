@@ -145,6 +145,7 @@ pub trait SwapRequestHandler {
 				retry_duration,
 				refund_destination: AccountOrAddress::InternalAccount(account_id.clone()),
 				min_price,
+				refund_ccm_metadata: None,
 			}),
 			dca_params,
 			SwapOrigin::OnChainAccount(account_id),

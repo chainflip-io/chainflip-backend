@@ -7,7 +7,6 @@ import {
   brokerMutex,
   decodeDotAddressForContract,
   handleSubstrateError,
-  newAddress,
   observeBalanceIncrease,
   shortChainFromAsset,
   hexStringToBytesArray,
@@ -16,6 +15,7 @@ import {
   observeSwapRequested,
   TransactionOrigin,
   defaultAssetAmounts,
+newAssetAddress,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -62,7 +62,10 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
 
   // Run a swap
   const destAsset = inputAsset === feeAsset ? Assets.Flip : feeAsset;
-  const destinationAddress = await newAddress(destAsset, seed ?? randomBytes(32).toString('hex'));
+  const destinationAddress = await newAssetAddress(
+    destAsset,
+    seed ?? randomBytes(32).toString('hex'),
+  );
   const observeDestinationAddress =
     inputAsset === Assets.Dot
       ? decodeDotAddressForContract(destinationAddress)
@@ -96,7 +99,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
 
   const refundParams = {
     refundAddress: chainflip.createType('EncodedAddress', {
-      Eth: hexStringToBytesArray(await newAddress(inputAsset, 'DEFAULT_REFUND')),
+      Eth: hexStringToBytesArray(await newAssetAddress(inputAsset, 'DEFAULT_REFUND')),
     }),
     minPrice: '0',
     retryDuration: 0,
@@ -164,7 +167,10 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
   assert(earnedBrokerFeesAfter > earnedBrokerFeesBefore, 'No increase in earned broker fees');
 
   // Withdraw the broker fees
-  const withdrawalAddress = await newAddress(feeAsset, seed ?? randomBytes(32).toString('hex'));
+  const withdrawalAddress = await newAssetAddress(
+    feeAsset,
+    seed ?? randomBytes(32).toString('hex'),
+  );
   const chain = shortChainFromAsset(feeAsset);
   logger.debug(`${chain} withdrawalAddress:`, withdrawalAddress);
   const balanceBeforeWithdrawal = await getBalance(feeAsset, withdrawalAddress);

@@ -137,6 +137,7 @@ impl TestRefundParams {
 				self.min_output.into(),
 				input_amount.into(),
 			)),
+			refund_ccm_metadata: None,
 		}
 	}
 }
@@ -269,6 +270,7 @@ const REFUND_PARAMS: ChannelRefundParametersEncoded = ChannelRefundParametersEnc
 	retry_duration: 100,
 	refund_address: EncodedAddress::Eth([1; 20]),
 	min_price: U256::zero(),
+	refund_ccm_metadata: None,
 };
 
 fn get_broker_balance<T: Config>(who: &T::AccountId, asset: Asset) -> AssetAmount {

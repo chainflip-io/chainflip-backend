@@ -57,9 +57,12 @@ impl NetworkFeeTracker {
 	}
 }
 
+// TODO: To update this migration since the swap_request_migration has newly been added.
+// Wait for this to update since the swap_request_migration will be removed after 1.9 release.
 pub mod old {
 	use super::*;
-	use cf_primitives::{Asset, Beneficiaries};
+	use cf_chains::ForeignChainAddress;
+	use cf_primitives::{Asset, Beneficiaries, Price};
 	use frame_support::Twox64Concat;
 
 	#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -67,6 +70,13 @@ pub mod old {
 		// Changing this NetworkFee a new struct
 		NetworkFee { min_fee_enforced: bool },
 		BrokerFee(Beneficiaries<T::AccountId>),
+	}
+	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+	pub struct RefundParametersExtendedGeneric<Address, AccountId> {
+		pub retry_duration: cf_primitives::BlockNumber,
+		pub refund_destination: AccountOrAddress<Address, AccountId>,
+		pub min_price: Price,
+		// Migration will add a refund_ccm_metadata
 	}
 
 	#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -91,6 +101,9 @@ pub mod old {
 		pub network_fee_collected: AssetAmount,
 		pub accumulated_stable_amount: AssetAmount,
 	}
+
+	pub type RefundParametersExtended<AccountId> =
+		RefundParametersExtendedGeneric<ForeignChainAddress, AccountId>;
 
 	#[allow(clippy::large_enum_variant)]
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
@@ -128,8 +141,7 @@ pub struct Migration<T: Config>(PhantomData<T>);
 impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let swap_request_count = old::SwapRequests::<T>::iter().count() as u64;
-		Ok(swap_request_count.encode())
+		Ok((old::SwapRequests::<T>::iter().count() as u64).encode())
 	}
 
 	fn on_runtime_upgrade() -> Weight {
@@ -137,10 +149,10 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 
 		crate::SwapRequests::<T>::translate_values::<old::SwapRequest<T>, _>(|old_swap_request| {
 			Some(SwapRequest {
-				id: old_swap_request.id,
-				input_asset: old_swap_request.input_asset,
-				output_asset: old_swap_request.output_asset,
-				state: match old_swap_request.state {
+				id: old_swap_requests.id,
+				input_asset: old_swap_requests.input_asset,
+				output_asset: old_swap_requests.output_asset,
+				state: match old_swap_requests.state {
 					old::SwapRequestState::UserSwap {
 						refund_params,
 						output_action,
@@ -161,7 +173,14 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 							},
 						);
 						SwapRequestState::UserSwap {
-							refund_params,
+							refund_params: refund_params.map(|params| {
+								cf_chains::RefundParametersExtendedGeneric {
+									retry_duration: params.retry_duration,
+									refund_destination: params.refund_destination,
+									min_price: params.min_price,
+									refund_ccm_metadata: None,
+								}
+							}),
 							output_action,
 							dca_state: DcaState {
 								status: dca_state.status,

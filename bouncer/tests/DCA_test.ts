@@ -2,7 +2,7 @@ import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli
 import { randomBytes } from 'crypto';
 import assert from 'assert';
 import {
-  newAddress,
+  newAssetAddress,
   observeBalanceIncrease,
   observeSwapRequested,
   SwapRequestType,
@@ -33,14 +33,14 @@ async function testDCASwap(
     chunkIntervalBlocks: CHUNK_INTERVAL,
   };
   const fillOrKillParams: FillOrKillParamsX128 = {
-    refundAddress: await newAddress(inputAsset, randomBytes(32).toString('hex')),
+    refundAddress: await newAssetAddress(inputAsset, randomBytes(32).toString('hex')),
     minPriceX128: '1',
     retryDurationBlocks: 100,
   };
 
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
 
-  const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
+  const destAddress = await newAssetAddress(destAsset, randomBytes(32).toString('hex'));
 
   const destBalanceBefore = await getBalance(destAsset, destAddress);
   logger.debug(`DCA destination address: ${destAddress}`);

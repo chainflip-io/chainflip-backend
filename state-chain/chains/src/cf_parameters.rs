@@ -26,37 +26,67 @@ use sp_runtime::{BoundedVec, Vec};
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub enum VersionedCfParameters<RefundAddress, CcmData = ()> {
 	V0(CfParameters<RefundAddress, CcmData>),
+	V1(CfParametersRefundCcm<RefundAddress, CcmData>),
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct CfParameters<RefundAddress, CcmData = ()> {
+pub struct CfParametersGeneric<P, CcmData> {
 	/// CCMs may require additional data (e.g. CCMs to Solana requires a list of addresses).
 	pub ccm_additional_data: CcmData,
-	pub vault_swap_parameters: VaultSwapParameters<RefundAddress>,
+	pub vault_swap_parameters: P,
+}
+
+pub type CfParameters<RefundAddress, CcmData = ()> =
+	CfParametersGeneric<VaultSwapParametersV0<RefundAddress>, CcmData>;
+pub type CfParametersRefundCcm<RefundAddress, CcmData = ()> =
+	CfParametersGeneric<VaultSwapParameters<RefundAddress>, CcmData>;
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+pub struct VaultSwapParametersGeneric<R> {
+	pub refund_params: R,
+	pub dca_params: Option<DcaParameters>,
+	pub boost_fee: u8,
+	pub broker_fee: Beneficiary<AccountId>,
+	pub affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
+}
+
+pub type VaultSwapParametersV0<RefundAddress> =
+	VaultSwapParametersGeneric<ChannelRefundParameters<RefundAddress, ()>>;
+pub type VaultSwapParameters<RefundAddress> =
+	VaultSwapParametersGeneric<ChannelRefundParameters<RefundAddress>>;
+
+impl<RefundAddress> From<VaultSwapParametersV0<RefundAddress>>
+	for VaultSwapParameters<RefundAddress>
+{
+	fn from(params: VaultSwapParametersV0<RefundAddress>) -> Self {
+		VaultSwapParameters {
+			refund_params: ChannelRefundParameters {
+				retry_duration: params.refund_params.retry_duration,
+				refund_address: params.refund_params.refund_address,
+				min_price: params.refund_params.min_price,
+				refund_ccm_metadata: None,
+			},
+			dca_params: params.dca_params,
+			boost_fee: params.boost_fee,
+			broker_fee: params.broker_fee,
+			affiliate_fees: params.affiliate_fees,
+		}
+	}
 }
 
 pub type VersionedCcmCfParameters<RefundAddress> =
 	VersionedCfParameters<RefundAddress, CcmAdditionalData>;
 
-impl<RefundAddress> CfParameters<RefundAddress, CcmAdditionalData> {
+impl<RefundAddress> CfParametersRefundCcm<RefundAddress, CcmAdditionalData> {
 	pub fn with_ccm_data(
-		cf_parameter: CfParameters<RefundAddress, ()>,
+		cf_parameters: CfParametersRefundCcm<RefundAddress, ()>,
 		data: CcmAdditionalData,
 	) -> Self {
-		CfParameters {
+		CfParametersRefundCcm {
 			ccm_additional_data: data,
-			vault_swap_parameters: cf_parameter.vault_swap_parameters,
+			vault_swap_parameters: cf_parameters.vault_swap_parameters,
 		}
 	}
-}
-
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct VaultSwapParameters<RefundAddress> {
-	pub refund_params: ChannelRefundParameters<RefundAddress>,
-	pub dca_params: Option<DcaParameters>,
-	pub boost_fee: u8,
-	pub broker_fee: Beneficiary<AccountId>,
-	pub affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
 }
 
 /// Provide a function that builds and encodes `cf_parameters`.
@@ -80,12 +110,12 @@ pub fn build_cf_parameters<C: Chain>(
 	};
 
 	match ccm {
-		Some(ccm) => VersionedCcmCfParameters::V0(CfParameters {
+		Some(ccm) => VersionedCcmCfParameters::V1(CfParametersRefundCcm {
 			ccm_additional_data: ccm.ccm_additional_data.clone(),
 			vault_swap_parameters,
 		})
 		.encode(),
-		None => VersionedCfParameters::V0(CfParameters {
+		None => VersionedCfParameters::V1(CfParametersRefundCcm {
 			ccm_additional_data: (),
 			vault_swap_parameters,
 		})
@@ -100,44 +130,65 @@ pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
 		VersionedCfParameters::decode(&mut &data[..])
 			.map_err(|_| "Failed to decode cf_parameter")?;
 
-	Ok((vault_swap_parameters, ccm_additional_data))
+	Ok((vault_swap_parameters.into(), ccm_additional_data))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		ChannelRefundParametersDecoded, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH,
-	};
+	use crate::{ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH, MAX_CCM_MSG_LENGTH};
 	use cf_primitives::chains::AnyChain;
 
-	const MAX_VAULT_SWAP_PARAMETERS_LENGTH: u32 = 1_000;
-	const MAX_CF_PARAM_LENGTH: u32 =
-		MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_PARAMETERS_LENGTH;
+	const MAX_VAULT_SWAP_PARAMETERS_LENGTH_V0: u32 = 1_000;
+	const MAX_CF_PARAM_LENGTH_V0: u32 =
+		MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_PARAMETERS_LENGTH_V0;
+
+	const MAX_VAULT_SWAP_PARAMETERS_LENGTH_V1: u32 =
+		MAX_VAULT_SWAP_PARAMETERS_LENGTH_V0 + MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_CCM_MSG_LENGTH;
+	const MAX_CF_PARAM_LENGTH_V1: u32 =
+		MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_PARAMETERS_LENGTH_V1;
+
+	// This is without the enum byte nor CcmData
+	const REFERENCE_EXPECTED_V0_ENCODED_HEX: &str = "01000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000";
+	const REFERENCE_EXPECTED_V1_ENCODED_HEX: &str = "0100000000020202020202020202020202020202020202020200000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000";
+	const V0_ENUM_BYTE: u8 = 0;
+	const V1_ENUM_BYTE: u8 = 1;
+	const ZERO_LENGTH_CCM_ADDITIONAL_DATA: u8 = 0;
 
 	#[test]
-	fn test_cf_parameters_max_length() {
+	fn test_cf_parameters_max_length_v0() {
 		// Pessimistic assumption of some chain with 64 bytes of account data.
 		#[derive(Encode, Decode, MaxEncodedLen)]
 		struct MaxAccountLength([u8; 64]);
 		assert!(
-			MAX_VAULT_SWAP_PARAMETERS_LENGTH as usize >=
-				VaultSwapParameters::<MaxAccountLength>::max_encoded_len()
+			MAX_VAULT_SWAP_PARAMETERS_LENGTH_V0 as usize >=
+				VaultSwapParametersV0::<MaxAccountLength>::max_encoded_len()
 		);
 		assert!(
-			MAX_CF_PARAM_LENGTH as usize >= CfParameters::<MaxAccountLength>::max_encoded_len()
-		);
-		assert!(
-			MAX_VAULT_SWAP_PARAMETERS_LENGTH as usize >=
-				VaultSwapParameters::<MaxAccountLength>::max_encoded_len()
+			MAX_CF_PARAM_LENGTH_V0 as usize >= CfParameters::<MaxAccountLength>::max_encoded_len()
 		);
 	}
-	fn vault_swap_parameters() -> VaultSwapParameters<ForeignChainAddress> {
-		VaultSwapParameters {
-			refund_params: ChannelRefundParametersDecoded {
+
+	#[test]
+	fn test_cf_parameters_max_length_v1() {
+		// Pessimistic assumption of some chain with 64 bytes of account data.
+		#[derive(Encode, Decode, MaxEncodedLen)]
+		struct MaxAccountLength([u8; 64]);
+		assert!(
+			MAX_VAULT_SWAP_PARAMETERS_LENGTH_V1 as usize >=
+				VaultSwapParameters::<MaxAccountLength>::max_encoded_len()
+		);
+		assert!(
+			MAX_CF_PARAM_LENGTH_V1 as usize >= CfParameters::<MaxAccountLength>::max_encoded_len()
+		);
+	}
+	fn vault_swap_parameters_v0() -> VaultSwapParametersV0<ForeignChainAddress> {
+		VaultSwapParametersV0 {
+			refund_params: ChannelRefundParameters {
 				retry_duration: 1,
 				refund_address: ForeignChainAddress::Eth(sp_core::H160::from([2; 20])),
 				min_price: Default::default(),
+				refund_ccm_metadata: (),
 			},
 			dca_params: Some(DcaParameters { number_of_chunks: 1u32, chunk_interval: 3u32 }),
 			boost_fee: 100u8,
@@ -150,7 +201,7 @@ mod tests {
 	fn test_versioned_cf_parameters() {
 		let cf_parameters = CfParameters {
 			ccm_additional_data: (),
-			vault_swap_parameters: vault_swap_parameters(),
+			vault_swap_parameters: vault_swap_parameters_v0(),
 		};
 		let no_ccm_v0_encoded = VersionedCfParameters::V0(cf_parameters).encode();
 
@@ -160,7 +211,7 @@ mod tests {
 
 		let ccm_cf_parameters = CfParameters {
 			ccm_additional_data: vec![0xF0, 0xF1, 0xF2, 0xF3].try_into().unwrap(),
-			vault_swap_parameters: vault_swap_parameters(),
+			vault_swap_parameters: vault_swap_parameters_v0(),
 		};
 		let ccm_v0_encoded = VersionedCcmCfParameters::V0(ccm_cf_parameters).encode();
 		assert_eq!(ccm_v0_encoded, hex::decode("0010f0f1f2f3010000000002020202020202020202020202020202020202020000000000000000000000000000000000000000000000000000000000000000010100000003000000640000000000000000000000000000000000000000000000000000000000000000010000").unwrap());
@@ -168,7 +219,7 @@ mod tests {
 
 	#[test]
 	fn can_decode_cf_parameters() {
-		let vault_swap_parameters = vault_swap_parameters();
+		let vault_swap_parameters = vault_swap_parameters_v0();
 
 		let encoded = build_cf_parameters::<AnyChain>(
 			vault_swap_parameters.refund_params.clone(),

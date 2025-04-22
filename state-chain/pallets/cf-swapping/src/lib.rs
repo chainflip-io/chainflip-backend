@@ -889,6 +889,8 @@ pub mod pallet {
 		/// Refund egress was not performed because no amount remained after deducting the refund
 		/// fee.
 		NoRefundAmountRemaining,
+		/// CCM is not supported for the refund chain.
+		CcmUnsupportedForRefundChain,
 	}
 
 	#[pallet::genesis_config]
@@ -1764,6 +1766,8 @@ pub mod pallet {
 									request.input_asset,
 									address.clone(),
 									EgressType::Refund { refund_fee },
+									refund_params.refund_ccm_metadata.clone(),
+									true, /* refund */
 								);
 							},
 							AccountOrAddress::InternalAccount(account_id) => {
@@ -2543,6 +2547,31 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 		if retry_duration > max_swap_retry_duration_blocks {
 			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));
 		}
+		Ok(())
+	}
+
+	// TODO: We probably want to merge this with validate_refund_params but there's even rpc
+	// calls that use that so we might need to untangle it. Also the checking and decoding
+	// might need to be updated after PR-5762.
+	fn validate_ccm_refund_params(
+		asset: cf_primitives::Asset,
+		refund_params: cf_chains::ChannelRefundParametersEncoded,
+	) -> Result<(), DispatchError> {
+		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<T>::get();
+		if refund_params.retry_duration > max_swap_retry_duration_blocks {
+			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));
+		}
+
+		if let Some(ccm) = refund_params.refund_ccm_metadata.as_ref() {
+			let source_chain: ForeignChain = (asset).into();
+			if !source_chain.ccm_support() {
+				return Err(DispatchError::from(Error::<T>::CcmUnsupportedForRefundChain));
+			}
+
+			let _ =
+				T::CcmValidityChecker::check_and_decode(ccm, asset, refund_params.refund_address)?;
+		}
+
 		Ok(())
 	}
 

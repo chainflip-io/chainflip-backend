@@ -63,6 +63,7 @@ pub mod test_utils {
 				retry_duration: 1u32,
 				refund_address: refund_address(),
 				min_price: Default::default(),
+				refund_ccm_metadata: Default::default(),
 			},
 			Some(dca_parameter()),
 			BOOST_FEE,

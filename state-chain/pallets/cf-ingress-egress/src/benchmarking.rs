@@ -257,6 +257,7 @@ mod benchmarks {
 					retry_duration: Default::default(),
 					refund_address: BenchmarkValue::benchmark_value(),
 					min_price: Default::default(),
+					refund_ccm_metadata: Default::default(),
 				},
 				dca_params: None,
 				boost_fee: 0,

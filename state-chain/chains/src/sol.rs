@@ -757,6 +757,7 @@ mod test {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
+			refund_ccm_metadata: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;
@@ -824,6 +825,7 @@ mod test {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
+			refund_ccm_metadata: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;
