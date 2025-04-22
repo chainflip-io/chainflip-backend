@@ -261,18 +261,25 @@ where
 	fn new_unsigned(
 		_deposit_details: <Ethereum as Chain>::DepositDetails,
 		refund_address: <Ethereum as Chain>::ChainAccount,
-		refund_amount: <Ethereum as Chain>::ChainAmount,
+		refund_amount: Option<<Ethereum as Chain>::ChainAmount>,
 		asset: <Ethereum as Chain>::ChainAsset,
 		deposit_fetch_id: Option<<Ethereum as Chain>::DepositFetchId>,
 	) -> Result<Self, RejectError> {
-		Ok(Self::RejectCall(evm_all_batch_builder::<Ethereum, _>(
+		match evm_all_batch_builder::<Ethereum, _>(
 			deposit_fetch_id
 				.map(|id| vec![FetchAssetParams { deposit_fetch_id: id, asset }])
 				.unwrap_or_default(),
-			vec![TransferAssetParams { asset, amount: refund_amount, to: refund_address }],
+			refund_amount
+				.map(|amount| TransferAssetParams { asset, amount, to: refund_address })
+				.into_iter()
+				.collect(),
 			E::token_address,
 			E::replay_protection(E::vault_address()),
-		)?))
+		) {
+			Ok(builder) => Ok(Self::RejectCall(builder)),
+			Err(AllBatchError::NotRequired) => Err(RejectError::from(AllBatchError::NotRequired)),
+			Err(err) => Err(RejectError::from(err)),
+		}
 	}
 }
 

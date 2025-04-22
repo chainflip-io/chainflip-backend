@@ -10,7 +10,7 @@ import {
   ChainflipExtrinsicSubmitter,
   calculateFeeWithBps,
   amountToFineAmountBigInt,
-  newAddress,
+  newAssetAddress,
   createStateChainKeypair,
 } from '../shared/utils';
 import { send } from '../shared/send';
@@ -136,7 +136,7 @@ async function testBoostingForAsset(
 
   // Do a swap
   const swapAsset = asset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
-  const destAddress = await newAddress(swapAsset, 'LP_BOOST');
+  const destAddress = await newAssetAddress(swapAsset, 'LP_BOOST');
   logger.debug(`Swap destination address: ${destAddress}`);
   const swapRequest = await requestNewSwap(
     logger,

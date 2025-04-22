@@ -179,6 +179,8 @@ pub fn try_extract_vault_swap_witness(
 			retry_duration: data.parameters.retry_duration.into(),
 			refund_address,
 			min_price,
+			// Bitcoin should never have a ccm refund
+			refund_ccm_metadata: None,
 		},
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks.into(),
@@ -349,6 +351,7 @@ mod tests {
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),
 					)),
+					refund_ccm_metadata: None,
 				},
 				dca_params: Some(DcaParameters {
 					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks.into(),

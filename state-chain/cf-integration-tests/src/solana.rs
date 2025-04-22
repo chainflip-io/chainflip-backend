@@ -77,6 +77,7 @@ const REFUND_PARAMS: ChannelRefundParameters<EncodedAddress> = ChannelRefundPara
 	retry_duration: 0,
 	refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
 	min_price: sp_core::U256::zero(),
+	refund_ccm_metadata: None,
 };
 
 type SolanaElectionVote = BoundedBTreeMap<
@@ -391,6 +392,7 @@ fn vault_swap_deposit_witness(
 			retry_duration: REFUND_PARAMS.retry_duration,
 			refund_address: FALLBACK_ADDRESS,
 			min_price: REFUND_PARAMS.min_price,
+			refund_ccm_metadata: None,
 		},
 		dca_params: None,
 		boost_fee: 0,

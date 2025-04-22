@@ -84,6 +84,7 @@ const ETH_REFUND_PARAMS: ChannelRefundParameters<H160> = ChannelRefundParameters
 	retry_duration: 0,
 	refund_address: ALICE_ETH_ADDRESS,
 	min_price: sp_core::U256::zero(),
+	refund_ccm_metadata: None,
 };
 
 #[track_caller]
@@ -3312,6 +3313,7 @@ fn test_various_refund_reasons() {
 				retry_duration: 0,
 				min_price: U256::from(0),
 				refund_address: H160::default(),
+				refund_ccm_metadata: None,
 			},
 			dca_params: None,
 			boost_fee: 0,
@@ -3337,6 +3339,7 @@ fn test_various_refund_reasons() {
 				retry_duration: 700,
 				min_price: U256::from(0),
 				refund_address: H160::default(),
+				refund_ccm_metadata: None,
 			},
 			dca_params: None,
 			boost_fee: 0,
@@ -3362,6 +3365,7 @@ fn test_various_refund_reasons() {
 				retry_duration: 0,
 				min_price: U256::from(0),
 				refund_address: H160::default(),
+				refund_ccm_metadata: None,
 			},
 			dca_params: Some(DcaParameters { number_of_chunks: 0, chunk_interval: 100 }),
 			boost_fee: 0,
