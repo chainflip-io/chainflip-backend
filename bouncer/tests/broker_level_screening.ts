@@ -230,6 +230,9 @@ async function testBrokerLevelScreeningEthereum(
   const MAX_RETRIES = 120;
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
+
+  logger.debug(`BTC destination address: ${destinationAddressForBtc}`);
+
   const ethereumRefundAddress = await newAssetAddress('Eth');
 
   const refundParameters: FillOrKillParamsX128 = {
@@ -509,9 +512,10 @@ export async function testBrokerLevelScreening(testContext: TestContext) {
     testBrokerLevelScreeningEthereum(testContext, 'Usdt', async (txId) =>
       setTxRiskScore('Ethereum', txId, 9.0),
     ),
-    testBrokerLevelScreeningEthereum(testContext, 'Flip', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
+    // Re-enable when DM supports FLIP
+    // testBrokerLevelScreeningEthereum(testContext, 'Flip', async (txId) =>
+    //   setTxRiskScore('Ethereum', txId, 9.0),
+    // ),
     testBrokerLevelScreeningEthereum(testContext, 'Usdc', async (txId) =>
       setTxRiskScore('Ethereum', txId, 9.0),
     ),
