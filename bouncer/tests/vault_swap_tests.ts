@@ -29,8 +29,8 @@ async function testRefundVaultSwap(logger: Logger) {
   const destAsset = Assets.Usdc;
   const balanceObserveTimeout = 60;
   const depositAmount = defaultAssetAmounts(inputAsset);
-  const destAddress = await newAddress('Usdc', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
-  const refundAddress = await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
+  const destAddress = await newAssetAddress('Usdc');
+  const refundAddress = await newAssetAddress('Btc');
   const foKParams = {
     retryDurationBlocks: 100,
     refundAddress,
