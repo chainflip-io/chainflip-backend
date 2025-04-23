@@ -18,7 +18,6 @@ impl OnRuntimeUpgrade for Migration {
 	fn on_runtime_upgrade() -> Weight {
 		ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::set(Some((
 			Default::default(),
-			// TODO: Write a migration to set this too.
 			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
 			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
 			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 0 },
@@ -32,6 +31,22 @@ impl OnRuntimeUpgrade for Migration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		let unsynchronized_settings =
+			ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::get();
+		assert_eq!(
+			unsynchronized_settings,
+			Some((
+				Default::default(),
+				BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
+				BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
+				BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 0 },
+				Default::default(),
+				(),
+			))
+		);
+
+		let lifetime = SharedDataReferenceLifetime::<Runtime, BitcoinInstance>::get();
+		assert_eq!(lifetime, 8);
 		Ok(())
 	}
 }
