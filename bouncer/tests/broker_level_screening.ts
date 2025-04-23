@@ -142,20 +142,7 @@ async function setMockmode(mode: Mockmode) {
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
 async function setTxRiskScore(chain: SupportedChain, txid: string, score: number) {
-  let endpoint;
-  switch (chain) {
-    case 'Bitcoin':
-      endpoint = ':6070/riskscore';
-      break;
-
-    case 'Ethereum':
-      endpoint = ':6070/riskscore_eth';
-      break;
-
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
-  }
-  await postToDepositMonitor(endpoint, [
+  await postToDepositMonitor(':6070/riskscore', [
     txid,
     {
       risk_score: { Score: score },
