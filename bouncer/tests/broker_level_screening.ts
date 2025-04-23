@@ -448,7 +448,9 @@ export async function testBrokerLevelScreeningBitcoin(
 
   await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
-    throw new Error(`Didn't receive funds refund to BTC address ${btcRefundAddress} within timeout!`);
+    throw new Error(
+      `Didn't receive funds refund to BTC address ${btcRefundAddress} within timeout!`,
+    );
   }
 
   logger.debug(`Marked Bitcoin transaction was rejected and refunded 👍.`);
@@ -465,7 +467,9 @@ export async function testBrokerLevelScreeningBitcoin(
     await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
     if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
-      throw new Error(`Didn't receive funds refund from boosted deposit to BTCaddress ${btcRefundAddress} within timeout!`);
+      throw new Error(
+        `Didn't receive funds refund from boosted deposit to BTCaddress ${btcRefundAddress} within timeout!`,
+      );
     }
     logger.debug(`Marked Bitcoin transaction was rejected and refunded 👍.`);
 
