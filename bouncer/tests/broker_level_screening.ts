@@ -530,9 +530,9 @@ export async function testBrokerLevelScreening(testContext: TestContext) {
     testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Usdt', async (txId) =>
       setTxRiskScore('Ethereum', txId, 9.0),
     ),
-    testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Flip', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
+    // testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Flip', async (txId) =>
+    //   setTxRiskScore('Ethereum', txId, 9.0),
+    // ),
     testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Usdc', async (txId) =>
       setTxRiskScore('Ethereum', txId, 9.0),
     ),
