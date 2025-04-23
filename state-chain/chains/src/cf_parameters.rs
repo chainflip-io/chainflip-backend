@@ -125,8 +125,6 @@ mod tests {
 	const MAX_CF_PARAM_LENGTH: u32 =
 		MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_PARAMETERS_LENGTH;
 
-	const REFERENCE_EXPECTED_ENCODED_HEX: &str = "0001000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000";
-
 	#[test]
 	fn test_cf_parameters_max_length() {
 		// Pessimistic assumption of some chain with 64 bytes of account data.
@@ -157,31 +155,25 @@ mod tests {
 			affiliate_fees: sp_core::bounded_vec![],
 		}
 	}
+
 	#[test]
 	fn test_versioned_cf_parameters() {
-		let vault_swap_parameters = vault_swap_parameters();
-
 		let cf_parameters = CfParameters {
 			ccm_additional_data: (),
-			vault_swap_parameters: vault_swap_parameters.clone(),
+			vault_swap_parameters: vault_swap_parameters(),
 		};
+		let no_ccm_v0_encoded = VersionedCfParameters::V0(cf_parameters).encode();
 
-		let mut encoded = VersionedCfParameters::V0(cf_parameters).encode();
 		let expected_encoded: Vec<u8> =
-			hex::decode(REFERENCE_EXPECTED_ENCODED_HEX).expect("Decoding hex string failed");
-		assert_eq!(encoded, expected_encoded);
+			hex::decode("00010000000002020202020202020202020202020202020202020000000000000000000000000000000000000000000000000000000000000000010100000003000000640000000000000000000000000000000000000000000000000000000000000000010000").unwrap();
+		assert_eq!(no_ccm_v0_encoded, expected_encoded);
 
 		let ccm_cf_parameters = CfParameters {
-			ccm_additional_data: CcmAdditionalData::default(),
-			vault_swap_parameters,
+			ccm_additional_data: vec![0xF0, 0xF1, 0xF2, 0xF3].try_into().unwrap(),
+			vault_swap_parameters: vault_swap_parameters(),
 		};
-
-		encoded = VersionedCcmCfParameters::V0(ccm_cf_parameters).encode();
-
-		// Extra byte for the empty ccm metadata
-		let expected_encoded_with_metadata = [vec![0], expected_encoded.clone()].concat();
-
-		assert_eq!(encoded, expected_encoded_with_metadata);
+		let ccm_v0_encoded = VersionedCcmCfParameters::V0(ccm_cf_parameters).encode();
+		assert_eq!(ccm_v0_encoded, hex::decode("0010f0f1f2f3010000000002020202020202020202020202020202020202020000000000000000000000000000000000000000000000000000000000000000010100000003000000640000000000000000000000000000000000000000000000000000000000000000010000").unwrap());
 	}
 
 	#[test]
