@@ -31,7 +31,7 @@ use cf_traits::{
 		egress_handler::MockEgressHandler, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	AccountRoleRegistry, BalanceApi, BoostApi, HistoricalFeeMigration, MinimumDeposit,
+	AccountRoleRegistry, BalanceApi, BoostApi, MinimumDeposit,
 };
 use frame_support::{
 	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -76,20 +76,6 @@ frame_support::construct_runtime!(
 
 thread_local! {
 	pub static BALANCE_MAP: RefCell<BTreeMap<AccountId, AssetAmount>> = RefCell::new(BTreeMap::new());
-}
-
-pub struct MockMigrationHelper;
-
-impl HistoricalFeeMigration for MockMigrationHelper {
-	type AccountId = AccountId;
-
-	fn migrate_historical_fee(_account_id: Self::AccountId, _asset: Asset, _amount: AssetAmount) {
-		todo!()
-	}
-
-	fn get_fee_amount(_account_id: Self::AccountId, _asset: Asset) -> AssetAmount {
-		todo!()
-	}
 }
 
 pub const MINIMUM_DEPOSIT: u128 = 100;
@@ -189,7 +175,6 @@ impl crate::Config for Test {
 	type FeePayment = MockFeePayment<Self>;
 	type BoostApi = MockIngressEgressBoostApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
-	type MigrationHelper = MockMigrationHelper;
 	type MinimumDeposit = MockMinimumDepositProvider;
 }
 
