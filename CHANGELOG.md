@@ -2,6 +2,104 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.9.0] - 2025-04-24
+
+### CI
+
+- Move to nsc container registry 🏎️ ([#5649](https://github.com/chainflip-io/chainflip-backend/issues/5649))
+- Enable CI Runner Cache 💰 ([#5668](https://github.com/chainflip-io/chainflip-backend/issues/5668))
+- Make localnet startup logs easier to access in CI [([PLA-1820](https://linear.app/chainflip/issue/PLA-1820))] ([#5725](https://github.com/chainflip-io/chainflip-backend/issues/5725))
+- ([PLA-1835](https://linear.app/chainflip/issue/PLA-1835)): limit start-deposit-monitor.sh retries in CI ([#5763](https://github.com/chainflip-io/chainflip-backend/issues/5763))
+
+### Features
+
+- Add base for versioned solana transaction ([#5599](https://github.com/chainflip-io/chainflip-backend/issues/5599))
+- Refresh solana elections instead of recreate ([#5629](https://github.com/chainflip-io/chainflip-backend/issues/5629))
+- Use vitest to run bouncer ([#5610](https://github.com/chainflip-io/chainflip-backend/issues/5610))
+- On chain swaps ([#5595](https://github.com/chainflip-io/chainflip-backend/issues/5595))
+- Solana backoff deposit witnessing ([#5636](https://github.com/chainflip-io/chainflip-backend/issues/5636))
+- Generate traces for solana elections ([#5639](https://github.com/chainflip-io/chainflip-backend/issues/5639))
+- Pino logging in bouncer ([#5643](https://github.com/chainflip-io/chainflip-backend/issues/5643))
+- Upgrade subxt to 0.39.0 ([#5625](https://github.com/chainflip-io/chainflip-backend/issues/5625))
+- Bouncer run test command ([#5675](https://github.com/chainflip-io/chainflip-backend/issues/5675))
+- Refund fee ([#5661](https://github.com/chainflip-io/chainflip-backend/issues/5661))
+- Add `cargo nextest` 🧪 ([#5696](https://github.com/chainflip-io/chainflip-backend/issues/5696))
+- Arbitrum ingress-egress tracking ([#5702](https://github.com/chainflip-io/chainflip-backend/issues/5702))
+- Add option hash to get open swap channels ([#5699](https://github.com/chainflip-io/chainflip-backend/issues/5699))
+- Enforce minimum swap amount for on-chain swaps ([#5691](https://github.com/chainflip-io/chainflip-backend/issues/5691))
+- Use environment variable to choose deposit-monitor image tag. ([#5706](https://github.com/chainflip-io/chainflip-backend/issues/5706))
+- On chain swap in lp api ([#5738](https://github.com/chainflip-io/chainflip-backend/issues/5738))
+- Update subxt to >0.41.0 with breaking changes fixes ([#5739](https://github.com/chainflip-io/chainflip-backend/issues/5739))
+- Add RPC to return all current vault addresses ([#5711](https://github.com/chainflip-io/chainflip-backend/issues/5711)) ([#5741](https://github.com/chainflip-io/chainflip-backend/issues/5741))
+- Core Functionality for Trading Strategies ([#5715](https://github.com/chainflip-io/chainflip-backend/issues/5715))
+- Trading strategy benchmarks ([#5748](https://github.com/chainflip-io/chainflip-backend/issues/5748))
+- Solana versioned transaction without user alt logic ([#5753](https://github.com/chainflip-io/chainflip-backend/issues/5753))
+- Safe mode for trading strategies ([#5755](https://github.com/chainflip-io/chainflip-backend/issues/5755))
+- Rpc to get trading strategies ([#5754](https://github.com/chainflip-io/chainflip-backend/issues/5754))
+- Reuse decode_cf_parameters ([#5765](https://github.com/chainflip-io/chainflip-backend/issues/5765))
+- Trading strategy limits ([#5758](https://github.com/chainflip-io/chainflip-backend/issues/5758))
+- Trading strategy limits rpc ([#5766](https://github.com/chainflip-io/chainflip-backend/issues/5766))
+- Single tick trading strategy ([#5767](https://github.com/chainflip-io/chainflip-backend/issues/5767))
+- Dynamically scale transaction fees for LP calls ([#5708](https://github.com/chainflip-io/chainflip-backend/issues/5708))
+- Rpc 2.0 move lp and broker apis to node ([#5781](https://github.com/chainflip-io/chainflip-backend/issues/5781))
+- Generic typeinfo ([#5775](https://github.com/chainflip-io/chainflip-backend/issues/5775))
+- Instance specific voter logs ([#5790](https://github.com/chainflip-io/chainflip-backend/issues/5790))
+- Change minimum network fee to be per request ([#5778](https://github.com/chainflip-io/chainflip-backend/issues/5778))
+- Ethereum broker level screening ([#5700](https://github.com/chainflip-io/chainflip-backend/issues/5700))
+- Ignore redemption tax when redeem all ([#5761](https://github.com/chainflip-io/chainflip-backend/issues/5761))
+- Remove pool fee for limit orders ([#5770](https://github.com/chainflip-io/chainflip-backend/issues/5770))
+- Asset hub chain implementation ([#5473](https://github.com/chainflip-io/chainflip-backend/issues/5473))
+- Safe mode for internal swaps ([#5792](https://github.com/chainflip-io/chainflip-backend/issues/5792))
+- Different network fee for internal swaps ([#5793](https://github.com/chainflip-io/chainflip-backend/issues/5793))
+- Combine eth/btc mocks for ingress-egress pallet ([#5771](https://github.com/chainflip-io/chainflip-backend/issues/5771))
+- Vault swap minimum broker fee ([#5796](https://github.com/chainflip-io/chainflip-backend/issues/5796))
+- Provide Partial Vote most of the time ([#5809](https://github.com/chainflip-io/chainflip-backend/issues/5809))
+- Ability to delay boost ([#5804](https://github.com/chainflip-io/chainflip-backend/issues/5804))
+
+### Fixes
+
+- Swap after disconnect polkadot bouncer issue ([#5616](https://github.com/chainflip-io/chainflip-backend/issues/5616))
+- Bump versions, remove old migrations and organise remaining ones ([#5619](https://github.com/chainflip-io/chainflip-backend/issues/5619))
+- Don't block fetches ([#5632](https://github.com/chainflip-io/chainflip-backend/issues/5632))
+- Typo 💅 ([#5656](https://github.com/chainflip-io/chainflip-backend/issues/5656))
+- Pick hotfixes from 1.8 branch ([#5645](https://github.com/chainflip-io/chainflip-backend/issues/5645))
+- Cancel_orders_batch benchmarking ([#5682](https://github.com/chainflip-io/chainflip-backend/issues/5682))
+- Spec version checker 🐛 ([#5684](https://github.com/chainflip-io/chainflip-backend/issues/5684))
+- Address RUSTSEC-2025-0009 ([#5710](https://github.com/chainflip-io/chainflip-backend/issues/5710))
+- Explicitly install rust toolchain on M2 Runners 🐛 ([#5718](https://github.com/chainflip-io/chainflip-backend/issues/5718))
+- Cargo audit issue RUSTSEC-2025-0014 ([#5723](https://github.com/chainflip-io/chainflip-backend/issues/5723))
+- Use .asc sig instead of .sig ([#5730](https://github.com/chainflip-io/chainflip-backend/issues/5730))
+- More robust cancellation of strategy orders ([#5744](https://github.com/chainflip-io/chainflip-backend/issues/5744))
+- Throw error if runtime upgrade test fails ([#5769](https://github.com/chainflip-io/chainflip-backend/issues/5769))
+- Correctly estimate input amount in scheduled swaps ([#5782](https://github.com/chainflip-io/chainflip-backend/issues/5782))
+- Bump openssl to fix RUSTSEC-2025-0022 ([#5788](https://github.com/chainflip-io/chainflip-backend/issues/5788))
+- Order_fills_for_block fix to show error only when result is none ([#5773](https://github.com/chainflip-io/chainflip-backend/issues/5773))
+- Refresh evm replay protection with correct contract address ([#5797](https://github.com/chainflip-io/chainflip-backend/issues/5797))
+- Changed bouncer test name from VaultSwapFeeCollection to VaultSwaps ([#5802](https://github.com/chainflip-io/chainflip-backend/issues/5802))
+- Prevent subscriptions dropping by properly unpinning blocks ([#5760](https://github.com/chainflip-io/chainflip-backend/issues/5760)) ([#5774](https://github.com/chainflip-io/chainflip-backend/issues/5774))
+- Lru cache fixes in the subscription gc ([#5807](https://github.com/chainflip-io/chainflip-backend/issues/5807))
+- Correctly clean up TransactionOutIdToBroadcastId storage ([#5806](https://github.com/chainflip-io/chainflip-backend/issues/5806))
+- Correctly clear pending boosts if full witness arrives early ([#5811](https://github.com/chainflip-io/chainflip-backend/issues/5811))
+- Auto-sweep at the beginning of the next block
+- Add hubUsdt and hubUsdc to StablecoinDefaults ([#5822](https://github.com/chainflip-io/chainflip-backend/issues/5822))
+
+### Refactor
+
+- ExecAsync ([#5680](https://github.com/chainflip-io/chainflip-backend/issues/5680))
+- Move common rpc and state chain client types to separate crates ([#5673](https://github.com/chainflip-io/chainflip-backend/issues/5673))
+- Make refund_params mandatory ([#5630](https://github.com/chainflip-io/chainflip-backend/issues/5630))
+- Initialise when necessary ([#5693](https://github.com/chainflip-io/chainflip-backend/issues/5693))
+- Make custom rpc logic shareable ([#5743](https://github.com/chainflip-io/chainflip-backend/issues/5743))
+- Include expire block in liquidity deposit details ([#5737](https://github.com/chainflip-io/chainflip-backend/issues/5737))
+- Improve cancel order batch sweeping ([#5726](https://github.com/chainflip-io/chainflip-backend/issues/5726))
+- Vault swap refund instead of ignoring the deposit ([#5507](https://github.com/chainflip-io/chainflip-backend/issues/5507))
+- Move rpc api defining traits to new crate ([#5805](https://github.com/chainflip-io/chainflip-backend/issues/5805))
+
+### Testing
+
+- Trading strategies integration test ([#5752](https://github.com/chainflip-io/chainflip-backend/issues/5752))
+
+
 ## [1.8.2] - 2025-02-12
 
 - Prevent blocking of fetches due to small edge case ([#5631](https://github.com/chainflip-io/chainflip-backend/pull/5631))
