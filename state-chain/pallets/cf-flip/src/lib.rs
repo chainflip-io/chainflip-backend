@@ -620,6 +620,10 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 		Ok(())
 	}
+
+	fn try_debit_funds(account_id: &Self::AccountId, amount: Self::Balance) -> bool {
+		Surplus::<T>::try_from_acct(account_id, amount, false).is_some()
+	}
 }
 
 pub struct BurnFlipAccount<T: Config>(PhantomData<T>);

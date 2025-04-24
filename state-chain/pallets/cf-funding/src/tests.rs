@@ -1835,3 +1835,32 @@ fn only_governance_can_update_settings() {
 		);
 	});
 }
+
+#[test]
+fn transfer_liquid_funds_internal() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			1,
+			"Funding pallet should increment the provider count on account creation."
+		);
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT, "Total balance to be correct.");
+		assert_ok!(Funding::internal_transfer(
+			OriginTrait::signed(ALICE),
+			BOB,
+			UNRESTRICTED_ADDRESS,
+			AMOUNT_MINUS_FEE.into()
+		));
+		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT_MINUS_FEE, "Total balance to be correct.");
+	});
+}
