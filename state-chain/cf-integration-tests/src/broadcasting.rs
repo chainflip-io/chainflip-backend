@@ -1,7 +1,8 @@
 use super::*;
 use cf_chains::{
 	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo},
-	AllBatch, Bitcoin, ForeignChain, TransferAssetParams,
+	eth::api::EthereumApi,
+	AllBatch, ApiCall, Bitcoin, ForeignChain, TransferAssetParams, UpdateFlipSupply,
 };
 use cf_primitives::{chains::assets::btc, AuthorityCount, BroadcastId};
 use cf_traits::{Broadcaster, EpochInfo};
@@ -113,4 +114,28 @@ fn bitcoin_broadcast_delay_works() {
 				);
 			}
 		});
+}
+
+#[test]
+fn refresh_replay_protection() {
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let mut api_call = <<Runtime as pallet_cf_emissions::Config>::ApiCall as UpdateFlipSupply<_>>::new_unsigned(1_000_000, 1);
+
+		let old_replay_protection = match &api_call {
+			EthereumApi::UpdateFlipSupply(call) => call.replay_protection(),
+			_ => unreachable!("Expected EthereumApi::UpdateFlipSupply"),
+		};
+
+		api_call.refresh_replay_protection();
+		let new_replay_protection = match &api_call {
+			EthereumApi::UpdateFlipSupply(call) => call.replay_protection(),
+			_ => unreachable!("Expected EthereumApi::UpdateFlipSupply"),
+		};
+
+		assert_ne!(old_replay_protection, new_replay_protection);
+		// Only the nonce should change
+		assert_ne!(old_replay_protection.nonce, new_replay_protection.nonce);
+		assert_eq!(old_replay_protection.chain_id, new_replay_protection.chain_id);
+		assert_eq!(old_replay_protection.contract_address, new_replay_protection.contract_address);
+	});
 }
