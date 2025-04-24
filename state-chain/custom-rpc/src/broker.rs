@@ -262,7 +262,7 @@ where
 		.map_err(CfApiError::from)?)
 	}
 
-	// This is also defined in custom-rpc.
+	// This is also defined in custom-rpc. // TODO: try to define only in one place
 	async fn request_swap_parameter_encoding(
 		&self,
 		source_asset: Asset,
