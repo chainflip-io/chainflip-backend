@@ -489,7 +489,7 @@ pub type ShortId = u8;
 pub struct StablecoinDefaults<const N: u128>();
 impl<const N: u128> Get<BTreeMap<Asset, AssetAmount>> for StablecoinDefaults<N> {
 	fn get() -> BTreeMap<Asset, AssetAmount> {
-		[Asset::Usdc, Asset::Usdt, Asset::ArbUsdc, Asset::SolUsdc]
+		[Asset::Usdc, Asset::Usdt, Asset::ArbUsdc, Asset::SolUsdc, Asset::HubUsdc, Asset::HubUsdt]
 			.into_iter()
 			.map(|asset| (asset, N))
 			.collect()
