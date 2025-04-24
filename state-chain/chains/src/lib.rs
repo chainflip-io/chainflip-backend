@@ -1199,7 +1199,6 @@ impl From<VaultSwapExtraParametersEncoded> for VaultSwapExtraParametersRpc {
 
 #[derive(Clone, Debug, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct VaultSwapInput<Address, Amount> {
-	pub broker_id: cf_primitives::AccountId,
 	pub source_asset: Option<AnyChainAsset>,
 	pub destination_asset: AnyChainAsset,
 	pub destination_address: Address,
@@ -1222,7 +1221,6 @@ pub type VaultSwapInputEncoded = VaultSwapInput<EncodedAddress, AssetAmount>;
 impl From<VaultSwapInputEncoded> for VaultSwapInputRpc {
 	fn from(value: VaultSwapInputEncoded) -> Self {
 		VaultSwapInput {
-			broker_id: value.broker_id,
 			source_asset: value.source_asset,
 			destination_asset: value.destination_asset,
 			destination_address: AddressString::from_encoded_address(value.destination_address),

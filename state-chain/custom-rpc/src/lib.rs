@@ -958,7 +958,7 @@ pub trait CustomApi {
 	#[method(name = "decode_vault_swap_parameter")]
 	fn cf_decode_vault_swap_parameter(
 		&self,
-		broker_id: state_chain_runtime::AccountId,
+		broker: state_chain_runtime::AccountId,
 		vault_swap: VaultSwapDetails<AddressString>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapInputRpc>;
@@ -1365,6 +1365,7 @@ where
 							.unwrap_or_default();
 
 						let info = if api_version < 3 {
+							#[allow(deprecated)]
 							api.cf_broker_info_before_version_3(hash, account_id.clone())?.into()
 						} else {
 							api.cf_broker_info(hash, account_id.clone())?
@@ -1858,7 +1859,7 @@ where
 
 	fn cf_decode_vault_swap_parameter(
 		&self,
-		broker_id: AccountId32,
+		broker: AccountId32,
 		vault_swap: VaultSwapDetails<AddressString>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapInputRpc> {
@@ -1866,7 +1867,7 @@ where
 			Ok::<_, CfApiError>(
 				api.cf_decode_vault_swap_parameter(
 					hash,
-					broker_id,
+					broker,
 					vault_swap.map_btc_address(Into::into),
 				)??
 				.into(),

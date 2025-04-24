@@ -540,7 +540,7 @@ decl_runtime_apis!(
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage>;
 		fn cf_decode_vault_swap_parameter(
-			broker_id: AccountId32,
+			broker: AccountId32,
 			vault_swap: VaultSwapDetails<String>,
 		) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;

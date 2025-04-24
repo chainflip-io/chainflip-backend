@@ -33,8 +33,9 @@ use crate::{
 		},
 		AccountBump, SlotNumber,
 	},
-	AnyChainAsset, CcmChannelMetadata, CcmParams, ChannelRefundParameters, DepositChannel,
-	DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator, TypeInfo,
+	AnyChainAsset, CcmAdditionalData, CcmChannelMetadata, CcmParams, ChannelRefundParameters,
+	DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator,
+	TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{sp_runtime::RuntimeDebug, Parameter};
@@ -632,20 +633,23 @@ pub fn decode_sol_instruction_data(
 		ccm,
 	) = match ccm_parameters {
 		Some(CcmParams { message, gas_amount }) => {
-			let (decoded, additional_data) =
-				crate::cf_parameters::decode_ccm_cf_parameters::<Solana>(cf_parameters)?;
+			let (decoded, additional_data) = crate::cf_parameters::decode_cf_parameters::<
+				SolAddress,
+				CcmAdditionalData,
+			>(&cf_parameters[..])?;
 			(
 				decoded,
 				Some(CcmChannelMetadata {
 					message: message.try_into().map_err(|_| "Ccm message is too long")?,
 					gas_budget: gas_amount.into(),
-					ccm_additional_data: additional_data
-						.try_into()
-						.map_err(|_| "Ccm message is too long")?,
+					ccm_additional_data: additional_data,
 				}),
 			)
 		},
-		None => (crate::cf_parameters::decode_cf_parameters::<Solana>(cf_parameters)?, None),
+		None => (
+			crate::cf_parameters::decode_cf_parameters::<SolAddress, ()>(&cf_parameters[..])?.0,
+			None,
+		),
 	};
 
 	Ok(DecodedXSwapParams {

@@ -93,24 +93,14 @@ pub fn build_cf_parameters<C: Chain>(
 	}
 }
 
-pub fn decode_cf_parameters<C: Chain>(
-	data: Vec<u8>,
-) -> Result<VaultSwapParameters<C::ChainAccount>, &'static str> {
-	let VersionedCfParameters::V0(CfParameters { ccm_additional_data: _, vault_swap_parameters }) =
-		VersionedCfParameters::<C::ChainAccount>::decode(&mut &data[..])
+pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
+	data: &[u8],
+) -> Result<(VaultSwapParameters<RefundAddress>, CcmData), &'static str> {
+	let VersionedCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
+		VersionedCfParameters::decode(&mut &data[..])
 			.map_err(|_| "Failed to decode cf_parameter")?;
 
-	Ok(vault_swap_parameters)
-}
-
-pub fn decode_ccm_cf_parameters<C: Chain>(
-	data: Vec<u8>,
-) -> Result<(VaultSwapParameters<C::ChainAccount>, Vec<u8>), &'static str> {
-	let VersionedCcmCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
-		VersionedCcmCfParameters::<C::ChainAccount>::decode(&mut &data[..])
-			.map_err(|_| "Failed to decode cf_parameter")?;
-
-	Ok((vault_swap_parameters, ccm_additional_data.to_vec()))
+	Ok((vault_swap_parameters, ccm_additional_data))
 }
 
 #[cfg(test)]
@@ -190,12 +180,7 @@ mod tests {
 			None,
 		);
 
-		assert_eq!(decode_cf_parameters::<AnyChain>(encoded), Ok(vault_swap_parameters));
-	}
-
-	#[test]
-	fn can_decode_ccm_cf_parameters() {
-		let vault_swap_parameters = vault_swap_parameters();
+		assert_eq!(decode_cf_parameters(&encoded[..]), Ok((vault_swap_parameters.clone(), ())));
 
 		let ccm_additional_data = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
 
@@ -214,7 +199,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			decode_ccm_cf_parameters::<AnyChain>(encoded),
+			decode_cf_parameters(&encoded[..]),
 			Ok((vault_swap_parameters, ccm_additional_data))
 		);
 	}

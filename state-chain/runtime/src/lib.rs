@@ -2446,7 +2446,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_decode_vault_swap_parameter(
-			broker_id: AccountId,
+			broker: AccountId,
 			vault_swap: VaultSwapDetails<String>,
 		) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage> {
 			match vault_swap {
@@ -2455,7 +2455,7 @@ impl_runtime_apis! {
 					deposit_address: _,
 				} => {
 					crate::chainflip::vault_swaps::decode_bitcoin_vault_swap(
-						broker_id,
+						broker,
 						nulldata_payload,
 					)
 				},

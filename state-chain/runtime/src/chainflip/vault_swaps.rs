@@ -388,7 +388,6 @@ pub fn decode_bitcoin_vault_swap(
 		.map_err(|_| "Failed to decode Bitcoin Null data Payload")?;
 
 	Ok(VaultSwapInputEncoded {
-		broker_id: broker_id.clone(),
 		source_asset: None, // We lose source asset information in Vault swap
 		destination_asset: output_asset,
 		destination_address: output_address,
@@ -428,7 +427,6 @@ pub fn decode_solana_vault_swap(
 	} = cf_chains::sol::decode_sol_instruction_data(&instruction)?;
 
 	Ok(VaultSwapInputEncoded {
-		broker_id: broker_id.clone(),
 		source_asset: Some(src_asset),
 		destination_asset: dst_token,
 		destination_address: dst_address,

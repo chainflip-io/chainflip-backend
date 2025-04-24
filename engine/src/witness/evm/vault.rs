@@ -32,7 +32,7 @@ use super::{
 
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
-	cf_parameters::{CfParameters, VaultSwapParameters, VersionedCfParameters},
+	cf_parameters::VaultSwapParameters,
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain,
@@ -51,16 +51,13 @@ where
 	RefundAddress: Decode,
 	CcmData: Default + Decode,
 {
-	let VersionedCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
-		VersionedCfParameters::decode(&mut &cf_parameters[..])
-			.inspect_err(|_| {
-				tracing::warn!(
-					"Failed to decode cf_parameters: {cf_parameters:?} at block {block_height}"
-				)
-			})
-			.map_err(|_| anyhow!("Failed to decode cf_parameters!"))?;
-
-	Ok((vault_swap_parameters, ccm_additional_data))
+	cf_chains::cf_parameters::decode_cf_parameters(cf_parameters)
+		.inspect_err(|_| {
+			tracing::warn!(
+				"Failed to decode cf_parameters: {cf_parameters:?} at block {block_height}"
+			)
+		})
+		.map_err(|e| anyhow::anyhow!(e))
 }
 
 pub fn call_from_event<
