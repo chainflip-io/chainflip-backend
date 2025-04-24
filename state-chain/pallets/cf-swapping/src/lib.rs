@@ -105,7 +105,6 @@ pub struct SwapState<T: Config> {
 	pub broker_fee_taken: Option<AssetAmount>,
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
-	pub stable_amount_before_fees: Option<AssetAmount>,
 }
 
 impl<T: Config> SwapState<T> {
@@ -116,8 +115,11 @@ impl<T: Config> SwapState<T> {
 			network_fee_taken: None,
 			broker_fee_taken: None,
 			swap,
-			stable_amount_before_fees: None,
 		}
+	}
+
+	pub fn swap_request_id(&self) -> SwapRequestId {
+		self.swap.swap_request_id
 	}
 
 	fn swap_id(&self) -> SwapId {
@@ -206,23 +208,13 @@ impl NetworkFeeTracker {
 			self.rate * (self.accumulated_stable_amount.saturating_add(stable_amount)),
 			self.minimum,
 		);
-		let fee =
+		let fee_taken =
 			core::cmp::min(calculated_fee.saturating_sub(self.accumulated_fee), stable_amount);
 
-		self.accumulated_fee.saturating_accrue(fee);
+		self.accumulated_fee.saturating_accrue(fee_taken);
 		self.accumulated_stable_amount.saturating_accrue(stable_amount);
 
-		FeeTaken { remaining_amount: stable_amount.saturating_sub(fee), fee }
-	}
-
-	#[cfg(test)]
-	fn new_for_test(
-		minimum: AssetAmount,
-		rate: Permill,
-		accumulated_stable_amount: AssetAmount,
-		accumulated_fee: AssetAmount,
-	) -> Self {
-		Self { minimum, rate, accumulated_stable_amount, accumulated_fee }
+		FeeTaken { remaining_amount: stable_amount.saturating_sub(fee_taken), fee: fee_taken }
 	}
 }
 
@@ -1420,7 +1412,7 @@ pub mod pallet {
 			swaps
 				.into_iter()
 				.filter_map(|state| {
-					let swap_request = SwapRequests::<T>::get(state.swap.swap_request_id)
+					let swap_request = SwapRequests::<T>::get(state.swap_request_id())
 						.expect("Swap request should exist");
 					let dca_state = match swap_request.state {
 						SwapRequestState::UserSwap { dca_state, .. } => Some(dca_state),
@@ -1434,7 +1426,7 @@ pub mod pallet {
 					if state.input_asset() == base_asset {
 						Some(SwapLegInfo {
 							swap_id: state.swap_id(),
-							swap_request_id: state.swap.swap_request_id,
+							swap_request_id: state.swap_request_id(),
 							base_asset,
 							// All swaps from `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
@@ -1477,7 +1469,7 @@ pub mod pallet {
 
 						Some(SwapLegInfo {
 							swap_id: state.swap_id(),
-							swap_request_id: state.swap.swap_request_id,
+							swap_request_id: state.swap_request_id(),
 							base_asset,
 							// All swaps to `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
@@ -1568,37 +1560,35 @@ pub mod pallet {
 
 			// Take fees as required:
 			let mut total_network_fee_taken = 0_u128;
-			for state in swaps.iter_mut() {
+			for swap in swaps.iter_mut() {
 				debug_assert!(
-					state.stable_amount.is_some(),
+					swap.stable_amount.is_some(),
 					"All swaps should have Stable amount set here"
 				);
 
-				state.stable_amount_before_fees = state.stable_amount;
-
-				for fee_type in state.swap.fees.iter_mut() {
+				for fee_type in swap.swap.fees.iter_mut() {
 					let remaining_amount = match fee_type {
 						FeeType::NetworkFee(fee_tracker) => {
 							let FeeTaken { remaining_amount, fee } =
-								fee_tracker.take_fee(state.stable_amount.unwrap_or_default());
-							state.network_fee_taken = Some(fee);
+								fee_tracker.take_fee(swap.stable_amount.unwrap_or_default());
+							swap.network_fee_taken = Some(fee);
 							total_network_fee_taken.saturating_accrue(fee);
 							remaining_amount
 						},
 						FeeType::BrokerFee(beneficiaries) => {
 							let FeeTaken { remaining_amount, fee } = Self::take_broker_fees(
-								state.stable_amount.unwrap_or_default(),
+								swap.stable_amount.unwrap_or_default(),
 								beneficiaries,
 							);
-							state.broker_fee_taken = Some(fee);
+							swap.broker_fee_taken = Some(fee);
 							remaining_amount
 						},
 					};
-					state.stable_amount = Some(remaining_amount);
+					swap.stable_amount = Some(remaining_amount);
 				}
 
-				if state.output_asset() == STABLE_ASSET {
-					state.final_output = state.stable_amount;
+				if swap.output_asset() == STABLE_ASSET {
+					swap.final_output = swap.stable_amount;
 				}
 			}
 
@@ -1806,45 +1796,45 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
 		}
 
-		fn process_swap_outcome(state: SwapState<T>) {
-			let swap_request_id = state.swap.swap_request_id;
+		fn process_swap_outcome(swap: SwapState<T>) {
+			let swap_request_id = swap.swap_request_id();
 
 			let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
 				log_or_panic!("Swap request {swap_request_id} not found");
 				return;
 			};
 
-			let Some(output_amount) = state.final_output else {
-				log_or_panic!("Swap {} is not completed yet!", state.swap_id());
+			let Some(output_amount) = swap.final_output else {
+				log_or_panic!("Swap {} is not completed yet!", swap.swap_id());
 				return;
 			};
 
 			Self::deposit_event(Event::<T>::SwapExecuted {
 				swap_request_id,
-				swap_id: state.swap_id(),
+				swap_id: swap.swap_id(),
 				// To be consistent with `swap_output` and `intermediate_amount` (which do
 				// not include the network fee), we report input amount without the network fee
 				// for swaps from STABLE_ASSET:
-				input_amount: if state.input_asset() == STABLE_ASSET {
-					state.stable_amount.unwrap_or_else(|| {
+				input_amount: if swap.input_asset() == STABLE_ASSET {
+					swap.stable_amount.unwrap_or_else(|| {
 						log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
-						state.input_amount()
+						swap.input_amount()
 					})
 				} else {
-					state.input_amount()
+					swap.input_amount()
 				},
-				input_asset: state.input_asset(),
-				network_fee: state.network_fee_taken.unwrap_or_default(),
-				broker_fee: state.broker_fee_taken.unwrap_or_default(),
-				output_asset: state.output_asset(),
+				input_asset: swap.input_asset(),
+				network_fee: swap.network_fee_taken.unwrap_or_default(),
+				broker_fee: swap.broker_fee_taken.unwrap_or_default(),
+				output_asset: swap.output_asset(),
 				output_amount,
-				intermediate_amount: state.intermediate_amount(),
+				intermediate_amount: swap.intermediate_amount(),
 			});
 
 			let request_completed = match &mut request.state {
 				SwapRequestState::UserSwap { output_action, dca_state, refund_params, .. } =>
 					if let Some(chunk_input_amount) =
-						dca_state.prepare_next_chunk(Some((state.swap_id(), output_amount)))
+						dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
 					{
 						let swap_id = Self::schedule_swap(
 							request.input_asset,
@@ -1852,7 +1842,7 @@ pub mod pallet {
 							chunk_input_amount,
 							refund_params.as_ref(),
 							SwapType::Swap,
-							state.swap.fees.clone(),
+							swap.swap.fees.clone(),
 							request.id,
 							dca_state.chunk_interval.into(),
 						);
@@ -1868,7 +1858,7 @@ pub mod pallet {
 								Self::egress_for_swap(
 									swap_request_id,
 									dca_state.accumulated_output_amount,
-									state.output_asset(),
+									swap.output_asset(),
 									output_address.clone(),
 									ccm_deposit_metadata.clone(),
 									false, /* refund */
@@ -1893,29 +1883,28 @@ pub mod pallet {
 						true
 					},
 				SwapRequestState::NetworkFee => {
-					if state.output_asset() == Asset::Flip {
+					if swap.output_asset() == Asset::Flip {
 						FlipToBurn::<T>::mutate(|total| {
 							total.saturating_accrue(output_amount);
 						});
 					} else {
 						log_or_panic!(
 							"NetworkFee burning should not be in asset: {:?}",
-							state.output_asset()
+							swap.output_asset()
 						);
 					}
 					true
 				},
 				SwapRequestState::IngressEgressFee => {
-					if state.output_asset() == ForeignChain::from(state.output_asset()).gas_asset()
-					{
+					if swap.output_asset() == ForeignChain::from(swap.output_asset()).gas_asset() {
 						T::IngressEgressFeeHandler::accrue_withheld_fee(
-							state.output_asset(),
+							swap.output_asset(),
 							output_amount,
 						);
 					} else {
 						log_or_panic!(
 							"IngressEgressFee swap should not be to non-gas asset: {:?}",
-							state.output_asset()
+							swap.output_asset()
 						);
 					}
 
@@ -1989,10 +1978,10 @@ pub mod pallet {
 			)
 			.map_err(|_| bundle_input)?;
 
-			for state in swaps.iter_mut() {
+			for swap in swaps.iter_mut() {
 				let swap_output = if bundle_input > 0 {
 					multiply_by_rational_with_rounding(
-						state.swap_amount(direction).unwrap_or_default(),
+						swap.swap_amount(direction).unwrap_or_default(),
 						bundle_output,
 						bundle_input,
 						Rounding::Down,
@@ -2004,7 +1993,7 @@ pub mod pallet {
 					0
 				};
 
-				state.update_swap_result(direction, swap_output);
+				swap.update_swap_result(direction, swap_output);
 
 				if swap_output == 0 {
 					// This is unlikely but theoretically possible if, for example, the initial swap
@@ -2013,7 +2002,7 @@ pub mod pallet {
 					log::warn!(
 						"Swap {:?} in bundle {{ input: {bundle_input}, output: {bundle_output} }}
 						resulted in swap output of zero.",
-						state.swap
+						swap.swap
 					);
 				}
 			}
@@ -2077,22 +2066,24 @@ pub mod pallet {
 		}
 
 		#[transactional]
+		/// Must be called within a rollback. Used to simulate a swap for calculating gas amounts.
+		/// Note: Network fees are taken into account, but not collected.
 		pub fn swap_with_network_fee_for_gas(
 			from: Asset,
 			to: Asset,
 			input_amount: AssetAmount,
 		) -> Result<SwapOutput, DispatchError> {
-			let swap_output = match (from, to) {
+			let mut network_fee_tracker = NetworkFeeTracker::new(0, T::NetworkFee::get());
+			Ok(match (from, to) {
 				(_, STABLE_ASSET) => {
-					let FeeTaken { remaining_amount: output, fee } =
-						NetworkFeeTracker::new(0, T::NetworkFee::get())
-							.take_fee(T::SwappingApi::swap_single_leg(from, to, input_amount)?);
+					let FeeTaken { remaining_amount: output, fee } = network_fee_tracker
+						.take_fee(T::SwappingApi::swap_single_leg(from, to, input_amount)?);
 
 					SwapOutput { intermediary: None, output, network_fee: fee }
 				},
 				(STABLE_ASSET, _) => {
 					let FeeTaken { remaining_amount: input_amount, fee } =
-						NetworkFeeTracker::new(0, T::NetworkFee::get()).take_fee(input_amount);
+						network_fee_tracker.take_fee(input_amount);
 
 					SwapOutput {
 						intermediary: None,
@@ -2101,10 +2092,12 @@ pub mod pallet {
 					}
 				},
 				_ => {
-					let FeeTaken { remaining_amount: intermediary, fee } =
-						NetworkFeeTracker::new(0, T::NetworkFee::get()).take_fee(
-							T::SwappingApi::swap_single_leg(from, STABLE_ASSET, input_amount)?,
-						);
+					let FeeTaken { remaining_amount: intermediary, fee } = network_fee_tracker
+						.take_fee(T::SwappingApi::swap_single_leg(
+							from,
+							STABLE_ASSET,
+							input_amount,
+						)?);
 
 					SwapOutput {
 						intermediary: Some(intermediary),
@@ -2112,15 +2105,7 @@ pub mod pallet {
 						network_fee: fee,
 					}
 				},
-			};
-
-			if !swap_output.network_fee.is_zero() {
-				CollectedNetworkFee::<T>::mutate(|total| {
-					total.saturating_accrue(swap_output.network_fee);
-				});
-			}
-
-			Ok(swap_output)
+			})
 		}
 
 		fn egress_for_swap(

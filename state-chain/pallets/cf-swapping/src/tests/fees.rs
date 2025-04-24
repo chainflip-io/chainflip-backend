@@ -117,22 +117,17 @@ fn test_buy_back_flip() {
 }
 
 #[test]
-fn swap_uses_correct_network_fee() {
-	const NORMAL_SWAP_AMOUNT: AssetAmount = 10000;
-	const NORMAL_NETWORK_FEE: Permill = Permill::from_percent(10);
-	const NORMAL_MINIMUM_NETWORK_FEE: AssetAmount = 100;
-
-	const INTERNAL_SWAP_AMOUNT: AssetAmount = 20000;
-	const INTERNAL_NETWORK_FEE: Permill = Permill::from_percent(20);
-	const INTERNAL_MINIMUM_NETWORK_FEE: AssetAmount = 200;
+fn normal_swap_uses_correct_network_fee() {
+	const AMOUNT: AssetAmount = 10000;
+	const SMALL_AMOUNT: AssetAmount = 500;
+	const NETWORK_FEE: Permill = Permill::from_percent(10);
+	const MINIMUM_NETWORK_FEE: AssetAmount = 100;
 
 	new_test_ext()
 		.execute_with(|| {
 			// Set both network fees to different values
-			NetworkFee::set(NORMAL_NETWORK_FEE);
-			MinimumNetworkFee::<Test>::set(NORMAL_MINIMUM_NETWORK_FEE);
-			InternalSwapNetworkFee::<Test>::set(INTERNAL_NETWORK_FEE);
-			InternalSwapMinimumNetworkFee::<Test>::set(INTERNAL_MINIMUM_NETWORK_FEE);
+			NetworkFee::set(NETWORK_FEE);
+			MinimumNetworkFee::<Test>::set(MINIMUM_NETWORK_FEE);
 
 			// Set a swap rate of 1 to make it easier
 			SwapRate::set(1_f64);
@@ -140,8 +135,7 @@ fn swap_uses_correct_network_fee() {
 			// Sanity check collected fees before any swaps
 			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
 
-			// Normal swap
-			fn normal_swap(amount: AssetAmount) {
+			fn init_swap(amount: AssetAmount) {
 				Swapping::init_swap_request(
 					Asset::Flip,
 					amount,
@@ -161,13 +155,57 @@ fn swap_uses_correct_network_fee() {
 					},
 				);
 			}
-			// Normal swap with network fee
-			normal_swap(NORMAL_SWAP_AMOUNT);
-			// Normal swap that will be charged the minimum network fee
-			normal_swap(NORMAL_MINIMUM_NETWORK_FEE);
+			// Swap with network fee
+			init_swap(AMOUNT);
+			// Swap that will be charged the minimum network fee
+			init_swap(SMALL_AMOUNT);
+		})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					network_fee,
+					input_amount: AMOUNT,
+					..
+				}) if *network_fee == NETWORK_FEE * AMOUNT,
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					network_fee,
+					input_amount: SMALL_AMOUNT,
+					..
+				}) if *network_fee == MINIMUM_NETWORK_FEE,
+			);
 
-			// Internal swap
-			fn internal_swap(amount: AssetAmount) {
+			// Check that the network fee is actually collected
+			assert_eq!(
+				CollectedNetworkFee::<Test>::get(),
+				(NETWORK_FEE * AMOUNT) + MINIMUM_NETWORK_FEE
+			);
+		});
+}
+
+#[test]
+fn internal_swap_uses_correct_network_fee() {
+	const AMOUNT: AssetAmount = 10000;
+	const SMALL_AMOUNT: AssetAmount = 500;
+	const NETWORK_FEE: Permill = Permill::from_percent(10);
+	const MINIMUM_NETWORK_FEE: AssetAmount = 100;
+
+	new_test_ext()
+		.execute_with(|| {
+			InternalSwapNetworkFee::<Test>::set(NETWORK_FEE);
+			InternalSwapMinimumNetworkFee::<Test>::set(MINIMUM_NETWORK_FEE);
+
+			// Set a swap rate of 1 to make it easier
+			SwapRate::set(1_f64);
+
+			// Sanity check collected fees before any swaps
+			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+
+			fn init_swap(amount: AssetAmount) {
 				Swapping::init_swap_request(
 					Asset::Flip,
 					amount,
@@ -181,15 +219,62 @@ fn swap_uses_correct_network_fee() {
 					SwapOrigin::OnChainAccount(0_u64),
 				);
 			}
-			// Internal swap with network fee
-			internal_swap(INTERNAL_SWAP_AMOUNT);
-			// Internal swap that will be charged the minimum network fee
-			internal_swap(INTERNAL_MINIMUM_NETWORK_FEE);
+			// Swap with network fee
+			init_swap(AMOUNT);
+			// Swap that will be charged the minimum network fee
+			init_swap(SMALL_AMOUNT);
+		})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					network_fee,
+					input_amount: AMOUNT,
+					..
+				}) if *network_fee == NETWORK_FEE * AMOUNT,
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					network_fee,
+					input_amount: SMALL_AMOUNT,
+					..
+				}) if *network_fee == MINIMUM_NETWORK_FEE,
+			);
 
-			// Ingress Egress fee swap has no minimum
+			// Check that the network fee is actually collected
+			assert_eq!(
+				CollectedNetworkFee::<Test>::get(),
+				(NETWORK_FEE * AMOUNT) + MINIMUM_NETWORK_FEE
+			);
+		});
+}
+
+#[test]
+fn no_network_fee_minimum_for_gas_swaps() {
+	const AMOUNT: AssetAmount = 500;
+	const NETWORK_FEE: Permill = Permill::from_percent(10);
+	const MINIMUM_NETWORK_FEE: AssetAmount = 100;
+
+	assert!(NETWORK_FEE * AMOUNT < MINIMUM_NETWORK_FEE, "Minimum network fee must be large enough");
+
+	new_test_ext()
+		.execute_with(|| {
+			NetworkFee::set(NETWORK_FEE);
+			// Set both minimums, just in case.
+			MinimumNetworkFee::<Test>::set(MINIMUM_NETWORK_FEE);
+			InternalSwapMinimumNetworkFee::<Test>::set(MINIMUM_NETWORK_FEE);
+
+			// Set a swap rate of 1 to make it easier
+			SwapRate::set(1_f64);
+
+			// Sanity check collected fees before any swaps
+			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+
 			Swapping::init_swap_request(
 				Asset::Flip,
-				NORMAL_MINIMUM_NETWORK_FEE,
+				AMOUNT,
 				Asset::Eth,
 				SwapRequestType::IngressEgressFee,
 				Default::default(),
@@ -204,52 +289,13 @@ fn swap_uses_correct_network_fee() {
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					network_fee,
-					input_amount: NORMAL_SWAP_AMOUNT,
+					input_amount: AMOUNT,
 					..
-				}) if *network_fee == NORMAL_NETWORK_FEE * NORMAL_SWAP_AMOUNT,
-			);
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					network_fee,
-					input_amount: NORMAL_MINIMUM_NETWORK_FEE,
-					..
-				}) if *network_fee == NORMAL_MINIMUM_NETWORK_FEE,
-			);
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					network_fee,
-					input_amount: INTERNAL_SWAP_AMOUNT,
-					..
-				}) if *network_fee == INTERNAL_NETWORK_FEE * INTERNAL_SWAP_AMOUNT,
-			);
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					network_fee,
-					input_amount: INTERNAL_MINIMUM_NETWORK_FEE,
-					..
-				}) if *network_fee == INTERNAL_MINIMUM_NETWORK_FEE,
-			);
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					network_fee,
-					input_amount: NORMAL_MINIMUM_NETWORK_FEE,
-					..
-				}) if *network_fee == NORMAL_NETWORK_FEE * NORMAL_MINIMUM_NETWORK_FEE,
+				}) if *network_fee == NETWORK_FEE * AMOUNT,
 			);
 
 			// Check that the network fee is actually collected
-			assert_eq!(
-				CollectedNetworkFee::<Test>::get(),
-				(NORMAL_NETWORK_FEE * NORMAL_SWAP_AMOUNT) +
-					(NORMAL_MINIMUM_NETWORK_FEE) +
-					(INTERNAL_NETWORK_FEE * INTERNAL_SWAP_AMOUNT) +
-					(INTERNAL_MINIMUM_NETWORK_FEE) +
-					(NORMAL_NETWORK_FEE * NORMAL_MINIMUM_NETWORK_FEE)
-			);
+			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE * AMOUNT);
 		});
 }
 
@@ -257,7 +303,7 @@ fn swap_uses_correct_network_fee() {
 fn test_network_fee_tracking() {
 	new_test_ext().execute_with(|| {
 		const NETWORK_FEE: Permill = Permill::from_percent(10);
-		const MIN_NETWORK_FEE: AssetAmount = 150;
+		const MIN_NETWORK_FEE: AssetAmount = 160;
 		const CHUNK_AMOUNT: AssetAmount = 1000;
 		let normal_fee_amount = NETWORK_FEE * CHUNK_AMOUNT;
 		assert!(
@@ -275,12 +321,10 @@ fn test_network_fee_tracking() {
 			FeeTaken { remaining_amount: CHUNK_AMOUNT - MIN_NETWORK_FEE, fee: MIN_NETWORK_FEE }
 		);
 		// Second chunk gets partial network fee taken from it
+		let partial_fee = normal_fee_amount * 2 - MIN_NETWORK_FEE;
 		assert_eq!(
 			fee_tracker.take_fee(CHUNK_AMOUNT),
-			FeeTaken {
-				remaining_amount: CHUNK_AMOUNT - (MIN_NETWORK_FEE - normal_fee_amount),
-				fee: MIN_NETWORK_FEE - normal_fee_amount
-			}
+			FeeTaken { remaining_amount: CHUNK_AMOUNT - partial_fee, fee: partial_fee }
 		);
 		// Remaining chunks get the full network fee taken from them
 		assert_eq!(
@@ -315,15 +359,15 @@ fn test_network_fee_calculation() {
 		network_fee_percent: u32,
 		minimum_network_fee: AssetAmount,
 		chunk_amount: AssetAmount,
-		network_fee_collected: AssetAmount,
+		accumulated_fee: AssetAmount,
 		accumulated_stable_amount: AssetAmount,
 	) -> (AssetAmount, AssetAmount) {
-		let FeeTaken { remaining_amount, fee } = NetworkFeeTracker::new_for_test(
-			minimum_network_fee,
-			Permill::from_percent(network_fee_percent),
+		let FeeTaken { remaining_amount, fee } = NetworkFeeTracker {
+			minimum: minimum_network_fee,
+			rate: Permill::from_percent(network_fee_percent),
 			accumulated_stable_amount,
-			network_fee_collected,
-		)
+			accumulated_fee,
+		}
 		.take_fee(chunk_amount);
 		(remaining_amount, fee)
 	}
@@ -804,77 +848,6 @@ fn expect_earned_fees_to_be_recorded() {
 				ALICE_FEE_1 + ALICE_FEE_2 + ALICE_FEE_3
 			);
 			assert_eq!(get_broker_balance::<Test>(&BOB, Asset::Usdc), BOB_FEE_1);
-		});
-}
-
-#[test]
-fn min_network_fee_is_enforced_in_regular_swaps() {
-	const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const FEE_SWAP_BLOCK: u64 = SWAP_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const NETWORK_FEE: Permill = Permill::from_perthousand(1);
-	const INPUT_AMOUNT: u128 = 1000;
-
-	const MIN_NETWORK_FEE: u128 = 10;
-
-	const FROM: Asset = Asset::Usdc;
-	const TO: Asset = Asset::ArbEth;
-
-	// Make sure that the amount is small enough that the min network fee
-	// will be in effect:
-	assert!(MIN_NETWORK_FEE > NETWORK_FEE * INPUT_AMOUNT);
-
-	new_test_ext()
-		.execute_with(|| {
-			NetworkFee::set(NETWORK_FEE);
-			MinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
-
-			// Check that min fee applies to regular swaps:
-			Swapping::init_swap_request(
-				FROM,
-				INPUT_AMOUNT,
-				TO,
-				SwapRequestType::Regular {
-					output_action: SwapOutputAction::Egress {
-						ccm_deposit_metadata: None,
-						output_address: ForeignChainAddress::Eth(H160::zero()),
-					},
-				},
-				Default::default(),
-				None,
-				None,
-				SwapOrigin::Vault {
-					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
-				},
-			);
-
-			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
-		})
-		.then_process_blocks_until_block(SWAP_BLOCK)
-		.then_execute_with(|_| {
-			assert_eq!(CollectedNetworkFee::<Test>::get(), MIN_NETWORK_FEE);
-
-			// Check that min fee does NOT apply to fee swaps
-			Swapping::init_swap_request(
-				FROM,
-				INPUT_AMOUNT,
-				TO,
-				SwapRequestType::IngressEgressFee,
-				Default::default(),
-				None,
-				None,
-				SwapOrigin::Vault {
-					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
-				},
-			);
-		})
-		.then_process_blocks_until_block(FEE_SWAP_BLOCK)
-		.then_execute_with(|_| {
-			assert_eq!(
-				CollectedNetworkFee::<Test>::get(),
-				MIN_NETWORK_FEE + NETWORK_FEE * INPUT_AMOUNT
-			);
 		});
 }
 
