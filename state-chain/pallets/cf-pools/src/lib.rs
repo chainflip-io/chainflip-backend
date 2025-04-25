@@ -330,6 +330,8 @@ pub mod pallet {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
 
+			Self::auto_sweep_limit_orders();
+
 			for LimitOrderUpdate { ref lp, id, call } in
 				ScheduledLimitOrderUpdates::<T>::take(current_block)
 			{
@@ -1036,42 +1038,6 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					) > maximum_price_impact
 					{
 						return Err(Error::<T>::InsufficientLiquidity.into());
-					}
-				}
-
-				// Auto-sweeping limit orders in case collected amount reaches a threshold:
-				{
-					let autosweeping_thresholds = LimitOrderAutoSweepingThresholds::<T>::get();
-
-					let collected_orders = {
-						// Clone pool since we don't actually want to make changes
-						// to it yet:
-						let mut pool_state = pool.pool_state.clone();
-						pool_state.collect_all_limit_orders()
-					};
-
-					for (base_or_quote, results_for_order) in collected_orders {
-						for ((lp, order_id), tick, collected, _pos_info) in results_for_order {
-							let asset_to_collect = asset_pair.assets()[!base_or_quote];
-
-							let threshold = autosweeping_thresholds
-								.get(&asset_to_collect)
-								.copied()
-								// Default to not sweeping
-								.unwrap_or(AssetAmount::MAX)
-								.into();
-
-							if collected.bought_amount >= threshold {
-								Self::sweep_limit_order(
-									pool,
-									&lp,
-									&asset_pair,
-									base_or_quote.sell_order(),
-									order_id,
-									tick,
-								)?;
-							}
-						}
 					}
 				}
 
@@ -1883,6 +1849,22 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
+	fn try_mutate_pools<
+		E: From<pallet::Error<T>>,
+		F: FnMut(&AssetPair, &mut Pool<T>) -> Result<(), E>,
+	>(
+		mut f: F,
+	) {
+		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
+			let _ = Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
+				let pool =
+					maybe_pool.as_mut().expect("Pools must exist since we are iterating over them");
+
+				f(&asset_pair, pool)
+			});
+		}
+	}
+
 	fn try_mutate_order<R, F: FnOnce(&AssetPair, &mut Pool<T>) -> Result<R, DispatchError>>(
 		lp: &T::AccountId,
 		base_asset: any::Asset,
@@ -2255,6 +2237,46 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 		Ok(())
+	}
+
+	fn auto_sweep_limit_orders() {
+		// Auto-sweeping limit orders in case collected amount reaches a threshold:
+		let autosweeping_thresholds = LimitOrderAutoSweepingThresholds::<T>::get();
+
+		Self::try_mutate_pools(|asset_pair, pool| {
+			let collected_orders = {
+				// Clone pool since we don't actually want to make changes
+				// to it yet:
+				let mut pool_state = pool.pool_state.clone();
+				pool_state.collect_all_limit_orders()
+			};
+
+			for (base_or_quote, results_for_order) in collected_orders {
+				for ((lp, order_id), tick, collected, _pos_info) in results_for_order {
+					let asset_to_collect = asset_pair.assets()[!base_or_quote];
+
+					let threshold = autosweeping_thresholds
+						.get(&asset_to_collect)
+						.copied()
+						// Default to not sweeping
+						.unwrap_or(AssetAmount::MAX)
+						.into();
+
+					if collected.bought_amount >= threshold {
+						Self::sweep_limit_order(
+							pool,
+							&lp,
+							asset_pair,
+							base_or_quote.sell_order(),
+							order_id,
+							tick,
+						)?;
+					}
+				}
+			}
+
+			Ok::<_, DispatchError>(())
+		});
 	}
 }
 
