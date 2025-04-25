@@ -86,7 +86,7 @@ impl BrokerRpcApiServer for RpcServerImpl {
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
-		Ok(self
+		let swap_deposit_address = self
 			.api
 			.broker_api()
 			.request_swap_deposit_address(
@@ -100,7 +100,11 @@ impl BrokerRpcApiServer for RpcServerImpl {
 				refund_parameters,
 				dca_parameters,
 			)
-			.await?)
+			.await?;
+
+		log::info!("Swap deposit address: {swap_deposit_address:?}");
+
+		Ok(swap_deposit_address)
 	}
 
 	async fn withdraw_fees(
