@@ -30,6 +30,7 @@ use cf_traits::{
 	PoolApi, SwapRequestHandler, SwappingApi,
 };
 
+use cf_traits::LpRegistration;
 pub use cf_traits::{IncreaseOrDecrease, OrderId};
 use core::ops::Range;
 use frame_support::{
@@ -39,10 +40,6 @@ use frame_support::{
 	traits::{OnKilledAccount, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
-
-use cf_traits::HistoricalFeeMigration;
-
-use cf_traits::LpRegistration;
 use frame_system::{pallet_prelude::OriginFor, WeightInfo as SystemWeightInfo};
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
@@ -2242,34 +2239,6 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn set_pool_fee_for_limit_orders(
-		pool: &mut Pool<T>,
-		asset_pair: &AssetPair,
-		fee_hundredth_pips: u32,
-	) -> DispatchResult {
-		pool.pool_state
-			.set_limit_order_fees(fee_hundredth_pips)
-			.map_err(|_| Error::<T>::InvalidFeeAmount)?
-			.try_map_with_pair(|asset, collected_fees| {
-				for ((lp, id), tick, collected, position_info) in collected_fees.into_iter() {
-					Self::process_limit_order_update(
-						pool,
-						asset_pair,
-						&lp,
-						asset.sell_order(),
-						id,
-						tick,
-						collected,
-						position_info,
-						IncreaseOrDecrease::Increase(0),
-					)?;
-				}
-				Result::<(), DispatchError>::Ok(())
-			})?;
-
-		Ok(())
-	}
-
 	fn auto_sweep_limit_orders() {
 		// Auto-sweeping limit orders in case collected amount reaches a threshold:
 		let autosweeping_thresholds = LimitOrderAutoSweepingThresholds::<T>::get();
@@ -2308,18 +2277,6 @@ impl<T: Config> Pallet<T> {
 
 			Ok::<_, DispatchError>(())
 		});
-	}
-}
-
-impl<T: Config> HistoricalFeeMigration for Pallet<T> {
-	type AccountId = T::AccountId;
-	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount) {
-		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
-			*balance = balance.saturating_add(amount)
-		});
-	}
-	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount {
-		HistoricalEarnedFees::<T>::get(account_id, asset)
 	}
 }
 

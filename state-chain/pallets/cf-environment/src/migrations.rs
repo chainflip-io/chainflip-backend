@@ -18,14 +18,11 @@ use crate::{Config, Pallet};
 #[cfg(feature = "try-runtime")]
 use crate::{CurrentReleaseVersion, Get};
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::{migrations::VersionedMigration, traits::OnRuntimeUpgrade};
+use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
-
-mod sol_api_environment;
-pub use sol_api_environment::SolApiEnvironmentMigration;
 
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility
 // checks.
@@ -54,17 +51,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 }
 
 // Migration for Updating Solana's Api Environments.
-pub type PalletMigration<T> = (
-	VersionedMigration<
-		13,
-		14,
-		SolApiEnvironmentMigration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<14, Pallet<T>>,
-	// Migration from 14 to 15 in state-chain/runtime/src/migrations/assethub_integration.rs
-);
+pub type PalletMigration<T> = (PlaceholderMigration<14, Pallet<T>>,);
 
 #[cfg(test)]
 mod tests {

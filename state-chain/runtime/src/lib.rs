@@ -232,7 +232,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 1_09_00,
+	spec_version: 1_10_00,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -607,7 +607,6 @@ impl pallet_cf_lp::Config for Runtime {
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
-	type MigrationHelper = LiquidityPools;
 	type MinimumDeposit = MinimumDepositProvider;
 }
 
@@ -1388,7 +1387,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	MigrationsForV1_9,
+	MigrationsForV1_10,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1443,6 +1442,7 @@ impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
 		Default::default()
 	}
 }
+#[allow(unused_macros)]
 macro_rules! instanced_migrations {
 	(
 		module: $module:ident,
@@ -1475,51 +1475,7 @@ macro_rules! instanced_migrations {
 	}
 }
 
-use frame_support::migrations::VersionedMigration;
-type MigrationsForV1_9 = (
-	instanced_migrations!(
-		module: pallet_cf_elections,
-		migration: migrations::backoff_settings_migration::SolanaBackoffSettingsMigration,
-		from: 5,
-		to: 6,
-		include_instances: [SolanaInstance],
-		exclude_instances: [],
-	),
-	VersionedMigration<
-		14,
-		15,
-		migrations::assethub_integration::AssethubUpdate,
-		pallet_cf_environment::Pallet<Runtime>,
-		<Runtime as frame_system::Config>::DbWeight,
-	>,
-	migrations::assethub_integration::AssethubChainstate,
-	migrations::assethub_integration::AssethubIngressEgressConfig,
-	instanced_migrations!(
-		module: pallet_cf_broadcast,
-		migration: migrations::sol_versioned_transactions::SolVersionedTransactionBroadcastPallet,
-		from: 12,
-		to: 13,
-		include_instances: [SolanaInstance],
-		exclude_instances: [
-			EthereumInstance,
-			PolkadotInstance,
-			BitcoinInstance,
-			ArbitrumInstance,
-		],
-	),
-	instanced_migrations!(
-		module: pallet_cf_threshold_signature,
-		migration: migrations::sol_versioned_transactions::SolVersionedTransactionThresholdSignerPallet,
-		from: 6,
-		to: 7,
-		include_instances: [SolanaInstance],
-		exclude_instances: [
-			EvmInstance,
-			PolkadotCryptoInstance,
-			BitcoinInstance,
-		],
-	),
-);
+type MigrationsForV1_10 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
