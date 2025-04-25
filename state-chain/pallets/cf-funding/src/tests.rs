@@ -1837,7 +1837,7 @@ fn only_governance_can_update_settings() {
 }
 
 #[test]
-fn transfer_liquid_funds_internal() {
+fn transfer_unrestricted_funds_internal() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
@@ -1862,5 +1862,41 @@ fn transfer_liquid_funds_internal() {
 			AMOUNT_MINUS_FEE.into()
 		));
 		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT_MINUS_FEE, "Total balance to be correct.");
+	});
+}
+
+#[test]
+fn transfer_restricted_funds_internal() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			vec![],
+		));
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		assert_ok!(Funding::internal_transfer(
+			OriginTrait::signed(ALICE),
+			BOB,
+			RESTRICTED_ADDRESS,
+			AMOUNT_MINUS_FEE.into()
+		));
+
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), None);
+		assert_eq!(
+			RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS),
+			Some(&AMOUNT_MINUS_FEE)
+		);
 	});
 }
