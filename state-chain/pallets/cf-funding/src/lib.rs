@@ -619,7 +619,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(11)]
-		#[pallet::weight(100)]
+		#[pallet::weight(T::WeightInfo::internal_transfer())]
 		pub fn internal_transfer(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
@@ -627,7 +627,7 @@ pub mod pallet {
 			amount: RedemptionAmount<FlipBalance<T>>,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
-			let (total_restricted_balance, redeem_amount) =
+			let (_total_restricted_balance, redeem_amount) =
 				Self::try_redeem(amount, source.clone(), address, None)?;
 
 			ensure!(
@@ -635,7 +635,7 @@ pub mod pallet {
 				Error::<T>::InsufficientBalance
 			);
 
-			let total_balance = Self::add_funds_to_account(&account_id, redeem_amount);
+			let _total_balance = Self::add_funds_to_account(&account_id, redeem_amount);
 
 			if RestrictedAddresses::<T>::contains_key(address) {
 				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
