@@ -15,7 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Contains tests related to liquidity, pools and swapping
-use std::vec;
+use cf_rpc_types::OrderFilled;
+use std::{collections::BTreeMap, vec};
 
 use crate::{
 	genesis,
@@ -44,7 +45,8 @@ use cf_primitives::{
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, OrderId, SwapType,
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, OrderId, PoolPairsMap,
+	SwapType,
 };
 use frame_support::{
 	assert_ok,
@@ -978,5 +980,132 @@ fn can_handle_failed_vault_transfer() {
 			assert!(PendingApiCalls::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
+		});
+}
+
+#[test]
+fn order_fills_subscription() {
+	const ORDER_ID: OrderId = 1;
+	const RANGE: std::ops::Range<Tick> = -10..10;
+	const DECIMALS: u128 = 10u128.pow(18);
+	const LIQUIDITY: Liquidity = 1_000_000_000 * DECIMALS;
+
+	super::genesis::with_test_defaults()
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			const POOL_FEE: u32 = 1000; // 10 bps
+
+			assert_ne!(POOL_FEE, 0);
+
+			new_pool(Asset::Eth, POOL_FEE, price_at_tick(0).unwrap());
+			new_pool(Asset::Flip, POOL_FEE, price_at_tick(0).unwrap());
+
+			register_refund_addresses(&DORIS);
+
+			// Use the same decimals amount for all assets.
+			credit_account(&DORIS, Asset::Eth, 10_000_000 * DECIMALS);
+			credit_account(&DORIS, Asset::Usdc, 10_000_000 * DECIMALS);
+			credit_account(&DORIS, Asset::Flip, 10_000_000 * DECIMALS);
+
+			set_range_order(&DORIS, Asset::Eth, Asset::Usdc, ORDER_ID, Some(RANGE), LIQUIDITY);
+
+			set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
+
+			// Perform internal swap to avoid having to account for ingress/egress swaps
+			use cf_traits::SwapRequestHandler;
+			Swapping::init_internal_swap_request(
+				Asset::Eth,
+				5_000 * DECIMALS,
+				Asset::Usdc,
+				0,
+				price_at_tick(-100).unwrap(),
+				None,
+				DORIS.clone(),
+			);
+			Swapping::init_internal_swap_request(
+				Asset::Usdc,
+				2_000 * DECIMALS,
+				Asset::Eth,
+				0,
+				price_at_tick(-100).unwrap(),
+				None,
+				DORIS.clone(),
+			);
+
+			Swapping::init_internal_swap_request(
+				Asset::Usdc,
+				500_000 * DECIMALS,
+				Asset::Flip,
+				0,
+				price_at_tick(-100).unwrap(),
+				None,
+				DORIS.clone(),
+			);
+		})
+		// Fast forward two blocks so swaps can be executed:
+		.then_execute_at_next_block(|_| {
+			assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+			pallet_cf_pools::Pools::<Runtime>::iter().collect::<BTreeMap<_, _>>()
+		})
+		.then_execute_at_next_block(|pools_after| {
+			assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+			pools_after
+		})
+		.then_execute_with(|pools_before| {
+			let lp_events: Vec<_> = frame_system::Pallet::<Runtime>::events()
+				.into_iter()
+				.filter_map(|event_record| match event_record.event {
+					RuntimeEvent::LiquidityPools(lp_event) => Some(lp_event),
+					_ => None,
+				})
+				.collect();
+
+			let pools_after: BTreeMap<_, _> = pallet_cf_pools::Pools::<Runtime>::iter().collect();
+
+			let order_fills = custom_rpc::order_fills::order_fills_from_block_updates(
+				&pools_before,
+				&pools_after,
+				lp_events,
+			);
+
+			assert_eq!(
+				order_fills.fills,
+				vec![
+					OrderFilled::RangeOrder {
+						lp: DORIS,
+						base_asset: Asset::Eth,
+						quote_asset: Asset::Usdc,
+						id: ORDER_ID.into(),
+						range: RANGE,
+						sold_amounts: PoolPairsMap {
+							base: 5_000 * DECIMALS - 1000,  // rounding error (amplified)
+							quote: 2_000 * DECIMALS - 1000  // rounding error (amplified)
+						}
+						.map(Into::into),
+						fees: PoolPairsMap {
+							base: 5_000 * DECIMALS / 1000 - 1,  // rounding error
+							quote: 2_000 * DECIMALS / 1000 - 1, // rounding error
+						}
+						.map(Into::into),
+						liquidity: LIQUIDITY.into(),
+					},
+					OrderFilled::LimitOrder {
+						lp: DORIS,
+						base_asset: Asset::Flip,
+						quote_asset: Asset::Usdc,
+						side: cf_traits::Side::Sell,
+						id: 0.into(),
+						tick: 0,
+						sold: (500_000 * DECIMALS).into(),
+						bought: (500_000 * DECIMALS).into(),
+						fees: 0.into(),
+						remaining: (500_000 * DECIMALS).into()
+					}
+				]
+			);
 		});
 }

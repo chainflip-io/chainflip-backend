@@ -19,7 +19,6 @@ use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
-// NOTE: Migration from 1.9 -> 1.10, Do not delete when removing 1.8->1.9 migrations.
 pub mod swap_request_migration;
 
 pub type PalletMigration<T> = (
