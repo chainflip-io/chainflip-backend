@@ -71,7 +71,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
@@ -186,18 +186,33 @@ pub enum FeeType<T: Config> {
 	BrokerFee(Beneficiaries<T::AccountId>),
 }
 
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default, Serialize, Deserialize,
+)]
+pub struct FeeRateAndMinimum {
+	pub rate: sp_runtime::Permill,
+	pub minimum: AssetAmount,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct NetworkFeeTracker {
-	minimum: AssetAmount,
-	rate: Permill,
+	network_fee: FeeRateAndMinimum,
 	// Total amount of stable asset that has been processed so far (before fees)
 	accumulated_stable_amount: AssetAmount,
 	accumulated_fee: AssetAmount,
 }
 
 impl NetworkFeeTracker {
-	pub fn new(minimum: AssetAmount, rate: Permill) -> Self {
-		Self { minimum, rate, accumulated_stable_amount: 0, accumulated_fee: 0 }
+	pub const fn new(network_fee: FeeRateAndMinimum) -> Self {
+		Self { network_fee, accumulated_stable_amount: 0, accumulated_fee: 0 }
+	}
+
+	pub fn new_without_minimum(network_fee: FeeRateAndMinimum) -> Self {
+		Self {
+			network_fee: FeeRateAndMinimum { rate: network_fee.rate, minimum: 0 },
+			accumulated_stable_amount: 0,
+			accumulated_fee: 0,
+		}
 	}
 
 	pub fn take_fee(&mut self, stable_amount: AssetAmount) -> FeeTaken {
@@ -205,8 +220,8 @@ impl NetworkFeeTracker {
 			return FeeTaken { remaining_amount: 0, fee: 0 };
 		}
 		let calculated_fee = core::cmp::max(
-			self.rate * (self.accumulated_stable_amount.saturating_add(stable_amount)),
-			self.minimum,
+			self.network_fee.rate * (self.accumulated_stable_amount.saturating_add(stable_amount)),
+			self.network_fee.minimum,
 		);
 		let fee_taken =
 			core::cmp::min(calculated_fee.saturating_sub(self.accumulated_fee), stable_amount);
@@ -423,14 +438,11 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// Set the broker bond. This is the amount of FLIP that must be bonded to open a private
 	/// broker channel. The funds are getting freed when the channel is closed.
 	SetBrokerBond { bond: T::Amount },
-	/// Set the minimum fee in USDC paid per swap request
-	SetMinimumNetworkFee { min_fee: AssetAmount },
-	/// Set the network fee in USDC that will be used just for internal swaps (credit on-chain
-	/// swaps)
-	SetInternalSwapNetworkFee { rate: Permill },
-	/// Set the minimum network fee in USDC that will be used just for internal swaps (credit
-	/// on-chain swaps)
-	SetInternalSwapMinimumNetworkFee { min_fee: AssetAmount },
+	/// Set the network fee rate and minimum in USDC
+	SetNetworkFee { rate: Permill, minimum: AssetAmount },
+	/// Set the network fee rate and minimum in USDC that will be used just for internal swaps
+	/// (credit on-chain swaps)
+	SetInternalSwapNetworkFee { rate: Permill, minimum: AssetAmount },
 }
 
 impl_pallet_safe_mode! {
@@ -506,9 +518,6 @@ pub mod pallet {
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
-
-		#[pallet::constant]
-		type NetworkFee: Get<Permill>;
 
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
@@ -629,20 +638,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
 
-	/// Minimum network fee in USDC, charged per swap request. Only applies to regular swaps, i.e.
-	/// it excludes internal swaps like ingress/egress/network fees.
-	/// For DCA swaps, this fee will be taken from the first chunks until it is fulfilled.
+	/// Network fee rate and minimum in USDC, charged per swap request. Only applies to regular
+	/// swaps, i.e. it excludes internal swaps like ingress/egress/network fees.
 	#[pallet::storage]
-	pub type MinimumNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+	pub type NetworkFee<T: Config> = StorageValue<_, FeeRateAndMinimum, ValueQuery>;
 
-	/// The network fee in USDC used just for internal swaps (credit on-chain swaps).
-	#[pallet::storage]
-	pub type InternalSwapNetworkFee<T: Config> = StorageValue<_, Permill, ValueQuery>;
-
-	/// The minimum network fee in USDC used just for internal swaps (credit on-chain
+	/// Alternate network fee rate and minimum in USDC, just for internal swaps (credit on-chain
 	/// swaps).
 	#[pallet::storage]
-	pub type InternalSwapMinimumNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+	pub type InternalSwapNetworkFee<T: Config> = StorageValue<_, FeeRateAndMinimum, ValueQuery>;
 
 	/// Set by the broker, this is the minimum broker commission that the broker will accept for a
 	/// vault swap.
@@ -1067,14 +1071,11 @@ pub mod pallet {
 					PalletConfigUpdate::SetBrokerBond { bond } => {
 						BrokerBond::<T>::set(bond);
 					},
-					PalletConfigUpdate::SetMinimumNetworkFee { min_fee } => {
-						MinimumNetworkFee::<T>::set(min_fee);
+					PalletConfigUpdate::SetNetworkFee { rate, minimum } => {
+						NetworkFee::<T>::set(FeeRateAndMinimum { rate, minimum });
 					},
-					PalletConfigUpdate::SetInternalSwapNetworkFee { rate } => {
-						InternalSwapNetworkFee::<T>::set(rate);
-					},
-					PalletConfigUpdate::SetInternalSwapMinimumNetworkFee { min_fee } => {
-						InternalSwapMinimumNetworkFee::<T>::set(min_fee);
+					PalletConfigUpdate::SetInternalSwapNetworkFee { rate, minimum } => {
+						InternalSwapNetworkFee::<T>::set(FeeRateAndMinimum { rate, minimum });
 					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
@@ -2073,7 +2074,8 @@ pub mod pallet {
 			to: Asset,
 			input_amount: AssetAmount,
 		) -> Result<SwapOutput, DispatchError> {
-			let mut network_fee_tracker = NetworkFeeTracker::new(0, T::NetworkFee::get());
+			let mut network_fee_tracker =
+				NetworkFeeTracker::new_without_minimum(NetworkFee::<T>::get());
 			Ok(match (from, to) {
 				(_, STABLE_ASSET) => {
 					let FeeTaken { remaining_amount: output, fee } = network_fee_tracker
@@ -2166,10 +2168,11 @@ pub mod pallet {
 			input_asset: Asset,
 			is_internal_swap: bool,
 		) -> Result<AssetAmount, DispatchError> {
+			// We use the network fee minimum as the refund fee
 			let refund_fee_usdc = if is_internal_swap {
-				InternalSwapMinimumNetworkFee::<T>::get()
+				InternalSwapNetworkFee::<T>::get().minimum
 			} else {
-				MinimumNetworkFee::<T>::get()
+				NetworkFee::<T>::get().minimum
 			};
 			if refund_fee_usdc.is_zero() || total_input_amount.is_zero() {
 				return Ok(total_input_amount)
@@ -2318,9 +2321,9 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::IngressEgressFee => {
-					let fees = vec![FeeType::NetworkFee(NetworkFeeTracker::new(
-						0, // No minimum network fee for ingress/egress fee swaps
-						T::NetworkFee::get(),
+					// No minimum network fee for ingress/egress fee swaps
+					let fees = vec![FeeType::NetworkFee(NetworkFeeTracker::new_without_minimum(
+						NetworkFee::<T>::get(),
 					))];
 
 					Self::schedule_swap(
@@ -2352,15 +2355,9 @@ pub mod pallet {
 					// Choose correct network fee for the swap
 					let mut fees = vec![FeeType::NetworkFee(
 						if matches!(output_action, SwapOutputAction::CreditOnChain { .. }) {
-							NetworkFeeTracker::new(
-								InternalSwapMinimumNetworkFee::<T>::get(),
-								InternalSwapNetworkFee::<T>::get(),
-							)
+							NetworkFeeTracker::new(InternalSwapNetworkFee::<T>::get())
 						} else {
-							NetworkFeeTracker::new(
-								MinimumNetworkFee::<T>::get(),
-								T::NetworkFee::get(),
-							)
+							NetworkFeeTracker::new(NetworkFee::<T>::get())
 						},
 					)];
 

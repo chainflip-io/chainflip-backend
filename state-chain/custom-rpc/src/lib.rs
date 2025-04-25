@@ -82,7 +82,7 @@ use state_chain_runtime::{
 		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash, NetworkFee, SolanaInstance,
+	Hash, SolanaInstance,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
@@ -1569,7 +1569,7 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
-				network_fee_hundredth_pips: NetworkFee::get(),
+				network_fee_hundredth_pips: api.cf_network_fees(hash)?.regular_network_fee.rate,
 				swap_retry_delay_blocks: api.cf_swap_retry_delay_blocks(hash)?,
 				max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,

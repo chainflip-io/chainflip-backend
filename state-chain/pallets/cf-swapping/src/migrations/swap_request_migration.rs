@@ -41,24 +41,21 @@ impl FeeMigrationData {
 
 impl NetworkFeeTracker {
 	fn migrate<T: Config>(enforce_minimum: bool, migration_data: &FeeMigrationData) -> Self {
-		Self {
-			minimum: if enforce_minimum {
-				if migration_data.is_internal {
-					InternalSwapMinimumNetworkFee::<T>::get()
-				} else {
-					MinimumNetworkFee::<T>::get()
-				}
-			} else {
-				AssetAmount::zero()
-			},
-			rate: if migration_data.is_internal {
-				InternalSwapNetworkFee::<T>::get()
-			} else {
-				T::NetworkFee::get()
+		let network_fee = if migration_data.is_internal {
+			InternalSwapNetworkFee::<T>::get()
+		} else {
+			NetworkFee::<T>::get()
+		};
+		let test = Self {
+			network_fee: FeeRateAndMinimum {
+				minimum: if enforce_minimum { network_fee.minimum } else { AssetAmount::zero() },
+				rate: network_fee.rate,
 			},
 			accumulated_stable_amount: migration_data.accumulated_output_amount,
 			accumulated_fee: migration_data.network_fee_collected,
-		}
+		};
+		log::info!("	Migrated network fee: {:?}", test);
+		test
 	}
 }
 
