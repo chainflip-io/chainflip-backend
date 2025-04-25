@@ -483,6 +483,35 @@ where
 		Ok(tx_hash)
 	}
 
+	async fn request_internal_transfer(
+		&self,
+		exact_amount: Option<NumberOrHex>,
+		redeem_address: EthereumAddress,
+		account_id: AccountId32,
+	) -> RpcResult<Hash> {
+		let redeem_amount = if let Some(number_or_hex) = exact_amount {
+			RedemptionAmount::Exact(try_parse_number_or_hex(number_or_hex)?)
+		} else {
+			RedemptionAmount::Max
+		};
+
+		let ExtrinsicData { tx_hash, .. } = self
+			.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_funding::Call::internal_transfer {
+					amount: redeem_amount,
+					account_id,
+					address: redeem_address,
+				}),
+				false,
+				true,
+			)
+			.await
+			.map_err(CfApiError::from)?;
+
+		Ok(tx_hash)
+	}
+
 	async fn subscribe_order_fills(&self, sink: PendingSubscriptionSink) {
 		self.rpc_backend
 			.new_subscription(

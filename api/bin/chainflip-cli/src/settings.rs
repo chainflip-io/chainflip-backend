@@ -235,6 +235,15 @@ pub enum CliCommand {
 		#[clap(help = "The epoch to check, default to the current one")]
 		epoch_index: Option<EpochIndex>,
 	},
+	#[clap(about = "Request an internal transfer of FLIP to an Ethereum address")]
+	RequestInternalTransfer {
+		#[clap(help = "The amount to transfer")]
+		amount: Option<f64>,
+		#[clap(help = "The Ethereum address under which condition ")]
+		destination: String,
+		#[clap(help = "The account ID to transfer the FLIP to")]
+		account_id: String,
+	},
 }
 
 fn account_role_parser(s: &str) -> Result<AccountRole, String> {

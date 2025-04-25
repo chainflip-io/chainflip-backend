@@ -447,6 +447,21 @@ impl LpRpcApiServer for RpcServerImpl {
 			.await?
 			.map_details(Into::into))
 	}
+
+	async fn request_internal_transfer(
+		&self,
+		exact_amount: Option<NumberOrHex>,
+		redeem_address: EthereumAddress,
+		account_id: AccountId32,
+	) -> RpcResult<Hash> {
+		use cf_rpc_apis::lp::LpRpcApiClient;
+		let result = self
+			.api
+			.raw_client()
+			.request_internal_transfer(exact_amount, redeem_address, account_id)
+			.await?;
+		Ok(result)
+	}
 }
 
 #[derive(Parser, Debug, Clone, Default)]
