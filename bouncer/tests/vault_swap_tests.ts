@@ -50,7 +50,7 @@ async function testRefundVaultSwap(logger: Logger) {
     foKParams,
   );
 
-  logger.info('Waiting for refund...');
+  logger.info(`Waiting for refund of ${inputAsset} to ${refundAddress}...`);
 
   let btcBalance = false;
 

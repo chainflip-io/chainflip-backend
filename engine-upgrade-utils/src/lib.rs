@@ -26,8 +26,8 @@ pub mod build_helpers;
 // rest of the places the version needs changing on build using the build scripts in each of the
 // relevant crates.
 // Should also check that the compatibility function below `args_compatible_with_old` is correct.
-pub const OLD_VERSION: &str = "1.8.4";
-pub const NEW_VERSION: &str = "1.9.0";
+pub const OLD_VERSION: &str = "1.9.0";
+pub const NEW_VERSION: &str = "1.10.0";
 
 pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
 pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
@@ -35,7 +35,7 @@ pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 // Sometimes we need to remove arguments that are valid for the new version but not for the old
 // version.
 pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
-	args.into_iter().filter(|arg| !arg.starts_with("--hub.")).collect()
+	args
 }
 
 pub use std::ffi::c_char;

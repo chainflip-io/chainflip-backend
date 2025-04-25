@@ -36,8 +36,12 @@ pub type SqrtPriceQ64F96 = U256;
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
 pub fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+	mul_div_floor_checked(a, b, c).unwrap()
+}
+
+pub fn mul_div_floor_checked<C: Into<U512>>(a: U256, b: U256, c: C) -> Option<U256> {
 	let c: U512 = c.into();
-	(U256::full_mul(a, b) / c).try_into().unwrap()
+	(U256::full_mul(a, b) / c).try_into().ok()
 }
 
 pub fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {

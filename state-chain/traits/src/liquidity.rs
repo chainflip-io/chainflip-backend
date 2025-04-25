@@ -105,12 +105,6 @@ pub trait LpRegistration {
 	}
 }
 
-pub trait HistoricalFeeMigration {
-	type AccountId;
-	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount);
-	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount;
-}
-
 pub trait PoolApi {
 	type AccountId;
 

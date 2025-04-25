@@ -46,7 +46,7 @@ pub struct OrderFills {
 	pub fills: Vec<OrderFilled>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum OrderFilled {
 	LimitOrder {
@@ -67,6 +67,7 @@ pub enum OrderFilled {
 		quote_asset: Asset,
 		id: U256,
 		range: Range<Tick>,
+		sold_amounts: PoolPairsMap<U256>,
 		fees: PoolPairsMap<U256>,
 		liquidity: U256,
 	},

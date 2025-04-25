@@ -25,9 +25,6 @@ use sp_runtime::DispatchError;
 
 use codec::{Decode, Encode};
 
-// TODO: To update this migration since the swap_request_migration has newly been added.
-// Wait for this to update since the swap_request_migration will be removed after 1.9 release.
-
 pub mod old {
 	use super::*;
 	use cf_chains::ForeignChainAddress;

@@ -21,8 +21,9 @@ mod tests;
 use core::convert::Infallible;
 
 use cf_amm_math::{
-	bounded_sqrt_price, is_sqrt_price_valid, mul_div_floor, price_to_sqrt_price,
-	sqrt_price_to_price, tick_at_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick,
+	bounded_sqrt_price, is_sqrt_price_valid, mul_div_floor, mul_div_floor_checked,
+	price_to_sqrt_price, sqrt_price_to_price, tick_at_sqrt_price, Amount, Price, SqrtPriceQ64F96,
+	Tick,
 };
 use codec::{Decode, Encode};
 use common::{
@@ -588,4 +589,22 @@ fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(
 	};
 
 	price_to_sqrt_price(adjusted_price)
+}
+
+pub fn input_amount_from_fee(fee: U256, fee_hundredth_pips: u32) -> Option<U256> {
+	(fee_hundredth_pips != 0).then(|| {
+		mul_div_floor_checked(
+			fee,
+			U256::from(ONE_IN_HUNDREDTH_PIPS),
+			U256::from(fee_hundredth_pips),
+		)
+		.unwrap_or(U256::MAX)
+	})
+}
+
+#[test]
+fn check_input_amount_from_fee() {
+	assert_eq!(input_amount_from_fee(1000u32.into(), 0), None);
+	assert_eq!(input_amount_from_fee(1000u32.into(), 500), Some(2_000_000u32.into()));
+	assert_eq!(input_amount_from_fee(U256::MAX, 500), Some(U256::MAX));
 }

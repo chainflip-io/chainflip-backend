@@ -134,20 +134,7 @@ async function setMockmode(mode: Mockmode) {
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
 async function setTxRiskScore(chain: SupportedChain, txid: string, score: number) {
-  let endpoint;
-  switch (chain) {
-    case 'Bitcoin':
-      endpoint = ':6070/riskscore';
-      break;
-
-    case 'Ethereum':
-      endpoint = ':6070/riskscore_eth';
-      break;
-
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
-  }
-  await postToDepositMonitor(endpoint, [
+  await postToDepositMonitor(':6070/riskscore', [
     txid,
     {
       risk_score: { Score: score },
@@ -235,6 +222,9 @@ async function testBrokerLevelScreeningEthereum(
   logger.debug(`Testing broker level screening for Ethereum ${sourceAsset}...`);
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
+
+  logger.debug(`BTC destination address: ${destinationAddressForBtc}`);
+
   const ethereumRefundAddress = await newAssetAddress('Eth', undefined, undefined, ccmRefund);
   const initialRefundAddressBalance = await getBalance(sourceAsset, ethereumRefundAddress);
 
@@ -386,7 +376,7 @@ async function testBrokerLevelScreeningEthereumLiquidityDeposit(
 
   if (!receivedRefund) {
     throw new Error(
-      `Didn't receive funds refund to address ${ethereumRefundAddress} within timeout!`,
+      `Didn't receive funds liquidity deposit refund to ${ethereumRefundAddress} within timeout!`,
     );
   }
 
@@ -451,7 +441,9 @@ export async function testBrokerLevelScreeningBitcoin(
 
   await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
-    throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
+    throw new Error(
+      `Didn't receive funds refund to BTC address ${btcRefundAddress} within timeout!`,
+    );
   }
 
   logger.debug(`Marked Bitcoin transaction was rejected and refunded 👍.`);
@@ -468,7 +460,9 @@ export async function testBrokerLevelScreeningBitcoin(
     await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
     if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
-      throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
+      throw new Error(
+        `Didn't receive funds refund from boosted deposit to BTCaddress ${btcRefundAddress} within timeout!`,
+      );
     }
     logger.debug(`Marked Bitcoin transaction was rejected and refunded 👍.`);
 
@@ -515,9 +509,10 @@ export async function testBrokerLevelScreening(testContext: TestContext) {
     testBrokerLevelScreeningEthereum(testContext, 'Usdt', async (txId) =>
       setTxRiskScore('Ethereum', txId, 9.0),
     ),
-    testBrokerLevelScreeningEthereum(testContext, 'Flip', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
+    // Re-enable when DM supports FLIP
+    // testBrokerLevelScreeningEthereum(testContext, 'Flip', async (txId) =>
+    //   setTxRiskScore('Ethereum', txId, 9.0),
+    // ),
     testBrokerLevelScreeningEthereum(testContext, 'Usdc', async (txId) =>
       setTxRiskScore('Ethereum', txId, 9.0),
     ),
@@ -544,9 +539,9 @@ export async function testBrokerLevelScreening(testContext: TestContext) {
     testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Usdt', async (txId) =>
       setTxRiskScore('Ethereum', txId, 9.0),
     ),
-    testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Flip', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
+    // testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Flip', async (txId) =>
+    //   setTxRiskScore('Ethereum', txId, 9.0),
+    // ),
     testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Usdc', async (txId) =>
       setTxRiskScore('Ethereum', txId, 9.0),
     ),

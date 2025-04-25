@@ -30,6 +30,7 @@ use cf_traits::{
 	PoolApi, SwapRequestHandler, SwappingApi,
 };
 
+use cf_traits::LpRegistration;
 pub use cf_traits::{IncreaseOrDecrease, OrderId};
 use core::ops::Range;
 use frame_support::{
@@ -39,10 +40,6 @@ use frame_support::{
 	traits::{OnKilledAccount, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
-
-use cf_traits::HistoricalFeeMigration;
-
-use cf_traits::LpRegistration;
 use frame_system::{pallet_prelude::OriginFor, WeightInfo as SystemWeightInfo};
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
@@ -332,6 +329,8 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+
+			Self::auto_sweep_limit_orders();
 
 			for LimitOrderUpdate { ref lp, id, call } in
 				ScheduledLimitOrderUpdates::<T>::take(current_block)
@@ -1039,42 +1038,6 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					) > maximum_price_impact
 					{
 						return Err(Error::<T>::InsufficientLiquidity.into());
-					}
-				}
-
-				// Auto-sweeping limit orders in case collected amount reaches a threshold:
-				{
-					let autosweeping_thresholds = LimitOrderAutoSweepingThresholds::<T>::get();
-
-					let collected_orders = {
-						// Clone pool since we don't actually want to make changes
-						// to it yet:
-						let mut pool_state = pool.pool_state.clone();
-						pool_state.collect_all_limit_orders()
-					};
-
-					for (base_or_quote, results_for_order) in collected_orders {
-						for ((lp, order_id), tick, collected, _pos_info) in results_for_order {
-							let asset_to_collect = asset_pair.assets()[!base_or_quote];
-
-							let threshold = autosweeping_thresholds
-								.get(&asset_to_collect)
-								.copied()
-								// Default to not sweeping
-								.unwrap_or(AssetAmount::MAX)
-								.into();
-
-							if collected.bought_amount >= threshold {
-								Self::sweep_limit_order(
-									pool,
-									&lp,
-									&asset_pair,
-									base_or_quote.sell_order(),
-									order_id,
-									tick,
-								)?;
-							}
-						}
 					}
 				}
 
@@ -1886,6 +1849,22 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
+	fn try_mutate_pools<
+		E: From<pallet::Error<T>>,
+		F: FnMut(&AssetPair, &mut Pool<T>) -> Result<(), E>,
+	>(
+		mut f: F,
+	) {
+		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
+			let _ = Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
+				let pool =
+					maybe_pool.as_mut().expect("Pools must exist since we are iterating over them");
+
+				f(&asset_pair, pool)
+			});
+		}
+	}
+
 	fn try_mutate_order<R, F: FnOnce(&AssetPair, &mut Pool<T>) -> Result<R, DispatchError>>(
 		lp: &T::AccountId,
 		base_asset: any::Asset,
@@ -2260,44 +2239,44 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn set_pool_fee_for_limit_orders(
-		pool: &mut Pool<T>,
-		asset_pair: &AssetPair,
-		fee_hundredth_pips: u32,
-	) -> DispatchResult {
-		pool.pool_state
-			.set_limit_order_fees(fee_hundredth_pips)
-			.map_err(|_| Error::<T>::InvalidFeeAmount)?
-			.try_map_with_pair(|asset, collected_fees| {
-				for ((lp, id), tick, collected, position_info) in collected_fees.into_iter() {
-					Self::process_limit_order_update(
-						pool,
-						asset_pair,
-						&lp,
-						asset.sell_order(),
-						id,
-						tick,
-						collected,
-						position_info,
-						IncreaseOrDecrease::Increase(0),
-					)?;
+	fn auto_sweep_limit_orders() {
+		// Auto-sweeping limit orders in case collected amount reaches a threshold:
+		let autosweeping_thresholds = LimitOrderAutoSweepingThresholds::<T>::get();
+
+		Self::try_mutate_pools(|asset_pair, pool| {
+			let collected_orders = {
+				// Clone pool since we don't actually want to make changes
+				// to it yet:
+				let mut pool_state = pool.pool_state.clone();
+				pool_state.collect_all_limit_orders()
+			};
+
+			for (base_or_quote, results_for_order) in collected_orders {
+				for ((lp, order_id), tick, collected, _pos_info) in results_for_order {
+					let asset_to_collect = asset_pair.assets()[!base_or_quote];
+
+					let threshold = autosweeping_thresholds
+						.get(&asset_to_collect)
+						.copied()
+						// Default to not sweeping
+						.unwrap_or(AssetAmount::MAX)
+						.into();
+
+					if collected.bought_amount >= threshold {
+						Self::sweep_limit_order(
+							pool,
+							&lp,
+							asset_pair,
+							base_or_quote.sell_order(),
+							order_id,
+							tick,
+						)?;
+					}
 				}
-				Result::<(), DispatchError>::Ok(())
-			})?;
+			}
 
-		Ok(())
-	}
-}
-
-impl<T: Config> HistoricalFeeMigration for Pallet<T> {
-	type AccountId = T::AccountId;
-	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount) {
-		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
-			*balance = balance.saturating_add(amount)
+			Ok::<_, DispatchError>(())
 		});
-	}
-	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount {
-		HistoricalEarnedFees::<T>::get(account_id, asset)
 	}
 }
 

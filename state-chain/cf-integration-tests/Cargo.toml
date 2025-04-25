@@ -18,7 +18,7 @@ workspace = true
 log = { workspace = true }
 state-chain-runtime = { workspace = true }
 libsecp256k1 = { workspace = true, default-features = true, features = [
-    "static-context",
+	"static-context",
 ] }
 rand = { workspace = true, default-features = true }
 hex = { workspace = true }
@@ -30,12 +30,13 @@ arrayref = { workspace = true }
 # Additional FRAME pallets
 cf-amm = { workspace = true, default-features = true }
 cf-chains = { workspace = true, default-features = true, features = [
-    "runtime-integration-tests",
+	"runtime-integration-tests",
 ] }
 cf-primitives = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
 cf-traits = { workspace = true, default-features = true }
+cf-rpc-types = { workspace = true }
 cfe-events = { workspace = true, default-features = true }
 chainflip-node = { workspace = true, default-features = true }
 pallet-authorship = { workspace = true, default-features = true }
@@ -59,14 +60,14 @@ pallet-cf-validator = { workspace = true, default-features = true }
 pallet-cf-vaults = { workspace = true, default-features = true }
 pallet-cf-witnesser = { workspace = true, default-features = true }
 pallet-session = { workspace = true, default-features = true, features = [
-    "historical",
+	"historical",
 ] }
 pallet-cf-trading-strategy = { workspace = true, default-features = true }
 
 # Substrate dependencies
 codec = { workspace = true, default-features = true, features = ["derive"] }
 scale-info = { workspace = true, default-features = true, features = [
-    "derive",
+	"derive",
 ] }
 
 frame-executive = { workspace = true, default-features = true }
@@ -94,3 +95,4 @@ sp-consensus-grandpa = { workspace = true, default-features = true }
 sp-timestamp = { workspace = true, default-features = true }
 frame-metadata-hash-extension = { workspace = true, default-features = true }
 sp-keyring = { workspace = true, default-features = true }
+custom-rpc = { workspace = true }
