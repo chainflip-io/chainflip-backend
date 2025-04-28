@@ -68,11 +68,6 @@ use sp_std::{
 	vec::Vec,
 };
 
-#[cfg(feature = "std")]
-use crate::address::AddressString;
-#[cfg(feature = "std")]
-use cf_utilities::rpc::NumberOrHex;
-
 pub use cf_primitives::chains::*;
 pub use frame_support::traits::Get;
 
@@ -1014,8 +1009,6 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
 	}
 }
 
-#[cfg(feature = "std")]
-pub type RefundParametersRpc = ChannelRefundParameters<AddressString>;
 pub type ChannelRefundParametersDecoded = ChannelRefundParameters<ForeignChainAddress>;
 pub type ChannelRefundParametersEncoded = ChannelRefundParameters<EncodedAddress>;
 
@@ -1163,43 +1156,12 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 	}
 }
 
-/// Type intended for RPC calls
-#[cfg(feature = "std")]
-pub type VaultSwapExtraParametersRpc = VaultSwapExtraParameters<AddressString, NumberOrHex>;
-
 /// Type used internally within the State chain.
 pub type VaultSwapExtraParametersEncoded = VaultSwapExtraParameters<EncodedAddress, AssetAmount>;
 
-#[cfg(feature = "std")]
-impl VaultSwapExtraParametersRpc {
-	pub fn try_into_encoded_params(
-		self,
-		chain: ForeignChain,
-	) -> anyhow::Result<VaultSwapExtraParametersEncoded> {
-		self.try_map_address(|a| a.try_parse_to_encoded_address(chain))?
-			.try_map_amounts(|n| {
-				u128::try_from(n)
-					.map_err(|_| anyhow::anyhow!("Cannot convert number input into u128"))
-			})
-	}
-}
-
-#[cfg(feature = "std")]
-impl From<VaultSwapExtraParametersEncoded> for VaultSwapExtraParametersRpc {
-	fn from(value: VaultSwapExtraParametersEncoded) -> Self {
-		value
-			.try_map_address(|a| {
-				Result::<AddressString, ()>::Ok(AddressString::from_encoded_address(a))
-			})
-			.expect("Address conversion is infallible")
-			.try_map_amounts(|n| Result::<NumberOrHex, ()>::Ok(n.into()))
-			.expect("Amount conversion is infallible")
-	}
-}
-
 #[derive(Clone, Debug, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct VaultSwapInput<Address, Amount> {
-	pub source_asset: Option<AnyChainAsset>,
+	pub source_asset: AnyChainAsset,
 	pub destination_asset: AnyChainAsset,
 	pub destination_address: Address,
 	pub broker_commission: BasisPoints,
@@ -1210,26 +1172,5 @@ pub struct VaultSwapInput<Address, Amount> {
 	pub dca_parameters: Option<DcaParameters>,
 }
 
-/// Type intended for RPC calls
-#[cfg(feature = "std")]
-pub type VaultSwapInputRpc = VaultSwapInput<AddressString, NumberOrHex>;
-
 /// Type used internally within the State chain.
 pub type VaultSwapInputEncoded = VaultSwapInput<EncodedAddress, AssetAmount>;
-
-#[cfg(feature = "std")]
-impl From<VaultSwapInputEncoded> for VaultSwapInputRpc {
-	fn from(value: VaultSwapInputEncoded) -> Self {
-		VaultSwapInput {
-			source_asset: value.source_asset,
-			destination_asset: value.destination_asset,
-			destination_address: AddressString::from_encoded_address(value.destination_address),
-			broker_commission: value.broker_commission,
-			extra_parameters: value.extra_parameters.into(),
-			channel_metadata: value.channel_metadata,
-			boost_fee: value.boost_fee,
-			affiliate_fees: value.affiliate_fees,
-			dca_parameters: value.dca_parameters,
-		}
-	}
-}

@@ -18,11 +18,11 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
-pub use cf_chains::{address::AddressString, RefundParametersRpc};
+pub use cf_chains::address::AddressString;
 use cf_chains::{evm::to_evm_address, CcmChannelMetadata};
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_rpc_types::RedemptionAmount;
+use cf_rpc_types::{RedemptionAmount, RefundParametersRpc};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::Serialize;

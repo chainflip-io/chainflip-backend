@@ -63,21 +63,6 @@ impl AffiliateRegistry for MockAffiliateRegistry {
 		None
 	}
 
-	fn full_mapping(
-		broker_id: &Self::AccountId,
-	) -> std::collections::BTreeMap<AffiliateShortId, Self::AccountId> {
-		AffiliateMapping::get()
-			.into_iter()
-			.filter_map(|((map_broker_id, short_id), account_id)| {
-				if *broker_id == map_broker_id {
-					Some((short_id, account_id))
-				} else {
-					None
-				}
-			})
-			.collect()
-	}
-
 	fn reverse_mapping(
 		broker_id: &Self::AccountId,
 	) -> std::collections::BTreeMap<Self::AccountId, AffiliateShortId> {

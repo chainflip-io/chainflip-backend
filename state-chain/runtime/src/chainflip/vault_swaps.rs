@@ -74,15 +74,15 @@ fn from_affiliate_and_fees(
 	broker_id: &AccountId,
 	affiliates_and_fees: Vec<AffiliateAndFee>,
 ) -> Result<Affiliates<AccountId>, DispatchErrorWithMessage> {
-	let mapping = <Swapping as AffiliateRegistry>::full_mapping(broker_id);
 	affiliates_and_fees
 		.into_iter()
 		.map(|affiliate_and_fee| {
 			Ok(Beneficiary {
-				account: mapping
-					.get(&affiliate_and_fee.affiliate)
-					.cloned()
-					.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegisteredForBroker)?,
+				account: pallet_cf_swapping::AffiliateIdMapping::<Runtime>::get(
+					broker_id,
+					affiliate_and_fee.affiliate,
+				)
+				.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegisteredForBroker)?,
 				bps: affiliate_and_fee.fee as BasisPoints,
 			})
 		})
@@ -388,7 +388,7 @@ pub fn decode_bitcoin_vault_swap(
 		.map_err(|_| "Failed to decode Bitcoin Null data Payload")?;
 
 	Ok(VaultSwapInputEncoded {
-		source_asset: None, // We lose source asset information in Vault swap
+		source_asset: Asset::Btc,
 		destination_asset: output_asset,
 		destination_address: output_address,
 		broker_commission: broker_fee.into(),
@@ -427,7 +427,7 @@ pub fn decode_solana_vault_swap(
 	} = cf_chains::sol::decode_sol_instruction_data(&instruction)?;
 
 	Ok(VaultSwapInputEncoded {
-		source_asset: Some(src_asset),
+		source_asset: src_asset,
 		destination_asset: dst_token,
 		destination_address: dst_address,
 		broker_commission,

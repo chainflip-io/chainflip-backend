@@ -27,7 +27,7 @@ use cf_amm::{
 use cf_chains::{
 	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	eth::Address as EthereumAddress,
-	CcmChannelMetadata, Chain, VaultSwapExtraParametersRpc, VaultSwapInputRpc, MAX_CCM_MSG_LENGTH,
+	CcmChannelMetadata, Chain, MAX_CCM_MSG_LENGTH,
 };
 use cf_node_client::events_decoder;
 use cf_primitives::{
@@ -35,7 +35,13 @@ use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
 	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
-use cf_rpc_apis::{call_error, internal_error, CfErrorCode, OrderFills, RpcApiError, RpcResult};
+use cf_rpc_apis::{
+	broker::{
+		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc,
+		VaultSwapExtraParametersRpc, VaultSwapInputRpc,
+	},
+	call_error, internal_error, CfErrorCode, OrderFills, RpcApiError, RpcResult,
+};
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
@@ -1846,7 +1852,7 @@ where
 					destination_asset,
 					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
 					broker_commission,
-					extra_parameters.try_into_encoded_params(source_asset.into())?,
+					try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
 					channel_metadata,
 					boost_fee.unwrap_or_default(),
 					affiliate_fees.unwrap_or_default(),
@@ -1864,14 +1870,13 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapInputRpc> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			Ok::<_, CfApiError>(
+			Ok::<_, CfApiError>(vault_swap_input_encoded_to_rpc(
 				api.cf_decode_vault_swap_parameter(
 					hash,
 					broker,
 					vault_swap.map_btc_address(Into::into),
-				)??
-				.into(),
-			)
+				)??,
+			))
 		})
 	}
 

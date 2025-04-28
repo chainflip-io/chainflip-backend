@@ -20,20 +20,18 @@ use crate::{
 	CfApiError,
 };
 pub use cf_chains::eth::Address as EthereumAddress;
-use cf_chains::{
-	address::AddressString, CcmChannelMetadata, ChannelRefundParameters, RefundParametersRpc,
-	VaultSwapExtraParametersRpc, VaultSwapInputRpc,
-};
+use cf_chains::{address::AddressString, CcmChannelMetadata, ChannelRefundParameters};
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
 };
 use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId};
 use cf_rpc_apis::{
 	broker::{
-		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
-		TransactionInId, WithdrawFeesDetail,
+		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc, BrokerRpcApiServer,
+		DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress, TransactionInId,
+		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
-	RpcResult, H256,
+	RefundParametersRpc, RpcResult, H256,
 };
 use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
 use pallet_cf_swapping::AffiliateDetails;
@@ -286,7 +284,7 @@ where
 				destination_asset,
 				destination_address.try_parse_to_encoded_address(destination_asset.into())?,
 				broker_commission,
-				extra_parameters.try_into_encoded_params(source_asset.into())?,
+				try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
 				channel_metadata,
 				boost_fee.unwrap_or_default(),
 				affiliate_fees.unwrap_or_default(),
@@ -301,18 +299,18 @@ where
 		&self,
 		vault_swap: VaultSwapDetails<AddressString>,
 	) -> RpcResult<VaultSwapInputRpc> {
-		Ok(self
-			.rpc_backend
-			.client
-			.runtime_api()
-			.cf_decode_vault_swap_parameter(
-				self.rpc_backend.client.info().best_hash,
-				self.signed_pool_client.account_id(),
-				vault_swap.map_btc_address(Into::into),
-			)
-			.map_err(CfApiError::from)?
-			.map_err(CfApiError::from)?
-			.into())
+		Ok(vault_swap_input_encoded_to_rpc(
+			self.rpc_backend
+				.client
+				.runtime_api()
+				.cf_decode_vault_swap_parameter(
+					self.rpc_backend.client.info().best_hash,
+					self.signed_pool_client.account_id(),
+					vault_swap.map_btc_address(Into::into),
+				)
+				.map_err(CfApiError::from)?
+				.map_err(CfApiError::from)?,
+		))
 	}
 
 	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()> {

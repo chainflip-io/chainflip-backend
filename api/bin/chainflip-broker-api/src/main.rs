@@ -14,13 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc, VaultSwapInputRpc};
 use cf_rpc_apis::{
 	broker::{
 		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
-		TransactionInId, WithdrawFeesDetail,
+		TransactionInId, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
-	RpcApiError, RpcResult,
+	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::{
 	health::{self, HealthCheckOptions},

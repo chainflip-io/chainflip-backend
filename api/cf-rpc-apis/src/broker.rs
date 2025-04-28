@@ -16,11 +16,8 @@
 
 use crate::RpcResult;
 
-use cf_chains::{
-	eth::Address as EthereumAddress, CcmChannelMetadata, VaultSwapExtraParametersRpc,
-	VaultSwapInputRpc,
-};
-use cf_rpc_types::{AccountId32, BlockUpdate, H256};
+use cf_chains::{eth::Address as EthereumAddress, CcmChannelMetadata};
+use cf_rpc_types::{AccountId32, BlockUpdate, RefundParametersRpc, H256};
 use jsonrpsee::proc_macros::rpc;
 
 pub use cf_primitives::DcaParameters;

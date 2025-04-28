@@ -2596,10 +2596,6 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 		AffiliateAccountDetails::<T>::get(broker_id, affiliate_id).map(|details| details.short_id)
 	}
 
-	fn full_mapping(broker_id: &Self::AccountId) -> BTreeMap<AffiliateShortId, Self::AccountId> {
-		AffiliateIdMapping::<T>::iter_prefix(broker_id).collect()
-	}
-
 	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId> {
 		AffiliateIdMapping::<T>::iter_prefix(broker_id)
 			.map(|(short_id, account_id)| (account_id, short_id))
