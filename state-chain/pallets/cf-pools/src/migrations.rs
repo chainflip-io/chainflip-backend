@@ -16,17 +16,5 @@
 
 use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::migrations::VersionedMigration;
 
-mod remove_limit_order_pool_fee;
-
-pub type PalletMigration<T> = (
-	VersionedMigration<
-		5,
-		6,
-		remove_limit_order_pool_fee::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<6, Pallet<T>>,
-);
+pub type PalletMigration<T> = (PlaceholderMigration<6, Pallet<T>>,);

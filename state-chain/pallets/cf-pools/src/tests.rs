@@ -1013,71 +1013,78 @@ fn auto_sweeping() {
 	let get_balance =
 		|lp| (MockBalance::get_balance(lp, ASSET), MockBalance::get_balance(lp, STABLE_ASSET));
 
-	new_test_ext().execute_with(|| {
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			ASSET,
-			STABLE_ASSET,
-			0,
-			price_at_tick(0).unwrap(),
-		));
-
-		for (lp, amount) in [(ALICE, 20_000), (BOB, 10_000)] {
-			MockBalance::credit_account(&lp, ASSET, amount);
-			assert_ok!(LiquidityPools::set_limit_order(
-				RuntimeOrigin::signed(lp),
+	new_test_ext()
+		.execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
 				ASSET,
 				STABLE_ASSET,
-				Side::Sell,
-				1,
-				Some(100),
-				amount
+				0,
+				price_at_tick(0).unwrap(),
 			));
-		}
 
-		// Setting different thresholds for different assets to improve coverage:
-		LimitOrderAutoSweepingThresholds::<Test>::mutate(|thresholds| {
-			thresholds.try_insert(ASSET, 5_000).unwrap();
-			thresholds.try_insert(STABLE_ASSET, 10_000).unwrap();
+			for (lp, amount) in [(ALICE, 20_000), (BOB, 10_000)] {
+				MockBalance::credit_account(&lp, ASSET, amount);
+				assert_ok!(LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(lp),
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					1,
+					Some(100),
+					amount
+				));
+			}
+
+			// Setting different thresholds for different assets to improve coverage:
+			LimitOrderAutoSweepingThresholds::<Test>::mutate(|thresholds| {
+				thresholds.try_insert(ASSET, 5_000).unwrap();
+				thresholds.try_insert(STABLE_ASSET, 10_000).unwrap();
+			});
+
+			assert_eq!(get_balance(&ALICE), (0, 0));
+			assert_eq!(get_balance(&BOB), (0, 0));
+
+			assert!(LiquidityPools::swap_single_leg(STABLE_ASSET, ASSET, 20_000).is_ok());
+		})
+		.then_execute_at_next_block(|_| {
+			// Alice's funds should have been swept, but not yet Bob's:
+			assert_eq!(get_balance(&ALICE), (0, 13_332));
+			assert_eq!(get_balance(&BOB), (0, 0));
+
+			// Another swap should result in Bob's orders being swept too:
+			assert!(LiquidityPools::swap_single_leg(STABLE_ASSET, ASSET, 10_100).is_ok());
+		})
+		.then_execute_at_next_block(|_| {
+			assert_eq!(get_balance(&ALICE), (0, 13_332));
+			assert_eq!(get_balance(&BOB), (0, 10_032));
+
+			// Check that auto-sweeping works in the other direction too
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				ASSET,
+				STABLE_ASSET,
+				Side::Buy,
+				1,
+				Some(0),
+				5_000
+			));
+
+			// Note: increase due to implicit sweeping in `set_limit_order`
+			assert_eq!(get_balance(&ALICE), (0, 15_063));
+
+			// The amount in this swap is not sufficient to trigger auto sweeping:
+			assert!(LiquidityPools::swap_single_leg(ASSET, STABLE_ASSET, 3_000).is_ok());
+		})
+		.then_execute_at_next_block(|_| {
+			assert_eq!(get_balance(&ALICE), (0, 15_063));
+
+			// This swap should take us over the threshold for ASSET:
+			assert!(LiquidityPools::swap_single_leg(ASSET, STABLE_ASSET, 2_000).is_ok());
+		})
+		.then_execute_at_next_block(|_| {
+			assert_eq!(get_balance(&ALICE), (5000, 15_063));
 		});
-
-		assert_eq!(get_balance(&ALICE), (0, 0));
-		assert_eq!(get_balance(&BOB), (0, 0));
-
-		assert!(LiquidityPools::swap_single_leg(STABLE_ASSET, ASSET, 20_000).is_ok());
-
-		// Alice's funds should have been swept, but not yet Bob's:
-		assert_eq!(get_balance(&ALICE), (0, 13_332));
-		assert_eq!(get_balance(&BOB), (0, 0));
-
-		// Another swap should result in Bob's orders being swept too:
-		assert!(LiquidityPools::swap_single_leg(STABLE_ASSET, ASSET, 10_100).is_ok());
-
-		assert_eq!(get_balance(&ALICE), (0, 13_332));
-		assert_eq!(get_balance(&BOB), (0, 10_032));
-
-		// Check that auto-sweeping works in the other direction too
-		assert_ok!(LiquidityPools::set_limit_order(
-			RuntimeOrigin::signed(ALICE),
-			ASSET,
-			STABLE_ASSET,
-			Side::Buy,
-			1,
-			Some(0),
-			5_000
-		));
-
-		// Note: increase due to implicit sweeping in `set_limit_order`
-		assert_eq!(get_balance(&ALICE), (0, 15_063));
-
-		// The amount in this swap is not sufficient to trigger auto sweeping:
-		assert!(LiquidityPools::swap_single_leg(ASSET, STABLE_ASSET, 3_000).is_ok());
-		assert_eq!(get_balance(&ALICE), (0, 15_063));
-
-		// This swap should take us over the threshold for ASSET:
-		assert!(LiquidityPools::swap_single_leg(ASSET, STABLE_ASSET, 2_000).is_ok());
-		assert_eq!(get_balance(&ALICE), (5000, 15_063));
-	});
 }
 
 #[test]
