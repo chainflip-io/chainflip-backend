@@ -4,10 +4,12 @@ import { InternalAsset as Asset, Chains } from '@chainflip/cli';
 import {
   PublicKey,
   Keypair,
-  sendAndConfirmTransaction,
   TransactionInstruction,
-  Transaction,
   AccountMeta,
+  TransactionMessage,
+  VersionedTransaction,
+  Transaction,
+  sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
 import {
@@ -153,22 +155,42 @@ export async function executeSolVaultSwap(
     });
   }
 
-  const transaction = new Transaction();
   const instruction = new TransactionInstruction({
     keys,
     programId: new PublicKey(vaultSwapDetails.program_id),
     data: Buffer.from(vaultSwapDetails.data.slice(2), 'hex'),
   });
 
-  transaction.add(instruction);
-
   logger.trace('Sending Solana vault swap transaction');
-  const txHash = await sendAndConfirmTransaction(
-    connection,
-    transaction,
-    [whaleKeypair, newEventAccountKeypair],
-    { commitment: 'confirmed' },
-  );
+  let txHash: string;
+
+  // Test with both legacy and versioned transaction (V0)
+  if (Math.random() < 0.5) {
+    const recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+    const messageV0 = new TransactionMessage({
+      payerKey: whaleKeypair.publicKey,
+      recentBlockhash,
+      instructions: [instruction],
+    }).compileToV0Message();
+
+    const transaction = new VersionedTransaction(messageV0);
+
+    // Sign separately to mimic a real scenario
+    transaction.sign([newEventAccountKeypair]);
+    transaction.sign([whaleKeypair]);
+    txHash = await connection.sendRawTransaction(transaction.serialize());
+    await connection.confirmTransaction(txHash);
+  } else {
+    const transaction = new Transaction();
+    transaction.add(instruction);
+    txHash = await sendAndConfirmTransaction(
+      connection,
+      transaction,
+      [whaleKeypair, newEventAccountKeypair],
+      { commitment: 'confirmed' },
+    );
+  }
 
   const transactionData = await connection.getTransaction(txHash, {
     commitment: 'confirmed',
