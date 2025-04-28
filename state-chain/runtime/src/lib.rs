@@ -1633,6 +1633,7 @@ impl_runtime_apis! {
 			AssetBalances::free_balances(&account_id)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
+			LiquidityPools::sweep(&account_id).unwrap();
 			let free_balances = AssetBalances::free_balances(&account_id);
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 			let boost_pools_balances = IngressEgressBoostApi::boost_pool_account_balances(&account_id);
@@ -2634,6 +2635,8 @@ impl_runtime_apis! {
 			type Strategy = pallet_cf_trading_strategy::TradingStrategy;
 
 			fn to_strategy_info(lp_id: AccountId, strategy_id: AccountId, strategy: Strategy) -> TradingStrategyInfo<AssetAmount> {
+
+				LiquidityPools::sweep(&strategy_id).unwrap();
 
 				let free_balances = AssetBalances::free_balances(&strategy_id);
 				let open_order_balances = LiquidityPools::open_order_balances(&strategy_id);
