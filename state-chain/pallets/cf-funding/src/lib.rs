@@ -246,6 +246,9 @@ pub mod pallet {
 
 		/// An account has been bound to an executor address.
 		BoundExecutorAddress { account_id: AccountId<T>, address: EthereumAddress },
+
+		/// An internal transfer was executed successfully.
+		InternalTransfer { from: AccountId<T>, to: AccountId<T>, amount: FlipBalance<T> },
 	}
 
 	#[pallet::error]
@@ -652,6 +655,12 @@ pub mod pallet {
 						.or_insert(redeem_amount);
 				});
 			}
+
+			Self::deposit_event(Event::InternalTransfer {
+				from: source,
+				to: account_id,
+				amount: redeem_amount,
+			});
 
 			Ok(())
 		}
