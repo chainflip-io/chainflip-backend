@@ -171,6 +171,7 @@ where
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
+		wait_for_finality: Option<bool>,
 	) -> RpcResult<SwapDepositAddress> {
 		let ExtrinsicData { events, header, .. } = self
 			.signed_pool_client
@@ -191,7 +192,7 @@ where
 						dca_parameters,
 					},
 				),
-				false,
+				wait_for_finality.unwrap_or_default(),
 				true,
 			)
 			.await
