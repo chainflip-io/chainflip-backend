@@ -354,8 +354,9 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
+		wait_for_finality: Option<bool>,
 	) -> Result<SwapDepositAddress> {
-		let (_tx_hash, events, header, ..) = self
+		let extrinsic_progress = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
@@ -372,9 +373,13 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					dca_parameters,
 				},
 			)
-			.await?
-			.until_in_block()
 			.await?;
+
+		let (_tx_hash, events, header, ..) = if wait_for_finality.unwrap_or_default() {
+			extrinsic_progress.until_finalized().await?
+		} else {
+			extrinsic_progress.until_in_block().await?
+		};
 
 		extract_event!(
 			events,
