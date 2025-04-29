@@ -240,12 +240,14 @@ async function brokerLevelScreeningTestBtc(
  * @returns - The the channel id of the deposit channel.
  */
 async function brokerLevelScreeningTestBtcVaultSwap(
-  logger: Logger,
+  testContext: TestContext,
   amount: string,
   doBoost: boolean,
   refundAddress: string,
   reportFunction: (txId: string) => Promise<void>,
 ): Promise<void> {
+  const logger = testContext.logger;
+
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const txId = await buildAndSendBtcVaultSwap(logger, parseFloat(amount), 'Usdc', destinationAddressForUsdc, refundAddress, {
     account: broker.address,
@@ -639,7 +641,10 @@ async function testBrokerLevelScreeningBitcoinVaultSwap(
   logger.debug(`Bitcoin vault swap was rejected and refunded 👍.`);
 }
 
-export async function testBrokerLevelScreening(testContext: TestContext) {
+export async function testBrokerLevelScreening(
+  testContext: TestContext,
+  testBoostedDeposits: boolean = false
+) {
   await ensureHealth();
   const previousMockmode = (await setMockmode('Manual')).previous;
 

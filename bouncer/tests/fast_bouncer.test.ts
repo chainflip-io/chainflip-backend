@@ -55,5 +55,5 @@ describe('ConcurrentTests', () => {
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('BrokerLevelScreeningTest', () => {
-  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 800);
+  concurrentTest('BrokerLevelScreening', (context) => testBrokerLevelScreening(context, true), 800);
 });
