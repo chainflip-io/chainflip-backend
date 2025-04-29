@@ -19,6 +19,7 @@
 #![feature(extract_if)]
 #![feature(split_array)]
 use crate::{
+	assets::any::Asset as AnyChainAsset,
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	btc::BitcoinCrypto,
 	dot::PolkadotCrypto,
@@ -41,7 +42,8 @@ use address::{
 };
 use cf_amm_math::Price;
 use cf_primitives::{
-	AssetAmount, BlockNumber, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId,
+	Affiliates, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId, DcaParameters,
+	EgressId, EthAmount, GasAmount, TxId,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -1007,8 +1009,6 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
 	}
 }
 
-#[cfg(feature = "std")]
-pub type RefundParametersRpc = ChannelRefundParameters<crate::address::AddressString>;
 pub type ChannelRefundParametersDecoded = ChannelRefundParameters<ForeignChainAddress>;
 pub type ChannelRefundParametersEncoded = ChannelRefundParameters<EncodedAddress>;
 
@@ -1156,24 +1156,21 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 	}
 }
 
-/// Type intended for RPC calls
-#[cfg(feature = "std")]
-pub type VaultSwapExtraParametersRpc =
-	VaultSwapExtraParameters<crate::address::AddressString, cf_utilities::rpc::NumberOrHex>;
-
 /// Type used internally within the State chain.
 pub type VaultSwapExtraParametersEncoded = VaultSwapExtraParameters<EncodedAddress, AssetAmount>;
 
-#[cfg(feature = "std")]
-impl VaultSwapExtraParametersRpc {
-	pub fn try_into_encoded_params(
-		self,
-		chain: ForeignChain,
-	) -> anyhow::Result<VaultSwapExtraParametersEncoded> {
-		self.try_map_address(|a| a.try_parse_to_encoded_address(chain))?
-			.try_map_amounts(|n| {
-				u128::try_from(n)
-					.map_err(|_| anyhow::anyhow!("Cannot convert number input into u128"))
-			})
-	}
+#[derive(Clone, Debug, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+pub struct VaultSwapInput<Address, Amount> {
+	pub source_asset: AnyChainAsset,
+	pub destination_asset: AnyChainAsset,
+	pub destination_address: Address,
+	pub broker_commission: BasisPoints,
+	pub extra_parameters: VaultSwapExtraParameters<Address, Amount>,
+	pub channel_metadata: Option<CcmChannelMetadata>,
+	pub boost_fee: BasisPoints,
+	pub affiliate_fees: Affiliates<cf_primitives::AccountId>,
+	pub dca_parameters: Option<DcaParameters>,
 }
+
+/// Type used internally within the State chain.
+pub type VaultSwapInputEncoded = VaultSwapInput<EncodedAddress, AssetAmount>;

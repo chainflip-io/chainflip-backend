@@ -621,7 +621,6 @@ mod test {
 						))
 						.await
 						.unwrap();
-
 						assert_eq!(expected_status, resp.status());
 						assert_eq!(resp.text().await.unwrap(), expected_text);
 					}

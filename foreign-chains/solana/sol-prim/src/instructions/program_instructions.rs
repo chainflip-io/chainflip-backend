@@ -248,6 +248,8 @@ impl SystemProgramInstruction {
 	}
 }
 
+pub type FunctionDiscriminator = [u8; 8];
+
 pub trait ProgramInstruction: BorshSerialize {
 	const CALL_NAME: &'static str;
 	const FN_DISCRIMINATOR_HASH: [u8; 32] = sha2_const::Sha256::new()
@@ -259,7 +261,7 @@ pub trait ProgramInstruction: BorshSerialize {
 		Instruction::new_with_borsh(program_id, &(Self::function_discriminator(), self), accounts)
 	}
 
-	fn function_discriminator() -> [u8; 8] {
+	fn function_discriminator() -> FunctionDiscriminator {
 		Self::FN_DISCRIMINATOR_HASH[..8].copy_to_array::<8>()
 	}
 }
@@ -361,10 +363,10 @@ macro_rules! solana_program {
 		}
 
 		$(
-			#[derive(BorshSerialize, Debug, Clone, PartialEq, Eq)]
+			#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 			pub struct $call {
 				$(
-					$call_arg: $arg_type,
+					pub $call_arg: $arg_type,
 				)*
 			}
 
