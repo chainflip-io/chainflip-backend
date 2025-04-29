@@ -167,12 +167,4 @@ pub trait LpRpcApi {
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;
-
-	#[method(name = "request_internal_transfer")]
-	async fn request_internal_transfer(
-		&self,
-		exact_amount: Option<NumberOrHex>,
-		redeem_address: EthereumAddress,
-		account_id: AccountId32,
-	) -> RpcResult<Hash>;
 }
