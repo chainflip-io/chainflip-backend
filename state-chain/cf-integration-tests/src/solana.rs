@@ -501,7 +501,7 @@ fn can_send_solana_ccm_v1() {
 			// Wait until swap is complete and ALT election started
 			vote_for_alt_election(
 				29,
-				AltWitnessingConsensusResult::ValidConsensus(vec![SolAddressLookupTableAccount {
+				AltWitnessingConsensusResult::Valid(vec![SolAddressLookupTableAccount {
 					key: user_alt().key,
 					addresses: vec![Default::default()],
 				}]),
@@ -587,7 +587,7 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 			// Let election come into Consensus
 			vote_for_alt_election(
 				29,
-				AltWitnessingConsensusResult::ValidConsensus(vec![
+				AltWitnessingConsensusResult::Valid(vec![
 					SolAddressLookupTableAccount {
 						key: user_alts[0].into(),
 						addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
@@ -600,7 +600,7 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 			);
 			vote_for_alt_election(
 				30,
-				AltWitnessingConsensusResult::ValidConsensus(vec![
+				AltWitnessingConsensusResult::Valid(vec![
 					SolAddressLookupTableAccount {
 						key: user_alts[1].into(),
 						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
@@ -613,7 +613,7 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 			);
 			vote_for_alt_election(
 				31,
-				AltWitnessingConsensusResult::ValidConsensus(vec![
+				AltWitnessingConsensusResult::Valid(vec![
 					SolAddressLookupTableAccount {
 						key: user_alts[0].into(),
 						addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
@@ -1118,7 +1118,7 @@ fn invalid_alt_triggers_refund_transfer() {
 
 			testnet.move_forward_blocks(1);
 
-			vote_for_alt_election(13, AltWitnessingConsensusResult::InvalidNoConsensus);
+			vote_for_alt_election(13, AltWitnessingConsensusResult::Invalid);
 
 			// Let the election come to consensus.
 			testnet.move_forward_blocks(1);

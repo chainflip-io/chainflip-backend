@@ -42,8 +42,8 @@ where
 		})
 		.collect::<Result<Option<_>, _>>()
 		.map(|maybe_consensus_alts| match maybe_consensus_alts {
-			Some(alts) => AltWitnessingConsensusResult::ValidConsensus(alts),
-			None => AltWitnessingConsensusResult::InvalidNoConsensus,
+			Some(alts) => AltWitnessingConsensusResult::Valid(alts),
+			None => AltWitnessingConsensusResult::Invalid,
 		})
 }
 fn parse_alt_account_info(
@@ -296,7 +296,7 @@ mod tests {
 				let addresses =
 					get_lookup_table_state(&client, vec![mainnet_empty_address]).await.unwrap();
 
-				assert_eq!(addresses, AltWitnessingConsensusResult::InvalidNoConsensus);
+				assert_eq!(addresses, AltWitnessingConsensusResult::Invalid);
 
 				let mainnet_nonce_account: SolAddress =
 					SolAddress::from_str("3bVqyf58hQHsxbjnqnSkopnoyEHB9v9KQwhZj7h1DucW").unwrap();
@@ -304,7 +304,7 @@ mod tests {
 				let addresses =
 					get_lookup_table_state(&client, vec![mainnet_nonce_account]).await.unwrap();
 
-				assert_eq!(addresses, AltWitnessingConsensusResult::InvalidNoConsensus);
+				assert_eq!(addresses, AltWitnessingConsensusResult::Invalid);
 
 				Ok(())
 			}
