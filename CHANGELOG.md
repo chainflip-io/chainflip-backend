@@ -2,14 +2,17 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.9.1] - 2025-04-29
+
+### Features
+
+- Add option to wait finality when opening deposit channel ([#5835](https://github.com/chainflip-io/chainflip-backend/issues/5835))
+
+### Fixes
+
+- Sweep in lp total balances and strategies rpc ([#5834](https://github.com/chainflip-io/chainflip-backend/issues/5834))
+
 ## [1.9.0] - 2025-04-24
-
-### CI
-
-- Move to nsc container registry 🏎️ ([#5649](https://github.com/chainflip-io/chainflip-backend/issues/5649))
-- Enable CI Runner Cache 💰 ([#5668](https://github.com/chainflip-io/chainflip-backend/issues/5668))
-- Make localnet startup logs easier to access in CI [([PLA-1820](https://linear.app/chainflip/issue/PLA-1820))] ([#5725](https://github.com/chainflip-io/chainflip-backend/issues/5725))
-- ([PLA-1835](https://linear.app/chainflip/issue/PLA-1835)): limit start-deposit-monitor.sh retries in CI ([#5763](https://github.com/chainflip-io/chainflip-backend/issues/5763))
 
 ### Features
 
@@ -95,10 +98,16 @@ All notable changes included in each Chainflip release will be documented in thi
 - Vault swap refund instead of ignoring the deposit ([#5507](https://github.com/chainflip-io/chainflip-backend/issues/5507))
 - Move rpc api defining traits to new crate ([#5805](https://github.com/chainflip-io/chainflip-backend/issues/5805))
 
+### CI
+
+- Move to nsc container registry 🏎️ ([#5649](https://github.com/chainflip-io/chainflip-backend/issues/5649))
+- Enable CI Runner Cache 💰 ([#5668](https://github.com/chainflip-io/chainflip-backend/issues/5668))
+- Make localnet startup logs easier to access in CI [([PLA-1820](https://linear.app/chainflip/issue/PLA-1820))] ([#5725](https://github.com/chainflip-io/chainflip-backend/issues/5725))
+- ([PLA-1835](https://linear.app/chainflip/issue/PLA-1835)): limit start-deposit-monitor.sh retries in CI ([#5763](https://github.com/chainflip-io/chainflip-backend/issues/5763))
+
 ### Testing
 
 - Trading strategies integration test ([#5752](https://github.com/chainflip-io/chainflip-backend/issues/5752))
-
 
 ## [1.8.2] - 2025-02-12
 
