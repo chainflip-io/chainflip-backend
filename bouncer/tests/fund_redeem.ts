@@ -6,17 +6,14 @@ import {
   newAddress,
   observeBalanceIncrease,
   assetDecimals,
-  createStateChainKeypair,
-  amountToFineAmount,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { fundFlip } from '../shared/fund_flip';
 import { redeemFlip, RedeemAmount } from '../shared/redeem_flip';
 import { newStatechainAddress } from '../shared/new_statechain_address';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
+import { getChainflipApi } from '../shared/utils/substrate';
 import { Logger } from '../shared/utils/logger';
 import { TestContext } from '../shared/utils/test_context';
-import { lpApiRpc } from '../shared/json_rpc';
 
 // Submitting the `redeem` extrinsic will cost a small amount of gas. Any more than this and we should be suspicious.
 const gasErrorMargin = 0.1;
@@ -40,40 +37,6 @@ async function redeemAndObserve(
   );
 
   return balanceIncrease;
-}
-
-// Funds the LP API address with Flip, and then transfers a portion of the Flip
-// to the LP2 address via an internal transfer.
-async function transferInternally(logger: Logger) {
-  const lpApi = createStateChainKeypair('//LP_API');
-  const to = createStateChainKeypair('//LP_2');
-
-  const fundAmount = 1000;
-  const amountToTransfer = fundAmount / 4;
-  const redeemEthAddress = await newAddress('Eth', randomBytes(32).toString('hex'));
-
-  await fundFlip(logger, lpApi.address, fundAmount.toString());
-
-  const fineAmountToTransfer = parseInt(
-    amountToFineAmount(amountToTransfer.toString(), assetDecimals('Flip')),
-  );
-
-  try {
-    logger.info(`Transferring ${fineAmountToTransfer} from ${lpApi.address} to ${to.address}`);
-    await lpApiRpc(logger, `lp_request_internal_transfer`, [
-      fineAmountToTransfer.toString(16),
-      redeemEthAddress,
-      to.address,
-    ]);
-    const observeInternalTransferEvent = observeEvent(logger, 'funding:InternalTransfer', {
-      test: (event) => event.data.to === to.address && event.data.from === lpApi.address,
-    }).event;
-
-    await observeInternalTransferEvent;
-    logger.info('Internal transfer success 🤘!');
-  } catch (error) {
-    logger.error(`Error: ${error}`);
-  }
 }
 
 // Uses the seed to generate a new SC address and Eth address.
@@ -132,5 +95,4 @@ async function main(logger: Logger, providedSeed?: string) {
 
 export async function testFundRedeem(testContext: TestContext) {
   await main(testContext.logger, 'redeem');
-  await transferInternally(testContext.logger);
 }
