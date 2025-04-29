@@ -403,7 +403,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let external_alts = ccm_additional_data
 			.alt_addresses()
 			.map(|alt_addresses| Environment::get_address_lookup_tables(alt_addresses))
-			.transpose()?
+			.transpose()
+			.inspect_err(|_| {
+				Environment::recover_durable_nonce(durable_nonce.0);
+			})?
 			.unwrap_or_default();
 		let address_lookup_tables =
 			sp_std::iter::once(sol_api_environment.address_lookup_table_account)
