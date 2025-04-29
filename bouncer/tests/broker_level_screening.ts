@@ -340,7 +340,7 @@ async function testBrokerLevelScreeningEthereumVaultSwap(
   const chain = chainFromAsset(sourceAsset);
   const ingressEgressPallet = ingressEgressPalletForChain(chain);
 
-  logger.debug(`Testing broker level screening for ${chain} ${sourceAsset} vault swap...`);
+  logger.info(`Testing broker level screening for ${chain} ${sourceAsset} vault swap...`);
   const MAX_RETRIES = 120;
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
@@ -396,7 +396,7 @@ async function testBrokerLevelScreeningEthereumVaultSwap(
     );
   }
 
-  logger.debug(`Marked ${sourceAsset} vault swap was rejected and refunded 👍.`);
+  logger.info(`Marked ${sourceAsset} vault swap was rejected and refunded 👍.`);
 }
 
 async function testBrokerLevelScreeningEthereumLiquidityDeposit(
@@ -409,7 +409,7 @@ async function testBrokerLevelScreeningEthereumLiquidityDeposit(
   const chain = chainFromAsset(sourceAsset);
   const ingressEgressPallet = ingressEgressPalletForChain(chain);
 
-  logger.debug(`Testing broker level screening for ${chain} ${sourceAsset}...`);
+  logger.info(`Testing broker level screening for ${chain} ${sourceAsset}...`);
   const MAX_RETRIES = 120;
 
   // setup access to chainflip api and lp
@@ -511,7 +511,7 @@ async function testBrokerLevelScreeningEthereumLiquidityDeposit(
     );
   }
 
-  logger.debug(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
+  logger.info(`Marked ${sourceAsset} LP deposit was rejected and refunded 👍.`);
 }
 
 // Sets the ingress_egress broker whitelist to the given `broker`.
@@ -624,7 +624,7 @@ async function testBrokerLevelScreeningBitcoinVaultSwap(
   const logger = testContext.logger;
 
   // -- Test vault swap rejection --
-  logger.debug('Testing broker level screening for Bitcoin vault swap...');
+  logger.info('Testing broker level screening for Bitcoin vault swap...');
   const btcRefundAddress = await newAssetAddress('Btc');
 
   await brokerLevelScreeningTestBtcVaultSwap(testContext, '0.2', false, btcRefundAddress, async (txId) =>
@@ -638,7 +638,7 @@ async function testBrokerLevelScreeningBitcoinVaultSwap(
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
 
-  logger.debug(`Bitcoin vault swap was rejected and refunded 👍.`);
+  logger.info(`Bitcoin vault swap was rejected and refunded 👍.`);
 }
 
 export async function testBrokerLevelScreening(
