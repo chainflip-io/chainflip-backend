@@ -1152,8 +1152,13 @@ impl CallIndexer<RuntimeCall> for LpOrderCallIndexer {
 pub struct CfCcmAdditionalDataHandler;
 impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData) {
-		ccm_data
-			.address_lookup_tables()
-			.inspect(|alts| solana_elections::initiate_solana_alt_election(alts.clone()));
+		match ccm_data {
+			DecodedCcmAdditionalData::NotRequired => {},
+			DecodedCcmAdditionalData::Solana(versioned_solana_ccm_additional_data) => {
+				versioned_solana_ccm_additional_data.alt_addresses().inspect(|alt_addresses| {
+					solana_elections::initiate_solana_alt_election(alt_addresses.clone())
+				});
+			},
+		}
 	}
 }

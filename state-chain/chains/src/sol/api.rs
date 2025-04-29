@@ -385,23 +385,11 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		message: Vec<u8>,
 		ccm_additional_data: VersionedSolanaCcmAdditionalData,
 	) -> Result<Self, SolanaTransactionBuildingError> {
-		let ccm_accounts = ccm_additional_data.ccm_accounts();
-		let alts = ccm_additional_data
-			.address_lookup_tables()
-			.map(|alts| Environment::get_address_lookup_tables(alts))
-			.transpose()?
-			.unwrap_or_default();
-
 		let sol_api_environment = Environment::api_environment()?;
 		let agg_key = Environment::current_agg_key()?;
 
-		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
-		let address_lookup_tables =
-			sp_std::iter::once(sol_api_environment.address_lookup_table_account)
-				.chain(alts)
-				.collect::<Vec<_>>();
-
 		// Ensure the CCM parameters do not contain blacklisted accounts.
+		let ccm_accounts = ccm_additional_data.ccm_accounts();
 		check_ccm_for_blacklisted_accounts(
 			&ccm_accounts,
 			vec![sol_api_environment.token_vault_pda_account.into(), agg_key.into()],
@@ -410,6 +398,17 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		let compute_price = Environment::compute_price()?;
 		let durable_nonce = Environment::nonce_account()?;
+
+		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
+		let external_alts = ccm_additional_data
+			.alt_addresses()
+			.map(|alt_addresses| Environment::get_address_lookup_tables(alt_addresses))
+			.transpose()?
+			.unwrap_or_default();
+		let address_lookup_tables =
+			sp_std::iter::once(sol_api_environment.address_lookup_table_account)
+				.chain(external_alts)
+				.collect::<Vec<_>>();
 
 		let compute_limit =
 			SolTrackedData::calculate_ccm_compute_limit(gas_budget, transfer_param.asset);

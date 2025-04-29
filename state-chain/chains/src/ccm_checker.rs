@@ -94,13 +94,6 @@ impl DecodedCcmAdditionalData {
 			_ => None,
 		}
 	}
-
-	pub fn address_lookup_tables(&self) -> Option<Vec<SolAddress>> {
-		match self {
-			DecodedCcmAdditionalData::Solana(sol_data) => sol_data.address_lookup_tables(),
-			_ => None,
-		}
-	}
 }
 
 #[derive(
@@ -126,7 +119,7 @@ impl VersionedSolanaCcmAdditionalData {
 		}
 	}
 
-	pub fn address_lookup_tables(&self) -> Option<Vec<SolAddress>> {
+	pub fn alt_addresses(&self) -> Option<Vec<SolAddress>> {
 		match self {
 			VersionedSolanaCcmAdditionalData::V0(..) => None,
 			VersionedSolanaCcmAdditionalData::V1 { alts, .. } =>
@@ -165,8 +158,7 @@ impl CcmValidityChecker {
 				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 
 				let ccm_accounts = decoded_data.ccm_accounts();
-				let address_lookup_tables =
-					decoded_data.address_lookup_tables().unwrap_or_default();
+				let address_lookup_tables = decoded_data.alt_addresses().unwrap_or_default();
 				let num_address_lookup_tables = address_lookup_tables.len();
 
 				if num_address_lookup_tables > MAX_CCM_USER_ALTS as usize {
