@@ -74,6 +74,7 @@ mod benchmarks {
 				i,
 				Some(0),
 				1_000,
+				None,
 			));
 		}
 	}
@@ -206,6 +207,7 @@ mod benchmarks {
 			0,
 			Some(100),
 			1_000,
+			Some(BlockNumberFor::<T>::from(100u32)),
 		);
 	}
 
@@ -229,6 +231,7 @@ mod benchmarks {
 			0,
 			Some(0),
 			10_000,
+			None,
 		));
 		assert_ok!(Pallet::<T>::set_limit_order(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -238,6 +241,7 @@ mod benchmarks {
 			1,
 			Some(0),
 			10_000,
+			None,
 		));
 		assert_ok!(Pallet::<T>::swap_single_leg(STABLE_ASSET, Asset::Eth, 1_000));
 		let fee = 1_000;
@@ -284,6 +288,7 @@ mod benchmarks {
 				id: 0,
 				option_tick: Some(0),
 				sell_amount: 100,
+				expire_at: None,
 			}),
 			BlockNumberFor::<T>::from(5u32),
 		);
@@ -357,6 +362,41 @@ mod benchmarks {
 		crate::benchmarking::benchmarks::cancel_orders_batch(
 			RawOrigin::Signed(caller.clone()),
 			orders_to_delete,
+		);
+	}
+
+	#[benchmark]
+	fn cancel_limit_order() {
+		const LIMIT_ORDER_ID: u64 = 0;
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(
+			T::EnsureGovernance::try_successful_origin().unwrap(),
+			Asset::Eth,
+			Asset::Usdc,
+			0,
+			price_at_tick(0).unwrap()
+		));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
+
+		assert_ok!(Pallet::<T>::set_limit_order(
+			RawOrigin::Signed(caller.clone()).into(),
+			Asset::Eth,
+			Asset::Usdc,
+			Side::Sell,
+			LIMIT_ORDER_ID,
+			Some(0),
+			1_000,
+			None,
+		));
+
+		#[extrinsic_call]
+		cancel_limit_order(
+			RawOrigin::Signed(caller),
+			Asset::Eth,
+			Asset::Usdc,
+			Side::Sell,
+			LIMIT_ORDER_ID,
 		);
 	}
 

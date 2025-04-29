@@ -390,14 +390,15 @@ pub mod pallet {
 		OutputOverflow,
 		/// There are no amounts between the specified maximum and minimum that match the required
 		/// ratio of assets
-		AssetRatioUnachieveable,
+		AssetRatioUnachievable,
 		/// Updating Limit Orders is disabled.
 		UpdatingLimitOrdersDisabled,
 		/// Updating Range Orders is disabled.
 		UpdatingRangeOrdersDisabled,
 		/// Unsupported call.
 		UnsupportedCall,
-		/// The update can't be scheduled because it has expired (dispatch_at is in the past).
+		/// The update can't be scheduled because it has expired (dispatch_at or expire_at is in
+		/// the past).
 		LimitOrderUpdateExpired,
 		/// The range order size is invalid.
 		InvalidSize,
@@ -738,12 +739,13 @@ pub mod pallet {
 			id: OrderId,
 			option_tick: Option<Tick>,
 			sell_amount: AssetAmount,
+			expire_at: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().limit_order_update_enabled,
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
-			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin.clone())?;
 			T::LpRegistrationApi::ensure_has_refund_address_for_assets(
 				&lp,
 				[base_asset, quote_asset],
@@ -757,7 +759,15 @@ pub mod pallet {
 				id,
 				option_tick,
 				sell_amount,
-			)
+			)?;
+
+			if let Some(expire_at) = expire_at {
+				let call = Call::cancel_limit_order { base_asset, quote_asset, side, id };
+				Self::schedule_limit_order_update(origin, Box::new(call), expire_at)
+					.map_err(|e| e.error)?;
+			}
+
+			Ok(())
 		}
 
 		/// Sets the Liquidity Pool fees. Also collect earned fees and bought amount for
@@ -846,6 +856,7 @@ pub mod pallet {
 			match *call {
 				Call::update_limit_order { id, .. } => schedule_or_dispatch(*call, id),
 				Call::set_limit_order { id, .. } => schedule_or_dispatch(*call, id),
+				Call::cancel_limit_order { id, .. } => schedule_or_dispatch(*call, id),
 				_ => Err(Error::<T>::UnsupportedCall)?,
 			}
 		}
@@ -986,6 +997,52 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Cancels a limit order.
+		/// Main difference with `update_limit_order` is that this will not error if the order does
+		/// not exist. This is used for auto-expiring orders that may of already been swept and
+		/// removed, without spamming failure events.
+		#[pallet::call_index(12)]
+		#[pallet::weight(T::WeightInfo::cancel_limit_order())]
+		pub fn cancel_limit_order(
+			origin: OriginFor<T>,
+			base_asset: any::Asset,
+			quote_asset: any::Asset,
+			side: Side,
+			id: OrderId,
+		) -> DispatchResult {
+			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			ensure!(
+				T::SafeMode::get().limit_order_update_enabled,
+				Error::<T>::UpdatingLimitOrdersDisabled
+			);
+
+			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+			Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
+				match pool.limit_orders_cache[side.to_sold_pair()]
+					.get(lp)
+					.and_then(|limit_orders| limit_orders.get(&id))
+					.cloned()
+				{
+					None => Ok::<(), DispatchError>(()),
+					Some(previous_tick) => {
+						Self::inner_update_limit_order_at_tick(
+							pool,
+							lp,
+							asset_pair,
+							side,
+							id,
+							previous_tick,
+							crate::pallet::IncreaseOrDecrease::Decrease(Amount::MAX),
+							crate::NoOpStatus::Allow,
+						)?;
+						Ok(())
+					},
+				}
+			})?;
+
+			Ok(())
+		}
 	}
 }
 
@@ -1116,7 +1173,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 					cache.get(account).cloned().map(|orders| (asset, orders))
 				}) {
 				for (id, tick) in orders {
-					Self::cancel_limit_order(
+					<Self as PoolApi>::cancel_limit_order(
 						account,
 						asset_pair.assets().base,
 						asset_pair.assets().quote,
@@ -1706,8 +1763,8 @@ impl<T: Config> Pallet<T> {
 								range_orders::MintError::MaximumGrossLiquidity,
 							) => Error::<T>::MaximumGrossLiquidity.into(),
 							range_orders::PositionError::Other(
-								cf_amm::range_orders::MintError::AssetRatioUnachieveable,
-							) => Error::<T>::AssetRatioUnachieveable.into(),
+								cf_amm::range_orders::MintError::AssetRatioUnachievable,
+							) => Error::<T>::AssetRatioUnachievable.into(),
 						}),
 					}?;
 
@@ -1734,8 +1791,8 @@ impl<T: Config> Pallet<T> {
 								Error::<T>::OrderDoesNotExist
 							},
 						range_orders::PositionError::Other(e) => match e {
-							range_orders::BurnError::AssetRatioUnachieveable =>
-								Error::<T>::AssetRatioUnachieveable,
+							range_orders::BurnError::AssetRatioUnachievable =>
+								Error::<T>::AssetRatioUnachievable,
 						},
 					}),
 				}?;

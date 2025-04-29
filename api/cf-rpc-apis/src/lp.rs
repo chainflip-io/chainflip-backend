@@ -120,6 +120,7 @@ pub trait LpRpcApi {
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
 		dispatch_at: Option<BlockNumber>,
+		expire_at: Option<BlockNumber>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
 
