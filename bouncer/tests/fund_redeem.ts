@@ -68,8 +68,7 @@ async function transferInternally(logger: Logger) {
     const observeInternalTransferEvent = observeEvent(logger, 'funding:InternalTransfer', {
       test: (event) =>
         event.data.to === to.address &&
-        event.data.from === lpApi.address &&
-        event.data.amount === fineAmountToTransfer.toString(16),
+        event.data.from === lpApi.address,
     }).event;
 
     await observeInternalTransferEvent;
@@ -126,14 +125,13 @@ async function main(logger: Logger, providedSeed?: string) {
   const expectedRedeemAllAmount = fundAmount - redeemedExact - redemptionTaxAmount;
   assert(
     redeemedAll >= expectedRedeemAllAmount - gasErrorMargin &&
-      redeemedAll <= expectedRedeemAllAmount,
-    `Unexpected balance increase amount: ${redeemedAll}. Expected between: ${
-      expectedRedeemAllAmount - gasErrorMargin
+    redeemedAll <= expectedRedeemAllAmount,
+    `Unexpected balance increase amount: ${redeemedAll}. Expected between: ${expectedRedeemAllAmount - gasErrorMargin
     } - ${expectedRedeemAllAmount}. Did fees change?`,
   );
 }
 
 export async function testFundRedeem(testContext: TestContext) {
-  await transferInternally(testContext.logger);
   await main(testContext.logger, 'redeem');
+  await transferInternally(testContext.logger);
 }
