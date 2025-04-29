@@ -42,7 +42,7 @@ export async function buildAndSendBtcVaultSwap(
     account: string;
     bps: number;
   }[] = [],
-  confirmations: number = 1
+  confirmations: number = 1,
 ) {
   await using chainflip = await getChainflipApi();
 
