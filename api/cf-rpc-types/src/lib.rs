@@ -69,7 +69,7 @@ pub enum OrderFilled {
 		quote_asset: Asset,
 		id: U256,
 		range: Range<Tick>,
-		sold_amounts: PoolPairsMap<U256>,
+		bought_amounts: PoolPairsMap<U256>,
 		fees: PoolPairsMap<U256>,
 		liquidity: U256,
 	},
