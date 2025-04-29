@@ -86,8 +86,10 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
-	+ ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
-	+ RecoverDurableNonce
+	+ ChainEnvironment<
+		Vec<SolAddress>,
+		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	> + RecoverDurableNonce
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
 		Self::lookup(ComputePrice).ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
@@ -123,8 +125,9 @@ pub trait SolanaEnvironment:
 		alts: Vec<SolAddress>,
 	) -> Result<Vec<SolAddressLookupTableAccount>, SolanaTransactionBuildingError> {
 		match Self::lookup(alts) {
-			Some(AltConsensusResult::ValidConsensusAlts(res)) => Ok(res),
-			Some(AltConsensusResult::AltsInvalidNoConsensus) =>
+			Some(AltWitnessingConsensusResult::ValidConsensus(witnessed_alts)) =>
+				Ok(witnessed_alts),
+			Some(AltWitnessingConsensusResult::InvalidNoConsensus) =>
 				Err(SolanaTransactionBuildingError::AltsInvalid),
 			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed),
 		}
@@ -763,7 +766,7 @@ impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {}
 	Ord,
 	PartialOrd,
 )]
-pub enum AltConsensusResult<T> {
-	ValidConsensusAlts(T),
-	AltsInvalidNoConsensus,
+pub enum AltWitnessingConsensusResult<T> {
+	ValidConsensus(T),
+	InvalidNoConsensus,
 }

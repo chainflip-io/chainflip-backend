@@ -228,15 +228,12 @@ impl VoterApi<SolanaAltWitnessing> for SolanaAltWitnessingVoter {
 		_settings: <SolanaAltWitnessing as ElectoralSystemTypes>::ElectoralSettings,
 		alt_witnessing_identifier: <SolanaAltWitnessing as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<SolanaAltWitnessing>>, anyhow::Error> {
-		lookup_table_witnessing::get_lookup_table_state(
-			&self.client,
-			alt_witnessing_identifier.alt_addresses,
-		)
-		.await
-		// We wrap the vote in a Some here since the vote is always valid if there was no error in
-		// rpc while querying. This is so we come to consensus on "None" if the lookup table is not
-		// found.
-		.map(Some)
+		lookup_table_witnessing::get_lookup_table_state(&self.client, alt_witnessing_identifier.0)
+			.await
+			// We wrap the vote in a Some here since the vote is always valid if there was no error
+			// in rpc while querying. This is so we come to consensus on "None" if the lookup
+			// table is not found.
+			.map(Some)
 	}
 }
 

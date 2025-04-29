@@ -48,7 +48,7 @@ use cf_chains::{
 	assets::any::ForeignChainAndAsset,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, Utxo, UtxoId,
+		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, Utxo, UtxoId,
 	},
 	ccm_checker::DecodedCcmAdditionalData,
 	dot::{
@@ -67,13 +67,14 @@ use cf_chains::{
 	},
 	hub::{api::AssethubApi, OutputAccountId},
 	instances::{
-		ArbitrumInstance, AssethubInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+		ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
+		SolanaInstance,
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
-			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
-			SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
+			RecoverDurableNonce, SolanaApi, SolanaEnvironment, SolanaTransactionType,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
@@ -95,7 +96,6 @@ use cf_traits::{
 	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
-use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -685,14 +685,16 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
-impl ChainEnvironment<Vec<SolAddress>, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
-	for SolEnvironment
+impl
+	ChainEnvironment<
+		Vec<SolAddress>,
+		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	> for SolEnvironment
 {
 	fn lookup(
-		_alts: Vec<SolAddress>,
-	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
-		// TODO: To be implemented with ALT election refactor
-		Some(AltConsensusResult::ValidConsensusAlts(vec![]))
+		alts: Vec<SolAddress>,
+	) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+		solana_elections::solana_alt_result(alts)
 	}
 }
 
