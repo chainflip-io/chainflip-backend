@@ -1900,3 +1900,44 @@ fn transfer_restricted_funds_internal() {
 		);
 	});
 }
+
+#[test]
+fn transfer_only_apart_of_the_restricted_funds() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_MOVE: u128 = AMOUNT / 2;
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			vec![],
+		));
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		assert_ok!(Funding::internal_transfer(
+			OriginTrait::signed(ALICE),
+			BOB,
+			RESTRICTED_ADDRESS,
+			RedemptionAmount::Exact(AMOUNT_MOVE).into()
+		));
+
+		// We burn the redemption tax from the restricted balance of the sender.
+		assert_eq!(
+			*RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS).unwrap(),
+			AMOUNT_MOVE
+		);
+
+		assert_eq!(
+			*RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
+			AMOUNT - AMOUNT_MOVE - REDEMPTION_TAX
+		);
+	});
+}
