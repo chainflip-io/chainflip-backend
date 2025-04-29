@@ -52,3 +52,8 @@ describe('ConcurrentTests', () => {
   serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 150);
   serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
 });
+
+// Tests that will run in parallel by both the ci-development and the ci-main-merge
+describe('BrokerLevelScreeningTest', () => {
+  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 800);
+});
