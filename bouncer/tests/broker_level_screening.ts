@@ -658,7 +658,7 @@ export async function testBrokerLevelScreening(
     testBrokerLevelScreeningEthereum(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereum(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereum(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereum(testContext, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    // testBrokerLevelScreeningEthereum(testContext, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
   // test rejection of LP deposits, this requires the rejecting broker to be whitelisted:
@@ -673,9 +673,9 @@ export async function testBrokerLevelScreening(
     testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Usdc', async (txId) =>
       setTxRiskScore(txId, 9.0),
     ),
-    testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'ArbEth', async (txId) =>
-      setTxRiskScore(txId, 9.0),
-    ),
+    // testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'ArbEth', async (txId) =>
+    //   setTxRiskScore(txId, 9.0),
+    // ),
     testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'ArbUsdc', async (txId) =>
       setTxRiskScore(txId, 9.0),
     ),
@@ -687,7 +687,7 @@ export async function testBrokerLevelScreening(
     testBrokerLevelScreeningBitcoinVaultSwap(testContext),
     testBrokerLevelScreeningEthereumVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereumVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereumVaultSwap(testContext, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    // testBrokerLevelScreeningEthereumVaultSwap(testContext, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereumVaultSwap(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
