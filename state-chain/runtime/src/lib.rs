@@ -77,6 +77,7 @@ use cf_chains::{
 	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
 	Arbitrum, Assethub, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot,
 	Solana, TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
+	VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -2441,6 +2442,33 @@ impl_runtime_apis! {
 				),
 				_ => Err(DispatchErrorWithMessage::from(
 					"Incompatible or unsupported source_asset and extra_parameters"
+				)),
+			}
+		}
+
+		fn cf_decode_vault_swap_parameter(
+			broker: AccountId,
+			vault_swap: VaultSwapDetails<String>,
+		) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage> {
+			match vault_swap {
+				VaultSwapDetails::Bitcoin {
+					nulldata_payload,
+					deposit_address: _,
+				} => {
+					crate::chainflip::vault_swaps::decode_bitcoin_vault_swap(
+						broker,
+						nulldata_payload,
+					)
+				},
+				VaultSwapDetails::Solana {
+					instruction,
+				} => {
+					crate::chainflip::vault_swaps::decode_solana_vault_swap(
+						instruction.into(),
+					)
+				},
+				_ => Err(DispatchErrorWithMessage::from(
+					"Decoding Vault Swap only supports Bitcoin and Solana"
 				)),
 			}
 		}

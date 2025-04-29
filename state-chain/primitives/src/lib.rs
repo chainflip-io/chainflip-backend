@@ -451,7 +451,7 @@ pub struct Beneficiary<Id> {
 	pub bps: BasisPoints,
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Debug)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct AffiliateAndFee {
 	pub affiliate: AffiliateShortId,
 	pub fee: u8,
