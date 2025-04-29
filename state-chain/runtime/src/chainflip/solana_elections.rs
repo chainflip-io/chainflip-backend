@@ -216,7 +216,7 @@ pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 pub fn solana_alt_result(
 	alts: Vec<SolAddress>,
 ) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
-	SolanaAltWitnessing::election_result::<
+	SolanaAltWitnessing::take_election_result::<
 		DerivedElectoralAccess<
 			_,
 			SolanaAltWitnessing,

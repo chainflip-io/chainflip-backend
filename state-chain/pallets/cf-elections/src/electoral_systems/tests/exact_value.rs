@@ -59,7 +59,7 @@ fn solana_election_result_reference_counting_works() {
 		assert_ok!(WitnessExactValueWithStorage::witness_exact_value::<
 			MockAccess<WitnessExactValueWithStorage>,
 		>(mock_id.clone()));
-		assert!(WitnessExactValueWithStorage::election_result::<
+		assert!(WitnessExactValueWithStorage::take_election_result::<
 			MockAccess<WitnessExactValueWithStorage>,
 		>(mock_id.clone())
 		.is_none());
@@ -74,12 +74,12 @@ fn solana_election_result_reference_counting_works() {
 
 		// First successful lookup `takes` the storage value.
 		assert_eq!(
-			WitnessExactValueWithStorage::election_result::<MockAccess<WitnessExactValueWithStorage>>(
-				mock_id.clone()
-			),
+			WitnessExactValueWithStorage::take_election_result::<
+				MockAccess<WitnessExactValueWithStorage>,
+			>(mock_id.clone()),
 			Some(vec![11, 12])
 		);
-		assert!(WitnessExactValueWithStorage::election_result::<
+		assert!(WitnessExactValueWithStorage::take_election_result::<
 			MockAccess<WitnessExactValueWithStorage>,
 		>(mock_id.clone())
 		.is_none());
@@ -119,29 +119,29 @@ fn solana_election_result_reference_counting_works() {
 
 		// First lookup takes the value from the storage map
 		assert_eq!(
-			WitnessExactValueWithStorage::election_result::<MockAccess<WitnessExactValueWithStorage>>(
-				first_id.clone()
-			),
+			WitnessExactValueWithStorage::take_election_result::<
+				MockAccess<WitnessExactValueWithStorage>,
+			>(first_id.clone()),
 			Some(vec![31, 32])
 		);
 		assert_eq!(
-			WitnessExactValueWithStorage::election_result::<MockAccess<WitnessExactValueWithStorage>>(
-				overlap_id.clone()
-			),
+			WitnessExactValueWithStorage::take_election_result::<
+				MockAccess<WitnessExactValueWithStorage>,
+			>(overlap_id.clone()),
 			Some(vec![22, 23])
 		);
 		assert_eq!(
-			WitnessExactValueWithStorage::election_result::<MockAccess<WitnessExactValueWithStorage>>(
-				first_id.clone()
-			),
+			WitnessExactValueWithStorage::take_election_result::<
+				MockAccess<WitnessExactValueWithStorage>,
+			>(first_id.clone()),
 			Some(vec![31, 32])
 		);
 
-		assert!(WitnessExactValueWithStorage::election_result::<
+		assert!(WitnessExactValueWithStorage::take_election_result::<
 			MockAccess<WitnessExactValueWithStorage>,
 		>(first_id.clone())
 		.is_none());
-		assert!(WitnessExactValueWithStorage::election_result::<
+		assert!(WitnessExactValueWithStorage::take_election_result::<
 			MockAccess<WitnessExactValueWithStorage>,
 		>(overlap_id.clone())
 		.is_none());

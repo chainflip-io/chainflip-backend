@@ -72,7 +72,7 @@ impl<
 		Ok(())
 	}
 
-	pub fn election_result<
+	pub fn take_election_result<
 		ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
 	>(
 		id: Hook::StorageKey,
