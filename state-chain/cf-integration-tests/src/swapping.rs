@@ -1081,7 +1081,7 @@ fn order_fills_subscription() {
 						quote_asset: Asset::Usdc,
 						id: ORDER_ID.into(),
 						range: RANGE,
-						sold_amounts: PoolPairsMap {
+						bought_amounts: PoolPairsMap {
 							base: 5_000 * DECIMALS - 1000,  // rounding error (amplified)
 							quote: 2_000 * DECIMALS - 1000  // rounding error (amplified)
 						}
