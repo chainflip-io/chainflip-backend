@@ -1926,7 +1926,7 @@ fn transfer_only_apart_of_the_restricted_funds() {
 			OriginTrait::signed(ALICE),
 			BOB,
 			RESTRICTED_ADDRESS,
-			RedemptionAmount::Exact(AMOUNT_MOVE).into()
+			RedemptionAmount::Exact(AMOUNT_MOVE)
 		));
 
 		// We burn the redemption tax from the restricted balance of the sender.
