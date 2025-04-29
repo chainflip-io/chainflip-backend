@@ -1,2 +1,2 @@
 #!/bin/bash
-pnpm vitest run -t "BrokerLevelScreeningTest"
+pnpm vitest run -t "BrokerLevelScreeningTest" --silent=false

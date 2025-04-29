@@ -92,3 +92,82 @@ export async function sendBtc(
 
   return txid;
 }
+
+
+export async function sendBtcChain(
+  logger: Logger,
+  address: string,
+  amount: number,
+  confirmations = 1,
+): Promise<string> {
+  // Btc client has a limit on the number of concurrent requests
+  const txid = (await btcClientMutex.runExclusive(async () => {
+      const intermediate_address = await btcClient.getNewAddress();
+
+      // bitcoin has 8 decimal places
+      const stringAmount = (amount * 1.1).toFixed(8);
+
+      let result = undefined;
+      try {
+      result = await btcClient.sendToAddress(intermediate_address, stringAmount, '', '', false, true, null, 'unset', null, 1);
+      } catch (err) {
+        throw new Error(`sendToAddress returned : ${err}`)
+      }
+      const intermediate_txid = result;
+
+      let rawTx = undefined;
+      try {
+        // Create the raw transaction
+        rawTx = await btcClient.createRawTransaction(
+          [
+            {
+              "txid": intermediate_txid as string,
+              "vout": 0
+            },
+          ], 
+          {
+          [address]: amount,
+        });
+      } catch (err) {
+        throw new Error(`CreateRawTransaction returned : ${err}`)
+      }
+
+      let fundedTx = undefined;
+
+      try {
+      fundedTx = (await btcClient.fundRawTransaction(rawTx, {
+        changeAddress: await btcClient.getNewAddress(),
+        feeRate: 0.00001,
+        lockUnspents: true,
+      })) as { hex: string };
+      } catch (err) {
+        throw new Error(`fundRawTransaction returned : ${err}`)
+      }
+
+      // Sign the raw transaction
+      let signedTx = undefined;
+      try {
+      signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
+      } catch (err) {
+        throw new Error(`signRawTransaction returned : ${err}`)
+      }
+
+      // Send the signed tx
+      let txId = undefined;
+      try {
+      txId = (await btcClient.sendRawTransaction(signedTx.hex)) as string | undefined;
+      } catch (err) {
+        throw new Error(`sendRawTransaction returned : ${err}`)
+      }
+
+      return intermediate_txid;
+
+  }
+  )) as string;
+
+  if (confirmations > 0) {
+    await waitForBtcTransaction(logger, txid, confirmations);
+  }
+
+  return txid;
+}
