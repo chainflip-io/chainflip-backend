@@ -39,6 +39,8 @@ jobs:
       - name: Install Rust Requirements 💿
         run: |
           brew install protobuf
+          wget https://raw.githubusercontent.com/Homebrew/homebrew-core/b4e46db74e74a8c1650b38b1da222284ce1ec5ce/Formula/c/cmake.rb
+          brew install -s cmake.rb
 
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️
