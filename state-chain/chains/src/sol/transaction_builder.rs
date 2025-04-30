@@ -31,16 +31,18 @@ use crate::{
 			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_NONCE_ROTATION,
 			COMPUTE_UNITS_PER_ROTATION, COMPUTE_UNITS_PER_SET_GOV_KEY,
 			COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS, COMPUTE_UNITS_PER_TRANSFER_NATIVE,
-			COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+			COMPUTE_UNITS_PER_TRANSFER_TOKEN, COMPUTE_UNITS_PER_UPGRADE_PROGRAM,
 		},
 		sol_tx_core::{
 			address_derivation::{
-				derive_associated_token_account, derive_fetch_account,
-				derive_swap_endpoint_native_vault_account, derive_token_supported_account,
+				derive_associated_token_account, derive_fetch_account, derive_pda_signer,
+				derive_program_data_address, derive_swap_endpoint_native_vault_account,
+				derive_token_supported_account,
 			},
 			compute_budget::ComputeBudgetInstruction,
 			consts::{
-				MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
+				BPF_LOADER_UPGRADEABLE_ID, MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL,
+				SYSTEM_PROGRAM_ID, SYS_VAR_CLOCK, SYS_VAR_INSTRUCTIONS, SYS_VAR_RENT,
 				TOKEN_PROGRAM_ID,
 			},
 			program_instructions::{
@@ -584,6 +586,44 @@ impl SolanaTransactionBuilder {
 			gov_key.into(),
 			compute_price,
 			compute_limit_with_buffer(COMPUTE_UNITS_PER_ENABLE_TOKEN_SUPPORT),
+			address_lookup_tables,
+		)
+	}
+
+	pub fn upgrade_program(
+		program_address: SolAddress,
+		buffer_address: SolAddress,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		gov_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+		address_lookup_tables: Vec<SolAddressLookupTableAccount>,
+	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
+		let program_data_address = derive_program_data_address(program_address)
+			.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+		let signer_pda = derive_pda_signer(vault_program)
+			.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+		let instructions = vec![VaultProgram::with_id(vault_program).upgrade_program(
+			vault_program_data_account,
+			gov_key,
+			program_data_address.address,
+			program_address,
+			buffer_address,
+			gov_key, // spill_address
+			SYS_VAR_RENT,
+			SYS_VAR_CLOCK,
+			signer_pda.address,
+			BPF_LOADER_UPGRADEABLE_ID,
+		)];
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			gov_key.into(),
+			compute_price,
+			compute_limit_with_buffer(COMPUTE_UNITS_PER_UPGRADE_PROGRAM),
 			address_lookup_tables,
 		)
 	}

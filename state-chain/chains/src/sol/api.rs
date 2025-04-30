@@ -171,6 +171,7 @@ pub enum SolanaTransactionType {
 	CloseEventAccounts,
 	SetProgramSwapParameters,
 	SetTokenSwapParameters,
+	UpgradeProgram,
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
@@ -209,6 +210,10 @@ pub enum SolanaGovCall {
 		min_swap_amount: u64,
 		token_mint_pubkey: SolAddress,
 	},
+	UpgradeProgram {
+		program_address: SolAddress,
+		buffer_address: SolAddress,
+	},
 }
 
 impl SolanaGovCall {
@@ -231,6 +236,8 @@ impl SolanaGovCall {
 			),
 			SolanaGovCall::SetTokenSwapParameters { min_swap_amount, token_mint_pubkey } =>
 				SolanaApi::set_token_swap_parameters(*min_swap_amount, *token_mint_pubkey),
+			SolanaGovCall::UpgradeProgram { program_address, buffer_address } =>
+				SolanaApi::upgrade_program(*program_address, *buffer_address),
 		}
 	}
 }
@@ -578,6 +585,38 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		Ok(Self {
 			call_type: SolanaTransactionType::SetTokenSwapParameters,
+			transaction,
+			signer: None,
+			_phantom: Default::default(),
+		})
+	}
+
+	pub fn upgrade_program(
+		program_address: SolAddress,
+		buffer_address: SolAddress,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		// Lookup environment variables, such as aggkey and durable nonce.
+		let agg_key = Environment::current_agg_key()?;
+		let sol_api_environment = Environment::api_environment()?;
+		let compute_price = Environment::compute_price()?;
+		let durable_nonce = Environment::nonce_account()?;
+
+		// Build the transaction
+		let transaction = SolanaTransactionBuilder::upgrade_program(
+			program_address,
+			buffer_address,
+			sol_api_environment.vault_program,
+			sol_api_environment.vault_program_data_account,
+			// Assumed that the agg_key is the gov_key in the on-chain programs.
+			// This assumption is valid until we change the key to some independent Governance key.
+			agg_key,
+			durable_nonce,
+			compute_price,
+			vec![sol_api_environment.address_lookup_table_account],
+		)?;
+
+		Ok(Self {
+			call_type: SolanaTransactionType::UpgradeProgram,
 			transaction,
 			signer: None,
 			_phantom: Default::default(),

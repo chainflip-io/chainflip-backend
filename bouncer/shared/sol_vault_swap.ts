@@ -86,8 +86,13 @@ export async function executeSolVaultSwap(
 
   const connection = getSolConnection();
 
-  const newEventAccountKeypair = Keypair.generate();
-  createdEventAccounts.push([newEventAccountKeypair.publicKey, srcAsset === 'Sol']);
+  // TODO: For now using a public key as a seed as done in the SC.
+  const seed = Keypair.generate().publicKey;
+  const [newEventAccountPublicKey] = PublicKey.findProgramAddressSync(
+    [Buffer.from('swap_event'), whaleKeypair.publicKey.toBuffer(), seed.toBuffer()],
+    new PublicKey(getContractAddress('Solana', 'SWAP_ENDPOINT')),
+  );
+  createdEventAccounts.push([newEventAccountPublicKey, srcAsset === 'Sol']);
 
   const amountToSwap = amountToFineAmount(
     amount ?? defaultAssetAmounts(srcAsset),
@@ -107,7 +112,7 @@ export async function executeSolVaultSwap(
   const extraParameters: SolanaVaultSwapExtraParameters = {
     chain: 'Solana',
     from: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
-    event_data_account: decodeSolAddress(newEventAccountKeypair.publicKey.toBase58()),
+    event_data_account: decodeSolAddress(seed.toBase58()),
     input_amount: '0x' + new BigNumber(amountToSwap).toString(16),
     refund_parameters: refundParams,
     from_token_account: undefined,
@@ -163,12 +168,9 @@ export async function executeSolVaultSwap(
   transaction.add(instruction);
 
   logger.trace('Sending Solana vault swap transaction');
-  const txHash = await sendAndConfirmTransaction(
-    connection,
-    transaction,
-    [whaleKeypair, newEventAccountKeypair],
-    { commitment: 'confirmed' },
-  );
+  const txHash = await sendAndConfirmTransaction(connection, transaction, [whaleKeypair], {
+    commitment: 'confirmed',
+  });
 
   const transactionData = await connection.getTransaction(txHash, {
     commitment: 'confirmed',
@@ -177,7 +179,7 @@ export async function executeSolVaultSwap(
   if (transactionData === null) {
     throwError(logger, new Error('Solana TransactionData is empty'));
   }
-  return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountKeypair.publicKey };
+  return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountPublicKey };
 }
 
 const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES = 5;

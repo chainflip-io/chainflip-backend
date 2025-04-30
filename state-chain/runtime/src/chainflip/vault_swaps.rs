@@ -300,8 +300,20 @@ pub fn solana_vault_swap<A>(
 				.map_err(|_| "Invalid refund address")?,
 		)
 	})?;
-	let event_data_account = SolPubkey::try_from(event_data_account)
-		.map_err(|_| "Invalid Solana Address: event_data_account")?;
+	// TODO: Temporarily just using the event_data_account as seed to not make breaking change in
+	// the api. TBD what we should be able to pass (nothing or seed or optional seed)
+	// let seed : SolPubkey = SolPubkey::try_from(event_data_account).map_err(|_| "Invalid Solana
+	// Address: event_data_account")?;
+	let seed = event_data_account.inner_bytes();
+	let event_data_account =
+		cf_chains::sol::sol_tx_core::address_derivation::derive_swap_endpoint_swap_event_account(
+			api_environment.swap_endpoint_program,
+			from.into(),
+			seed,
+		)
+		.map_err(|_| "Failed to derive swap_endpoint_native_vault")?
+		.address
+		.into();
 	let input_amount =
 		SolAmount::try_from(input_amount).map_err(|_| "Input amount exceeded MAX")?;
 	let cf_parameters = build_cf_parameters::<Solana>(
@@ -322,6 +334,7 @@ pub fn solana_vault_swap<A>(
 				destination_asset,
 				destination_address,
 				from,
+				seed.to_vec(),
 				event_data_account,
 				input_amount,
 				cf_parameters,
@@ -354,6 +367,7 @@ pub fn solana_vault_swap<A>(
 					destination_address,
 					from,
 					from_token_account,
+					seed.to_vec(),
 					event_data_account,
 					token_supported_account.address.into(),
 					input_amount,

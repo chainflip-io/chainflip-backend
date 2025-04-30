@@ -57,6 +57,15 @@ impl Pda {
 		Ok(builder)
 	}
 
+	pub fn from_address_off_curve(program_id: Address) -> Result<Self, PdaError> {
+		let builder = Self {
+			program_id,
+			hasher: Sha256::new(),
+			seeds_left: consts::SOLANA_PDA_MAX_SEEDS - 1,
+		};
+		Ok(builder)
+	}
+
 	pub fn seed(&mut self, seed: impl AsRef<[u8]>) -> Result<&mut Self, PdaError> {
 		let Some(seeds_left) = self.seeds_left.checked_sub(1) else {
 			return Err(PdaError::TooManySeeds)
