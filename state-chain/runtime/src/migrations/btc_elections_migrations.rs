@@ -6,6 +6,7 @@ use pallet_cf_elections::{ElectoralUnsynchronisedSettings, SharedDataReferenceLi
 use pallet_cf_elections::electoral_systems::block_witnesser::state_machine::BlockWitnesserSettings;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
+use crate::chainflip::bitcoin_elections;
 
 pub struct Migration;
 
@@ -16,16 +17,9 @@ impl OnRuntimeUpgrade for Migration {
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::set(Some((
-			Default::default(),
-			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
-			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
-			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 0 },
-			Default::default(),
-			(),
-		)));
-
-		SharedDataReferenceLifetime::<Runtime, BitcoinInstance>::set(8);
+		let _result = pallet_cf_elections::Pallet::<Runtime, BitcoinInstance>::internally_initialize(
+			bitcoin_elections::initial_state()
+		);
 		Weight::zero()
 	}
 
