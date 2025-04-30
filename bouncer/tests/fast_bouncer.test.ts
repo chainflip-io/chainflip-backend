@@ -52,3 +52,8 @@ describe('ConcurrentTests', () => {
   serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 150);
   serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
 });
+
+// Run only the broker level screening tests
+describe('BrokerLevelScreeningTest', () => {
+  concurrentTest('BrokerLevelScreening', (context) => testBrokerLevelScreening(context, true), 800);
+});
