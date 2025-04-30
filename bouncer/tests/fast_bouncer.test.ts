@@ -53,7 +53,7 @@ describe('ConcurrentTests', () => {
   serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
 });
 
-// Tests that will run in parallel by both the ci-development and the ci-main-merge
+// Run only the broker level screening tests
 describe('BrokerLevelScreeningTest', () => {
   concurrentTest('BrokerLevelScreening', (context) => testBrokerLevelScreening(context, true), 800);
 });
