@@ -260,6 +260,8 @@ export async function initializeSolanaPrograms(
   await signAndSendTxSol(logger, tx);
 
   // Deploy latest Swap endpoint from buffer to test the upgrade process that will be done in mainnet.
+  // Deploy program in a buffer, set the authority to the upgrade signer PDA (controlled by the aggKey),
+  // extend the buffer for the new length and use SC governance to upgrade the program.
   const bufferAddress = new PublicKey('8vgLUrLVbA8NYbv2Jug9BYQkrGupi32mGU1UxTf35i57');
   execSync(
     `solana program write-buffer --keypair shared/id.json --commitment confirmed --url localhost --buffer  ../contract-interfaces/sol-program-idls/buffer.json ../contract-interfaces/sol-program-idls/v1.0.0-alt-manager/swap_endpoint.so`,
@@ -267,7 +269,6 @@ export async function initializeSolanaPrograms(
   execSync(
     `solana program set-buffer-authority 8vgLUrLVbA8NYbv2Jug9BYQkrGupi32mGU1UxTf35i57 --keypair shared/id.json --commitment confirmed --url localhost --new-buffer-authority H7G2avdmRSQyVxPcgZJPGXVCPhC61TMAKdvYBRF42zJ9`,
   );
-
   // Extend bytes - Initial length: 361480 - Needed length: 357288 -  Need to extend: 4192
   execSync(
     `solana program extend --keypair shared/id.json --commitment confirmed --url localhost 35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT 4192`,
@@ -282,5 +283,4 @@ export async function initializeSolanaPrograms(
       },
     }),
   );
-  console.log('Program upgraded succesfully!');
 }
