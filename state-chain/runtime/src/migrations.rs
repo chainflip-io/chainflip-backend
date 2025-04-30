@@ -16,7 +16,5 @@
 
 //! Chainflip runtime storage migrations.
 
-pub mod assethub_integration;
-pub mod backoff_settings_migration;
 pub mod housekeeping;
-pub mod sol_versioned_transactions;
+pub mod btc_elections_migrations;

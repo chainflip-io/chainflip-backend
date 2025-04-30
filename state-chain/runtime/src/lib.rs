@@ -1401,7 +1401,8 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	MigrationsForV1_9,
+	MigrationsForV1_10,
+    migrations::btc_elections_migrations::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1488,50 +1489,7 @@ macro_rules! instanced_migrations {
 	}
 }
 
-use frame_support::migrations::VersionedMigration;
-type MigrationsForV1_9 = (
-	instanced_migrations!(
-		module: pallet_cf_elections,
-		migration: migrations::backoff_settings_migration::SolanaBackoffSettingsMigration,
-		from: 5,
-		to: 6,
-		include_instances: [SolanaInstance],
-		exclude_instances: [],
-	),
-	VersionedMigration<
-		14,
-		15,
-		migrations::assethub_integration::AssethubUpdate,
-		pallet_cf_environment::Pallet<Runtime>,
-		<Runtime as frame_system::Config>::DbWeight,
-	>,
-	migrations::assethub_integration::AssethubChainstate,
-	migrations::assethub_integration::AssethubIngressEgressConfig,
-	instanced_migrations!(
-		module: pallet_cf_broadcast,
-		migration: migrations::sol_versioned_transactions::SolVersionedTransactionBroadcastPallet,
-		from: 12,
-		to: 13,
-		include_instances: [SolanaInstance],
-		exclude_instances: [
-			EthereumInstance,
-			PolkadotInstance,
-			BitcoinInstance,
-			ArbitrumInstance,
-		],
-	),
-	instanced_migrations!(
-		module: pallet_cf_threshold_signature,
-		migration: migrations::sol_versioned_transactions::SolVersionedTransactionThresholdSignerPallet,
-		from: 6,
-		to: 7,
-		include_instances: [SolanaInstance],
-		exclude_instances: [
-			EvmInstance,
-			PolkadotCryptoInstance,
-			BitcoinInstance,
-		],
-	),
+type MigrationsForV1_10 = (
 );
 
 #[cfg(feature = "runtime-benchmarks")]

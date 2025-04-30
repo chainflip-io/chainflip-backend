@@ -544,7 +544,7 @@ impl
 	}
 }
 
-const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
+pub(crate) const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
 
 // Channel expiry:
 // We need to process elections in order, even after a safe mode pause. This is to ensure channel
