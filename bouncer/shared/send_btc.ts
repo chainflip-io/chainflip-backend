@@ -133,7 +133,7 @@ export async function sendBtcTransactionWithParent(
         [
           {
             "txid": parentTxid as string,
-            "vout": 1
+            "vout": 0
           },
         ], 
         {

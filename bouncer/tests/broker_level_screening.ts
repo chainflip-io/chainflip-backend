@@ -2,7 +2,7 @@ import axios from 'axios';
 import { randomBytes } from 'crypto';
 import { Chain, InternalAsset } from '@chainflip/cli';
 import Web3 from 'web3';
-import { sendBtc } from '../shared/send_btc';
+import { sendBtc, sendBtcTransactionWithParent } from '../shared/send_btc';
 import {
   newAddress,
   sleep,
@@ -204,17 +204,20 @@ async function waitForDepositContractDeployment(chain: Chain, depositAddress: st
  */
 async function brokerLevelScreeningTestBtc(
   logger: Logger,
-  amount: number,
   doBoost: boolean,
-  refundAddress: string,
+  sendFunction: (amount: number, address: string) => Promise<string>,
   reportFunction: (txId: string) => Promise<void>,
-): Promise<string> {
-  const destinationAddressForUsdc = await newAssetAddress('Usdc');
+): Promise<void> {
+
+  logger.info(`Testing broker level screening for Bitcoin with ${doBoost? '' : 'no'} boost...`);
+
+  const refundAddress = await newAssetAddress('Btc');
   const refundParameters: FillOrKillParamsX128 = {
     retryDurationBlocks: 0,
     refundAddress,
     minPriceX128: '0',
   };
+  const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const swapParams = await requestNewSwap(
     logger.child({ tag: 'brokerLevelScreeningTest' }),
     'Btc',
@@ -225,9 +228,20 @@ async function brokerLevelScreeningTestBtc(
     doBoost ? 100 : 0,
     refundParameters,
   );
-  const txId = await sendBtc(logger, swapParams.depositAddress, amount, 0);
+
+  // send tx
+  const txId = await sendFunction(0.2, swapParams.depositAddress);
+
+  // mark tx for rejection
   await reportFunction(txId);
-  return swapParams.channelId.toString();
+
+  // wait for rejection
+  await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
+  if (!(await observeBtcAddressBalanceChange(refundAddress))) {
+    throw new Error(`Didn't receive funds refund to address ${refundAddress} within timeout!`);
+  }
+
+  logger.info(`Marked Bitcoin transaction was rejected and refunded 👍.`);
 }
 
 
@@ -256,13 +270,13 @@ async function brokerLevelScreeningTestBtcVaultSwap(
   await reportFunction(txId);
 }
 
-async function testBrokerLevelScreeningEthereum(
+async function testBrokerLevelScreeningEvm(
   testContext: TestContext,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
   const logger = testContext.logger;
-  logger.info(`Testing broker level screening for Ethereum ${sourceAsset}...`);
+  logger.info(`Testing broker level screening for Evm ${sourceAsset}...`);
 
   const chain = chainFromAsset(sourceAsset);
   const ingressEgressPallet = ingressEgressPalletForChain(chain);
@@ -552,69 +566,37 @@ async function setWhitelistedBroker(brokerAddress: Uint8Array) {
 // 1. No boost and early tx report -> tx is reported early and the swap is refunded.
 // 2. Boost and early tx report -> tx is reported early and the swap is refunded.
 // 3. Boost and late tx report -> tx is reported late and the swap is not refunded.
-export async function testBrokerLevelScreeningBitcoin(
+export function testBrokerLevelScreeningBitcoin(
   testContext: TestContext,
-  testBoostedDeposits: boolean = false,
-) {
+  doBoost: boolean,
+) : Promise<void>[] {
   const logger = testContext.logger;
-  const MILLI_SECS_PER_BLOCK = 6000;
 
-  // 1. -- Test no boost and early tx report --
-  logger.info('Testing broker level screening for Bitcoin with no boost...');
-  let btcRefundAddress = await newAssetAddress('Btc');
+  // if we don't boost, we wait with our report for 1 block confirmation, otherwise we submit the report directly
+  const confirmationsBeforeReport = doBoost ? 0 : 1;
 
-  await brokerLevelScreeningTestBtc(logger, 0.2, false, btcRefundAddress, async (txId) =>
-    setTxRiskScore(txId, 9.0),
+  // send a single tx
+  const simple = brokerLevelScreeningTestBtc(logger, doBoost,
+    async (amount, address) => 
+      (await sendBtc(logger, address, amount, confirmationsBeforeReport)),
+    async (txId) => setTxRiskScore(txId, 9.0),
   );
 
-  await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
-  if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
-    throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
-  }
+  // send a parent->child chain in the same block and mark the parent
+  const sameBlockParentMarked = brokerLevelScreeningTestBtc(logger, doBoost,
+    async (amount, address) => 
+      (await sendBtcTransactionWithParent(logger, address, amount, 0, confirmationsBeforeReport)).childTxid,
+    async (txId) => setTxRiskScore(txId, 9.0),
+  );
 
-  logger.info(`Marked Bitcoin transaction was rejected and refunded 👍.`);
+  // send a parent->child chain where parent is 2 blocks older and mark the parent
+  const oldParentMarked = brokerLevelScreeningTestBtc(logger, doBoost,
+    async (amount, address) => 
+      (await sendBtcTransactionWithParent(logger, address, amount, 2, confirmationsBeforeReport)).childTxid,
+    async (txId) => setTxRiskScore(txId, 9.0),
+  );
 
-  // 2. -- Test boost and early tx report --
-  if (testBoostedDeposits) {
-    // 2. -- Test boost and early tx report --
-    logger.info('Testing broker level screening for Bitcoin with boost and an early tx report...');
-    btcRefundAddress = await newAssetAddress('Btc');
-
-    await brokerLevelScreeningTestBtc(logger, 0.2, true, btcRefundAddress, async (txId) =>
-      setTxRiskScore(txId, 9.0),
-    );
-    await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
-
-    if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
-      throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
-    }
-    logger.info(`Marked Bitcoin transaction was rejected and refunded 👍.`);
-
-    // 3. -- Test boost and late tx report --
-    // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
-    logger.info('Testing broker level screening with boost and a late tx report...');
-    btcRefundAddress = await newAssetAddress('Btc');
-
-    const channelId = await brokerLevelScreeningTestBtc(
-      logger,
-      0.2,
-      true,
-      btcRefundAddress,
-      // We wait 12 seconds (2 localnet btc blocks) before we submit the tx.
-      // We submit the extrinsic manually in order to ensure that even though it definitely arrives,
-      // the transaction is refunded because the extrinsic is submitted too late.
-      async (txId) => {
-        await sleep(MILLI_SECS_PER_BLOCK * 2);
-        await markTxForRejection(txId, 'Bitcoin');
-      },
-    );
-
-    await observeEvent(logger, 'bitcoinIngressEgress:DepositFinalised', {
-      test: (event) => event.data.channelId === channelId,
-    }).event;
-
-    logger.info(`Bitcoin swap was executed and transaction was not refunded 👍.`);
-  }
+  return [ simple, sameBlockParentMarked, oldParentMarked ];
 }
 
 async function testBrokerLevelScreeningBitcoinVaultSwap(
@@ -652,18 +634,26 @@ export async function testBrokerLevelScreening(
   // deposit monitor, since Elliptic doesn't provide Flip analysis.
 
   // test rejection of swaps by the responsible broker
-  await Promise.all([
-    testBrokerLevelScreeningBitcoin(testContext, testBoostedDeposits),
-    testBrokerLevelScreeningEthereum(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereum(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereum(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testBrokerLevelScreeningEthereum(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    // testBrokerLevelScreeningEthereum(testContext, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
-  ]);
+  await Promise.all( [
+      testBrokerLevelScreeningEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+      testBrokerLevelScreeningEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+      testBrokerLevelScreeningEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+      testBrokerLevelScreeningEvm(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+      // testBrokerLevelScreeningEvm(testContext, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
+    ]
+    .concat(testBrokerLevelScreeningBitcoin(testContext, false))
+    .concat(testBoostedDeposits ? testBrokerLevelScreeningBitcoin(testContext, true) : [])
+  );
 
-  // test rejection of LP deposits, this requires the rejecting broker to be whitelisted:
+
+  // test rejection of LP deposits and vault swaps:
+  //  - this requires the rejecting broker to be whitelisted
+  //  - for bitcoin vault swaps a private channel has to be opened
   await setWhitelistedBroker(broker.addressRaw);
+  await openPrivateBtcChannel(testContext.logger, '//BROKER_1');
   await Promise.all([
+
+    // --- LP deposits ---
     testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'Eth', async (txId) =>
       setTxRiskScore(txId, 9.0),
     ),
@@ -679,11 +669,8 @@ export async function testBrokerLevelScreening(
     testBrokerLevelScreeningEthereumLiquidityDeposit(testContext, 'ArbUsdc', async (txId) =>
       setTxRiskScore(txId, 9.0),
     ),
-  ]);
 
-  // test vault swaps
-  await openPrivateBtcChannel(testContext.logger, '//BROKER_1');
-  await Promise.all([
+    // --- vault swaps ---
     testBrokerLevelScreeningBitcoinVaultSwap(testContext),
     testBrokerLevelScreeningEthereumVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testBrokerLevelScreeningEthereumVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
