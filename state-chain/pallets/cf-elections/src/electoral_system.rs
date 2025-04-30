@@ -422,6 +422,22 @@ mod access {
 			Self::set_unsynchronised_state(unsynchronised_state)?;
 			Ok(t)
 		}
+
+		/// Allows you to mutate the value of the unsynchronised state map.
+		fn mutate_unsynchronised_state_map<
+			T,
+			F: for<'a> FnOnce(
+				&'a mut Option<<Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapValue>,
+			) -> Result<T, CorruptStorageError>,
+		>(
+			key: <Self::ElectoralSystem as ElectoralSystemTypes>::ElectoralUnsynchronisedStateMapKey,
+			f: F,
+		) -> Result<T, CorruptStorageError>{
+			let mut unsynchronised_state_map = Self::unsynchronised_state_map(&key)?;
+			let t = f(&mut unsynchronised_state_map)?;
+			Self::set_unsynchronised_state_map(key, unsynchronised_state_map);
+			Ok(t)
+		}
 	}
 }
 pub use access::{

@@ -48,7 +48,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
-	SwapRequestId, ThresholdSignatureRequestId,
+	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -914,7 +914,6 @@ pub trait EgressApi<C: Chain> {
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-		swap_request_id: Option<SwapRequestId>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
@@ -1244,9 +1243,11 @@ pub trait PoolPriceProvider {
 	fn pool_price(base_asset: Asset, quote_asset: Asset) -> Result<PoolPrice, DispatchError>;
 }
 
-pub trait InitiateSolanaAltWitnessing {
-	fn initiate_alt_witnessing(
-		_ccm_channel_metadata: DecodedCcmAdditionalData,
-		_swap_request_id: SwapRequestId,
-	);
+pub trait CcmAdditionalDataHandler {
+	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
+}
+
+pub struct IgnoreCcmAdditionalData;
+impl CcmAdditionalDataHandler for IgnoreCcmAdditionalData {
+	fn handle_ccm_additional_data(_ccm_data: DecodedCcmAdditionalData) {}
 }
