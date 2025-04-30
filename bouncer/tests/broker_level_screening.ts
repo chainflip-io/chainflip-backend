@@ -362,12 +362,6 @@ async function testBrokerLevelScreeningEthereumVaultSwap(
 
   logger.debug(`Refund address for ${sourceAsset} is ${ethereumRefundAddress}...`);
 
-  // const refundParameters: FillOrKillParamsX128 = {
-  //   retryDurationBlocks: 0,
-  //   refundAddress: ethereumRefundAddress,
-  //   minPriceX128: '0',
-  // };
-
   logger.debug(`Sending ${sourceAsset} (vault swap) tx to reject...`);
   const txHash = await executeEvmVaultSwap(
     logger,
@@ -601,7 +595,6 @@ export function testBrokerLevelScreeningBitcoin(
 
 async function testBrokerLevelScreeningBitcoinVaultSwap(
   testContext: TestContext,
-  testBoostedDeposits: boolean = false
 ) {
   const logger = testContext.logger;
 
