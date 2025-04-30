@@ -58,7 +58,8 @@ export async function executeEvmVaultSwap(
   const srcChain = chainFromAsset(sourceAsset);
   const destChain = chainFromAsset(destAsset);
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
-  const refundAddress = optionalRefundAddress ?? await newAddress(sourceAsset, randomBytes(32).toString('hex'));
+  const refundAddress =
+    optionalRefundAddress ?? (await newAddress(sourceAsset, randomBytes(32).toString('hex')));
   const fokParams = fillOrKillParams ?? {
     retryDurationBlocks: 0,
     refundAddress,

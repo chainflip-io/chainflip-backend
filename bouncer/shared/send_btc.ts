@@ -95,7 +95,7 @@ export async function sendBtc(
 
 /**
  * Creates a chain of 2 btc transactions (parent & child tx)
- * 
+ *
  * @param logger - Logger to use
  * @param address - Target address of the child tx
  * @param amount - Amount of the child tx
@@ -109,10 +109,9 @@ export async function sendBtcTransactionWithParent(
   amount: number,
   parentConfirmations: number,
   childConfirmations: number,
-): Promise<{parentTxid: string, childTxid: string}> {
+): Promise<{ parentTxid: string; childTxid: string }> {
   // Btc client has a limit on the number of concurrent requests
-  const txids = (await btcClientMutex.runExclusive(async () => {
-
+  const txids = await btcClientMutex.runExclusive(async () => {
     // create a new address in our wallet that we have the keys for
     const intermediateAddress = await btcClient.getNewAddress();
 
@@ -121,7 +120,18 @@ export async function sendBtcTransactionWithParent(
     const parentAmount = (amount * 1.1).toFixed(8);
 
     // send the parent tx
-    const parentTxid = await btcClient.sendToAddress(intermediateAddress, parentAmount, '', '', false, true, null, 'unset', null, 1) as string;
+    const parentTxid = (await btcClient.sendToAddress(
+      intermediateAddress,
+      parentAmount,
+      '',
+      '',
+      false,
+      true,
+      null,
+      'unset',
+      null,
+      1,
+    )) as string;
 
     // wait for inclusion in a block
     if (parentConfirmations > 0) {
@@ -130,15 +140,16 @@ export async function sendBtcTransactionWithParent(
 
     // Create a raw transaction for the child tx
     const childRawTx = await btcClient.createRawTransaction(
-        [
-          {
-            "txid": parentTxid as string,
-            "vout": 0
-          },
-        ], 
+      [
         {
+          txid: parentTxid as string,
+          vout: 0,
+        },
+      ],
+      {
         [address]: amount,
-      });
+      },
+    );
 
     // Fund the child tx
     const childFundedTx = (await btcClient.fundRawTransaction(childRawTx, {
@@ -153,9 +164,8 @@ export async function sendBtcTransactionWithParent(
     // Send the signed tx
     const childTxid = (await btcClient.sendRawTransaction(childSignedTx.hex)) as string;
 
-    return { parentTxid, childTxid};
-  }
-  ));
+    return { parentTxid, childTxid };
+  });
 
   if (childConfirmations > 0) {
     await waitForBtcTransaction(logger, txids.childTxid, childConfirmations);
