@@ -335,7 +335,6 @@ impl<T: Config> Pallet<T> {
 				flip_to_burn,
 				T::EthEnvironment::state_chain_gateway_address(),
 				None,
-				None,
 			)
 			.map_err(Into::into)
 			.and_then(

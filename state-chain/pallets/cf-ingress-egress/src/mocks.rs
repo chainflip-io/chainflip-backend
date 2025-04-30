@@ -32,7 +32,6 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		affiliate_registry::MockAffiliateRegistry,
-		alt_witnessing::MockAltWitnessing,
 		api_call::{
 			MockBitcoinApiCall, MockBtcEnvironment, MockEthereumApiCall, MockEvmEnvironment,
 		},
@@ -40,6 +39,7 @@ use cf_traits::{
 		asset_withholding::MockAssetWithholding,
 		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
+		ccm_additional_data_handler::MockCcmAdditionalDataHandler,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
@@ -138,7 +138,7 @@ impl Config<Instance1> for Test {
 	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapParameterValidation = MockSwapParameterValidation;
-	type SolanaAltWitnessingHandler = MockAltWitnessing;
+	type CcmAdditionalDataHandler = MockCcmAdditionalDataHandler;
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
@@ -167,7 +167,7 @@ impl Config<Instance2> for Test {
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapParameterValidation = MockSwapParameterValidation;
-	type SolanaAltWitnessingHandler = MockAltWitnessing;
+	type CcmAdditionalDataHandler = MockCcmAdditionalDataHandler;
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;

@@ -48,8 +48,9 @@ use cf_chains::{
 	assets::any::ForeignChainAndAsset,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, Utxo, UtxoId,
+		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, Utxo, UtxoId,
 	},
+	ccm_checker::DecodedCcmAdditionalData,
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
 		PolkadotTransactionData, ResetProxyAccountNonce, RuntimeVersion,
@@ -66,13 +67,14 @@ use cf_chains::{
 	},
 	hub::{api::AssethubApi, OutputAccountId},
 	instances::{
-		ArbitrumInstance, AssethubInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+		ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
+		SolanaInstance,
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, AltConsensusResult, ApiEnvironment, ComputePrice, CurrentAggKey,
-			CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, RecoverDurableNonce,
-			SolanaApi, SolanaEnvironment,
+			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
+			RecoverDurableNonce, SolanaApi, SolanaEnvironment, SolanaTransactionType,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
@@ -84,17 +86,16 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters, SwapRequestId,
+	DcaParameters,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
-	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
-	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails,
+	BroadcastAnyChainGovKey, Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster,
+	DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, Heartbeat,
+	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
-use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -684,13 +685,16 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
-impl ChainEnvironment<SwapRequestId, AltConsensusResult<Vec<SolAddressLookupTableAccount>>>
-	for SolEnvironment
+impl
+	ChainEnvironment<
+		Vec<SolAddress>,
+		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	> for SolEnvironment
 {
 	fn lookup(
-		swap_request_id: SwapRequestId,
-	) -> Option<AltConsensusResult<Vec<SolAddressLookupTableAccount>>> {
-		Environment::take_sol_ccm_swap_alts(swap_request_id)
+		alts: Vec<SolAddress>,
+	) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+		solana_elections::solana_alt_result(alts)
 	}
 }
 
@@ -835,7 +839,6 @@ macro_rules! impl_egress_api_for_anychain {
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
 				maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-				swap_request_id: Option<SwapRequestId>,
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
@@ -846,7 +849,6 @@ macro_rules! impl_egress_api_for_anychain {
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 							maybe_ccm_deposit_metadata,
-							swap_request_id,
 						)
 						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
 						.map_err(Into::into),
@@ -1156,4 +1158,18 @@ pub fn get_header_timestamp(header: &crate::Header) -> Option<u64> {
 		.iter()
 		.find_map(missed_authorship_slots::extract_slot_from_digest_item)
 		.map(|slot| slot.saturating_mul(cf_primitives::SECONDS_PER_BLOCK))
+}
+
+pub struct CfCcmAdditionalDataHandler;
+impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
+	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData) {
+		match ccm_data {
+			DecodedCcmAdditionalData::NotRequired => {},
+			DecodedCcmAdditionalData::Solana(versioned_solana_ccm_additional_data) => {
+				versioned_solana_ccm_additional_data.alt_addresses().inspect(|alt_addresses| {
+					solana_elections::initiate_solana_alt_election(alt_addresses.clone())
+				});
+			},
+		}
+	}
 }

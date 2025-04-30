@@ -31,7 +31,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::DispatchError;
-use sp_std::{collections::btree_set::BTreeSet, vec, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
@@ -119,10 +119,11 @@ impl VersionedSolanaCcmAdditionalData {
 		}
 	}
 
-	pub fn address_lookup_tables(&self) -> Vec<SolAddress> {
+	pub fn alt_addresses(&self) -> Option<Vec<SolAddress>> {
 		match self {
-			VersionedSolanaCcmAdditionalData::V0(..) => vec![],
-			VersionedSolanaCcmAdditionalData::V1 { alts, .. } => alts.clone(),
+			VersionedSolanaCcmAdditionalData::V0(..) => None,
+			VersionedSolanaCcmAdditionalData::V1 { alts, .. } =>
+				(!alts.is_empty()).then_some(alts.clone()),
 		}
 	}
 }
@@ -157,7 +158,7 @@ impl CcmValidityChecker {
 				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 
 				let ccm_accounts = decoded_data.ccm_accounts();
-				let address_lookup_tables = decoded_data.address_lookup_tables();
+				let address_lookup_tables = decoded_data.alt_addresses().unwrap_or_default();
 				let num_address_lookup_tables = address_lookup_tables.len();
 
 				if num_address_lookup_tables > MAX_CCM_USER_ALTS as usize {
