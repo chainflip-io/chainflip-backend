@@ -295,6 +295,7 @@ jobs:
       - name: Write chain explorer to file 📝
         if: failure()
         continue-on-error: true
+        timeout-minutes: 10
         working-directory: bouncer
         run: |
           BLOCK_HEIGHT=$(curl -s -H "Content-Type: application/json" \
