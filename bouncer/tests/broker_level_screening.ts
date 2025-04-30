@@ -7,9 +7,7 @@ import {
   newAddress,
   sleep,
   handleSubstrateError,
-  brokerMutex,
   chainGasAsset,
-  hexStringToBytesArray,
   lpMutex,
   createStateChainKeypair,
   isWithinOnePercent,
@@ -31,8 +29,6 @@ import { send } from '../shared/send';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from '../shared/btc_vault_swap';
 import { executeEvmVaultSwap } from '../shared/evm_vault_swap';
-
-type SupportedChain = 'Bitcoin' | 'Ethereum' | 'Arbitrum';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
@@ -66,33 +62,6 @@ async function observeBtcAddressBalanceChange(address: string): Promise<boolean>
  */
 async function newAssetAddress(asset: InternalAsset, seed = null): Promise<string> {
   return Promise.resolve(newAddress(asset, seed || randomBytes(32).toString('hex')));
-}
-
-/**
- * Mark a transaction for rejection.
- *
- * @param txId - The txId as hash string.
- */
-async function markTxForRejection(txHash: string, chain: SupportedChain) {
-  const txId = hexStringToBytesArray(txHash);
-  await using chainflip = await getChainflipApi();
-  switch (chain) {
-    case 'Bitcoin':
-      return brokerMutex.runExclusive(async () =>
-        chainflip.tx.bitcoinIngressEgress
-          .markTransactionForRejection(txId.reverse())
-          .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
-      );
-    case 'Ethereum':
-      case 'Arbitrum':
-      return brokerMutex.runExclusive(async () =>
-        chainflip.tx.ethereumIngressEgress
-          .markTransactionForRejection(txId)
-          .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
-      );
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
-  }
 }
 
 /**
@@ -352,7 +321,6 @@ async function testBrokerLevelScreeningEthereumVaultSwap(
   const logger = testContext.logger;
 
   const chain = chainFromAsset(sourceAsset);
-  const ingressEgressPallet = ingressEgressPalletForChain(chain);
 
   logger.info(`Testing broker level screening for ${chain} ${sourceAsset} vault swap...`);
   const MAX_RETRIES = 120;
@@ -415,7 +383,6 @@ async function testBrokerLevelScreeningEthereumLiquidityDeposit(
   const logger = testContext.logger;
 
   const chain = chainFromAsset(sourceAsset);
-  const ingressEgressPallet = ingressEgressPalletForChain(chain);
 
   logger.info(`Testing broker level screening for ${chain} ${sourceAsset}...`);
   const MAX_RETRIES = 120;
@@ -572,7 +539,7 @@ export function testBrokerLevelScreeningBitcoin(
   // send a single tx
   const simple = brokerLevelScreeningTestBtc(logger, doBoost,
     async (amount, address) => 
-      (await sendBtc(logger, address, amount, confirmationsBeforeReport)),
+      sendBtc(logger, address, amount, confirmationsBeforeReport),
     async (txId) => setTxRiskScore(txId, 9.0),
   );
 

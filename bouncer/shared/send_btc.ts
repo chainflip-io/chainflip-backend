@@ -153,7 +153,7 @@ export async function sendBtcTransactionWithParent(
     // Send the signed tx
     const childTxid = (await btcClient.sendRawTransaction(childSignedTx.hex)) as string;
 
-    return { parentTxid: parentTxid, childTxid: childTxid};
+    return { parentTxid, childTxid};
   }
   ));
 
