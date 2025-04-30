@@ -30,8 +30,8 @@ impl<T: EvmRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Ethereum
 		&self,
 		header: &Header<<cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber, H256, Bloom>,
 	) -> Result<<cf_chains::Ethereum as cf_chains::Chain>::TrackedData, anyhow::Error> {
-		// We take the highest base fee (which is limited to a 12.5% increase per block) to ensure
-		// we don't estimate too low. Then we take the lowest priority fee, which is not limited,
+		// We take the latest base fee. Assuming this will be most likely to be closest to the next
+		// base fee. Then we take the lowest priority fee, which is not limited,
 		// to protect against upward spikes in the priority fee. We only take the last 2 blocks so
 		// we don't lag too much.
 		const PRIORITY_FEE_PERCENTILE: f64 = 70.0;
@@ -40,7 +40,7 @@ impl<T: EvmRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Ethereum
 			.await;
 
 		Ok(EthereumTrackedData {
-			base_fee: context!(fee_history.base_fee_per_gas.into_iter().max())?
+			base_fee: (*context!(fee_history.base_fee_per_gas.last())?)
 				.try_into()
 				.expect("Base fee should fit u128"),
 			priority_fee: context!(fee_history.reward.into_iter().flatten().min())?
