@@ -199,6 +199,16 @@ jobs:
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.OLD_BIN_VERSION }}"
 
+      # TODO: This is a temporary workaround to upgrade the Solana Swap Endpoint program. Remove after 1.10 is released.
+      - name: Upgrade Solana Swap Endpoint
+        if: inputs.run-job
+        id: post-upgrade-bouncer
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          ./commands/upgrade_swap_endpoint.ts
+
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
         id: post-upgrade-bouncer
