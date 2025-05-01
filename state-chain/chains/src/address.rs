@@ -517,6 +517,13 @@ impl From<String> for AddressString {
 }
 
 #[cfg(feature = "std")]
+impl From<AddressString> for String {
+	fn from(s: AddressString) -> Self {
+		s.0
+	}
+}
+
+#[cfg(feature = "std")]
 impl sp_std::str::FromStr for AddressString {
 	type Err = frame_support::Never;
 

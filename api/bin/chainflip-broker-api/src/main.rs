@@ -14,13 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::{RefundParametersRpc, VaultSwapExtraParametersRpc};
 use cf_rpc_apis::{
 	broker::{
 		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
-		TransactionInId, WithdrawFeesDetail,
+		TransactionInId, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
-	RpcApiError, RpcResult,
+	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
@@ -85,6 +84,7 @@ impl BrokerRpcApiServer for RpcServerImpl {
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
+		wait_for_finality: Option<bool>,
 	) -> RpcResult<SwapDepositAddress> {
 		Ok(self
 			.api
@@ -99,6 +99,7 @@ impl BrokerRpcApiServer for RpcServerImpl {
 				affiliate_fees,
 				refund_parameters,
 				dca_parameters,
+				wait_for_finality,
 			)
 			.await?)
 	}
@@ -137,6 +138,21 @@ impl BrokerRpcApiServer for RpcServerImpl {
 				boost_fee,
 				affiliate_fees,
 				dca_parameters,
+				None,
+			)
+			.await?)
+	}
+
+	async fn decode_vault_swap_parameter(
+		&self,
+		vault_swap: VaultSwapDetails<AddressString>,
+	) -> RpcResult<VaultSwapInputRpc> {
+		Ok(self
+			.api
+			.raw_client()
+			.cf_decode_vault_swap_parameter(
+				self.api.state_chain_client.account_id(),
+				vault_swap,
 				None,
 			)
 			.await?)

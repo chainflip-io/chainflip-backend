@@ -123,10 +123,34 @@ pub fn build_cf_parameters<C: Chain>(
 	}
 }
 
+pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
+	data: &[u8],
+) -> Result<(VaultSwapParameters<RefundAddress>, CcmData), &'static str> {
+	let (ccm_additional_data, vault_swap_parameters) = {
+		match VersionedCfParameters::decode(&mut &data[..])
+			.map_err(|_| "Failed to decode cf_parameter")?
+		{
+			VersionedCfParameters::V0(CfParameters {
+				ccm_additional_data,
+				vault_swap_parameters,
+			}) => (ccm_additional_data, vault_swap_parameters.into()),
+			VersionedCfParameters::V1(CfParametersRefundCcm {
+				ccm_additional_data,
+				vault_swap_parameters,
+			}) => (ccm_additional_data, vault_swap_parameters),
+		}
+	};
+	Ok((vault_swap_parameters, ccm_additional_data))
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH, MAX_CCM_MSG_LENGTH};
+	use crate::{
+		ChannelRefundParametersDecoded, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH,
+		MAX_CCM_MSG_LENGTH,
+	};
+	use cf_primitives::chains::AnyChain;
 
 	const MAX_VAULT_SWAP_PARAMETERS_LENGTH_V0: u32 = 1_000;
 	const MAX_CF_PARAM_LENGTH_V0: u32 =
@@ -250,5 +274,57 @@ mod tests {
 				.concat();
 
 		assert_eq!(encoded, expected_encoded_with_metadata);
+	}
+
+	fn vault_swap_parameters() -> VaultSwapParameters<ForeignChainAddress> {
+		VaultSwapParameters {
+			refund_params: ChannelRefundParametersDecoded {
+				retry_duration: 1,
+				refund_address: ForeignChainAddress::Eth(sp_core::H160::from([2; 20])),
+				min_price: Default::default(),
+				refund_ccm_metadata: None,
+			},
+			dca_params: Some(DcaParameters { number_of_chunks: 1u32, chunk_interval: 3u32 }),
+			boost_fee: 0,
+			broker_fee: Beneficiary { account: AccountId::new([0x00; 32]), bps: 1u16 },
+			affiliate_fees: sp_core::bounded_vec![],
+		}
+	}
+	#[test]
+	fn can_decode_cf_parameters() {
+		let vault_swap_parameters = vault_swap_parameters();
+
+		let encoded = build_cf_parameters::<AnyChain>(
+			vault_swap_parameters.refund_params.clone(),
+			vault_swap_parameters.dca_params.clone(),
+			vault_swap_parameters.boost_fee,
+			vault_swap_parameters.broker_fee.account.clone(),
+			vault_swap_parameters.broker_fee.bps,
+			vault_swap_parameters.affiliate_fees.clone(),
+			None,
+		);
+
+		assert_eq!(decode_cf_parameters(&encoded[..]), Ok((vault_swap_parameters.clone(), ())));
+
+		let ccm_additional_data = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
+
+		let encoded = build_cf_parameters::<AnyChain>(
+			vault_swap_parameters.refund_params.clone(),
+			vault_swap_parameters.dca_params.clone(),
+			vault_swap_parameters.boost_fee,
+			vault_swap_parameters.broker_fee.account.clone(),
+			vault_swap_parameters.broker_fee.bps,
+			vault_swap_parameters.affiliate_fees.clone(),
+			Some(&CcmChannelMetadata {
+				message: Default::default(),
+				gas_budget: Default::default(),
+				ccm_additional_data: ccm_additional_data.clone().try_into().unwrap(),
+			}),
+		);
+
+		assert_eq!(
+			decode_cf_parameters(&encoded[..]),
+			Ok((vault_swap_parameters, ccm_additional_data))
+		);
 	}
 }

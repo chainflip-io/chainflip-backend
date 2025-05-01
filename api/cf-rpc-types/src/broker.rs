@@ -16,14 +16,17 @@
 
 use anyhow::bail;
 
-use crate::{H256, U256};
-use cf_chains::{Chain, ChainCrypto, ChannelRefundParameters, ForeignChain};
+use crate::{RefundParametersRpc, H256, U256};
+use cf_chains::{
+	Chain, ChainCrypto, ChannelRefundParameters, ForeignChain, VaultSwapExtraParametersEncoded,
+	VaultSwapInputEncoded,
+};
 use cf_primitives::AffiliateShortId;
 use cf_utilities::rpc::NumberOrHex;
 use sp_core::serde::{Deserialize, Serialize};
 use std::fmt;
 
-pub use cf_chains::{address::AddressString, RefundParametersRpc};
+pub use cf_chains::{address::AddressString, VaultSwapExtraParameters, VaultSwapInput};
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 pub use pallet_cf_swapping::AffiliateDetails;
 pub use state_chain_runtime::runtime_apis::{
@@ -107,6 +110,45 @@ pub fn find_lowest_unused_short_id(
 				.map(|(index, _)| index)
 				.unwrap_or(used_id_len) as u8,
 		))
+	}
+}
+
+pub type VaultSwapExtraParametersRpc = VaultSwapExtraParameters<AddressString, NumberOrHex>;
+pub fn try_into_swap_extra_params_encoded(
+	params: VaultSwapExtraParametersRpc,
+	chain: ForeignChain,
+) -> anyhow::Result<VaultSwapExtraParametersEncoded> {
+	params
+		.try_map_address(|a| a.try_parse_to_encoded_address(chain))?
+		.try_map_amounts(|n| {
+			u128::try_from(n).map_err(|_| anyhow::anyhow!("Cannot convert number input into u128"))
+		})
+}
+
+pub fn extra_params_encoded_to_rpc(
+	value: VaultSwapExtraParametersEncoded,
+) -> VaultSwapExtraParametersRpc {
+	value
+		.try_map_address(|a| {
+			Result::<AddressString, ()>::Ok(AddressString::from_encoded_address(a))
+		})
+		.expect("Address conversion is infallible")
+		.try_map_amounts(|n| Result::<NumberOrHex, ()>::Ok(n.into()))
+		.expect("Amount conversion is infallible")
+}
+
+pub type VaultSwapInputRpc = VaultSwapInput<AddressString, NumberOrHex>;
+pub fn vault_swap_input_encoded_to_rpc(value: VaultSwapInputEncoded) -> VaultSwapInputRpc {
+	VaultSwapInput {
+		source_asset: value.source_asset,
+		destination_asset: value.destination_asset,
+		destination_address: AddressString::from_encoded_address(value.destination_address),
+		broker_commission: value.broker_commission,
+		extra_parameters: extra_params_encoded_to_rpc(value.extra_parameters),
+		channel_metadata: value.channel_metadata,
+		boost_fee: value.boost_fee,
+		affiliate_fees: value.affiliate_fees,
+		dca_parameters: value.dca_parameters,
 	}
 }
 

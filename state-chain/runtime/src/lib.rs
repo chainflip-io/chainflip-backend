@@ -77,6 +77,7 @@ use cf_chains::{
 	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
 	Arbitrum, Assethub, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot,
 	Solana, TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
+	VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -1589,6 +1590,7 @@ impl_runtime_apis! {
 			AssetBalances::free_balances(&account_id)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
+			LiquidityPools::sweep(&account_id).unwrap();
 			let free_balances = AssetBalances::free_balances(&account_id);
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 			let boost_pools_balances = IngressEgressBoostApi::boost_pool_account_balances(&account_id);
@@ -2458,6 +2460,33 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_decode_vault_swap_parameter(
+			broker: AccountId,
+			vault_swap: VaultSwapDetails<String>,
+		) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage> {
+			match vault_swap {
+				VaultSwapDetails::Bitcoin {
+					nulldata_payload,
+					deposit_address: _,
+				} => {
+					crate::chainflip::vault_swaps::decode_bitcoin_vault_swap(
+						broker,
+						nulldata_payload,
+					)
+				},
+				VaultSwapDetails::Solana {
+					instruction,
+				} => {
+					crate::chainflip::vault_swaps::decode_solana_vault_swap(
+						instruction.into(),
+					)
+				},
+				_ => Err(DispatchErrorWithMessage::from(
+					"Decoding Vault Swap only supports Bitcoin and Solana"
+				)),
+			}
+		}
+
 		fn cf_get_open_deposit_channels(account_id: Option<<Runtime as frame_system::Config>::AccountId>) -> ChainAccounts {
 			fn open_deposit_channels_for_account<T: pallet_cf_ingress_egress::Config<I>, I: 'static>(
 				account_id: Option<&<T as frame_system::Config>::AccountId>
@@ -2604,6 +2633,8 @@ impl_runtime_apis! {
 			type Strategy = pallet_cf_trading_strategy::TradingStrategy;
 
 			fn to_strategy_info(lp_id: AccountId, strategy_id: AccountId, strategy: Strategy) -> TradingStrategyInfo<AssetAmount> {
+
+				LiquidityPools::sweep(&strategy_id).unwrap();
 
 				let free_balances = AssetBalances::free_balances(&strategy_id);
 				let open_order_balances = LiquidityPools::open_order_balances(&strategy_id);
