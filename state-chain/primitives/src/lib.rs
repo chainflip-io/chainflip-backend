@@ -133,7 +133,7 @@ pub type Tick = i32;
 
 define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
 
-define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize);
+define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
 pub type PrewitnessedDepositId = u64;
 
