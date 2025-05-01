@@ -29,6 +29,15 @@ struct FeeMigrationData {
 	pub network_fee_collected: AssetAmount,
 	pub is_internal: bool,
 }
+impl FeeMigrationData {
+	fn new_for_fees() -> Self {
+		Self {
+			accumulated_output_amount: AssetAmount::zero(),
+			network_fee_collected: AssetAmount::zero(),
+			is_internal: false,
+		}
+	}
+}
 
 impl NetworkFeeTracker {
 	fn migrate<T: Config>(enforce_minimum: bool, migration_data: &FeeMigrationData) -> Self {
@@ -168,8 +177,16 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 							},
 						}
 					},
-					old::SwapRequestState::NetworkFee => SwapRequestState::NetworkFee,
-					old::SwapRequestState::IngressEgressFee => SwapRequestState::IngressEgressFee,
+					old::SwapRequestState::NetworkFee => {
+						fee_migration_data
+							.insert(old_swap_request.id, FeeMigrationData::new_for_fees());
+						SwapRequestState::NetworkFee
+					},
+					old::SwapRequestState::IngressEgressFee => {
+						fee_migration_data
+							.insert(old_swap_request.id, FeeMigrationData::new_for_fees());
+						SwapRequestState::IngressEgressFee
+					},
 				},
 			})
 		});
