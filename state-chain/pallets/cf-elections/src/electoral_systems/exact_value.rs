@@ -88,7 +88,7 @@ impl<
 			})
 		})
 		.unwrap_or_else(|_| {
-			log_or_panic!("Failed to get election result for el {:?} due to corrupted storage", id);
+			log_or_panic!("Failed to get result for election {:?} due to corrupted storage", id);
 			None
 		})
 	}

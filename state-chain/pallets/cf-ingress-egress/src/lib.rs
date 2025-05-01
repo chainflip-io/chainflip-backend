@@ -2010,7 +2010,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						egress_id: ccm.egress_id,
 					});
 				},
-				Err(ExecutexSwapAndCallError::TryAgainLater) =>
+				Err(ExecutexSwapAndCallError::AuxDataNotReady) =>
 					ScheduledEgressCcm::<T, I>::append(ccm),
 				Err(error) => {
 					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. Error: {:?}", error);
