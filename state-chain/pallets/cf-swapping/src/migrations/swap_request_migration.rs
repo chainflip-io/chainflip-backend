@@ -30,7 +30,7 @@ struct FeeMigrationData {
 	pub is_internal: bool,
 }
 impl FeeMigrationData {
-	fn new_for_fees() -> Self {
+	fn new_for_fee_swap() -> Self {
 		Self {
 			accumulated_output_amount: AssetAmount::zero(),
 			network_fee_collected: AssetAmount::zero(),
@@ -179,12 +179,12 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 					},
 					old::SwapRequestState::NetworkFee => {
 						fee_migration_data
-							.insert(old_swap_request.id, FeeMigrationData::new_for_fees());
+							.insert(old_swap_request.id, FeeMigrationData::new_for_fee_swap());
 						SwapRequestState::NetworkFee
 					},
 					old::SwapRequestState::IngressEgressFee => {
 						fee_migration_data
-							.insert(old_swap_request.id, FeeMigrationData::new_for_fees());
+							.insert(old_swap_request.id, FeeMigrationData::new_for_fee_swap());
 						SwapRequestState::IngressEgressFee
 					},
 				},
