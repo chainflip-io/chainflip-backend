@@ -29,7 +29,7 @@ pub mod tags {
 	pub struct D;
 	pub struct EE;
 	pub struct FF;
-	pub struct GG;
+	pub struct G;
 }
 
 macro_rules! generate_electoral_system_tuple_impls {
@@ -482,4 +482,4 @@ macro_rules! generate_electoral_system_tuple_impls {
     };
 }
 
-generate_electoral_system_tuple_impls!(tuple_7_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0), (FF, F0), (GG, G0)));
+generate_electoral_system_tuple_impls!(tuple_7_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0), (FF, F0), (G, G0)));

@@ -79,8 +79,6 @@ pub fn build_cf_parameters<C: Chain>(
 		affiliate_fees,
 	};
 
-	// TODO: Consider checking the ccm parameters?
-
 	match ccm {
 		Some(ccm) => VersionedCcmCfParameters::V0(CfParameters {
 			ccm_additional_data: ccm.ccm_additional_data.clone(),

@@ -185,9 +185,9 @@ fn vote_for_alt_election(
 	vote.try_insert(
 		ElectionIdentifier::new(
 			UniqueMonotonicIdentifier::from(election_identifier),
-			CompositeElectionIdentifierExtra::GG(()),
+			CompositeElectionIdentifierExtra::G(()),
 		),
-		AuthorityVote::Vote(CompositeVote::GG(res)),
+		AuthorityVote::Vote(CompositeVote::G(res)),
 	)
 	.unwrap();
 	Validator::current_authorities().into_iter().for_each(|id| {

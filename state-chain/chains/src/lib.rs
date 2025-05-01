@@ -613,8 +613,8 @@ pub enum ExecutexSwapAndCallError {
 	DispatchError(DispatchError),
 	/// No vault account exists yet.
 	NoVault,
-	/// ALT witnessing is still not finished for solana ccms.
-	TryAgainLater,
+	/// Auxiliary data required to build the transaction is not ready.
+	AuxDataNotReady,
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {

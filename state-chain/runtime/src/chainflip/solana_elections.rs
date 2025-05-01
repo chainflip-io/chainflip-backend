@@ -48,7 +48,7 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		self,
 		blockchain::delta_based_ingress::BackoffSettings,
-		composite::{tags::GG, tuple_7_impls::Hooks, CompositeRunner},
+		composite::{tags::G, tuple_7_impls::Hooks, CompositeRunner},
 		exact_value::ExactValueHook,
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
@@ -226,7 +226,7 @@ pub fn solana_alt_result(
 }
 
 pub type SolanaAltWitnessingElectoralAccess =
-	DerivedElectoralAccess<GG, SolanaAltWitnessing, RunnerStorageAccess<Runtime, SolanaInstance>>;
+	DerivedElectoralAccess<G, SolanaAltWitnessing, RunnerStorageAccess<Runtime, SolanaInstance>>;
 
 pub struct SolanaAltWitnessingHook;
 
