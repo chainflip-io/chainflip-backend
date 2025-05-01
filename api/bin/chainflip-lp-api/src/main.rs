@@ -241,8 +241,8 @@ impl LpRpcApiServer for RpcServerImpl {
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
 		dispatch_at: Option<BlockNumber>,
-		expire_at: Option<BlockNumber>,
 		wait_for: Option<WaitFor>,
+		close_order_at: Option<BlockNumber>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
 		Ok(self
 			.api
@@ -255,8 +255,8 @@ impl LpRpcApiServer for RpcServerImpl {
 				tick,
 				try_parse_number_or_hex(sell_amount)?,
 				dispatch_at,
-				expire_at,
 				wait_for.unwrap_or_default(),
+				close_order_at,
 			)
 			.await?)
 	}

@@ -397,7 +397,7 @@ fn can_execute_scheduled_limit_order() {
 				id: order_id,
 				option_tick: Some(100),
 				sell_amount: AMOUNT,
-				expire_at: None,
+				close_order_at: None,
 			}),
 			6
 		));
@@ -457,7 +457,7 @@ fn cant_schedule_in_the_past() {
 					id: 0,
 					option_tick: Some(0),
 					sell_amount: 55,
-					expire_at: None,
+					close_order_at: None,
 				}),
 				9
 			),
@@ -1422,9 +1422,9 @@ fn test_sweeping_when_updating_range_order() {
 }
 
 #[test]
-fn test_limit_order_expire_at() {
+fn test_limit_order_auto_close() {
 	const ASSET: Asset = Asset::Flip;
-	const EXPIRE_AT: u64 = 10;
+	const CLOSE_ORDER_AT: u64 = 10;
 	const AMOUNT: AssetAmount = 10_000;
 	const ORDER_ID: u64 = 1;
 
@@ -1440,7 +1440,7 @@ fn test_limit_order_expire_at() {
 
 			MockBalance::credit_account(&ALICE, ASSET, AMOUNT);
 
-			// Make sure that a expiry block that is in the past is not accepted
+			// Make sure that a close order at block that is in the past is not accepted
 			assert_noop!(
 				LiquidityPools::set_limit_order(
 					RuntimeOrigin::signed(ALICE),
@@ -1452,7 +1452,38 @@ fn test_limit_order_expire_at() {
 					AMOUNT,
 					Some(0), // Block 0 will always be in the past
 				),
-				Error::<Test>::LimitOrderUpdateExpired
+				Error::<Test>::InvalidCloseOrderAt
+			);
+
+			// Make sure that a close order block will always be in the future when scheduling an
+			// update
+			let call = Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
+				base_asset: ASSET,
+				quote_asset: STABLE_ASSET,
+				side: Side::Sell,
+				id: ORDER_ID,
+				option_tick: Some(5),
+				sell_amount: AMOUNT,
+				close_order_at: Some(CLOSE_ORDER_AT),
+			});
+			assert_noop!(
+				LiquidityPools::schedule_limit_order_update(
+					RuntimeOrigin::signed(ALICE),
+					call.clone(),
+					// Schedule the call for the same block as the close order, so it
+					// should be rejected
+					CLOSE_ORDER_AT,
+				),
+				Error::<Test>::InvalidCloseOrderAt
+			);
+			assert_noop!(
+				LiquidityPools::schedule_limit_order_update(
+					RuntimeOrigin::signed(ALICE),
+					call,
+					// Schedule the call for after the close order, so it should be rejected
+					CLOSE_ORDER_AT + 1,
+				),
+				Error::<Test>::InvalidCloseOrderAt
 			);
 
 			// Set a limit order with an expiry block in the future
@@ -1464,7 +1495,7 @@ fn test_limit_order_expire_at() {
 				ORDER_ID,
 				Some(5),
 				AMOUNT,
-				Some(EXPIRE_AT),
+				Some(CLOSE_ORDER_AT),
 			));
 
 			// Check that the event for scheduling the expire order is emitted
@@ -1473,7 +1504,7 @@ fn test_limit_order_expire_at() {
 				RuntimeEvent::LiquidityPools(Event::LimitOrderSetOrUpdateScheduled {
 					lp: ALICE,
 					order_id: ORDER_ID,
-					dispatch_at: EXPIRE_AT,
+					dispatch_at: CLOSE_ORDER_AT,
 				}) => ()
 			);
 
@@ -1487,7 +1518,8 @@ fn test_limit_order_expire_at() {
 				1
 			);
 		})
-		.then_execute_at_block(EXPIRE_AT, |_| {
+		.then_process_blocks_until_block(CLOSE_ORDER_AT)
+		.then_execute_with(|_| {
 			// The order should be removed after the expiry block
 			assert_events_match!(
 				Test,

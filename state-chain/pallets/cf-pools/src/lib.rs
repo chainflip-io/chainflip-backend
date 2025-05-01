@@ -40,7 +40,10 @@ use frame_support::{
 	traits::{OnKilledAccount, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
-use frame_system::{pallet_prelude::OriginFor, WeightInfo as SystemWeightInfo};
+use frame_system::{
+	pallet_prelude::{BlockNumberFor, OriginFor},
+	WeightInfo as SystemWeightInfo,
+};
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{SaturatedConversion, Zero};
@@ -397,9 +400,10 @@ pub mod pallet {
 		UpdatingRangeOrdersDisabled,
 		/// Unsupported call.
 		UnsupportedCall,
-		/// The update can't be scheduled because it has expired (dispatch_at or expire_at is in
-		/// the past).
+		/// The update can't be scheduled because it has expired (dispatch_at is in the past).
 		LimitOrderUpdateExpired,
+		/// The given close_order_at is in the past or not larger than dispatch_at.
+		InvalidCloseOrderAt,
 		/// The range order size is invalid.
 		InvalidSize,
 	}
@@ -739,7 +743,7 @@ pub mod pallet {
 			id: OrderId,
 			option_tick: Option<Tick>,
 			sell_amount: AssetAmount,
-			expire_at: Option<BlockNumberFor<T>>,
+			close_order_at: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().limit_order_update_enabled,
@@ -761,9 +765,13 @@ pub mod pallet {
 				sell_amount,
 			)?;
 
-			if let Some(expire_at) = expire_at {
+			if let Some(close_order_at) = close_order_at {
+				if close_order_at <= frame_system::Pallet::<T>::block_number() {
+					return Err(Error::<T>::InvalidCloseOrderAt.into());
+				}
+
 				let call = Call::cancel_limit_order { base_asset, quote_asset, side, id };
-				Self::schedule_limit_order_update(origin, Box::new(call), expire_at)
+				Self::schedule_or_dispatch_limit_order_update(lp, Box::new(call), close_order_at)
 					.map_err(|e| e.error)?;
 			}
 
@@ -833,32 +841,8 @@ pub mod pallet {
 			dispatch_at: BlockNumberFor<T>,
 		) -> DispatchResultWithPostInfo {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			let current_block_number = frame_system::Pallet::<T>::block_number();
-			ensure!(dispatch_at >= current_block_number, Error::<T>::LimitOrderUpdateExpired);
 
-			let schedule_or_dispatch = |call: Call<T>, id: OrderId| {
-				if current_block_number == dispatch_at {
-					call.dispatch_bypass_filter(OriginTrait::signed(lp))
-				} else {
-					ScheduledLimitOrderUpdates::<T>::append(
-						dispatch_at,
-						LimitOrderUpdate { lp: lp.clone(), id, call },
-					);
-					Self::deposit_event(Event::<T>::LimitOrderSetOrUpdateScheduled {
-						lp,
-						order_id: id,
-						dispatch_at,
-					});
-					Ok(().into())
-				}
-			};
-
-			match *call {
-				Call::update_limit_order { id, .. } => schedule_or_dispatch(*call, id),
-				Call::set_limit_order { id, .. } => schedule_or_dispatch(*call, id),
-				Call::cancel_limit_order { id, .. } => schedule_or_dispatch(*call, id),
-				_ => Err(Error::<T>::UnsupportedCall)?,
-			}
+			Self::schedule_or_dispatch_limit_order_update(lp, call, dispatch_at)
 		}
 
 		/// Sets per-pool limits (in number of ticks) that determine the allowed change in price of
@@ -913,7 +897,7 @@ pub mod pallet {
 							match pool.limit_orders_cache[side.to_sold_pair()]
 								.get(lp)
 								.and_then(|limit_orders| limit_orders.get(&id))
-								.cloned()
+								.copied()
 							{
 								None => {
 									Self::deposit_event(Event::<T>::OrderDeletionFailed { order });
@@ -927,8 +911,8 @@ pub mod pallet {
 										side,
 										id,
 										previous_tick,
-										crate::pallet::IncreaseOrDecrease::Decrease(Amount::MAX),
-										crate::NoOpStatus::Allow,
+										IncreaseOrDecrease::Decrease(Amount::MAX),
+										NoOpStatus::Allow,
 									)?;
 									Ok(())
 								},
@@ -938,17 +922,16 @@ pub mod pallet {
 					CloseOrder::Range { base_asset, quote_asset, id } => {
 						let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 						Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
-							match (pool
+							match pool
 								.range_orders_cache
 								.get(lp)
 								.and_then(|range_orders| range_orders.get(&id))
-								.cloned(),)
 							{
-								(None,) => {
+								None => {
 									Self::deposit_event(Event::<T>::OrderDeletionFailed { order });
 									Ok::<(), DispatchError>(())
 								},
-								(Some(previous_tick_range),) => {
+								Some(previous_tick_range) => {
 									Self::inner_update_range_order(
 										pool,
 										lp,
@@ -1022,19 +1005,19 @@ pub mod pallet {
 				match pool.limit_orders_cache[side.to_sold_pair()]
 					.get(lp)
 					.and_then(|limit_orders| limit_orders.get(&id))
-					.cloned()
+					.copied()
 				{
 					None => Ok::<(), DispatchError>(()),
-					Some(previous_tick) => {
+					Some(tick) => {
 						Self::inner_update_limit_order_at_tick(
 							pool,
 							lp,
 							asset_pair,
 							side,
 							id,
-							previous_tick,
-							crate::pallet::IncreaseOrDecrease::Decrease(Amount::MAX),
-							crate::NoOpStatus::Allow,
+							tick,
+							IncreaseOrDecrease::Decrease(Amount::MAX),
+							NoOpStatus::Allow,
 						)?;
 						Ok(())
 					},
@@ -1508,7 +1491,7 @@ impl<T: Config> Pallet<T> {
 				pool.limit_orders_cache[side.to_sold_pair()]
 					.get(lp)
 					.and_then(|limit_orders| limit_orders.get(&id))
-					.cloned(),
+					.copied(),
 				option_tick,
 			) {
 				(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
@@ -1560,7 +1543,7 @@ impl<T: Config> Pallet<T> {
 				pool.limit_orders_cache[side.to_sold_pair()]
 					.get(lp)
 					.and_then(|limit_orders| limit_orders.get(&id))
-					.cloned(),
+					.copied(),
 				option_tick,
 			) {
 				(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
@@ -1989,8 +1972,8 @@ impl<T: Config> Pallet<T> {
 		let pool_state =
 			Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?.pool_state;
 
-		// TODO: Need to change limit order pool implmentation so Amount::MAX is guaranteed to drain
-		// pool (so the calculated amounts here are guaranteed to reflect the accurate
+		// TODO: Need to change limit order pool implementation so Amount::MAX is guaranteed to
+		// drain pool (so the calculated amounts here are guaranteed to reflect the accurate
 		// maximum_bough_amounts)
 
 		Ok(PoolOrderbook {
@@ -2334,6 +2317,42 @@ impl<T: Config> Pallet<T> {
 
 			Ok::<_, DispatchError>(())
 		});
+	}
+
+	pub fn schedule_or_dispatch_limit_order_update(
+		lp: T::AccountId,
+		call: Box<Call<T>>,
+		dispatch_at: BlockNumberFor<T>,
+	) -> DispatchResultWithPostInfo {
+		let current_block_number = frame_system::Pallet::<T>::block_number();
+		ensure!(dispatch_at >= current_block_number, Error::<T>::LimitOrderUpdateExpired);
+		if let Call::set_limit_order { close_order_at: Some(close_order_at), .. } = call.as_ref() {
+			ensure!(close_order_at > &dispatch_at, Error::<T>::InvalidCloseOrderAt);
+		};
+
+		let schedule_or_dispatch = |call: Call<T>, id: OrderId| {
+			if current_block_number == dispatch_at {
+				call.dispatch_bypass_filter(OriginTrait::signed(lp))
+			} else {
+				ScheduledLimitOrderUpdates::<T>::append(
+					dispatch_at,
+					LimitOrderUpdate { lp: lp.clone(), id, call },
+				);
+				Self::deposit_event(Event::<T>::LimitOrderSetOrUpdateScheduled {
+					lp,
+					order_id: id,
+					dispatch_at,
+				});
+				Ok(().into())
+			}
+		};
+
+		match *call {
+			Call::update_limit_order { id, .. } => schedule_or_dispatch(*call, id),
+			Call::set_limit_order { id, .. } => schedule_or_dispatch(*call, id),
+			Call::cancel_limit_order { id, .. } => schedule_or_dispatch(*call, id),
+			_ => Err(Error::<T>::UnsupportedCall)?,
+		}
 	}
 }
 

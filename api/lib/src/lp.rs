@@ -358,14 +358,9 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
 		dispatch_at: Option<BlockNumber>,
-		expire_at: Option<BlockNumber>,
 		wait_for: WaitFor,
+		close_order_at: Option<BlockNumber>,
 	) -> Result<ApiWaitForResult<Vec<LimitOrder>>> {
-		if let (Some(dispatch_at), Some(expire_at)) = (dispatch_at, expire_at) {
-			if dispatch_at >= expire_at {
-				Err(anyhow!("Invalid expire_at, must be larger than dispatch_at"))?;
-			}
-		};
 		self.scheduled_or_immediate(
 			pallet_cf_pools::Call::set_limit_order {
 				base_asset,
@@ -374,7 +369,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				id,
 				option_tick,
 				sell_amount,
-				expire_at,
+				close_order_at,
 			},
 			dispatch_at,
 			wait_for,

@@ -288,7 +288,7 @@ mod benchmarks {
 				id: 0,
 				option_tick: Some(0),
 				sell_amount: 100,
-				expire_at: None,
+				close_order_at: None,
 			}),
 			BlockNumberFor::<T>::from(5u32),
 		);
