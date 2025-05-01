@@ -38,7 +38,7 @@ use cf_chains::{
 	ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
 	Solana, SwapOrigin, TransactionBuilder,
 };
-use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
+use cf_primitives::{AccountRole, AuthorityCount, Beneficiary, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_traits::EgressApi;
 use cf_utilities::{assert_matches, bs58_array};
@@ -203,6 +203,7 @@ fn vote_for_alt_election(
 }
 
 fn vault_swap_deposit_witness(
+	broker: AccountId,
 	deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 ) -> VaultDepositWitness<Runtime, SolanaInstance> {
 	VaultDepositWitness {
@@ -213,7 +214,7 @@ fn vault_swap_deposit_witness(
 		deposit_metadata,
 		tx_id: Default::default(),
 		deposit_details: (),
-		broker_fee: None,
+		broker_fee: Some(Beneficiary { account: broker, bps: 100u16 }),
 		affiliate_fees: Default::default(),
 		refund_params: ChannelRefundParameters {
 			retry_duration: REFUND_PARAMS.retry_duration,
@@ -736,7 +737,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			assert_ok!(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposit: Box::new(vault_swap_deposit_witness(Some(invalid_ccm))),
+					deposit: Box::new(vault_swap_deposit_witness(ZION, Some(invalid_ccm))),
 				}
 			)
 			.dispatch_bypass_filter(
@@ -781,7 +782,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposit: Box::new(vault_swap_deposit_witness(Some(ccm))),
+					deposit: Box::new(vault_swap_deposit_witness(ZION, Some(ccm))),
 				},
 			));
 			// Setting the current agg key will invalidate the CCM.
@@ -998,7 +999,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposit: Box::new(vault_swap_deposit_witness(Some(ccm))),
+					deposit: Box::new(vault_swap_deposit_witness(ZION, Some(ccm))),
 				}
 			));
 
