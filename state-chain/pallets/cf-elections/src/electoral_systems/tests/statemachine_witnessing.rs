@@ -7,10 +7,10 @@ use std::{
 	hash::DefaultHasher,
 };
 
-use proptest::test_runner::{Config, TestRunner};
+use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 
 use crate::electoral_systems::{
-	block_height_tracking::HeightWitnesserProperties,
+	block_height_tracking::{HWTypes, HeightWitnesserProperties},
 	block_witnesser::{
 		block_processor::{tests::MockBtcEvent, BlockProcessingInfo, BlockProcessorEvent},
 		state_machine::{BWProcessorTypes, BWTypes},
@@ -37,6 +37,19 @@ use crate::electoral_systems::{
 		test_utils::{BTreeMultiSet, Container},
 	},
 };
+
+
+macro_rules! if_matches {
+    ($($tt:tt)+) => {
+        |x| matches!(x, $($tt)+)
+    };
+}
+
+macro_rules! try_get {
+    ($($tt:tt)+) => {
+        |x| match x {$($tt)+(x) => Some(x), _ => None}
+    };
+}
 
 pub trait AbstractVoter<M: Statemachine> {
 	fn vote(&mut self, index: M::InputIndex) -> Option<Vec<M::Input>>;
@@ -111,10 +124,23 @@ pub fn test_all() {
 
 	let mut runner = TestRunner::new(Config {
         cases: 256 * 16,
+        failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
+            "proptest-regressions-full-pipeline",
+        ))),
         ..Default::default()
     });
-	runner.run(&generate_chain_progression(), |mut chains| {
+	runner.run(&generate_blocks_with_tail(), |blocks| {
 
+        let mut chains = blocks_into_chain_progression(&blocks.blocks);
+
+        const SAFETY_MARGIN: u32 = 6;
+
+        // get final chain so we can check that we emitted the correct events:
+        let final_chain = chains.get_final_chain();
+        let finalized_blocks : Vec<_> = final_chain;
+        let finalized_events : BTreeSet<_> = finalized_blocks.iter().flat_map(|block| block.events.iter()).collect();
+
+        // prepare the state machines
         let mut bhw_state: BHWStateWrapper<N> = BHWStateWrapper {
             state: BHWState::Starting,
             block_height_update: MockHook::new(())
@@ -135,18 +161,18 @@ pub fn test_all() {
         };
         let bw_settings = BlockWitnesserSettings {
             max_concurrent_elections: 4,
-            safety_margin: 7,
+            safety_margin: SAFETY_MARGIN,
         };
 
         #[derive(Clone, Debug)]
-        enum BWTrace<T: BWTypes> {
+        enum BWTrace<T: BWTypes, T0: HWTypes> {
             Input(<BWStatemachine<T> as Statemachine>::Input),
+            InputBHW(<BlockHeightTrackingSM<T0> as Statemachine>::Input),
             Output(Vec<(T::ChainBlockNumber, T::Event)>),
             Event(BlockProcessorEvent<T>)
         }
 
         let mut bw_history = Vec::new();
-
         let mut total_outputs = Vec::new();
 
         while chains.has_chains() {
@@ -154,6 +180,8 @@ pub fn test_all() {
             let bhw_outputs = if let Some(inputs) = AbstractVoter::<BHW>::vote(&mut chains, BHW::input_index(&mut bhw_state)) {
                 let mut outputs = Vec::new();
                 for input in inputs {
+                    bw_history.push(BWTrace::InputBHW(input.clone()));
+
                     let output = BHW::step(&mut bhw_state, input, &()).unwrap();
                     outputs.push(output);
                 }
@@ -237,12 +265,21 @@ pub fn test_all() {
 
         let counted_events : Container<BTreeMultiSet<(u8, MockBtcEvent)>> = total_outputs.into_iter().flatten().collect();
 
+        // verify that each event was emitted only one time 
         for (event, count) in counted_events.0.0.clone() {
             if count > 1 {
                 panic!("Got event {event:?} in total {count} times           events: {printed}              bw_input_history: {bw_history:?}");
             }
         }
 
+        // ensure that we only emit witness events that are on the final chain
+        let emitted_witness_events : BTreeSet<_> = counted_events.0.0.keys().map(|(a,b)|b).filter_map(try_get!(MockBtcEvent::Witness)).map(|event| *event as char).collect();
+        let expected_witness_events : BTreeSet<_> = finalized_events.into_iter().cloned().collect();
+        assert!(emitted_witness_events.is_subset(&expected_witness_events),
+            "got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {bw_history:?}"
+        );
+
         Ok(())
     }).unwrap();
 }
+

@@ -1,4 +1,4 @@
-use core::ops::{Range, RangeInclusive};
+use core::{fmt::Debug, ops::{Range, RangeInclusive}};
 use proptest::{collection::*, prelude::*};
 
 use crate::electoral_systems::block_height_tracking::primitives::Header;
@@ -17,7 +17,7 @@ pub enum FilledBlocks<E> {
 
 #[derive(Debug, Clone)]
 pub struct FlatBlock<E> {
-	events: Vec<E>,
+	pub events: Vec<E>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,6 +54,10 @@ impl<E: Clone> FlatChainProgression<E> {
 
 	pub fn has_chains(&self) -> bool {
 		self.chains.len() > 0
+	}
+
+	pub fn get_final_chain(&self) -> Vec<FlatBlock<E>> {
+		self.chains.last().unwrap().blocks.clone()
 	}
 }
 
@@ -221,28 +225,75 @@ pub fn make_events(len: usize) -> Vec<char> {
 		.collect()
 }
 
-pub fn generate_chain_progression() -> impl Strategy<Value = FlatChainProgression<char>> {
+pub fn generate_blocks_with_tail() -> impl Strategy<Value = BlocksWithTail> {
 	generate_blocks(10, 4, 200, 4, 3..5, 1..=3, 2, 1, 2)
-		.prop_map(|block| {
-			let (cursor, consumed) = size(&block);
+
+		// turn into chain progression
+		.prop_map(|mut blocks| {
+
+			// generate a large number of empty blocks, so all processors can run until completion
+			blocks.extend((0..5).map(|_| Block::Block { jump: 0, drop: 0, take: 0, time_steps: 1, data_delays: vec![0,0,0,0,0] }));
+
+			let (cursor, consumed) = size(&blocks);
 			println!("size: ({cursor:?}, {consumed:?})");
-			let filled_chain = fill_blocks(&block, make_events(consumed + cursor));
-			let time_steps = create_time_steps(&filled_chain);
+			let filled_chain = fill_blocks(&blocks, make_events(consumed + cursor));
 
-			for step in &time_steps {
-				println!("step: {step:?}");
+			BlocksWithTail {
+				blocks: filled_chain
 			}
 
-			let chain_progression = FlatChainProgression { chains: time_steps, age: 0 };
-			chain_progression
 		})
-		// attach a dummy first block to each chain
-		.prop_map(|mut progression| {
-			for chain in &mut progression.chains {
-				chain.blocks.insert(0, FlatBlock { events: vec![] });
-			}
-			progression
-		})
+}
+
+pub struct BlocksWithTail {
+	pub blocks: Vec<FilledBlocks<char>>
+}
+
+pub fn print_blocks(blocks: &Vec<FilledBlocks<char>>, height: usize, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+	let mut forks = Vec::new();
+
+	let mut current_string = String::from_iter((0..height).map(|_| ' '));
+	current_string.push_str("|- ");
+
+	for block in blocks {
+		match block {
+			FilledBlocks::Fork(blocks) => forks.push((current_string.len(), blocks)),
+			FilledBlocks::Block { events, time_steps, data_delays } => current_string.push_str(&format!("{events:?} [{data_delays:?}] -> ")),
+		}
+	}
+
+	writeln!(f, "{current_string}")?;
+
+	for (indent, fork) in forks {
+		print_blocks(fork, indent, f)?;
+	}
+
+	Ok(())
+}
+
+impl Debug for BlocksWithTail {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		writeln!(f, "chains:")?;
+		print_blocks(&self.blocks, 0, f)
+	}
+}
+
+pub fn blocks_into_chain_progression(filled_chain: &Vec<FilledBlocks<char>>) -> FlatChainProgression<char> {
+	let time_steps = create_time_steps(&filled_chain);
+
+	for step in &time_steps {
+		println!("step: {step:?}");
+	}
+
+	let mut chain_progression = FlatChainProgression { chains: time_steps, age: 0 };
+
+	// attach dummy first block
+	for chain in &mut chain_progression.chains {
+		chain.blocks.insert(0, FlatBlock { events: vec![] });
+	}
+
+	chain_progression
+
 }
 
 type MockChain<E> = Vec<FlatBlock<E>>;
