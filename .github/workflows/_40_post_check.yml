@@ -140,6 +140,7 @@ jobs:
         if: ${{ ! inputs.full-bouncer }}
         working-directory: bouncer
         run: |
+          solana --version
           ./fast_bouncer.sh
 
       - name: Write chain explorer to file 📝
