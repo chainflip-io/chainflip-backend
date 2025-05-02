@@ -439,10 +439,10 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// broker channel. The funds are getting freed when the channel is closed.
 	SetBrokerBond { bond: T::Amount },
 	/// Set the network fee rate and minimum in USDC
-	SetNetworkFee { rate: Permill, minimum: AssetAmount },
+	SetNetworkFee { rate: Option<Permill>, minimum: Option<AssetAmount> },
 	/// Set the network fee rate and minimum in USDC that will be used just for internal swaps
 	/// (credit on-chain swaps)
-	SetInternalSwapNetworkFee { rate: Permill, minimum: AssetAmount },
+	SetInternalSwapNetworkFee { rate: Option<Permill>, minimum: Option<AssetAmount> },
 }
 
 impl_pallet_safe_mode! {
@@ -638,8 +638,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
 
-	/// Network fee rate and minimum in USDC, charged per swap request. Only applies to regular
-	/// swaps, i.e. it excludes internal swaps like ingress/egress/network fees.
+	/// Network fee rate and minimum in USDC, charged per swap request. Used for regular swaps and
+	/// fee swaps, it excludes internal swaps (credit on-chain swaps).
 	#[pallet::storage]
 	pub type NetworkFee<T: Config> = StorageValue<_, FeeRateAndMinimum, ValueQuery>;
 
@@ -1071,11 +1071,38 @@ pub mod pallet {
 					PalletConfigUpdate::SetBrokerBond { bond } => {
 						BrokerBond::<T>::set(bond);
 					},
-					PalletConfigUpdate::SetNetworkFee { rate, minimum } => {
-						NetworkFee::<T>::set(FeeRateAndMinimum { rate, minimum });
+					PalletConfigUpdate::SetNetworkFee { rate, minimum } => match (rate, minimum) {
+						(Some(rate), Some(minimum)) => {
+							NetworkFee::<T>::set(FeeRateAndMinimum { rate, minimum });
+						},
+						(Some(rate), None) => {
+							NetworkFee::<T>::mutate(|fee| fee.rate = rate);
+						},
+						(None, Some(minimum)) => {
+							NetworkFee::<T>::mutate(|fee| fee.minimum = minimum);
+						},
+						(None, None) => {
+							// No change, do nothing
+						},
 					},
 					PalletConfigUpdate::SetInternalSwapNetworkFee { rate, minimum } => {
-						InternalSwapNetworkFee::<T>::set(FeeRateAndMinimum { rate, minimum });
+						match (rate, minimum) {
+							(Some(rate), Some(minimum)) => {
+								InternalSwapNetworkFee::<T>::set(FeeRateAndMinimum {
+									rate,
+									minimum,
+								});
+							},
+							(Some(rate), None) => {
+								InternalSwapNetworkFee::<T>::mutate(|fee| fee.rate = rate);
+							},
+							(None, Some(minimum)) => {
+								InternalSwapNetworkFee::<T>::mutate(|fee| fee.minimum = minimum);
+							},
+							(None, None) => {
+								// No change, do nothing
+							},
+						}
 					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });

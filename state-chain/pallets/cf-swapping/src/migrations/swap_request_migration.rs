@@ -54,7 +54,6 @@ impl NetworkFeeTracker {
 			accumulated_stable_amount: migration_data.accumulated_output_amount,
 			accumulated_fee: migration_data.network_fee_collected,
 		};
-		log::info!("	Migrated network fee: {:?}", test);
 		test
 	}
 }

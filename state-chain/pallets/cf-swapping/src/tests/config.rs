@@ -61,12 +61,12 @@ fn can_update_all_config_items() {
 				size: NEW_MINIMUM_CHUNK_SIZE,
 			},
 			PalletConfigUpdate::SetNetworkFee {
-				rate: NEW_NETWORK_FEE.rate,
-				minimum: NEW_NETWORK_FEE.minimum,
+				rate: Some(NEW_NETWORK_FEE.rate),
+				minimum: Some(NEW_NETWORK_FEE.minimum),
 			},
 			PalletConfigUpdate::SetInternalSwapNetworkFee {
-				rate: NEW_INTERNAL_SWAP_FEE.rate,
-				minimum: NEW_INTERNAL_SWAP_FEE.minimum,
+				rate: Some(NEW_INTERNAL_SWAP_FEE.rate),
+				minimum: Some(NEW_INTERNAL_SWAP_FEE.minimum),
 			},
 		];
 
