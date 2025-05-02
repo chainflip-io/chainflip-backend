@@ -140,6 +140,7 @@ jobs:
         if: ${{ ! inputs.full-bouncer }}
         working-directory: bouncer
         run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
           ./fast_bouncer.sh
 
