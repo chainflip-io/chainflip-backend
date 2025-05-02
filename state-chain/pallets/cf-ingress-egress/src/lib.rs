@@ -356,7 +356,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(23);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(24);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
