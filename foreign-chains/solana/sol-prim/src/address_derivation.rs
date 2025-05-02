@@ -87,7 +87,7 @@ pub fn derive_swap_endpoint_native_vault_account(
 		.finish()
 }
 
-pub fn derive_swap_endpoint_swap_event_account(
+pub fn derive_vault_swap_account(
 	swap_endpoint_program: Address,
 	from: Address,
 	seed: &[u8],
@@ -128,6 +128,8 @@ mod tests {
 	const VAULT_PROGRAM: Address = const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf");
 	const SWAP_ENDPOINT_PROGRAM: Address =
 		const_address("35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT");
+	const FROM: Address = const_address("EwgZksaPybTUyhcEMn3aR46HZokR4NH6d1Wy8d51qZ6G");
+	const VAULT_SWAP_SEED: &[u8] = &[1; 32];
 
 	#[test]
 	fn derive_associated_token_account_on_curve() {
@@ -350,6 +352,16 @@ mod tests {
 		assert_eq!(
 			vault_pda_signer.address,
 			Address::from_str("H7G2avdmRSQyVxPcgZJPGXVCPhC61TMAKdvYBRF42zJ9").unwrap(),
+		);
+	}
+	#[test]
+	fn can_derive_vault_swap_account() {
+		let vault_pda_signer =
+			derive_vault_swap_account(SWAP_ENDPOINT_PROGRAM, FROM, VAULT_SWAP_SEED).unwrap();
+
+		assert_eq!(
+			vault_pda_signer.address,
+			Address::from_str("GSSXPb5UenWXyx9sFQHtedKhhwX9Q26nr1heRQab5YEe").unwrap(),
 		);
 	}
 }

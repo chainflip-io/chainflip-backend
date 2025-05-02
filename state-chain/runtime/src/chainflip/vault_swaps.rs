@@ -306,7 +306,7 @@ pub fn solana_vault_swap<A>(
 	// Address: event_data_account")?;
 	let seed = event_data_account.inner_bytes();
 	let event_data_account =
-		cf_chains::sol::sol_tx_core::address_derivation::derive_swap_endpoint_swap_event_account(
+		cf_chains::sol::sol_tx_core::address_derivation::derive_vault_swap_account(
 			api_environment.swap_endpoint_program,
 			from.into(),
 			seed,

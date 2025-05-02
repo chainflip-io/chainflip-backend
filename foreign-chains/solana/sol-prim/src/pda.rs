@@ -44,26 +44,19 @@ pub struct Pda {
 }
 
 impl Pda {
+	fn build(program_id: Address) -> Self {
+		Self { program_id, hasher: Sha256::new(), seeds_left: consts::SOLANA_PDA_MAX_SEEDS - 1 }
+	}
+
 	pub fn from_address(program_id: Address) -> Result<Self, PdaError> {
 		if !bytes_are_curve_point(program_id) {
-			return Err(PdaError::NotAValidPoint)
+			return Err(PdaError::NotAValidPoint);
 		}
-
-		let builder = Self {
-			program_id,
-			hasher: Sha256::new(),
-			seeds_left: consts::SOLANA_PDA_MAX_SEEDS - 1,
-		};
-		Ok(builder)
+		Ok(Self::build(program_id))
 	}
 
 	pub fn from_address_off_curve(program_id: Address) -> Result<Self, PdaError> {
-		let builder = Self {
-			program_id,
-			hasher: Sha256::new(),
-			seeds_left: consts::SOLANA_PDA_MAX_SEEDS - 1,
-		};
-		Ok(builder)
+		Ok(Self::build(program_id))
 	}
 
 	pub fn seed(&mut self, seed: impl AsRef<[u8]>) -> Result<&mut Self, PdaError> {
