@@ -1058,4 +1058,26 @@ pub mod test {
 			SolanaTransactionBuildingError::FinalTransactionExceededMaxLength(1288)
 		);
 	}
+
+	#[test]
+	fn can_create_upgrade_program() {
+		let env = api_env();
+
+		let transaction = SolanaTransactionBuilder::upgrade_program(
+			SWAP_ENDPOINT_PROGRAM,
+			TRANSFER_TO_ACCOUNT, // using arbitrary account as buffer_address
+			env.vault_program,
+			env.vault_program_data_account,
+			agg_key(),
+			durable_nonce(),
+			compute_price(),
+			vec![chainflip_alt()],
+		)
+		.unwrap();
+
+		// Serialized tx built in `set_gov_key_with_agg_key` test
+		let expected_serialized_tx = hex_literal::hex!("01da3df412314161094e4ecefc64597978fee30866171f3aaa5075972898569ad98500c0397c9fb7d989f3d41ae2486d3a1a04092abe5f0aac97a83dd3db81a207800100070af79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb31e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd4cde5ef84f05a81106a2008f93ecd3f1088dbacd4e5c592fbbfe28cc906702f4b000000000000000000000000000000000000000000000000000000000000000002a8f6914e88a1b0e210153ef763ae2b00c2b93d16c124d2c0537a10048000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d51718c774c928566398691d5eb68b5eb8a39b4b6d5c73555b210000000006a7d517192c5c51218cc94c3d4af17f58daee089ba1fd44e3dbd98a0000000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cef557795afc29ff257a1ea5fcd11ece260f1f96e50f3c1da477013d1d7f350fec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000403030a0c00040400000005000903809698000000000005000502f0490200080a0d00020b01000706090408dfec27596fcc7225013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a1020f07020d02").to_vec();
+
+		test_constructed_transaction(transaction, expected_serialized_tx);
+	}
 }
