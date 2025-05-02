@@ -2013,8 +2013,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(ExecutexSwapAndCallError::AuxDataNotReady) =>
 					ScheduledEgressCcm::<T, I>::append(ccm),
 				Err(error) => {
-					log::warn!("Failed to construct CCM. Fund will be refunded to the fallback refund address. Error: {:?}", error);
-
 					Self::deposit_event(Event::<T, I>::CcmEgressInvalid {
 						egress_id: ccm.egress_id,
 						error,
@@ -2873,15 +2871,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 				};
 
-			let decoded =
-				metadata.to_checked(destination_asset, destination_address_internal.clone());
-
-			if decoded.is_err() {
-				return Err(RefundReason::CcmInvalidMetadata);
-			}
-			let decoded = decoded.unwrap();
-
-			(Some(decoded.channel_metadata), decoded.source_address)
+			metadata
+				.to_checked(destination_asset, destination_address_internal.clone())
+				.map_err(|_| RefundReason::CcmInvalidMetadata)
+				.map(|decoded| (Some(decoded.channel_metadata), decoded.source_address))?
 		} else {
 			(None, None)
 		};

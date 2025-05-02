@@ -204,8 +204,6 @@ pub struct SolanaAltWitnessingIdentifier(pub Vec<SolAddress>);
 
 pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 	SolanaAltWitnessingIdentifier,
-	// We also want to allow for the election to come to consensus on the fact that one or more
-	// alts provided were invalid and so we cant witness all alts.
 	AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	(),
 	SolanaAltWitnessingHook,
@@ -731,6 +729,7 @@ pub(crate) fn initiate_solana_alt_election(alts: Vec<SolAddress>) {
 		>(SolanaAltWitnessingIdentifier(alts))
 	})
 	.unwrap_or_else(|e| {
+		//The error should not happen as long as the election identifiers don't overflow
 		log::error!("Cannot start Solana ALT witnessing election: {:?}", e);
-	}) //The error should not happen as long as the election identifiers don't overflow
+	})
 }
