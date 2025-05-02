@@ -9,6 +9,8 @@ services:
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
   solana-init:
+    # Not using v1.1.0-rc0 because we want to test the Swap Endpoint upgrade logic to be run in mainnet.
+    # The Swap Endpoint program is the only difference between the two images.
     image: ghcr.io/chainflip-io/solana-localnet-ledger:v1.0.0-alt-manager
     pull_policy: if_not_present
     container_name: init-solana

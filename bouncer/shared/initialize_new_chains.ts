@@ -91,7 +91,7 @@ export async function upgradeSwapEndpoint(logger: Logger) {
   // extend the buffer for the new length and use SC governance to upgrade the program.
   const bufferAddress = new PublicKey('8vgLUrLVbA8NYbv2Jug9BYQkrGupi32mGU1UxTf35i57');
   execSync(
-    `solana program write-buffer --keypair shared/id.json --commitment confirmed --url localhost --buffer  ../contract-interfaces/sol-program-idls/buffer.json ../contract-interfaces/sol-program-idls/v1.0.0-alt-manager/swap_endpoint.so`,
+    `solana program write-buffer --keypair shared/id.json --commitment confirmed --url localhost --buffer  ../contract-interfaces/sol-program-idls/buffer.json ../contract-interfaces/sol-program-idls/v1.1.0-rc0/swap_endpoint.so`,
   );
   // Updgrade signer PDA: `H7G2avdmRSQyVxPcgZJPGXVCPhC61TMAKdvYBRF42zJ9`
   execSync(
