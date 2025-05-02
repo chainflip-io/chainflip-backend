@@ -1246,8 +1246,3 @@ pub trait PoolPriceProvider {
 pub trait CcmAdditionalDataHandler {
 	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
 }
-
-pub struct IgnoreCcmAdditionalData;
-impl CcmAdditionalDataHandler for IgnoreCcmAdditionalData {
-	fn handle_ccm_additional_data(_ccm_data: DecodedCcmAdditionalData) {}
-}

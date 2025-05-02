@@ -35,13 +35,15 @@ impl From<Vec<u32>> for MockIdentifier {
 	}
 }
 
+pub const DO_NOT_STORE_ON_CONSENSUS: [u32; 3] = [0, 1, 2];
+
 pub struct MockHook;
 impl ExactValueHook<MockIdentifier, Vec<u32>> for MockHook {
 	type StorageKey = MockIdentifier;
 	type StorageValue = Vec<u32>;
 
 	fn on_consensus(id: MockIdentifier, value: Vec<u32>) -> Option<(MockIdentifier, Vec<u32>)> {
-		Some((id, value))
+		(value != DO_NOT_STORE_ON_CONSENSUS.to_vec()).then_some((id, value))
 	}
 }
 
@@ -145,5 +147,53 @@ fn solana_election_result_reference_counting_works() {
 			MockAccess<WitnessExactValueWithStorage>,
 		>(overlap_id.clone())
 		.is_none());
+	});
+}
+
+#[test]
+fn election_result_can_be_stored_into_unsynchronised_state_map() {
+	with_default_state().then(|| {
+		let mock_id: MockIdentifier = vec![1u32, 2u32].into();
+		let id = |umi: u64| ElectionIdentifier::new(umi.into(), ());
+
+		// If `on_consensus` returns false, the result is not stored into the state map.
+		assert_ok!(WitnessExactValueWithStorage::witness_exact_value::<
+			MockAccess<WitnessExactValueWithStorage>,
+		>(mock_id.clone()));
+		MockStorageAccess::set_consensus_status::<WitnessExactValueWithStorage>(
+			id(0),
+			ConsensusStatus::Gained { most_recent: None, new: DO_NOT_STORE_ON_CONSENSUS.to_vec() },
+		);
+		assert_ok!(WitnessExactValueWithStorage::on_finalize::<
+			MockAccess<WitnessExactValueWithStorage>,
+		>(vec![id(0)], &()));
+
+		// First successful lookup `takes` the storage value.
+		assert_eq!(
+			WitnessExactValueWithStorage::take_election_result::<
+				MockAccess<WitnessExactValueWithStorage>,
+			>(mock_id.clone()),
+			None,
+		);
+
+		// Only store into the state map if `on_consensus` returns true.
+		assert_ok!(WitnessExactValueWithStorage::witness_exact_value::<
+			MockAccess<WitnessExactValueWithStorage>,
+		>(mock_id.clone()));
+		MockStorageAccess::set_consensus_status::<WitnessExactValueWithStorage>(
+			id(1),
+			ConsensusStatus::Gained { most_recent: None, new: vec![0x00] },
+		);
+		assert_ok!(WitnessExactValueWithStorage::on_finalize::<
+			MockAccess<WitnessExactValueWithStorage>,
+		>(vec![id(1)], &()));
+
+		// First successful lookup `takes` the storage value.
+		assert_eq!(
+			WitnessExactValueWithStorage::take_election_result::<
+				MockAccess<WitnessExactValueWithStorage>,
+			>(mock_id.clone()),
+			Some(vec![0x00]),
+		);
 	});
 }
