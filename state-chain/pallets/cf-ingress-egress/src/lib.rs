@@ -2854,22 +2854,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Err(RefundReason::InvalidBrokerFees);
 		}
 
+		let destination_address_internal =
+			match T::AddressConverter::decode_and_validate_address_for_asset(
+				destination_address.clone(),
+				destination_asset,
+			) {
+				Ok(address) => address,
+				Err(_) => {
+					return Err(RefundReason::InvalidDestinationAddress);
+				},
+			};
+
 		let (channel_metadata, source_address) = if let Some(metadata) = deposit_metadata.clone() {
 			let destination_chain: ForeignChain = (destination_asset).into();
 			if !destination_chain.ccm_support() {
 				return Err(RefundReason::CcmUnsupportedForTargetChain);
 			}
-
-			let destination_address_internal =
-				match T::AddressConverter::decode_and_validate_address_for_asset(
-					destination_address.clone(),
-					destination_asset,
-				) {
-					Ok(address) => address,
-					Err(_) => {
-						return Err(RefundReason::InvalidDestinationAddress);
-					},
-				};
 
 			metadata
 				.to_checked(destination_asset, destination_address_internal.clone())
@@ -2890,17 +2890,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return Err(RefundReason::InvalidDcaParameters);
 			}
 		}
-
-		let destination_address_internal =
-			match T::AddressConverter::decode_and_validate_address_for_asset(
-				destination_address.clone(),
-				destination_asset,
-			) {
-				Ok(address) => address,
-				Err(_) => {
-					return Err(RefundReason::InvalidDestinationAddress);
-				},
-			};
 
 		Ok(ValidatedVaultSwapParams {
 			broker_fees,
