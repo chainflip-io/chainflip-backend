@@ -443,7 +443,7 @@ pub mod pallet {
 	/// invalidated. This should be set as low as possible, I'd suggest using 8 blocks, which
 	/// equates to 48 seconds.
 	#[pallet::storage]
-	pub(crate) type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
+	pub type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Stores the number of references to a shared vote. We also store the block number at which
