@@ -523,6 +523,7 @@ pub struct DecodedXSwapParams {
 	pub broker_commission: BasisPoints,
 	pub affiliate_fees: Vec<AffiliateAndFee>,
 	pub ccm: Option<CcmChannelMetadata>,
+	pub seed: Vec<u8>,
 }
 
 pub fn decode_sol_instruction_data(
@@ -539,6 +540,7 @@ pub fn decode_sol_instruction_data(
 		dst_token,
 		ccm_parameters,
 		cf_parameters,
+		seed,
 	) = match instruction.accounts.len() as u8 {
 		sol_tx_core::consts::X_SWAP_NATIVE_ACC_LEN => {
 			let (
@@ -553,7 +555,7 @@ pub fn decode_sol_instruction_data(
 							ccm_parameters,
 							cf_parameters,
 						},
-					seed: _,
+					seed,
 				},
 			) = SolInstruction::deserialize_data_with_borsh::<(FunctionDiscriminator, XSwapNative)>(
 				data,
@@ -574,6 +576,7 @@ pub fn decode_sol_instruction_data(
 				dst_token,
 				ccm_parameters,
 				cf_parameters,
+				seed,
 			))
 		},
 		sol_tx_core::consts::X_SWAP_TOKEN_ACC_LEN => {
@@ -590,7 +593,7 @@ pub fn decode_sol_instruction_data(
 							cf_parameters,
 							decimals: _,
 						},
-					seed: _,
+					seed,
 				},
 			) = SolInstruction::deserialize_data_with_borsh::<(FunctionDiscriminator, XSwapToken)>(
 				data,
@@ -618,6 +621,7 @@ pub fn decode_sol_instruction_data(
 				dst_token,
 				ccm_parameters,
 				cf_parameters,
+				seed,
 			))
 		},
 		_ => Err("SolInstruction is invalid"),
@@ -675,6 +679,7 @@ pub fn decode_sol_instruction_data(
 		broker_commission: bps,
 		affiliate_fees: affiliate_fees.to_vec(),
 		ccm,
+		seed,
 	})
 }
 
@@ -808,6 +813,7 @@ mod test {
 				broker_commission,
 				affiliate_fees,
 				ccm: Some(channel_metadata),
+				seed: seed.to_vec(),
 			})
 		);
 	}
@@ -876,6 +882,7 @@ mod test {
 				broker_commission,
 				affiliate_fees,
 				ccm: Some(channel_metadata),
+				seed: seed.to_vec(),
 			})
 		);
 	}

@@ -2400,7 +2400,7 @@ impl_runtime_apis! {
 					ForeignChain::Solana,
 					VaultSwapExtraParameters::Solana {
 						from,
-						event_data_account,
+						seed,
 						input_amount,
 						refund_parameters,
 						from_token_account,
@@ -2418,7 +2418,7 @@ impl_runtime_apis! {
 					affiliate_fees,
 					dca_parameters,
 					from,
-					event_data_account,
+					seed,
 					from_token_account,
 				),
 				_ => Err(DispatchErrorWithMessage::from(

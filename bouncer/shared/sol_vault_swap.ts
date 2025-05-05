@@ -32,6 +32,7 @@ import { getChainflipApi } from './utils/substrate';
 import { getBalance } from './get_balance';
 import { TestContext } from './utils/test_context';
 import { Logger, throwError } from './utils/logger';
+import { randomBytes } from 'crypto';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
 
@@ -51,7 +52,7 @@ type RpcAccountMeta = {
 interface SolanaVaultSwapExtraParameters {
   chain: 'Solana';
   from: string;
-  event_data_account: string;
+  seed: number[];
   input_amount: string;
   refund_parameters: ChannelRefundParameters;
   from_token_account?: string;
@@ -86,10 +87,9 @@ export async function executeSolVaultSwap(
 
   const connection = getSolConnection();
 
-  // TODO: For now using a public key as a seed as done in the SC.
-  const seed = Keypair.generate().publicKey;
+  const seed = randomBytes(32);
   const [newEventAccountPublicKey] = PublicKey.findProgramAddressSync(
-    [Buffer.from('swap_event'), whaleKeypair.publicKey.toBuffer(), seed.toBuffer()],
+    [Buffer.from('swap_event'), whaleKeypair.publicKey.toBuffer(), seed],
     new PublicKey(getContractAddress('Solana', 'SWAP_ENDPOINT')),
   );
   createdEventAccounts.push([newEventAccountPublicKey, srcAsset === 'Sol']);
@@ -108,11 +108,10 @@ export async function executeSolVaultSwap(
     ),
     min_price: fillOrKillParams?.minPriceX128 ?? '0x0',
   };
-
   const extraParameters: SolanaVaultSwapExtraParameters = {
     chain: 'Solana',
     from: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
-    event_data_account: decodeSolAddress(seed.toBase58()),
+    seed: Array.from(seed),
     input_amount: '0x' + new BigNumber(amountToSwap).toString(16),
     refund_parameters: refundParams,
     from_token_account: undefined,
