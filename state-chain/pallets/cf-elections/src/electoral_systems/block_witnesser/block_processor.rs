@@ -135,15 +135,13 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 				last_block = last_height;
 			},
 			ChainProgressInner::Reorg(range) => {
-				last_block = (*range.start()).saturating_backward(1);
-				let mut highest_safety_margin = 0u32;
-				for n in range.clone() {
-					if let Some(block_info) = self.blocks_data.remove(&n) {
-						if block_info.safety_margin > highest_safety_margin {
-							highest_safety_margin = block_info.safety_margin;
-						}
-					}
-				}
+				last_block = *range.start();
+				let highest_safety_margin = self
+					.blocks_data
+					.extract_if(|block_number, _| range.contains(block_number))
+					.map(|(_, block_info)| block_info.safety_margin)
+					.max()
+					.unwrap_or(0);
 				for (_event, stored_expiry) in self.processed_events.iter_mut() {
 					let mut expiry = range.end().saturating_forward(highest_safety_margin as usize);
 					let new_expiry = stored_expiry.max(&mut expiry);
