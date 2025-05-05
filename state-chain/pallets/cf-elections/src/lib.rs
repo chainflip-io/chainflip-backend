@@ -124,6 +124,7 @@
 #![feature(associated_type_defaults)]
 #![feature(adt_const_params)]
 #![feature(unsized_const_params)]
+#![feature(btree_extract_if)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]

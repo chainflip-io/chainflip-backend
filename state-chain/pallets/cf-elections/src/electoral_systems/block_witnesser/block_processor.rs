@@ -11,16 +11,16 @@ use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
 ///
-/// DepositChannelWitnessingProcessor
+/// BlockProcessor
 /// ===================================
 ///
-/// This processor is responsible for handling block data from a blockchain deposit channel while
+/// This processor is responsible for handling block data from a blockchain while
 /// managing reorganization events (reorgs) within a safety margin. It maintains an internal state
-/// of block data and reorg events, applies chain-specific processing rules (such as pre-witness and
-/// witness event generation), deduplicates events to avoid processing the same deposit twice, and
-/// finally executes those events.
+/// of block data and already processed events, applies chain-specific processing rules (such as
+/// pre-witness and witness event generation), deduplicates events to avoid processing the same
+/// deposit twice, and finally executes those events.
 ///
-/// Each blockchain can provide its own definitions for:
+/// Each block processor can provide its own definitions for:
 /// - The block number type.
 /// - The block data type.
 /// - The event type produced during block processing.
@@ -37,7 +37,7 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 ///     - `BlockData`: The type of data associated with a block.
 ///     - `Event`: The type of event generated from processing blocks.
 ///     - `Rules`: A hook to process block data and generate events.
-///     - `Execute`: A hook to execute generated events.
+///     - `Execute`: A hook to dedup and execute generated events.
 #[derive_where(Debug, Clone, PartialEq, Eq;
 	T::ChainBlockNumber: Debug + Clone + Eq,
 	T::BlockData: Debug + Clone + Eq,
@@ -54,12 +54,14 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, 
 	T::Execute: Encode,
 ))]
 pub struct BlockProcessor<T: BWProcessorTypes> {
-	/// A mapping from block numbers to their corresponding block data, the next age to be
-	/// processed and the safety margin. The "age" represents the block height difference between
-	/// head of the chain and block that we are processing, and it's used to know what rules have
-	/// already been processed for such block
+	/// A mapping from block numbers to their corresponding BlockInfo (block data, the next age to
+	/// be processed and the safety margin). The "age" represents the block height difference
+	/// between head of the chain and block that we are processing, and it's used to know what
+	/// rules have already been processed for such block
 	pub blocks_data: BTreeMap<T::ChainBlockNumber, BlockProcessingInfo<T::BlockData>>,
-	pub reorg_events: BTreeMap<T::ChainBlockNumber, (Vec<T::Event>, u32)>,
+	/// A mapping from event to their corresponding expiration block_number (which is defined as
+	/// block_number + safety margin)
+	pub processed_events: BTreeMap<T::Event, T::ChainBlockNumber>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
 }
@@ -80,7 +82,7 @@ impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 	fn default() -> Self {
 		Self {
 			blocks_data: Default::default(),
-			reorg_events: Default::default(),
+			processed_events: Default::default(),
 			rules: Default::default(),
 			execute: Default::default(),
 		}
@@ -99,8 +101,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	///    undergone a reorganization (reorg).
 	///    - For a normal progress update, it uses the latest block height to process pending block
 	///      data.
-	///    - For a reorg, it removes the block data for the affected blocks and collects any events
-	///      generated during that process into `reorg_events`.
+	///    - For a reorg, it removes the block information for the affected blocks
 	///
 	/// 3. **Processing Rules:** The processor applies the chain-specific rules (via the `rules`
 	///    hook) to the stored block data, generating a set of events.
@@ -108,19 +109,17 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// 4. **Deduplication and Execution:** Generated events are deduplicated and then executed via
 	///    the `execute` hook.
 	///
+	/// 5. **Cleaning:** Expired blocks and events (based on safety margin) are removed from the
+	///    block processor
+	///
 	/// # Parameters
 	///
 	/// - `chain_progress`: Indicates the current state of the blockchain. It can either be:
 	///   - `ChainProgressInner::Progress(last_height)` for a simple progress update.
 	///   - `ChainProgressInner::Reorg(range)` for a reorganization event, where `range` defines the
 	///     blocks affected.
-	/// - `block_data`: An optional tuple `(block_number, block_data)`. If provided, this new block
-	///   data is stored.
-	///
-	/// # Returns
-	///
-	/// A vector of (block height, events (`T::Event`)) generated during the processing. These
-	/// events have been deduplicated and executed.
+	/// - `block_data`: An optional tuple `(block_number, block_data, safety_margin)`. If provided,
+	///   this new block data is stored.
 	pub fn process_block_data(
 		&mut self,
 		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
@@ -136,35 +135,22 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 				last_block = last_height;
 			},
 			ChainProgressInner::Reorg(range) => {
-				last_block = *range.end();
-				for n in range {
-					let block_data = self.blocks_data.remove(&n);
-					if let Some(block_info) = block_data {
-						let age_range: Range<u32> = 0..block_info.next_age_to_process;
-						let events = self
-							.process_rules_for_ages_and_block(
-								n,
-								age_range,
-								&block_info.block_data,
-								block_info.safety_margin,
-							)
-							.into_iter()
-							.map(|(_, event)| event)
-							.collect::<Vec<_>>();
-						match self.reorg_events.get_mut(&n) {
-							None => {
-								self.reorg_events.insert(n, (events, block_info.safety_margin));
-							},
-							Some((previous_events, _)) => {
-								previous_events.extend(events.into_iter());
-							},
-						}
-					}
+				last_block = *range.start();
+				let highest_safety_margin = self
+					.blocks_data
+					.extract_if(|block_number, _| range.contains(block_number))
+					.map(|(_, block_info)| block_info.safety_margin)
+					.max()
+					.unwrap_or(0);
+				for (_event, stored_expiry) in self.processed_events.iter_mut() {
+					let mut expiry = range.end().saturating_forward(highest_safety_margin as usize);
+					let new_expiry = stored_expiry.max(&mut expiry);
+					*stored_expiry = *new_expiry;
 				}
 			},
 		}
 		let events = self.process_rules(last_block);
-		self.execute.run(events.clone());
+		self.execute.run(events);
 		self.clean_old(last_block);
 	}
 
@@ -203,57 +189,65 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		last_events
 	}
 
-	/// Applies the processing rules for a given block at a specific age to generate events.
+	/// Applies the processing rules for a given block and a given range of ages to generate events.
 	///
 	/// This function performs two primary steps:
 	///
-	/// 1. **Event Generation:** It calls the `rules` hook with a tuple `(block, age, data.clone())`
-	///    to generate events.
+	/// 1. **Event Generation:** It calls the `rules` hook with a tuple `(block_number, age, data,
+	///    safety_margin)` to generate events.
 	/// 2. **Deduplication Filtering:** It then filters out events that are already present in
-	///    `reorg_events`
+	///    `processed_events`. If an event is already present in `processed_events`, it is
+	///    considered a duplicate. The existing entry is updated to reflect the highest expiry
+	///    ChainBlockNumber between the existing and the new (duplicate) event.
 	///
 	/// # Parameters
 	///
-	/// - `block`: The block number for which to process rules.
+	/// - `block_number`: The block number for which to process rules.
 	/// - `age`: The age of the block (i.e., how many blocks have passed since this block).
 	/// - `data`: A reference to the block data.
+	/// - `safety_margin`: the safety margin for that block
 	///
 	/// # Returns
 	///
 	/// A vector of (block height, events (`T::Event`)) generated by applying the rules, excluding
-	/// any duplicates.
+	/// any event already processed.
 	fn process_rules_for_ages_and_block(
 		&mut self,
-		block: T::ChainBlockNumber,
+		block_number: T::ChainBlockNumber,
 		age: Range<u32>,
 		data: &T::BlockData,
 		safety_margin: u32,
 	) -> Vec<(T::ChainBlockNumber, T::Event)> {
+		let last_age = age.end;
 		let events: Vec<(T::ChainBlockNumber, T::Event)> =
-			self.rules.run((block, age, data.clone(), safety_margin));
+			self.rules.run((block_number, age, data.clone(), safety_margin));
+
 		events
 			.into_iter()
-			.filter(|(_, last_event)| {
-				!self
-					.reorg_events
-					.iter()
-					.flat_map(|(_, (events, _))| events)
-					.any(|event| event == last_event)
+			.filter(|(block_number, event)| {
+				let expiry = block_number
+					.saturating_forward(safety_margin as usize)
+					.saturating_forward(last_age as usize);
+				match self.processed_events.get_mut(event) {
+					Some(stored_expiry) => {
+						if *stored_expiry < expiry {
+							*stored_expiry = expiry;
+						}
+						false
+					},
+					None => {
+						self.processed_events.insert(event.clone(), expiry);
+						true
+					},
+				}
 			})
-			.collect::<Vec<_>>()
+			.collect()
 	}
+
 	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
 		self.blocks_data
 			.retain(|_key, block_info| block_info.next_age_to_process <= block_info.safety_margin);
-		// Todo! Do we want to keep these events around for longer? is there any benefit?
-		// If we keep these for let's say 100 blocks we can then prevent double processing things
-		// that are reorged up to 100 blocks later, what are the chanches of smth like this
-		// happening? This still won't protect us from re-processing full Witness events since we
-		// remove the blocks from block_data as soon as safety margin is reached (we would have to
-		// increase the size of blocks_data as well)
-		self.reorg_events.retain(|key, (_, safety_margin)| {
-			key.saturating_forward(*safety_margin as usize) > last_height
-		});
+		self.processed_events.retain(|_, expiry_block| *expiry_block > last_height);
 	}
 }
 
@@ -285,7 +279,19 @@ pub(crate) mod test {
 
 	type MockBlockData = Vec<u8>;
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+	#[derive(
+		Debug,
+		Clone,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		Deserialize,
+		Serialize,
+		Ord,
+		PartialOrd,
+	)]
 	pub enum MockBtcEvent {
 		PreWitness(u8),
 		Witness(u8),
@@ -432,66 +438,6 @@ pub(crate) mod test {
 		assert!(!processor.blocks_data.contains_key(&11));
 	}
 
-	/// test that a reorg is properly handled by saving all the events executed so far
-	#[test]
-	fn reorgs_events_saved_and_removed() {
-		let mut processor = BlockProcessor::<Types>::default();
-
-		processor.process_block_data(
-			ChainProgressInner::Progress(9),
-			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
-		);
-		processor.process_block_data(
-			ChainProgressInner::Progress(10),
-			Some((10, vec![4, 5, 6], SAFETY_MARGIN)),
-		);
-		processor.process_block_data(
-			ChainProgressInner::Progress(11),
-			Some((11, vec![7, 8, 9], SAFETY_MARGIN)),
-		);
-
-		//when a reorg happens the block processor saves all the events it has processed so far for
-		// the reorged blocks
-		processor.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(9, 11)), None);
-		assert_eq!(
-			vec![
-				(9, MockBtcEvent::PreWitness(1)),
-				(9, MockBtcEvent::PreWitness(2)),
-				(9, MockBtcEvent::PreWitness(3)),
-				(10, MockBtcEvent::PreWitness(4)),
-				(10, MockBtcEvent::PreWitness(5)),
-				(10, MockBtcEvent::PreWitness(6)),
-				(11, MockBtcEvent::PreWitness(7)),
-				(11, MockBtcEvent::PreWitness(8)),
-				(11, MockBtcEvent::PreWitness(9))
-			],
-			processor
-				.reorg_events
-				.iter()
-				.flat_map(|(block_number, (events, _safety_margin))| {
-					events.iter().map(|event| (*block_number, event.clone()))
-				})
-				.collect::<Vec<_>>()
-		);
-		processor.process_block_data(ChainProgressInner::Progress(13), None);
-		assert_eq!(
-			vec![
-				(11, MockBtcEvent::PreWitness(7)),
-				(11, MockBtcEvent::PreWitness(8)),
-				(11, MockBtcEvent::PreWitness(9))
-			],
-			processor
-				.reorg_events
-				.iter()
-				.flat_map(|(block_number, (events, _safety_margin))| {
-					events.iter().map(|event| (*block_number, event.clone()))
-				})
-				.collect::<Vec<_>>()
-		);
-		processor.process_block_data(ChainProgressInner::Progress(14), None);
-		assert!(processor.reorg_events.is_empty())
-	}
-
 	///test that when a reorg happens the reorged events are used to avoid re-executing the same
 	///action even if the deposit ends up in a different block,
 	#[test]
@@ -523,6 +469,159 @@ pub(crate) mod test {
 		// After reprocessing the reorged blocks we should have not re-emitted the same prewitness
 		// events for the same deposit, only the new detected deposit (10) is present
 		assert_eq!(result, vec![(11, MockBtcEvent::PreWitness(10))]);
+	}
+
+	#[test]
+	fn already_executed_events_are_not_reprocessed() {
+		let mut processor = BlockProcessor::<Types>::default();
+		// We processed pre-witnessing for the followings deposits
+		processor.process_block_data(
+			ChainProgressInner::Progress(9),
+			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
+		);
+		// we receive next block which contains a deposit already processed (reorg detected later)
+		let result =
+			processor.process_rules_for_ages_and_block(10, 0..1, &vec![3, 4, 5], SAFETY_MARGIN);
+		// The already processed events are saved, hence only the new one are present when
+		// processing the new block
+		assert_eq!(
+			result,
+			vec![(10, MockBtcEvent::PreWitness(4)), (10, MockBtcEvent::PreWitness(5))]
+		);
+	}
+
+	#[test]
+	fn already_processed_events_always_have_highest_expiry_block_number() {
+		let mut processor = BlockProcessor::<Types>::default();
+		// We processed pre-witnessing for the followings deposits
+		processor.process_block_data(
+			ChainProgressInner::Progress(9),
+			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(9),
+			Some((10, vec![3, 4], SAFETY_MARGIN * 2)),
+		);
+
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(3)),
+			Some(10u64.saturating_add((SAFETY_MARGIN * 2).into()).saturating_add(1)).as_ref()
+		);
+	}
+
+	// When we encounter a reorg, expiry block for all the already processed events gets bumped to
+	// the max between the end of the reorg + the highest safety_margin and the currently stored
+	// expiry
+	#[test]
+	fn reorg_cause_expiry_block_to_be_bumped() {
+		let mut processor = BlockProcessor::<Types>::default();
+
+		processor.process_block_data(
+			ChainProgressInner::Progress(101),
+			Some((101, vec![1], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(102),
+			Some((102, vec![], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(103),
+			Some((103, vec![], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(104),
+			Some((104, vec![], SAFETY_MARGIN)),
+		);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(101u64.saturating_add((SAFETY_MARGIN).into()).saturating_add(1)).as_ref(),
+		);
+		processor
+			.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(101, 105)), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(105u64.saturating_add((SAFETY_MARGIN).into())).as_ref(),
+		);
+	}
+
+	// When we encounter an event already processed we update its expiry to be the max between
+	// last_seen_height + safety_margin and the currently stored expiry
+	#[test]
+	fn already_processed_events_expiry_is_updated_based_on_last_seen_height() {
+		let mut processor = BlockProcessor::<Types>::default();
+
+		processor.process_block_data(
+			ChainProgressInner::Progress(101),
+			Some((101, vec![1, 2], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(102),
+			Some((102, vec![3], SAFETY_MARGIN)),
+		);
+		processor.process_block_data(ChainProgressInner::Progress(103), None);
+
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(101u64.saturating_add((SAFETY_MARGIN).into()).saturating_add(1)).as_ref(),
+		);
+		processor
+			.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(101, 103)), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(103u64.saturating_add((SAFETY_MARGIN).into())).as_ref(),
+		);
+
+		processor.process_block_data(
+			ChainProgressInner::Progress(104),
+			Some((101, vec![1], SAFETY_MARGIN)),
+		);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(104u64.saturating_add((SAFETY_MARGIN).into()).saturating_add(1)).as_ref(),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(104),
+			Some((102, vec![2], SAFETY_MARGIN)),
+		);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(2)),
+			Some(104u64.saturating_add((SAFETY_MARGIN).into()).saturating_add(1)).as_ref(),
+		);
+	}
+
+	// The expiry block cannot be lowered, and the highest value is always kept, even in case we
+	// update the safety margin
+	#[test]
+	fn change_in_safety_margin_do_not_impact_expiry_block() {
+		let mut processor = BlockProcessor::<Types>::default();
+
+		processor.process_block_data(
+			ChainProgressInner::Progress(101),
+			Some((101, vec![1, 2], SAFETY_MARGIN * 2)),
+		);
+		processor.process_block_data(
+			ChainProgressInner::Progress(102),
+			Some((102, vec![3], SAFETY_MARGIN * 2)),
+		);
+		processor.process_block_data(ChainProgressInner::Progress(103), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(101u64.saturating_add((SAFETY_MARGIN * 2).into()).saturating_add(1)).as_ref(),
+		);
+		processor
+			.process_block_data(ChainProgressInner::Reorg(RangeInclusive::new(101, 103)), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(103u64.saturating_add((SAFETY_MARGIN * 2).into())).as_ref(),
+		);
+		processor.process_block_data(ChainProgressInner::Progress(101), Some((101, vec![1, 2], 1)));
+		processor.process_block_data(ChainProgressInner::Progress(102), Some((102, vec![3], 1)));
+		processor.process_block_data(ChainProgressInner::Progress(103), None);
+		assert_eq!(
+			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
+			Some(103u64.saturating_add((SAFETY_MARGIN * 2).into())).as_ref(),
+		);
+		println!("{:?}", processor.processed_events);
 	}
 }
 
@@ -604,11 +703,11 @@ impl<T: BWProcessorTypes + 'static> Statemachine for SMBlockProcessor<T> {
 // 	match input {
 // 		SMBlockProcessorInput::ChainProgress(chain_progress) => match chain_progress {
 // 			ChainProgressInner::Progress(_last_height) => {
-// 				assert!(after.reorg_events.len() <= before.reorg_events.len(), "If no reorg happened,
+// 				assert!(after.processed_events.len() <= before.processed_events.len(), "If no reorg happened,
 // number of reorg events should stay the same or decrease"); 	// 			},
 // 	// 			ChainProgressInner::Reorg(range) =>
 // 	// 				for n in range.clone().into_iter() {
-// 	// 					assert!(after.reorg_events.contains_key(&n), "Should always contains key for blocks
+// 	// 					assert!(after.processed_events.contains_key(&n), "Should always contains key for blocks
 // being reorged, even if no events were produced! (Empty vec)"); 	// 					assert!(
 // 	// 						!after.blocks_data.contains_key(&n),
 // 	// 						"Should never contain blocks data for blocks being reorged"
