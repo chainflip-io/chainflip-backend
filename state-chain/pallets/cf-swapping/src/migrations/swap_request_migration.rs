@@ -46,15 +46,14 @@ impl NetworkFeeTracker {
 		} else {
 			NetworkFee::<T>::get()
 		};
-		let test = Self {
+		Self {
 			network_fee: FeeRateAndMinimum {
 				minimum: if enforce_minimum { network_fee.minimum } else { AssetAmount::zero() },
 				rate: network_fee.rate,
 			},
 			accumulated_stable_amount: migration_data.accumulated_output_amount,
 			accumulated_fee: migration_data.network_fee_collected,
-		};
-		test
+		}
 	}
 }
 
