@@ -3,13 +3,13 @@ import * as anchor from '@coral-xyz/anchor';
 import { InternalAsset as Asset, Chains } from '@chainflip/cli';
 import {
   PublicKey,
-  Keypair,
   sendAndConfirmTransaction,
   TransactionInstruction,
   Transaction,
   AccountMeta,
 } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
+import { randomBytes } from 'crypto';
 import {
   getContractAddress,
   amountToFineAmount,
@@ -32,7 +32,6 @@ import { getChainflipApi } from './utils/substrate';
 import { getBalance } from './get_balance';
 import { TestContext } from './utils/test_context';
 import { Logger, throwError } from './utils/logger';
-import { randomBytes } from 'crypto';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
 
