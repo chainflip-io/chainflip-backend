@@ -10,6 +10,7 @@ use core::{
 	ops::{Range, RangeInclusive},
 };
 
+use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use proptest::{collection::*, prelude::*};
 
 /// The basic data structure involved is an ordered tree which:
@@ -282,30 +283,43 @@ pub fn blocks_into_chain_progression(
 	chain_progression
 }
 
-use crate::electoral_systems::block_height_tracking::primitives::Header;
-type MockChain<E> = Vec<FlatBlock<E>>;
+pub struct MockChain<E, T: ChainTypes<ChainBlockHash = Vec<E>>> {
+	pub chain: Vec<FlatBlock<E>>,
+	pub _phantom: std::marker::PhantomData<T>,
+}
+
+use crate::electoral_systems::block_height_tracking::{primitives::Header, ChainTypes};
+use sp_std::iter::Step;
+// type MockChain<E> = Vec<FlatBlock<E>>;
 type N = u8;
-pub fn get_block_height<E>(chain: &MockChain<E>) -> N {
-	chain.len() as u8 - 1
-}
-pub fn get_block_header<E: Clone>(chain: &MockChain<E>, height: N) -> Option<Header<Vec<E>, N>> {
-	let hash = chain.get(height as usize)?.events.clone();
-	let parent_hash = chain
-		.get(height.saturating_sub(1) as usize)
-		.map(|block| block.events.clone())
-		.unwrap_or(vec![]);
-	Some(Header { block_height: height, hash, parent_hash })
-}
-pub fn get_best_block<E: Clone>(chain: &MockChain<E>) -> Header<Vec<E>, N> {
-	let hash = chain.last().unwrap().events.clone();
-	let parent_hash = chain
-		.iter()
-		.rev()
-		.skip(1)
-		.next()
-		.map(|block| block.events.clone())
-		.unwrap_or(vec![]);
-	Header { block_height: chain.len() as u8 - 1, hash, parent_hash }
+
+impl<E: Clone, T: ChainTypes<ChainBlockHash = Vec<E>>> MockChain<E, T> {
+	pub fn get_block_height(&self) -> T::ChainBlockNumber {
+		T::ChainBlockNumber::zero().saturating_forward(self.chain.len()).saturating_backward(1)
+	}
+	pub fn get_block_header(&self, height: T::ChainBlockNumber) -> Option<Header<T>> {
+		let height_usize: usize = T::ChainBlockNumber::steps_between(&BlockZero::zero(), &height).0;
+
+		let hash = self.chain.get(height_usize)?.events.clone();
+		let parent_hash = self
+			.chain
+			.get(height_usize.saturating_sub(1))
+			.map(|block| block.events.clone())
+			.unwrap_or(vec![]);
+		Some(Header { block_height: height, hash, parent_hash })
+	}
+	pub fn get_best_block(&self) -> Header<T> {
+		let hash = self.chain.last().unwrap().events.clone();
+		let parent_hash = self
+			.chain
+			.iter()
+			.rev()
+			.skip(1)
+			.next()
+			.map(|block| block.events.clone())
+			.unwrap_or(vec![]);
+		Header { block_height: self.get_block_height(), hash, parent_hash }
+	}
 }
 
 // Temp

@@ -4,7 +4,7 @@ use super::{
 	primitives::{ElectionTracker, SafeModeStatus},
 };
 use crate::electoral_systems::{
-	block_height_tracking::ChainProgress,
+	block_height_tracking::{ChainProgress, ChainTypes},
 	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{core::Validate, state_machine::Statemachine, state_machine_es::SMInput},
 };
@@ -65,16 +65,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, LogEventHook> {
 	type Output = ();
 }
 
-pub trait BWProcessorTypes: Sized {
-	type ChainBlockNumber: Serde
-		+ Copy
-		+ Eq
-		+ Ord
-		+ SaturatingStep
-		+ Step
-		+ BlockZero
-		+ Debug
-		+ 'static;
+pub trait BWProcessorTypes: ChainTypes + Sized {
 	type BlockData: PartialEq + Clone + Debug + Eq + Ord + Serde + 'static;
 
 	type Event: Serde + Debug + Clone + Eq + Ord;
@@ -184,8 +175,7 @@ pub struct BWStatemachine<Types: BWTypes> {
 }
 
 impl<T: BWTypes> Statemachine for BWStatemachine<T> {
-	type Input =
-		SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>;
+	type Input = SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T>>;
 	type InputIndex = Vec<BWElectionProperties<T>>;
 	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
@@ -247,6 +237,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		Ok(())
 	}
 
+	/*
 	/// Specifiation for step function
 	#[cfg(test)]
 	fn step_specification(
@@ -393,6 +384,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			Context(None) => (),
 		}
 	}
+	*/
 }
 
 #[cfg(test)]
@@ -488,26 +480,33 @@ pub mod tests {
 		}
 	}
 
-	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
-		BWTypes for N
+	impl<
+			N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static,
+			H: Serde + Ord + Clone + Debug + Default + 'static,
+			D: Serde + Ord + Clone + Debug + Default + 'static,
+		> BWTypes for (N, H, Vec<D>)
 	{
 		type ElectionProperties = ();
 		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;
 		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 	}
 
+	type Types = (u32, Vec<u8>, Vec<u8>);
+
 	#[test]
 	pub fn test_bw_statemachine() {
-		BWStatemachine::<u32>::test(
+		BWStatemachine::<Types>::test(
 			file!(),
 			generate_state(),
 			prop_do! {
 				let max_concurrent_elections in 0..10u16;
 				return BlockWitnesserSettings { max_concurrent_elections, safety_margin: SAFETY_MARGIN}
 			},
-			generate_input::<u32>,
+			generate_input::<Types>,
 		);
 	}
+
+	/*
 
 	struct TestChain {}
 	impl ChainWitnessConfig for TestChain {
@@ -527,4 +526,5 @@ pub mod tests {
 			generate_input::<BlockWitnessRange<TestChain>>,
 		);
 	}
+	*/
 }

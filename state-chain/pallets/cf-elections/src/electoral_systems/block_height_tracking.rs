@@ -2,7 +2,7 @@ use core::{iter::Step, ops::RangeInclusive};
 
 use super::{
 	block_witnesser::state_machine::HookTypeFor,
-	state_machine::core::{Hook, HookType, Validate},
+	state_machine::core::{Hook, HookType, Serde, Validate},
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
@@ -19,25 +19,21 @@ pub mod consensus;
 pub mod primitives;
 pub mod state_machine;
 
-pub trait HWTypes: Ord + PartialEq + Clone + Debug + 'static {
-	const BLOCK_BUFFER_SIZE: usize;
+pub trait ChainTypes: Ord + Clone + Debug + 'static {
 	type ChainBlockNumber: SaturatingStep
+		+ Step
 		+ BlockZero
 		+ Debug
 		+ Copy
-		+ Eq
 		+ Ord
-		+ Serialize
-		+ for<'a> Deserialize<'a>
-		+ 'static;
-	type ChainBlockHash: Serialize
-		+ for<'a> Deserialize<'a>
-		+ PartialEq
-		+ Eq
-		+ Ord
-		+ Clone
-		+ Debug
-		+ 'static;
+		+ Serde
+		+ 'static
+		+ Sized;
+	type ChainBlockHash: Serde + Ord + Clone + Debug + 'static;
+}
+
+pub trait HWTypes: ChainTypes {
+	const BLOCK_BUFFER_SIZE: usize;
 
 	type BlockHeightChangeHook: Hook<HookTypeFor<Self, BlockHeightChangeHook>>;
 }
@@ -54,24 +50,28 @@ impl<T: HWTypes> HookType for HookTypeFor<T, BlockHeightChangeHook> {
 	T::ChainBlockNumber: Debug + Clone + Copy + Eq + Ord
 )]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub struct HeightWitnesserProperties<T: HWTypes> {
+pub struct HeightWitnesserProperties<T: ChainTypes> {
 	/// An election starts with a given block number,
 	/// meaning that engines have to submit all blocks they know of starting with this height.
 	pub witness_from_index: T::ChainBlockNumber,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ChainProgress<ChainBlockNumber> {
+#[derive_where(
+	Debug, Clone, PartialEq, Eq;
+	// T::ChainBlockNumber: Debug + Clone + Ord
+)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub enum ChainProgress<T: ChainTypes> {
 	// Range of new block heights witnessed. If this is not consecutive, it means that
-	Range(RangeInclusive<ChainBlockNumber>),
+	Range(RangeInclusive<T::ChainBlockNumber>),
 	// Range of new block heights, only emitted when there is a consensus for the first time after
 	// being started.
-	FirstConsensus(RangeInclusive<ChainBlockNumber>),
+	FirstConsensus(RangeInclusive<T::ChainBlockNumber>),
 	// there was no update to the witnessed block headers
 	None,
 }
 
-impl<N: Ord> Validate for ChainProgress<N> {
+impl<T: ChainTypes> Validate for ChainProgress<T> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {

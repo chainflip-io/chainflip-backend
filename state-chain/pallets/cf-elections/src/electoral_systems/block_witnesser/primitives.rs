@@ -3,12 +3,85 @@ use codec::{Decode, Encode};
 use core::{iter::Step, ops::RangeInclusive};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{cmp::max, collections::btree_map::BTreeMap, vec::Vec};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-use crate::electoral_systems::state_machine::core::Validate;
+use crate::electoral_systems::state_machine::core::{fst, Validate};
+
+pub struct ElectionTracker2<N: Ord, H: Ord> {
+	pub seen_heights_below: N,
+
+	/// We always create elections until the next priority height, even if we
+	/// are in safe mode.
+	pub priority_elections_below: N,
+
+	/// Block hashes we got from the BHW.
+	pub queued_elections: BTreeMap<N, H>,
+
+	/// Hashes of elections currently ongoing
+	pub ongoing: BTreeMap<N, H>,
+}
+
+impl<N: Ord + BlockZero + Clone + SaturatingStep, H: Ord> ElectionTracker2<N, H> {
+	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
+		// In case of a reorg we still want to recreate elections for blocks which we had
+		// elections for previously AND were touched by the reorg
+		let start_all_below = match safemode {
+			SafeModeStatus::Disabled =>
+				self.queued_elections.last_key_value().map(fst).cloned().unwrap_or(N::zero()),
+			SafeModeStatus::Enabled => self.priority_elections_below.clone(),
+		};
+
+		// schedule at most `max_new_elections`
+		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
+		self.ongoing.extend(
+			self.queued_elections
+				.extract_if(|n, _| *n < start_all_below)
+				.take(max_new_elections),
+		);
+	}
+
+	/// If an election is done we remove it from the ongoing list
+	pub fn mark_election_done(&mut self, election: N) {
+		if self.ongoing.remove(&election).is_none() {
+			panic!("marking an election done which wasn't ongoing!")
+		}
+	}
+
+	/// This function schedules all elections up to `range.end()`
+	pub fn schedule_range(&mut self, range: RangeInclusive<N>, mut hashes: BTreeMap<N, H>) {
+		// Check whether there is a reorg concerning elections we have started previously.
+		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
+		// range are going to be restarted once there is the capacity to do so.
+		if *range.start() < self.next_election() {
+			// we set this value such that even in case of a reorg we create elections for up to
+			// this block
+			self.priority_elections_below =
+				max(self.next_election(), self.priority_elections_below.clone());
+		}
+
+		// QUESTION: currently, the following check ensures that
+		// the highest scheduled election never decreases. Do we want this?
+		// It's difficult to imagine a situation where the highest block number
+		// after a reorg is lower than it was previously, and also, even if, in that
+		// case we simply keep the higher number that doesn't seem to be too much of a problem.
+		self.seen_heights_below =
+			max(self.seen_heights_below.clone(), range.end().clone().saturating_forward(1));
+
+		// adding all hashes to the queue
+		self.queued_elections.append(&mut hashes);
+	}
+
+	fn next_election(&self) -> N {
+		self.queued_elections
+			.first_key_value()
+			.map(fst)
+			.cloned()
+			.unwrap_or(self.seen_heights_below.clone())
+	}
+}
 
 /// Keeps track of ongoing elections for the block witnesser.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
@@ -89,8 +162,7 @@ impl<N: Ord + SaturatingStep + Step + Copy> ElectionTracker<N> {
 		if *range.start() < self.next_election {
 			// we set this value such that even in case of a reorg we create elections for up to
 			// this block
-			self.next_priority_election =
-				sp_std::cmp::max(self.next_election, self.next_priority_election);
+			self.next_priority_election = max(self.next_election, self.next_priority_election);
 
 			// the next election we start is going to be the first block involved in the reorg
 			self.next_election = *range.start();

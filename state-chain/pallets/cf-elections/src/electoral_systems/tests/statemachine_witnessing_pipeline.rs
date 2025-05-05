@@ -58,21 +58,21 @@ pub trait AbstractVoter<M: Statemachine> {
 
 #[test]
 pub fn test_all() {
-	type N = u8;
-	type BW = BWStatemachine<N>;
-	type BHW = BlockHeightTrackingSM<N>;
+	type Types = (u8, Vec<char>, Vec<char>);
+	type BW = BWStatemachine<Types>;
+	type BHW = BlockHeightTrackingSM<Types>;
 
 	impl AbstractVoter<BHW> for FlatChainProgression<char> {
 		fn vote(
 			&mut self,
 			indices: <BHW as Statemachine>::InputIndex,
 		) -> Option<Vec<<BHW as Statemachine>::Input>> {
-			let chain = self.get_next_chain()?;
+			let chain = MockChain { chain: self.get_next_chain()?, _phantom: Default::default() };
 
 			let mut result = Vec::new();
 
 			for index in indices {
-				let best_block = get_best_block(&chain);
+				let best_block = chain.get_best_block();
 				if best_block.block_height < index.witness_from_index {
 					continue;
 				}
@@ -83,8 +83,8 @@ pub fn test_all() {
 							println!("########### first witnessing #################");
 							InputHeaders(VecDeque::from([best_block]))
 						} else {
-							let headers = (witness_from_index..=get_block_height(&chain))
-								.map(|height| get_block_header(&chain, height));
+							let headers = (witness_from_index..=chain.get_block_height())
+								.map(|height| chain.get_block_header(height));
 							if headers.len() == 0 {
 								println!("no new blocks, continuing...");
 								continue;
@@ -111,12 +111,12 @@ pub fn test_all() {
 		) -> Option<Vec<<BW as Statemachine>::Input>> {
 			let mut inputs = Vec::new();
 			for index in indices {
-				let chain = self.get_next_chain()?;
-				if let Some(block_data) = get_block_header(&chain, index.block_height) {
-					inputs.push(SMInput::Consensus((
-						index,
-						block_data.hash.into_iter().map(|x| x as u8).collect(),
-					)));
+				let chain = MockChain::<char, Types> {
+					chain: self.get_next_chain()?,
+					_phantom: Default::default(),
+				};
+				if let Some(block_data) = chain.get_block_header(index.block_height) {
+					inputs.push(SMInput::Consensus((index, block_data.hash)));
 				}
 			}
 			Some(inputs)
@@ -142,18 +142,18 @@ pub fn test_all() {
         let finalized_events : BTreeSet<_> = finalized_blocks.iter().flat_map(|block| block.events.iter()).collect();
 
         // prepare the state machines
-        let mut bhw_state: BHWStateWrapper<N> = BHWStateWrapper {
+        let mut bhw_state: BHWStateWrapper<Types> = BHWStateWrapper {
             state: BHWState::Starting,
             block_height_update: MockHook::new(())
         };
-        let block_processor: BlockProcessor<N> = BlockProcessor {
+        let block_processor: BlockProcessor<Types> = BlockProcessor {
             blocks_data: Default::default(),
             processed_events: Default::default(),
             rules: Default::default(),
             execute: MockHook::new(()),
             delete_data: MockHook::new(()),
         };
-        let mut bw_state: BlockWitnesserState<N> = BlockWitnesserState {
+        let mut bw_state: BlockWitnesserState<Types> = BlockWitnesserState {
             elections: Default::default(),
             generate_election_properties_hook: Default::default(),
             safemode_enabled: MockHook::new(SafeModeStatus::Disabled),
@@ -264,7 +264,7 @@ pub fn test_all() {
         println!("{printed}");
         println!("----- outputs end ------");
 
-        let counted_events : Container<BTreeMultiSet<(u8, MockBtcEvent)>> = total_outputs.into_iter().flatten().collect();
+        let counted_events : Container<BTreeMultiSet<(u8, MockBtcEvent<char>)>> = total_outputs.into_iter().flatten().collect();
 
         // verify that each event was emitted only one time 
         for (event, count) in counted_events.0.0.clone() {

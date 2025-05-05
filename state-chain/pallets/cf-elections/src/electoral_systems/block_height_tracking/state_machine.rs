@@ -15,9 +15,7 @@ use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
 
 //------------------------ inputs ---------------------------
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct InputHeaders<Types: HWTypes>(
-	pub VecDeque<Header<Types::ChainBlockHash, Types::ChainBlockNumber>>,
-);
+pub struct InputHeaders<Types: HWTypes>(pub VecDeque<Header<Types>>);
 
 impl<T: HWTypes> IndexedValidate<HeightWitnesserProperties<T>, InputHeaders<T>>
 	for BlockHeightTrackingSM<T>
@@ -60,10 +58,7 @@ impl<T: HWTypes> Validate for InputHeaders<T> {
 )]
 pub enum BHWState<T: HWTypes> {
 	Starting,
-	Running {
-		headers: VecDeque<Header<T::ChainBlockHash, T::ChainBlockNumber>>,
-		witness_from: T::ChainBlockNumber,
-	},
+	Running { headers: VecDeque<Header<T>>, witness_from: T::ChainBlockNumber },
 }
 
 impl<T: HWTypes> Default for BHWState<T> {
@@ -129,7 +124,7 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type Input = SMInput<(HeightWitnesserProperties<T>, InputHeaders<T>), ()>;
 	type InputIndex = Vec<HeightWitnesserProperties<T>>;
 	type Settings = ();
-	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
+	type Output = Result<ChainProgress<T>, &'static str>;
 
 	fn input_index(s: &mut Self::State) -> Self::InputIndex {
 		let witness_from_index = match s.state {
@@ -253,10 +248,9 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 
 #[cfg(test)]
 pub mod tests {
-
 	use crate::{
 		electoral_systems::{
-			block_height_tracking::BlockHeightChangeHook,
+			block_height_tracking::{BlockHeightChangeHook, ChainTypes},
 			block_witnesser::state_machine::HookTypeFor,
 			state_machine::core::{hook_test_utils::MockHook, Serde},
 		},
@@ -272,6 +266,7 @@ pub mod tests {
 		prop_oneof,
 		sample::select,
 	};
+	use sp_std::{fmt::Debug, iter::Step};
 
 	use crate::electoral_systems::block_height_tracking::state_machine::BHWStateWrapper;
 
@@ -333,35 +328,51 @@ pub mod tests {
 	}
 
 	impl<
+			N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static,
+			H: Serde + Ord + Clone + Debug + 'static,
+			D: Serde + Ord + Clone + Debug + 'static,
+		> ChainTypes for (N, H, D)
+	{
+		type ChainBlockNumber = N;
+		type ChainBlockHash = H;
+	}
+
+	impl<
 			N: Serde
 				+ Copy
 				+ Ord
 				+ SaturatingStep
+				+ Step
 				+ BlockZero
 				+ sp_std::fmt::Debug
 				+ Default
 				+ 'static,
-		> HWTypes for N
+			H: Serde + Ord + Clone + Debug + 'static,
+			D: Serde + Ord + Clone + Debug + 'static,
+		> HWTypes for (N, H, D)
 	{
 		const BLOCK_BUFFER_SIZE: usize = 6;
-		type ChainBlockNumber = N;
-		type ChainBlockHash = Vec<char>;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
 	#[test]
 	pub fn test_dsm() {
-		BlockHeightTrackingSM::<u32>::test(module_path!(), generate_state(), Just(()), |indices| {
-			prop_oneof![
-				Just(SMInput::Context(())),
-				prop_do! {
-					let index in select(indices);
-					let input in generate_input(index);
-					return SMInput::Consensus((index, input))
-				}
-			]
-			.boxed()
-		});
+		BlockHeightTrackingSM::<(u32, Vec<char>, ())>::test(
+			module_path!(),
+			generate_state(),
+			Just(()),
+			|indices| {
+				prop_oneof![
+					Just(SMInput::Context(())),
+					prop_do! {
+						let index in select(indices);
+						let input in generate_input(index);
+						return SMInput::Consensus((index, input))
+					}
+				]
+				.boxed()
+			},
+		);
 	}
 
 	struct TestChain {}
@@ -370,12 +381,15 @@ pub mod tests {
 		type ChainBlockNumber = u32;
 	}
 
+	impl ChainTypes for TestTypes2 {
+		type ChainBlockNumber = BlockWitnessRange<TestChain>;
+		type ChainBlockHash = bool;
+	}
+
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 	struct TestTypes2 {}
 	impl HWTypes for TestTypes2 {
 		const BLOCK_BUFFER_SIZE: usize = 6;
-		type ChainBlockNumber = BlockWitnessRange<TestChain>;
-		type ChainBlockHash = bool;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
