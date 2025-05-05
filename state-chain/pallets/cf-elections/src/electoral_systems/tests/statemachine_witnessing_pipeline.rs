@@ -1,6 +1,8 @@
 //! This file tests the BlockWitnesser and the BlockHeightWitnesser state machines composed together
 //! on realistic inputs of a chain with many reorgs.
 
+pub mod chainstate_simulation;
+
 use core::marker::PhantomData;
 use std::{
 	collections::{BTreeMap, BTreeSet, VecDeque},
@@ -30,14 +32,13 @@ use crate::electoral_systems::{
 		},
 	},
 	state_machine::{
-		chain::*,
 		core::{hook_test_utils::MockHook, IndexedValidate, TypesFor},
 		state_machine::Statemachine,
 		state_machine_es::SMInput,
 		test_utils::{BTreeMultiSet, Container},
 	},
 };
-
+use chainstate_simulation::*;
 
 macro_rules! if_matches {
     ($($tt:tt)+) => {
@@ -123,12 +124,12 @@ pub fn test_all() {
 	}
 
 	let mut runner = TestRunner::new(Config {
-        cases: 256 * 16,
-        failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
-            "proptest-regressions-full-pipeline",
-        ))),
-        ..Default::default()
-    });
+		cases: 256 * 16,
+		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
+			"proptest-regressions-full-pipeline",
+		))),
+		..Default::default()
+	});
 	runner.run(&generate_blocks_with_tail(), |blocks| {
 
         let mut chains = blocks_into_chain_progression(&blocks.blocks);
@@ -282,4 +283,3 @@ pub fn test_all() {
         Ok(())
     }).unwrap();
 }
-

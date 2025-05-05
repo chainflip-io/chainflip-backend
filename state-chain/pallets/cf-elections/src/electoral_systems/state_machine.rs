@@ -1,5 +1,5 @@
-#[cfg(test)]
-pub mod chain;
+// #[cfg(test)]
+// pub mod chain;
 pub mod consensus;
 pub mod core;
 #[allow(clippy::module_inception)]
