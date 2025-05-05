@@ -69,6 +69,22 @@ pub fn generate_consumer(p: ConsumerParameters) -> impl Strategy<Value = Consume
 	)
 }
 
+pub fn trim_forked_block<A>(block: ForkedBlock<A>, max_length: usize) -> ForkedBlock<A> {
+	match block {
+		ForkedBlock::Block(block) => ForkedBlock::Block(block),
+		ForkedBlock::Fork(chain) => ForkedBlock::Fork(trim_forked_chain(chain, max_length)),
+	}
+}
+
+pub fn trim_forked_chain<A>(chain: ForkedChain<A>, max_length: usize) -> ForkedChain<A> {
+	chain
+		.into_iter()
+		.enumerate()
+		.map(|(height, block)| trim_forked_block(block, max_length.saturating_sub(height)))
+		.take(max_length)
+		.collect()
+}
+
 pub fn generate_consumer_block(
 	p: ConsumerChainParameters,
 ) -> impl Strategy<Value = ForkedBlock<Consumer>> {
@@ -79,6 +95,8 @@ pub fn generate_consumer_block(
 		p.max_fork_length as u32,
 		move |inner| vec(inner, 1..p.max_fork_length).prop_map(ForkedBlock::Fork),
 	)
+	// enforce fork length by deleting blocks that go over the limit
+	.prop_map(move |block| trim_forked_block(block, p.max_fork_length))
 }
 
 pub fn generate_consumer_chain(
@@ -210,7 +228,7 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 		// turn into chain progression
 		.prop_map(|mut blocks| {
 			// generate a large number of empty blocks, so all processors can run until completion
-			blocks.extend((0..5).map(|_| {
+			blocks.extend((0..8).map(|_| {
 				ForkedBlock::Block(Consumer {
 					ignore: 0,
 					drop: 0,
@@ -269,10 +287,6 @@ pub fn blocks_into_chain_progression(
 ) -> FlatChainProgression<char> {
 	let time_steps = create_time_steps(&filled_chain);
 
-	for step in &time_steps {
-		println!("step: {step:?}");
-	}
-
 	let mut chain_progression = FlatChainProgression { chains: time_steps, age: 0 };
 
 	// attach dummy first block
@@ -293,20 +307,36 @@ use sp_std::iter::Step;
 // type MockChain<E> = Vec<FlatBlock<E>>;
 type N = u8;
 
-impl<E: Clone, T: ChainTypes<ChainBlockHash = Vec<E>>> MockChain<E, T> {
+impl<E: Clone + PartialEq, T: ChainTypes<ChainBlockHash = Vec<E>>> MockChain<E, T> {
+	/// NOTE: This is going to return values even for non-existent blocks!
+	pub fn get_hash_by_height(&self, height: usize) -> Vec<E> {
+		self.chain
+			.iter()
+			.take(height + 1)
+			.flat_map(|block| block.events.clone())
+			.collect()
+	}
+
 	pub fn get_block_height(&self) -> T::ChainBlockNumber {
-		T::ChainBlockNumber::zero().saturating_forward(self.chain.len()).saturating_backward(1)
+		T::ChainBlockNumber::zero()
+			.saturating_forward(self.chain.len())
+			.saturating_backward(1)
 	}
 	pub fn get_block_header(&self, height: T::ChainBlockNumber) -> Option<Header<T>> {
 		let height_usize: usize = T::ChainBlockNumber::steps_between(&BlockZero::zero(), &height).0;
 
-		let hash = self.chain.get(height_usize)?.events.clone();
-		let parent_hash = self
-			.chain
-			.get(height_usize.saturating_sub(1))
-			.map(|block| block.events.clone())
-			.unwrap_or(vec![]);
+		// let hash = self.chain.get(height_usize)?.events.clone();
+		let hash = self.get_hash_by_height(height_usize);
+		let parent_hash = self.get_hash_by_height(height_usize.saturating_sub(1));
+
 		Some(Header { block_height: height, hash, parent_hash })
+	}
+	pub fn get_block_by_hash(&self, hash: T::ChainBlockHash) -> Option<Vec<E>> {
+		self.chain
+			.iter()
+			.enumerate()
+			.find(|(height, _)| self.get_hash_by_height(*height) == hash)
+			.map(|(height, block)| block.events.clone())
 	}
 	pub fn get_best_block(&self) -> Header<T> {
 		let hash = self.chain.last().unwrap().events.clone();

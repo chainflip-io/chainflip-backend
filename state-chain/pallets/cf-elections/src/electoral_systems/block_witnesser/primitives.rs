@@ -1,6 +1,7 @@
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::{iter::Step, ops::RangeInclusive};
+use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{cmp::max, collections::btree_map::BTreeMap, vec::Vec};
@@ -8,29 +9,37 @@ use sp_std::{cmp::max, collections::btree_map::BTreeMap, vec::Vec};
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-use crate::electoral_systems::state_machine::core::{fst, Validate};
+use crate::electoral_systems::{
+	block_height_tracking::ChainTypes,
+	state_machine::core::{fst, Validate},
+};
 
-pub struct ElectionTracker2<N: Ord, H: Ord> {
-	pub seen_heights_below: N,
+#[derive_where(Debug, Clone, PartialEq, Eq;)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[codec(encode_bound(
+	T::ChainBlockNumber: Encode,
+	T::ChainBlockHash: Encode,
+))]
+pub struct ElectionTracker2<T: ChainTypes> {
+	pub seen_heights_below: T::ChainBlockNumber,
 
 	/// We always create elections until the next priority height, even if we
 	/// are in safe mode.
-	pub priority_elections_below: N,
+	pub priority_elections_below: T::ChainBlockNumber,
 
 	/// Block hashes we got from the BHW.
-	pub queued_elections: BTreeMap<N, H>,
+	pub queued_elections: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
 
 	/// Hashes of elections currently ongoing
-	pub ongoing: BTreeMap<N, H>,
+	pub ongoing: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
 }
 
-impl<N: Ord + BlockZero + Clone + SaturatingStep, H: Ord> ElectionTracker2<N, H> {
+impl<T: ChainTypes> ElectionTracker2<T> {
 	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
 		// In case of a reorg we still want to recreate elections for blocks which we had
 		// elections for previously AND were touched by the reorg
 		let start_all_below = match safemode {
-			SafeModeStatus::Disabled =>
-				self.queued_elections.last_key_value().map(fst).cloned().unwrap_or(N::zero()),
+			SafeModeStatus::Disabled => self.seen_heights_below.clone(),
 			SafeModeStatus::Enabled => self.priority_elections_below.clone(),
 		};
 
@@ -44,14 +53,18 @@ impl<N: Ord + BlockZero + Clone + SaturatingStep, H: Ord> ElectionTracker2<N, H>
 	}
 
 	/// If an election is done we remove it from the ongoing list
-	pub fn mark_election_done(&mut self, election: N) {
+	pub fn mark_election_done(&mut self, election: T::ChainBlockNumber) {
 		if self.ongoing.remove(&election).is_none() {
 			panic!("marking an election done which wasn't ongoing!")
 		}
 	}
 
 	/// This function schedules all elections up to `range.end()`
-	pub fn schedule_range(&mut self, range: RangeInclusive<N>, mut hashes: BTreeMap<N, H>) {
+	pub fn schedule_range(
+		&mut self,
+		range: RangeInclusive<T::ChainBlockNumber>,
+		mut hashes: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+	) {
 		// Check whether there is a reorg concerning elections we have started previously.
 		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
 		// range are going to be restarted once there is the capacity to do so.
@@ -74,12 +87,23 @@ impl<N: Ord + BlockZero + Clone + SaturatingStep, H: Ord> ElectionTracker2<N, H>
 		self.queued_elections.append(&mut hashes);
 	}
 
-	fn next_election(&self) -> N {
+	fn next_election(&self) -> T::ChainBlockNumber {
 		self.queued_elections
 			.first_key_value()
 			.map(fst)
 			.cloned()
 			.unwrap_or(self.seen_heights_below.clone())
+	}
+}
+
+impl<T: ChainTypes> Default for ElectionTracker2<T> {
+	fn default() -> Self {
+		Self {
+			seen_heights_below: T::ChainBlockNumber::zero(),
+			priority_elections_below: T::ChainBlockNumber::zero(),
+			queued_elections: Default::default(),
+			ongoing: Default::default(),
+		}
 	}
 }
 

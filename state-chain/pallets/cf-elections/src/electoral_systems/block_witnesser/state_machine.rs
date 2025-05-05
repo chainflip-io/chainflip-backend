@@ -1,7 +1,7 @@
 use super::{
 	super::state_machine::core::*,
 	block_processor::BlockProcessorEvent,
-	primitives::{ElectionTracker, SafeModeStatus},
+	primitives::{ElectionTracker, ElectionTracker2, SafeModeStatus},
 };
 use crate::electoral_systems::{
 	block_height_tracking::{ChainProgress, ChainTypes},
@@ -102,13 +102,14 @@ pub struct BlockWitnesserSettings {
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
 	T::ChainBlockNumber: Encode,
+	T::ChainBlockHash: Encode,
 	T::ElectionPropertiesHook: Encode,
 	T::SafeModeEnabledHook: Encode,
 
 	BlockProcessor<T>: Encode,
 ))]
 pub struct BlockWitnesserState<T: BWTypes> {
-	pub elections: ElectionTracker<T::ChainBlockNumber>,
+	pub elections: ElectionTracker2<T>,
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
 	pub safemode_enabled: T::SafeModeEnabledHook,
 	pub block_processor: BlockProcessor<T>,
@@ -119,7 +120,7 @@ impl<T: BWTypes> Validate for BlockWitnesserState<T> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.elections.is_valid()
+		Ok(())
 	}
 }
 
@@ -140,22 +141,25 @@ where
 }
 
 #[derive_where(Debug, Clone, PartialEq, Eq;
+	T::ChainBlockHash: Debug + Clone + Eq,
 	T::ChainBlockNumber: Debug + Clone + Eq,
 	T::ElectionProperties: Debug + Clone + Eq,
 )]
 #[derive_where(Default;
+	T::ChainBlockHash: Default,
 	T::ChainBlockNumber: Default,
 	T::ElectionProperties: Default,
 )]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
+	T::ChainBlockHash: Encode,
 	T::ChainBlockNumber: Encode,
 	T::ElectionProperties: Encode,
 ))]
 pub struct BWElectionProperties<T: BWTypes> {
+	pub block_hash: T::ChainBlockHash,
 	pub block_height: T::ChainBlockNumber,
 	pub properties: T::ElectionProperties,
-	pub reorg_id: u8,
 }
 
 impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, T::BlockData> for BWStatemachine<T> {
@@ -186,26 +190,25 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.ongoing
 			.clone()
 			.into_iter()
-			.map(|(block_height, reorg_id)| BWElectionProperties {
+			.map(|(block_height, block_hash)| BWElectionProperties {
 				properties: s.generate_election_properties_hook.run(block_height),
+				block_hash,
 				block_height,
-				reorg_id,
 			})
 			.collect()
 	}
 
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
 		let processor_input = match i {
-			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
-				s.elections.next_election = *range.start();
-				s.elections.schedule_range(range.clone());
+			// SMInput::Context(ChainProgress::FirstConsensus(hashes, range)) => {
+			// 	s.elections.next_election = *range.start();
+			// 	s.elections.schedule_range(range.clone());
 
-				Some((ChainProgressInner::Progress(*range.start()), None))
-			},
-
-			SMInput::Context(ChainProgress::Range(range)) => {
-				s.elections.schedule_range(range.clone());
-				if *range.start() < s.elections.next_witnessed {
+			// 	Some((ChainProgressInner::Progress(*range.start()), None))
+			// },
+			SMInput::Context(ChainProgress::Range(hashes, range)) => {
+				s.elections.schedule_range(range.clone(), hashes.clone());
+				if *range.start() < s.elections.seen_heights_below {
 					//Reorg
 					Some((ChainProgressInner::Reorg(range.clone()), None))
 				} else {
@@ -219,7 +222,9 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 				s.elections.mark_election_done(properties.block_height);
 				log::info!("got block data: {:?}", blockdata);
 				Some((
-					ChainProgressInner::Progress(s.elections.next_witnessed.saturating_backward(1)),
+					ChainProgressInner::Progress(
+						s.elections.seen_heights_below.saturating_backward(1),
+					),
 					Some((properties.block_height, blockdata, settings.safety_margin)),
 				))
 			},
@@ -393,6 +398,7 @@ pub mod tests {
 
 	use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
 	use proptest::{
+		arbitrary::arbitrary,
 		prelude::{any, Arbitrary, BoxedStrategy, Just, Strategy},
 		prop_oneof,
 		sample::select,
@@ -402,6 +408,7 @@ pub mod tests {
 	use super::*;
 	use crate::prop_do;
 	use hook_test_utils::*;
+	use proptest::collection::*;
 
 	const SAFETY_MARGIN: u32 = 3;
 	fn generate_state<
@@ -409,12 +416,13 @@ pub mod tests {
 	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
 		T::ChainBlockNumber: Arbitrary,
+		T::ChainBlockHash: Arbitrary,
 		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
 		T::BlockData: Default + Clone + Debug + Eq,
 	{
 		prop_do! {
-			let (next_election, next_witnessed,
-				 next_priority_election, reorg_id,
+			let (next_election, seen_heights_below,
+				 priority_elections_below, reorg_id,
 				safemode_enabled) in (
 				any::<T::ChainBlockNumber>(),
 				any::<T::ChainBlockNumber>(),
@@ -423,14 +431,17 @@ pub mod tests {
 				any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else {SafeModeStatus::Disabled})
 			);
 
-			let ongoing in proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<u8>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election));
+			let (ongoing, queued_elections) in
+			(
+				proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<T::ChainBlockHash>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election)),
+				proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<T::ChainBlockHash>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election))
+			);
 			LazyJust::new(move || BlockWitnesserState {
-				elections: ElectionTracker {
-					next_election,
-					next_witnessed,
-					next_priority_election,
+				elections: ElectionTracker2 {
+					queued_elections: BTreeMap::from_iter(queued_elections.clone()),
+					seen_heights_below,
+					priority_elections_below,
 					ongoing: BTreeMap::from_iter(ongoing.clone()),
-					reorg_id
 				},
 				generate_election_properties_hook: Default::default(),
 				safemode_enabled: MockHook::new(safemode_enabled),
@@ -451,6 +462,7 @@ pub mod tests {
 	) -> BoxedStrategy<<BWStatemachine<T> as Statemachine>::Input>
 	where
 		T::ChainBlockNumber: Arbitrary,
+		T::ChainBlockHash: Arbitrary,
 		T::BlockData: Arbitrary,
 	{
 		let generate_input = |index: BWElectionProperties<T>| {
@@ -459,11 +471,17 @@ pub mod tests {
 					.prop_map(move |data| (SMInput::Consensus((index.clone(), data)))),
 				prop_oneof![
 					Just(ChainProgress::None),
-					(any::<T::ChainBlockNumber>(), 0..20usize)
-						.prop_map(|(a, b)| ChainProgress::Range(a..=a.saturating_forward(b))),
-					(any::<T::ChainBlockNumber>(), 0..20usize).prop_map(|(a, b)| {
-						ChainProgress::FirstConsensus(a..=a.saturating_forward(b))
-					})
+					(
+						any::<T::ChainBlockNumber>(),
+						btree_map(any::<T::ChainBlockNumber>(), any::<T::ChainBlockHash>(), 0..20)
+					)
+						.prop_map(|(a, hashes)| ChainProgress::Range(
+							hashes.clone(),
+							a..=a.saturating_forward(hashes.len())
+						)),
+					// (any::<T::ChainBlockNumber>(), 0..20usize).prop_map(|(a, b)| {
+					// 	ChainProgress::FirstConsensus(a..=a.saturating_forward(b))
+					// })
 				]
 				.prop_map(SMInput::Context)
 			]

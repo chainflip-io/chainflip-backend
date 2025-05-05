@@ -10,7 +10,7 @@ use derive_where::derive_where;
 use frame_support::ensure;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::fmt::Debug;
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
@@ -63,11 +63,11 @@ pub struct HeightWitnesserProperties<T: ChainTypes> {
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum ChainProgress<T: ChainTypes> {
 	// Range of new block heights witnessed. If this is not consecutive, it means that
-	Range(RangeInclusive<T::ChainBlockNumber>),
+	Range(BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>, RangeInclusive<T::ChainBlockNumber>),
 	// Range of new block heights, only emitted when there is a consensus for the first time after
 	// being started.
-	FirstConsensus(RangeInclusive<T::ChainBlockNumber>),
-	// there was no update to the witnessed block headers
+	// FirstConsensus(BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+	// RangeInclusive<T::ChainBlockNumber>), there was no update to the witnessed block headers
 	None,
 }
 
@@ -77,10 +77,18 @@ impl<T: ChainTypes> Validate for ChainProgress<T> {
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		use ChainProgress::*;
 		match self {
-			Range(range) | FirstConsensus(range) => {
+			Range(hashes, range) => {
 				ensure!(
 					range.start() <= range.end(),
 					"range a..=b in ChainProgress should have a <= b"
+				);
+				ensure!(
+					hashes.keys().all(|key| range.contains(key)),
+					"hashes should all be inside the range"
+				);
+				ensure!(
+					range.clone().all(|key| hashes.contains_key(&key)),
+					"all heights should have an attached hash"
 				);
 				Ok(())
 			},

@@ -28,7 +28,12 @@ pub struct MergeInfo<T: ChainTypes> {
 impl<T: ChainTypes> MergeInfo<T> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<T>> {
 		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
-			Some(ChainProgress::Range(first_added.block_height..=last_added.block_height))
+			let hashes = self
+				.added
+				.iter()
+				.map(|header| (header.block_height, header.hash.clone()))
+				.collect();
+			Some(ChainProgress::Range(hashes, first_added.block_height..=last_added.block_height))
 		} else {
 			None
 		}

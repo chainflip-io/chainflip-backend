@@ -200,7 +200,9 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 					headers: new_headers.0.clone(),
 					witness_from: last.saturating_forward(1),
 				};
-				Ok(ChainProgress::Range(first..=last))
+				let hashes =
+					new_headers.0.into_iter().map(|hash| (hash.block_height, hash.hash)).collect();
+				Ok(ChainProgress::Range(hashes, first..=last))
 			},
 
 			BHWState::Running { headers, witness_from } => {

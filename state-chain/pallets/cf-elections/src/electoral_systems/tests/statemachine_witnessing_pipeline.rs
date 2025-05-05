@@ -9,26 +9,22 @@ use std::{
 	hash::DefaultHasher,
 };
 
+use itertools::Itertools;
 use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 
 use crate::electoral_systems::{
-	block_height_tracking::{HWTypes, HeightWitnesserProperties},
-	block_witnesser::{
-		block_processor::{tests::MockBtcEvent, BlockProcessingInfo, BlockProcessorEvent},
-		state_machine::{BWProcessorTypes, BWTypes},
-	},
-};
-// use crate::electoral_systems::block_witnesser::block_processor::tests::MockBlockProcessorDefinition;
-use crate::electoral_systems::{
-	block_height_tracking::state_machine::{
-		tests::*, BHWState, BHWStateWrapper, BlockHeightTrackingSM, InputHeaders,
+	block_height_tracking::{
+		state_machine::{tests::*, BHWState, BHWStateWrapper, BlockHeightTrackingSM, InputHeaders},
+		HWTypes, HeightWitnesserProperties,
 	},
 	block_witnesser::{
-		block_processor::BlockProcessor,
+		block_processor::{
+			tests::MockBtcEvent, BlockProcessingInfo, BlockProcessor, BlockProcessorEvent,
+		},
 		primitives::SafeModeStatus,
 		state_machine::{
-			tests::*, BWElectionProperties, BWStatemachine, BlockWitnesserSettings,
-			BlockWitnesserState,
+			tests::*, BWElectionProperties, BWProcessorTypes, BWStatemachine, BWTypes,
+			BlockWitnesserSettings, BlockWitnesserState,
 		},
 	},
 	state_machine::{
@@ -80,13 +76,11 @@ pub fn test_all() {
 				let bhw_input = match index {
 					HeightWitnesserProperties { witness_from_index } =>
 						if witness_from_index == 0 {
-							println!("########### first witnessing #################");
 							InputHeaders(VecDeque::from([best_block]))
 						} else {
 							let headers = (witness_from_index..=chain.get_block_height())
 								.map(|height| chain.get_block_header(height));
 							if headers.len() == 0 {
-								println!("no new blocks, continuing...");
 								continue;
 							}
 							if let Some(headers) = headers.into_iter().collect::<Option<Vec<_>>>() {
@@ -115,8 +109,8 @@ pub fn test_all() {
 					chain: self.get_next_chain()?,
 					_phantom: Default::default(),
 				};
-				if let Some(block_data) = chain.get_block_header(index.block_height) {
-					inputs.push(SMInput::Consensus((index, block_data.hash)));
+				if let Some(block_data) = chain.get_block_by_hash(index.block_hash.clone()) {
+					inputs.push(SMInput::Consensus((index, block_data)));
 				}
 			}
 			Some(inputs)
@@ -230,7 +224,6 @@ pub fn test_all() {
                     );
 
                     let mut output = bw_state.block_processor.execute.take_history();
-                    println!("got output: {output:?}");
                     bw_history.extend(
                         output.iter().cloned().map(BWTrace::Output)
                     );
@@ -245,7 +238,7 @@ pub fn test_all() {
             total_outputs.append(&mut bw_outputs);
         }
 
-        println!("----- outputs begin ------");
+        // println!("----- outputs begin ------");
         use std::fmt::Write;
         let mut printed: String = Default::default();
         for output in total_outputs.clone() {
@@ -261,8 +254,6 @@ pub fn test_all() {
             }
             writeln!(printed, "").unwrap();
         }
-        println!("{printed}");
-        println!("----- outputs end ------");
 
         let counted_events : Container<BTreeMultiSet<(u8, MockBtcEvent<char>)>> = total_outputs.into_iter().flatten().collect();
 
@@ -277,7 +268,8 @@ pub fn test_all() {
         let emitted_witness_events : BTreeSet<_> = counted_events.0.0.keys().map(|(a,b)|b).filter_map(try_get!(MockBtcEvent::Witness)).map(|event| *event as char).collect();
         let expected_witness_events : BTreeSet<_> = finalized_events.into_iter().cloned().collect();
         assert!(emitted_witness_events.is_subset(&expected_witness_events),
-            "got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {bw_history:?}"
+            "got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {}",
+            bw_history.iter().map(|event| format!("{event:?}")).intersperse("\n".to_string()).collect::<String>()
         );
 
         Ok(())
