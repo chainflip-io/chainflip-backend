@@ -479,6 +479,68 @@ fn test_try_debit_from_liquid_funds() {
 	});
 }
 
+#[cfg(test)]
+mod transfer {
+	use super::*;
+
+	#[test]
+	fn try_transfer_funds_and_dont_violate_the_total_issuance() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 10;
+			assert_eq!(Flip::total_balance_of(&ALICE), 100);
+			assert_eq!(Flip::total_balance_of(&BOB), 50);
+			let previous_issuance = TotalIssuance::<Test>::get();
+
+			assert_ok!(Flip::try_transfer_funds_internally(AMOUNT, &ALICE, &BOB));
+
+			assert_eq!(Flip::total_balance_of(&ALICE), 90);
+			assert_eq!(Flip::total_balance_of(&BOB), 60);
+			assert_eq!(TotalIssuance::<Test>::get(), previous_issuance);
+		});
+	}
+
+	#[test]
+	fn transfer_with_insufficient_sender_balance() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Flip::try_transfer_funds_internally(110, &ALICE, &BOB),
+				Error::<Test>::InsufficientLiquidity
+			);
+		});
+	}
+
+	#[test]
+	fn can_not_transfer_to_sender() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Flip::try_transfer_funds_internally(110, &ALICE, &BOB),
+				Error::<Test>::InsufficientLiquidity
+			);
+		});
+	}
+
+	#[test]
+	fn can_not_transfer_funds_to_myself() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Flip::try_transfer_funds_internally(50, &ALICE, &ALICE),
+				Error::<Test>::CanNotTransferToSelf
+			);
+		});
+	}
+
+	#[test]
+	fn can_not_transfer_to_not_existing_account() {
+		new_test_ext().execute_with(|| {
+			let not_existing_account = 1000;
+			assert_noop!(
+				Flip::try_transfer_funds_internally(50, &ALICE, &not_existing_account),
+				Error::<Test>::AccountDoesNotExist
+			);
+		});
+	}
+}
+
 #[test]
 fn try_transfer_funds_and_dont_violate_the_total_issuance() {
 	new_test_ext().execute_with(|| {

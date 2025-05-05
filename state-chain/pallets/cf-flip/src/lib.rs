@@ -204,6 +204,10 @@ pub mod pallet {
 		NoPendingRedemptionForThisID,
 		/// Account is bonded.
 		AccountBonded,
+		/// Can not transfer funds to the sender account.
+		CanNotTransferToSelf,
+		/// Account does not exist.
+		AccountDoesNotExist,
 	}
 
 	#[pallet::hooks]
@@ -626,6 +630,8 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		from: &Self::AccountId,
 		to: &Self::AccountId,
 	) -> Result<(), DispatchError> {
+		ensure!(from != to, Error::<T>::CanNotTransferToSelf);
+		ensure!(Account::<T>::contains_key(to), Error::<T>::AccountDoesNotExist);
 		if let Some(from_imbalance) = Pallet::<T>::try_debit(from, amount) {
 			from_imbalance.offset(Pallet::<T>::credit(to, amount));
 			Ok(())
