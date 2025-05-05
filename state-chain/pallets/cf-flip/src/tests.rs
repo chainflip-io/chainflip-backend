@@ -479,6 +479,22 @@ fn test_try_debit_from_liquid_funds() {
 	});
 }
 
+#[test]
+fn try_transfer_funds_and_dont_violate_the_total_issuance() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 10;
+		assert_eq!(Flip::total_balance_of(&ALICE), 100);
+		assert_eq!(Flip::total_balance_of(&BOB), 50);
+		let previous_issuance = TotalIssuance::<Test>::get();
+
+		assert_ok!(Flip::try_transfer_funds_internally(AMOUNT, &ALICE, &BOB));
+
+		assert_eq!(Flip::total_balance_of(&ALICE), 90);
+		assert_eq!(Flip::total_balance_of(&BOB), 60);
+		assert_eq!(TotalIssuance::<Test>::get(), previous_issuance);
+	});
+}
+
 #[cfg(test)]
 mod test_issuance {
 	use super::*;

@@ -621,8 +621,17 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		Ok(())
 	}
 
-	fn try_debit_funds(account_id: &Self::AccountId, amount: Self::Balance) -> bool {
-		Surplus::<T>::try_from_acct(account_id, amount, false).is_some()
+	fn try_transfer_funds_internally(
+		amount: Self::Balance,
+		from: &Self::AccountId,
+		to: &Self::AccountId,
+	) -> Result<(), DispatchError> {
+		if let Some(from_imbalance) = Pallet::<T>::try_debit(from, amount) {
+			from_imbalance.offset(Pallet::<T>::credit(to, amount));
+			Ok(())
+		} else {
+			Err(Error::<T>::InsufficientLiquidity.into())
+		}
 	}
 }
 

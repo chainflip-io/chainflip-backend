@@ -631,21 +631,13 @@ pub mod pallet {
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 
-			let mut address_is_restricted_for_account = false;
-
-			if RestrictedBalances::<T>::contains_key(&source) {
-				address_is_restricted_for_account = true;
-			}
+			let address_is_restricted_for_account =
+				RestrictedBalances::<T>::get(&source).contains_key(&address);
 
 			let (_total_restricted_balance, redeem_amount) =
 				Self::try_redeem(amount, source.clone(), address, None)?;
 
-			ensure!(
-				T::Flip::try_debit_funds(&source, redeem_amount),
-				Error::<T>::InsufficientBalance
-			);
-
-			let _total_balance = Self::add_funds_to_account(&account_id, redeem_amount);
+			T::Flip::try_transfer_funds_internally(redeem_amount, &source, &account_id)?;
 
 			// Restricted funds are added to the restricted balance of the account.
 			if address_is_restricted_for_account {

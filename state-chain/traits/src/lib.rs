@@ -308,7 +308,12 @@ pub trait Funding {
 	/// Reverts a pending redemption in the case of an expiry or cancellation.
 	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
 
-	fn try_debit_funds(account_id: &Self::AccountId, amount: Self::Balance) -> bool;
+	/// Directly transfers funds from an account A to an account B
+	fn try_transfer_funds_internally(
+		amount: Self::Balance,
+		from: &Self::AccountId,
+		to: &Self::AccountId,
+	) -> Result<(), DispatchError>;
 }
 
 pub trait AccountInfo {
