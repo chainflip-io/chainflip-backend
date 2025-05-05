@@ -621,6 +621,12 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Transfers funds from one account to another without the need of a full redemption.
+		/// The funds are getting transferred under the same conditions as a full redemption.
+		///
+		/// ## Events
+		///
+		/// - [InternalTransfer](Event::InternalTransfer)
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::internal_transfer())]
 		pub fn internal_transfer(
@@ -639,7 +645,6 @@ pub mod pallet {
 
 			T::Flip::try_transfer_funds_internally(redeem_amount, &source, &account_id)?;
 
-			// Restricted funds are added to the restricted balance of the account.
 			if address_is_restricted_for_account {
 				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
 					map.entry(address)
