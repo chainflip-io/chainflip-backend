@@ -1,5 +1,6 @@
 use super::{
 	super::state_machine::core::*,
+	block_processor::BlockProcessorEvent,
 	primitives::{ElectionTracker, SafeModeStatus},
 };
 use crate::electoral_systems::{
@@ -58,6 +59,12 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
 	type Output = ();
 }
 
+pub struct LogEventHook;
+impl<T: BWProcessorTypes> HookType for HookTypeFor<T, LogEventHook> {
+	type Input = BlockProcessorEvent<T>;
+	type Output = ();
+}
+
 pub trait BWProcessorTypes: Sized {
 	type ChainBlockNumber: Serde
 		+ Copy
@@ -68,11 +75,13 @@ pub trait BWProcessorTypes: Sized {
 		+ BlockZero
 		+ Debug
 		+ 'static;
-	type BlockData: PartialEq + Clone + Debug + Eq + Serde + 'static;
+	type BlockData: PartialEq + Clone + Debug + Eq + Ord + Serde + 'static;
 
 	type Event: Serde + Debug + Clone + Eq + Ord;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
 	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + Serde + Debug + Clone + Eq;
+
+	type LogEventHook: Hook<HookTypeFor<Self, LogEventHook>> + Default + Serde + Debug + Clone + Eq;
 }
 
 #[derive(
@@ -196,45 +205,44 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	}
 
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
-		// log::warn!("BW: input {i:?}");
-		match i {
+		let processor_input = match i {
 			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
 				s.elections.next_election = *range.start();
 				s.elections.schedule_range(range.clone());
-				s.block_processor
-					.process_block_data(ChainProgressInner::Progress(*range.start()), None);
+
+				Some((ChainProgressInner::Progress(*range.start()), None))
 			},
 
 			SMInput::Context(ChainProgress::Range(range)) => {
+				s.elections.schedule_range(range.clone());
 				if *range.start() < s.elections.next_witnessed {
 					//Reorg
-					s.block_processor
-						.process_block_data(ChainProgressInner::Reorg(range.clone()), None);
+					Some((ChainProgressInner::Reorg(range.clone()), None))
 				} else {
-					s.block_processor
-						.process_block_data(ChainProgressInner::Progress(*range.end()), None);
+					Some((ChainProgressInner::Progress(*range.end()), None))
 				}
-				s.elections.schedule_range(range);
 			},
 
-			SMInput::Context(ChainProgress::None) => {},
+			SMInput::Context(ChainProgress::None) => None,
 
 			SMInput::Consensus((properties, blockdata)) => {
 				s.elections.mark_election_done(properties.block_height);
 				log::info!("got block data: {:?}", blockdata);
-				s.block_processor.process_block_data(
+				Some((
 					ChainProgressInner::Progress(s.elections.next_witnessed.saturating_backward(1)),
 					Some((properties.block_height, blockdata, settings.safety_margin)),
-				);
+				))
 			},
 		};
+
+		if let Some((progress, block)) = processor_input {
+			s.block_processor.process_block_data(progress, block);
+		}
 
 		s.elections.start_more_elections(
 			settings.max_concurrent_elections as usize,
 			s.safemode_enabled.run(()),
 		);
-
-		// log::warn!("BW: done. current elections: {:?}", s.elections.ongoing);
 
 		Ok(())
 	}
@@ -244,6 +252,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	fn step_specification(
 		before: &mut Self::State,
 		input: &Self::Input,
+		_output: &Self::Output,
 		settings: &Self::Settings,
 		after: &Self::State,
 	) {
@@ -354,7 +363,6 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					before.elections.next_election
 				};
 
-				// if !safemode_enabled {
 				if *range.start() < before_next_election {
 					assert!(
 							!before.elections.ongoing.values().contains(&after.elections.reorg_id),
@@ -388,7 +396,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 	use std::collections::BTreeMap;
 
 	use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
@@ -435,25 +443,28 @@ mod tests {
 				generate_election_properties_hook: Default::default(),
 				safemode_enabled: MockHook::new(safemode_enabled),
 				block_processor: BlockProcessor {
-					blocks_data: Default::default(),
-					processed_events: Default::default(),
-					rules: Default::default(),
-					execute: Default::default(),
+					blocks_data:Default::default(),
+					processed_events:Default::default(),
+					rules:Default::default(),
+					execute:Default::default(),
+					delete_data: Default::default()
 				},
 				_phantom: core::marker::PhantomData,
 			})
 		}
 	}
 
-	fn generate_input<T: BWTypes<BlockData = ()>>(
+	fn generate_input<T: BWTypes>(
 		indices: <BWStatemachine<T> as Statemachine>::InputIndex,
 	) -> BoxedStrategy<<BWStatemachine<T> as Statemachine>::Input>
 	where
 		T::ChainBlockNumber: Arbitrary,
+		T::BlockData: Arbitrary,
 	{
-		let generate_input = |index| {
+		let generate_input = |index: BWElectionProperties<T>| {
 			prop_oneof![
-				Just(SMInput::Consensus((index, ()))),
+				any::<T::BlockData>()
+					.prop_map(move |data| (SMInput::Consensus((index.clone(), data)))),
 				prop_oneof![
 					Just(ChainProgress::None),
 					(any::<T::ChainBlockNumber>(), 0..20usize)
@@ -475,16 +486,6 @@ mod tests {
 		} else {
 			Just(SMInput::Context(ChainProgress::None)).boxed()
 		}
-	}
-
-	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
-		BWProcessorTypes for N
-	{
-		type ChainBlockNumber = N;
-		type BlockData = ();
-		type Event = ();
-		type Rules = MockHook<HookTypeFor<Self, RulesHook>>;
-		type Execute = MockHook<HookTypeFor<Self, ExecuteHook>>;
 	}
 
 	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>

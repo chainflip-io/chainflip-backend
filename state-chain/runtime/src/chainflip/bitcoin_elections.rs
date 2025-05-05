@@ -41,7 +41,7 @@ use pallet_cf_elections::{
 		},
 		liveness::Liveness,
 		state_machine::{
-			core::Hook,
+			core::{hook_test_utils::EmptyHook, Hook},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 		unsafe_median::{UnsafeMedian, UpdateFeeHook},
@@ -158,6 +158,7 @@ impls! {
 		type Event = BtcEvent<DepositWitness<Bitcoin>>;
 		type Rules = Self;
 		type Execute = Self;
+		type LogEventHook = EmptyHook;
 	}
 
 	/// Associating BW types to the struct
@@ -245,6 +246,8 @@ impls! {
 		type Event = BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
+
+		type LogEventHook = EmptyHook;
 	}
 
 	/// Associating BW types to the struct
@@ -341,6 +344,8 @@ impls! {
 		type Event = BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
+
+		type LogEventHook = EmptyHook;
 	}
 
 	/// Associating BW types to the struct
