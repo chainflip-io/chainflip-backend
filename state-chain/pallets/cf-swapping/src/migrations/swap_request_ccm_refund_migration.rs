@@ -28,7 +28,7 @@ use codec::{Decode, Encode};
 pub mod old {
 	use super::*;
 	use cf_chains::ForeignChainAddress;
-	use cf_primitives::{Asset, Beneficiaries, Price};
+	use cf_primitives::{Asset, Price};
 	use frame_support::Twox64Concat;
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
@@ -49,7 +49,6 @@ pub mod old {
 			refund_params: Option<RefundParametersExtended<T::AccountId>>,
 			output_action: SwapOutputAction<T::AccountId>,
 			dca_state: DcaState,
-			broker_fees: Beneficiaries<T::AccountId>,
 		},
 		NetworkFee,
 		IngressEgressFee,
@@ -83,24 +82,19 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				input_asset: old_swap_requests.input_asset,
 				output_asset: old_swap_requests.output_asset,
 				state: match old_swap_requests.state {
-					old::SwapRequestState::UserSwap {
-						refund_params,
-						output_action,
-						dca_state,
-						broker_fees,
-					} => SwapRequestState::UserSwap {
-						refund_params: refund_params.map(|params| {
-							cf_chains::RefundParametersExtendedGeneric {
-								retry_duration: params.retry_duration,
-								refund_destination: params.refund_destination,
-								min_price: params.min_price,
-								refund_ccm_metadata: None,
-							}
-						}),
-						output_action,
-						dca_state,
-						broker_fees,
-					},
+					old::SwapRequestState::UserSwap { refund_params, output_action, dca_state } =>
+						SwapRequestState::UserSwap {
+							refund_params: refund_params.map(|params| {
+								cf_chains::RefundParametersExtendedGeneric {
+									retry_duration: params.retry_duration,
+									refund_destination: params.refund_destination,
+									min_price: params.min_price,
+									refund_ccm_metadata: None,
+								}
+							}),
+							output_action,
+							dca_state,
+						},
 					old::SwapRequestState::NetworkFee => SwapRequestState::NetworkFee,
 					old::SwapRequestState::IngressEgressFee => SwapRequestState::IngressEgressFee,
 				},

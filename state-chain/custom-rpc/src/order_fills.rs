@@ -165,7 +165,7 @@ fn order_fills_for_pool<'a>(
 						base_asset: asset_pair.assets().base,
 						quote_asset: asset_pair.assets().quote,
 						id: id.into(),
-						sold_amounts: fees.map(|amount| {
+						bought_amounts: fees.map(|amount| {
 							input_amount_from_fee(amount, fee_hundredth_pips).unwrap_or_default()
 						}),
 						range: range.clone(),

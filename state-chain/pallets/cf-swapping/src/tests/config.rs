@@ -66,7 +66,7 @@ fn can_update_all_config_items() {
 				size: NEW_MINIMUM_CHUNK_SIZE,
 			},
 			PalletConfigUpdate::SetMinimumNetworkFee { min_fee: NEW_MINIMUM_NETWORK_FEE },
-			PalletConfigUpdate::SetInternalSwapNetworkFee { fee: NEW_INTERNAL_SWAP_NETWORK_FEE },
+			PalletConfigUpdate::SetInternalSwapNetworkFee { rate: NEW_INTERNAL_SWAP_NETWORK_FEE },
 			PalletConfigUpdate::SetInternalSwapMinimumNetworkFee {
 				min_fee: NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE,
 			},
@@ -158,25 +158,9 @@ fn max_swap_amount_can_be_removed() {
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
 			vec![
-				Swap::new(
-					1.into(),
-					1.into(),
-					from,
-					to,
-					max_swap,
-					None,
-					[FeeType::NetworkFee { min_fee_enforced: true }]
-				),
+				Swap::new(1.into(), 1.into(), from, to, max_swap, None, vec![ZERO_NETWORK_FEES],),
 				// New swap takes the full amount.
-				Swap::new(
-					2.into(),
-					2.into(),
-					from,
-					to,
-					amount,
-					None,
-					[FeeType::NetworkFee { min_fee_enforced: true }]
-				),
+				Swap::new(2.into(), 2.into(), from, to, amount, None, vec![ZERO_NETWORK_FEES],),
 			]
 		);
 		// No no funds are confiscated.
@@ -244,15 +228,7 @@ fn can_swap_below_max_amount() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(
-				1.into(),
-				1.into(),
-				from,
-				to,
-				amount,
-				None,
-				[FeeType::NetworkFee { min_fee_enforced: true }]
-			),]
+			vec![Swap::new(1.into(), 1.into(), from, to, amount, None, vec![ZERO_NETWORK_FEES],),]
 		);
 	});
 }
