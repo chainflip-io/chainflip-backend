@@ -79,6 +79,7 @@ const ETH_REFUND_PARAMS: ChannelRefundParameters<<Ethereum as Chain>::ChainAccou
 		retry_duration: 5,
 		refund_address: H160([100u8; 20]),
 		min_price: sp_core::U256::zero(),
+		refund_ccm_metadata: None,
 	};
 
 pub fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {

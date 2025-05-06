@@ -16,5 +16,25 @@
 
 use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
 
-pub type PalletMigration<T, I> = (PlaceholderMigration<23, Pallet<T, I>>,);
+mod deposit_channel_details_migration;
+mod transaction_rejection_details_ccm_migration;
+
+pub type PalletMigration<T, I> = (
+	VersionedMigration<
+		23,
+		24,
+		deposit_channel_details_migration::DepositChannelDetailsMigration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		24,
+		25,
+		transaction_rejection_details_ccm_migration::Migration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<25, Pallet<T, I>>,
+);

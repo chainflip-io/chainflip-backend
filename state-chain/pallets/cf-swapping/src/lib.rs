@@ -71,7 +71,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
@@ -860,6 +860,8 @@ pub mod pallet {
 		/// The affiliate has not withdrawn their earned fees. This is a pre-requisite for
 		/// deregistration of a broker.
 		AffiliateEarnedFeesNotWithdrawn,
+		/// CCM is not supported for the refund chain.
+		CcmUnsupportedForRefundChain,
 	}
 
 	#[pallet::genesis_config]
@@ -1734,7 +1736,7 @@ pub mod pallet {
 									amount_to_refund,
 									request.input_asset,
 									address.clone(),
-									None, /* refunds don't use ccm parameters */
+									refund_params.refund_ccm_metadata.clone(),
 									true, /* refund */
 								);
 							},
@@ -2487,6 +2489,28 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 		if retry_duration > max_swap_retry_duration_blocks {
 			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));
 		}
+		Ok(())
+	}
+
+	// TODO: We might want to merge this with validate_refund_params but there's even rpc
+	// calls that use that so we might need to untangle it. However, having them separate
+	// is actually useful for Invalid Vault swap refunds because a failing
+	// `validate_refund_params` should cause a refund while a failing
+	// `validate_ccm_refund_params` should not, since the CCM refund data is invalid.
+	fn validate_ccm_refund_params(
+		asset: cf_primitives::Asset,
+		refund_params: cf_chains::ChannelRefundParametersEncoded,
+	) -> Result<(), DispatchError> {
+		if let Some(ccm) = refund_params.refund_ccm_metadata.as_ref() {
+			let source_chain: ForeignChain = (asset).into();
+			if !source_chain.ccm_support() {
+				return Err(DispatchError::from(Error::<T>::CcmUnsupportedForRefundChain));
+			}
+
+			let _ =
+				T::CcmValidityChecker::check_and_decode(ccm, asset, refund_params.refund_address)?;
+		}
+
 		Ok(())
 	}
 
