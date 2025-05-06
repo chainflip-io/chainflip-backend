@@ -179,8 +179,8 @@ impls! {
 		type ElectionIdentifierExtra = ();
 		type ElectionProperties = BWElectionProperties<Self>;
 		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<BlockDataDepositChannel>;
-		type Consensus = BlockDataDepositChannel;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(Self::ChainBlockHash, BlockDataDepositChannel)>;
+		type Consensus = (Self::ChainBlockHash, BlockDataDepositChannel);
 		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
@@ -268,8 +268,8 @@ impls! {
 		type ElectionIdentifierExtra = ();
 		type ElectionProperties = BWElectionProperties<Self>;
 		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<BlockDataVaultDeposit>;
-		type Consensus = BlockDataVaultDeposit;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(Self::ChainBlockHash, BlockDataVaultDeposit)>;
+		type Consensus = (Self::ChainBlockHash, BlockDataVaultDeposit);
 		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
@@ -366,8 +366,8 @@ impls! {
 		type ElectionIdentifierExtra = ();
 		type ElectionProperties = BWElectionProperties<Self>;
 		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<EgressBlockData>;
-		type Consensus = EgressBlockData;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(Self::ChainBlockHash, EgressBlockData)>;
+		type Consensus = (Self::ChainBlockHash, EgressBlockData);
 		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
