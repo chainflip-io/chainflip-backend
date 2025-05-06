@@ -64,6 +64,7 @@ pub struct HeightWitnesserProperties<T: ChainTypes> {
 pub enum ChainProgress<T: ChainTypes> {
 	// Range of new block heights witnessed. If this is not consecutive, it means that
 	Range(BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>, RangeInclusive<T::ChainBlockNumber>),
+	Reorg(BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>, RangeInclusive<T::ChainBlockNumber>),
 	// Range of new block heights, only emitted when there is a consensus for the first time after
 	// being started.
 	// FirstConsensus(BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
@@ -77,7 +78,7 @@ impl<T: ChainTypes> Validate for ChainProgress<T> {
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		use ChainProgress::*;
 		match self {
-			Range(hashes, range) => {
+			Range(hashes, range) | Reorg(hashes, range) => {
 				ensure!(
 					range.start() <= range.end(),
 					"range a..=b in ChainProgress should have a <= b"

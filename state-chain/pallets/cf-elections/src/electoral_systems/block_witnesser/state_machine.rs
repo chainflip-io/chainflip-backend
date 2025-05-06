@@ -208,18 +208,18 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			// },
 			SMInput::Context(ChainProgress::Range(hashes, range)) => {
 				s.elections.schedule_range(range.clone(), hashes.clone());
-				if *range.start() < s.elections.seen_heights_below {
-					//Reorg
-					Some((ChainProgressInner::Reorg(range.clone()), None))
-				} else {
-					Some((ChainProgressInner::Progress(*range.end()), None))
-				}
+				Some((ChainProgressInner::Progress(*range.end()), None))
+			},
+
+			SMInput::Context(ChainProgress::Reorg(hashes, range)) => {
+				s.elections.schedule_range(range.clone(), hashes.clone());
+				Some((ChainProgressInner::Reorg(range.clone()), None))
 			},
 
 			SMInput::Context(ChainProgress::None) => None,
 
 			SMInput::Consensus((properties, blockdata)) => {
-				s.elections.mark_election_done(properties.block_height);
+				s.elections.mark_election_done(properties.block_height, &properties.block_hash);
 				log::info!("got block data: {:?}", blockdata);
 				Some((
 					ChainProgressInner::Progress(

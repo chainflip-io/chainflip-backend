@@ -53,9 +53,13 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 	}
 
 	/// If an election is done we remove it from the ongoing list
-	pub fn mark_election_done(&mut self, election: T::ChainBlockNumber) {
-		if self.ongoing.remove(&election).is_none() {
-			panic!("marking an election done which wasn't ongoing!")
+	pub fn mark_election_done(&mut self, height: T::ChainBlockNumber, hash: &T::ChainBlockHash) {
+		// Note: if we receive blockdata for a block number, and
+		// in the same statechain block there's a reorg which changes the hash of this block,
+		// then we shouldn't close the election.
+
+		if self.ongoing.get(&height) == Some(hash) {
+			self.ongoing.remove(&height);
 		}
 	}
 
