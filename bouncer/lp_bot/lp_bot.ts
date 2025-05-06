@@ -60,7 +60,7 @@ const manageLimitOrders = async (decision: TradeDecision) => {
     try {
         logger.info(`Setting limit order for asset: ${decision.asset}, amount: ${decision.amount}, side: ${decision.side}, orderId: ${orderId}`);
         await lpApiRpc(logger, 'lp_set_limit_order', [
-            decision.asset,
+            { chain: 'Ethereum', asset: decision.asset },
             { chain: 'Ethereum', asset: 'USDC' },
             decision.side,
             orderId,
