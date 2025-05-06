@@ -65,7 +65,7 @@ impl Pda {
 		};
 
 		let seed = seed.as_ref();
-		if seed.len() > consts::SOLANA_PDA_MAX_SEED_LEN {
+		if seed.len() > consts::SOLANA_PDA_MAX_SEED_LEN as usize {
 			return Err(PdaError::SeedTooLarge)
 		};
 

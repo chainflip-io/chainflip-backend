@@ -27,7 +27,7 @@ use crate::{
 	none::NoneChainCrypto,
 	sol::{
 		api::SolanaTransactionBuildingError,
-		sol_tx_core::instructions::program_instructions::swap_endpoints::types::CcmParams,
+		sol_tx_core::instructions::program_instructions::swap_endpoints::types::CcmParams, SolSeed,
 		SolanaCrypto, SolanaTransactionInId,
 	},
 };
@@ -1086,7 +1086,8 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 	Arbitrum(EvmVaultSwapExtraParameters<Address, Amount>),
 	Solana {
 		from: Address,
-		seed: Vec<u8>,
+		#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
+		seed: SolSeed,
 		input_amount: Amount,
 		refund_parameters: ChannelRefundParameters<Address>,
 		from_token_account: Option<Address>,

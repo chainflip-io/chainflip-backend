@@ -38,7 +38,10 @@ use crate::{
 	TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
-use frame_support::{sp_runtime::RuntimeDebug, Parameter};
+use frame_support::{
+	sp_runtime::{BoundedVec, RuntimeDebug},
+	Parameter,
+};
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Member;
 
@@ -56,7 +59,7 @@ use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
 	consts::{
 		LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT,
-		TOKEN_ACCOUNT_RENT,
+		SOLANA_PDA_MAX_SEED_LEN, TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	transaction::{
@@ -104,6 +107,8 @@ pub struct SolanaTransactionData {
 
 /// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
 pub type SolanaTransactionInId = (SolAddress, u64);
+
+pub type SolSeed = BoundedVec<u8, sp_core::ConstU32<SOLANA_PDA_MAX_SEED_LEN>>;
 
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
@@ -512,7 +517,6 @@ pub struct DecodedXSwapParams {
 	pub amount: cf_primitives::AssetAmount,
 	pub src_asset: AnyChainAsset,
 	pub src_address: SolAddress,
-	pub event_data_account: SolAddress,
 	pub from_token_account: Option<SolAddress>,
 	pub dst_address: crate::address::EncodedAddress,
 	pub dst_token: AnyChainAsset,
@@ -523,7 +527,7 @@ pub struct DecodedXSwapParams {
 	pub broker_commission: BasisPoints,
 	pub affiliate_fees: Vec<AffiliateAndFee>,
 	pub ccm: Option<CcmChannelMetadata>,
-	pub seed: Vec<u8>,
+	pub seed: SolSeed,
 }
 
 pub fn decode_sol_instruction_data(
@@ -533,7 +537,6 @@ pub fn decode_sol_instruction_data(
 	let (
 		amount,
 		src_asset,
-		event_data_account,
 		src_token_from_account,
 		dst_chain,
 		dst_address,
@@ -564,12 +567,6 @@ pub fn decode_sol_instruction_data(
 			Ok((
 				amount,
 				AnyChainAsset::Sol,
-				instruction
-					.accounts
-					.get(sol_tx_core::consts::X_SWAP_NATIVE_EVENT_DATA_ACC_IDX as usize)
-					.ok_or("Invalid accounts in SolInstruction")?
-					.pubkey
-					.into(),
 				None,
 				dst_chain,
 				dst_address,
@@ -602,12 +599,6 @@ pub fn decode_sol_instruction_data(
 			Ok((
 				amount,
 				AnyChainAsset::SolUsdc,
-				instruction
-					.accounts
-					.get(sol_tx_core::consts::X_SWAP_TOKEN_EVENT_DATA_ACC_IDX as usize)
-					.ok_or("Invalid accounts in SolInstruction")?
-					.pubkey
-					.into(),
 				Some(
 					instruction
 						.accounts
@@ -668,7 +659,6 @@ pub fn decode_sol_instruction_data(
 			.ok_or("Invalid accounts in SolInstruction")?
 			.pubkey
 			.into(),
-		event_data_account,
 		from_token_account: src_token_from_account,
 		dst_address: EncodedAddress::from_chain_bytes(chain, dst_address)?,
 		dst_token: AnyChainAsset::try_from(dst_token).map_err(|_| "Invalid dst_token")?,
@@ -679,7 +669,7 @@ pub fn decode_sol_instruction_data(
 		broker_commission: bps,
 		affiliate_fees: affiliate_fees.to_vec(),
 		ccm,
-		seed,
+		seed: seed.try_into().map_err(|_| "Seed too long")?,
 	})
 }
 
@@ -781,7 +771,7 @@ mod test {
 			destination_asset,
 			destination_address.clone(),
 			from,
-			seed.to_vec(),
+			seed.to_vec().try_into().unwrap(),
 			event_data_account.into(),
 			input_amount,
 			build_cf_parameters::<Solana>(
@@ -802,7 +792,6 @@ mod test {
 				amount: input_amount.into(),
 				src_asset: Asset::Sol,
 				src_address: from.into(),
-				event_data_account,
 				from_token_account: None,
 				dst_address: destination_address,
 				dst_token: destination_asset,
@@ -813,7 +802,7 @@ mod test {
 				broker_commission,
 				affiliate_fees,
 				ccm: Some(channel_metadata),
-				seed: seed.to_vec(),
+				seed: seed.to_vec().try_into().unwrap(),
 			})
 		);
 	}
@@ -849,7 +838,7 @@ mod test {
 			destination_address.clone(),
 			from,
 			from_token_account,
-			seed.to_vec(),
+			seed.to_vec().try_into().unwrap(),
 			event_data_account.into(),
 			token_supported_account,
 			input_amount,
@@ -871,7 +860,6 @@ mod test {
 				amount: input_amount.into(),
 				src_asset: Asset::SolUsdc,
 				src_address: from.into(),
-				event_data_account,
 				from_token_account: Some(from_token_account.into()),
 				dst_address: destination_address,
 				dst_token: destination_asset,
@@ -882,7 +870,7 @@ mod test {
 				broker_commission,
 				affiliate_fees,
 				ccm: Some(channel_metadata),
-				seed: seed.to_vec(),
+				seed: seed.to_vec().try_into().unwrap(),
 			})
 		);
 	}

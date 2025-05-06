@@ -51,7 +51,7 @@ type RpcAccountMeta = {
 interface SolanaVaultSwapExtraParameters {
   chain: 'Solana';
   from: string;
-  seed: number[];
+  seed: string;
   input_amount: string;
   refund_parameters: ChannelRefundParameters;
   from_token_account?: string;
@@ -110,7 +110,7 @@ export async function executeSolVaultSwap(
   const extraParameters: SolanaVaultSwapExtraParameters = {
     chain: 'Solana',
     from: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
-    seed: Array.from(seed),
+    seed: seed.toString('hex'),
     input_amount: '0x' + new BigNumber(amountToSwap).toString(16),
     refund_parameters: refundParams,
     from_token_account: undefined,

@@ -274,7 +274,7 @@ pub fn solana_vault_swap<A>(
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
 	from: EncodedAddress,
-	seed: Vec<u8>,
+	seed: cf_chains::sol::SolSeed,
 	from_token_account: Option<EncodedAddress>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	// Load up environment variables.
@@ -422,7 +422,6 @@ pub fn decode_solana_vault_swap(
 		amount,
 		src_asset,
 		src_address,
-		event_data_account: _,
 		from_token_account,
 		dst_address,
 		dst_token,
