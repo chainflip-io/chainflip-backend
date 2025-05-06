@@ -1,11 +1,12 @@
 use super::{
 	super::state_machine::core::*,
 	block_processor::BlockProcessorEvent,
+	optimistic_block_cache::OptimisticBlockCache,
 	primitives::{ElectionTracker, ElectionTracker2, SafeModeStatus},
 };
 use crate::electoral_systems::{
 	block_height_tracking::{ChainProgress, ChainTypes},
-	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
+	block_witnesser::{block_processor::BlockProcessor, optimistic_block_cache::OptimisticBlock, primitives::ChainProgressInner},
 	state_machine::{core::Validate, state_machine::Statemachine, state_machine_es::SMInput},
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
@@ -14,7 +15,7 @@ use core::{iter::Step, ops::Range};
 use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{fmt::Debug, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
 
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
@@ -105,6 +106,7 @@ pub struct BlockWitnesserSettings {
 	T::ChainBlockHash: Encode,
 	T::ElectionPropertiesHook: Encode,
 	T::SafeModeEnabledHook: Encode,
+	T::BlockData: Encode,
 
 	BlockProcessor<T>: Encode,
 ))]
@@ -113,6 +115,7 @@ pub struct BlockWitnesserState<T: BWTypes> {
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
 	pub safemode_enabled: T::SafeModeEnabledHook,
 	pub block_processor: BlockProcessor<T>,
+	pub optimistic_blocks_cache: OptimisticBlockCache<T>,
 	pub _phantom: sp_std::marker::PhantomData<T>,
 }
 
@@ -135,6 +138,7 @@ where
 			generate_election_properties_hook: Default::default(),
 			safemode_enabled: Default::default(),
 			block_processor: Default::default(),
+			optimistic_blocks_cache: Default::default(),
 			_phantom: Default::default(),
 		}
 	}
@@ -157,19 +161,24 @@ where
 	T::ElectionProperties: Encode,
 ))]
 pub struct BWElectionProperties<T: BWTypes> {
-	pub block_hash: T::ChainBlockHash,
+	pub block_hash: Option<T::ChainBlockHash>,
 	pub block_height: T::ChainBlockNumber,
 	pub properties: T::ElectionProperties,
 }
 
-impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, T::BlockData> for BWStatemachine<T> {
+impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, (T::BlockData, Option<T::ChainBlockHash>)>
+	for BWStatemachine<T>
+{
 	type Error = ();
 
 	fn validate(
-		_index: &BWElectionProperties<T>,
-		_value: &T::BlockData,
+		index: &BWElectionProperties<T>,
+		(_, hash): &(T::BlockData, Option<T::ChainBlockHash>),
 	) -> Result<(), Self::Error> {
-		Ok(())
+		match (&index.block_hash, hash) {
+			(Some(_), None) | (None, Some(_)) => Ok(()),
+			_ => Err(()),
+		}
 	}
 }
 
@@ -179,7 +188,10 @@ pub struct BWStatemachine<Types: BWTypes> {
 }
 
 impl<T: BWTypes> Statemachine for BWStatemachine<T> {
-	type Input = SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T>>;
+	type Input = SMInput<
+		(BWElectionProperties<T>, (T::BlockData, Option<T::ChainBlockHash>)),
+		ChainProgress<T>,
+	>;
 	type InputIndex = Vec<BWElectionProperties<T>>;
 	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
@@ -192,7 +204,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.into_iter()
 			.map(|(block_height, block_hash)| BWElectionProperties {
 				properties: s.generate_election_properties_hook.run(block_height),
-				block_hash,
+				block_hash: Some(block_hash),
 				block_height,
 			})
 			.collect()
@@ -218,15 +230,40 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 
 			SMInput::Context(ChainProgress::None) => None,
 
-			SMInput::Consensus((properties, blockdata)) => {
-				s.elections.mark_election_done(properties.block_height, &properties.block_hash);
-				log::info!("got block data: {:?}", blockdata);
-				Some((
-					ChainProgressInner::Progress(
-						s.elections.seen_heights_below.saturating_backward(1),
-					),
-					Some((properties.block_height, blockdata, settings.safety_margin)),
-				))
+			SMInput::Consensus((properties, (blockdata, blockhash))) => {
+				match &properties.block_hash {
+					// we got a proper block with correct hash
+					Some(hash) => {
+						s.elections.mark_election_done(properties.block_height, hash);
+
+						log::info!("got block data: {:?}", blockdata);
+
+						Some((
+							ChainProgressInner::Progress(
+								s.elections.seen_heights_below.saturating_backward(1),
+							),
+							Some((properties.block_height, blockdata, settings.safety_margin)),
+						))
+					},
+					// we got a block from an optimistic election
+					None => {
+						log::info!("got optimistic block data: {:?}", blockdata);
+
+						s.elections.mark_optimistic_election_done(properties.block_height);
+
+						s.optimistic_blocks_cache.add_block(properties.block_height, OptimisticBlock {
+							hash: blockhash.unwrap(),
+							data: blockdata,
+						});
+
+						Some((
+							ChainProgressInner::Progress(
+								s.elections.seen_heights_below.saturating_backward(1),
+							),
+							None,
+						))
+					},
+				}
 			},
 		};
 

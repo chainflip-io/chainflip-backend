@@ -4,7 +4,11 @@ use core::{iter::Step, ops::RangeInclusive};
 use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{cmp::max, collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{
+	cmp::max,
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec::Vec,
+};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
@@ -21,6 +25,7 @@ use crate::electoral_systems::{
 	T::ChainBlockHash: Encode,
 ))]
 pub struct ElectionTracker2<T: ChainTypes> {
+	/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 	pub seen_heights_below: T::ChainBlockNumber,
 
 	/// We always create elections until the next priority height, even if we
@@ -32,6 +37,9 @@ pub struct ElectionTracker2<T: ChainTypes> {
 
 	/// Hashes of elections currently ongoing
 	pub ongoing: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+
+	/// Elections for block numbers that we don't have the hashes for yet
+	pub ongoing_optimistic: BTreeSet<T::ChainBlockNumber>,
 }
 
 impl<T: ChainTypes> ElectionTracker2<T> {
@@ -63,6 +71,10 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		}
 	}
 
+	pub fn mark_optimistic_election_done(&mut self, height: T::ChainBlockNumber) {
+		self.ongoing_optimistic.remove(&height);
+	}
+
 	/// This function schedules all elections up to `range.end()`
 	pub fn schedule_range(
 		&mut self,
@@ -90,6 +102,10 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		// if there are elections ongoing for the block heights we received, we stop them
 		self.ongoing.retain(|height, _| !hashes.contains_key(height));
 
+		// if there are optimistic elections ongoing for the block heights we received, we stop them
+		self.ongoing_optimistic.retain(|height| !hashes.contains_key(height));
+
+		//--- finally ---
 		// adding all hashes to the queue
 		self.queued_elections.append(&mut hashes);
 	}
