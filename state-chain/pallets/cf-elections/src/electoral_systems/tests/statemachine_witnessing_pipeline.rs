@@ -54,21 +54,23 @@ pub trait AbstractVoter<M: Statemachine> {
 
 #[test]
 pub fn test_all() {
-	type Types = (u8, Vec<char>, Vec<char>);
+	type Types = (u8, usize, Vec<char>);
 	type BW = BWStatemachine<Types>;
 	type BHW = BlockHeightTrackingSM<Types>;
+
+	const OFFSET: usize = 20;
 
 	impl AbstractVoter<BHW> for FlatChainProgression<char> {
 		fn vote(
 			&mut self,
 			indices: <BHW as Statemachine>::InputIndex,
 		) -> Option<Vec<<BHW as Statemachine>::Input>> {
-			let chain = MockChain { chain: self.get_next_chain()?, _phantom: Default::default() };
+			let chain = MockChain::new_with_offset(OFFSET, self.get_next_chain()?);
 
 			let mut result = Vec::new();
 
 			for index in indices {
-				let best_block = chain.get_best_block();
+				let best_block = chain.get_best_block_header();
 				if best_block.block_height < index.witness_from_index {
 					continue;
 				}
@@ -78,7 +80,7 @@ pub fn test_all() {
 						if witness_from_index == 0 {
 							InputHeaders(VecDeque::from([best_block]))
 						} else {
-							let headers = (witness_from_index..=chain.get_block_height())
+							let headers = (witness_from_index..=chain.get_best_block_height())
 								.map(|height| chain.get_block_header(height));
 							if headers.len() == 0 {
 								continue;
@@ -105,10 +107,8 @@ pub fn test_all() {
 		) -> Option<Vec<<BW as Statemachine>::Input>> {
 			let mut inputs = Vec::new();
 			for index in indices {
-				let chain = MockChain::<char, Types> {
-					chain: self.get_next_chain()?,
-					_phantom: Default::default(),
-				};
+				let chain =
+					MockChain::<char, Types>::new_with_offset(OFFSET, self.get_next_chain()?);
 				if let Some(block_data) = chain.get_block_by_hash(index.block_hash.clone()) {
 					inputs.push(SMInput::Consensus((index, block_data)));
 				}
@@ -118,7 +118,7 @@ pub fn test_all() {
 	}
 
 	let mut runner = TestRunner::new(Config {
-		cases: 256 * 16,
+		cases: 256 * 16 * 16,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
 		))),
@@ -175,9 +175,16 @@ pub fn test_all() {
             let bhw_outputs = if let Some(inputs) = AbstractVoter::<BHW>::vote(&mut chains, BHW::input_index(&mut bhw_state)) {
                 let mut outputs = Vec::new();
                 for input in inputs {
+                    // ensure that input is correct
+                    BHW::validate(&BHW::input_index(&mut bhw_state), &input).unwrap();
+
                     bw_history.push(BWTrace::InputBHW(input.clone()));
 
-                    let output = BHW::step(&mut bhw_state, input, &()).unwrap();
+                    let output = BHW::step(&mut bhw_state, input, &())
+                    .map_err(|err| format!("err: {err} with history: {bw_history:?}"))
+                    .unwrap();
+                    // .expect(&format!("BHW failed with history: {bw_history:?}"));
+
                     outputs.push(output);
                 }
                 outputs

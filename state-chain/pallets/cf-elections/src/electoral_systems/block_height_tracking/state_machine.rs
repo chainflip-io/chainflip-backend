@@ -239,8 +239,9 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 					},
 
 					Err(MergeFailure::InternalError(reason)) => {
+						let str = format!("internal error in block height tracker: {reason}");
 						log::error!("internal error in block height tracker: {reason}");
-						Err("internal error in block height tracker")
+						Err(str.leak())
 					},
 				}
 			},
