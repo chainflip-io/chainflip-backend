@@ -108,6 +108,7 @@ export async function upgradeSwapEndpoint(logger: Logger) {
       UpgradeProgram: {
         program_address: decodeSolAddress(getContractAddress('Solana', 'SWAP_ENDPOINT')),
         buffer_address: decodeSolAddress(bufferAddress.toString()),
+        spill_address: decodeSolAddress(getSolWhaleKeyPair().publicKey.toString()),
       },
     }),
   );

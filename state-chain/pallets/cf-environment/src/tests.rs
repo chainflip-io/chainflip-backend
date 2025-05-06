@@ -737,6 +737,7 @@ fn can_dispatch_solana_gov_call() {
 			SolanaGovCall::UpgradeProgram {
 				program_address: SolAddress([0x11; 32]),
 				buffer_address: SolAddress([0x22; 32]),
+				spill_address: SolAddress([0x33; 32]),
 			}
 		));
 

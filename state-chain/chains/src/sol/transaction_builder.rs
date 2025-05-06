@@ -596,6 +596,7 @@ impl SolanaTransactionBuilder {
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
 		gov_key: SolAddress,
+		spill_address: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
 		address_lookup_tables: Vec<SolAddressLookupTableAccount>,
@@ -611,7 +612,7 @@ impl SolanaTransactionBuilder {
 			program_data_address.address,
 			program_address,
 			buffer_address,
-			gov_key, // spill_address
+			spill_address,
 			SYS_VAR_RENT,
 			SYS_VAR_CLOCK,
 			signer_pda.address,
@@ -1068,6 +1069,7 @@ pub mod test {
 			TRANSFER_TO_ACCOUNT, // using arbitrary account as buffer_address
 			env.vault_program,
 			env.vault_program_data_account,
+			agg_key(),
 			agg_key(),
 			durable_nonce(),
 			compute_price(),

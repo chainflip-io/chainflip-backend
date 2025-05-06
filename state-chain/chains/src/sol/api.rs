@@ -213,6 +213,7 @@ pub enum SolanaGovCall {
 	UpgradeProgram {
 		program_address: SolAddress,
 		buffer_address: SolAddress,
+		spill_address: SolAddress,
 	},
 }
 
@@ -236,8 +237,8 @@ impl SolanaGovCall {
 			),
 			SolanaGovCall::SetTokenSwapParameters { min_swap_amount, token_mint_pubkey } =>
 				SolanaApi::set_token_swap_parameters(*min_swap_amount, *token_mint_pubkey),
-			SolanaGovCall::UpgradeProgram { program_address, buffer_address } =>
-				SolanaApi::upgrade_program(*program_address, *buffer_address),
+			SolanaGovCall::UpgradeProgram { program_address, buffer_address, spill_address } =>
+				SolanaApi::upgrade_program(*program_address, *buffer_address, *spill_address),
 		}
 	}
 }
@@ -594,6 +595,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	pub fn upgrade_program(
 		program_address: SolAddress,
 		buffer_address: SolAddress,
+		spill_address: SolAddress,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Lookup environment variables, such as aggkey and durable nonce.
 		let agg_key = Environment::current_agg_key()?;
@@ -610,6 +612,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			// Assumed that the agg_key is the gov_key in the on-chain programs.
 			// This assumption is valid until we change the key to some independent Governance key.
 			agg_key,
+			spill_address,
 			durable_nonce,
 			compute_price,
 			vec![sol_api_environment.address_lookup_table_account],
