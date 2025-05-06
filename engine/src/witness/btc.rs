@@ -84,23 +84,29 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 		properties: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties {
-			block_height: witness_range, properties: deposit_addresses, ..
+			block_height: witness_range, properties: deposit_addresses, block_hash, ..
 		} = properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range)
 			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
 		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
 
 		let mut txs = vec![];
-		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
 		tracing::info!("Witness range: {:?}", witness_range);
-		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
-			tracing::info!("Checking block {:?}", block);
-
-			let block_hash = self.client.block_hash(block).await?;
-
-			let block = self.client.block(block_hash).await?;
+		if let Some(hash) = block_hash {
+			let block = self.client.block(hash).await?;
 
 			txs.extend(block.txdata);
+		} else {
+			// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+			for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
+				tracing::info!("Checking block {:?}", block);
+
+				let block_hash = self.client.block_hash(block).await?;
+
+				let block = self.client.block(block_hash).await?;
+
+				txs.extend(block.txdata);
+			}
 		}
 
 		let deposit_addresses = map_script_addresses(deposit_addresses);
@@ -123,22 +129,28 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 		_settings: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinVaultDepositWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties { block_height: witness_range, properties: vaults, .. } =
+		let BWElectionProperties { block_height: witness_range, properties: vaults, block_hash, .. } =
 			properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range)
 			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
 
 		let mut txs = vec![];
-		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
 		tracing::info!("Witness range: {:?}", witness_range);
-		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
-			tracing::info!("Checking block {:?}", block);
-
-			let block_hash = self.client.block_hash(block).await?;
-
-			let block = self.client.block(block_hash).await?;
+		if let Some(hash) = block_hash {
+			let block = self.client.block(hash).await?;
 
 			txs.extend(block.txdata);
+		} else {
+			// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+			for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
+				tracing::info!("Checking block {:?}", block);
+
+				let block_hash = self.client.block_hash(block).await?;
+
+				let block = self.client.block(block_hash).await?;
+
+				txs.extend(block.txdata);
+			}
 		}
 
 		let witnesses = vault_deposits(&txs, &vaults);
@@ -249,23 +261,28 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 		_settings: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinEgressWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties { block_height: witness_range, properties: tx_hashes, .. } =
+		let BWElectionProperties { block_height: witness_range, properties: tx_hashes, block_hash, .. } =
 			properties;
 		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
 
 		let mut txs = vec![];
-		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
 		tracing::info!("Witness range: {:?}", witness_range);
-		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
-			tracing::info!("Checking block {:?}", block);
-
-			let block_hash = self.client.block_hash(block).await?;
-
-			let block = self.client.block(block_hash).await?;
+		if let Some(hash) = block_hash {
+			let block = self.client.block(hash).await?;
 
 			txs.extend(block.txdata);
-		}
+		} else {
+			// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+			for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
+				tracing::info!("Checking block {:?}", block);
 
+				let block_hash = self.client.block_hash(block).await?;
+
+				let block = self.client.block(block_hash).await?;
+
+				txs.extend(block.txdata);
+			}
+		}
 		let witnesses = egress_witnessing(&txs, tx_hashes);
 
 		if witnesses.is_empty() {
