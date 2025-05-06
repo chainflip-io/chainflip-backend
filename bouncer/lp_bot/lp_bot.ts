@@ -1,26 +1,31 @@
 import { webSocket } from 'rxjs/webSocket';
-import { Observable, Subject, from, fromEventPattern, merge } from 'rxjs';
+import { Observable, Subject, from } from 'rxjs';
 import { filter, map, mergeMap } from 'rxjs/operators';
 import WebSocket from 'ws';
 import { lpApiRpc } from '../shared/json_rpc';
-import { amountToFineAmount, Asset, assetDecimals, Chain, chainFromAsset, createStateChainKeypair, getContractAddress, toAsset, toRpcAsset } from '../shared/utils';
+import { chainFromAsset, createStateChainKeypair, getContractAddress, toAsset } from '../shared/utils';
 import { globalLogger as logger } from '../shared/utils/logger';
 import { sendErc20 } from '../shared/send_erc20';
 import { Order, Side, OrderStatus, OrderType, Swap, TradeDecision, OutOfLiquidityEvent } from './utils';
-import { EventEmitter } from 'events';
-import BigNumber from 'bignumber.js';
 
 (global as any).WebSocket = WebSocket;
 
 const outOfLiquiditySubject = new Subject<OutOfLiquidityEvent>();
 
-// Todo: Upgrade to a persistent state
-declare global {
-    var ORDER_BOOK: Map<number, Order>;
-    var SWAPS: Map<number, Swap>;
-    var LP_ACCOUNT: string;
-    var CHAIN: string;
-    var ASSET: string;
+class LPBotState {
+    ORDER_BOOK: Map<number, Order>;
+    SWAPS: Map<number, Swap>;
+    LP_ACCOUNT: string;
+    CHAIN: string;
+    ASSET: string;
+
+    constructor(chain: string, asset: string) {
+        this.ORDER_BOOK = new Map<number, Order>();
+        this.SWAPS = new Map<number, Swap>();
+        this.LP_ACCOUNT = createStateChainKeypair('//LP_API').address;
+        this.CHAIN = chain;
+        this.ASSET = asset;
+    }
 }
 
 /**
@@ -45,10 +50,10 @@ const tradingStrategy = (swap: Swap): TradeDecision => {
  * @param decision - The trade decision.
  * @returns The order ID.
  */
-const manageLimitOrders = async (decision: TradeDecision) => {
+const manageLimitOrders = async (state: LPBotState, decision: TradeDecision) => {
     let orderId;
 
-    const currentOpenOrderForAsset = Array.from(global.ORDER_BOOK.values()).find(order => order.asset === decision.asset && order.orderType === OrderType.Limit && order.amount >= decision.amount);
+    const currentOpenOrderForAsset = Array.from(state.ORDER_BOOK.values()).find(order => order.asset === decision.asset && order.orderType === OrderType.Limit && order.amount >= decision.amount);
 
     if (currentOpenOrderForAsset) {
         logger.info(`Found existing order for asset: ${decision.asset}`);
@@ -60,14 +65,14 @@ const manageLimitOrders = async (decision: TradeDecision) => {
     try {
         logger.info(`Setting limit order for asset: ${decision.asset}, amount: ${decision.amount}, side: ${decision.side}, orderId: ${orderId}`);
         await lpApiRpc(logger, 'lp_set_limit_order', [
-            { chain: 'Ethereum', asset: decision.asset },
+            { chain: state.CHAIN, asset: decision.asset },
             { chain: 'Ethereum', asset: 'USDC' },
             decision.side,
             orderId,
             0,
             decision.amount,
         ]);
-        global.ORDER_BOOK.set(orderId, new Order(orderId, OrderStatus.Accepted, OrderType.Limit, decision.asset, decision.side, decision.amount, decision.price));
+        state.ORDER_BOOK.set(orderId, new Order(orderId, OrderStatus.Accepted, OrderType.Limit, decision.asset, decision.side, decision.amount, decision.price));
         return orderId;
     } catch (error) {
         logger.error(`Failed to execute order: ${error}`);
@@ -82,7 +87,7 @@ const manageLimitOrders = async (decision: TradeDecision) => {
  * @param wsConnection - The WebSocket connection.
  * @returns The swap stream.
  */
-const createSwapStream = (wsConnection: any): Observable<Swap> => {
+const createSwapStream = (state: LPBotState, wsConnection: any): Observable<Swap> => {
     return wsConnection.pipe(
         filter((msg: any) => msg.method === 'cf_subscribe_scheduled_swaps'),
         map((msg: any) => {
@@ -97,10 +102,10 @@ const createSwapStream = (wsConnection: any): Observable<Swap> => {
             amount: swap.amount
         })),
         filter((swap: Swap) => {
-            if (global.SWAPS.has(swap.swapId)) {
+            if (state.SWAPS.has(swap.swapId)) {
                 return false;
             }
-            global.SWAPS.set(swap.swapId, swap);
+            state.SWAPS.set(swap.swapId, swap);
             return true;
         })
     );
@@ -125,9 +130,9 @@ const createTradeDecisionStream = (swaps$: Observable<Swap>): Observable<TradeDe
  * @param decisions$ - The trade decision stream.
  * @returns The order stream.
  */
-const createOrderStream = (decisions$: Observable<TradeDecision>): Observable<number | null> => {
+const createOrderStream = (state: LPBotState, decisions$: Observable<TradeDecision>): Observable<number | null> => {
     return decisions$.pipe(
-        map(manageLimitOrders),
+        map(decision => manageLimitOrders(state, decision)),
         mergeMap(orderId => from(orderId))
     );
 };
@@ -177,21 +182,17 @@ const depositLiquidity = async (rpcAsset: string, amount: string) => {
 const initializeLiquidityProviderBot = (chain: string, asset: string) => {
     logger.info('Initializing liquidity provider bot 🤖.');
 
-    global.ORDER_BOOK = new Map<number, Order>();
-    global.SWAPS = new Map<number, Swap>();
-    global.LP_ACCOUNT = createStateChainKeypair('//LP_API').address;
-    global.CHAIN = chain;
-    global.ASSET = asset;
+    const state = new LPBotState(chain, asset);
 
-    logger.info(`LP Account: ${global.LP_ACCOUNT}`);
+    logger.info(`LP Account: ${state.LP_ACCOUNT}`);
 
     const stateChainWsConnection = webSocket('ws://127.0.0.1:9944');
     const lpWsConnection = webSocket('ws://127.0.0.1:10589');
 
     // Create our reactive pipeline
-    const swaps$ = createSwapStream(stateChainWsConnection);
+    const swaps$ = createSwapStream(state, stateChainWsConnection);
     const tradeDecisions$ = createTradeDecisionStream(swaps$);
-    const orders$ = createOrderStream(tradeDecisions$);
+    const orders$ = createOrderStream(state, tradeDecisions$);
     const orderFills$ = createOrderFillStream(lpWsConnection);
     const outOfLiquidity$ = outOfLiquiditySubject.asObservable();
 
@@ -199,12 +200,12 @@ const initializeLiquidityProviderBot = (chain: string, asset: string) => {
     orderFills$.subscribe({
         next: (fill) => {
             if (fill.limit_order) {
-                if (fill.limit_order.lp === global.LP_ACCOUNT) {
+                if (fill.limit_order.lp === state.LP_ACCOUNT) {
                     logger.info(`We won a swap 🕺 !`);
                     let idAsNumber = parseInt(fill.limit_order.id);
-                    let order = global.ORDER_BOOK.get(idAsNumber)!;
+                    let order = state.ORDER_BOOK.get(idAsNumber)!;
                     order.status = OrderStatus.Filled;
-                    global.ORDER_BOOK.set(idAsNumber, order);
+                    state.ORDER_BOOK.set(idAsNumber, order);
                 }
             }
         },
@@ -246,7 +247,7 @@ const initializeLiquidityProviderBot = (chain: string, asset: string) => {
         jsonrpc: "2.0",
         method: "cf_subscribe_scheduled_swaps",
         params: {
-            base_asset: { chain: global.CHAIN, asset: global.ASSET },
+            base_asset: { chain: state.CHAIN, asset: state.ASSET },
             quote_asset: { chain: 'Ethereum', asset: 'USDC' }
         }
     });
