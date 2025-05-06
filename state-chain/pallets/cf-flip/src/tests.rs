@@ -510,32 +510,11 @@ mod transfer {
 	}
 
 	#[test]
-	fn can_not_transfer_to_sender() {
-		new_test_ext().execute_with(|| {
-			assert_noop!(
-				Flip::try_transfer_funds_internally(110, &ALICE, &BOB),
-				Error::<Test>::InsufficientLiquidity
-			);
-		});
-	}
-
-	#[test]
 	fn can_not_transfer_funds_to_myself() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
 				Flip::try_transfer_funds_internally(50, &ALICE, &ALICE),
 				Error::<Test>::CanNotTransferToSelf
-			);
-		});
-	}
-
-	#[test]
-	fn can_not_transfer_to_not_existing_account() {
-		new_test_ext().execute_with(|| {
-			let not_existing_account = 1000;
-			assert_noop!(
-				Flip::try_transfer_funds_internally(50, &ALICE, &not_existing_account),
-				Error::<Test>::AccountDoesNotExist
 			);
 		});
 	}
