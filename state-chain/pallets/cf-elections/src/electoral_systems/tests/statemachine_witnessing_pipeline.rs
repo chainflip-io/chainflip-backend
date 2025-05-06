@@ -128,7 +128,7 @@ pub fn test_all() {
 
         let mut chains = blocks_into_chain_progression(&blocks.blocks);
 
-        const SAFETY_MARGIN: u32 = 6;
+        const SAFETY_MARGIN: u32 = 7;
 
         // get final chain so we can check that we emitted the correct events:
         let final_chain = chains.get_final_chain();
@@ -274,7 +274,7 @@ pub fn test_all() {
         // ensure that we only emit witness events that are on the final chain
         let emitted_witness_events : BTreeSet<_> = counted_events.0.0.keys().map(|(a,b)|b).filter_map(try_get!(MockBtcEvent::Witness)).map(|event| *event as char).collect();
         let expected_witness_events : BTreeSet<_> = finalized_events.into_iter().cloned().collect();
-        assert!(emitted_witness_events.is_subset(&expected_witness_events),
+        assert!(emitted_witness_events == expected_witness_events,
             "got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {}",
             bw_history.iter().map(|event| format!("{event:?}")).intersperse("\n".to_string()).collect::<String>()
         );

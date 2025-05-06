@@ -33,7 +33,11 @@ impl<T: ChainTypes> MergeInfo<T> {
 				.iter()
 				.map(|header| (header.block_height, header.hash.clone()))
 				.collect();
-			Some(ChainProgress::Range(hashes, first_added.block_height..=last_added.block_height))
+
+			let f =
+				if self.removed.is_empty() { ChainProgress::Range } else { ChainProgress::Reorg };
+
+			Some(f(hashes, first_added.block_height..=last_added.block_height))
 		} else {
 			None
 		}

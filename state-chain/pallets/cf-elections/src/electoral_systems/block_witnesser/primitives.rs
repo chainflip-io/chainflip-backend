@@ -87,6 +87,9 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		self.seen_heights_below =
 			max(self.seen_heights_below.clone(), range.end().clone().saturating_forward(1));
 
+		// if there are elections ongoing for the block heights we received, we stop them
+		self.ongoing.retain(|height, _| !hashes.contains_key(height));
+
 		// adding all hashes to the queue
 		self.queued_elections.append(&mut hashes);
 	}
