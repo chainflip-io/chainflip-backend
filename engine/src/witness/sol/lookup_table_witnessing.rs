@@ -13,7 +13,7 @@ use sol_prim::{AddressLookupTableAccount, Slot};
 use std::str::FromStr;
 
 // We want to return None if the account is not found or there is any error. It should
-// only error if the rpc call fails or returns an unrecognized format respons. That is
+// only error if the rpc call fails or returns an unrecognized format response. That is
 // because this address will be provided by the user (user alts) and in case of the address
 // not being a valid ALT we still want to reach consensus.
 pub async fn get_lookup_table_state<SolRetryRpcClient>(
@@ -57,7 +57,6 @@ fn parse_alt_account_info(
 			..
 		}) => {
 			if program != "address-lookup-table" {
-				tracing::info!("Program is not an address lookup table: {}", program);
 				return Ok(None);
 			}
 
@@ -104,7 +103,7 @@ fn parse_alt_account_info(
 					// whole vote. We could return a table with missing addresses but then
 					// we would have to change the AddressLookupTableAccount account type
 					// (to have Option<Vec<Addresses>>). Since its a type taken from the
-					// Solana sdk, we dont want to modify it. Hence, we fail here.
+					// Solana sdk, we don't want to modify it. Hence, we fail here.
 					.map(|address| SolAddress::from_str(address).map(|a| a.into()))
 					.collect::<Result<_, _>>()?,
 			}))

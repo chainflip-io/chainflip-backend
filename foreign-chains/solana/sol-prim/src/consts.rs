@@ -81,5 +81,3 @@ pub const X_SWAP_FROM_ACC_IDX: u8 = 2u8;
 pub const X_SWAP_NATIVE_EVENT_DATA_ACC_IDX: u8 = 3u8;
 pub const X_SWAP_TOKEN_FROM_TOKEN_ACC_IDX: u8 = 3u8;
 pub const X_SWAP_TOKEN_EVENT_DATA_ACC_IDX: u8 = 4u8;
-
-pub const MAX_CCM_USER_ALTS: u8 = 3u8;

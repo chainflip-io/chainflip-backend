@@ -405,12 +405,20 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		let compute_price = Environment::compute_price()?;
 
+		let durable_nonce = Environment::nonce_account()?;
+
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
 		let external_alts = ccm_additional_data
 			.alt_addresses()
 			.map(Environment::get_address_lookup_tables)
-			.transpose()?
+			.transpose()
+			.inspect_err(|_| {
+				// This can be removed once the transaction building is made transactional.
+				// Recover the durable nonce when transaction building fails.
+				Environment::recover_durable_nonce(durable_nonce.0);
+			})?
 			.unwrap_or_default();
+
 		let address_lookup_tables =
 			sp_std::iter::once(sol_api_environment.address_lookup_table_account)
 				.chain(external_alts)
@@ -418,8 +426,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		let compute_limit =
 			SolTrackedData::calculate_ccm_compute_limit(gas_budget, transfer_param.asset);
-
-		let durable_nonce = Environment::nonce_account()?;
 
 		Ok(Self {
 			call_type: SolanaTransactionType::CcmTransfer {

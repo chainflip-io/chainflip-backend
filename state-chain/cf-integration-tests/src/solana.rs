@@ -475,7 +475,7 @@ fn can_send_solana_ccm_v1() {
 					ALICE,
 					Asset::Sol,
 					Asset::SolUsdc,
-					Some(sol_test_values::ccm_parameter().channel_metadata)
+					Some(sol_test_values::ccm_parameter_v1().channel_metadata)
 				),
 				1.into()
 			);
@@ -491,17 +491,16 @@ fn can_send_solana_ccm_v1() {
 
 			testnet.move_forward_blocks(2);
 
-			// CCM without ALT can be dispatched immediately
-			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
-					broadcast_id: 3,
-					egress_id: (ForeignChain::Solana, 1),
-				},
-			));
-
 			// Wait until swap is complete and ALT election started
 			vote_for_alt_election(
 				29,
+				AltWitnessingConsensusResult::Valid(vec![SolAddressLookupTableAccount {
+					key: user_alt().key,
+					addresses: vec![Default::default()],
+				}]),
+			);
+			vote_for_alt_election(
+				30,
 				AltWitnessingConsensusResult::Valid(vec![SolAddressLookupTableAccount {
 					key: user_alt().key,
 					addresses: vec![Default::default()],
@@ -511,6 +510,12 @@ fn can_send_solana_ccm_v1() {
 			// With consensus on ALT witnessing election, v1 CCM call is ready to be built.
 			testnet.move_forward_blocks(1);
 
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id: 3,
+					egress_id: (ForeignChain::Solana, 1),
+				},
+			));
 			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
 					broadcast_id: 4,
@@ -570,17 +575,23 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 				.try_into()
 				.unwrap();
 
+			let mut next_swap_id =
+				(*pallet_cf_swapping::SwapRequestIdCounter::<Runtime>::get() + 1).into();
 			assert_eq!(
 				schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, Some(ccm_0.clone())),
-				1.into()
+				next_swap_id,
 			);
+
+			//Sol -> Usdc -> SolUsdc consumes 2 swap IDs
+			*next_swap_id += 2;
 			assert_eq!(
 				schedule_deposit_to_swap(BOB, Asset::SolUsdc, Asset::Sol, Some(ccm_1)),
-				3.into()
+				next_swap_id
 			);
+			*next_swap_id += 1;
 			assert_eq!(
 				schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, Some(ccm_0)),
-				4.into()
+				next_swap_id
 			);
 
 			testnet.move_forward_blocks(2);
