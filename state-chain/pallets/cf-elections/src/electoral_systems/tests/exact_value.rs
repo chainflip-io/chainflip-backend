@@ -24,7 +24,11 @@ use codec::{Decode, Encode};
 use frame_support::assert_ok;
 use scale_info::TypeInfo;
 
-type WitnessExactValueWithStorage = ExactValue<MockIdentifier, Vec<u32>, (), MockHook, u32, u64>;
+// Define two `ExactValue` ElectoralSystems.
+type WitnessExactValueWithStorage =
+	ExactValue<MockIdentifier, Vec<u32>, (), MockHook<true>, u32, u64>;
+type WitnessExactValueWithoutStorage =
+	ExactValue<MockIdentifier, Vec<u32>, (), MockHook<false>, u32, u64>;
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, PartialOrd, Ord, Default)]
 pub struct MockIdentifier(Vec<u32>);
@@ -35,15 +39,14 @@ impl From<Vec<u32>> for MockIdentifier {
 	}
 }
 
-pub const DO_NOT_STORE_ON_CONSENSUS: [u32; 3] = [0, 1, 2];
-
-pub struct MockHook;
-impl ExactValueHook<MockIdentifier, Vec<u32>> for MockHook {
+struct MockHook<const STORE: bool>;
+// impl using STORE to decide whether or not to store the data.
+impl<const STORE: bool> ExactValueHook<MockIdentifier, Vec<u32>> for MockHook<STORE> {
 	type StorageKey = MockIdentifier;
 	type StorageValue = Vec<u32>;
 
 	fn on_consensus(id: MockIdentifier, value: Vec<u32>) -> Option<(MockIdentifier, Vec<u32>)> {
-		(value != DO_NOT_STORE_ON_CONSENSUS.to_vec()).then_some((id, value))
+		STORE.then_some((id, value))
 	}
 }
 
@@ -157,12 +160,12 @@ fn election_result_can_be_stored_into_unsynchronised_state_map() {
 		let id = |umi: u64| ElectionIdentifier::new(umi.into(), ());
 
 		// If `on_consensus` returns false, the result is not stored into the state map.
-		assert_ok!(WitnessExactValueWithStorage::witness_exact_value::<
-			MockAccess<WitnessExactValueWithStorage>,
+		assert_ok!(WitnessExactValueWithoutStorage::witness_exact_value::<
+			MockAccess<WitnessExactValueWithoutStorage>,
 		>(mock_id.clone()));
-		MockStorageAccess::set_consensus_status::<WitnessExactValueWithStorage>(
+		MockStorageAccess::set_consensus_status::<WitnessExactValueWithoutStorage>(
 			id(0),
-			ConsensusStatus::Gained { most_recent: None, new: DO_NOT_STORE_ON_CONSENSUS.to_vec() },
+			ConsensusStatus::Gained { most_recent: None, new: vec![0x01, 0x02, 0x03] },
 		);
 		assert_ok!(WitnessExactValueWithStorage::on_finalize::<
 			MockAccess<WitnessExactValueWithStorage>,

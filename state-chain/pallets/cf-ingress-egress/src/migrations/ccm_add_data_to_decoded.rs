@@ -73,8 +73,8 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 			maybe_old_ccms.map(|old_ccms| {
 				old_ccms
 					.into_iter()
-					.map(|old_ccm| {
-						let checked_ccm = CcmChannelMetadataUnchecked {
+					.filter_map(|old_ccm| {
+						match (CcmChannelMetadataUnchecked {
 							message: old_ccm.message.clone(),
 							gas_budget: old_ccm.gas_budget,
 							ccm_additional_data: old_ccm.ccm_additional_data,
@@ -82,19 +82,22 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 						.to_checked(
 							old_ccm.asset.into(),
 							old_ccm.destination_address.clone().into_foreign_chain_address(),
-						)
-						.expect("All ccm should have valid additional data");
-
-						CrossChainMessage {
-							egress_id: old_ccm.egress_id,
-							asset: old_ccm.asset,
-							amount: old_ccm.amount,
-							destination_address: old_ccm.destination_address.clone(),
-							message: old_ccm.message,
-							source_chain: old_ccm.source_chain,
-							source_address: old_ccm.source_address,
-							ccm_additional_data: checked_ccm.ccm_additional_data,
-							gas_budget: old_ccm.gas_budget,
+						)) {
+							Err(e) => {
+								log::error!("❌ Ccm To Checked Migration for Ingress-Egress pallet failed. Egress id: {:?}, err: {:?}", old_ccm.egress_id, e);
+								None
+							},
+							Ok(checked_ccm) => Some(CrossChainMessage {
+								egress_id: old_ccm.egress_id,
+								asset: old_ccm.asset,
+								amount: old_ccm.amount,
+								destination_address: old_ccm.destination_address.clone(),
+								message: old_ccm.message,
+								source_chain: old_ccm.source_chain,
+								source_address: old_ccm.source_address,
+								ccm_additional_data: checked_ccm.ccm_additional_data,
+								gas_budget: old_ccm.gas_budget,
+							})
 						}
 					})
 					.collect::<Vec<_>>()

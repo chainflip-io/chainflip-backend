@@ -1772,7 +1772,7 @@ pub mod pallet {
 												AuthorityElectionData {
 													settings: RunnerStorageAccess::<T, I>::electoral_settings_for_election(*election_identifier.unique_monotonic())?,
 													properties: RunnerStorageAccess::<T, I>::election_properties(election_identifier)?,
-													// We report the vote to the engine even though it is time-outed so the engine
+													// We report the vote to the engine even though it is timed out so the engine
 													// knows to delete it. As it may still later to reconstructed if the right
 													// `SharedData` is provided, unless it is delete.
 													option_existing_vote: option_current_authority_vote.as_ref().map(|(_, authority_vote)| {
