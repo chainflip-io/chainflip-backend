@@ -16,6 +16,7 @@
     "@polkadot/types": "^11.3.1",
     "@polkadot/util": "12.6.2",
     "@polkadot/util-crypto": "12.6.2",
+    "@reactivex/rxjs": "^6.6.7",
     "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.95.8",
     "@types/yargs": "^17.0.33",
@@ -36,12 +37,11 @@
     "scale-ts": "1.6.0",
     "tiny-secp256k1": "^2.2.3",
     "toml": "^3.0.0",
-    "web3": "^1.10.4",
-    "yargs": "^17.7.2",
-    "zod": "^3.23.8",
     "vitest": "3.0.3",
-    "pino": "9.6.0",
-    "pino-pretty": "13.0.0"
+    "web3": "^1.10.4",
+    "ws": "^8.18.2",
+    "yargs": "^17.7.2",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/minimist": "^1.2.5",
