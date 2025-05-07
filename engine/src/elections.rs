@@ -38,6 +38,7 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	sync::Arc,
 };
+use tokio::sync::mpsc;
 use tracing::Level;
 use voter_api::CompositeVoterApi;
 
@@ -58,6 +59,7 @@ pub struct Voter<
 	state_chain_client: Arc<StateChainClient>,
 	voter: RetrierClient<VoterClient>,
 	voter_name: &'static str,
+	cache_invalidation_senders: Option<Vec<mpsc::Sender<()>>>,
 	_phantom: core::marker::PhantomData<Instance>,
 }
 
@@ -76,6 +78,7 @@ where
 		scope: &Scope<'_, anyhow::Error>,
 		state_chain_client: Arc<StateChainClient>,
 		voter: VoterClient,
+		cache_invalidation_senders: Option<Vec<mpsc::Sender<()>>>,
 		voter_name: &'static str,
 	) -> Self {
 		Self {
@@ -89,6 +92,7 @@ where
 				MAXIMUM_CONCURRENT_VOTER_REQUESTS,
 			),
 			voter_name,
+			cache_invalidation_senders,
 			_phantom: Default::default(),
 		}
 	}
@@ -137,8 +141,9 @@ where
 		}
 
 		let mut unfinalized_block_stream = self.state_chain_client.unfinalized_block_stream().await;
+		// TEMP: Half block time to hack BTC voting.
 		const BLOCK_TIME: std::time::Duration =
-			std::time::Duration::from_millis(MILLISECONDS_PER_BLOCK);
+			std::time::Duration::from_millis(MILLISECONDS_PER_BLOCK / 2);
 		let mut submit_interval = tokio::time::interval(BLOCK_TIME);
 		let mut pending_submissions = BTreeMap::<
 			ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
@@ -232,6 +237,13 @@ where
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
 					authority_count = core::cmp::max(electoral_data.authority_count, 1);
 					if electoral_data.contributing {
+						if let Some(caches) = &self.cache_invalidation_senders {
+							for sender in caches {
+								if let Err(e) = sender.send(()).await {
+									self.log(Level::WARN, &format!("Cache receiver dropped: {e}"))
+								}
+							}
+						}
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
 								if !vote_tasks.contains_key(&election_identifier) {
