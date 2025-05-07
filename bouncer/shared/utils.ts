@@ -179,7 +179,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
         case 'USER_ADDRESS_LOOKUP_TABLE':
-          return '4eUGPyr3krnw8tD3rL3UBXXdy1cx8Sf9HKVESZUAatqv';
+          return 'DevMVEbBZirFWmiVu851LUY3d6ajRassAKghUhrHvNSb';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }

@@ -70,7 +70,11 @@ export async function depositChannelCreation(testContext: TestContext) {
           destinationAsset: z.string(),
           brokerCommissionRate: numberSchema,
           channelMetadata: z
-            .object({ message: z.string(), gasBudget: bigintSchema, ccmAdditionalData: z.string() })
+            .object({
+              message: z.string(),
+              gasBudget: bigintSchema,
+              ccmAdditionalData: z.union([z.object({ Solana: z.any() }), z.literal('NotRequired')]),
+            })
             .nullable(),
           boostFee: numberSchema,
           affiliateFees: z.array(z.object({ account: z.string(), bps: numberSchema })),
@@ -150,8 +154,16 @@ export async function depositChannelCreation(testContext: TestContext) {
     const sourceAsset = getInternalAsset(params.srcAsset);
     const destinationAsset = getInternalAsset(params.destAsset);
 
-    assert.strictEqual(event.sourceAsset, sourceAsset, 'source asset is wrong');
-    assert.strictEqual(event.destinationAsset, destinationAsset, 'destination asset is wrong');
+    assert.strictEqual(
+      event.sourceAsset,
+      sourceAsset,
+      `Expected source asset to be ${sourceAsset}, but got ${event.sourceAsset}`,
+    );
+    assert.strictEqual(
+      event.destinationAsset,
+      destinationAsset,
+      `Expected destination asset to be ${destinationAsset}, but got ${event.destinationAsset}`,
+    );
 
     const destChain = shortChainFromAsset(destinationAsset);
     const transformDestAddress = addressTransforms[destChain];
@@ -159,25 +171,36 @@ export async function depositChannelCreation(testContext: TestContext) {
     assert.strictEqual(
       transformDestAddress(event.destinationAddress[destChain]!),
       transformDestAddress(params.destAddress),
-      'destination address is wrong',
+      `Expected destination address to be ${transformDestAddress(params.destAddress)}, but got ${event.destinationAddress[destChain]!}`,
     );
-    assert.strictEqual(event.brokerCommissionRate, params.commissionBps ?? 0);
-    assert.strictEqual(event.boostFee, params.maxBoostFeeBps ?? 0);
+    assert.strictEqual(
+      event.brokerCommissionRate,
+      params.commissionBps ?? 0,
+      `Expected broker commission rate to be ${params.commissionBps ?? 0}, but got ${event.brokerCommissionRate}`,
+    );
+    assert.strictEqual(
+      event.boostFee,
+      params.maxBoostFeeBps ?? 0,
+      `Expected boost fee to be ${params.maxBoostFeeBps ?? 0}, but got ${event.boostFee}`,
+    );
 
     if (params.fillOrKillParams) {
       assert.strictEqual(
         event.refundParameters?.minPrice,
         BigInt(params.fillOrKillParams.minPriceX128),
+        `Expected refund parameter minPrice to be ${BigInt(params.fillOrKillParams.minPriceX128)}, but got ${event.refundParameters?.minPrice}`,
       );
       assert.strictEqual(
         event.refundParameters?.retryDuration,
         params.fillOrKillParams.retryDurationBlocks,
+        `Expected refund parameter retryDuration to be ${params.fillOrKillParams.retryDurationBlocks}, but got ${event.refundParameters?.retryDuration}`,
       );
       const sourceChain = shortChainFromAsset(sourceAsset);
       const transformRefundAddress = addressTransforms[sourceChain];
       assert.strictEqual(
         transformRefundAddress(event.refundParameters!.refundAddress[sourceChain]!),
         transformRefundAddress(params.fillOrKillParams.refundAddress),
+        `Expected refund address to be ${params.fillOrKillParams.refundAddress}, but got ${event.refundParameters!.refundAddress[sourceChain]!}`,
       );
     }
 
@@ -191,20 +214,36 @@ export async function depositChannelCreation(testContext: TestContext) {
     }
 
     if (params.dcaParams) {
-      assert.strictEqual(event.dcaParameters?.numberOfChunks, params.dcaParams.numberOfChunks);
-      assert.strictEqual(event.dcaParameters.chunkInterval, params.dcaParams.chunkIntervalBlocks);
+      assert.strictEqual(
+        event.dcaParameters?.numberOfChunks,
+        params.dcaParams.numberOfChunks,
+        `Expected DCA parameter numberOfChunks to be ${params.dcaParams.numberOfChunks}, but got ${event.dcaParameters?.numberOfChunks}`,
+      );
+      assert.strictEqual(
+        event.dcaParameters.chunkInterval,
+        params.dcaParams.chunkIntervalBlocks,
+        `Expected DCA parameter chunkInterval to be ${params.dcaParams.chunkIntervalBlocks}, but got ${event.dcaParameters.chunkInterval}`,
+      );
     }
 
     if (params.ccmParams) {
       assert.strictEqual(
         event.channelMetadata?.message,
         params.ccmParams.message === '0x' ? '' : params.ccmParams.message,
+        `Expected CCM parameter message to be ${params.ccmParams.message === '0x' ? '' : params.ccmParams.message}, but got ${event.channelMetadata?.message}`,
       );
-      assert.strictEqual(event.channelMetadata.gasBudget, BigInt(params.ccmParams.gasBudget));
       assert.strictEqual(
-        event.channelMetadata.ccmAdditionalData,
-        params.ccmParams.ccmAdditionalData === '0x' ? '' : params.ccmParams.ccmAdditionalData,
+        event.channelMetadata.gasBudget,
+        BigInt(params.ccmParams.gasBudget),
+        `Expected CCM parameter gasBudget to be ${BigInt(params.ccmParams.gasBudget)}, but got ${event.channelMetadata.gasBudget}`,
       );
+      if (params.ccmParams.ccmAdditionalData === '0x') {
+        assert.strictEqual(
+          event.channelMetadata.ccmAdditionalData,
+          'NotRequired',
+          `Expected CCM parameter ccmAdditionalData to be NotRequired, but got ${event.channelMetadata.ccmAdditionalData}`,
+        );
+      }
     }
   };
 

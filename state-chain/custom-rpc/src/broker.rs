@@ -20,7 +20,7 @@ use crate::{
 	CfApiError,
 };
 pub use cf_chains::eth::Address as EthereumAddress;
-use cf_chains::{address::AddressString, CcmChannelMetadata, ChannelRefundParameters};
+use cf_chains::{address::AddressString, CcmChannelMetadataUnchecked, ChannelRefundParameters};
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
 };
@@ -164,7 +164,7 @@ where
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
@@ -269,7 +269,7 @@ where
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		extra_parameters: VaultSwapExtraParametersRpc,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,

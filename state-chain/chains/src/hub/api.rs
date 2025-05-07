@@ -156,7 +156,7 @@ where
 		_source_address: Option<ForeignChainAddress>,
 		_gas_budget: <Assethub as Chain>::ChainAmount,
 		message: Vec<u8>,
-		_ccm_additional_data: Vec<u8>,
+		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		match <AssethubRuntimeCall as codec::Decode>::decode(&mut message.as_ref()) {
 			Ok(xcm_call) => {

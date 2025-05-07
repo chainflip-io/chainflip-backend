@@ -39,8 +39,9 @@ pub use async_result::AsyncResult;
 use cf_chains::{
 	address::ForeignChainAddress,
 	assets::any::AssetMap,
+	ccm_checker::DecodedCcmAdditionalData,
 	sol::{SolAddress, SolHash},
-	ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
+	ApiCall, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain, ChainCrypto,
 	ChannelRefundParametersDecoded, Ethereum,
 };
 use cf_primitives::{
@@ -766,7 +767,7 @@ pub trait DepositApi<C: Chain> {
 		destination_address: ForeignChainAddress,
 		broker_commission: Beneficiaries<Self::AccountId>,
 		broker_id: Self::AccountId,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataChecked>,
 		boost_fee: BasisPoints,
 		refund_params: ChannelRefundParametersDecoded,
 		dca_params: Option<DcaParameters>,
@@ -912,7 +913,7 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+		maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
@@ -1240,4 +1241,8 @@ pub struct PoolPrice {
 // Used to get price of a given pool
 pub trait PoolPriceProvider {
 	fn pool_price(base_asset: Asset, quote_asset: Asset) -> Result<PoolPrice, DispatchError>;
+}
+
+pub trait CcmAdditionalDataHandler {
+	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
 }

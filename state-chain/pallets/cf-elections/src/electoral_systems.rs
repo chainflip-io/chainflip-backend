@@ -16,7 +16,7 @@
 
 pub mod blockchain;
 pub mod composite;
-pub mod egress_success;
+pub mod exact_value;
 pub mod liveness;
 #[cfg(test)]
 pub mod mock;

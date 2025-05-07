@@ -17,7 +17,7 @@
 use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes},
-	electoral_systems::egress_success::*,
+	electoral_systems::exact_value::*,
 };
 
 use cf_primitives::AuthorityCount;
@@ -27,9 +27,13 @@ thread_local! {
 }
 
 pub struct MockHook;
-impl OnEgressSuccess<(), EgressData> for MockHook {
-	fn on_egress_success(_id: (), _egress_data: EgressData) {
+impl ExactValueHook<(), EgressData> for MockHook {
+	type StorageKey = ();
+	type StorageValue = EgressData;
+
+	fn on_consensus(id: (), egress_data: EgressData) -> Option<((), EgressData)> {
 		HOOK_CALLED.with(|hook_called| hook_called.set(true));
+		Some((id, egress_data))
 	}
 }
 
@@ -40,17 +44,27 @@ impl MockHook {
 }
 
 type EgressData = u64;
-type SimpleEgressSuccess = EgressSuccess<(), EgressData, (), MockHook, (), u32>;
+type SimpleEgressSuccess = ExactValue<(), EgressData, (), MockHook, (), u32>;
 
 register_checks! {
 	SimpleEgressSuccess {
-		hook_called(_pre, _post) {
+		hook_called(_pre, post) {
 			assert!(MockHook::called(), "Hook should have been called!");
+			assert!(
+				post.unsynchronised_state_map
+					.contains_key(&()),
+				"State should have been set!"
+			)
 		},
-		hook_not_called(_pre, _post) {
+		hook_not_called(pre, post) {
 			assert!(
 				!MockHook::called(),
 				"Hook should not have been called!"
+			);
+			assert_eq!(
+				pre,
+				post,
+				"State should not have changed!"
 			);
 		},
 	}

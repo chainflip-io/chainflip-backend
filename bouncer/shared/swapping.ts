@@ -42,8 +42,7 @@ const BYTES_PER_ALT = 34; // 32 + 1 + 1 (for vector lengths)
 function newSolanaCcmAdditionalData(maxBytes: number) {
   // Test all combinations
   const useLegacy = maxBytes < BYTES_PER_ALT || Math.random() < 0.5;
-  // TODO: Once ALT witnessing is supported set "!useLegacy && Math.random() < 0.5"
-  const useAlt = false;
+  const useAlt = !useLegacy && Math.random() < 0.5;
   let bytesAvailable = maxBytes;
 
   const additionalAccounts = [];
