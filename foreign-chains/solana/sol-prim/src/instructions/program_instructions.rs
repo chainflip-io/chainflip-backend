@@ -820,12 +820,13 @@ pub mod swap_endpoints {
 			x_swap_native => XSwapNative {
 				args: [
 					swap_native_params: SwapNativeParams,
+					seed: Vec<u8>,
 				],
 				account_metas: [
 					data_account: { signer: false, writable: false },
 					native_vault: { signer: false, writable: true },
 					from: { signer: true, writable: true },
-					event_data_account: { signer: true, writable: true },
+					event_data_account: { signer: false, writable: true },
 					swap_endpoint_data_account: { signer: false, writable: true },
 					system_program: { signer: false, writable: false },
 				]
@@ -833,13 +834,14 @@ pub mod swap_endpoints {
 			x_swap_token => XSwapToken {
 				args: [
 					swap_token_params: SwapTokenParams,
+					seed: Vec<u8>,
 				],
 				account_metas: [
 					data_account: { signer: false, writable: false },
 					token_vault_associated_token_account: { signer: false, writable: true },
 					from: { signer: true, writable: true },
 					from_token_account: { signer: false, writable: true },
-					event_data_account: { signer: true, writable: true },
+					event_data_account: { signer: false, writable: true },
 					swap_endpoint_data_account: { signer: false, writable: true },
 					token_supported_account: { signer: false, writable: false },
 					token_program: { signer: false, writable: false },

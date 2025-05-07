@@ -18,7 +18,7 @@
 //! as well as deriving ATA for token operations (such as fetch or transfer).
 
 use crate::{
-	consts::{ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID},
+	consts::{ASSOCIATED_TOKEN_PROGRAM_ID, BPF_LOADER_UPGRADEABLE_ID, TOKEN_PROGRAM_ID},
 	pda::{Pda as DerivedAddressBuilder, PdaError},
 	Address, PdaAndBump,
 };
@@ -29,6 +29,8 @@ const DEPOSIT_CHANNEL_PREFIX_SEED: &[u8] = b"channel";
 const HISTORICAL_FETCH_PREFIX_SEED: &[u8] = b"hist_fetch";
 const SUPPORTED_TOKEN_PREFIX_SEED: &[u8] = b"supported_token";
 const SWAP_ENDPOINT_NATIVE_VAULT_SEED: &[u8] = b"swap_endpoint_native_vault";
+const PDA_SIGNER_SEED: &[u8] = b"signer";
+const SWAP_EVENT_ACCOUNT_PREFIX_SEED: &[u8] = b"swap_event";
 
 /// Derive address for a given channel ID
 pub fn derive_deposit_address(
@@ -85,6 +87,30 @@ pub fn derive_swap_endpoint_native_vault_account(
 		.finish()
 }
 
+pub fn derive_vault_swap_account(
+	swap_endpoint_program: Address,
+	from: Address,
+	seed: &[u8],
+) -> Result<PdaAndBump, PdaError> {
+	DerivedAddressBuilder::from_address(swap_endpoint_program)?
+		.chain_seed(SWAP_EVENT_ACCOUNT_PREFIX_SEED)?
+		.chain_seed(from)?
+		.chain_seed(seed)?
+		.finish()
+}
+
+pub fn derive_program_data_address(program: Address) -> Result<PdaAndBump, PdaError> {
+	DerivedAddressBuilder::from_address_off_curve(BPF_LOADER_UPGRADEABLE_ID)?
+		.chain_seed(program)?
+		.finish()
+}
+
+pub fn derive_pda_signer(vault_program: Address) -> Result<PdaAndBump, PdaError> {
+	DerivedAddressBuilder::from_address(vault_program)?
+		.chain_seed(PDA_SIGNER_SEED)?
+		.finish()
+}
+
 /// Derive an address from our Vault program key. Produces an Address and a bump.
 #[cfg(test)]
 fn derive_address(seed: impl AsRef<[u8]>, vault_program: Address) -> Result<PdaAndBump, PdaError> {
@@ -102,6 +128,8 @@ mod tests {
 	const VAULT_PROGRAM: Address = const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf");
 	const SWAP_ENDPOINT_PROGRAM: Address =
 		const_address("35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT");
+	const FROM: Address = const_address("EwgZksaPybTUyhcEMn3aR46HZokR4NH6d1Wy8d51qZ6G");
+	const VAULT_SWAP_SEED: &[u8] = &[1; 32];
 
 	#[test]
 	fn derive_associated_token_account_on_curve() {
@@ -293,6 +321,47 @@ mod tests {
 				address: Address::from_str("EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN").unwrap(),
 				bump: 254u8
 			}
+		);
+	}
+
+	#[test]
+	fn can_derive_vault_data_address() {
+		let vault_program_data_address = derive_program_data_address(VAULT_PROGRAM).unwrap();
+
+		assert_eq!(
+			vault_program_data_address.address,
+			Address::from_str("3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57").unwrap(),
+		);
+	}
+
+	#[test]
+	fn can_derive_program_data_address() {
+		let swap_endpoint_program_data_address =
+			derive_program_data_address(SWAP_ENDPOINT_PROGRAM).unwrap();
+
+		assert_eq!(
+			swap_endpoint_program_data_address.address,
+			Address::from_str("ErjwBtUxDrpewSnX1JPRh7FeHhNsaaukXKMu7FjsZxHG").unwrap(),
+		);
+	}
+
+	#[test]
+	fn can_derive_pda_signer_seed() {
+		let vault_pda_signer = derive_pda_signer(VAULT_PROGRAM).unwrap();
+
+		assert_eq!(
+			vault_pda_signer.address,
+			Address::from_str("H7G2avdmRSQyVxPcgZJPGXVCPhC61TMAKdvYBRF42zJ9").unwrap(),
+		);
+	}
+	#[test]
+	fn can_derive_vault_swap_account() {
+		let vault_pda_signer =
+			derive_vault_swap_account(SWAP_ENDPOINT_PROGRAM, FROM, VAULT_SWAP_SEED).unwrap();
+
+		assert_eq!(
+			vault_pda_signer.address,
+			Address::from_str("GSSXPb5UenWXyx9sFQHtedKhhwX9Q26nr1heRQab5YEe").unwrap(),
 		);
 	}
 }
