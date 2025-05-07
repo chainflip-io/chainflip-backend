@@ -634,6 +634,33 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
+export function toRpcAsset(asset: Asset): string {
+  return asset.toUpperCase();
+}
+
+export function toAsset(rpcAsset: string): Asset {
+  switch (rpcAsset) {
+    case 'ETH':
+      return 'Eth';
+    case 'ARBETH':
+      return 'ArbEth';
+    case 'USDC':
+      return 'Usdc';
+    case 'USDT':
+      return 'Usdt';
+    case 'DOT':
+      return 'Dot';
+    case 'BTC':
+      return 'Btc';
+    case 'SOL':
+      return 'Sol';
+    case 'SOLUSDC':
+      return 'SolUsdc';
+    default:
+      throw new Error(`Unsupported asset: ${rpcAsset}`);
+  }
+}
+
 export function getEvmEndpoint(chain: Chain): string {
   switch (chain) {
     case 'Ethereum':
