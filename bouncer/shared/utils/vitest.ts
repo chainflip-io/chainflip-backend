@@ -58,7 +58,7 @@ export function serialTest(
   testFunction: (context: TestContext) => Promise<void>,
   timeoutSeconds: number,
 ) {
-  it<{ testContext: TestContext }>(
+  it.sequential<{ testContext: TestContext }>(
     name,
     createTestFunction(name, testFunction),
     timeoutSeconds * 1000,
