@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.9.2] - 2025-04-29
+
+### Features
+
+- Upgrade Solana vault swaps ([#5845](https://github.com/chainflip-io/chainflip-backend/issues/5845))
+- Decode vault swap rpc ([#5817](https://github.com/chainflip-io/chainflip-backend/issues/5817))
+
 ## [1.9.1] - 2025-04-29
 
 ### Features
