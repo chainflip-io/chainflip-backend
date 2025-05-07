@@ -89,7 +89,7 @@ impl<E> AllBatch<Assethub> for AssethubApi<E>
 where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Assethub>>,
 		transfer_params: Vec<(TransferAssetParams<Assethub>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {

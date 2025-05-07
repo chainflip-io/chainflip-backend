@@ -33,6 +33,7 @@ use crate::{
 };
 use ccm_checker::{CcmValidityChecker, CcmValidityError, DecodedCcmAdditionalData};
 use core::{fmt::Display, iter::Step};
+use frame_support::storage::transactional;
 use sol::api::VaultSwapAccountAndSender;
 use sp_std::marker::PhantomData;
 
@@ -597,10 +598,16 @@ pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 }
 
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<C>>,
 		transfer_params: Vec<(TransferAssetParams<C>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError>;
+	fn new_unsigned(
+		fetch_params: Vec<FetchAssetParams<C>>,
+		transfer_params: Vec<(TransferAssetParams<C>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(fetch_params, transfer_params))
+	}
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
