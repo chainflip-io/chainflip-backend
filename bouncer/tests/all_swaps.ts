@@ -1,4 +1,5 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { describe } from 'vitest';
 import { SwapParams } from '../shared/perform_swap';
 import {
   newCcmMetadata,
@@ -16,7 +17,6 @@ import {
 import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
 import { TestContext } from '../shared/utils/test_context';
 import { concurrentTest, serialTest } from '../shared/utils/vitest';
-import { describe } from 'vitest';
 
 export async function initiateSwap(
   testContext: TestContext,
@@ -54,8 +54,8 @@ export async function initiateSwap(
   );
 }
 
-export async function testAllSwaps(timeoutPerSwap: number) {
-  let allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
+export function testAllSwaps(timeoutPerSwap: number) {
+  const allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
   let allSwapsCount = 0;
 
   function appendSwap(
