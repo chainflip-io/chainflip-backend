@@ -731,5 +731,19 @@ fn can_dispatch_solana_gov_call() {
 			SolanaCallBroadcasted::get().unwrap().call_type,
 			SolanaTransactionType::SetTokenSwapParameters
 		);
+
+		assert_ok!(Environment::dispatch_solana_gov_call(
+			RuntimeOrigin::root(),
+			SolanaGovCall::UpgradeProgram {
+				program_address: SolAddress([0x11; 32]),
+				buffer_address: SolAddress([0x22; 32]),
+				spill_address: SolAddress([0x33; 32]),
+			}
+		));
+
+		assert_eq!(
+			SolanaCallBroadcasted::get().unwrap().call_type,
+			SolanaTransactionType::UpgradeProgram
+		);
 	});
 }

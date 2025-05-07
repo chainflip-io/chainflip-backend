@@ -199,6 +199,18 @@ jobs:
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.OLD_BIN_VERSION }}"
 
+      # This step is to mimick the Swap Endpoint upgrade to be done in mainnet. After 1.10 we can
+      # consider updating the Solana image and removing this step.
+      - name: Upgrade Solana Swap Endpoint
+        if: inputs.run-job
+        id: upgrade-solana-swap-endpoint
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          ./commands/upgrade_swap_endpoint.ts
+
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
         id: post-upgrade-bouncer

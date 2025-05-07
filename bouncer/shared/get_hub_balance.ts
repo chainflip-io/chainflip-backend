@@ -20,6 +20,5 @@ export async function getHubAssetBalance(asset: HubAsset, address: string): Prom
 
   const fineAmountBalance = // eslint-disable-next-line @typescript-eslint/no-explicit-any
     JSON.parse(reply as any).balance;
-  console.log('Got balance response: ' + fineAmountBalance);
   return fineAmountToAmount(fineAmountBalance, assetDecimals(asset));
 }

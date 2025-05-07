@@ -218,7 +218,33 @@ export type SwapEndpoint = {
         {
           "name": "eventDataAccount",
           "writable": true,
-          "signer": true
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "from"
+              },
+              {
+                "kind": "arg",
+                "path": "seed"
+              }
+            ]
+          }
         },
         {
           "name": "swapEndpointDataAccount",
@@ -237,6 +263,10 @@ export type SwapEndpoint = {
               "name": "swapNativeParams"
             }
           }
+        },
+        {
+          "name": "seed",
+          "type": "bytes"
         }
       ]
     },
@@ -359,7 +389,33 @@ export type SwapEndpoint = {
         {
           "name": "eventDataAccount",
           "writable": true,
-          "signer": true
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "from"
+              },
+              {
+                "kind": "arg",
+                "path": "seed"
+              }
+            ]
+          }
         },
         {
           "name": "swapEndpointDataAccount",
@@ -388,6 +444,10 @@ export type SwapEndpoint = {
               "name": "swapTokenParams"
             }
           }
+        },
+        {
+          "name": "seed",
+          "type": "bytes"
         }
       ]
     }

@@ -27,7 +27,7 @@ use crate::{
 	none::NoneChainCrypto,
 	sol::{
 		api::SolanaTransactionBuildingError,
-		sol_tx_core::instructions::program_instructions::swap_endpoints::types::CcmParams,
+		sol_tx_core::instructions::program_instructions::swap_endpoints::types::CcmParams, SolSeed,
 		SolanaCrypto, SolanaTransactionInId,
 	},
 };
@@ -1086,7 +1086,8 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 	Arbitrum(EvmVaultSwapExtraParameters<Address, Amount>),
 	Solana {
 		from: Address,
-		event_data_account: Address,
+		#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
+		seed: SolSeed,
 		input_amount: Amount,
 		refund_parameters: ChannelRefundParameters<Address>,
 		from_token_account: Option<Address>,
@@ -1109,13 +1110,13 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				VaultSwapExtraParameters::Arbitrum(extra_parameter.try_map_address(f)?),
 			VaultSwapExtraParameters::Solana {
 				from,
-				event_data_account,
+				seed,
 				input_amount,
 				refund_parameters,
 				from_token_account,
 			} => VaultSwapExtraParameters::Solana {
 				from: f(from)?,
-				event_data_account: f(event_data_account)?,
+				seed,
 				input_amount,
 				refund_parameters: refund_parameters.try_map_address(&f)?,
 				from_token_account: from_token_account.map(&f).transpose()?,
@@ -1141,13 +1142,13 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				VaultSwapExtraParameters::Arbitrum(extra_parameter.try_map_amounts(f)?),
 			VaultSwapExtraParameters::Solana {
 				from,
-				event_data_account,
+				seed,
 				input_amount,
 				refund_parameters,
 				from_token_account,
 			} => VaultSwapExtraParameters::Solana {
 				from,
-				event_data_account,
+				seed,
 				input_amount: f(input_amount)?,
 				refund_parameters,
 				from_token_account,

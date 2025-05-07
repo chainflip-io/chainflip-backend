@@ -8,7 +8,7 @@ import {
 } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { getSolanaVaultIdl } from '../shared/contract_interfaces';
-import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0-alt-manager/vault';
+import { Vault } from '../../contract-interfaces/sol-program-idls/v1.1.0/vault';
 import { TestContext } from '../shared/utils/test_context';
 import { Logger } from '../shared/utils/logger';
 

@@ -274,7 +274,7 @@ pub fn solana_vault_swap<A>(
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
 	from: EncodedAddress,
-	event_data_account: EncodedAddress,
+	seed: cf_chains::sol::SolSeed,
 	from_token_account: Option<EncodedAddress>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	// Load up environment variables.
@@ -300,8 +300,15 @@ pub fn solana_vault_swap<A>(
 				.map_err(|_| "Invalid refund address")?,
 		)
 	})?;
-	let event_data_account = SolPubkey::try_from(event_data_account)
-		.map_err(|_| "Invalid Solana Address: event_data_account")?;
+	let event_data_account =
+		cf_chains::sol::sol_tx_core::address_derivation::derive_vault_swap_account(
+			api_environment.swap_endpoint_program,
+			from.into(),
+			&seed,
+		)
+		.map_err(|_| "Failed to derive swap_endpoint_native_vault")?
+		.address
+		.into();
 	let input_amount =
 		SolAmount::try_from(input_amount).map_err(|_| "Input amount exceeded MAX")?;
 	let cf_parameters = build_cf_parameters::<Solana>(
@@ -322,6 +329,7 @@ pub fn solana_vault_swap<A>(
 				destination_asset,
 				destination_address,
 				from,
+				seed,
 				event_data_account,
 				input_amount,
 				cf_parameters,
@@ -354,6 +362,7 @@ pub fn solana_vault_swap<A>(
 					destination_address,
 					from,
 					from_token_account,
+					seed,
 					event_data_account,
 					token_supported_account.address.into(),
 					input_amount,
@@ -413,7 +422,6 @@ pub fn decode_solana_vault_swap(
 		amount,
 		src_asset,
 		src_address,
-		event_data_account,
 		from_token_account,
 		dst_address,
 		dst_token,
@@ -424,6 +432,7 @@ pub fn decode_solana_vault_swap(
 		broker_commission,
 		affiliate_fees,
 		ccm,
+		seed,
 	} = cf_chains::sol::decode_sol_instruction_data(&instruction)?;
 
 	Ok(VaultSwapInputEncoded {
@@ -433,7 +442,7 @@ pub fn decode_solana_vault_swap(
 		broker_commission,
 		extra_parameters: VaultSwapExtraParameters::Solana {
 			from: src_address.into(),
-			event_data_account: event_data_account.into(),
+			seed,
 			input_amount: amount,
 			refund_parameters,
 			from_token_account: from_token_account.map(|addr| addr.into()),
