@@ -2035,7 +2035,7 @@ impl<T: Config> Pallet<T> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolInfo {
-			limit_order_fee_hundredth_pips: pool.pool_state.limit_order_fee(),
+			limit_order_fee_hundredth_pips: Zero::zero(),
 			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
 			range_order_total_fees_earned: pool.pool_state.range_order_total_fees_earned(),
 			limit_order_total_fees_earned: pool.pool_state.limit_order_total_fees_earned(),
