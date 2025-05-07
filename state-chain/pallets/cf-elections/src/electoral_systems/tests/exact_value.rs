@@ -167,14 +167,13 @@ fn election_result_can_be_stored_into_unsynchronised_state_map() {
 			id(0),
 			ConsensusStatus::Gained { most_recent: None, new: vec![0x01, 0x02, 0x03] },
 		);
-		assert_ok!(WitnessExactValueWithStorage::on_finalize::<
-			MockAccess<WitnessExactValueWithStorage>,
+		assert_ok!(WitnessExactValueWithoutStorage::on_finalize::<
+			MockAccess<WitnessExactValueWithoutStorage>,
 		>(vec![id(0)], &()));
 
-		// First successful lookup `takes` the storage value.
 		assert_eq!(
-			WitnessExactValueWithStorage::take_election_result::<
-				MockAccess<WitnessExactValueWithStorage>,
+			WitnessExactValueWithoutStorage::take_election_result::<
+				MockAccess<WitnessExactValueWithoutStorage>,
 			>(mock_id.clone()),
 			None,
 		);
