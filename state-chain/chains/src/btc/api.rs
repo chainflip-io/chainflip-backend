@@ -78,7 +78,7 @@ where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
 		+ ChainEnvironment<(), AggKey>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {

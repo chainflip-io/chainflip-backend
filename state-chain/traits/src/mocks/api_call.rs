@@ -115,7 +115,7 @@ thread_local! {
 }
 
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
@@ -340,7 +340,7 @@ impl MockBtcAllBatch<MockBtcEnvironment> {
 }
 
 impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {

@@ -77,7 +77,7 @@ impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
 		transfer_params: Vec<(TransferAssetParams<Polkadot>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {

@@ -183,7 +183,7 @@ impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
