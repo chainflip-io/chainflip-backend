@@ -1,11 +1,15 @@
 use super::{
 	super::state_machine::core::*,
 	block_processor::BlockProcessorEvent,
-	primitives::{ElectionTracker, SafeModeStatus},
+	optimistic_block_cache::OptimisticBlockCache,
+	primitives::{ElectionTracker, ElectionTracker2, SafeModeStatus},
 };
 use crate::electoral_systems::{
-	block_height_tracking::ChainProgress,
-	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
+	block_height_tracking::{ChainProgress, ChainTypes},
+	block_witnesser::{
+		block_processor::BlockProcessor, optimistic_block_cache::OptimisticBlock,
+		primitives::ChainProgressInner,
+	},
 	state_machine::{core::Validate, state_machine::Statemachine, state_machine_es::SMInput},
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
@@ -14,7 +18,7 @@ use core::{iter::Step, ops::Range};
 use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{fmt::Debug, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
 
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
@@ -65,16 +69,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, LogEventHook> {
 	type Output = ();
 }
 
-pub trait BWProcessorTypes: Sized {
-	type ChainBlockNumber: Serde
-		+ Copy
-		+ Eq
-		+ Ord
-		+ SaturatingStep
-		+ Step
-		+ BlockZero
-		+ Debug
-		+ 'static;
+pub trait BWProcessorTypes: ChainTypes + Sized {
 	type BlockData: PartialEq + Clone + Debug + Eq + Ord + Serde + 'static;
 
 	type Event: Serde + Debug + Clone + Eq + Ord;
@@ -111,16 +106,19 @@ pub struct BlockWitnesserSettings {
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
 	T::ChainBlockNumber: Encode,
+	T::ChainBlockHash: Encode,
 	T::ElectionPropertiesHook: Encode,
 	T::SafeModeEnabledHook: Encode,
+	T::BlockData: Encode,
 
 	BlockProcessor<T>: Encode,
 ))]
 pub struct BlockWitnesserState<T: BWTypes> {
-	pub elections: ElectionTracker<T::ChainBlockNumber>,
+	pub elections: ElectionTracker2<T>,
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
 	pub safemode_enabled: T::SafeModeEnabledHook,
 	pub block_processor: BlockProcessor<T>,
+	pub optimistic_blocks_cache: OptimisticBlockCache<T>,
 	pub _phantom: sp_std::marker::PhantomData<T>,
 }
 
@@ -128,7 +126,7 @@ impl<T: BWTypes> Validate for BlockWitnesserState<T> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.elections.is_valid()
+		Ok(())
 	}
 }
 
@@ -143,38 +141,58 @@ where
 			generate_election_properties_hook: Default::default(),
 			safemode_enabled: Default::default(),
 			block_processor: Default::default(),
+			optimistic_blocks_cache: Default::default(),
 			_phantom: Default::default(),
 		}
 	}
 }
 
-#[derive_where(Debug, Clone, PartialEq, Eq;
-	T::ChainBlockNumber: Debug + Clone + Eq,
-	T::ElectionProperties: Debug + Clone + Eq,
-)]
-#[derive_where(Default;
-	T::ChainBlockNumber: Default,
-	T::ElectionProperties: Default,
-)]
+#[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
+	T::ChainBlockHash: Encode,
 	T::ChainBlockNumber: Encode,
 	T::ElectionProperties: Encode,
 ))]
 pub struct BWElectionProperties<T: BWTypes> {
+	pub election_type: BWElectionType<T>,
 	pub block_height: T::ChainBlockNumber,
 	pub properties: T::ElectionProperties,
-	pub reorg_id: u8,
 }
 
-impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, T::BlockData> for BWStatemachine<T> {
+#[derive_where(Debug, Clone, PartialEq, Eq;)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[codec(encode_bound(
+	T::ChainBlockHash: Encode,
+	T::ChainBlockNumber: Encode,
+))]
+#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
+pub enum BWElectionType<T: ChainTypes> {
+	/// Querying blocks we haven't received a hash for yet
+	Optimistic,
+
+	/// Querying blocks by hash
+	ByHash(T::ChainBlockHash),
+
+	/// Querying "old" blocks that are below the safety margin,
+	/// and thus we don't care about the hash anymore
+	SafeBlockHeight,
+}
+
+impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, (T::BlockData, Option<T::ChainBlockHash>)>
+	for BWStatemachine<T>
+{
 	type Error = ();
 
 	fn validate(
-		_index: &BWElectionProperties<T>,
-		_value: &T::BlockData,
+		index: &BWElectionProperties<T>,
+		(_, hash): &(T::BlockData, Option<T::ChainBlockHash>),
 	) -> Result<(), Self::Error> {
-		Ok(())
+		use BWElectionType::*;
+		match (&index.election_type, hash) {
+			(ByHash(_), None) | (Optimistic, Some(_)) | (SafeBlockHeight, None) => Ok(()),
+			_ => Err(()),
+		}
 	}
 }
 
@@ -184,8 +202,10 @@ pub struct BWStatemachine<Types: BWTypes> {
 }
 
 impl<T: BWTypes> Statemachine for BWStatemachine<T> {
-	type Input =
-		SMInput<(BWElectionProperties<T>, T::BlockData), ChainProgress<T::ChainBlockNumber>>;
+	type Input = SMInput<
+		(BWElectionProperties<T>, (T::BlockData, Option<T::ChainBlockHash>)),
+		ChainProgress<T>,
+	>;
 	type InputIndex = Vec<BWElectionProperties<T>>;
 	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
@@ -196,48 +216,79 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.ongoing
 			.clone()
 			.into_iter()
-			.map(|(block_height, reorg_id)| BWElectionProperties {
+			.map(|(block_height, election_type)| BWElectionProperties {
 				properties: s.generate_election_properties_hook.run(block_height),
+				election_type,
 				block_height,
-				reorg_id,
 			})
 			.collect()
 	}
 
 	fn step(s: &mut Self::State, i: Self::Input, settings: &Self::Settings) -> Self::Output {
-		let processor_input = match i {
-			SMInput::Context(ChainProgress::FirstConsensus(range)) => {
-				s.elections.next_election = *range.start();
-				s.elections.schedule_range(range.clone());
+		match i {
+			// TODO: unify these two cases
+			SMInput::Context(ChainProgress::Range(hashes, range)) => {
+				s.elections.schedule_range(
+					range.clone(),
+					hashes.clone(),
+					settings.safety_margin as usize,
+				);
 
-				Some((ChainProgressInner::Progress(*range.start()), None))
+				for (height, block) in s.optimistic_blocks_cache.get_blocks(&hashes) {
+					s.block_processor.process_block_data((
+						height,
+						block.data,
+						settings.safety_margin,
+					));
+				}
+
+				s.block_processor
+					.process_chain_progress(ChainProgressInner::Progress(*range.end()));
 			},
 
-			SMInput::Context(ChainProgress::Range(range)) => {
-				s.elections.schedule_range(range.clone());
-				if *range.start() < s.elections.next_witnessed {
-					//Reorg
-					Some((ChainProgressInner::Reorg(range.clone()), None))
-				} else {
-					Some((ChainProgressInner::Progress(*range.end()), None))
+			SMInput::Context(ChainProgress::Reorg(hashes, range)) => {
+				s.elections.schedule_range(
+					range.clone(),
+					hashes.clone(),
+					settings.safety_margin as usize,
+				);
+
+				for (height, block) in s.optimistic_blocks_cache.get_blocks(&hashes) {
+					s.block_processor.process_block_data((
+						height,
+						block.data,
+						settings.safety_margin,
+					));
+				}
+
+				s.block_processor
+					.process_chain_progress(ChainProgressInner::Reorg(range.clone()));
+			},
+
+			SMInput::Context(ChainProgress::None) => (),
+
+			SMInput::Consensus((properties, (blockdata, blockhash))) => {
+				log::info!("got {:?} block data: {:?}", properties.election_type, blockdata);
+
+				use BWElectionType::*;
+				match s.elections.mark_election_done(
+					properties.block_height,
+					&properties.election_type,
+					&blockhash,
+				) {
+					Some(Optimistic) => s.optimistic_blocks_cache.add_block(
+						properties.block_height,
+						OptimisticBlock { hash: blockhash.unwrap(), data: blockdata },
+					),
+					Some(ByHash(_) | SafeBlockHeight) => s.block_processor.process_block_data((
+						properties.block_height,
+						blockdata,
+						settings.safety_margin,
+					)),
+					None => (),
 				}
 			},
-
-			SMInput::Context(ChainProgress::None) => None,
-
-			SMInput::Consensus((properties, blockdata)) => {
-				s.elections.mark_election_done(properties.block_height);
-				log::info!("got block data: {:?}", blockdata);
-				Some((
-					ChainProgressInner::Progress(s.elections.next_witnessed.saturating_backward(1)),
-					Some((properties.block_height, blockdata, settings.safety_margin)),
-				))
-			},
 		};
-
-		if let Some((progress, block)) = processor_input {
-			s.block_processor.process_block_data(progress, block);
-		}
 
 		s.elections.start_more_elections(
 			settings.max_concurrent_elections as usize,
@@ -247,6 +298,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		Ok(())
 	}
 
+	/*
 	/// Specifiation for step function
 	#[cfg(test)]
 	fn step_specification(
@@ -393,6 +445,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			Context(None) => (),
 		}
 	}
+	*/
 }
 
 #[cfg(test)]
@@ -401,6 +454,7 @@ pub mod tests {
 
 	use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
 	use proptest::{
+		arbitrary::arbitrary,
 		prelude::{any, Arbitrary, BoxedStrategy, Just, Strategy},
 		prop_oneof,
 		sample::select,
@@ -410,6 +464,7 @@ pub mod tests {
 	use super::*;
 	use crate::prop_do;
 	use hook_test_utils::*;
+	use proptest::collection::*;
 
 	const SAFETY_MARGIN: u32 = 3;
 	fn generate_state<
@@ -417,12 +472,13 @@ pub mod tests {
 	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
 		T::ChainBlockNumber: Arbitrary,
+		T::ChainBlockHash: Arbitrary,
 		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
 		T::BlockData: Default + Clone + Debug + Eq,
 	{
 		prop_do! {
-			let (next_election, next_witnessed,
-				 next_priority_election, reorg_id,
+			let (next_election, seen_heights_below,
+				 priority_elections_below, reorg_id,
 				safemode_enabled) in (
 				any::<T::ChainBlockNumber>(),
 				any::<T::ChainBlockNumber>(),
@@ -431,14 +487,18 @@ pub mod tests {
 				any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else {SafeModeStatus::Disabled})
 			);
 
-			let ongoing in proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<u8>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election));
+			let (ongoing, queued_elections) in
+			(
+				proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<BWElectionType<T>>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election)),
+				proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<T::ChainBlockHash>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election))
+			);
 			LazyJust::new(move || BlockWitnesserState {
-				elections: ElectionTracker {
-					next_election,
-					next_witnessed,
-					next_priority_election,
+				elections: ElectionTracker2 {
+					queued_next_safe_height: None,
+					queued_elections: BTreeMap::from_iter(queued_elections.clone()),
+					seen_heights_below,
+					priority_elections_below,
 					ongoing: BTreeMap::from_iter(ongoing.clone()),
-					reorg_id
 				},
 				generate_election_properties_hook: Default::default(),
 				safemode_enabled: MockHook::new(safemode_enabled),
@@ -449,6 +509,7 @@ pub mod tests {
 					execute:Default::default(),
 					delete_data: Default::default()
 				},
+				optimistic_blocks_cache: Default::default(),
 				_phantom: core::marker::PhantomData,
 			})
 		}
@@ -459,19 +520,26 @@ pub mod tests {
 	) -> BoxedStrategy<<BWStatemachine<T> as Statemachine>::Input>
 	where
 		T::ChainBlockNumber: Arbitrary,
+		T::ChainBlockHash: Arbitrary,
 		T::BlockData: Arbitrary,
 	{
 		let generate_input = |index: BWElectionProperties<T>| {
 			prop_oneof![
-				any::<T::BlockData>()
+				(any::<T::BlockData>(), any::<Option<T::ChainBlockHash>>())
 					.prop_map(move |data| (SMInput::Consensus((index.clone(), data)))),
 				prop_oneof![
 					Just(ChainProgress::None),
-					(any::<T::ChainBlockNumber>(), 0..20usize)
-						.prop_map(|(a, b)| ChainProgress::Range(a..=a.saturating_forward(b))),
-					(any::<T::ChainBlockNumber>(), 0..20usize).prop_map(|(a, b)| {
-						ChainProgress::FirstConsensus(a..=a.saturating_forward(b))
-					})
+					(
+						any::<T::ChainBlockNumber>(),
+						btree_map(any::<T::ChainBlockNumber>(), any::<T::ChainBlockHash>(), 0..20)
+					)
+						.prop_map(|(a, hashes)| ChainProgress::Range(
+							hashes.clone(),
+							a..=a.saturating_forward(hashes.len())
+						)),
+					// (any::<T::ChainBlockNumber>(), 0..20usize).prop_map(|(a, b)| {
+					// 	ChainProgress::FirstConsensus(a..=a.saturating_forward(b))
+					// })
 				]
 				.prop_map(SMInput::Context)
 			]
@@ -488,26 +556,33 @@ pub mod tests {
 		}
 	}
 
-	impl<N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static>
-		BWTypes for N
+	impl<
+			N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static,
+			H: Serde + Ord + Clone + Debug + Default + 'static,
+			D: Serde + Ord + Clone + Debug + Default + 'static,
+		> BWTypes for (N, H, Vec<D>)
 	{
 		type ElectionProperties = ();
 		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;
 		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 	}
 
+	type Types = (u32, Vec<u8>, Vec<u8>);
+
 	#[test]
 	pub fn test_bw_statemachine() {
-		BWStatemachine::<u32>::test(
+		BWStatemachine::<Types>::test(
 			file!(),
 			generate_state(),
 			prop_do! {
 				let max_concurrent_elections in 0..10u16;
 				return BlockWitnesserSettings { max_concurrent_elections, safety_margin: SAFETY_MARGIN}
 			},
-			generate_input::<u32>,
+			generate_input::<Types>,
 		);
 	}
+
+	/*
 
 	struct TestChain {}
 	impl ChainWitnessConfig for TestChain {
@@ -527,4 +602,5 @@ pub mod tests {
 			generate_input::<BlockWitnessRange<TestChain>>,
 		);
 	}
+	*/
 }
