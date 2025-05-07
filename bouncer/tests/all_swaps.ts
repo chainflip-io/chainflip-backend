@@ -65,8 +65,9 @@ export function testAllSwaps(timeoutPerSwap: number) {
     ccmSwap: boolean = false,
   ) {
     allSwapsCount++;
+    const swapType = functionCall === testSwap ? 'Swap' : 'VaultSwap';
     allSwaps.push({
-      name: `Swap ${allSwapsCount}: ${sourceAsset} to ${destAsset} ${ccmSwap ? '(CCM)' : ''}`,
+      name: `Swap ${allSwapsCount}: ${sourceAsset} to ${destAsset} (${ccmSwap ? 'CCM ' : ''}${swapType})`,
       test: async (context) => {
         await initiateSwap(context, sourceAsset, destAsset, functionCall, ccmSwap);
       },
