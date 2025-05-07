@@ -5,8 +5,9 @@ use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
-	cmp::max,
+	cmp::{max, min},
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	iter,
 	vec::Vec,
 };
 
@@ -17,6 +18,14 @@ use crate::electoral_systems::{
 	block_height_tracking::ChainTypes,
 	state_machine::core::{fst, Validate},
 };
+
+use super::state_machine::BWElectionType;
+
+macro_rules! do_match {
+	($($tt:tt)*) => {
+		|x| match x {$($tt)*}
+	};
+}
 
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
@@ -35,14 +44,18 @@ pub struct ElectionTracker2<T: ChainTypes> {
 	/// Block hashes we got from the BHW.
 	pub queued_elections: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
 
-	/// Hashes of elections currently ongoing
-	pub ongoing: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+	/// Block heights which are queued but already past the safetymargin don't
+	/// have associated hashes. We just store the lowest height which we want
+	/// to query.
+	pub queued_next_safe_height: Option<T::ChainBlockNumber>,
 
-	/// Elections for block numbers that we don't have the hashes for yet
-	pub ongoing_optimistic: BTreeSet<T::ChainBlockNumber>,
+	/// Hashes of elections currently ongoing
+	pub ongoing: BTreeMap<T::ChainBlockNumber, BWElectionType<T>>,
 }
 
 impl<T: ChainTypes> ElectionTracker2<T> {
+	/// There are three types of elections:
+	///  - ByHash() elections are started
 	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
 		// In case of a reorg we still want to recreate elections for blocks which we had
 		// elections for previously AND were touched by the reorg
@@ -51,28 +64,97 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 			SafeModeStatus::Enabled => self.priority_elections_below.clone(),
 		};
 
+		let next_safe_height = self.queued_next_safe_height.unwrap_or(self.next_election());
+
+		use BWElectionType::*;
+		let safe_elections = (next_safe_height..min(self.next_election(), start_all_below))
+			.map(|height| (height, SafeBlockHeight));
+		let hash_elections = self
+			.queued_elections
+			.extract_if(|n, _| *n < start_all_below)
+			.map(|(height, hash)| (height, ByHash(hash)));
+		let opti_elections = iter::once((self.seen_heights_below, Optimistic));
+
 		// schedule at most `max_new_elections`
 		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
 		self.ongoing.extend(
-			self.queued_elections
-				.extract_if(|n, _| *n < start_all_below)
+			safe_elections
+				.chain(hash_elections)
+				.chain(opti_elections)
+				.inspect(|(height, election_type)| {
+					if *election_type != Optimistic {
+						self.queued_next_safe_height = Some(height.saturating_forward(1))
+					}
+				})
 				.take(max_new_elections),
 		);
 	}
 
-	/// If an election is done we remove it from the ongoing list
-	pub fn mark_election_done(&mut self, height: T::ChainBlockNumber, hash: &T::ChainBlockHash) {
+	/// If an election is done we remove it from the ongoing list.
+	/// This function returns the current election type for the given block height.
+	/// Note that the election type might be different from the election type that was closed for
+	/// this height, due to:
+	///  - We had a reorg, and the hash we are querying for changed, and in the same statechain
+	///    block we receive a result for the old hash
+	///  - The election was `Optimistic`, we received a hash for it, and in the same statechain
+	///    block we got the result of the optimistic election, which might or might not be for the
+	///    hash we now got.
+	///  - The election was `ByHash`, but it got too old and its type changed to `SafeBlockHeight`
+	pub fn mark_election_done(
+		&mut self,
+		height: T::ChainBlockNumber,
+		received: &BWElectionType<T>,
+		received_hash: &Option<T::ChainBlockHash>,
+	) -> Option<BWElectionType<T>> {
+		// update the lowest unseen block,
+		// currently this only has an effect if we get an Optimistic block
+		self.seen_heights_below = max(self.seen_heights_below, height.saturating_forward(1));
+
 		// Note: if we receive blockdata for a block number, and
 		// in the same statechain block there's a reorg which changes the hash of this block,
 		// then we shouldn't close the election.
 
-		if self.ongoing.get(&height) == Some(hash) {
-			self.ongoing.remove(&height);
-		}
-	}
+		use BWElectionType::*;
+		self.ongoing
+			.get(&height)
+			.cloned()
+			.and_then(|current| match (received, &current) {
+				// if we receive a result for the same election type as is currently open,
+				// we close it
+				(a, b) if a == b => Some(current),
 
-	pub fn mark_optimistic_election_done(&mut self, height: T::ChainBlockNumber) {
-		self.ongoing_optimistic.remove(&height);
+				// if we get consensus for a by-hash election whose hash doesn't match with
+				// the hash we have currently, we keep it open
+				(ByHash(a), ByHash(b)) if a != b => None,
+
+				// if we get an optimistic consensus for an election that is already by-hash,
+				// we check whether the `received_hash` is the same as the hash we're currently
+				// querying for. If it is, we accept the optimistic block as result for the by-hash
+				// election. otherwise we keep the by-hash election open.
+				(Optimistic, ByHash(current_hash)) =>
+					if received_hash.as_ref() == Some(current_hash) {
+						Some(current)
+					} else {
+						None
+					},
+
+				// If we get an optimistic consensus for an election that is already past
+				// safety-margin we ignore it, it's safer to re-query by block height. This
+				// should virtually never happen, only in case where the querying takes a *very*
+				// long time.
+				(Optimistic, SafeBlockHeight) => None,
+
+				// If we get a by-hash consensus for an election that is already past safety-margin,
+				// we ignore it. We've already deleted the hash for this election from storage,
+				// so we can't check whether we got the correct block. It's safer to re-query.
+				(ByHash(_), SafeBlockHeight) => None,
+
+				// All other cases should be impossible
+				(_, _) => None,
+			})
+			.inspect(|_| {
+				self.ongoing.remove(&height);
+			})
 	}
 
 	/// This function schedules all elections up to `range.end()`
@@ -80,6 +162,7 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		&mut self,
 		range: RangeInclusive<T::ChainBlockNumber>,
 		mut hashes: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+		safety_margin: usize,
 	) {
 		// Check whether there is a reorg concerning elections we have started previously.
 		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
@@ -102,12 +185,12 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		// if there are elections ongoing for the block heights we received, we stop them
 		self.ongoing.retain(|height, _| !hashes.contains_key(height));
 
-		// if there are optimistic elections ongoing for the block heights we received, we stop them
-		self.ongoing_optimistic.retain(|height| !hashes.contains_key(height));
-
-		//--- finally ---
 		// adding all hashes to the queue
 		self.queued_elections.append(&mut hashes);
+
+		// clean up the queue by removing old hashes
+		self.queued_elections
+			.retain(|height, _| height.saturating_forward(safety_margin) >= *range.end());
 	}
 
 	fn next_election(&self) -> T::ChainBlockNumber {
@@ -126,6 +209,7 @@ impl<T: ChainTypes> Default for ElectionTracker2<T> {
 			priority_elections_below: T::ChainBlockNumber::zero(),
 			queued_elections: Default::default(),
 			ongoing: Default::default(),
+			queued_next_safe_height: None,
 		}
 	}
 }

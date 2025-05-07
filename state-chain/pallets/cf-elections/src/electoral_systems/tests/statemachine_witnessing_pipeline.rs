@@ -23,8 +23,8 @@ use crate::electoral_systems::{
 		},
 		primitives::SafeModeStatus,
 		state_machine::{
-			tests::*, BWElectionProperties, BWProcessorTypes, BWStatemachine, BWTypes,
-			BlockWitnesserSettings, BlockWitnesserState,
+			tests::*, BWElectionProperties, BWElectionType, BWProcessorTypes, BWStatemachine,
+			BWTypes, BlockWitnesserSettings, BlockWitnesserState,
 		},
 	},
 	state_machine::{
@@ -109,8 +109,23 @@ pub fn test_all() {
 			for index in indices {
 				let chain =
 					MockChain::<char, Types>::new_with_offset(OFFSET, self.get_next_chain()?);
-				if let Some(block_data) = chain.get_block_by_hash(index.block_hash.clone()) {
-					inputs.push(SMInput::Consensus((index, block_data)));
+
+				use BWElectionType::*;
+				match index.election_type {
+					Optimistic =>
+						if let Some(block_data) = chain.get_block_by_height(index.block_height) {
+							let header = chain.get_block_header(index.block_height).unwrap();
+							inputs
+								.push(SMInput::Consensus((index, (block_data, Some(header.hash)))));
+						},
+					ByHash(hash) =>
+						if let Some(block_data) = chain.get_block_by_hash(hash) {
+							inputs.push(SMInput::Consensus((index, (block_data, None))));
+						},
+					SafeBlockHeight =>
+						if let Some(block_data) = chain.get_block_by_height(index.block_height) {
+							inputs.push(SMInput::Consensus((index, (block_data, None))));
+						},
 				}
 			}
 			Some(inputs)
@@ -153,6 +168,7 @@ pub fn test_all() {
             safemode_enabled: MockHook::new(SafeModeStatus::Disabled),
             block_processor,
             _phantom: core::marker::PhantomData,
+            optimistic_blocks_cache: Default::default(),
         };
         let bw_settings = BlockWitnesserSettings {
             max_concurrent_elections: 4,

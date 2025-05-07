@@ -359,6 +359,12 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = usize>> MockCh
 			.find(|(height, block)| block.block_id == hash)
 			.map(|(height, block)| block.events.clone())
 	}
+	pub fn get_block_by_height(&self, number: T::ChainBlockNumber) -> Option<Vec<E>> {
+		self.chain
+			.iter()
+			.find(|(height, block)| *height == number)
+			.map(|(height, block)| block.events.clone())
+	}
 	pub fn get_best_block_header(&self) -> Header<T> {
 		let best_height = self.get_best_block_height();
 		self.get_block_header(best_height).expect(&format!(

@@ -36,16 +36,16 @@ impl<T: BWTypes> OptimisticBlockCache<T> {
 
 	pub fn get_blocks(
 		&mut self,
-		properties: &Vec<BWElectionProperties<T>>,
-	) -> Vec<OptimisticBlock<T>> {
+		properties: &BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+	) -> Vec<(T::ChainBlockNumber, OptimisticBlock<T>)> {
 		// TODO this algorithm could be improved probably!
 		let mut result = Vec::new();
-		for property in properties {
-			if let Some(block) = self.blocks.remove(&property.block_height) {
-				if Some(&block.hash) == property.block_hash.as_ref() {
-					result.push(block);
+		for (block_height, block_hash) in properties.iter() {
+			if let Some(block) = self.blocks.remove(&block_height) {
+				if block.hash == *block_hash {
+					result.push((*block_height, block));
 				} else {
-					self.blocks.insert(property.block_height, block);
+					self.blocks.insert(*block_height, block);
 				}
 			}
 		}
