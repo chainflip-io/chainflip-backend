@@ -134,12 +134,18 @@ jobs:
         if: inputs.full-bouncer
         working-directory: bouncer
         run: |
+          # This export PATH is needed when upgrading the Swap Endpoint program as it's to be done in mainnet.
+          # After 1.10 we can consider updating the Solana image and removing this step.
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           ./full_bouncer.sh
 
       - name: Run HeuteLeiderNicht.einfach.exe 🦺
         if: ${{ ! inputs.full-bouncer }}
         working-directory: bouncer
         run: |
+          # This export PATH is needed when upgrading the Swap Endpoint program as it's to be done in mainnet.
+          # After 1.10 we can consider updating the Solana image and removing this step.
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           ./fast_bouncer.sh
 
       - name: Write chain explorer to file 📝
