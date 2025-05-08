@@ -57,7 +57,6 @@ pub trait WeightInfo {
 	fn schedule_limit_order_update() -> Weight;
 	fn set_maximum_price_impact(n: u32, ) -> Weight;
 	fn cancel_orders_batch(n: u32, ) -> Weight;
-	fn cancel_limit_order() -> Weight;
 }
 
 /// Weights for pallet_cf_pools using the Substrate node and recommended hardware.
@@ -222,25 +221,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(5_u64))
 			.saturating_add(Weight::from_parts(0, 440).saturating_mul(n.into()))
 	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::Pools` (r:1 w:1)
-	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:2 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::HistoricalEarnedFees` (r:1 w:1)
-	/// Proof: `LiquidityPools::HistoricalEarnedFees` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn cancel_limit_order() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `2589`
-		//  Estimated: `8529`
-		// Minimum execution time: 47_000_000 picoseconds.
-		Weight::from_parts(50_000_000, 8529)
-			.saturating_add(T::DbWeight::get().reads(6_u64))
-			.saturating_add(T::DbWeight::get().writes(3_u64))
-	}
 }
 
 // For backwards compatibility and tests
@@ -403,24 +383,5 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(7_u64))
 			.saturating_add(ParityDbWeight::get().writes(5_u64))
 			.saturating_add(Weight::from_parts(0, 440).saturating_mul(n.into()))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::Pools` (r:1 w:1)
-	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:2 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::HistoricalEarnedFees` (r:1 w:1)
-	/// Proof: `LiquidityPools::HistoricalEarnedFees` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn cancel_limit_order() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `2589`
-		//  Estimated: `8529`
-		// Minimum execution time: 47_000_000 picoseconds.
-		Weight::from_parts(50_000_000, 8529)
-			.saturating_add(ParityDbWeight::get().reads(6_u64))
-			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
 }

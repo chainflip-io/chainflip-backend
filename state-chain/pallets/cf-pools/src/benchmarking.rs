@@ -281,16 +281,16 @@ mod benchmarks {
 		#[extrinsic_call]
 		schedule_limit_order_update(
 			RawOrigin::Signed(caller.clone()),
-			Box::new(Call::<T>::set_limit_order {
-				base_asset: Asset::Eth,
-				quote_asset: Asset::Usdc,
-				side: Side::Sell,
-				id: 0,
+			Asset::Eth,
+			Asset::Usdc,
+			Side::Sell,
+			0,
+			LimitOrderUpdateDetails::Set {
 				option_tick: Some(0),
 				sell_amount: 100,
-				close_order_at: None,
-			}),
-			BlockNumberFor::<T>::from(5u32),
+				close_order_at: Some(BlockNumberFor::<T>::from(10u32)),
+			},
+			Some(BlockNumberFor::<T>::from(5u32)),
 		);
 
 		assert!(!ScheduledLimitOrderUpdates::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
@@ -362,41 +362,6 @@ mod benchmarks {
 		crate::benchmarking::benchmarks::cancel_orders_batch(
 			RawOrigin::Signed(caller.clone()),
 			orders_to_delete,
-		);
-	}
-
-	#[benchmark]
-	fn cancel_limit_order() {
-		const LIMIT_ORDER_ID: u64 = 0;
-		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(
-			T::EnsureGovernance::try_successful_origin().unwrap(),
-			Asset::Eth,
-			Asset::Usdc,
-			0,
-			price_at_tick(0).unwrap()
-		));
-		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
-		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
-
-		assert_ok!(Pallet::<T>::set_limit_order(
-			RawOrigin::Signed(caller.clone()).into(),
-			Asset::Eth,
-			Asset::Usdc,
-			Side::Sell,
-			LIMIT_ORDER_ID,
-			Some(0),
-			1_000,
-			None,
-		));
-
-		#[extrinsic_call]
-		cancel_limit_order(
-			RawOrigin::Signed(caller),
-			Asset::Eth,
-			Asset::Usdc,
-			Side::Sell,
-			LIMIT_ORDER_ID,
 		);
 	}
 

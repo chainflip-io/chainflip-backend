@@ -390,16 +390,16 @@ fn can_execute_scheduled_limit_order() {
 		MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT);
 		assert_ok!(LiquidityPools::schedule_limit_order_update(
 			RuntimeOrigin::signed(ALICE),
-			Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
-				base_asset: Asset::Flip,
-				quote_asset: STABLE_ASSET,
-				side: Side::Buy,
-				id: order_id,
+			Asset::Flip,
+			STABLE_ASSET,
+			Side::Buy,
+			order_id,
+			LimitOrderUpdateDetails::Set {
 				option_tick: Some(100),
 				sell_amount: AMOUNT,
 				close_order_at: None,
-			}),
-			6
+			},
+			Some(6)
 		));
 		assert_eq!(
 			last_event::<Test>(),
@@ -427,39 +427,21 @@ fn can_execute_scheduled_limit_order() {
 }
 
 #[test]
-fn schedule_rejects_unsupported_calls() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			LiquidityPools::schedule_limit_order_update(
-				RuntimeOrigin::signed(ALICE),
-				Box::new(pallet_cf_pools::Call::<Test>::set_pool_fees {
-					base_asset: Asset::Eth,
-					quote_asset: STABLE_ASSET,
-					fee_hundredth_pips: 0,
-				}),
-				6
-			),
-			Error::<Test>::UnsupportedCall
-		);
-	});
-}
-
-#[test]
 fn cant_schedule_in_the_past() {
 	new_test_ext().then_execute_at_block(10u32, |_| {
 		assert_noop!(
 			LiquidityPools::schedule_limit_order_update(
 				RuntimeOrigin::signed(ALICE),
-				Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
-					base_asset: Asset::Flip,
-					quote_asset: STABLE_ASSET,
-					side: Side::Buy,
-					id: 0,
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				0,
+				LimitOrderUpdateDetails::Set {
 					option_tick: Some(0),
 					sell_amount: 55,
 					close_order_at: None,
-				}),
-				9
+				},
+				Some(9)
 			),
 			Error::<Test>::LimitOrderUpdateExpired
 		);
@@ -1457,31 +1439,35 @@ fn test_limit_order_auto_close() {
 
 			// Make sure that a close order block will always be in the future when scheduling an
 			// update
-			let call = Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
-				base_asset: ASSET,
-				quote_asset: STABLE_ASSET,
-				side: Side::Sell,
-				id: ORDER_ID,
+			let details = LimitOrderUpdateDetails::Set {
 				option_tick: Some(5),
 				sell_amount: AMOUNT,
 				close_order_at: Some(CLOSE_ORDER_AT),
-			});
+			};
 			assert_noop!(
 				LiquidityPools::schedule_limit_order_update(
 					RuntimeOrigin::signed(ALICE),
-					call.clone(),
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					ORDER_ID,
+					details.clone(),
 					// Schedule the call for the same block as the close order, so it
 					// should be rejected
-					CLOSE_ORDER_AT,
+					Some(CLOSE_ORDER_AT),
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);
 			assert_noop!(
 				LiquidityPools::schedule_limit_order_update(
 					RuntimeOrigin::signed(ALICE),
-					call,
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					ORDER_ID,
+					details,
 					// Schedule the call for after the close order, so it should be rejected
-					CLOSE_ORDER_AT + 1,
+					Some(CLOSE_ORDER_AT + 1),
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);
@@ -1537,71 +1523,4 @@ fn test_limit_order_auto_close() {
 				0
 			);
 		});
-}
-
-#[test]
-fn test_cancel_limit_order() {
-	new_test_ext().execute_with(|| {
-		const ASSET: Asset = Asset::Flip;
-		const ORDER_ID: u64 = 1;
-		const AMOUNT: AssetAmount = 10_000;
-
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			ASSET,
-			STABLE_ASSET,
-			0,
-			price_at_tick(0).unwrap(),
-		));
-
-		MockBalance::credit_account(&ALICE, ASSET, AMOUNT);
-
-		assert_ok!(LiquidityPools::set_limit_order(
-			RuntimeOrigin::signed(ALICE),
-			ASSET,
-			STABLE_ASSET,
-			Side::Sell,
-			ORDER_ID,
-			Some(5),
-			AMOUNT,
-			None,
-		));
-
-		assert_eq!(
-			LiquidityPools::pool_orders(ASSET, STABLE_ASSET, Some(ALICE), false)
-				.unwrap()
-				.limit_orders
-				.asks
-				.len(),
-			1
-		);
-
-		assert_ok!(LiquidityPools::cancel_limit_order(
-			RuntimeOrigin::signed(ALICE),
-			ASSET,
-			STABLE_ASSET,
-			Side::Sell,
-			ORDER_ID,
-		));
-
-		assert_events_match!(
-			Test,
-			RuntimeEvent::LiquidityPools(Event::LimitOrderUpdated {
-				lp: ALICE,
-				side: Side::Sell,
-				id: ORDER_ID,
-				sell_amount_change: Some(IncreaseOrDecrease::Decrease(AMOUNT)),
-				..
-			}) => ()
-		);
-
-		assert_eq!(
-			LiquidityPools::pool_orders(ASSET, STABLE_ASSET, Some(ALICE), false)
-				.unwrap()
-				.limit_orders
-				.asks
-				.len(),
-			0
-		);
-	});
 }
