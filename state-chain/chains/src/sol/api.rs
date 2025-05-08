@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::RejectCall;
+use crate::{RejectCall, SetGovKeyWithAggKeyError};
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::marker::PhantomData;
@@ -744,15 +744,19 @@ impl<Env: 'static + SolanaEnvironment> FetchAndCloseSolanaVaultSwapAccounts for 
 }
 
 impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for SolanaApi<Environment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_maybe_old_key: Option<<SolanaCrypto as ChainCrypto>::GovKey>,
 		new_gov_key: <SolanaCrypto as ChainCrypto>::GovKey,
-	) -> Result<Self, ()> {
+	) -> Result<Self, SetGovKeyWithAggKeyError> {
 		// Lookup environment variables, such as aggkey and durable nonce.
-		let agg_key = Environment::current_agg_key().map_err(|_e| ())?;
-		let sol_api_environment = Environment::api_environment().map_err(|_e| ())?;
-		let compute_price = Environment::compute_price().map_err(|_e| ())?;
-		let durable_nonce = Environment::nonce_account().map_err(|_e| ())?;
+		let agg_key =
+			Environment::current_agg_key().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
+		let sol_api_environment =
+			Environment::api_environment().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
+		let compute_price =
+			Environment::compute_price().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
+		let durable_nonce =
+			Environment::nonce_account().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::set_gov_key_with_agg_key(
@@ -774,7 +778,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 				e,
 				durable_nonce
 			);
-			Environment::recover_durable_nonce(durable_nonce.0);
+			SetGovKeyWithAggKeyError::Failed
 		})?;
 
 		Ok(Self {
