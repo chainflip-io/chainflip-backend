@@ -22,6 +22,7 @@ use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::RuntimeDebug;
+use sp_runtime::DispatchError;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
@@ -142,6 +143,7 @@ pub enum SolanaTransactionBuildingError {
 	InvalidCcm(CcmValidityError),
 	FailedToSerializeFinalTransaction,
 	FinalTransactionExceededMaxLength(u32),
+	DispatchError(DispatchError),
 }
 
 impl sp_std::fmt::Display for SolanaTransactionBuildingError {
@@ -736,7 +738,7 @@ impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
 }
 
 impl<Env: 'static + SolanaEnvironment> FetchAndCloseSolanaVaultSwapAccounts for SolanaApi<Env> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		Self::fetch_and_batch_close_vault_swap_accounts(accounts)
