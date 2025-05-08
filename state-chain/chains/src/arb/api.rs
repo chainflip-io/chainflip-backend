@@ -44,8 +44,8 @@ impl<E> SetAggKeyWithAggKey<EvmCrypto> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	fn new_unsigned(
-		_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
+	fn new_unsigned_impl(
+		maybe_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
 		new_key: <EvmCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
 		Ok(Some(Self::SetAggKeyWithAggKey(EvmTransactionBuilder::new_unsigned(

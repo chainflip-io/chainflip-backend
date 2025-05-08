@@ -132,7 +132,7 @@ impl<E> SetAggKeyWithAggKey<BitcoinCrypto> for BitcoinApi<E>
 where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_maybe_old_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
 		_new_key: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {

@@ -486,11 +486,19 @@ pub trait ChainEnvironment<
 pub enum SetAggKeyWithAggKeyError {
 	Failed,
 	FinalTransactionExceededMaxLength,
+	DispatchError(DispatchError),
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
+		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
+		new_key: <C as ChainCrypto>::AggKey,
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(maybe_old_key, new_key))
+	}
+
+	fn new_unsigned_impl(
 		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
 		new_key: <C as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError>;
@@ -563,6 +571,12 @@ impl From<DispatchError> for AllBatchError {
 impl From<DispatchError> for ExecutexSwapAndCallError {
 	fn from(e: DispatchError) -> Self {
 		ExecutexSwapAndCallError::DispatchError(e)
+	}
+}
+
+impl From<DispatchError> for SetAggKeyWithAggKeyError {
+	fn from(e: DispatchError) -> Self {
+		SetAggKeyWithAggKeyError::DispatchError(e)
 	}
 }
 

@@ -373,7 +373,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				new_agg_key,
 				durable_nonce
 			);
-			Environment::recover_durable_nonce(durable_nonce.0);
 		})?;
 
 		Ok(Self {
@@ -678,7 +677,7 @@ impl<Env: 'static> ConsolidateCall<Solana> for SolanaApi<Env> {
 }
 
 impl<Env: 'static + SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for SolanaApi<Env> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_maybe_old_key: Option<<SolanaCrypto as ChainCrypto>::AggKey>,
 		new_key: <SolanaCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, crate::SetAggKeyWithAggKeyError> {
