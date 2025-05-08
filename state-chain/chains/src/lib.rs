@@ -548,6 +548,12 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 pub trait FetchAndCloseSolanaVaultSwapAccounts: ApiCall<<Solana as Chain>::ChainCrypto> {
 	fn new_unsigned(
 		accounts: Vec<VaultSwapAccountAndSender>,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(accounts))
+	}
+
+	fn new_unsigned_impl(
+		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError>;
 }
 
@@ -596,6 +602,12 @@ impl From<DispatchError> for SetAggKeyWithAggKeyError {
 impl From<DispatchError> for SetGovKeyWithAggKeyError {
 	fn from(e: DispatchError) -> Self {
 		SetGovKeyWithAggKeyError::DispatchError(e)
+	}
+}
+
+impl From<DispatchError> for SolanaTransactionBuildingError {
+	fn from(e: DispatchError) -> Self {
+		SolanaTransactionBuildingError::DispatchError(e)
 	}
 }
 
