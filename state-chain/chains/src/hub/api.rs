@@ -130,7 +130,7 @@ impl<E> SetAggKeyWithAggKey<PolkadotCrypto> for AssethubApi<E>
 where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
