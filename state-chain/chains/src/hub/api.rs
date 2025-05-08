@@ -150,7 +150,7 @@ impl<E> ExecutexSwapAndCall<Assethub> for AssethubApi<E>
 where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Assethub>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,

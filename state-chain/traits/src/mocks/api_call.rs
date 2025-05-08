@@ -166,7 +166,7 @@ pub struct MockEthExecutexSwapAndCall<MockEvmEnvironment> {
 }
 
 impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -303,7 +303,7 @@ pub struct MockBtcExecutexSwapAndCall<MockBtcEnvironment> {
 }
 
 impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Bitcoin>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,

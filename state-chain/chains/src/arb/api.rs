@@ -80,7 +80,7 @@ impl<E> ExecutexSwapAndCall<Arbitrum> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Arbitrum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
