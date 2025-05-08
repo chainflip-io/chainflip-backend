@@ -29,7 +29,7 @@ export async function limitOrder(
   }).event;
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
-      .setLimitOrder(ccy.toLowerCase(), 'usdc', 'sell', orderId, tick, fineAmount)
+      .setLimitOrder(ccy.toLowerCase(), 'usdc', 'sell', orderId, tick, fineAmount, null)
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
   await orderCreatedEvent;

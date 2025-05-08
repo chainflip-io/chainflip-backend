@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::SimpleSubmissionApi;
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
 	common::{PoolPairsMap, Side},
@@ -33,7 +33,10 @@ use chainflip_engine::state_chain_observer::client::{
 	StateChainClient,
 };
 use frame_support::{pallet_prelude::ConstU32, BoundedVec};
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
+use pallet_cf_pools::{
+	CloseOrder, IncreaseOrDecrease, LimitOrderUpdateDetails, OrderId, RangeOrderSize,
+	MAX_ORDERS_DELETE,
+};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
@@ -200,9 +203,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 						}),
 						_ => None,
 					})
-					.ok_or_else(|| {
-						anyhow::anyhow!("No LiquidityDepositAddressReady event was found")
-					})?;
+					.ok_or_else(|| anyhow!("No LiquidityDepositAddressReady event was found"))?;
 
 				ApiWaitForResult::TxDetails { tx_hash, response: encoded_address }
 			},
@@ -245,9 +246,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 						) => Some(egress_id),
 						_ => None,
 					})
-					.ok_or_else(|| {
-						anyhow::anyhow!("No WithdrawalEgressScheduled event was found")
-					})?;
+					.ok_or_else(|| anyhow!("No WithdrawalEgressScheduled event was found"))?;
 
 				ApiWaitForResult::TxDetails { tx_hash, response: egress_id }
 			},
@@ -339,14 +338,11 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<Vec<LimitOrder>>> {
 		self.scheduled_or_immediate(
-			pallet_cf_pools::Call::update_limit_order {
-				base_asset,
-				quote_asset,
-				side,
-				id,
-				option_tick,
-				amount_change,
-			},
+			base_asset,
+			quote_asset,
+			side,
+			id,
+			LimitOrderUpdateDetails::Update { option_tick, amount_change },
 			dispatch_at,
 			wait_for,
 		)
@@ -363,16 +359,14 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		sell_amount: AssetAmount,
 		dispatch_at: Option<BlockNumber>,
 		wait_for: WaitFor,
+		close_order_at: Option<BlockNumber>,
 	) -> Result<ApiWaitForResult<Vec<LimitOrder>>> {
 		self.scheduled_or_immediate(
-			pallet_cf_pools::Call::set_limit_order {
-				base_asset,
-				quote_asset,
-				side,
-				id,
-				option_tick,
-				sell_amount,
-			},
+			base_asset,
+			quote_asset,
+			side,
+			id,
+			LimitOrderUpdateDetails::Set { option_tick, sell_amount, close_order_at },
 			dispatch_at,
 			wait_for,
 		)
@@ -381,23 +375,27 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 
 	async fn scheduled_or_immediate(
 		&self,
-		call: pallet_cf_pools::Call<state_chain_runtime::Runtime>,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderId,
+		details: LimitOrderUpdateDetails<BlockNumber>,
 		dispatch_at: Option<BlockNumber>,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<Vec<LimitOrder>>> {
 		Ok(into_api_wait_for_result(
-			if let Some(dispatch_at) = dispatch_at {
-				self.submit_signed_extrinsic_wait_for(
-					pallet_cf_pools::Call::schedule_limit_order_update {
-						call: Box::new(call),
-						dispatch_at,
-					},
-					wait_for,
-				)
-				.await?
-			} else {
-				self.submit_signed_extrinsic_wait_for(call, wait_for).await?
-			},
+			self.submit_signed_extrinsic_wait_for(
+				pallet_cf_pools::Call::schedule_limit_order_update {
+					base_asset,
+					quote_asset,
+					side,
+					id,
+					details,
+					dispatch_at,
+				},
+				wait_for,
+			)
+			.await?,
 			collect_limit_order_returns,
 		))
 	}
@@ -463,7 +461,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 						) => Some(swap_request_id),
 						_ => None,
 					})
-					.ok_or_else(|| anyhow::anyhow!("No SwapRequested event was found"))?;
+					.ok_or_else(|| anyhow!("No SwapRequested event was found"))?;
 
 				ApiWaitForResult::TxDetails { tx_hash, response: swap_request_id }
 			},
