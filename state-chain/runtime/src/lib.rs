@@ -46,7 +46,7 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+		NetworkFees, RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
 		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
 		VaultAddresses, VaultSwapDetails,
 	},
@@ -319,7 +319,6 @@ impl pallet_cf_environment::Config for Runtime {
 }
 
 parameter_types! {
-	pub const NetworkFee: Permill = Permill::from_perthousand(1);
 	pub const ScreeningBrokerId: AccountId = AccountId::new(
 		// Screening Account: `cFHvfaLQ8prf25JCxY2tzGR8WuNiCLjkALzy5J3H8jbo3Brok`
 		hex_literal::hex!("026de9d675fae14536ce79a478f4d16215571984b8bad180463fa27ea78d9c4f")
@@ -338,7 +337,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
 	type CcmValidityChecker = CcmValidityChecker;
-	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
@@ -1808,8 +1806,7 @@ impl_runtime_apis! {
 
 			if include_fee(FeeTypes::Network) {
 				fees_vec.push(FeeType::NetworkFee(NetworkFeeTracker::new(
-					pallet_cf_swapping::MinimumNetworkFee::<Runtime>::get(),
-					NetworkFee::get(),
+					pallet_cf_swapping::NetworkFee::<Runtime>::get(),
 				)));
 			}
 
@@ -2636,6 +2633,13 @@ impl_runtime_apis! {
 					.map(|(asset, balance)| (asset, Some(balance)))),
 				minimum_added_funds_amount: AssetMap::from_iter(pallet_cf_trading_strategy::MinimumAddedFundsToStrategy::<Runtime>::get().into_iter()
 					.map(|(asset, balance)| (asset, Some(balance)))),
+			}
+		}
+
+		fn cf_network_fees() -> NetworkFees{
+			NetworkFees {
+				regular_network_fee: pallet_cf_swapping::NetworkFee::<Runtime>::get(),
+				internal_swap_network_fee: pallet_cf_swapping::InternalSwapNetworkFee::<Runtime>::get(),
 			}
 		}
 	}

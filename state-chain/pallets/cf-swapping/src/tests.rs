@@ -70,8 +70,7 @@ const INPUT_ASSET: Asset = Asset::Usdc;
 const OUTPUT_ASSET: Asset = Asset::Eth;
 
 const ZERO_NETWORK_FEES: FeeType<Test> = FeeType::NetworkFee(NetworkFeeTracker {
-	minimum: 0,
-	rate: Permill::zero(),
+	network_fee: FeeRateAndMinimum { minimum: 0, rate: Permill::zero() },
 	accumulated_stable_amount: 0,
 	accumulated_fee: 0,
 });
@@ -540,15 +539,13 @@ fn process_all_into_stable_swaps_first() {
 	const SWAP_EXECUTION_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const AMOUNT: AssetAmount = 1_000_000;
 	new_test_ext().execute_with(|| {
-		const NETWORK_FEE: Permill = Permill::from_parts(100);
-		NetworkFee::set(NETWORK_FEE);
+		const NETWORK_FEE_RATE: Permill = Permill::from_parts(100);
+		const NETWORK_FEE: FeeRateAndMinimum =
+			FeeRateAndMinimum { rate: NETWORK_FEE_RATE, minimum: 0 };
+		NetworkFee::<Test>::set(NETWORK_FEE);
 
-		const NETWORK_FEE_DETAILS: FeeType<Test> = FeeType::NetworkFee(NetworkFeeTracker {
-			minimum: 0,
-			rate: NETWORK_FEE,
-			accumulated_stable_amount: 0,
-			accumulated_fee: 0,
-		});
+		const NETWORK_FEE_DETAILS: FeeType<Test> =
+			FeeType::NetworkFee(NetworkFeeTracker::new(NETWORK_FEE));
 
 		[Asset::Flip, Asset::Btc, Asset::Dot, Asset::Usdc]
 			.into_iter()
@@ -620,7 +617,7 @@ fn process_all_into_stable_swaps_first() {
 		Swapping::on_finalize(SWAP_EXECUTION_BLOCK);
 		assert_swaps_queue_is_empty();
 
-		let network_fee_amount = NETWORK_FEE * AMOUNT;
+		let network_fee_amount = NETWORK_FEE_RATE * AMOUNT;
 		let usdc_amount_swapped_after_fee: AssetAmount =
 			(AMOUNT - network_fee_amount) * DEFAULT_SWAP_RATE;
 		let usdc_amount_deposited_after_fee: AssetAmount = AMOUNT - network_fee_amount;
@@ -1411,7 +1408,10 @@ mod swap_batching {
 
 		new_test_ext()
 			.execute_with(|| {
-				NetworkFee::set(Permill::from_percent(1));
+				NetworkFee::<Test>::set(FeeRateAndMinimum {
+					rate: Permill::from_percent(1),
+					minimum: 0,
+				});
 
 				let swap = |input_asset: Asset, output_asset: Asset, input_amount: AssetAmount| {
 					TestSwapParams {
@@ -1477,7 +1477,10 @@ mod swap_batching {
 
 		new_test_ext()
 			.execute_with(|| {
-				NetworkFee::set(Permill::from_percent(1));
+				NetworkFee::<Test>::set(FeeRateAndMinimum {
+					rate: Permill::from_percent(1),
+					minimum: 0,
+				});
 				let swap = |input_asset: Asset, output_asset: Asset, input_amount: AssetAmount| {
 					TestSwapParams {
 						input_asset,
@@ -1614,7 +1617,10 @@ mod internal_swaps {
 			.execute_with(|| {
 				// Internal swaps use a different network fee minimum than the regular swaps.
 				// This minimum network fee is used as the refund fee.
-				InternalSwapMinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
+				InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
+					rate: Permill::from_percent(0),
+					minimum: MIN_NETWORK_FEE,
+				});
 
 				Swapping::init_internal_swap_request(
 					INPUT_ASSET,

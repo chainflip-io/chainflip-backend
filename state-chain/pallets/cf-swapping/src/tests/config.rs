@@ -26,11 +26,10 @@ fn can_update_all_config_items() {
 		const NEW_MAX_SWAP_RETRY_DURATION: u32 = 69_u32;
 		const MAX_SWAP_REQUEST_DURATION: u32 = 420_u32;
 		const NEW_MINIMUM_CHUNK_SIZE: AssetAmount = 10_000;
-		const NEW_MINIMUM_NETWORK_FEE: AssetAmount = 10;
-		const NEW_INTERNAL_SWAP_NETWORK_FEE: Permill = Permill::from_percent(5);
-		const NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE: AssetAmount = 50;
-
-		NetworkFee::set(Permill::from_perthousand(1));
+		const NEW_NETWORK_FEE: FeeRateAndMinimum =
+			FeeRateAndMinimum { rate: Permill::from_percent(5), minimum: 10 };
+		const NEW_INTERNAL_SWAP_FEE: FeeRateAndMinimum =
+			FeeRateAndMinimum { rate: Permill::from_percent(10), minimum: 50 };
 
 		// Check that the default values are different from the new ones
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
@@ -40,12 +39,8 @@ fn can_update_all_config_items() {
 		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_ne!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 		assert_ne!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE);
-		assert_ne!(MinimumNetworkFee::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
-		assert_ne!(InternalSwapNetworkFee::<Test>::get(), NEW_INTERNAL_SWAP_NETWORK_FEE);
-		assert_ne!(
-			InternalSwapMinimumNetworkFee::<Test>::get(),
-			NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE
-		);
+		assert_ne!(NetworkFee::<Test>::get(), NEW_NETWORK_FEE);
+		assert_ne!(InternalSwapNetworkFee::<Test>::get(), NEW_INTERNAL_SWAP_FEE);
 
 		// Define the updates in a reusable vec
 		let updates = vec![
@@ -65,10 +60,13 @@ fn can_update_all_config_items() {
 				asset: Asset::Usdc,
 				size: NEW_MINIMUM_CHUNK_SIZE,
 			},
-			PalletConfigUpdate::SetMinimumNetworkFee { min_fee: NEW_MINIMUM_NETWORK_FEE },
-			PalletConfigUpdate::SetInternalSwapNetworkFee { rate: NEW_INTERNAL_SWAP_NETWORK_FEE },
-			PalletConfigUpdate::SetInternalSwapMinimumNetworkFee {
-				min_fee: NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE,
+			PalletConfigUpdate::SetNetworkFee {
+				rate: Some(NEW_NETWORK_FEE.rate),
+				minimum: Some(NEW_NETWORK_FEE.minimum),
+			},
+			PalletConfigUpdate::SetInternalSwapNetworkFee {
+				rate: Some(NEW_INTERNAL_SWAP_FEE.rate),
+				minimum: Some(NEW_INTERNAL_SWAP_FEE.minimum),
 			},
 		];
 
@@ -86,12 +84,8 @@ fn can_update_all_config_items() {
 		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_eq!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 		assert_eq!(MinimumChunkSize::<Test>::get(Asset::Usdc), NEW_MINIMUM_CHUNK_SIZE);
-		assert_eq!(MinimumNetworkFee::<Test>::get(), NEW_MINIMUM_NETWORK_FEE);
-		assert_eq!(InternalSwapNetworkFee::<Test>::get(), NEW_INTERNAL_SWAP_NETWORK_FEE);
-		assert_eq!(
-			InternalSwapMinimumNetworkFee::<Test>::get(),
-			NEW_INTERNAL_SWAP_MINIMUM_NETWORK_FEE
-		);
+		assert_eq!(NetworkFee::<Test>::get(), NEW_NETWORK_FEE);
+		assert_eq!(InternalSwapNetworkFee::<Test>::get(), NEW_INTERNAL_SWAP_FEE);
 
 		// Check that the PalletConfigUpdate event was emitted for each update
 		for update in updates {

@@ -26,7 +26,7 @@ fn swap_output_amounts_correctly_account_for_fees() {
 			const INPUT_AMOUNT: AssetAmount = 1000;
 
 			let network_fee = Permill::from_percent(1);
-			NetworkFee::set(network_fee);
+			NetworkFee::<Test>::set(FeeRateAndMinimum { rate: network_fee, minimum: 0 });
 
 			let expected_output: AssetAmount = {
 				let usdc_amount = if from == Asset::Usdc {
@@ -126,8 +126,14 @@ fn normal_swap_uses_correct_network_fee() {
 	new_test_ext()
 		.execute_with(|| {
 			// Set both network fees to different values
-			NetworkFee::set(NETWORK_FEE);
-			MinimumNetworkFee::<Test>::set(MINIMUM_NETWORK_FEE);
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: NETWORK_FEE,
+				minimum: MINIMUM_NETWORK_FEE,
+			});
+			InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: Permill::zero(),
+				minimum: 0,
+			});
 
 			// Set a swap rate of 1 to make it easier
 			SwapRate::set(1_f64);
@@ -196,8 +202,12 @@ fn internal_swap_uses_correct_network_fee() {
 
 	new_test_ext()
 		.execute_with(|| {
-			InternalSwapNetworkFee::<Test>::set(NETWORK_FEE);
-			InternalSwapMinimumNetworkFee::<Test>::set(MINIMUM_NETWORK_FEE);
+			// Set both network fees to different values
+			NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::zero(), minimum: 0 });
+			InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: NETWORK_FEE,
+				minimum: MINIMUM_NETWORK_FEE,
+			});
 
 			// Set a swap rate of 1 to make it easier
 			SwapRate::set(1_f64);
@@ -261,10 +271,15 @@ fn no_network_fee_minimum_for_gas_swaps() {
 
 	new_test_ext()
 		.execute_with(|| {
-			NetworkFee::set(NETWORK_FEE);
 			// Set both minimums, just in case.
-			MinimumNetworkFee::<Test>::set(MINIMUM_NETWORK_FEE);
-			InternalSwapMinimumNetworkFee::<Test>::set(MINIMUM_NETWORK_FEE);
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: NETWORK_FEE,
+				minimum: MINIMUM_NETWORK_FEE,
+			});
+			InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: NETWORK_FEE,
+				minimum: MINIMUM_NETWORK_FEE,
+			});
 
 			// Set a swap rate of 1 to make it easier
 			SwapRate::set(1_f64);
@@ -312,7 +327,10 @@ fn test_network_fee_tracking() {
 		);
 
 		// Setup a fresh tracker
-		let mut fee_tracker = NetworkFeeTracker::new(MIN_NETWORK_FEE, NETWORK_FEE);
+		let mut fee_tracker = NetworkFeeTracker::new(FeeRateAndMinimum {
+			minimum: MIN_NETWORK_FEE,
+			rate: NETWORK_FEE,
+		});
 
 		// Take fees from each chunk in order and make sure it gives the expected result
 		// First chunk gets the minimum network fee taken from it
@@ -363,8 +381,10 @@ fn test_network_fee_calculation() {
 		accumulated_stable_amount: AssetAmount,
 	) -> (AssetAmount, AssetAmount) {
 		let FeeTaken { remaining_amount, fee } = NetworkFeeTracker {
-			minimum: minimum_network_fee,
-			rate: Permill::from_percent(network_fee_percent),
+			network_fee: FeeRateAndMinimum {
+				minimum: minimum_network_fee,
+				rate: Permill::from_percent(network_fee_percent),
+			},
 			accumulated_stable_amount,
 			accumulated_fee,
 		}
@@ -499,8 +519,11 @@ fn test_calculate_input_for_desired_output() {
 			Some(1000)
 		);
 
-		// Make sure the network fee is taken.
-		NetworkFee::set(Permill::from_percent(1));
+		// Make sure the network fee is taken. Also checking that the minimum is not enforced.
+		NetworkFee::<Test>::set(FeeRateAndMinimum {
+			rate: Permill::from_percent(1),
+			minimum: 1000,
+		});
 		assert_eq!(
 			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Usdc, 1000, true),
 			Some(505)
@@ -658,10 +681,10 @@ fn input_amount_excludes_network_fee() {
 	let output_address: ForeignChainAddress = ForeignChainAddress::Eth(Default::default());
 	const NETWORK_FEE: Permill = Permill::from_percent(1);
 
-	NetworkFee::set(NETWORK_FEE);
-
 	new_test_ext()
 		.execute_with(|| {
+			NetworkFee::<Test>::set(FeeRateAndMinimum { rate: NETWORK_FEE, minimum: 0 });
+
 			swap_with_custom_broker_fee(FROM_ASSET, TO_ASSET, AMOUNT, bounded_vec![]);
 
 			<Pallet<Test> as SwapRequestHandler>::init_swap_request(
@@ -740,7 +763,6 @@ fn expect_earned_fees_to_be_recorded() {
 	const INTERMEDIATE_AMOUNT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE;
 
 	const NETWORK_FEE_PERCENT: u32 = 1;
-	NetworkFee::set(Permill::from_percent(NETWORK_FEE_PERCENT));
 
 	const ALICE: u64 = 2_u64;
 	const BOB: u64 = 3_u64;
@@ -766,6 +788,10 @@ fn expect_earned_fees_to_be_recorded() {
 
 	new_test_ext()
 		.execute_with(|| {
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: Permill::from_percent(NETWORK_FEE_PERCENT),
+				minimum: 0,
+			});
 			swap_with_custom_broker_fee(
 				Asset::Flip,
 				Asset::Usdc,
@@ -874,8 +900,10 @@ fn minimum_network_fee_is_enforced_on_dca_swap() {
 	new_test_ext()
 		.execute_with(|| {
 			assert_eq!(System::block_number(), INIT_BLOCK);
-			NetworkFee::set(NETWORK_FEE);
-			MinimumNetworkFee::<Test>::set(MIN_NETWORK_FEE);
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: NETWORK_FEE,
+				minimum: MIN_NETWORK_FEE,
+			});
 
 			Swapping::init_swap_request(
 				// Doing a 2 leg swap, swap rate is 2, so output without fees is x4 and network fee
@@ -964,7 +992,7 @@ fn minimum_network_fee_is_enforced_on_dca_swap() {
 #[test]
 fn test_refund_fee_calculation() {
 	new_test_ext().execute_with(|| {
-		MinimumNetworkFee::<Test>::set(10);
+		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::zero(), minimum: 10 });
 
 		// Usdc, no conversion needed, so the refund fee is just 10
 		assert_eq!(Swapping::take_refund_fee(1000, Asset::Usdc, false), Ok(990));
@@ -978,7 +1006,10 @@ fn test_refund_fee_calculation() {
 		assert_eq!(Swapping::take_refund_fee(3, Asset::Eth, false), Ok(0));
 
 		// Internal swaps use a different network fee
-		InternalSwapMinimumNetworkFee::<Test>::set(30);
+		InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
+			rate: Permill::zero(),
+			minimum: 30,
+		});
 		assert_eq!(Swapping::take_refund_fee(1000, Asset::Usdc, true), Ok(970));
 		assert_eq!(Swapping::take_refund_fee(1000, Asset::Eth, true), Ok(985));
 	});

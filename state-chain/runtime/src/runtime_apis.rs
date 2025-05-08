@@ -40,7 +40,7 @@ use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
+use pallet_cf_swapping::{AffiliateDetails, FeeRateAndMinimum, SwapLegInfo};
 use pallet_cf_trading_strategy::TradingStrategy;
 use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
@@ -377,6 +377,12 @@ pub struct TradingStrategyLimits {
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
 }
 
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct NetworkFees {
+	pub regular_network_fee: FeeRateAndMinimum,
+	pub internal_swap_network_fee: FeeRateAndMinimum,
+}
+
 // READ THIS BEFORE UPDATING THIS TRAIT:
 //
 // ## When changing an existing method:
@@ -555,6 +561,7 @@ decl_runtime_apis!(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
+		fn cf_network_fees() -> NetworkFees;
 	}
 );
 
