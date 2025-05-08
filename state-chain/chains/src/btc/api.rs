@@ -151,7 +151,7 @@ impl<E> From<batch_transfer::BatchTransfer> for BitcoinApi<E> {
 
 // TODO: Implement transfer / transfer and call for Bitcoin.
 impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for BitcoinApi<E> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Bitcoin>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,

@@ -691,7 +691,7 @@ impl<Env: 'static + SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for Sol
 }
 
 impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi<Env> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
 		_source_address: Option<ForeignChainAddress>,

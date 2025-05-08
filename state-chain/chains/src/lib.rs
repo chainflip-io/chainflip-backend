@@ -560,6 +560,12 @@ impl From<DispatchError> for AllBatchError {
 	}
 }
 
+impl From<DispatchError> for ExecutexSwapAndCallError {
+	fn from(e: DispatchError) -> Self {
+		ExecutexSwapAndCallError::DispatchError(e)
+	}
+}
+
 #[derive(Debug)]
 pub enum ConsolidationError {
 	NotRequired,
@@ -626,6 +632,26 @@ pub enum ExecutexSwapAndCallError {
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
+		transfer_param: TransferAssetParams<C>,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
+		gas_budget: GasAmount,
+		message: Vec<u8>,
+		ccm_additional_data: DecodedCcmAdditionalData,
+	) -> Result<Self, ExecutexSwapAndCallError> {
+		transactional::with_storage_layer(|| {
+			Self::new_unsigned_impl(
+				transfer_param,
+				source_chain,
+				source_address,
+				gas_budget,
+				message,
+				ccm_additional_data,
+			)
+		})
+	}
+
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
