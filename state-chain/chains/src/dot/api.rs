@@ -99,11 +99,11 @@ impl<E> SetGovKeyWithAggKey<PolkadotCrypto> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
-	) -> Result<Self, ()> {
-		let vault = E::try_vault_account().ok_or(())?;
+	) -> Result<Self, SetGovKeyWithAggKeyError> {
+		let vault = E::try_vault_account().ok_or(SetGovKeyWithAggKeyError::Failed)?;
 
 		Ok(Self::ChangeGovKey(rotate_vault_proxy::extrinsic_builder(
 			E::replay_protection(false),

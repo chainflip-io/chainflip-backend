@@ -111,10 +111,10 @@ impl<E> SetGovKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_maybe_old_key: Option<<EvmCrypto as ChainCrypto>::GovKey>,
 		new_gov_key: <EvmCrypto as ChainCrypto>::GovKey,
-	) -> Result<Self, ()> {
+	) -> Result<Self, SetGovKeyWithAggKeyError> {
 		Ok(Self::SetGovKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::key_manager_address()),
 			set_gov_key_with_agg_key::SetGovKeyWithAggKey::new(new_gov_key),
