@@ -96,7 +96,7 @@ impl<E> SetAggKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
 		new_key: <EvmCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {

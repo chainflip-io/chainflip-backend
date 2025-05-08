@@ -118,7 +118,7 @@ impl<E> SetAggKeyWithAggKey<PolkadotCrypto> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
