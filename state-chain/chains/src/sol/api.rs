@@ -489,7 +489,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					transfer_param,
 					durable_nonce
 				);
-				Environment::recover_durable_nonce(durable_nonce.0);
 			})?,
 			signer: None,
 			_phantom: Default::default(),
