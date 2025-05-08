@@ -131,7 +131,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::{offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
-use pallet_cf_funding::MinimumFunding;
+use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_pools::{PoolInfo, PoolOrders};
 use pallet_grandpa::AuthorityId as GrandpaId;
 use pallet_session::historical as session_historical;
@@ -1611,6 +1611,12 @@ impl_runtime_apis! {
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
+			let calculate_redeem_amount = pallet_cf_funding::Pallet::<Runtime>::calculate_redeem_amount(
+				account_id,
+				&restricted_balances,
+				RedemptionAmount::Max,
+				None,
+			);
 			ValidatorInfo {
 				balance: account_info.total(),
 				bond: account_info.bond(),
@@ -1625,6 +1631,7 @@ impl_runtime_apis! {
 				bound_redeem_address,
 				apy_bp,
 				restricted_balances,
+				redeemable_balance: calculate_redeem_amount.redeem_amount,
 			}
 		}
 

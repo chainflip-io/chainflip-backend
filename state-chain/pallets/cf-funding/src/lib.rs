@@ -66,6 +66,14 @@ pub struct PendingRedemptionInfo<FlipBalance> {
 	pub redeem_address: EthereumAddress,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct CalculatedRedeemAmount<Amount: Copy + Clone> {
+	pub debit_amount: Amount,
+	pub redeem_amount: Amount,
+	pub redemption_fee: Amount,
+	pub restricted_deficit: Amount,
+}
+
 impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 
 #[frame_support::pallet]
@@ -387,36 +395,17 @@ pub mod pallet {
 				);
 			}
 
-			// In case the balance is lower than the sum of restricted addresses we take this
-			// discrepancy into account so that restricted addresses can still redeem.
-			let restricted_deficit: FlipBalance<T> = restricted_balances
-				.values()
-				.copied()
-				.sum::<FlipBalance<T>>()
-				.saturating_sub(T::Flip::balance(&account_id));
-
-			// The available funds are the total balance minus whichever is larger from:
-			// - The bond.
-			// - The total restricted funds that need to remain in the account after the redemption.
-			let liquid_balance = T::Flip::balance(&account_id).saturating_sub(max(
-				T::Flip::bond(&account_id),
-				restricted_balances.values().copied().sum::<FlipBalance<T>>().saturating_sub(
-					restricted_deficit +
-						restricted_balances.get(&address).copied().unwrap_or_default(),
-				),
-			));
-
-			let redemption_fee = match amount {
-				RedemptionAmount::Max if liquid_balance == T::Flip::balance(&account_id) =>
-					Zero::zero(),
-				_ => RedemptionTax::<T>::get(),
-			};
-
-			let (debit_amount, redeem_amount) = match amount {
-				RedemptionAmount::Max =>
-					(liquid_balance, liquid_balance.saturating_sub(redemption_fee)),
-				RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
-			};
+			let CalculatedRedeemAmount {
+				debit_amount,
+				redeem_amount,
+				redemption_fee,
+				restricted_deficit,
+			} = Self::calculate_redeem_amount(
+				&account_id,
+				&restricted_balances,
+				amount,
+				Some(&address),
+			);
 
 			ensure!(
 				T::Flip::try_burn_fee(&account_id, redemption_fee).is_ok(),
@@ -768,6 +757,47 @@ impl<T: Config> Pallet<T> {
 		}
 
 		T::Flip::credit_funds(account_id, amount)
+	}
+
+	pub fn calculate_redeem_amount(
+		account_id: &T::AccountId,
+		restricted_balances: &BTreeMap<EthereumAddress, FlipBalance<T>>,
+		amount: RedemptionAmount<FlipBalance<T>>,
+		maybe_address: Option<&EthereumAddress>,
+	) -> CalculatedRedeemAmount<T::Amount> {
+		// In case the balance is lower than the sum of restricted addresses we take this
+		// discrepancy into account so that restricted addresses can still redeem.
+		let restricted_deficit: FlipBalance<T> = restricted_balances
+			.values()
+			.copied()
+			.sum::<FlipBalance<T>>()
+			.saturating_sub(T::Flip::balance(account_id));
+
+		// The available funds are the total balance minus whichever is larger from:
+		// - The bond.
+		// - The total restricted funds that need to remain in the account after the redemption.
+		let liquid_balance = T::Flip::balance(account_id).saturating_sub(max(
+			T::Flip::bond(account_id),
+			restricted_balances.values().copied().sum::<FlipBalance<T>>().saturating_sub(
+				restricted_deficit +
+					maybe_address
+						.and_then(|address| restricted_balances.get(address).copied())
+						.unwrap_or_default(),
+			),
+		));
+
+		let redemption_fee = match amount {
+			RedemptionAmount::Max if liquid_balance == T::Flip::balance(account_id) => Zero::zero(),
+			_ => RedemptionTax::<T>::get(),
+		};
+
+		let (debit_amount, redeem_amount) = match amount {
+			RedemptionAmount::Max =>
+				(liquid_balance, liquid_balance.saturating_sub(redemption_fee)),
+			RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
+		};
+
+		CalculatedRedeemAmount { debit_amount, redeem_amount, redemption_fee, restricted_deficit }
 	}
 }
 
