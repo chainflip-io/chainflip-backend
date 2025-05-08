@@ -23,7 +23,6 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
-  SOLANA_PROGRAMS_VERSION: v1.1.0
   NODE_COUNT: "1-node"
 
 permissions:
@@ -172,25 +171,8 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           touch ./localnet/.setup_complete
-          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana programs version. Remove after 1.10 is released.
-          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[^ ]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
-          sed -i '/🐛 Fix solana symlink issue ...\|ln -sf $SOLANA_BASE_PATH\/test-ledger\/accounts\/snapshot\/100/d' localnet/common.sh
           ./localnet/manage.sh
           git reset --hard
-
-      # TODO: We have a problem with the sol_address_lookup_table_account and also the USER_ADDRESS_LOOKUP_TABLE in `utils.ts` but the latter
-      # is easier to fix with sed commands. The first one is hard to fix because we don't have a way to overwrite the lookup table account
-      # stored in the environment pallet, Actually what if we just use the old image as is? That might work.
-
-      # TODO: This is a temporary workaround to insert the image nonces for versioned transactions. Remove after 1.10 is released.
-      - name: Nonce workaround
-        if: inputs.run-job
-        run: |
-          git checkout ${{ github.sha }}
-          git rev-parse HEAD
-          cd bouncer
-          pnpm install --frozen-lockfile
-          ./commands/force_sol_nonces.ts
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
@@ -200,6 +182,9 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
+          # This export PATH is needed when upgrading the Swap Endpoint program.
+          # To be removed after 1.10.
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           ./fast_bouncer.sh
 
       - name: Upgrade network 🚀
@@ -225,6 +210,9 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
+          # TODO: This is a temporary workaround to patch the user address lookup table in the bouncer.
+          # To remove after 1.10 is released.
+          sed -i 's/ERWdwQvf6XHkHyw4JN2ctojkEaAVPFL9y57BoXmtq6DB/4eUGPyr3krnw8tD3rL3UBXXdy1cx8Sf9HKVESZUAatqv/g' shared/utils.ts
           pnpm vitest run -t "ConcurrentTests"
 
       - name: Print chainflip-engine logs 🚗
