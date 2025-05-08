@@ -489,6 +489,12 @@ pub enum SetAggKeyWithAggKeyError {
 	DispatchError(DispatchError),
 }
 
+#[derive(RuntimeDebug, Clone, PartialEq, Eq)]
+pub enum SetGovKeyWithAggKeyError {
+	Failed,
+	DispatchError(DispatchError),
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
@@ -509,7 +515,14 @@ pub trait SetGovKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
 		maybe_old_key: Option<<C as ChainCrypto>::GovKey>,
 		new_key: <C as ChainCrypto>::GovKey,
-	) -> Result<Self, ()>;
+	) -> Result<Self, SetGovKeyWithAggKeyError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(maybe_old_key, new_key))
+	}
+
+	fn new_unsigned_impl(
+		maybe_old_key: Option<<C as ChainCrypto>::GovKey>,
+		new_key: <C as ChainCrypto>::GovKey,
+	) -> Result<Self, SetGovKeyWithAggKeyError>;
 }
 
 pub trait SetCommKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
@@ -577,6 +590,12 @@ impl From<DispatchError> for ExecutexSwapAndCallError {
 impl From<DispatchError> for SetAggKeyWithAggKeyError {
 	fn from(e: DispatchError) -> Self {
 		SetAggKeyWithAggKeyError::DispatchError(e)
+	}
+}
+
+impl From<DispatchError> for SetGovKeyWithAggKeyError {
+	fn from(e: DispatchError) -> Self {
+		SetGovKeyWithAggKeyError::DispatchError(e)
 	}
 }
 

@@ -29,6 +29,8 @@ mod signer_nomination;
 pub mod solana_elections;
 pub mod vault_swaps;
 
+use cf_chains::SetGovKeyWithAggKeyError;
+
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
@@ -703,20 +705,23 @@ impl SolanaEnvironment for SolEnvironment {}
 pub struct TokenholderGovernanceBroadcaster;
 
 impl TokenholderGovernanceBroadcaster {
-	fn broadcast_gov_key<C, B>(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<(), ()>
+	fn broadcast_gov_key<C, B>(
+		maybe_old_key: Option<Vec<u8>>,
+		new_key: Vec<u8>,
+	) -> Result<(), SetGovKeyWithAggKeyError>
 	where
 		C: Chain,
 		B: Broadcaster<C>,
 		<B as Broadcaster<C>>::ApiCall: cf_chains::SetGovKeyWithAggKey<C::ChainCrypto>,
 	{
 		let maybe_old_key = if let Some(old_key) = maybe_old_key {
-			Some(Decode::decode(&mut &old_key[..]).or(Err(()))?)
+			Some(Decode::decode(&mut &old_key[..]).or(Err(SetGovKeyWithAggKeyError::Failed))?)
 		} else {
 			None
 		};
 		let api_call = SetGovKeyWithAggKey::<C::ChainCrypto>::new_unsigned(
 			maybe_old_key,
-			Decode::decode(&mut &new_key[..]).or(Err(()))?,
+			Decode::decode(&mut &new_key[..]).or(Err(SetGovKeyWithAggKeyError::Failed))?,
 		)?;
 		B::threshold_sign_and_broadcast(api_call);
 		Ok(())
@@ -732,14 +737,14 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 		chain: ForeignChain,
 		maybe_old_key: Option<Vec<u8>>,
 		new_key: Vec<u8>,
-	) -> Result<(), ()> {
+	) -> Result<(), SetGovKeyWithAggKeyError> {
 		match chain {
 			ForeignChain::Ethereum =>
 				Self::broadcast_gov_key::<Ethereum, EthereumBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
-			ForeignChain::Bitcoin => Err(()),
-			ForeignChain::Arbitrum => Err(()),
+			ForeignChain::Bitcoin => Err(SetGovKeyWithAggKeyError::Failed),
+			ForeignChain::Arbitrum => Err(SetGovKeyWithAggKeyError::Failed),
 			ForeignChain::Solana =>
 				Self::broadcast_gov_key::<Solana, SolanaBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Assethub =>
