@@ -78,6 +78,13 @@ impl SetAggKeyWithAggKey<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 
 		Ok(Some(Self { old_key: old_key.ok_or(SetAggKeyWithAggKeyError::Failed)?, new_key }))
 	}
+
+	fn new_unsigned_impl(
+		old_key: Option<<<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
+		new_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
+		Self::new_unsigned(old_key, new_key)
+	}
 }
 
 impl ApiCall<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {

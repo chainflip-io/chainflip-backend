@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::RejectCall;
+use crate::{RejectCall, SetGovKeyWithAggKeyError};
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::marker::PhantomData;
@@ -22,6 +22,7 @@ use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::RuntimeDebug;
+use sp_runtime::DispatchError;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
@@ -142,6 +143,7 @@ pub enum SolanaTransactionBuildingError {
 	InvalidCcm(CcmValidityError),
 	FailedToSerializeFinalTransaction,
 	FinalTransactionExceededMaxLength(u32),
+	DispatchError(DispatchError),
 }
 
 impl sp_std::fmt::Display for SolanaTransactionBuildingError {
@@ -359,7 +361,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				new_agg_key,
 				durable_nonce
 			);
-			Environment::recover_durable_nonce(durable_nonce.0);
 		})?;
 
 		Ok(Self {
@@ -487,7 +488,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					transfer_param,
 					durable_nonce
 				);
-				Environment::recover_durable_nonce(durable_nonce.0);
 			})?,
 			signer: None,
 			_phantom: Default::default(),
@@ -677,7 +677,7 @@ impl<Env: 'static> ConsolidateCall<Solana> for SolanaApi<Env> {
 }
 
 impl<Env: 'static + SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for SolanaApi<Env> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_maybe_old_key: Option<<SolanaCrypto as ChainCrypto>::AggKey>,
 		new_key: <SolanaCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, crate::SetAggKeyWithAggKeyError> {
@@ -689,7 +689,7 @@ impl<Env: 'static + SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for Sol
 }
 
 impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi<Env> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
@@ -715,7 +715,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 }
 
 impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Solana>>,
 		transfer_params: Vec<(TransferAssetParams<Solana>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
@@ -730,7 +730,7 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 }
 
 impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Solana>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)
@@ -738,7 +738,7 @@ impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
 }
 
 impl<Env: 'static + SolanaEnvironment> FetchAndCloseSolanaVaultSwapAccounts for SolanaApi<Env> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		Self::fetch_and_batch_close_vault_swap_accounts(accounts)
@@ -746,15 +746,19 @@ impl<Env: 'static + SolanaEnvironment> FetchAndCloseSolanaVaultSwapAccounts for 
 }
 
 impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for SolanaApi<Environment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_maybe_old_key: Option<<SolanaCrypto as ChainCrypto>::GovKey>,
 		new_gov_key: <SolanaCrypto as ChainCrypto>::GovKey,
-	) -> Result<Self, ()> {
+	) -> Result<Self, SetGovKeyWithAggKeyError> {
 		// Lookup environment variables, such as aggkey and durable nonce.
-		let agg_key = Environment::current_agg_key().map_err(|_e| ())?;
-		let sol_api_environment = Environment::api_environment().map_err(|_e| ())?;
-		let compute_price = Environment::compute_price().map_err(|_e| ())?;
-		let durable_nonce = Environment::nonce_account().map_err(|_e| ())?;
+		let agg_key =
+			Environment::current_agg_key().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
+		let sol_api_environment =
+			Environment::api_environment().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
+		let compute_price =
+			Environment::compute_price().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
+		let durable_nonce =
+			Environment::nonce_account().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::set_gov_key_with_agg_key(
@@ -776,7 +780,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 				e,
 				durable_nonce
 			);
-			Environment::recover_durable_nonce(durable_nonce.0);
+			SetGovKeyWithAggKeyError::Failed
 		})?;
 
 		Ok(Self {
