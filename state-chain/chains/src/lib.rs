@@ -611,6 +611,12 @@ impl From<DispatchError> for SolanaTransactionBuildingError {
 	}
 }
 
+impl From<DispatchError> for TransferFallbackError {
+	fn from(e: DispatchError) -> Self {
+		TransferFallbackError::DispatchError(e)
+	}
+}
+
 #[derive(Debug)]
 pub enum ConsolidationError {
 	NotRequired,
@@ -712,9 +718,18 @@ pub enum TransferFallbackError {
 	Unsupported,
 	/// Failed to lookup the given token address, so the asset is invalid.
 	CannotLookupTokenAddress,
+	/// Some other DispatchError occurred.
+	DispatchError(DispatchError),
 }
+
 pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {
-	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, TransferFallbackError>;
+	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, TransferFallbackError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(transfer_param))
+	}
+
+	fn new_unsigned_impl(
+		transfer_param: TransferAssetParams<C>,
+	) -> Result<Self, TransferFallbackError>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {

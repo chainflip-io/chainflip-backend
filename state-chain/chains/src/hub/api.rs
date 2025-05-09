@@ -179,7 +179,7 @@ impl<E> TransferFallback<Assethub> for AssethubApi<E>
 where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Assethub>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)

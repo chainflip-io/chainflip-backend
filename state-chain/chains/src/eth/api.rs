@@ -237,7 +237,7 @@ impl<E> TransferFallback<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Ethereum>,
 	) -> Result<Self, TransferFallbackError> {
 		let transfer_param = EncodableTransferAssetParams {
