@@ -198,7 +198,7 @@ pub struct MockEthTransferFallback<MockEvmEnvironment> {
 }
 
 impl TransferFallback<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Ethereum>,
 	) -> Result<Self, TransferFallbackError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
@@ -285,7 +285,7 @@ pub struct MockBtcTransferFallback<MockBtcEnvironment> {
 }
 
 impl TransferFallback<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Bitcoin>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)
