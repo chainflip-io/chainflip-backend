@@ -186,7 +186,7 @@ where
 
 // transfer_fallback is unsupported for Bitcoin.
 impl<E: ReplayProtectionProvider<Bitcoin>> TransferFallback<Bitcoin> for BitcoinApi<E> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Bitcoin>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)

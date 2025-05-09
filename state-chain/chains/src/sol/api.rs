@@ -740,7 +740,7 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 }
 
 impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Solana>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)
