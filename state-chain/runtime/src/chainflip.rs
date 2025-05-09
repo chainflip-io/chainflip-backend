@@ -1007,6 +1007,7 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 pub struct BlockUpdate<Data> {
 	pub block_hash: Hash,
 	pub block_number: BlockNumber,
+	pub timestamp: u64,
 	// NOTE: Flatten requires Data types to be struct or map
 	// Also flatten is incompatible with u128, so AssetAmounts needs to be String type.
 	#[serde(flatten)]
@@ -1133,4 +1134,14 @@ impl CallIndexer<RuntimeCall> for LpOrderCallIndexer {
 			_ => None,
 		}
 	}
+}
+
+// Timestamp of the header in seconds past the unix epoch.
+pub fn get_header_timestamp(header: &crate::Header) -> Option<u64> {
+	header
+		.digest
+		.logs()
+		.iter()
+		.find_map(missed_authorship_slots::extract_slot_from_digest_item)
+		.map(|slot| slot.saturating_mul(cf_primitives::SECONDS_PER_BLOCK))
 }

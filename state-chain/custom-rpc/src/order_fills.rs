@@ -22,7 +22,7 @@ use cf_amm::input_amount_from_fee;
 use cf_primitives::AccountId;
 use cf_rpc_apis::{OrderFilled, OrderFills};
 use pallet_cf_pools::{AssetPair, OrderId, Pool};
-use state_chain_runtime::Runtime;
+use state_chain_runtime::{chainflip::get_header_timestamp, Runtime};
 
 pub(crate) fn order_fills_for_block<C, B, BE>(
 	client: &C,
@@ -63,6 +63,7 @@ where
 	Ok(BlockUpdate::<OrderFills> {
 		block_hash: hash,
 		block_number: header.number,
+		timestamp: get_header_timestamp(&header).unwrap_or_default(),
 		data: order_fills_from_block_updates(&prev_pools, &pools, lp_events),
 	})
 }

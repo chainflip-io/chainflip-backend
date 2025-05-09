@@ -30,7 +30,11 @@ use sc_rpc_spec_v2::chain_head::{
 use serde::Serialize;
 use sp_api::CallApiAt;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use state_chain_runtime::{chainflip::BlockUpdate, runtime_apis::CustomRuntimeApi, Hash};
+use state_chain_runtime::{
+	chainflip::{get_header_timestamp, BlockUpdate},
+	runtime_apis::CustomRuntimeApi,
+	Hash,
+};
 use std::{fmt::Debug, marker::PhantomData, num::NonZero, sync::Arc};
 
 /// The CustomRpcBackend struct provides common logic implementation for providing RPC endpoints.
@@ -371,6 +375,7 @@ where
 								Ok(Some(header)) => Some(Ok(BlockUpdate {
 									block_hash: hash,
 									block_number: *header.number(),
+									timestamp: get_header_timestamp(&header).unwrap_or_default(),
 									data: new_item,
 								})),
 								Ok(None) =>
