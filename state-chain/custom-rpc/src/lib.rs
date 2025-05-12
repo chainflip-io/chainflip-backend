@@ -78,11 +78,12 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		ChannelActionType, CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		NetworkFees, RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo,
+		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+		VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash, NetworkFee, SolanaInstance,
+	Hash, SolanaInstance,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
@@ -447,11 +448,13 @@ pub struct FundingEnvironment {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SwappingEnvironment {
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
+	#[deprecated(note = "Use network_fees field instead")]
 	network_fee_hundredth_pips: Permill,
 	swap_retry_delay_blocks: u32,
 	max_swap_retry_duration_blocks: u32,
 	max_swap_request_duration_blocks: u32,
 	minimum_chunk_size: any::AssetMap<NumberOrHex>,
+	network_fees: NetworkFees,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -1569,13 +1572,14 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
-				network_fee_hundredth_pips: NetworkFee::get(),
+				network_fee_hundredth_pips: api.cf_network_fees(hash)?.regular_network_fee.rate,
 				swap_retry_delay_blocks: api.cf_swap_retry_delay_blocks(hash)?,
 				max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
 				minimum_chunk_size: any::AssetMap::try_from_fn(|asset| {
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
 				})?,
+				network_fees: api.cf_network_fees(hash)?,
 			})
 		})
 	}
@@ -1947,6 +1951,7 @@ mod test {
 	use std::collections::BTreeSet;
 
 	use cf_chains::address::EncodedAddress;
+	use pallet_cf_swapping::FeeRateAndMinimum;
 
 	use super::*;
 	use cf_chains::{assets::sol, btc::ScriptPubkey};
@@ -2132,6 +2137,16 @@ mod test {
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: 101112_u32.into() },
 					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
+				},
+				network_fees: NetworkFees {
+					regular_network_fee: FeeRateAndMinimum {
+						rate: Permill::from_percent(1),
+						minimum: 123u32.into(),
+					},
+					internal_swap_network_fee: FeeRateAndMinimum {
+						rate: Permill::from_percent(2),
+						minimum: 456u32.into(),
+					},
 				},
 			},
 			ingress_egress: IngressEgressEnvironment {
