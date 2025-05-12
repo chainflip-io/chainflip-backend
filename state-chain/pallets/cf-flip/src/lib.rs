@@ -631,6 +631,8 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		ensure!(from != to, Error::<T>::CanNotTransferToSelf);
 		if let Some(from_imbalance) = Pallet::<T>::try_debit(from, amount) {
 			from_imbalance.offset(Pallet::<T>::credit(to, amount));
+			T::OnAccountFunded::on_account_funded(from, Self::balance(from));
+			T::OnAccountFunded::on_account_funded(to, Self::balance(to));
 			Ok(())
 		} else {
 			Err(Error::<T>::InsufficientLiquidity.into())
