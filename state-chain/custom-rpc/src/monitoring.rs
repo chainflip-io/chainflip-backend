@@ -262,7 +262,7 @@ where
 				bound_redeem_address: account_info.bound_redeem_address,
 				apy_bp: account_info.apy_bp,
 				restricted_balances: account_info.restricted_balances,
-				redeemable_balance: account_info.redeemable_balance.into(),
+				estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 			})
 			.collect())
 	}

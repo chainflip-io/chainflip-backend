@@ -1631,7 +1631,7 @@ impl_runtime_apis! {
 				bound_redeem_address,
 				apy_bp,
 				restricted_balances,
-				redeemable_balance: calculate_redeem_amount.redeem_amount,
+				estimated_redeemable_balance: calculate_redeem_amount.redeem_amount,
 			}
 		}
 
