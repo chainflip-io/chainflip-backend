@@ -2037,3 +2037,53 @@ fn ensure_bonded_address_condition_holds_during_internal_transfer() {
 		);
 	});
 }
+
+#[test]
+fn proof_address_restrictions_for_executor_address_are_respected() {
+	new_test_ext().execute_with(|| {
+		// None of the addresses are bound to any other address.
+		assert_ok!(Funding::ensure_address_restrictions(&ALICE, &BOB));
+		assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(ALICE), H160([0x02; 20])));
+		// ALICE is bound, BOB is not.
+		assert_noop!(
+			Funding::ensure_address_restrictions(&ALICE, &BOB),
+			Error::<Test>::ExecutorBindingRestrictionViolated
+		);
+		assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(BOB), H160([0x03; 20])));
+		// ALICE and BOB are bound to different addresses.
+		assert_noop!(
+			Funding::ensure_address_restrictions(&ALICE, &BOB),
+			Error::<Test>::ExecutorBindingRestrictionViolated
+		);
+		// Override the executor address for BOB.
+		BoundExecutorAddress::<Test>::insert(&BOB, H160([0x02; 20]));
+
+		assert_ok!(Funding::ensure_address_restrictions(&ALICE, &BOB));
+	});
+}
+
+#[test]
+fn proof_address_restrictions_for_redeem_address_are_respected() {
+	new_test_ext().execute_with(|| {
+		// None of the addresses are bound to any other address.
+		assert_ok!(Funding::ensure_address_restrictions(&ALICE, &BOB));
+
+		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), H160([0x02; 20])));
+
+		assert_noop!(
+			Funding::ensure_address_restrictions(&ALICE, &BOB),
+			Error::<Test>::AccountBindingRestrictionViolated
+		);
+
+		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(BOB), H160([0x03; 20])));
+
+		assert_noop!(
+			Funding::ensure_address_restrictions(&ALICE, &BOB),
+			Error::<Test>::AccountBindingRestrictionViolated
+		);
+
+		BoundRedeemAddress::<Test>::insert(&BOB, H160([0x02; 20]));
+
+		assert_ok!(Funding::ensure_address_restrictions(&ALICE, &BOB));
+	});
+}

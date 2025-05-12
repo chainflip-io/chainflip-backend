@@ -642,55 +642,57 @@ pub mod pallet {
 			let source = ensure_signed(origin)?;
 
 			ensure!(
-				T::AccountRoleRegistry::has_account_role(&source, AccountRole::Validator),
+				T::AccountRoleRegistry::has_account_role(&source, AccountRole::Validator) &&
+					T::AccountRoleRegistry::has_account_role(
+						&account_id,
+						AccountRole::Validator
+					),
 				Error::<T>::RestrictedToValidators
 			);
 
-			ensure!(
-				T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Validator),
-				Error::<T>::RestrictedToValidators
-			);
-
-			if let Some(executor) = BoundExecutorAddress::<T>::get(&source) {
-				ensure!(executor == source, Error::<T>::ExecutorBindingRestrictionViolated);
-			}
+			Self::ensure_address_restrictions(&source, &account_id)?;
 
 			let address_is_restricted_for_account =
 				RestrictedBalances::<T>::get(&source).contains_key(&address);
 
-			let (_total_restricted_balance, redeem_amount) =
-				Self::try_redeem(amount, source.clone(), address, None)?;
+			let (_total_restricted_balance, redeem_amount) = Self::try_redeem(
+				amount,
+				source.clone(),
+				address,
+				BoundExecutorAddress::<T>::get(&source),
+			)?;
 
-			T::Flip::try_initiate_redemption(&source, redeem_amount)?;
-			T::Flip::finalize_redemption(&source)?;
+			if redeem_amount > Zero::zero() {
+				T::Flip::try_transfer_funds_internally(redeem_amount, &source, &account_id)?;
 
-			if T::Flip::balance(&source).is_zero() {
-				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
-					// This shouldn't happen, and not much we can do if it does except fix it on a
-					// subsequent release. Consequences are minor.
-					log::error!(
-						"Unexpected reference count error while reaping the account {:?}: {:?}.",
-						account_id,
-						e
-					);
-				})
-			}
+				if T::Flip::balance(&source).is_zero() {
+					frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
+						// This shouldn't happen, and not much we can do if it does except fix it on
+						// a subsequent release. Consequences are minor.
+						log::error!(
+							"Unexpected reference count error while reaping the account {:?}: {:?}.",
+							account_id,
+							e
+						);
+					})
+				}
 
-			T::Flip::credit_funds(&account_id, redeem_amount);
+				if address_is_restricted_for_account {
+					RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
+						map.entry(address)
+							.and_modify(|balance| *balance += redeem_amount)
+							.or_insert(redeem_amount);
+					});
+				}
 
-			if address_is_restricted_for_account {
-				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
-					map.entry(address)
-						.and_modify(|balance| *balance += redeem_amount)
-						.or_insert(redeem_amount);
+				Self::deposit_event(Event::InternalTransfer {
+					from: source,
+					to: account_id,
+					amount: redeem_amount,
 				});
+			} else {
+				Self::deposit_event(Event::RedemptionAmountZero { account_id });
 			}
-
-			Self::deposit_event(Event::InternalTransfer {
-				from: source,
-				to: account_id,
-				amount: redeem_amount,
-			});
 
 			Ok(())
 		}
@@ -745,6 +747,26 @@ impl<T: Config> Pallet<T> {
 		}
 
 		T::Flip::credit_funds(account_id, amount)
+	}
+
+	fn ensure_address_restrictions(
+		source: &AccountId<T>,
+		destination: &AccountId<T>,
+	) -> DispatchResult {
+		let source_executor = BoundExecutorAddress::<T>::get(source);
+		let source_redeem = BoundRedeemAddress::<T>::get(&source);
+
+		ensure!(
+			source_executor == BoundExecutorAddress::<T>::get(&destination),
+			Error::<T>::ExecutorBindingRestrictionViolated
+		);
+
+		ensure!(
+			source_redeem == BoundRedeemAddress::<T>::get(&destination),
+			Error::<T>::AccountBindingRestrictionViolated
+		);
+
+		Ok(())
 	}
 
 	fn try_redeem(
