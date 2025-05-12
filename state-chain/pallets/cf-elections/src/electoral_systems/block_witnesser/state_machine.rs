@@ -494,11 +494,12 @@ pub mod tests {
 			);
 			LazyJust::new(move || BlockWitnesserState {
 				elections: ElectionTracker2 {
-					queued_next_safe_height: None,
+					// queued_next_safe_height: None,
 					queued_elections: BTreeMap::from_iter(queued_elections.clone()),
 					seen_heights_below,
 					priority_elections_below,
 					ongoing: BTreeMap::from_iter(ongoing.clone()),
+					queued_safe_elections: T::ChainBlockNumber::zero()..T::ChainBlockNumber::zero()
 				},
 				generate_election_properties_hook: Default::default(),
 				safemode_enabled: MockHook::new(safemode_enabled),

@@ -9,6 +9,7 @@ use std::{
 	hash::DefaultHasher,
 };
 
+use frame_support::ensure;
 use itertools::Itertools;
 use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 
@@ -28,7 +29,7 @@ use crate::electoral_systems::{
 		},
 	},
 	state_machine::{
-		core::{hook_test_utils::MockHook, IndexedValidate, TypesFor},
+		core::{hook_test_utils::MockHook, IndexedValidate, TypesFor, Validate},
 		state_machine::Statemachine,
 		state_machine_es::SMInput,
 		test_utils::{BTreeMultiSet, Container},
@@ -186,6 +187,9 @@ pub fn test_all() {
         let mut bw_history = Vec::new();
         let mut total_outputs = Vec::new();
 
+        let print_bw_history = |bw_history: &Vec<BWTrace<Types, Types>>| 
+            bw_history.iter().map(|event| format!("{event:?}")).intersperse("\n".to_string()).collect::<String>();
+
         while chains.has_chains() {
             // run BHW
             let bhw_outputs = if let Some(inputs) = AbstractVoter::<BHW>::vote(&mut chains, BHW::input_index(&mut bhw_state)) {
@@ -217,6 +221,10 @@ pub fn test_all() {
                 for bhw_output in bhw_outputs {
                     bw_history.push(BWTrace::Input(SMInput::Context(bhw_output.clone())));
 
+                    bw_state.elections.is_valid()
+                        .map_err(|err| format!("err: {err} with history: {}", print_bw_history(&bw_history)))
+                        .unwrap();
+
                     BW::step(&mut bw_state, SMInput::Context(bhw_output), &bw_settings).unwrap();
 
                     bw_history.extend(
@@ -236,6 +244,10 @@ pub fn test_all() {
                 // run on BW inputs (consensus)
                 for input in inputs {
                     bw_history.push(BWTrace::Input(input.clone()));
+
+                    bw_state.elections.is_valid()
+                        .map_err(|err| format!("err: {err} with history: {}", print_bw_history(&bw_history)))
+                        .unwrap();
 
                     BW::step(&mut bw_state, input, &bw_settings).unwrap();
 

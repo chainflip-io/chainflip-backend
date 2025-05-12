@@ -1,6 +1,9 @@
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
-use core::{iter::Step, ops::RangeInclusive};
+use core::{
+	iter::Step,
+	ops::{Range, RangeInclusive},
+};
 use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -27,30 +30,81 @@ macro_rules! do_match {
 	};
 }
 
-#[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-#[codec(encode_bound(
-	T::ChainBlockNumber: Encode,
-	T::ChainBlockHash: Encode,
-))]
-pub struct ElectionTracker2<T: ChainTypes> {
-	/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
-	pub seen_heights_below: T::ChainBlockNumber,
+macro_rules! defx {
+	(
+		pub struct $Name:tt [$($ParamName:ident: $ParamType:tt),*] {
+			$($Definition:tt)*
+		} where $this:ident {
+			$($prop_name:ident : $prop:expr),*
+		} with {
+			$($Attributes:tt)*
+		}
+	) => {
 
-	/// We always create elections until the next priority height, even if we
-	/// are in safe mode.
-	pub priority_elections_below: T::ChainBlockNumber,
+		$($Attributes)*
+		pub struct $Name<$($ParamName: $ParamType),*> {
+			$($Definition)*
+		}
 
-	/// Block hashes we got from the BHW.
-	pub queued_elections: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+		impl<$($ParamName: $ParamType),*> Validate for $Name<$($ParamName),*> {
 
-	/// Block heights which are queued but already past the safetymargin don't
-	/// have associated hashes. We just store the lowest height which we want
-	/// to query.
-	pub queued_next_safe_height: Option<T::ChainBlockNumber>,
+			type Error = &'static str;
 
-	/// Hashes of elections currently ongoing
-	pub ongoing: BTreeMap<T::ChainBlockNumber, BWElectionType<T>>,
+			fn is_valid(&self) -> Result<(), Self::Error> {
+				let $this = self;
+				use frame_support::ensure;
+				$(
+					ensure!($prop, stringify!($prop_name));
+				)*
+				Ok(())
+			}
+		}
+	};
+}
+
+defx! {
+
+	pub struct ElectionTracker2[T: ChainTypes] {
+		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
+		pub seen_heights_below: T::ChainBlockNumber,
+
+		/// We always create elections until the next priority height, even if we
+		/// are in safe mode.
+		pub priority_elections_below: T::ChainBlockNumber,
+
+		/// Block hashes we got from the BHW.
+		pub queued_elections: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+
+		/// Block heights which are queued but already past the safetymargin don't
+		/// have associated hashes. We just store the lowest height which we want
+		/// to query.
+		// pub queued_next_safe_height: Option<T::ChainBlockNumber>,
+
+		pub queued_safe_elections: Range<T::ChainBlockNumber>,
+
+		/// Hashes of elections currently ongoing
+		pub ongoing: BTreeMap<T::ChainBlockNumber, BWElectionType<T>>,
+
+	} where this {
+
+		queued_elections_are_consequtive:
+			this.queued_elections.keys().zip(this.queued_elections.keys().skip(1))
+			.all(|(left, right)| left.saturating_forward(1) == *right),
+
+		queued_safe_height_is_not_queued:
+			this.queued_safe_elections.clone().all(|height| !this.queued_elections.contains_key(&height))
+
+	} with {
+
+		#[derive_where(Debug, Clone, PartialEq, Eq;)]
+		#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+		#[codec(encode_bound(
+			T::ChainBlockNumber: Encode,
+			T::ChainBlockHash: Encode,
+		))]
+
+	}
+
 }
 
 impl<T: ChainTypes> ElectionTracker2<T> {
@@ -64,10 +118,13 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 			SafeModeStatus::Enabled => self.priority_elections_below.clone(),
 		};
 
-		let next_safe_height = self.queued_next_safe_height.unwrap_or(self.next_election());
-
 		use BWElectionType::*;
-		let safe_elections = (next_safe_height..min(self.next_election(), start_all_below))
+		let safe_elections = 
+			// self.queued_next_safe_height.zip(self.next_election())
+			// .map(|(safe_height, next_election)| (safe_height..min(next_election, start_all_below)))
+			self.queued_safe_elections
+			.clone()
+			// .unwrap_or(start_all_below..start_all_below)
 			.map(|height| (height, SafeBlockHeight));
 		let hash_elections = self
 			.queued_elections
@@ -82,9 +139,15 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 				.chain(hash_elections)
 				.chain(opti_elections)
 				.inspect(|(height, election_type)| {
-					if *election_type != Optimistic {
-						self.queued_next_safe_height = Some(height.saturating_forward(1))
+					match *election_type {
+						Optimistic => (),
+						ByHash(_) => self.queued_safe_elections = *height..*height,
+						SafeBlockHeight =>
+							self.queued_safe_elections = self.queued_safe_elections.start..*height,
 					}
+					// if *election_type != Optimistic {
+					// 	self.queued_next_safe_height = Some(height.saturating_forward(1))
+					// }
 				})
 				.take(max_new_elections),
 		);
@@ -167,12 +230,23 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		// Check whether there is a reorg concerning elections we have started previously.
 		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
 		// range are going to be restarted once there is the capacity to do so.
-		if *range.start() < self.next_election() {
-			// we set this value such that even in case of a reorg we create elections for up to
-			// this block
-			self.priority_elections_below =
-				max(self.next_election(), self.priority_elections_below.clone());
+		if let Some(next_election) = self.next_election() {
+			if *range.start() < next_election {
+				// we set this value such that even in case of a reorg we create elections for up to
+				// this block
+				self.priority_elections_below =
+					max(next_election, self.priority_elections_below.clone());
+
+				// We have to kick out scheduled safe-height elections that intersect with the reorg
+				// we're gonna create by-hash elections for the reorg range instead
+				// self.queued_next_safe_height = self.queued_next_safe_height.map(
+				// 	|next_safe_height| min(next_safe_height, *range.start())
+				// );
+			}
 		}
+
+		self.queued_safe_elections =
+			self.queued_safe_elections.start..min(self.queued_safe_elections.end, *range.start());
 
 		// QUESTION: currently, the following check ensures that
 		// the highest scheduled election never decreases. Do we want this?
@@ -189,16 +263,18 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		self.queued_elections.append(&mut hashes);
 
 		// clean up the queue by removing old hashes
-		self.queued_elections
-			.retain(|height, _| height.saturating_forward(safety_margin) >= *range.end());
+		let _ = self
+			.queued_elections
+			.extract_if(|height, _| height.saturating_forward(safety_margin) < *range.end())
+			.map(|(height, _)| {
+				self.queued_safe_elections.end = max(self.queued_safe_elections.end, height)
+			})
+			.collect::<Vec<_>>();
 	}
 
-	fn next_election(&self) -> T::ChainBlockNumber {
-		self.queued_elections
-			.first_key_value()
-			.map(fst)
-			.cloned()
-			.unwrap_or(self.seen_heights_below.clone())
+	fn next_election(&self) -> Option<T::ChainBlockNumber> {
+		self.queued_elections.first_key_value().map(fst).cloned()
+		// .unwrap_or(self.seen_heights_below.clone())
 	}
 }
 
@@ -209,7 +285,8 @@ impl<T: ChainTypes> Default for ElectionTracker2<T> {
 			priority_elections_below: T::ChainBlockNumber::zero(),
 			queued_elections: Default::default(),
 			ongoing: Default::default(),
-			queued_next_safe_height: None,
+			queued_safe_elections: T::ChainBlockNumber::zero()..T::ChainBlockNumber::zero(),
+			// queued_next_safe_height: None,
 		}
 	}
 }
