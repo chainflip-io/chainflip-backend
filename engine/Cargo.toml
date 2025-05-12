@@ -34,7 +34,6 @@ http = { workspace = true }
 itertools = { workspace = true, default-features = true }
 jsonrpsee = { workspace = true, features = ["full"] }
 dyn-clone = { workspace = true }
-ethbloom = { workspace = true }
 ethers = { workspace = true, features = ["rustls"] }
 lazy_static = { workspace = true }
 num-bigint = { workspace = true }
