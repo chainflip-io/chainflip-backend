@@ -134,7 +134,7 @@ pub fn test_all() {
 	}
 
 	let mut runner = TestRunner::new(Config {
-		cases: 256 * 16 * 16,
+		cases: 256 * 16 * 16 * 4,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
 		))),
@@ -144,7 +144,7 @@ pub fn test_all() {
 
         let mut chains = blocks_into_chain_progression(&blocks.blocks);
 
-        const SAFETY_MARGIN: u32 = 7;
+        const SAFETY_MARGIN: u32 = 8;
 
         // get final chain so we can check that we emitted the correct events:
         let final_chain = chains.get_final_chain();
@@ -308,7 +308,9 @@ pub fn test_all() {
         // verify that each event was emitted only one time 
         for (event, count) in counted_events.0.0.clone() {
             if count > 1 {
-                panic!("Got event {event:?} in total {count} times           events: {printed}              bw_input_history: {bw_history:?}");
+                panic!("Got event {event:?} in total {count} times           events: {printed}              bw_input_history: {}",
+                print_bw_history(&bw_history)
+            );
             }
         }
 

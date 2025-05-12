@@ -116,6 +116,17 @@ defx! {
 }
 
 impl<T: BWTypes> ElectionTracker2<T> {
+	pub fn update_safe_elections(
+		&mut self,
+		reason: UpdateSafeElectionsReason,
+		f: impl Fn(&mut Range<T::ChainBlockNumber>),
+	) {
+		let old = self.queued_safe_elections.clone();
+		f(&mut self.queued_safe_elections);
+		let new = self.queued_safe_elections.clone();
+		self.events.run(ElectionTrackerEvent::UpdateSafeElections { old, new, reason });
+	}
+
 	/// There are three types of elections:
 	///  - ByHash() elections are started
 	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
@@ -146,19 +157,33 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			safe_elections
 				.chain(hash_elections)
 				.chain(opti_elections)
-				.inspect(|(height, election_type)| {
-					match *election_type {
-						Optimistic => (),
-						ByHash(_) => self.queued_safe_elections = *height..*height,
-						SafeBlockHeight =>
-							self.queued_safe_elections = self.queued_safe_elections.start..*height,
-					}
-					// if *election_type != Optimistic {
-					// 	self.queued_next_safe_height = Some(height.saturating_forward(1))
-					// }
-				})
+				// .inspect(|(height, election_type)| {
+				// 	match *election_type {
+				// 		Optimistic => (),
+				// 		ByHash(_) =>
+				// self.update_safe_elections(UpdateSafeElectionsReason::SafeElectionScheduled, |x|
+				// *x = *height..*height), 		SafeBlockHeight =>
+				// 			self.queued_safe_elections = self.queued_safe_elections.start..*height,
+				// 	}
+				// 	// if *election_type != Optimistic {
+				// 	// 	self.queued_next_safe_height = Some(height.saturating_forward(1))
+				// 	// }
+				// })
 				.take(max_new_elections),
 		);
+
+		let highest_non_optimistic_election = self
+			.ongoing
+			.iter()
+			.filter(|(height, t)| **t != Optimistic)
+			.map(fst)
+			.max()
+			.cloned();
+		if let Some(n) = highest_non_optimistic_election {
+			self.update_safe_elections(UpdateSafeElectionsReason::SafeElectionScheduled, |x| {
+				x.start = n.saturating_forward(1)
+			});
+		}
 	}
 
 	/// If an election is done we remove it from the ongoing list.
@@ -298,22 +323,40 @@ impl<T: BWTypes> ElectionTracker2<T> {
 
 		// if we have optimistic blocks for the hashes we received, we will return them
 		let optimistic_blocks: BTreeMap<_, _> = if !is_reorg {
-			self.optimistic_block_cache
-				.extract_if(|height, block| hashes.get(height) == Some(&block.hash))
-				.collect()
+			if self.queued_elections.is_empty() {
+				// we only want to use the single next block
+				let next_queued_height = hashes.first_key_value().unwrap().0.clone();
+
+				self.optimistic_block_cache
+					.extract_if(|height, block| {
+						hashes.get(height) == Some(&block.hash) && *height == next_queued_height
+					})
+					.collect()
+			} else {
+				Default::default()
+			}
 		} else {
 			Default::default()
 		};
 
 		// remove those hashes for which we had optimistic blocks
-		let _: Vec<_> = hashes
+		let _ = hashes
 			.extract_if(|height, hash| {
 				optimistic_blocks.get(&height).map(|block| block.hash == *hash).unwrap_or(false)
 			})
-			.inspect(|(height, block)| {
-				self.queued_safe_elections.start = max(self.queued_safe_elections.start, *height)
-			})
-			.collect();
+			.map(fst)
+			.min()
+			.inspect(|height| {
+				self.update_safe_elections(UpdateSafeElectionsReason::GotOptimisticBlock, |x|
+					// x.end = max(x.end, height.saturating_forward(1))
+					x.start = max(x.start, *height));
+			});
+
+		if is_reorg {
+			self.update_safe_elections(UpdateSafeElectionsReason::ReorgReceived, |x|
+				// x.end = max(x.end, height.saturating_forward(1))
+				x.start = min(x.start, *range.start()));
+		}
 
 		// adding all hashes to the queue
 		self.queued_elections.append(&mut hashes);
@@ -322,10 +365,14 @@ impl<T: BWTypes> ElectionTracker2<T> {
 		let _ = self
 			.queued_elections
 			.extract_if(|height, _| height.saturating_forward(safety_margin) < *range.end())
-			.map(|(height, _)| {
-				self.queued_safe_elections.end = max(self.queued_safe_elections.end, height)
-			})
-			.collect::<Vec<_>>();
+			.map(fst)
+			.max()
+			.clone()
+			.inspect(|height| {
+				self.update_safe_elections(UpdateSafeElectionsReason::OutOfSafetyMargin, |x| {
+					x.end = max(x.end, height.saturating_forward(1))
+				});
+			});
 
 		optimistic_blocks.into_iter().collect()
 	}
@@ -371,6 +418,19 @@ pub enum ElectionTrackerEvent<T: BWTypes> {
 		received: BWElectionType<T>,
 		current: BWElectionType<T>,
 	},
+	UpdateSafeElections {
+		old: Range<T::ChainBlockNumber>,
+		new: Range<T::ChainBlockNumber>,
+		reason: UpdateSafeElectionsReason,
+	},
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub enum UpdateSafeElectionsReason {
+	OutOfSafetyMargin,
+	SafeElectionScheduled,
+	GotOptimisticBlock,
+	ReorgReceived,
 }
 
 /// Keeps track of ongoing elections for the block witnesser.
