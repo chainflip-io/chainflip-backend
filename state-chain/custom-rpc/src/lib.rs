@@ -37,8 +37,9 @@ use cf_primitives::{
 };
 use cf_rpc_apis::{
 	broker::{
-		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc,
-		VaultSwapExtraParametersRpc, VaultSwapInputRpc,
+		try_into_refund_parameters_encoded, try_into_swap_extra_params_encoded,
+		vault_swap_input_encoded_to_rpc, ChannelRefundParametersRpc, VaultSwapExtraParametersRpc,
+		VaultSwapInputRpc,
 	},
 	call_error, internal_error, CfErrorCode, OrderFills, RpcApiError, RpcResult,
 };
@@ -976,6 +977,22 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapInputRpc>;
 
+	#[method(name = "encode_cf_parameter")]
+	fn cf_encode_cf_parameter(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		refund_parameters: ChannelRefundParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
+		dca_parameters: Option<DcaParameters>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
 	#[method(name = "get_open_deposit_channels")]
 	fn cf_get_open_deposit_channels(
 		&self,
@@ -1886,6 +1903,37 @@ where
 					vault_swap.map_btc_address(Into::into),
 				)??,
 			))
+		})
+	}
+
+	fn cf_encode_cf_parameter(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		refund_parameters: ChannelRefundParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
+		dca_parameters: Option<DcaParameters>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			Ok::<_, CfApiError>(api.cf_encode_cf_parameter(
+				hash,
+				broker,
+				source_asset,
+				destination_address.try_parse_to_encoded_address(destination_asset.into())?,
+				destination_asset,
+				try_into_refund_parameters_encoded(refund_parameters, source_asset.into())?,
+				dca_parameters,
+				boost_fee.unwrap_or_default(),
+				broker_commission,
+				affiliate_fees.unwrap_or_default(),
+				channel_metadata,
+			)??)
 		})
 	}
 

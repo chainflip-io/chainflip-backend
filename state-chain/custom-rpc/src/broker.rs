@@ -27,7 +27,8 @@ use cf_node_client::{
 use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId};
 use cf_rpc_apis::{
 	broker::{
-		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc, BrokerRpcApiServer,
+		try_into_refund_parameters_encoded, try_into_swap_extra_params_encoded,
+		vault_swap_input_encoded_to_rpc, BrokerRpcApiServer, ChannelRefundParametersRpc,
 		DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress, TransactionInId,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
@@ -312,6 +313,39 @@ where
 				.map_err(CfApiError::from)?
 				.map_err(CfApiError::from)?,
 		))
+	}
+
+	async fn encode_cf_parameter(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		refund_parameters: ChannelRefundParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<Vec<u8>> {
+		Ok(self
+			.rpc_backend
+			.client
+			.runtime_api()
+			.cf_encode_cf_parameter(
+				self.rpc_backend.client.info().best_hash,
+				self.signed_pool_client.account_id(),
+				source_asset,
+				destination_address.try_parse_to_encoded_address(destination_asset.into())?,
+				destination_asset,
+				try_into_refund_parameters_encoded(refund_parameters, source_asset.into())?,
+				dca_parameters,
+				boost_fee.unwrap_or_default(),
+				broker_commission,
+				affiliate_fees.unwrap_or_default(),
+				channel_metadata,
+			)
+			.map_err(CfApiError::from)?
+			.map_err(CfApiError::from)?)
 	}
 
 	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()> {
