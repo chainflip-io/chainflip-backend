@@ -31,6 +31,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
+use cf_primitives::AccountRole;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	Funding,
@@ -294,6 +295,9 @@ pub mod pallet {
 
 		/// The account cannot be reaped before it is unregistered.
 		AccountMustBeUnregistered,
+
+		/// The call is restricted to validators.
+		RestrictedToValidators,
 	}
 
 	#[pallet::call]
@@ -637,13 +641,42 @@ pub mod pallet {
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&source, AccountRole::Validator),
+				Error::<T>::RestrictedToValidators
+			);
+
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Validator),
+				Error::<T>::RestrictedToValidators
+			);
+
+			if let Some(executor) = BoundExecutorAddress::<T>::get(&source) {
+				ensure!(executor == source, Error::<T>::ExecutorBindingRestrictionViolated);
+			}
+
 			let address_is_restricted_for_account =
 				RestrictedBalances::<T>::get(&source).contains_key(&address);
 
 			let (_total_restricted_balance, redeem_amount) =
 				Self::try_redeem(amount, source.clone(), address, None)?;
 
-			T::Flip::try_transfer_funds_internally(redeem_amount, &source, &account_id)?;
+			T::Flip::try_initiate_redemption(&source, redeem_amount)?;
+			T::Flip::finalize_redemption(&source)?;
+
+			if T::Flip::balance(&source).is_zero() {
+				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
+					// This shouldn't happen, and not much we can do if it does except fix it on a
+					// subsequent release. Consequences are minor.
+					log::error!(
+						"Unexpected reference count error while reaping the account {:?}: {:?}.",
+						account_id,
+						e
+					);
+				})
+			}
+
+			T::Flip::credit_funds(&account_id, redeem_amount);
 
 			if address_is_restricted_for_account {
 				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {

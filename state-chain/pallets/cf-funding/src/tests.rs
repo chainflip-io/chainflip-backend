@@ -1842,6 +1842,15 @@ fn transfer_unrestricted_funds_internal() {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
 		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -1866,11 +1875,52 @@ fn transfer_unrestricted_funds_internal() {
 }
 
 #[test]
+fn can_only_transfer_as_and_to_validator() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_noop!(
+			Funding::internal_transfer(
+				OriginTrait::signed(ALICE),
+				BOB,
+				UNRESTRICTED_ADDRESS,
+				AMOUNT_MINUS_FEE.into()
+			),
+			Error::<Test>::RestrictedToValidators
+		);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_noop!(
+			Funding::internal_transfer(
+				OriginTrait::signed(ALICE),
+				BOB,
+				UNRESTRICTED_ADDRESS,
+				AMOUNT_MINUS_FEE.into()
+			),
+			Error::<Test>::RestrictedToValidators
+		);
+	});
+}
+
+#[test]
 fn transfer_restricted_funds_internal() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
 		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
 
 		assert_ok!(Funding::update_restricted_addresses(
 			RuntimeOrigin::root(),
@@ -1907,6 +1957,14 @@ fn transfer_only_apart_of_the_restricted_funds() {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MOVE: u128 = AMOUNT / 2;
 		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
 
 		assert_ok!(Funding::update_restricted_addresses(
 			RuntimeOrigin::root(),
@@ -1948,6 +2006,14 @@ fn ensure_bonded_address_condition_holds_during_internal_transfer() {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
 		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
 
 		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), H160([0x02; 20])));
 		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(BOB), H160([0x03; 20])));
