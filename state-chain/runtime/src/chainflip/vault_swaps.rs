@@ -28,6 +28,10 @@ use cf_chains::{
 	btc::vault_swap_encoding::{
 		encode_swap_params_in_nulldata_payload, BtcCfParameters, UtxoEncodedData,
 	},
+	ccm_checker::{
+		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
+		DecodedCcmAdditionalData,
+	},
 	cf_parameters::build_cf_parameters,
 	evm::api::{EvmCall, EvmEnvironmentProvider},
 	sol::{
@@ -42,14 +46,15 @@ use cf_primitives::{
 	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters,
 	SWAP_DELAY_BLOCKS,
 };
-use cf_traits::AffiliateRegistry;
+use cf_traits::{AffiliateRegistry, SwapParameterValidation};
 use codec::Decode;
 use scale_info::prelude::string::String;
 
+use frame_support::pallet_prelude::DispatchError;
 use sp_core::U256;
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
-fn to_affiliate_and_fees(
+pub fn to_affiliate_and_fees(
 	broker_id: &AccountId,
 	affiliates: Affiliates<AccountId>,
 ) -> Result<Vec<AffiliateAndFee>, DispatchErrorWithMessage> {
@@ -452,4 +457,91 @@ pub fn decode_solana_vault_swap(
 		affiliate_fees: from_affiliate_and_fees(&broker_id, affiliate_fees)?,
 		dca_parameters,
 	})
+}
+
+pub fn validate_parameters(
+	broker_id: &AccountId,
+	source_chain: ForeignChain,
+	destination_address: &EncodedAddress,
+	destination_asset: Asset,
+	dca_parameters: &Option<DcaParameters>,
+	boost_fee: BasisPoints,
+	broker_commission: BasisPoints,
+	affiliate_fees: &Affiliates<AccountId>,
+	retry_duration: BlockNumber,
+	channel_metadata: &Option<CcmChannelMetadata>,
+) -> Result<(), DispatchErrorWithMessage> {
+	let destination_chain = destination_address.chain();
+
+	// Validate DCA parameters.
+	if let Some(params) = dca_parameters.as_ref() {
+		pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
+	}
+
+	// Validate boost fee.
+	if boost_fee < u8::MAX.into() {
+		return Err(pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh.into());
+	}
+
+	// Validate broker fee
+	if broker_commission <
+		pallet_cf_swapping::Pallet::<Runtime>::get_minimum_vault_swap_fee_for_broker(broker_id)
+	{
+		return Err(DispatchErrorWithMessage::from("Broker commission is too low"));
+	}
+	let _beneficiaries = pallet_cf_swapping::Pallet::<Runtime>::assemble_and_validate_broker_fees(
+		broker_id.clone(),
+		broker_commission,
+		affiliate_fees.clone(),
+	)?;
+
+	// Validate refund duration.
+	pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
+
+	// Validate CCM.
+	if let Some(ccm) = channel_metadata.as_ref() {
+		if source_chain == ForeignChain::Bitcoin {
+			return Err(DispatchErrorWithMessage::from(
+				"Vault swaps with CCM are not supported for the Bitcoin Chain",
+			));
+		}
+		if !destination_chain.ccm_support() {
+			return Err(DispatchErrorWithMessage::from("Destination chain does not support CCM"));
+		}
+
+		// Ensure CCM message is valid
+		match CcmValidityChecker::check_and_decode(
+			ccm,
+			destination_asset,
+			destination_address.clone(),
+		) {
+			Ok(DecodedCcmAdditionalData::Solana(decoded)) => {
+				let ccm_accounts = decoded.ccm_accounts();
+
+				// Ensure the CCM parameters do not contain blacklisted accounts.
+				// Load up environment variables.
+				let api_environment = SolEnvironment::api_environment()
+					.map_err(|_| "Failed to load Solana API environment")?;
+
+				let agg_key: SolPubkey = SolEnvironment::current_agg_key()
+					.map_err(|_| "Failed to load Solana Agg key")?
+					.into();
+
+				let on_chain_key: SolPubkey = SolEnvironment::current_on_chain_key()
+					.map(|key| key.into())
+					.unwrap_or_else(|_| agg_key);
+
+				check_ccm_for_blacklisted_accounts(
+					&ccm_accounts,
+					vec![api_environment.token_vault_pda_account.into(), agg_key, on_chain_key],
+				)
+				.map_err(DispatchError::from)?;
+			},
+			Ok(DecodedCcmAdditionalData::NotRequired) => {},
+			Err(_) =>
+				return Err(DispatchErrorWithMessage::from("Solana Ccm additional data is invalid")),
+		};
+	}
+
+	Ok(())
 }

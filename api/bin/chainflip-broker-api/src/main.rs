@@ -17,8 +17,9 @@
 use cf_chains::CcmChannelMetadataUnchecked;
 use cf_rpc_apis::{
 	broker::{
-		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
-		TransactionInId, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
+		BrokerRpcApiServer, ChannelRefundParametersRpc, DcaParameters, GetOpenDepositChannelsQuery,
+		SwapDepositAddress, TransactionInId, VaultSwapExtraParametersRpc, VaultSwapInputRpc,
+		WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
@@ -154,6 +155,37 @@ impl BrokerRpcApiServer for RpcServerImpl {
 			.cf_decode_vault_swap_parameter(
 				self.api.state_chain_client.account_id(),
 				vault_swap,
+				None,
+			)
+			.await?)
+	}
+
+	async fn encode_cf_parameter(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		refund_parameters: ChannelRefundParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<Vec<u8>> {
+		Ok(self
+			.api
+			.raw_client()
+			.cf_encode_cf_parameter(
+				self.api.state_chain_client.account_id(),
+				source_asset,
+				destination_asset,
+				destination_address,
+				broker_commission,
+				refund_parameters,
+				channel_metadata,
+				boost_fee,
+				affiliate_fees,
+				dca_parameters,
 				None,
 			)
 			.await?)

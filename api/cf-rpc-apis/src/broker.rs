@@ -70,6 +70,20 @@ pub trait BrokerRpcApi {
 		vault_swap: VaultSwapDetails<AddressString>,
 	) -> RpcResult<VaultSwapInputRpc>;
 
+	#[method(name = "encode_cf_parameter", aliases = ["broker_EncodeCfParameter"])]
+	async fn encode_cf_parameter(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		refund_parameters: ChannelRefundParametersRpc,
+		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<Vec<u8>>;
+
 	#[method(name = "mark_transaction_for_rejection", aliases = ["broker_MarkTransactionForRejection"])]
 	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()>;
 
