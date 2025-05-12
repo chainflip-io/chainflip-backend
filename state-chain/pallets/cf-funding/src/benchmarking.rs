@@ -191,5 +191,22 @@ mod benchmarks {
 		assert!(BoundExecutorAddress::<T>::contains_key(&caller));
 	}
 
+	#[benchmark]
+	fn internal_transfer() {
+		let caller: T::AccountId = whitelisted_caller();
+
+		fund_with_minimum::<T>(&caller);
+
+		let recipient = account("doogle", 0, 1);
+
+		#[extrinsic_call]
+		internal_transfer(
+			RawOrigin::Signed(caller.clone()),
+			recipient,
+			Default::default(),
+			RedemptionAmount::Max,
+		);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

@@ -72,7 +72,7 @@ impl<AccountId> ImbalanceSource<AccountId> {
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have
 /// been added from *somewhere*, and that we need to account for this by cancelling it against a
 /// corresponding [Deficit].
-#[must_use = "This surplus needs to be reconciled - if not any remaining imblance will be reverted."]
+#[must_use = "This surplus needs to be reconciled - if not any remaining imbalance will be reverted."]
 #[derive(RuntimeDebug, PartialEq, Eq)]
 pub struct Surplus<T: Config> {
 	amount: T::Balance,
