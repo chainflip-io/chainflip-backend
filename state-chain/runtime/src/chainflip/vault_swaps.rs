@@ -479,7 +479,7 @@ pub fn validate_parameters(
 	}
 
 	// Validate boost fee.
-	if boost_fee < u8::MAX.into() {
+	if boost_fee > u8::MAX.into() {
 		return Err(pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh.into());
 	}
 
