@@ -22,7 +22,7 @@ use crate::electoral_systems::{
 		block_processor::{
 			tests::MockBtcEvent, BlockProcessingInfo, BlockProcessor, BlockProcessorEvent,
 		},
-		primitives::SafeModeStatus,
+		primitives::{ElectionTrackerEvent, SafeModeStatus},
 		state_machine::{
 			tests::*, BWElectionProperties, BWElectionType, BWProcessorTypes, BWStatemachine,
 			BWTypes, BlockWitnesserSettings, BlockWitnesserState,
@@ -181,13 +181,14 @@ pub fn test_all() {
             Input(<BWStatemachine<T> as Statemachine>::Input),
             InputBHW(<BlockHeightTrackingSM<T0> as Statemachine>::Input),
             Output(Vec<(T::ChainBlockNumber, T::Event)>),
-            Event(BlockProcessorEvent<T>)
+            Event(BlockProcessorEvent<T>),
+            ET(ElectionTrackerEvent<T>)
         }
 
         let mut bw_history = Vec::new();
         let mut total_outputs = Vec::new();
 
-        let print_bw_history = |bw_history: &Vec<BWTrace<Types, Types>>| 
+        let print_bw_history = |bw_history: &Vec<BWTrace<Types, Types>>|
             bw_history.iter().map(|event| format!("{event:?}")).intersperse("\n".to_string()).collect::<String>();
 
         while chains.has_chains() {
@@ -228,6 +229,12 @@ pub fn test_all() {
                     BW::step(&mut bw_state, SMInput::Context(bhw_output), &bw_settings).unwrap();
 
                     bw_history.extend(
+                        bw_state.elections.events
+                        .take_history()
+                        .into_iter()
+                        .map(BWTrace::ET));
+
+                    bw_history.extend(
                         bw_state.block_processor.delete_data
                         .take_history()
                         .into_iter()
@@ -250,6 +257,12 @@ pub fn test_all() {
                         .unwrap();
 
                     BW::step(&mut bw_state, input, &bw_settings).unwrap();
+
+                    bw_history.extend(
+                        bw_state.elections.events
+                        .take_history()
+                        .into_iter()
+                        .map(BWTrace::ET));
 
                     bw_history.extend(
                         bw_state.block_processor.delete_data

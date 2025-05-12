@@ -27,8 +27,9 @@ use crate::{
 		block_witnesser::{
 			primitives::ElectionTracker,
 			state_machine::{
-				BWElectionProperties, BWProcessorTypes, ElectionPropertiesHook, ExecuteHook,
-				HookTypeFor, LogEventHook, RulesHook, SafeModeEnabledHook,
+				BWElectionProperties, BWProcessorTypes, ElectionPropertiesHook,
+				ElectionTrackerEventHook, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,
+				SafeModeEnabledHook,
 			},
 			*,
 		},
@@ -86,6 +87,7 @@ impl BWTypes for Types {
 	type ElectionPropertiesHook =
 		MockHook<HookTypeFor<Self, ElectionPropertiesHook>, "generate_election_properties">;
 	type SafeModeEnabledHook = Self;
+	type ElectionTrackerEventHook = MockHook<HookTypeFor<Self, ElectionTrackerEventHook>>;
 }
 
 /// Associating the ES related types to the struct

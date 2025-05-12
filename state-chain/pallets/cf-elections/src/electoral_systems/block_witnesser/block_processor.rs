@@ -90,6 +90,14 @@ impl<BlockData> BlockProcessingInfo<BlockData> {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum BlockProcessorEvent<T: BWProcessorTypes> {
+	NewBlock {
+		height: T::ChainBlockNumber,
+		data: T::BlockData,
+	},
+	ProcessingBlockForAges {
+		height: T::ChainBlockNumber,
+		ages: Range<u32>,
+	},
 	DeleteBlock((T::ChainBlockNumber, BlockProcessingInfo<T::BlockData>)),
 	DeleteEvents(Vec<T::Event>),
 	StoreReorgedEvents {
@@ -159,6 +167,10 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		&mut self,
 		(block_number, block_data, safety_margin): (T::ChainBlockNumber, T::BlockData, u32),
 	) {
+		self.delete_data.run(BlockProcessorEvent::NewBlock {
+			height: block_number.clone(),
+			data: block_data.clone(),
+		});
 		self.blocks_data
 			.insert(block_number, BlockProcessingInfo::new(block_data, safety_margin));
 	}
@@ -219,6 +231,12 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			if new_age as u32 >= block_info.next_age_to_process {
 				let age_range: Range<u32> =
 					(block_info.next_age_to_process)..new_age.saturating_add(1) as u32;
+
+				self.delete_data.run(BlockProcessorEvent::ProcessingBlockForAges {
+					height: block_height.clone(),
+					ages: age_range.clone(),
+				});
+
 				last_events.extend(self.process_rules_for_ages_and_block(
 					block_height,
 					block_height,

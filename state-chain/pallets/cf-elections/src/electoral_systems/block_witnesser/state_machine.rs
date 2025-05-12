@@ -2,7 +2,7 @@ use super::{
 	super::state_machine::core::*,
 	block_processor::BlockProcessorEvent,
 	optimistic_block_cache::OptimisticBlockCache,
-	primitives::{ElectionTracker, ElectionTracker2, SafeModeStatus},
+	primitives::{ElectionTracker, ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
 	block_height_tracking::{ChainProgress, ChainTypes},
@@ -36,9 +36,22 @@ pub trait BWTypes: 'static + Sized + BWProcessorTypes {
 	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>>;
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>>;
+
+	type ElectionTrackerEventHook: Hook<HookTypeFor<Self, ElectionTrackerEventHook>>
+		+ Default
+		+ Serde
+		+ Debug
+		+ Clone
+		+ Eq;
 }
 
 // hook types
+pub struct ElectionTrackerEventHook;
+impl<T: BWTypes> HookType for HookTypeFor<T, ElectionTrackerEventHook> {
+	type Input = ElectionTrackerEvent<T>;
+	type Output = ();
+}
+
 pub struct SafeModeEnabledHook;
 impl<T: BWTypes> HookType for HookTypeFor<T, SafeModeEnabledHook> {
 	type Input = ();
@@ -110,6 +123,7 @@ pub struct BlockWitnesserSettings {
 	T::ElectionPropertiesHook: Encode,
 	T::SafeModeEnabledHook: Encode,
 	T::BlockData: Encode,
+	T::ElectionTrackerEventHook: Encode,
 
 	BlockProcessor<T>: Encode,
 ))]
@@ -228,13 +242,12 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		match i {
 			// TODO: unify these two cases
 			SMInput::Context(ChainProgress::Range(hashes, range)) => {
-				s.elections.schedule_range(
+				for (height, block) in s.elections.schedule_range(
 					range.clone(),
 					hashes.clone(),
 					settings.safety_margin as usize,
-				);
-
-				for (height, block) in s.optimistic_blocks_cache.get_blocks(&hashes) {
+					false,
+				) {
 					s.block_processor.process_block_data((
 						height,
 						block.data,
@@ -247,13 +260,12 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			},
 
 			SMInput::Context(ChainProgress::Reorg(hashes, range)) => {
-				s.elections.schedule_range(
+				for (height, block) in s.elections.schedule_range(
 					range.clone(),
 					hashes.clone(),
 					settings.safety_margin as usize,
-				);
-
-				for (height, block) in s.optimistic_blocks_cache.get_blocks(&hashes) {
+					true,
+				) {
 					s.block_processor.process_block_data((
 						height,
 						block.data,
@@ -270,22 +282,17 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			SMInput::Consensus((properties, (blockdata, blockhash))) => {
 				log::info!("got {:?} block data: {:?}", properties.election_type, blockdata);
 
-				use BWElectionType::*;
-				match s.elections.mark_election_done(
+				if let Some(blockdata) = s.elections.mark_election_done(
 					properties.block_height,
 					&properties.election_type,
 					&blockhash,
+					blockdata,
 				) {
-					Some(Optimistic) => s.optimistic_blocks_cache.add_block(
-						properties.block_height,
-						OptimisticBlock { hash: blockhash.unwrap(), data: blockdata },
-					),
-					Some(ByHash(_) | SafeBlockHeight) => s.block_processor.process_block_data((
+					s.block_processor.process_block_data((
 						properties.block_height,
 						blockdata,
 						settings.safety_margin,
-					)),
-					None => (),
+					));
 				}
 			},
 		};
@@ -499,7 +506,9 @@ pub mod tests {
 					seen_heights_below,
 					priority_elections_below,
 					ongoing: BTreeMap::from_iter(ongoing.clone()),
-					queued_safe_elections: T::ChainBlockNumber::zero()..T::ChainBlockNumber::zero()
+					queued_safe_elections: T::ChainBlockNumber::zero()..T::ChainBlockNumber::zero(),
+					optimistic_block_cache: Default::default(),
+					events: Default::default()
 				},
 				generate_election_properties_hook: Default::default(),
 				safemode_enabled: MockHook::new(safemode_enabled),
@@ -566,6 +575,7 @@ pub mod tests {
 		type ElectionProperties = ();
 		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;
 		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
+		type ElectionTrackerEventHook = MockHook<HookTypeFor<Self, ElectionTrackerEventHook>>;
 	}
 
 	type Types = (u32, Vec<u8>, Vec<u8>);

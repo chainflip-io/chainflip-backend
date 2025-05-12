@@ -19,10 +19,10 @@ use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
 	block_height_tracking::ChainTypes,
-	state_machine::core::{fst, Validate},
+	state_machine::core::{fst, Hook, Validate},
 };
 
-use super::state_machine::BWElectionType;
+use super::state_machine::{BWElectionType, BWTypes};
 
 macro_rules! do_match {
 	($($tt:tt)*) => {
@@ -64,7 +64,7 @@ macro_rules! defx {
 
 defx! {
 
-	pub struct ElectionTracker2[T: ChainTypes] {
+	pub struct ElectionTracker2[T: BWTypes] {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: T::ChainBlockNumber,
 
@@ -85,6 +85,12 @@ defx! {
 		/// Hashes of elections currently ongoing
 		pub ongoing: BTreeMap<T::ChainBlockNumber, BWElectionType<T>>,
 
+		/// Optimistic blocks
+		pub optimistic_block_cache: BTreeMap<T::ChainBlockNumber, OptimisticBlock<T>>,
+
+		/// debug hook
+		pub events: T::ElectionTrackerEventHook,
+
 	} where this {
 
 		queued_elections_are_consequtive:
@@ -101,13 +107,15 @@ defx! {
 		#[codec(encode_bound(
 			T::ChainBlockNumber: Encode,
 			T::ChainBlockHash: Encode,
+			T::BlockData: Encode,
+			T::ElectionTrackerEventHook: Encode
 		))]
 
 	}
 
 }
 
-impl<T: ChainTypes> ElectionTracker2<T> {
+impl<T: BWTypes> ElectionTracker2<T> {
 	/// There are three types of elections:
 	///  - ByHash() elections are started
 	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
@@ -119,7 +127,7 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		};
 
 		use BWElectionType::*;
-		let safe_elections = 
+		let safe_elections =
 			// self.queued_next_safe_height.zip(self.next_election())
 			// .map(|(safe_height, next_election)| (safe_height..min(next_election, start_all_below)))
 			self.queued_safe_elections
@@ -168,7 +176,8 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		height: T::ChainBlockNumber,
 		received: &BWElectionType<T>,
 		received_hash: &Option<T::ChainBlockHash>,
-	) -> Option<BWElectionType<T>> {
+		received_data: T::BlockData,
+	) -> Option<T::BlockData> {
 		// update the lowest unseen block,
 		// currently this only has an effect if we get an Optimistic block
 		self.seen_heights_below = max(self.seen_heights_below, height.saturating_forward(1));
@@ -181,42 +190,69 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		self.ongoing
 			.get(&height)
 			.cloned()
-			.and_then(|current| match (received, &current) {
-				// if we receive a result for the same election type as is currently open,
-				// we close it
-				(a, b) if a == b => Some(current),
+			.and_then(|current| {
+				self.events.run(ElectionTrackerEvent::ComparingBlocks {
+					height,
+					hash: received_hash.clone(),
+					received: received.clone(),
+					current: current.clone(),
+				});
 
-				// if we get consensus for a by-hash election whose hash doesn't match with
-				// the hash we have currently, we keep it open
-				(ByHash(a), ByHash(b)) if a != b => None,
+				match (received, &current) {
+					// if we receive a result for the same election type as is currently open,
+					// we close it
+					(a, b) if a == b => Some(current),
 
-				// if we get an optimistic consensus for an election that is already by-hash,
-				// we check whether the `received_hash` is the same as the hash we're currently
-				// querying for. If it is, we accept the optimistic block as result for the by-hash
-				// election. otherwise we keep the by-hash election open.
-				(Optimistic, ByHash(current_hash)) =>
-					if received_hash.as_ref() == Some(current_hash) {
-						Some(current)
-					} else {
-						None
-					},
+					// if we get consensus for a by-hash election whose hash doesn't match with
+					// the hash we have currently, we keep it open
+					(ByHash(a), ByHash(b)) if a != b => None,
 
-				// If we get an optimistic consensus for an election that is already past
-				// safety-margin we ignore it, it's safer to re-query by block height. This
-				// should virtually never happen, only in case where the querying takes a *very*
-				// long time.
-				(Optimistic, SafeBlockHeight) => None,
+					// if we get an optimistic consensus for an election that is already by-hash,
+					// we check whether the `received_hash` is the same as the hash we're currently
+					// querying for. If it is, we accept the optimistic block as result for the
+					// by-hash election. otherwise we keep the by-hash election open.
+					(Optimistic, ByHash(current_hash)) =>
+						if received_hash.as_ref() == Some(current_hash) {
+							Some(current)
+						} else {
+							None
+						},
 
-				// If we get a by-hash consensus for an election that is already past safety-margin,
-				// we ignore it. We've already deleted the hash for this election from storage,
-				// so we can't check whether we got the correct block. It's safer to re-query.
-				(ByHash(_), SafeBlockHeight) => None,
+					// If we get an optimistic consensus for an election that is already past
+					// safety-margin we ignore it, it's safer to re-query by block height. This
+					// should virtually never happen, only in case where the querying takes a *very*
+					// long time.
+					(Optimistic, SafeBlockHeight) => None,
 
-				// All other cases should be impossible
-				(_, _) => None,
+					// If we get a by-hash consensus for an election that is already past
+					// safety-margin, we ignore it. We've already deleted the hash for this
+					// election from storage, so we can't check whether we got the correct
+					// block. It's safer to re-query.
+					(ByHash(_), SafeBlockHeight) => None,
+
+					// All other cases should be impossible
+					(_, _) => None,
+				}
 			})
 			.inspect(|_| {
 				self.ongoing.remove(&height);
+			})
+			.and_then(|t| match t {
+				// we closed an optimistic election, this means we don't have the hash yet
+				// so we include the block in our optimistic cache
+				Optimistic => {
+					self.optimistic_block_cache.insert(
+						height,
+						OptimisticBlock {
+							hash: received_hash.clone().unwrap(),
+							data: received_data,
+						},
+					);
+					None
+				},
+				// Otherwise we know that this block is correct and can be forwarded to the
+				// block processor, thus we return it here.
+				ByHash(_) | SafeBlockHeight => Some(received_data),
 			})
 	}
 
@@ -226,7 +262,8 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		range: RangeInclusive<T::ChainBlockNumber>,
 		mut hashes: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
 		safety_margin: usize,
-	) {
+		is_reorg: bool,
+	) -> Vec<(T::ChainBlockNumber, OptimisticBlock<T>)> {
 		// Check whether there is a reorg concerning elections we have started previously.
 		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
 		// range are going to be restarted once there is the capacity to do so.
@@ -259,6 +296,25 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 		// if there are elections ongoing for the block heights we received, we stop them
 		self.ongoing.retain(|height, _| !hashes.contains_key(height));
 
+		// if we have optimistic blocks for the hashes we received, we will return them
+		let optimistic_blocks: BTreeMap<_, _> = if !is_reorg {
+			self.optimistic_block_cache
+				.extract_if(|height, block| hashes.get(height) == Some(&block.hash))
+				.collect()
+		} else {
+			Default::default()
+		};
+
+		// remove those hashes for which we had optimistic blocks
+		let _: Vec<_> = hashes
+			.extract_if(|height, hash| {
+				optimistic_blocks.get(&height).map(|block| block.hash == *hash).unwrap_or(false)
+			})
+			.inspect(|(height, block)| {
+				self.queued_safe_elections.start = max(self.queued_safe_elections.start, *height)
+			})
+			.collect();
+
 		// adding all hashes to the queue
 		self.queued_elections.append(&mut hashes);
 
@@ -270,6 +326,8 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 				self.queued_safe_elections.end = max(self.queued_safe_elections.end, height)
 			})
 			.collect::<Vec<_>>();
+
+		optimistic_blocks.into_iter().collect()
 	}
 
 	fn next_election(&self) -> Option<T::ChainBlockNumber> {
@@ -278,7 +336,7 @@ impl<T: ChainTypes> ElectionTracker2<T> {
 	}
 }
 
-impl<T: ChainTypes> Default for ElectionTracker2<T> {
+impl<T: BWTypes> Default for ElectionTracker2<T> {
 	fn default() -> Self {
 		Self {
 			seen_heights_below: T::ChainBlockNumber::zero(),
@@ -286,9 +344,33 @@ impl<T: ChainTypes> Default for ElectionTracker2<T> {
 			queued_elections: Default::default(),
 			ongoing: Default::default(),
 			queued_safe_elections: T::ChainBlockNumber::zero()..T::ChainBlockNumber::zero(),
-			// queued_next_safe_height: None,
+			optimistic_block_cache: Default::default(),
+			events: Default::default(),
 		}
 	}
+}
+
+#[derive_where(Debug, Clone, PartialEq, Eq;)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[codec(encode_bound(
+	T::ChainBlockNumber: Encode,
+	T::ChainBlockHash: Encode,
+	T::BlockData: Encode,
+))]
+pub struct OptimisticBlock<T: BWTypes> {
+	pub hash: T::ChainBlockHash,
+	pub data: T::BlockData,
+}
+
+#[derive_where(Debug, Clone, PartialEq, Eq;)]
+#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub enum ElectionTrackerEvent<T: BWTypes> {
+	ComparingBlocks {
+		height: T::ChainBlockNumber,
+		hash: Option<T::ChainBlockHash>,
+		received: BWElectionType<T>,
+		current: BWElectionType<T>,
+	},
 }
 
 /// Keeps track of ongoing elections for the block witnesser.
