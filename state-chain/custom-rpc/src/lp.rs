@@ -51,7 +51,7 @@ use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
 use frame_support::BoundedVec;
 use jsonrpsee::{core::async_trait, tokio, PendingSubscriptionSink};
 use pallet_cf_ingress_egress::DepositChannelDetails;
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, LimitOrderUpdateDetails, MAX_ORDERS_DELETE};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
@@ -389,19 +389,26 @@ where
 		dispatch_at: Option<BlockNumber>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
-		self.scheduled_or_immediate(
-			base_asset,
-			quote_asset,
-			side,
-			id,
-			LimitOrderUpdateDetails::Update {
-				option_tick: tick,
-				amount_change: amount_change.try_map(try_parse_number_or_hex)?,
-			},
-			dispatch_at,
-			wait_for.unwrap_or_default(),
+		Ok(into_api_wait_for_dynamic_result(
+			self.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_pools::Call::update_limit_order {
+						base_asset,
+						quote_asset,
+						side,
+						id: id.try_into()?,
+						option_tick: tick,
+						amount_change: amount_change.try_map(try_parse_number_or_hex)?,
+						dispatch_at,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await
+				.map_err(CfApiError::from)?,
+			filter_limit_orders,
 		)
-		.await
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn set_limit_order(
@@ -416,20 +423,27 @@ where
 		wait_for: Option<WaitFor>,
 		close_order_at: Option<BlockNumber>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
-		self.scheduled_or_immediate(
-			base_asset,
-			quote_asset,
-			side,
-			id,
-			LimitOrderUpdateDetails::Set {
-				option_tick: tick,
-				sell_amount: try_parse_number_or_hex(sell_amount)?,
-				close_order_at,
-			},
-			dispatch_at,
-			wait_for.unwrap_or_default(),
+		Ok(into_api_wait_for_dynamic_result(
+			self.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_pools::Call::set_limit_order {
+						base_asset,
+						quote_asset,
+						side,
+						id: id.try_into()?,
+						option_tick: tick,
+						sell_amount: try_parse_number_or_hex(sell_amount)?,
+						close_order_at,
+						dispatch_at,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await
+				.map_err(CfApiError::from)?,
+			filter_limit_orders,
 		)
-		.await
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn free_balances(&self) -> RpcResult<AssetMap<U256>> {
@@ -670,37 +684,6 @@ where
 				.await
 				.map_err(CfApiError::from)?,
 			filter_orders,
-		)
-		.map_err(CfApiError::from)?)
-	}
-
-	async fn scheduled_or_immediate(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		id: OrderIdJson,
-		details: LimitOrderUpdateDetails<BlockNumber>,
-		dispatch_at: Option<BlockNumber>,
-		wait_for: WaitFor,
-	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
-		Ok(into_api_wait_for_dynamic_result(
-			self.signed_pool_client
-				.submit_wait_for_result_dynamic(
-					RuntimeCall::from(pallet_cf_pools::Call::schedule_limit_order_update {
-						base_asset,
-						quote_asset,
-						side,
-						id: id.try_into()?,
-						details,
-						dispatch_at,
-					}),
-					wait_for,
-					false,
-				)
-				.await
-				.map_err(CfApiError::from)?,
-			filter_limit_orders,
 		)
 		.map_err(CfApiError::from)?)
 	}

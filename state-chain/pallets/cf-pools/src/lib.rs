@@ -182,7 +182,7 @@ impl<T> AskBidMap<T> {
 
 #[derive(Clone, Encode, DebugNoBound, Decode, TypeInfo, PartialEq, Eq)]
 #[scale_info(skip_type_params(T))]
-pub struct LimitOrderUpdate<T: Config> {
+struct LimitOrderUpdate<T: Config> {
 	pub lp: T::AccountId,
 	pub base_asset: any::Asset,
 	pub quote_asset: any::Asset,
@@ -192,7 +192,7 @@ pub struct LimitOrderUpdate<T: Config> {
 }
 
 #[derive(Clone, Encode, DebugNoBound, Decode, TypeInfo, PartialEq, Eq)]
-pub enum LimitOrderUpdateDetails<BlockNumber: sp_std::fmt::Debug> {
+enum LimitOrderUpdateDetails<BlockNumber: sp_std::fmt::Debug> {
 	Update { option_tick: Option<Tick>, amount_change: IncreaseOrDecrease<AssetAmount> },
 	Set { option_tick: Option<Tick>, sell_amount: AssetAmount, close_order_at: Option<BlockNumber> },
 	Close,
@@ -210,6 +210,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 					self.id,
 					option_tick,
 					sell_amount,
+					None, // Dispatch now
 					close_order_at,
 				);
 				(T::WeightInfo::set_limit_order(), result)
@@ -223,6 +224,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 					self.id,
 					option_tick,
 					amount_change,
+					None, // Dispatch now
 				);
 				(T::WeightInfo::update_limit_order(), result)
 			},
@@ -235,6 +237,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 					self.id,
 					None,
 					IncreaseOrDecrease::Decrease(AssetAmount::MAX),
+					None, // Dispatch now
 				);
 				let result = if let Err(err) = result {
 					if err == Error::<T>::OrderDoesNotExist.into() {
@@ -795,6 +798,7 @@ pub mod pallet {
 			id: OrderId,
 			option_tick: Option<Tick>,
 			amount_change: IncreaseOrDecrease<AssetAmount>,
+			dispatch_at: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().limit_order_update_enabled,
@@ -806,15 +810,27 @@ pub mod pallet {
 				[base_asset, quote_asset],
 			)?;
 
-			Self::inner_update_limit_order(
-				&lp,
-				base_asset,
-				quote_asset,
-				side,
-				id,
-				option_tick,
-				amount_change,
-			)
+			if let Some(dispatch_at) = dispatch_at {
+				LimitOrderUpdate::<T> {
+					lp: lp.clone(),
+					base_asset,
+					quote_asset,
+					side,
+					id,
+					details: LimitOrderUpdateDetails::Update { option_tick, amount_change },
+				}
+				.schedule_or_dispatch(Some(dispatch_at))
+			} else {
+				Self::inner_update_limit_order(
+					&lp,
+					base_asset,
+					quote_asset,
+					side,
+					id,
+					option_tick,
+					amount_change,
+				)
+			}
 		}
 
 		/// Optionally move the order to a different tick and then set its amount of liquidity. The
@@ -835,6 +851,7 @@ pub mod pallet {
 			id: OrderId,
 			option_tick: Option<Tick>,
 			sell_amount: AssetAmount,
+			dispatch_at: Option<BlockNumberFor<T>>,
 			close_order_at: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			ensure!(
@@ -847,32 +864,47 @@ pub mod pallet {
 				[base_asset, quote_asset],
 			)?;
 
-			Self::inner_set_limit_order(
-				&lp,
-				base_asset,
-				quote_asset,
-				side,
-				id,
-				option_tick,
-				sell_amount,
-			)?;
-
-			if let Some(close_order_at) = close_order_at {
-				if close_order_at <= frame_system::Pallet::<T>::block_number() {
-					return Err(Error::<T>::InvalidCloseOrderAt.into());
-				}
-
+			if let Some(dispatch_at) = dispatch_at {
 				LimitOrderUpdate::<T> {
 					lp: lp.clone(),
 					base_asset,
 					quote_asset,
 					side,
 					id,
-					details: LimitOrderUpdateDetails::Close,
+					details: LimitOrderUpdateDetails::Set {
+						option_tick,
+						sell_amount,
+						close_order_at,
+					},
 				}
-				.schedule(close_order_at);
-			}
+				.schedule_or_dispatch(Some(dispatch_at))?;
+			} else {
+				Self::inner_set_limit_order(
+					&lp,
+					base_asset,
+					quote_asset,
+					side,
+					id,
+					option_tick,
+					sell_amount,
+				)?;
 
+				if let Some(close_order_at) = close_order_at {
+					if close_order_at <= frame_system::Pallet::<T>::block_number() {
+						return Err(Error::<T>::InvalidCloseOrderAt.into());
+					}
+
+					LimitOrderUpdate::<T> {
+						lp: lp.clone(),
+						base_asset,
+						quote_asset,
+						side,
+						id,
+						details: LimitOrderUpdateDetails::Close,
+					}
+					.schedule(close_order_at);
+				}
+			}
 			Ok(())
 		}
 
@@ -915,33 +947,6 @@ pub mod pallet {
 			});
 
 			Ok(())
-		}
-
-		/// Schedules a limit order update to be executed at a later block.
-		///
-		/// `dispatch_at` specifies the block at which to schedule the update. If None or current
-		/// block is given, it will dispatch immediately.
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [UnsupportedCall](pallet_cf_pools::Error::UnsupportedCall)
-		#[allow(clippy::useless_conversion)]
-		#[pallet::call_index(8)]
-		#[pallet::weight(T::WeightInfo::schedule_limit_order_update())]
-		pub fn schedule_limit_order_update(
-			origin: OriginFor<T>,
-			base_asset: any::Asset,
-			quote_asset: any::Asset,
-			side: Side,
-			id: OrderId,
-			details: LimitOrderUpdateDetails<BlockNumberFor<T>>,
-			dispatch_at: Option<BlockNumberFor<T>>,
-		) -> DispatchResult {
-			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			LimitOrderUpdate::<T> { lp: lp.clone(), base_asset, quote_asset, side, id, details }
-				.schedule_or_dispatch(dispatch_at)
 		}
 
 		/// Sets per-pool limits (in number of ticks) that determine the allowed change in price of

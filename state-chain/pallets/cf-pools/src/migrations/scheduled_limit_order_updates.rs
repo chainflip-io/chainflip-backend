@@ -159,7 +159,9 @@ fn test_migrate_update() {
 	}
 
 	new_test_ext().execute_with(|| {
-		// Create a call (The update_limit_order has not changed, so we can use it for the test)
+		// Create a call
+		// Note: The update_limit_order call has changed, but it should still decode into the old
+		// struct because we have only added fields
 		let call = crate::Call::<Test>::update_limit_order {
 			base_asset: Asset::Flip,
 			quote_asset: Asset::Eth,
@@ -167,6 +169,7 @@ fn test_migrate_update() {
 			id: 123,
 			option_tick: None,
 			amount_change: IncreaseOrDecrease::Increase(100),
+			dispatch_at: None,
 		};
 		// Encode the call in the old storage format
 		let encoded_storage = OldStorage { lp: 69, id: 123, call: call.clone() }.encode();

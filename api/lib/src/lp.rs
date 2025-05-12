@@ -33,10 +33,7 @@ use chainflip_engine::state_chain_observer::client::{
 	StateChainClient,
 };
 use frame_support::{pallet_prelude::ConstU32, BoundedVec};
-use pallet_cf_pools::{
-	CloseOrder, IncreaseOrDecrease, LimitOrderUpdateDetails, OrderId, RangeOrderSize,
-	MAX_ORDERS_DELETE,
-};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
@@ -337,16 +334,22 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		dispatch_at: Option<BlockNumber>,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<Vec<LimitOrder>>> {
-		self.scheduled_or_immediate(
-			base_asset,
-			quote_asset,
-			side,
-			id,
-			LimitOrderUpdateDetails::Update { option_tick, amount_change },
-			dispatch_at,
-			wait_for,
-		)
-		.await
+		Ok(into_api_wait_for_result(
+			self.submit_signed_extrinsic_wait_for(
+				pallet_cf_pools::Call::update_limit_order {
+					base_asset,
+					quote_asset,
+					side,
+					id,
+					option_tick,
+					amount_change,
+					dispatch_at,
+				},
+				wait_for,
+			)
+			.await?,
+			collect_limit_order_returns,
+		))
 	}
 
 	async fn set_limit_order(
@@ -361,36 +364,16 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		wait_for: WaitFor,
 		close_order_at: Option<BlockNumber>,
 	) -> Result<ApiWaitForResult<Vec<LimitOrder>>> {
-		self.scheduled_or_immediate(
-			base_asset,
-			quote_asset,
-			side,
-			id,
-			LimitOrderUpdateDetails::Set { option_tick, sell_amount, close_order_at },
-			dispatch_at,
-			wait_for,
-		)
-		.await
-	}
-
-	async fn scheduled_or_immediate(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		id: OrderId,
-		details: LimitOrderUpdateDetails<BlockNumber>,
-		dispatch_at: Option<BlockNumber>,
-		wait_for: WaitFor,
-	) -> Result<ApiWaitForResult<Vec<LimitOrder>>> {
 		Ok(into_api_wait_for_result(
 			self.submit_signed_extrinsic_wait_for(
-				pallet_cf_pools::Call::schedule_limit_order_update {
+				pallet_cf_pools::Call::set_limit_order {
 					base_asset,
 					quote_asset,
 					side,
 					id,
-					details,
+					option_tick,
+					sell_amount,
+					close_order_at,
 					dispatch_at,
 				},
 				wait_for,
