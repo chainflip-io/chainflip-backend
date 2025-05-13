@@ -977,8 +977,8 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapInputRpc>;
 
-	#[method(name = "encode_cf_parameter")]
-	fn cf_encode_cf_parameter(
+	#[method(name = "encode_cf_parameters")]
+	fn cf_encode_cf_parameters(
 		&self,
 		broker: state_chain_runtime::AccountId,
 		source_asset: Asset,
@@ -1906,7 +1906,7 @@ where
 		})
 	}
 
-	fn cf_encode_cf_parameter(
+	fn cf_encode_cf_parameters(
 		&self,
 		broker: state_chain_runtime::AccountId,
 		source_asset: Asset,
@@ -1921,7 +1921,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			Ok::<_, CfApiError>(api.cf_encode_cf_parameter(
+			Ok::<_, CfApiError>(api.cf_encode_cf_parameters(
 				hash,
 				broker,
 				source_asset,

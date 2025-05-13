@@ -550,7 +550,7 @@ decl_runtime_apis!(
 			broker: AccountId32,
 			vault_swap: VaultSwapDetails<String>,
 		) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage>;
-		fn cf_encode_cf_parameter(
+		fn cf_encode_cf_parameters(
 			broker: AccountId32,
 			source_asset: Asset,
 			destination_address: EncodedAddress,
