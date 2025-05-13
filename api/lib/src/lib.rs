@@ -311,14 +311,14 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 	async fn request_internal_transfer(
 		&self,
 		amount: RedemptionAmount,
-		address: Option<EthereumAddress>,
+		address: EthereumAddress,
 		account_id: AccountId32,
 	) -> Result<H256> {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::internal_transfer {
 				amount,
 				account_id,
-				address,
+				address: Some(address),
 			})
 			.await
 			.until_in_block()
