@@ -193,15 +193,20 @@ mod benchmarks {
 
 	#[benchmark]
 	fn internal_transfer() {
-		let caller: T::AccountId = whitelisted_caller();
+		let validators = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::Validator,
+			2,
+		)
+		.unwrap();
 
-		fund_with_minimum::<T>(&caller);
+		let sender = validators[0].clone();
+		let recipient = validators[1].clone();
 
-		let recipient = account("doogle", 0, 1);
+		fund_with_minimum::<T>(&sender);
 
 		#[extrinsic_call]
 		internal_transfer(
-			RawOrigin::Signed(caller.clone()),
+			RawOrigin::Signed(sender),
 			recipient,
 			Default::default(),
 			RedemptionAmount::Max,

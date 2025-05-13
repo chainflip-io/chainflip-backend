@@ -318,7 +318,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			.submit_signed_extrinsic(pallet_cf_funding::Call::internal_transfer {
 				amount,
 				account_id,
-				address,
+				address: Some(address),
 			})
 			.await
 			.until_in_block()

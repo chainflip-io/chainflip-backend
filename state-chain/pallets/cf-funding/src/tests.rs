@@ -1840,7 +1840,7 @@ fn only_governance_can_update_settings() {
 fn transfer_unrestricted_funds_internal() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
-		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
 		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
@@ -1867,7 +1867,7 @@ fn transfer_unrestricted_funds_internal() {
 		assert_ok!(Funding::internal_transfer(
 			OriginTrait::signed(ALICE),
 			BOB,
-			UNRESTRICTED_ADDRESS,
+			Some(UNRESTRICTED_ADDRESS),
 			AMOUNT_MINUS_FEE.into()
 		));
 		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT_MINUS_FEE, "Total balance to be correct.");
@@ -1878,14 +1878,14 @@ fn transfer_unrestricted_funds_internal() {
 fn can_only_transfer_as_and_to_validator() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
-		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
 		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
 		assert_noop!(
 			Funding::internal_transfer(
 				OriginTrait::signed(ALICE),
 				BOB,
-				UNRESTRICTED_ADDRESS,
+				Some(UNRESTRICTED_ADDRESS),
 				AMOUNT_MINUS_FEE.into()
 			),
 			Error::<Test>::RestrictedToValidators
@@ -1899,7 +1899,7 @@ fn can_only_transfer_as_and_to_validator() {
 			Funding::internal_transfer(
 				OriginTrait::signed(ALICE),
 				BOB,
-				UNRESTRICTED_ADDRESS,
+				Some(UNRESTRICTED_ADDRESS),
 				AMOUNT_MINUS_FEE.into()
 			),
 			Error::<Test>::RestrictedToValidators
@@ -1911,7 +1911,7 @@ fn can_only_transfer_as_and_to_validator() {
 fn transfer_restricted_funds_internal() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
-		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
 		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
@@ -1939,7 +1939,7 @@ fn transfer_restricted_funds_internal() {
 		assert_ok!(Funding::internal_transfer(
 			OriginTrait::signed(ALICE),
 			BOB,
-			RESTRICTED_ADDRESS,
+			Some(RESTRICTED_ADDRESS),
 			AMOUNT_MINUS_FEE.into()
 		));
 
@@ -1983,7 +1983,7 @@ fn transfer_only_apart_of_the_restricted_funds() {
 		assert_ok!(Funding::internal_transfer(
 			OriginTrait::signed(ALICE),
 			BOB,
-			RESTRICTED_ADDRESS,
+			Some(RESTRICTED_ADDRESS),
 			RedemptionAmount::Exact(AMOUNT_MOVE)
 		));
 
@@ -1995,7 +1995,7 @@ fn transfer_only_apart_of_the_restricted_funds() {
 
 		assert_eq!(
 			*RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
-			AMOUNT - AMOUNT_MOVE - REDEMPTION_TAX
+			AMOUNT - AMOUNT_MOVE
 		);
 	});
 }
@@ -2004,7 +2004,7 @@ fn transfer_only_apart_of_the_restricted_funds() {
 fn ensure_bonded_address_condition_holds_during_internal_transfer() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
-		const AMOUNT_MINUS_FEE: u128 = AMOUNT - REDEMPTION_TAX;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
 		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
@@ -2030,7 +2030,7 @@ fn ensure_bonded_address_condition_holds_during_internal_transfer() {
 			Funding::internal_transfer(
 				OriginTrait::signed(ALICE),
 				BOB,
-				RESTRICTED_ADDRESS,
+				Some(RESTRICTED_ADDRESS),
 				AMOUNT_MINUS_FEE.into()
 			),
 			Error::<Test>::AccountBindingRestrictionViolated

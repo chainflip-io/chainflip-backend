@@ -365,7 +365,7 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 
 			let (total_restricted_balance, redeem_amount) =
-				Self::try_redeem(amount, account_id.clone(), address, executor)?;
+				Self::try_redeem(amount, account_id.clone(), Some(address), executor, true)?;
 
 			// Update the account balance.
 			if redeem_amount > Zero::zero() {
@@ -636,7 +636,7 @@ pub mod pallet {
 		pub fn internal_transfer(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
-			address: EthereumAddress,
+			address: Option<EthereumAddress>,
 			amount: RedemptionAmount<FlipBalance<T>>,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
@@ -652,14 +652,18 @@ pub mod pallet {
 
 			Self::ensure_address_restrictions(&source, &account_id)?;
 
-			let address_is_restricted_for_account =
-				RestrictedBalances::<T>::get(&source).contains_key(&address);
+			let address_is_restricted_for_account = if let Some(address) = address {
+				RestrictedBalances::<T>::get(&source).contains_key(&address)
+			} else {
+				false
+			};
 
 			let (_total_restricted_balance, redeem_amount) = Self::try_redeem(
 				amount,
 				source.clone(),
 				address,
 				BoundExecutorAddress::<T>::get(&source),
+				false,
 			)?;
 
 			if redeem_amount > Zero::zero() {
@@ -679,7 +683,7 @@ pub mod pallet {
 
 				if address_is_restricted_for_account {
 					RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
-						map.entry(address)
+						map.entry(address.expect("address is not None"))
 							.and_modify(|balance| *balance += redeem_amount)
 							.or_insert(redeem_amount);
 					});
@@ -754,15 +758,15 @@ impl<T: Config> Pallet<T> {
 		destination: &AccountId<T>,
 	) -> DispatchResult {
 		let source_executor = BoundExecutorAddress::<T>::get(source);
-		let source_redeem = BoundRedeemAddress::<T>::get(&source);
+		let source_redeem = BoundRedeemAddress::<T>::get(source);
 
 		ensure!(
-			source_executor == BoundExecutorAddress::<T>::get(&destination),
+			source_executor == BoundExecutorAddress::<T>::get(destination),
 			Error::<T>::ExecutorBindingRestrictionViolated
 		);
 
 		ensure!(
-			source_redeem == BoundRedeemAddress::<T>::get(&destination),
+			source_redeem == BoundRedeemAddress::<T>::get(destination),
 			Error::<T>::AccountBindingRestrictionViolated
 		);
 
@@ -772,8 +776,9 @@ impl<T: Config> Pallet<T> {
 	fn try_redeem(
 		amount: RedemptionAmount<FlipBalance<T>>,
 		account_id: AccountId<T>,
-		address: EthereumAddress,
+		address: Option<EthereumAddress>,
 		executor: Option<EthereumAddress>,
+		burn_fee: bool,
 	) -> Result<(T::Amount, T::Amount), DispatchError> {
 		use cf_chains::Get;
 		use cf_traits::RedemptionCheck;
@@ -787,24 +792,6 @@ impl<T: Config> Pallet<T> {
 		ensure!(!PendingRedemptions::<T>::contains_key(&account_id), Error::<T>::PendingRedemption);
 
 		let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
-
-		// Ignore executor binding restrictions for withdrawals of restricted funds.
-		if !restricted_balances.contains_key(&address) {
-			if let Some(bound_executor) = BoundExecutorAddress::<T>::get(&account_id) {
-				ensure!(
-					executor == Some(bound_executor),
-					Error::<T>::ExecutorBindingRestrictionViolated
-				);
-			}
-		}
-
-		if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
-			ensure!(
-				bound_address == address || restricted_balances.contains_key(&address),
-				Error::<T>::AccountBindingRestrictionViolated
-			);
-		}
-
 		// In case the balance is lower than the sum of restricted addresses we take this
 		// discrepancy into account so that restricted addresses can still redeem.
 		let restricted_deficit: FlipBalance<T> = restricted_balances
@@ -813,68 +800,107 @@ impl<T: Config> Pallet<T> {
 			.sum::<FlipBalance<T>>()
 			.saturating_sub(T::Flip::balance(&account_id));
 
-		// The available funds are the total balance minus whichever is larger from:
-		// - The bond.
-		// - The total restricted funds that need to remain in the account after the redemption.
-		let liquid_balance = T::Flip::balance(&account_id).saturating_sub(max(
-			T::Flip::bond(&account_id),
-			restricted_balances.values().copied().sum::<FlipBalance<T>>().saturating_sub(
-				restricted_deficit + restricted_balances.get(&address).copied().unwrap_or_default(),
-			),
-		));
+		if let Some(address) = address {
+			// Ignore executor binding restrictions for withdrawals of restricted funds.
+			if !restricted_balances.contains_key(&address) {
+				if let Some(bound_executor) = BoundExecutorAddress::<T>::get(&account_id) {
+					ensure!(
+						executor == Some(bound_executor),
+						Error::<T>::ExecutorBindingRestrictionViolated
+					);
+				}
+			}
 
-		let redemption_fee = match amount {
-			RedemptionAmount::Max if liquid_balance == T::Flip::balance(&account_id) =>
-				Zero::zero(),
-			_ => RedemptionTax::<T>::get(),
-		};
+			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
+				ensure!(
+					bound_address == address || restricted_balances.contains_key(&address),
+					Error::<T>::AccountBindingRestrictionViolated
+				);
+			}
 
-		let (debit_amount, redeem_amount) = match amount {
-			RedemptionAmount::Max =>
-				(liquid_balance, liquid_balance.saturating_sub(redemption_fee)),
-			RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
-		};
+			// The available funds are the total balance minus whichever is larger from:
+			// - The bond.
+			// - The total restricted funds that need to remain in the account after the redemption.
+			let liquid_balance = T::Flip::balance(&account_id).saturating_sub(max(
+				T::Flip::bond(&account_id),
+				restricted_balances.values().copied().sum::<FlipBalance<T>>().saturating_sub(
+					restricted_deficit +
+						restricted_balances.get(&address).copied().unwrap_or_default(),
+				),
+			));
 
-		ensure!(
-			T::Flip::try_burn_fee(&account_id, redemption_fee).is_ok(),
-			Error::<T>::InsufficientBalance
-		);
+			let redemption_fee = match amount {
+				RedemptionAmount::Max if liquid_balance == T::Flip::balance(&account_id) =>
+					Zero::zero(),
 
-		let mut total_restricted_balance: FlipBalance<T> = T::Amount::zero();
+				_ if burn_fee => RedemptionTax::<T>::get(),
+				_ => Zero::zero(),
+			};
 
-		// If necessary, update account restrictions.
-		if let Some(restricted_balance) = restricted_balances.get_mut(&address) {
-			// Use the full debit amount here - fees are paid by restricted funds by default.
-			total_restricted_balance = *restricted_balance;
-			restricted_balance.saturating_reduce(debit_amount);
-			// ensure that the remaining restricted balance is zero or above MinimumFunding
+			let (debit_amount, redeem_amount) = match amount {
+				RedemptionAmount::Max =>
+					(liquid_balance, liquid_balance.saturating_sub(redemption_fee)),
+				RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
+			};
+
 			ensure!(
-				restricted_balance.is_zero() || *restricted_balance >= MinimumFunding::<T>::get(),
-				Error::<T>::RestrictedBalanceBelowMinimumFunding
+				T::Flip::try_burn_fee(&account_id, redemption_fee).is_ok(),
+				Error::<T>::InsufficientBalance
 			);
 
-			if restricted_balance.is_zero() {
-				restricted_balances.remove(&address);
+			let mut total_restricted_balance: FlipBalance<T> = T::Amount::zero();
+
+			// If necessary, update account restrictions.
+			if let Some(restricted_balance) = restricted_balances.get_mut(&address) {
+				// Use the full debit amount here - fees are paid by restricted funds by default.
+				total_restricted_balance = *restricted_balance;
+				restricted_balance.saturating_reduce(debit_amount);
+				// ensure that the remaining restricted balance is zero or above MinimumFunding
+				ensure!(
+					restricted_balance.is_zero() ||
+						*restricted_balance >= MinimumFunding::<T>::get(),
+					Error::<T>::RestrictedBalanceBelowMinimumFunding
+				);
+
+				if restricted_balance.is_zero() {
+					restricted_balances.remove(&address);
+				}
+				RestrictedBalances::<T>::insert(&account_id, &restricted_balances);
 			}
-			RestrictedBalances::<T>::insert(&account_id, &restricted_balances);
+
+			let remaining_balance = T::Flip::balance(&account_id)
+				.checked_sub(&redeem_amount)
+				.ok_or(Error::<T>::InsufficientBalance)?;
+
+			ensure!(
+				remaining_balance == Zero::zero() ||
+					remaining_balance >= MinimumFunding::<T>::get(),
+				Error::<T>::BelowMinimumFunding
+			);
+			ensure!(
+				remaining_balance >=
+					restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+						restricted_deficit,
+				Error::<T>::InsufficientUnrestrictedFunds
+			);
+
+			Ok((total_restricted_balance.saturating_sub(redemption_fee), redeem_amount))
+		} else {
+			let total_restricted_balance =
+				restricted_balances.values().copied().sum::<FlipBalance<T>>();
+			let liquid_balance = T::Flip::balance(&account_id).saturating_sub(max(
+				T::Flip::bond(&account_id),
+				total_restricted_balance.saturating_sub(restricted_deficit),
+			));
+			let redeem_amount = match amount {
+				RedemptionAmount::Max => liquid_balance,
+				RedemptionAmount::Exact(amount) => amount,
+			};
+			if redeem_amount > liquid_balance {
+				return Err(Error::<T>::InsufficientBalance.into());
+			}
+			Ok((total_restricted_balance, redeem_amount))
 		}
-
-		let remaining_balance = T::Flip::balance(&account_id)
-			.checked_sub(&redeem_amount)
-			.ok_or(Error::<T>::InsufficientBalance)?;
-
-		ensure!(
-			remaining_balance == Zero::zero() || remaining_balance >= MinimumFunding::<T>::get(),
-			Error::<T>::BelowMinimumFunding
-		);
-		ensure!(
-			remaining_balance >=
-				restricted_balances.values().copied().sum::<FlipBalance<T>>() -
-					restricted_deficit,
-			Error::<T>::InsufficientUnrestrictedFunds
-		);
-
-		Ok((total_restricted_balance.saturating_sub(redemption_fee), redeem_amount))
 	}
 }
 
