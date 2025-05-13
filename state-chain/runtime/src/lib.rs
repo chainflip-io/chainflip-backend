@@ -2475,7 +2475,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_encode_cf_parameter(
+		fn cf_encode_cf_parameters(
 			broker: AccountId,
 			source_asset: Asset,
 			destination_address: EncodedAddress,
@@ -2533,7 +2533,7 @@ impl_runtime_apis! {
 				ForeignChain::Ethereum => build_cf_parameters_for_chain!(Ethereum),
 				ForeignChain::Arbitrum => build_cf_parameters_for_chain!(Arbitrum),
 				ForeignChain::Solana => build_cf_parameters_for_chain!(Solana),
-				_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for EVM vault swap"))?,
+				_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for encoding cf_parameters"))?,
 			})
 		}
 

@@ -315,7 +315,7 @@ where
 		))
 	}
 
-	async fn encode_cf_parameter(
+	async fn encode_cf_parameters(
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
@@ -331,7 +331,7 @@ where
 			.rpc_backend
 			.client
 			.runtime_api()
-			.cf_encode_cf_parameter(
+			.cf_encode_cf_parameters(
 				self.rpc_backend.client.info().best_hash,
 				self.signed_pool_client.account_id(),
 				source_asset,

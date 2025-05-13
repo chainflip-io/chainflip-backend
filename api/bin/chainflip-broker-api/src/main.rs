@@ -160,7 +160,7 @@ impl BrokerRpcApiServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn encode_cf_parameter(
+	async fn encode_cf_parameters(
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
@@ -175,7 +175,7 @@ impl BrokerRpcApiServer for RpcServerImpl {
 		Ok(self
 			.api
 			.raw_client()
-			.cf_encode_cf_parameter(
+			.cf_encode_cf_parameters(
 				self.api.state_chain_client.account_id(),
 				source_asset,
 				destination_asset,
