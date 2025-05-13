@@ -229,6 +229,7 @@ pub enum RpcAccountInfo {
 		bound_redeem_address: Option<EthereumAddress>,
 		apy_bp: Option<u32>,
 		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
+		estimated_redeemable_balance: NumberOrHex,
 	},
 }
 
@@ -298,6 +299,7 @@ impl RpcAccountInfo {
 				.into_iter()
 				.map(|(address, balance)| (address, balance.into()))
 				.collect(),
+			estimated_redeemable_balance: info.estimated_redeemable_balance.into(),
 		}
 	}
 }
@@ -317,6 +319,7 @@ pub struct RpcAccountInfoV2 {
 	pub bound_redeem_address: Option<EthereumAddress>,
 	pub apy_bp: Option<u32>,
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
+	pub estimated_redeemable_balance: NumberOrHex,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -672,6 +675,7 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfo>;
+	#[deprecated(note = "Please use `cf_account_info` instead.")]
 	#[method(name = "account_info_v2")]
 	fn cf_account_info_v2(
 		&self,
@@ -1420,6 +1424,7 @@ where
 			bound_redeem_address: account_info.bound_redeem_address,
 			apy_bp: account_info.apy_bp,
 			restricted_balances: account_info.restricted_balances,
+			estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 		})
 	}
 
@@ -2099,6 +2104,7 @@ mod test {
 				H160::from([1; 20]),
 				FLIPPERINOS_PER_FLIP,
 			)]),
+			estimated_redeemable_balance: 0,
 		});
 
 		insta::assert_snapshot!(serde_json::to_value(validator).unwrap());
