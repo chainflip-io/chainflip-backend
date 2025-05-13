@@ -18,8 +18,8 @@ use cf_chains::CcmChannelMetadataUnchecked;
 use cf_rpc_apis::{
 	broker::{
 		BrokerRpcApiServer, ChannelRefundParametersRpc, DcaParameters, GetOpenDepositChannelsQuery,
-		SwapDepositAddress, TransactionInId, VaultSwapExtraParametersRpc, VaultSwapInputRpc,
-		WithdrawFeesDetail,
+		RpcBytes, SwapDepositAddress, TransactionInId, VaultSwapExtraParametersRpc,
+		VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
@@ -171,7 +171,7 @@ impl BrokerRpcApiServer for RpcServerImpl {
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<Vec<u8>> {
+	) -> RpcResult<RpcBytes> {
 		Ok(self
 			.api
 			.raw_client()

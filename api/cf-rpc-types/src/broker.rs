@@ -23,7 +23,7 @@ use cf_chains::{
 };
 use cf_primitives::AffiliateShortId;
 use cf_utilities::rpc::NumberOrHex;
-use sp_core::serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 pub use cf_chains::{address::AddressString, VaultSwapExtraParameters, VaultSwapInput};
@@ -162,6 +162,15 @@ pub fn try_into_refund_parameters_encoded(
 		refund_address: param.refund_address.try_parse_to_encoded_address(chain)?,
 		min_price: param.min_price,
 	})
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RpcBytes(#[serde(with = "sp_core::bytes")] Vec<u8>);
+
+impl From<Vec<u8>> for RpcBytes {
+	fn from(value: Vec<u8>) -> Self {
+		Self(value)
+	}
 }
 
 #[cfg(test)]

@@ -29,7 +29,7 @@ use cf_rpc_apis::{
 	broker::{
 		try_into_refund_parameters_encoded, try_into_swap_extra_params_encoded,
 		vault_swap_input_encoded_to_rpc, BrokerRpcApiServer, ChannelRefundParametersRpc,
-		DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress, TransactionInId,
+		DcaParameters, GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, TransactionInId,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcResult, H256,
@@ -326,7 +326,7 @@ where
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<Vec<u8>> {
+	) -> RpcResult<RpcBytes> {
 		Ok(self
 			.rpc_backend
 			.client
@@ -345,7 +345,8 @@ where
 				channel_metadata,
 			)
 			.map_err(CfApiError::from)?
-			.map_err(CfApiError::from)?)
+			.map_err(CfApiError::from)?
+			.into())
 	}
 
 	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()> {

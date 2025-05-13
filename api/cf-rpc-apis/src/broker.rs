@@ -82,7 +82,7 @@ pub trait BrokerRpcApi {
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<Vec<u8>>;
+	) -> RpcResult<RpcBytes>;
 
 	#[method(name = "mark_transaction_for_rejection", aliases = ["broker_MarkTransactionForRejection"])]
 	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()>;
