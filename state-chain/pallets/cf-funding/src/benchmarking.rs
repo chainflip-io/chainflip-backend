@@ -192,7 +192,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn internal_transfer() {
+	fn rebalance() {
 		let validators = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
 			AccountRole::Validator,
 			2,
@@ -205,12 +205,7 @@ mod benchmarks {
 		fund_with_minimum::<T>(&sender);
 
 		#[extrinsic_call]
-		internal_transfer(
-			RawOrigin::Signed(sender),
-			recipient,
-			Default::default(),
-			RedemptionAmount::Max,
-		);
+		rebalance(RawOrigin::Signed(sender), recipient, Default::default(), RedemptionAmount::Max);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

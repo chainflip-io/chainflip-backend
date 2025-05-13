@@ -249,7 +249,7 @@ pub mod pallet {
 		BoundExecutorAddress { account_id: AccountId<T>, address: EthereumAddress },
 
 		/// An internal transfer was executed successfully.
-		InternalTransfer { from: AccountId<T>, to: AccountId<T>, amount: FlipBalance<T> },
+		Rebalance { from: AccountId<T>, to: AccountId<T>, amount: FlipBalance<T> },
 	}
 
 	#[pallet::error]
@@ -625,15 +625,22 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Transfers funds from one account to another without the need of a full redemption.
-		/// The funds are getting transferred under the same conditions as a full redemption.
+		/// Rebalance funds between to validator accounts under the same address binding conditions
+		/// as a full redemption. Additionally, checks that no address binding conditions are
+		/// violated.
 		///
 		/// ## Events
 		///
-		/// - [InternalTransfer](Event::InternalTransfer)
+		/// - [Rebalance](Event::Rebalance)
+		///
+		/// ## Errors
+		///
+		/// - [RestrictedToValidators](Error::RestrictedToValidators)
+		/// - [ExecutorBindingRestrictionViolated](Error::ExecutorBindingRestrictionViolated)
+		/// - [AccountBindingRestrictionViolated](Error::AccountBindingRestrictionViolated)
 		#[pallet::call_index(11)]
-		#[pallet::weight(T::WeightInfo::internal_transfer())]
-		pub fn internal_transfer(
+		#[pallet::weight(T::WeightInfo::rebalance())]
+		pub fn rebalance(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			address: Option<EthereumAddress>,
@@ -683,13 +690,13 @@ pub mod pallet {
 
 				if address_is_restricted_for_account {
 					RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
-						map.entry(address.expect("address is not None"))
+						map.entry(address.expect("condition checked above"))
 							.and_modify(|balance| *balance += redeem_amount)
 							.or_insert(redeem_amount);
 					});
 				}
 
-				Self::deposit_event(Event::InternalTransfer {
+				Self::deposit_event(Event::Rebalance {
 					from: source,
 					to: account_id,
 					amount: redeem_amount,

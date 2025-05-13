@@ -1864,7 +1864,7 @@ fn transfer_unrestricted_funds_internal() {
 			"Funding pallet should increment the provider count on account creation."
 		);
 		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT, "Total balance to be correct.");
-		assert_ok!(Funding::internal_transfer(
+		assert_ok!(Funding::rebalance(
 			OriginTrait::signed(ALICE),
 			BOB,
 			Some(UNRESTRICTED_ADDRESS),
@@ -1882,7 +1882,7 @@ fn can_only_transfer_as_and_to_validator() {
 		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
 		assert_noop!(
-			Funding::internal_transfer(
+			Funding::rebalance(
 				OriginTrait::signed(ALICE),
 				BOB,
 				Some(UNRESTRICTED_ADDRESS),
@@ -1896,7 +1896,7 @@ fn can_only_transfer_as_and_to_validator() {
 		));
 
 		assert_noop!(
-			Funding::internal_transfer(
+			Funding::rebalance(
 				OriginTrait::signed(ALICE),
 				BOB,
 				Some(UNRESTRICTED_ADDRESS),
@@ -1936,7 +1936,7 @@ fn transfer_restricted_funds_internal() {
 			TX_HASH
 		));
 
-		assert_ok!(Funding::internal_transfer(
+		assert_ok!(Funding::rebalance(
 			OriginTrait::signed(ALICE),
 			BOB,
 			Some(RESTRICTED_ADDRESS),
@@ -1980,7 +1980,7 @@ fn transfer_only_apart_of_the_restricted_funds() {
 			TX_HASH
 		));
 
-		assert_ok!(Funding::internal_transfer(
+		assert_ok!(Funding::rebalance(
 			OriginTrait::signed(ALICE),
 			BOB,
 			Some(RESTRICTED_ADDRESS),
@@ -2001,7 +2001,7 @@ fn transfer_only_apart_of_the_restricted_funds() {
 }
 
 #[test]
-fn ensure_bonded_address_condition_holds_during_internal_transfer() {
+fn ensure_bonded_address_condition_holds_during_rebalance() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
@@ -2027,7 +2027,7 @@ fn ensure_bonded_address_condition_holds_during_internal_transfer() {
 		));
 
 		assert_noop!(
-			Funding::internal_transfer(
+			Funding::rebalance(
 				OriginTrait::signed(ALICE),
 				BOB,
 				Some(RESTRICTED_ADDRESS),

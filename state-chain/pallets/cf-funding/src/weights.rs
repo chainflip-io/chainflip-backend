@@ -57,7 +57,7 @@ pub trait WeightInfo {
 	fn bind_redeem_address() -> Weight;
 	fn update_restricted_addresses(a: u32, b: u32, c: u32, ) -> Weight;
 	fn bind_executor_address() -> Weight;
-	fn internal_transfer() -> Weight;
+	fn rebalance() -> Weight;
 }
 
 /// Weights for pallet_cf_funding using the Substrate node and recommended hardware.
@@ -301,7 +301,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 
-	fn internal_transfer() -> Weight {
+	fn rebalance() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `140`
 		//  Estimated: `3605`
@@ -550,7 +550,7 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 
-	fn internal_transfer() -> Weight {
+	fn rebalance() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `140`
 		//  Estimated: `3605`

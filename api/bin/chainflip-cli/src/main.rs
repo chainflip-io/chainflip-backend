@@ -188,8 +188,8 @@ async fn run_cli() -> Result<()> {
 				CountWitnesses { hash, epoch_index } => {
 					count_witnesses(api.query_api(), hash, epoch_index).await?;
 				},
-				RequestInternalTransfer { amount, destination, account_id } => {
-					request_internal_transfer(api, amount, destination, account_id).await?;
+				Rebalance { account_id, amount, destination } => {
+					request_rebalance(api, account_id, amount, destination).await?;
 				},
 			};
 			Ok(())
@@ -269,33 +269,45 @@ async fn request_redemption(
 	Ok(())
 }
 
-async fn request_internal_transfer(
+async fn request_rebalance(
 	api: StateChainApi,
+	account_id: String,
 	amount: Option<f64>,
-	supplied_redeem_address: String,
-	supplied_account_id: String,
+	supplied_address: Option<String>,
 ) -> Result<()> {
 	use anyhow::anyhow;
 	use std::str::FromStr;
 
 	// Check validity of the redeem address
-	let redeem_address = EthereumAddress::from(
-		clean_hex_address::<[u8; 20]>(&supplied_redeem_address)
-			.context("Invalid redeem address")?,
-	);
+	let address = if let Some(supplied_address) = supplied_address {
+		Some(EthereumAddress::from(
+			clean_hex_address::<[u8; 20]>(&supplied_address).context("Invalid address")?,
+		))
+	} else {
+		None
+	};
 
-	let account_id = AccountId32::from_str(&supplied_account_id)
+	let address_or: String = if let Some(address) = address {
+		format!("With address: {address:?}")
+	} else {
+		"No address provided".to_string()
+	};
+
+	let account_id = AccountId32::from_str(&account_id)
 		.map_err(|err| anyhow!("Failed to parse AccountId: {}", err))
 		.context("Invalid account ID provided")?;
 
 	// Calculate the redemption amount
 	let redeem_amount = flip_to_redemption_amount(amount);
+
 	match redeem_amount {
 		RedemptionAmount::Exact(atomic_amount) => {
-			println!( "Submitting internal transfer of funds with amount `{}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`.", flipperino_to_flip_string(atomic_amount));
+			println!( "Submitting rebalance of funds with amount `{}` FLIP (`{atomic_amount}` Flipperinos) under address binding condition: {address_or}.", flipperino_to_flip_string(atomic_amount));
 		},
 		RedemptionAmount::Max => {
-			println!("Submitting internal transfer of funds with MAX amount to ETH address `{redeem_address:?}`.");
+			println!(
+				"Submitting rebalance of funds with MAX amount under address binding condition: {address_or}."
+			);
 		},
 	};
 
@@ -303,12 +315,9 @@ async fn request_internal_transfer(
 		return Ok(())
 	}
 
-	let tx_hash = api
-		.operator_api()
-		.request_internal_transfer(redeem_amount, redeem_address, account_id)
-		.await?;
+	let tx_hash = api.operator_api().request_rebalance(redeem_amount, address, account_id).await?;
 
-	println!("Internal transfer request has State Chain transaction hash: `{tx_hash:#x}`.");
+	println!("Rebalance request has State Chain transaction hash: `{tx_hash:#x}`.");
 
 	Ok(())
 }
