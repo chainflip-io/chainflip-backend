@@ -453,7 +453,8 @@ fn can_execute_scheduled_limit_order_updates() {
 }
 
 #[test]
-fn cant_schedule_in_the_past() {
+fn test_dispatch_at_validation() {
+	const CURRENT_BLOCK: u64 = 10;
 	new_test_ext().then_execute_at_block(10u32, |_| {
 		assert_noop!(
 			LiquidityPools::update_limit_order(
@@ -464,9 +465,25 @@ fn cant_schedule_in_the_past() {
 				0,
 				Some(0),
 				IncreaseOrDecrease::Decrease(55),
-				Some(9) // 1 block in the past
+				// 1 block in the past
+				Some(CURRENT_BLOCK - 1)
 			),
-			Error::<Test>::LimitOrderUpdateExpired
+			Error::<Test>::InvalidDispatchAt
+		);
+
+		assert_noop!(
+			LiquidityPools::update_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				0,
+				Some(0),
+				IncreaseOrDecrease::Decrease(55),
+				// Too far in the future
+				Some(CURRENT_BLOCK + (SCHEDULE_UPDATE_LIMIT_BLOCKS as u64) + 1)
+			),
+			Error::<Test>::InvalidDispatchAt
 		);
 	});
 }
@@ -1475,8 +1492,7 @@ fn test_limit_order_auto_close() {
 				Error::<Test>::InvalidCloseOrderAt
 			);
 
-			// Make sure that a close order block will always be in the future when scheduling an
-			// update
+			// Test close order block validation
 			assert_noop!(
 				LiquidityPools::set_limit_order(
 					RuntimeOrigin::signed(ALICE),
@@ -1505,6 +1521,21 @@ fn test_limit_order_auto_close() {
 					// Schedule the call for after the close order, so it should be rejected
 					Some(CLOSE_ORDER_AT + 1),
 					Some(CLOSE_ORDER_AT),
+				),
+				Error::<Test>::InvalidCloseOrderAt
+			);
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					ORDER_ID,
+					Some(5),
+					AMOUNT,
+					Some(DISPATCH_AT),
+					// Schedule the close order for too far in the future
+					Some((SCHEDULE_UPDATE_LIMIT_BLOCKS as u64) + 2),
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);

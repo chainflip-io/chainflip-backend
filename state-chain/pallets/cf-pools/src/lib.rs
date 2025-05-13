@@ -29,6 +29,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, LpOrdersWeightsProvider,
 	PoolApi, SwapRequestHandler, SwappingApi,
 };
+use sp_runtime::Saturating;
 
 use cf_traits::LpRegistration;
 pub use cf_traits::{IncreaseOrDecrease, OrderId};
@@ -67,6 +68,9 @@ impl<const N: u128> Get<SweepingThresholds> for StablecoinDefaults<N> {
 		cf_primitives::StablecoinDefaults::<N>::get().try_into().unwrap()
 	}
 }
+
+// Limit on how far in the future an LP can schedule a limit order update/close.
+const SCHEDULE_UPDATE_LIMIT_BLOCKS: u32 = 3600; // 6 hours
 
 pub const MAX_ORDERS_DELETE: u32 = 100;
 #[derive(
@@ -282,12 +286,26 @@ impl<T: Config> LimitOrderUpdate<T> {
 	pub fn schedule_or_dispatch(self, dispatch_at: Option<BlockNumberFor<T>>) -> DispatchResult {
 		if let Some(dispatch_at) = dispatch_at {
 			let current_block_number = frame_system::Pallet::<T>::block_number();
-			ensure!(dispatch_at >= current_block_number, Error::<T>::LimitOrderUpdateExpired);
+			ensure!(
+				dispatch_at >= current_block_number &&
+					dispatch_at <=
+						current_block_number.saturating_add(BlockNumberFor::<T>::from(
+							SCHEDULE_UPDATE_LIMIT_BLOCKS
+						)),
+				Error::<T>::InvalidDispatchAt
+			);
 
 			if let LimitOrderUpdateDetails::Set { close_order_at: Some(close_order_at), .. } =
 				self.details
 			{
-				ensure!(close_order_at > dispatch_at, Error::<T>::InvalidCloseOrderAt);
+				ensure!(
+					close_order_at > dispatch_at &&
+						close_order_at <=
+							current_block_number.saturating_add(BlockNumberFor::<T>::from(
+								SCHEDULE_UPDATE_LIMIT_BLOCKS
+							)),
+					Error::<T>::InvalidCloseOrderAt
+				);
 			}
 
 			if current_block_number == dispatch_at {
@@ -495,9 +513,11 @@ pub mod pallet {
 		UpdatingRangeOrdersDisabled,
 		/// Unsupported call.
 		UnsupportedCall,
-		/// The update can't be scheduled because it has expired (dispatch_at is in the past).
-		LimitOrderUpdateExpired,
-		/// The given close_order_at is in the past or not larger than dispatch_at.
+		/// The update can't be scheduled because the given dispatch_at block is in the past or too
+		/// far in the future (3600 blocks).
+		InvalidDispatchAt,
+		/// The given close_order_at is in the past, not larger than dispatch_at or too far in the
+		/// future (3600 blocks).
 		InvalidCloseOrderAt,
 		/// The range order size is invalid.
 		InvalidSize,
@@ -890,9 +910,15 @@ pub mod pallet {
 				)?;
 
 				if let Some(close_order_at) = close_order_at {
-					if close_order_at <= frame_system::Pallet::<T>::block_number() {
-						return Err(Error::<T>::InvalidCloseOrderAt.into());
-					}
+					let current_block_number = frame_system::Pallet::<T>::block_number();
+					ensure!(
+						close_order_at > current_block_number &&
+							close_order_at <=
+								current_block_number.saturating_add(
+									BlockNumberFor::<T>::from(SCHEDULE_UPDATE_LIMIT_BLOCKS)
+								),
+						Error::<T>::InvalidCloseOrderAt
+					);
 
 					LimitOrderUpdate::<T> {
 						lp: lp.clone(),
