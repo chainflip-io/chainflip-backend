@@ -105,7 +105,7 @@ thread_local! {
 	pub static ELECTORAL_UNSYNCHRONISED_STATE: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 	pub static ELECTORAL_UNSYNCHRONISED_STATE_MAP: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
 	pub static CONSENSUS_STATUS: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
-	pub static NEXT_ELECTION_ID: RefCell<UniqueMonotonicIdentifier> = const { RefCell::new(UniqueMonotonicIdentifier::from_u64(0)) };
+	pub static NEXT_ELECTION_ID: RefCell<UniqueMonotonicIdentifier> = RefCell::new(UniqueMonotonicIdentifier::from(0u64));
 }
 
 impl<ES: ElectoralSystem> ElectionWriteAccess for MockWriteAccess<ES> {
@@ -246,7 +246,7 @@ impl MockStorageAccess {
 		});
 		NEXT_ELECTION_ID.with(|next_id| {
 			let mut next_id_ref = next_id.borrow_mut();
-			*next_id_ref = UniqueMonotonicIdentifier::from_u64(0);
+			*next_id_ref = UniqueMonotonicIdentifier::from(0);
 		});
 	}
 

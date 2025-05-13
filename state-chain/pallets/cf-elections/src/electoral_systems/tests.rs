@@ -20,6 +20,7 @@ pub(crate) use crate::register_checks;
 
 pub mod delta_based_ingress;
 pub mod egress_success;
+pub mod exact_value;
 pub mod liveness;
 pub mod monotonic_change;
 pub mod monotonic_median;

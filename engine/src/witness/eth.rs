@@ -23,7 +23,7 @@ use cf_chains::{
 	address::EncodedAddress,
 	cf_parameters::VaultSwapParameters,
 	evm::{DepositDetails, H256},
-	CcmDepositMetadata, Ethereum,
+	CcmDepositMetadataUnchecked, Ethereum, ForeignChainAddress,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset, AssetAmount, EpochIndex};
 use cf_utilities::task_scope::Scope;
@@ -255,7 +255,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		deposit_metadata: Option<CcmDepositMetadata>,
+		deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 		tx_id: H256,
 		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
 	) -> state_chain_runtime::RuntimeCall {

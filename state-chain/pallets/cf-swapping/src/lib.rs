@@ -20,10 +20,9 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
-	ccm_checker::CcmValidityCheck,
 	eth::Address as EthereumAddress,
-	AccountOrAddress, CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParametersEncoded,
-	RefundParametersExtended, SwapOrigin, SwapRefundParameters,
+	AccountOrAddress, ChannelRefundParametersEncoded, RefundParametersExtended, SwapOrigin,
+	SwapRefundParameters,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
@@ -465,7 +464,8 @@ pub mod pallet {
 
 	use cf_amm::math::output_amount_ceil;
 	use cf_chains::{
-		address::EncodedAddress, AnyChain, Chain, RefundParametersExtended,
+		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
+		CcmDepositMetadataChecked, Chain, RefundParametersExtended,
 		RefundParametersExtendedEncoded,
 	};
 	use cf_primitives::{
@@ -515,9 +515,6 @@ pub mod pallet {
 		>;
 
 		type IngressEgressFeeHandler: IngressEgressFeeApi<AnyChain>;
-
-		/// For checking if the CCM message passed in is valid.
-		type CcmValidityChecker: CcmValidityCheck;
 
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
@@ -681,7 +678,7 @@ pub mod pallet {
 			channel_id: ChannelId,
 			broker_id: T::AccountId,
 			broker_commission_rate: BasisPoints,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadataChecked>,
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
@@ -961,7 +958,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
 			refund_parameters: ChannelRefundParametersEncoded,
 		) -> DispatchResult {
@@ -1169,7 +1166,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
 			refund_parameters: ChannelRefundParametersEncoded,
@@ -1196,24 +1193,26 @@ pub mod pallet {
 					.map_err(|_| Error::<T>::InvalidRefundAddress)
 			})?;
 
-			if let Some(ccm) = channel_metadata.as_ref() {
-				let destination_chain: ForeignChain = destination_asset.into();
-				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
-
-				let _ = T::CcmValidityChecker::check_and_decode(
-					ccm,
-					destination_asset,
-					destination_address.clone(),
-				)
-				.map_err(|e| {
-					log::warn!(
-						"Failed to open channel due to invalid CCM. Broker: {:?}, Error: {:?}",
-						broker,
-						e
+			let channel_metadata = channel_metadata
+				.map(|ccm| {
+					let destination_chain: ForeignChain = destination_asset.into();
+					ensure!(
+						destination_chain.ccm_support(),
+						Error::<T>::CcmUnsupportedForTargetChain
 					);
-					Error::<T>::InvalidCcm
-				})?;
-			}
+
+					ccm.to_checked(destination_asset, destination_address_internal.clone()).map_err(
+						|e| {
+							log::warn!(
+							"Failed to open channel due to invalid CCM. Broker: {:?}, Error: {:?}",
+							broker,
+							e
+						);
+							Error::<T>::InvalidCcm
+						},
+					)
+				})
+				.transpose()?;
 
 			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
 				T::DepositHandler::request_swap_deposit_address(
@@ -2142,7 +2141,7 @@ pub mod pallet {
 			amount: AssetAmount,
 			asset: Asset,
 			address: ForeignChainAddress,
-			maybe_ccm_metadata: Option<CcmDepositMetadata>,
+			maybe_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 			is_refund: bool,
 		) {
 			let is_ccm_swap = maybe_ccm_metadata.is_some();

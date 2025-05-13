@@ -35,9 +35,9 @@ use cf_chains::{
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ChannelRefundParameters,
-	DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall, ForeignChain, ForeignChainAddress,
-	RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
+	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain, ChainState,
+	ChannelRefundParameters, DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall, ForeignChain,
+	ForeignChainAddress, RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
 	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, EgressId,
@@ -585,7 +585,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 	});
 }
 
-fn ccm_deposit_metadata_mock() -> CcmDepositMetadata {
+fn ccm_deposit_metadata_mock() -> CcmDepositMetadataUnchecked<ForeignChainAddress> {
 	CcmDepositMetadata {
 		source_chain: ForeignChain::Ethereum,
 		source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
@@ -763,7 +763,7 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 				None,
 				gas_budget,
 				vec![],
-				vec![],
+				Default::default(),
 			)
 			.unwrap()
 		};

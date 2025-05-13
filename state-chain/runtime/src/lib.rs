@@ -65,19 +65,16 @@ use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
-	ccm_checker::{
-		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
-		DecodedCcmAdditionalData,
-	},
+	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot,
-	Solana, TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
-	VaultSwapInputEncoded,
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, DefaultRetryPolicy, ForeignChain,
+	Polkadot, Solana, TransactionBuilder, VaultSwapExtraParameters,
+	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -175,8 +172,9 @@ pub use pallet_cf_validator::SetSizeParameters;
 use chainflip::{
 	boost_api::IngressEgressBoostApi, epoch_transition::ChainflipEpochTransitions,
 	multi_vault_activator::MultiVaultActivator, BroadcastReadyProvider, BtcEnvironment,
-	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment, HubEnvironment,
-	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
+	CfCcmAdditionalDataHandler, ChainAddressConverter, ChainflipHeartbeat, DotEnvironment,
+	EvmEnvironment, HubEnvironment, MinimumDepositProvider, SolEnvironment, SolanaLimit,
+	TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -336,7 +334,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
-	type CcmValidityChecker = CcmValidityChecker;
 	type BalanceApi = AssetBalances;
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
@@ -430,11 +427,11 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -459,11 +456,11 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -488,11 +485,11 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -517,11 +514,11 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -546,11 +543,11 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -575,11 +572,11 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -2274,7 +2271,7 @@ impl_runtime_apis! {
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
 			extra_parameters: VaultSwapExtraParametersEncoded,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
@@ -2319,7 +2316,7 @@ impl_runtime_apis! {
 			})?;
 
 			// Validate CCM.
-			if let Some(ccm) = channel_metadata.as_ref() {
+			if let Some(channel_metadata) = channel_metadata.as_ref() {
 				if source_chain == ForeignChain::Bitcoin {
 					return Err(DispatchErrorWithMessage::from("Vault swaps with CCM are not supported for the Bitcoin Chain"));
 				}
@@ -2328,7 +2325,11 @@ impl_runtime_apis! {
 				}
 
 				// Ensure CCM message is valid
-				match CcmValidityChecker::check_and_decode(ccm, destination_asset, destination_address.clone())
+				match channel_metadata.clone().to_checked(
+					destination_asset,
+					ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+						.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
+				).map(|checked| checked.ccm_additional_data)
 				{
 					Ok(DecodedCcmAdditionalData::Solana(decoded)) => {
 						let ccm_accounts = decoded.ccm_accounts();
