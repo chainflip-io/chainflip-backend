@@ -40,6 +40,8 @@ use futures::FutureExt;
 use serde::Serialize;
 use std::{io::Write, path::PathBuf, sync::Arc};
 
+use crate::settings::RedemptionSubcommands;
+
 mod settings;
 
 #[tokio::main]
@@ -142,8 +144,13 @@ async fn run_cli() -> Result<()> {
 						println!("Account started bidding at tx {tx_hash:#x}.");
 					},
 				},
-				Redeem { amount, eth_address, executor_address } => {
-					request_redemption(api, amount, eth_address, executor_address).await?;
+				Redemption(subcommand) => match subcommand {
+				    RedemptionSubcommands::Redeem { amount, eth_address, executor_address } => {
+					    request_redemption(api, amount, eth_address, executor_address).await?;
+			        },
+				    RedemptionSubcommands::InternalTransfer { account_id, amount, eth_address } => {
+					    request_internal_transfer(api, amount, eth_address, account_id).await?;
+					},
 				},
 				BindRedeemAddress { eth_address } => {
 					bind_redeem_address(api.operator_api(), &eth_address).await?;
@@ -187,9 +194,6 @@ async fn run_cli() -> Result<()> {
 				GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
 				CountWitnesses { hash, epoch_index } => {
 					count_witnesses(api.query_api(), hash, epoch_index).await?;
-				},
-				RequestInternalTransfer { amount, destination, account_id } => {
-					request_internal_transfer(api, amount, destination, account_id).await?;
 				},
 			};
 			Ok(())
@@ -272,17 +276,20 @@ async fn request_redemption(
 async fn request_internal_transfer(
 	api: StateChainApi,
 	amount: Option<f64>,
-	supplied_redeem_address: String,
+	supplied_redeem_address: Option<String>,
 	supplied_account_id: String,
 ) -> Result<()> {
 	use anyhow::anyhow;
 	use std::str::FromStr;
 
 	// Check validity of the redeem address
-	let redeem_address = EthereumAddress::from(
-		clean_hex_address::<[u8; 20]>(&supplied_redeem_address)
-			.context("Invalid redeem address")?,
-	);
+	let redeem_address = if let Some(address) = supplied_redeem_address {
+		Some(EthereumAddress::from(
+			clean_hex_address::<[u8; 20]>(&address).context("Invalid redeem address")?,
+		))
+	} else {
+		None
+	};
 
 	let account_id = AccountId32::from_str(&supplied_account_id)
 		.map_err(|err| anyhow!("Failed to parse AccountId: {}", err))

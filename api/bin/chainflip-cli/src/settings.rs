@@ -123,6 +123,35 @@ pub enum LiquidityProviderSubcommands {
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
+pub enum RedemptionSubcommands {
+	#[clap(about = "Request an internal transfer of FLIP to another validator account.")]
+	InternalTransfer {
+		#[clap(help = "The amount to transfer")]
+		amount: Option<f64>,
+		#[clap(help = "Optional Ethereum address under which condition we transfer the FLIP.")]
+		eth_address: Option<String>,
+		#[clap(help = "The account ID to transfer the FLIP to")]
+		account_id: String,
+	},
+	#[clap(
+		about = "Request a redemption. After requesting the redemption, please proceed to the  to complete the redeeming process."
+	)]
+	Redeem {
+		#[clap(
+			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP). Up to 6 decimal places, any more are rounded.",
+			long = "exact"
+		)]
+		amount: Option<f64>,
+		#[clap(help = "The Ethereum address you wish to redeem your FLIP to.")]
+		eth_address: String,
+		#[clap(
+			help = "Optional executor address. If specified, only this address will be able to execute the redemption."
+		)]
+		executor_address: Option<String>,
+	},
+}
+
+#[derive(clap::Subcommand, Clone, Debug)]
 pub enum ValidatorSubcommands {
 	/// Register this account as a validator account.
 	RegisterAccount,
@@ -144,22 +173,8 @@ pub enum CliCommand {
 	LiquidityProvider(LiquidityProviderSubcommands),
 	#[clap(subcommand)]
 	Validator(ValidatorSubcommands),
-	#[clap(
-		about = "Request a redemption. After requesting the redemption, please proceed to the  to complete the redeeming process."
-	)]
-	Redeem {
-		#[clap(
-			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP). Up to 6 decimal places, any more are rounded.",
-			long = "exact"
-		)]
-		amount: Option<f64>,
-		#[clap(help = "The Ethereum address you wish to redeem your FLIP to.")]
-		eth_address: String,
-		#[clap(
-			help = "Optional executor address. If specified, only this address will be able to execute the redemption."
-		)]
-		executor_address: Option<String>,
-	},
+	#[clap(subcommand)]
+	Redemption(RedemptionSubcommands),
 	#[clap(
 		about = "Irreversible action that restricts your account to only be able to redeem to the specified address"
 	)]
@@ -234,15 +249,6 @@ pub enum CliCommand {
 		hash: state_chain_runtime::Hash,
 		#[clap(help = "The epoch to check, default to the current one")]
 		epoch_index: Option<EpochIndex>,
-	},
-	#[clap(about = "Request an internal transfer of FLIP to another account")]
-	RequestInternalTransfer {
-		#[clap(help = "The amount to transfer")]
-		amount: Option<f64>,
-		#[clap(help = "The Ethereum address under which condition we transfer the FLIP")]
-		destination: String,
-		#[clap(help = "The account ID to transfer the FLIP to")]
-		account_id: String,
 	},
 }
 
