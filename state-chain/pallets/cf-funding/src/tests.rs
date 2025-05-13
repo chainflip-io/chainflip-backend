@@ -1837,7 +1837,7 @@ fn only_governance_can_update_settings() {
 }
 
 #[test]
-fn transfer_unrestricted_funds_internal() {
+fn rebalance_unrestricted_funds() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
@@ -1875,7 +1875,7 @@ fn transfer_unrestricted_funds_internal() {
 }
 
 #[test]
-fn can_only_transfer_as_and_to_validator() {
+fn can_only_rebalance_as_and_to_validator() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
@@ -1908,7 +1908,7 @@ fn can_only_transfer_as_and_to_validator() {
 }
 
 #[test]
-fn transfer_restricted_funds_internal() {
+fn rebalance_restricted_funds() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
@@ -1952,7 +1952,7 @@ fn transfer_restricted_funds_internal() {
 }
 
 #[test]
-fn transfer_only_apart_of_the_restricted_funds() {
+fn rebalance_only_a_apart_of_the_restricted_funds() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MOVE: u128 = AMOUNT / 2;
@@ -2001,7 +2001,7 @@ fn transfer_only_apart_of_the_restricted_funds() {
 }
 
 #[test]
-fn ensure_bonded_address_condition_holds_during_rebalance() {
+fn ensure_bonded_address_condition_hold_during_rebalance() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
