@@ -51,8 +51,9 @@ async function startSwapSimulator(limit?: number) {
   }
 
   let swaps = 0;
+  let run = true;
 
-  while (true) {
+  while (run) {
     const amountToSwap = Math.floor(Math.random() * 1000);
     await doSwap(amountToSwap.toString());
     await sleep(2000);
@@ -60,7 +61,7 @@ async function startSwapSimulator(limit?: number) {
     swaps++;
     if (limit && swaps >= limit) {
       logger.info('Swapping limit reached!');
-      break;
+      run = false;
     }
   }
 

@@ -1,4 +1,4 @@
-import { webSocket } from 'rxjs/webSocket';
+import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { Observable, Subject, from } from 'rxjs';
 import { filter, map, mergeMap } from 'rxjs/operators';
 import WebSocket from 'ws';
@@ -22,10 +22,10 @@ import {
 } from './utils';
 import { sendBtc } from '../shared/send_btc';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (global as any).WebSocket = WebSocket;
 
 const outOfLiquiditySubject = new Subject<OutOfLiquidityEvent>();
-
 class LPBotState {
     ORDER_BOOK: Map<number, Order>;
 
@@ -67,7 +67,6 @@ const tradingStrategy = (swap: Swap): TradeDecision => ({
  * @returns The order ID.
  */
 const manageLimitOrders = async (state: LPBotState, decision: TradeDecision) => {
-    let orderId;
 
     const currentOpenOrderForAsset = Array.from(state.ORDER_BOOK.values()).find(
         (order) =>
@@ -81,7 +80,7 @@ const manageLimitOrders = async (state: LPBotState, decision: TradeDecision) => 
         return currentOpenOrderForAsset.orderId;
     }
 
-    orderId = Math.floor(Math.random() * 10000) + 1;
+    const orderId = Math.floor(Math.random() * 10000) + 1;
 
     try {
         logger.info(
@@ -125,7 +124,7 @@ const manageLimitOrders = async (state: LPBotState, decision: TradeDecision) => 
  * @param wsConnection - The WebSocket connection.
  * @returns The swap stream.
  */
-const createSwapStream = (state: LPBotState, wsConnection: any): Observable<Swap> =>
+const createSwapStream = (state: LPBotState, wsConnection: WebSocketSubject<unknown>): Observable<Swap> =>
     wsConnection.pipe(
         filter((msg: any) => msg.method === 'cf_subscribe_scheduled_swaps'),
         map((msg: any) => msg.params.result.swaps),
@@ -181,7 +180,7 @@ const createOrderStream = (
  * @param wsConnection - The WebSocket connection.
  * @returns The order fill stream.
  */
-const createOrderFillStream = (wsConnection: any): Observable<any> =>
+const createOrderFillStream = (wsConnection: WebSocketSubject<unknown>): Observable<any> =>
     wsConnection.pipe(
         filter((msg: any) => msg.method === 'lp_subscribe_order_fills'),
         map((msg: any) => msg.params.result.fills),

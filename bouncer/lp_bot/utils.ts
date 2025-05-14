@@ -1,6 +1,6 @@
-import { getChainflipApi } from '../shared/utils/substrate';
-import { Chain, createStateChainKeypair, handleSubstrateError, Asset } from '../shared/utils';
-import { globalLogger as logger } from '../shared/utils/logger';
+// import { getChainflipApi } from '../shared/utils/substrate';
+// import { createStateChainKeypair, handleSubstrateError } from '../shared/utils';
+// import { globalLogger as logger } from '../shared/utils/logger';
 
 /**
  * The status of an order.
@@ -31,7 +31,7 @@ class Order {
     public side: Side,
     public amount: number,
     public price: number,
-  ) {}
+  ) { }
 }
 
 /**
@@ -73,74 +73,74 @@ type OutOfLiquidityEvent = {
   amount: number;
 };
 
-/**
- * Cancels all orders for a given liquidity provider.
- *
- * @param lpAccount - The account of the liquidity provider.
- * @param chain - The chain to cancel orders for.
- * @param asset - The asset to cancel orders for.
- */
-const cancelAllOrdersForLp = async (lpAccount: string, chain: string, asset: string) => {
-  await using chainflip = await getChainflipApi();
-  const lp = createStateChainKeypair(lpAccount);
+// /**
+//  * Cancels all orders for a given liquidity provider.
+//  *
+//  * @param lpAccount - The account of the liquidity provider.
+//  * @param chain - The chain to cancel orders for.
+//  * @param asset - The asset to cancel orders for.
+//  */
+// const cancelAllOrdersForLp = async (lpAccount: string, chain: string, asset: string) => {
+//   await using chainflip = await getChainflipApi();
+//   const lp = createStateChainKeypair(lpAccount);
 
-  logger.info(`Try to close all orders for: ${lp.address}...`);
-  try {
-    const orders = await chainflip.rpc('cf_pool_orders', { chain, asset }, 'USDC', lp.address);
+//   logger.info(`Try to close all orders for: ${lp.address}...`);
+//   try {
+//     const orders = await chainflip.rpc('cf_pool_orders', { chain, asset }, 'USDC', lp.address);
 
-    if (
-      orders?.range_orders.length === 0 &&
-      orders?.limit_orders.asks.length === 0 &&
-      orders?.limit_orders.bids.length === 0
-    ) {
-      logger.info(`No open orders found for: ${lp.address}`);
-      return;
-    }
+//     if (
+//       orders?.range_orders.length === 0 &&
+//       orders?.limit_orders.asks.length === 0 &&
+//       orders?.limit_orders.bids.length === 0
+//     ) {
+//       logger.info(`No open orders found for: ${lp.address}`);
+//       return;
+//     }
 
-    logger.info(`Open orders: ${JSON.stringify(orders, null, 2)}`);
+//     logger.info(`Open orders: ${JSON.stringify(orders, null, 2)}`);
 
-    const orderToDelete: {
-      Limit?: { base_asset: string; quote_asset: string; side: string; id: number };
-      Range?: { base_asset: string; quote_asset: string; id: number };
-    }[] = [];
+//     const orderToDelete: {
+//       Limit?: { base_asset: string; quote_asset: string; side: string; id: number };
+//       Range?: { base_asset: string; quote_asset: string; id: number };
+//     }[] = [];
 
-    for (const order of orders?.range_orders) {
-      console.log(order);
-      orderToDelete.push({
-        Range: {
-          base_asset: 'USDT',
-          quote_asset: 'USDC',
-          id: order.id,
-        },
-      });
-    }
+//     for (const order of orders?.range_orders) {
+//       console.log(order);
+//       orderToDelete.push({
+//         Range: {
+//           base_asset: 'USDT',
+//           quote_asset: 'USDC',
+//           id: order.id,
+//         },
+//       });
+//     }
 
-    for (const order of orders?.limit_orders.asks) {
-      console.log(order);
-      orderToDelete.push({
-        Limit: { base_asset: 'USDT', quote_asset: 'USDC', side: 'sell', id: order.id },
-      });
-    }
+//     for (const order of orders?.limit_orders.asks) {
+//       console.log(order);
+//       orderToDelete.push({
+//         Limit: { base_asset: 'USDT', quote_asset: 'USDC', side: 'sell', id: order.id },
+//       });
+//     }
 
-    for (const order of orders?.limit_orders.bids) {
-      console.log(order);
-      orderToDelete.push({
-        Limit: { base_asset: 'USDT', quote_asset: 'USDC', side: 'buy', id: order.id },
-      });
-    }
+//     for (const order of orders?.limit_orders.bids) {
+//       console.log(order);
+//       orderToDelete.push({
+//         Limit: { base_asset: 'USDT', quote_asset: 'USDC', side: 'buy', id: order.id },
+//       });
+//     }
 
-    try {
-      await chainflip.tx.liquidityPools
-        .cancelOrdersBatch(orderToDelete)
-        .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
-      logger.info(`Orders cancelled: ${JSON.stringify(orderToDelete, null, 2)}`);
-    } catch (error) {
-      logger.error(`Error: ${error}`);
-    }
-  } catch (error) {
-    logger.error(`Error: ${error}`);
-  }
-};
+//     try {
+//       await chainflip.tx.liquidityPools
+//         .cancelOrdersBatch(orderToDelete)
+//         .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+//       logger.info(`Orders cancelled: ${JSON.stringify(orderToDelete, null, 2)}`);
+//     } catch (error) {
+//       logger.error(`Error: ${error}`);
+//     }
+//   } catch (error) {
+//     logger.error(`Error: ${error}`);
+//   }
+// };
 
 // const manageRangeOrder = async (baseAsset: Asset, tick1: number, tick2: number, size: number) => {
 //     logger.info(`Managing range order for ${baseAsset} with tick1: ${tick1}, tick2: ${tick2}, size: ${size}`);
@@ -172,7 +172,7 @@ const cancelAllOrdersForLp = async (lpAccount: string, chain: string, asset: str
 // }
 
 export {
-  cancelAllOrdersForLp,
+  // cancelAllOrdersForLp,
   Order,
   Side,
   OrderStatus,
