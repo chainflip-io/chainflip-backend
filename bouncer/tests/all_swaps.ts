@@ -126,9 +126,10 @@ export function testAllSwaps(timeoutPerSwap: number) {
         context.logger.info(`🧪 Private broker channel opened`);
       },
       120,
+      'AllSwaps',
     );
     for (const swap of allSwaps) {
-      concurrentTest(swap.name, swap.test, timeoutPerSwap);
+      concurrentTest(swap.name, swap.test, timeoutPerSwap, 'AllSwaps');
     }
   });
 }

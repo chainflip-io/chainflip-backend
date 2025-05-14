@@ -44,6 +44,7 @@ export function concurrentTest(
   name: string,
   testFunction: (context: TestContext) => Promise<void>,
   timeoutSeconds: number,
+  alternativeName?: string,
 ) {
   it.concurrent<{ testContext: TestContext }>(
     name,
@@ -51,12 +52,13 @@ export function concurrentTest(
     timeoutSeconds * 1000,
   );
 
-  writeTestInfoFile(name, testFunction);
+  writeTestInfoFile(alternativeName ?? name, testFunction);
 }
 export function serialTest(
   name: string,
   testFunction: (context: TestContext) => Promise<void>,
   timeoutSeconds: number,
+  alternativeName?: string,
 ) {
   it.sequential<{ testContext: TestContext }>(
     name,
@@ -64,5 +66,5 @@ export function serialTest(
     timeoutSeconds * 1000,
   );
 
-  writeTestInfoFile(name, testFunction);
+  writeTestInfoFile(alternativeName ?? name, testFunction);
 }
