@@ -23,9 +23,9 @@ use cf_chains::{
 	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
-	AnyChain, Arbitrum, Assethub, Bitcoin, CcmDepositMetadata, Chain, ChainCrypto,
-	ChannelRefundParameters, Ethereum, IntoTransactionInIdForAnyChain, Polkadot,
-	TransactionInIdForAnyChain,
+	AnyChain, Arbitrum, Assethub, Bitcoin, CcmDepositMetadataUnchecked, Chain, ChainCrypto,
+	ChannelRefundParameters, Ethereum, ForeignChainAddress, IntoTransactionInIdForAnyChain,
+	Polkadot, TransactionInIdForAnyChain,
 };
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
 use chainflip_api::primitives::{
@@ -147,7 +147,7 @@ enum WitnessInformation {
 		output_asset: cf_chains::assets::any::Asset,
 		amount: NumberOrHex,
 		destination_address: TrackerAddress,
-		ccm_deposit_metadata: Option<CcmDepositMetadata>,
+		ccm_deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 		deposit_details: Option<DepositDetails>,
 		broker_fee: Option<Beneficiary<AccountId32>>,
 		affiliate_fees: Affiliates<AccountId32>,
@@ -998,7 +998,7 @@ mod tests {
 					input_asset: cf_chains::assets::eth::Asset::Eth,
 					output_asset: chainflip_api::primitives::Asset::Flip,
 					destination_address: cf_chains::address::EncodedAddress::Dot([0; 32]),
-					deposit_metadata: Some(CcmDepositMetadata {
+					deposit_metadata: Some(CcmDepositMetadataUnchecked {
 						channel_metadata: CcmChannelMetadata {
 							message: b"HELLO".to_vec().try_into().unwrap(),
 							gas_budget: 12345,

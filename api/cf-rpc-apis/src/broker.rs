@@ -16,8 +16,8 @@
 
 use crate::RpcResult;
 
-use cf_chains::{eth::Address as EthereumAddress, CcmChannelMetadata, VaultSwapExtraParametersRpc};
-use cf_rpc_types::{AccountId32, BlockUpdate, H256};
+use cf_chains::{eth::Address as EthereumAddress, CcmChannelMetadataUnchecked};
+use cf_rpc_types::{AccountId32, BlockUpdate, RefundParametersRpc, H256};
 use jsonrpsee::proc_macros::rpc;
 
 pub use cf_primitives::DcaParameters;
@@ -35,11 +35,12 @@ pub trait BrokerRpcApi {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
+		wait_for_finality: Option<bool>,
 	) -> RpcResult<SwapDepositAddress>;
 
 	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
@@ -57,11 +58,17 @@ pub trait BrokerRpcApi {
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		extra_parameters: VaultSwapExtraParametersRpc,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<VaultSwapDetails<AddressString>>;
+
+	#[method(name = "decode_vault_swap_parameter", aliases = ["broker_DecodeVaultSwapParameter"])]
+	async fn decode_vault_swap_parameter(
+		&self,
+		vault_swap: VaultSwapDetails<AddressString>,
+	) -> RpcResult<VaultSwapInputRpc>;
 
 	#[method(name = "mark_transaction_for_rejection", aliases = ["broker_MarkTransactionForRejection"])]
 	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()>;

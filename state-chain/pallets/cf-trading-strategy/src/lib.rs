@@ -91,10 +91,11 @@ impl TradingStrategy {
 	}
 	fn validate_params<T: Config>(&self) -> Result<(), Error<T>> {
 		match self {
-			TradingStrategy::TickZeroCentered { spread_tick, .. } => {
+			TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
 				if *spread_tick < 0 || *spread_tick > cf_amm_math::MAX_TICK {
 					return Err(Error::<T>::InvalidTick)
 				}
+				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
 			},
 		}
 		Ok(())

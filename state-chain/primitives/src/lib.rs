@@ -133,7 +133,7 @@ pub type Tick = i32;
 
 define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
 
-define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize);
+define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
 pub type PrewitnessedDepositId = u64;
 
@@ -451,7 +451,7 @@ pub struct Beneficiary<Id> {
 	pub bps: BasisPoints,
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Debug)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct AffiliateAndFee {
 	pub affiliate: AffiliateShortId,
 	pub fee: u8,
@@ -489,7 +489,7 @@ pub type ShortId = u8;
 pub struct StablecoinDefaults<const N: u128>();
 impl<const N: u128> Get<BTreeMap<Asset, AssetAmount>> for StablecoinDefaults<N> {
 	fn get() -> BTreeMap<Asset, AssetAmount> {
-		[Asset::Usdc, Asset::Usdt, Asset::ArbUsdc, Asset::SolUsdc]
+		[Asset::Usdc, Asset::Usdt, Asset::ArbUsdc, Asset::SolUsdc, Asset::HubUsdc, Asset::HubUsdt]
 			.into_iter()
 			.map(|asset| (asset, N))
 			.collect()

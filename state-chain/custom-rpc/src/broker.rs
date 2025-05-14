@@ -20,20 +20,18 @@ use crate::{
 	CfApiError,
 };
 pub use cf_chains::eth::Address as EthereumAddress;
-use cf_chains::{
-	address::AddressString, CcmChannelMetadata, ChannelRefundParameters, RefundParametersRpc,
-	VaultSwapExtraParametersRpc,
-};
+use cf_chains::{address::AddressString, CcmChannelMetadataUnchecked, ChannelRefundParameters};
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
 };
 use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId};
 use cf_rpc_apis::{
 	broker::{
-		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress,
-		TransactionInId, WithdrawFeesDetail,
+		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc, BrokerRpcApiServer,
+		DcaParameters, GetOpenDepositChannelsQuery, SwapDepositAddress, TransactionInId,
+		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
-	RpcResult, H256,
+	RefundParametersRpc, RpcResult, H256,
 };
 use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
 use pallet_cf_swapping::AffiliateDetails;
@@ -166,11 +164,12 @@ where
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
+		wait_for_finality: Option<bool>,
 	) -> RpcResult<SwapDepositAddress> {
 		let ExtrinsicData { events, header, .. } = self
 			.signed_pool_client
@@ -191,7 +190,7 @@ where
 						dca_parameters,
 					},
 				),
-				false,
+				wait_for_finality.unwrap_or_default(),
 				true,
 			)
 			.await
@@ -270,7 +269,7 @@ where
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		extra_parameters: VaultSwapExtraParametersRpc,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
@@ -286,7 +285,7 @@ where
 				destination_asset,
 				destination_address.try_parse_to_encoded_address(destination_asset.into())?,
 				broker_commission,
-				extra_parameters.try_into_encoded_params(source_asset.into())?,
+				try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
 				channel_metadata,
 				boost_fee.unwrap_or_default(),
 				affiliate_fees.unwrap_or_default(),
@@ -295,6 +294,24 @@ where
 			.map_err(CfApiError::from)?
 			.map_err(CfApiError::from)?
 			.map_btc_address(Into::into))
+	}
+
+	async fn decode_vault_swap_parameter(
+		&self,
+		vault_swap: VaultSwapDetails<AddressString>,
+	) -> RpcResult<VaultSwapInputRpc> {
+		Ok(vault_swap_input_encoded_to_rpc(
+			self.rpc_backend
+				.client
+				.runtime_api()
+				.cf_decode_vault_swap_parameter(
+					self.rpc_backend.client.info().best_hash,
+					self.signed_pool_client.account_id(),
+					vault_swap.map_btc_address(Into::into),
+				)
+				.map_err(CfApiError::from)?
+				.map_err(CfApiError::from)?,
+		))
 	}
 
 	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()> {

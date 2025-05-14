@@ -22,8 +22,8 @@ use cf_amm::{
 };
 use cf_chains::{
 	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
-	sol::SolInstructionRpc, CcmChannelMetadata, Chain, ChainCrypto, ForeignChainAddress,
-	VaultSwapExtraParametersEncoded,
+	sol::SolInstructionRpc, CcmChannelMetadataUnchecked, Chain, ChainCrypto, ForeignChainAddress,
+	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
@@ -40,7 +40,7 @@ use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
+use pallet_cf_swapping::{AffiliateDetails, FeeRateAndMinimum, SwapLegInfo};
 use pallet_cf_trading_strategy::TradingStrategy;
 use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
@@ -135,6 +135,7 @@ pub struct ValidatorInfo {
 	pub bound_redeem_address: Option<EthereumAddress>,
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
+	pub estimated_redeemable_balance: AssetAmount,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
@@ -377,6 +378,12 @@ pub struct TradingStrategyLimits {
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
 }
 
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct NetworkFees {
+	pub regular_network_fee: FeeRateAndMinimum,
+	pub internal_swap_network_fee: FeeRateAndMinimum,
+}
+
 // READ THIS BEFORE UPDATING THIS TRAIT:
 //
 // ## When changing an existing method:
@@ -534,11 +541,15 @@ decl_runtime_apis!(
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
 			extra_parameters: VaultSwapExtraParametersEncoded,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId32>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage>;
+		fn cf_decode_vault_swap_parameter(
+			broker: AccountId32,
+			vault_swap: VaultSwapDetails<String>,
+		) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(
@@ -551,6 +562,7 @@ decl_runtime_apis!(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
+		fn cf_network_fees() -> NetworkFees;
 	}
 );
 

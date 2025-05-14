@@ -16,18 +16,32 @@
 
 pub use cf_primitives::chains::Solana;
 
-use cf_primitives::ChannelId;
+use cf_primitives::{
+	AffiliateAndFee, BasisPoints, Beneficiary, ChannelId, DcaParameters, ForeignChain,
+};
+use sol_prim::program_instructions::FunctionDiscriminator;
 use sp_core::ConstBool;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
-	address, assets,
-	sol::sol_tx_core::{AccountBump, SlotNumber},
-	DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator,
-	TypeInfo,
+	address::{self, EncodedAddress},
+	assets,
+	cf_parameters::VaultSwapParameters,
+	sol::sol_tx_core::{
+		instructions::program_instructions::swap_endpoints::{
+			SwapNativeParams, SwapTokenParams, XSwapNative, XSwapToken,
+		},
+		AccountBump, SlotNumber,
+	},
+	AnyChainAsset, CcmAdditionalData, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmParams,
+	ChannelRefundParameters, DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi,
+	FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
-use frame_support::{sp_runtime::RuntimeDebug, Parameter};
+use frame_support::{
+	sp_runtime::{BoundedVec, RuntimeDebug},
+	Parameter,
+};
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Member;
 
@@ -45,7 +59,7 @@ use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
 	consts::{
 		LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT,
-		TOKEN_ACCOUNT_RENT,
+		SOLANA_PDA_MAX_SEED_LEN, TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	transaction::{
@@ -93,6 +107,8 @@ pub struct SolanaTransactionData {
 
 /// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
 pub type SolanaTransactionInId = (SolAddress, u64);
+
+pub type SolSeed = BoundedVec<u8, sp_core::ConstU32<SOLANA_PDA_MAX_SEED_LEN>>;
 
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
@@ -195,6 +211,7 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 6_000u32;
 	pub const COMPUTE_UNITS_PER_SET_PROGRAM_SWAPS_PARAMS: SolComputeLimit = 50_000u32;
 	pub const COMPUTE_UNITS_PER_ENABLE_TOKEN_SUPPORT: SolComputeLimit = 50_000u32;
+	pub const COMPUTE_UNITS_PER_UPGRADE_PROGRAM: SolComputeLimit = 100_000u32;
 
 	/// This is equivalent to a priority fee, in micro-lamports/compute unit.
 	pub const MIN_COMPUTE_PRICE: SolAmount = 10_000_000;
@@ -495,10 +512,186 @@ pub struct SolApiEnvironment {
 
 impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct DecodedXSwapParams {
+	pub amount: cf_primitives::AssetAmount,
+	pub src_asset: AnyChainAsset,
+	pub src_address: SolAddress,
+	pub from_token_account: Option<SolAddress>,
+	pub dst_address: crate::address::EncodedAddress,
+	pub dst_token: AnyChainAsset,
+	pub refund_parameters: ChannelRefundParameters<EncodedAddress>,
+	pub dca_parameters: Option<DcaParameters>,
+	pub boost_fee: u8,
+	pub broker_id: cf_primitives::AccountId,
+	pub broker_commission: BasisPoints,
+	pub affiliate_fees: Vec<AffiliateAndFee>,
+	pub ccm: Option<CcmChannelMetadataUnchecked>,
+	pub seed: SolSeed,
+}
+
+pub fn decode_sol_instruction_data(
+	instruction: &SolInstruction,
+) -> Result<DecodedXSwapParams, &'static str> {
+	let data = instruction.data.clone();
+	let (
+		amount,
+		src_asset,
+		src_token_from_account,
+		dst_chain,
+		dst_address,
+		dst_token,
+		ccm_parameters,
+		cf_parameters,
+		seed,
+	) = match instruction.accounts.len() as u8 {
+		sol_tx_core::consts::X_SWAP_NATIVE_ACC_LEN => {
+			let (
+				_discriminator,
+				XSwapNative {
+					swap_native_params:
+						SwapNativeParams {
+							amount,
+							dst_chain,
+							dst_address,
+							dst_token,
+							ccm_parameters,
+							cf_parameters,
+						},
+					seed,
+				},
+			) = SolInstruction::deserialize_data_with_borsh::<(FunctionDiscriminator, XSwapNative)>(
+				data,
+			)
+			.map_err(|_| "Failed to deserialize SolInstruction")?;
+			Ok((
+				amount,
+				AnyChainAsset::Sol,
+				None,
+				dst_chain,
+				dst_address,
+				dst_token,
+				ccm_parameters,
+				cf_parameters,
+				seed,
+			))
+		},
+		sol_tx_core::consts::X_SWAP_TOKEN_ACC_LEN => {
+			let (
+				_discriminator,
+				XSwapToken {
+					swap_token_params:
+						SwapTokenParams {
+							amount,
+							dst_chain,
+							dst_address,
+							dst_token,
+							ccm_parameters,
+							cf_parameters,
+							decimals: _,
+						},
+					seed,
+				},
+			) = SolInstruction::deserialize_data_with_borsh::<(FunctionDiscriminator, XSwapToken)>(
+				data,
+			)
+			.map_err(|_| "Failed to deserialize SolInstruction")?;
+			Ok((
+				amount,
+				AnyChainAsset::SolUsdc,
+				Some(
+					instruction
+						.accounts
+						.get(sol_tx_core::consts::X_SWAP_TOKEN_FROM_TOKEN_ACC_IDX as usize)
+						.ok_or("Invalid accounts in SolInstruction")?
+						.pubkey
+						.into(),
+				),
+				dst_chain,
+				dst_address,
+				dst_token,
+				ccm_parameters,
+				cf_parameters,
+				seed,
+			))
+		},
+		_ => Err("SolInstruction is invalid"),
+	}?;
+
+	let chain = ForeignChain::try_from(dst_chain).map_err(|_| "ForeignChain is invalid")?;
+
+	let (
+		VaultSwapParameters {
+			refund_params,
+			dca_params,
+			boost_fee,
+			broker_fee: Beneficiary { account, bps },
+			affiliate_fees,
+		},
+		ccm,
+	) = match ccm_parameters {
+		Some(CcmParams { message, gas_amount }) => {
+			let (decoded, additional_data) = crate::cf_parameters::decode_cf_parameters::<
+				SolAddress,
+				CcmAdditionalData,
+			>(&cf_parameters[..])?;
+			(
+				decoded,
+				Some(CcmChannelMetadata {
+					message: message.try_into().map_err(|_| "Ccm message is too long")?,
+					gas_budget: gas_amount.into(),
+					ccm_additional_data: additional_data,
+				}),
+			)
+		},
+		None => (
+			crate::cf_parameters::decode_cf_parameters::<SolAddress, ()>(&cf_parameters[..])?.0,
+			None,
+		),
+	};
+
+	Ok(DecodedXSwapParams {
+		amount: amount.into(),
+		src_asset,
+		src_address: instruction
+			.accounts
+			.get(sol_tx_core::consts::X_SWAP_FROM_ACC_IDX as usize)
+			.ok_or("Invalid accounts in SolInstruction")?
+			.pubkey
+			.into(),
+		from_token_account: src_token_from_account,
+		dst_address: EncodedAddress::from_chain_bytes(chain, dst_address)?,
+		dst_token: AnyChainAsset::try_from(dst_token).map_err(|_| "Invalid dst_token")?,
+		refund_parameters: refund_params.map_address(|addr| addr.into()),
+		dca_parameters: dca_params,
+		boost_fee,
+		broker_id: account,
+		broker_commission: bps,
+		affiliate_fees: affiliate_fees.to_vec(),
+		ccm,
+		seed: seed.try_into().map_err(|_| "Seed too long")?,
+	})
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{sol::compute_units_costs::*, ChannelLifecycleHooks};
+	use crate::{
+		cf_parameters::build_cf_parameters,
+		sol::{
+			compute_units_costs::*,
+			instruction_builder::SolanaInstructionBuilder,
+			sol_tx_core::{
+				address_derivation::{
+					derive_swap_endpoint_native_vault_account, derive_vault_swap_account,
+				},
+				sol_test_values,
+			},
+		},
+		ChannelLifecycleHooks,
+	};
+	use cf_primitives::{chains::assets::any::Asset, AffiliateShortId};
+	use sp_runtime::AccountId32;
 
 	#[test]
 	fn can_calculate_gas_limit() {
@@ -542,6 +735,143 @@ mod test {
 			<<Solana as Chain>::DepositChannelState as ChannelLifecycleHooks>::maybe_recycle(0).is_none(),
 			"It looks like Solana channel recycling is active. If this is intentional, ensure that the corresponding
 			unsynchronised state map in the delta_based_ingress election is not deleted when channels are closed."
+		);
+	}
+
+	#[test]
+	fn can_decode_x_swap_native_sol_instruction() {
+		let swap_endpoint_native_vault =
+			derive_swap_endpoint_native_vault_account(sol_test_values::SWAP_ENDPOINT_PROGRAM)
+				.unwrap()
+				.address;
+		let destination_asset = Asset::Sol;
+		let destination_address = EncodedAddress::Sol([0xF0; 32]);
+		let from = SolPubkey([0xF1; 32]);
+		let seed: &[u8] = &[0xF2; 32];
+		let event_data_account =
+			derive_vault_swap_account(sol_test_values::SWAP_ENDPOINT_PROGRAM, from.into(), seed)
+				.unwrap()
+				.address;
+		let input_amount = 1_000_000_000u64;
+		let refund_parameters = ChannelRefundParameters {
+			retry_duration: 15u32,
+			refund_address: SolAddress([0xF3; 32]),
+			min_price: 0.into(),
+		};
+		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
+		let boost_fee = 10u8;
+		let broker_id = AccountId32::new([0xF4; 32]);
+		let broker_commission = 11;
+		let affiliate_fees = vec![AffiliateAndFee { affiliate: AffiliateShortId(0u8), fee: 12u8 }];
+		let channel_metadata = sol_test_values::ccm_parameter_v1().channel_metadata;
+
+		let instruction = SolanaInstructionBuilder::x_swap_native(
+			sol_test_values::api_env(),
+			swap_endpoint_native_vault.into(),
+			destination_asset,
+			destination_address.clone(),
+			from,
+			seed.to_vec().try_into().unwrap(),
+			event_data_account.into(),
+			input_amount,
+			build_cf_parameters::<Solana>(
+				refund_parameters.clone(),
+				Some(dca_parameters.clone()),
+				boost_fee,
+				broker_id.clone(),
+				broker_commission,
+				affiliate_fees.clone().try_into().unwrap(),
+				Some(&channel_metadata),
+			),
+			Some(channel_metadata.clone()),
+		);
+
+		assert_eq!(
+			decode_sol_instruction_data(&instruction),
+			Ok(DecodedXSwapParams {
+				amount: input_amount.into(),
+				src_asset: Asset::Sol,
+				src_address: from.into(),
+				from_token_account: None,
+				dst_address: destination_address,
+				dst_token: destination_asset,
+				refund_parameters: refund_parameters.map_address(Into::into),
+				dca_parameters: Some(dca_parameters),
+				boost_fee,
+				broker_id,
+				broker_commission,
+				affiliate_fees,
+				ccm: Some(channel_metadata),
+				seed: seed.to_vec().try_into().unwrap(),
+			})
+		);
+	}
+
+	#[test]
+	fn can_decode_x_swap_usdc_sol_instruction() {
+		let destination_asset = Asset::Sol;
+		let destination_address = EncodedAddress::Sol([0xF0; 32]);
+		let from = SolPubkey([0xF1; 32]);
+		let from_token_account = SolPubkey([0xF4; 32]);
+		let seed: &[u8] = &[0xF2; 32];
+		let event_data_account =
+			derive_vault_swap_account(sol_test_values::SWAP_ENDPOINT_PROGRAM, from.into(), seed)
+				.unwrap()
+				.address;
+		let token_supported_account = SolPubkey([0xF5; 32]);
+		let input_amount = 1_000_000_000u64;
+		let refund_parameters = ChannelRefundParameters {
+			retry_duration: 15u32,
+			refund_address: SolAddress([0xF3; 32]),
+			min_price: 0.into(),
+		};
+		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
+		let boost_fee = 10u8;
+		let broker_id = AccountId32::new([0xF4; 32]);
+		let broker_commission = 11;
+		let affiliate_fees = vec![AffiliateAndFee { affiliate: AffiliateShortId(0u8), fee: 12u8 }];
+		let channel_metadata = sol_test_values::ccm_parameter_v1().channel_metadata;
+
+		let instruction = SolanaInstructionBuilder::x_swap_usdc(
+			sol_test_values::api_env(),
+			destination_asset,
+			destination_address.clone(),
+			from,
+			from_token_account,
+			seed.to_vec().try_into().unwrap(),
+			event_data_account.into(),
+			token_supported_account,
+			input_amount,
+			build_cf_parameters::<Solana>(
+				refund_parameters.clone(),
+				Some(dca_parameters.clone()),
+				boost_fee,
+				broker_id.clone(),
+				broker_commission,
+				affiliate_fees.clone().try_into().unwrap(),
+				Some(&channel_metadata),
+			),
+			Some(channel_metadata.clone()),
+		);
+
+		assert_eq!(
+			decode_sol_instruction_data(&instruction),
+			Ok(DecodedXSwapParams {
+				amount: input_amount.into(),
+				src_asset: Asset::SolUsdc,
+				src_address: from.into(),
+				from_token_account: Some(from_token_account.into()),
+				dst_address: destination_address,
+				dst_token: destination_asset,
+				refund_parameters: refund_parameters.map_address(Into::into),
+				dca_parameters: Some(dca_parameters),
+				boost_fee,
+				broker_id,
+				broker_commission,
+				affiliate_fees,
+				ccm: Some(channel_metadata),
+				seed: seed.to_vec().try_into().unwrap(),
+			})
 		);
 	}
 }

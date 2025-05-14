@@ -22,19 +22,25 @@ use super::*;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	assets::{any::Asset, sol::Asset as SolAsset},
-	ccm_checker::{CcmValidityError, VersionedSolanaCcmAdditionalData},
+	ccm_checker::{CcmValidityError, DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	sol::{
-		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
-		sol_tx_core::sol_test_values,
+		api::{
+			AltWitnessingConsensusResult, SolanaApi, SolanaEnvironment,
+			SolanaTransactionBuildingError, SolanaTransactionType,
+		},
+		sol_tx_core::sol_test_values::{self, user_alt},
 		transaction_builder::SolanaTransactionBuilder,
-		SolAddress, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey, SolanaCrypto,
+		SolAddress, SolAddressLookupTableAccount, SolCcmAccounts, SolCcmAddress, SolHash,
+		SolPubkey, SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
-	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
-	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
+	CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata, CcmDepositMetadataChecked,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParameters, ExecutexSwapAndCallError,
+	ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
+	Solana, SwapOrigin, TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, Beneficiary, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
+use cf_traits::EgressApi;
 use cf_utilities::{assert_matches, bs58_array};
 use codec::Encode;
 use frame_support::{
@@ -42,9 +48,13 @@ use frame_support::{
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
 use pallet_cf_elections::{
-	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote},
-	AuthorityVoteOf, ElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
+	electoral_system::ElectoralReadAccess,
+	electoral_systems::composite::tuple_7_impls::CompositeElectionIdentifierExtra,
+	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
+	AuthorityVoteOf, ElectionIdentifier, ElectionIdentifierOf, UniqueMonotonicIdentifier,
+	MAXIMUM_VOTES_PER_EXTRINSIC,
 };
+
 use pallet_cf_ingress_egress::{
 	DepositAction, DepositWitness, FetchOrTransfer, RefundReason, VaultDepositWitness,
 };
@@ -53,7 +63,11 @@ use sp_core::ConstU32;
 use sp_runtime::BoundedBTreeMap;
 use state_chain_runtime::{
 	chainflip::{
-		address_derivation::AddressDerivation, solana_elections::TransactionSuccessDetails,
+		address_derivation::AddressDerivation,
+		solana_elections::{
+			SolanaAltWitnessingElectoralAccess, SolanaAltWitnessingIdentifier,
+			TransactionSuccessDetails,
+		},
 		ChainAddressConverter, SolEnvironment,
 		SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
 	},
@@ -106,7 +120,7 @@ fn schedule_deposit_to_swap(
 	who: AccountId,
 	from: Asset,
 	to: Asset,
-	ccm: Option<CcmChannelMetadata>,
+	ccm: Option<CcmChannelMetadataUnchecked>,
 ) -> SwapRequestId {
 	assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 		RuntimeOrigin::signed(who.clone()),
@@ -161,6 +175,57 @@ fn schedule_deposit_to_swap(
 	}) if <Solana as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone())
 		.expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address
 		=> swap_request_id)
+}
+
+fn vote_for_alt_election(
+	election_identifier: u64,
+	res: AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+) {
+	let mut vote = BoundedBTreeMap::new();
+	vote.try_insert(
+		ElectionIdentifier::new(
+			UniqueMonotonicIdentifier::from(election_identifier),
+			CompositeElectionIdentifierExtra::G(()),
+		),
+		AuthorityVote::Vote(CompositeVote::G(res)),
+	)
+	.unwrap();
+	Validator::current_authorities().into_iter().for_each(|id| {
+		assert_ok!(SolanaElections::stop_ignoring_my_votes(RuntimeOrigin::signed(id.clone()),));
+		assert_ok!(RuntimeCall::SolanaElections(pallet_cf_elections::Call::<
+			Runtime,
+			SolanaInstance,
+		>::vote {
+			authority_votes: vote.clone()
+		})
+		.dispatch_bypass_filter(RuntimeOrigin::signed(id)));
+	});
+}
+
+fn vault_swap_deposit_witness(
+	broker: AccountId,
+	deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
+) -> VaultDepositWitness<Runtime, SolanaInstance> {
+	VaultDepositWitness {
+		input_asset: SolAsset::Sol,
+		output_asset: Asset::SolUsdc,
+		deposit_amount: 1_000_000_000_000u64,
+		destination_address: EncodedAddress::Sol([1u8; 32]),
+		deposit_metadata,
+		tx_id: Default::default(),
+		deposit_details: (),
+		broker_fee: Some(Beneficiary { account: broker, bps: 100u16 }),
+		affiliate_fees: Default::default(),
+		refund_params: ChannelRefundParameters {
+			retry_duration: REFUND_PARAMS.retry_duration,
+			refund_address: FALLBACK_ADDRESS,
+			min_price: REFUND_PARAMS.min_price,
+		},
+		dca_params: None,
+		boost_fee: 0,
+		deposit_address: Some(SolAddress([2u8; 32])),
+		channel_id: Some(0),
+	}
 }
 
 #[test]
@@ -374,29 +439,241 @@ fn can_send_solana_ccm() {
 		});
 }
 
-fn vault_swap_deposit_witness(
-	deposit_metadata: Option<CcmDepositMetadata>,
-) -> VaultDepositWitness<Runtime, SolanaInstance> {
-	VaultDepositWitness {
-		input_asset: SolAsset::Sol,
-		output_asset: Asset::SolUsdc,
-		deposit_amount: 1_000_000_000_000u64,
-		destination_address: EncodedAddress::Sol([1u8; 32]),
-		deposit_metadata,
-		tx_id: Default::default(),
-		deposit_details: (),
-		broker_fee: Some(Beneficiary { account: BROKER.into(), bps: 0 }),
-		affiliate_fees: Default::default(),
-		refund_params: ChannelRefundParameters {
-			retry_duration: REFUND_PARAMS.retry_duration,
-			refund_address: FALLBACK_ADDRESS,
-			min_price: REFUND_PARAMS.min_price,
-		},
-		dca_params: None,
-		boost_fee: 0,
-		deposit_address: Some(SolAddress([2u8; 32])),
-		channel_id: Some(0),
-	}
+#[test]
+fn can_send_solana_ccm_v1() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			(ALICE, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			(BOB, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			setup_sol_environments();
+
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_ok!(RuntimeCall::SolanaVault(
+				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
+			)
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
+
+			register_refund_addresses(&DORIS);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+
+			testnet.move_to_the_next_epoch();
+
+			// Register 2 CCMs, one with Sol and one with SolUsdc token.
+			assert_eq!(
+				schedule_deposit_to_swap(
+					ALICE,
+					Asset::Sol,
+					Asset::SolUsdc,
+					Some(sol_test_values::ccm_parameter_v1().channel_metadata)
+				),
+				1.into()
+			);
+			assert_eq!(
+				schedule_deposit_to_swap(
+					BOB,
+					Asset::SolUsdc,
+					Asset::Sol,
+					Some(sol_test_values::ccm_parameter_v1().channel_metadata)
+				),
+				3.into()
+			);
+
+			testnet.move_forward_blocks(2);
+
+			// Wait until swap is complete and ALT election started
+			vote_for_alt_election(
+				29,
+				AltWitnessingConsensusResult::Valid(vec![SolAddressLookupTableAccount {
+					key: user_alt().key,
+					addresses: vec![Default::default()],
+				}]),
+			);
+			vote_for_alt_election(
+				30,
+				AltWitnessingConsensusResult::Valid(vec![SolAddressLookupTableAccount {
+					key: user_alt().key,
+					addresses: vec![Default::default()],
+				}]),
+			);
+
+			// With consensus on ALT witnessing election, v1 CCM call is ready to be built.
+			testnet.move_forward_blocks(1);
+
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id: 3,
+					egress_id: (ForeignChain::Solana, 1),
+				},
+			));
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id: 4,
+					egress_id: (ForeignChain::Solana, 2),
+				},
+			));
+		});
+}
+
+#[test]
+fn ccms_can_contain_overlapping_and_identical_alts() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			(ALICE, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			(BOB, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			setup_sol_environments();
+
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_ok!(RuntimeCall::SolanaVault(
+				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
+			)
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
+
+			register_refund_addresses(&DORIS);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+
+			testnet.move_to_the_next_epoch();
+
+			// Register 2 CCMs with overlapping ALTs
+			let user_alts =
+				[SolAddress([0xF0; 32]), SolAddress([0xF1; 32]), SolAddress([0xF2; 32])];
+			let mut ccm_0 = sol_test_values::ccm_parameter().channel_metadata;
+			ccm_0.ccm_additional_data =
+				codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
+					ccm_accounts: sol_test_values::ccm_accounts(),
+					alts: vec![user_alts[0], user_alts[1]],
+				})
+				.try_into()
+				.unwrap();
+			let mut ccm_1 = sol_test_values::ccm_parameter().channel_metadata;
+			ccm_1.ccm_additional_data =
+				codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
+					ccm_accounts: sol_test_values::ccm_accounts(),
+					alts: vec![user_alts[1], user_alts[2]],
+				})
+				.try_into()
+				.unwrap();
+
+			let mut next_swap_id =
+				(*pallet_cf_swapping::SwapRequestIdCounter::<Runtime>::get() + 1).into();
+			assert_eq!(
+				schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, Some(ccm_0.clone())),
+				next_swap_id,
+			);
+
+			//Sol -> Usdc -> SolUsdc consumes 2 swap IDs
+			*next_swap_id += 2;
+			assert_eq!(
+				schedule_deposit_to_swap(BOB, Asset::SolUsdc, Asset::Sol, Some(ccm_1)),
+				next_swap_id
+			);
+			*next_swap_id += 1;
+			assert_eq!(
+				schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, Some(ccm_0)),
+				next_swap_id
+			);
+
+			testnet.move_forward_blocks(2);
+
+			// Let election come into Consensus
+			vote_for_alt_election(
+				29,
+				AltWitnessingConsensusResult::Valid(vec![
+					SolAddressLookupTableAccount {
+						key: user_alts[0].into(),
+						addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
+					},
+					SolAddressLookupTableAccount {
+						key: user_alts[1].into(),
+						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
+					},
+				]),
+			);
+			vote_for_alt_election(
+				30,
+				AltWitnessingConsensusResult::Valid(vec![
+					SolAddressLookupTableAccount {
+						key: user_alts[1].into(),
+						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
+					},
+					SolAddressLookupTableAccount {
+						key: user_alts[2].into(),
+						addresses: vec![SolPubkey([0xE4; 32]), SolPubkey([0xE5; 32])],
+					},
+				]),
+			);
+			vote_for_alt_election(
+				31,
+				AltWitnessingConsensusResult::Valid(vec![
+					SolAddressLookupTableAccount {
+						key: user_alts[0].into(),
+						addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
+					},
+					SolAddressLookupTableAccount {
+						key: user_alts[1].into(),
+						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
+					},
+				]),
+			);
+			testnet.move_forward_blocks(1);
+
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id: 3,
+					egress_id: (ForeignChain::Solana, 1),
+				},
+			));
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id: 4,
+					egress_id: (ForeignChain::Solana, 2),
+				},
+			));
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id: 5,
+					egress_id: (ForeignChain::Solana, 3),
+				},
+			));
+
+			// All CCMs are egressed successfully. Unsynchronised map states are consumed correctly.
+			assert_eq!(
+				pallet_cf_ingress_egress::ScheduledEgressCcm::<Runtime, SolanaInstance>::decode_len(
+				),
+				Some(0)
+			);
+			assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(
+				&SolanaAltWitnessingIdentifier(vec![user_alts[0], user_alts[1]])
+			)
+			.unwrap()
+			.is_none());
+			assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(
+				&SolanaAltWitnessingIdentifier(vec![user_alts[1], user_alts[2]])
+			)
+			.unwrap()
+			.is_none());
+		});
 }
 
 #[test]
@@ -430,7 +707,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			let invalid_ccm = CcmDepositMetadata {
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xff; 20].into())),
-				channel_metadata: CcmChannelMetadata {
+				channel_metadata: CcmChannelMetadataUnchecked {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 0u128,
 					ccm_additional_data: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
@@ -471,7 +748,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			assert_ok!(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposit: Box::new(vault_swap_deposit_witness(Some(invalid_ccm))),
+					deposit: Box::new(vault_swap_deposit_witness(ZION, Some(invalid_ccm))),
 				}
 			)
 			.dispatch_bypass_filter(
@@ -496,7 +773,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			let ccm = CcmDepositMetadata {
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xff; 20].into())),
-				channel_metadata: CcmChannelMetadata {
+				channel_metadata: CcmChannelMetadataUnchecked {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 0u128,
 					ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
@@ -516,7 +793,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposit: Box::new(vault_swap_deposit_witness(Some(ccm))),
+					deposit: Box::new(vault_swap_deposit_witness(ZION, Some(ccm))),
 				},
 			));
 			// Setting the current agg key will invalidate the CCM.
@@ -714,7 +991,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			let ccm = CcmDepositMetadata {
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xff; 20].into())),
-				channel_metadata: CcmChannelMetadata {
+				channel_metadata: CcmChannelMetadataUnchecked {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 1_000_000_000u128,
 					ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
@@ -733,7 +1010,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_swap_request {
 					block_height: 0,
-					deposit: Box::new(vault_swap_deposit_witness(Some(ccm))),
+					deposit: Box::new(vault_swap_deposit_witness(ZION, Some(ccm))),
 				}
 			));
 
@@ -790,5 +1067,97 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			assert!(!pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::contains_key(ccm_broadcast_id));
 			assert!(!pallet_cf_broadcast::TransactionOutIdToBroadcastId::<Runtime, SolanaInstance>::iter_values().any(|(broadcast_id, _)|broadcast_id == ccm_broadcast_id));
 			assert!(!pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::contains_key(ccm_broadcast_id));
+		});
+}
+
+#[test]
+fn invalid_alt_triggers_refund_transfer() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			setup_sol_environments();
+
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_ok!(RuntimeCall::SolanaVault(
+				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
+			)
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+			testnet.move_to_the_next_epoch();
+
+			let destination_address = SolAddress([0xcf; 32]);
+			let alt_0 = SolAddress([0xF0; 32]);
+			let alt_1 = SolAddress([0xF1; 32]);
+
+			// Directly insert a CCM to be ingressed.
+			assert_ok!(SolanaIngressEgress::schedule_egress(
+				SolAsset::Sol,
+				1_000_000_000_000u64,
+				destination_address,
+				Some(CcmDepositMetadataChecked {
+					channel_metadata: CcmChannelMetadata {
+						message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
+						gas_budget: 1_000_000_000u128,
+						ccm_additional_data: DecodedCcmAdditionalData::Solana(
+							VersionedSolanaCcmAdditionalData::V1 {
+								ccm_accounts: SolCcmAccounts {
+									cf_receiver: SolCcmAddress {
+										pubkey: SolPubkey([0x10; 32]),
+										is_writable: true,
+									},
+									additional_accounts: vec![SolCcmAddress {
+										pubkey: SolPubkey([0x01; 32]),
+										is_writable: false,
+									}],
+									fallback_address: FALLBACK_ADDRESS.into(),
+								},
+								alts: vec![alt_0, alt_1],
+							},
+						),
+					},
+					source_chain: ForeignChain::Ethereum,
+					source_address: None,
+				}),
+			));
+
+			testnet.move_forward_blocks(1);
+
+			vote_for_alt_election(13, AltWitnessingConsensusResult::Invalid);
+
+			// Let the election come to consensus.
+			testnet.move_forward_blocks(1);
+
+			// When CCM transaction building failed, fallback to refund the asset via Transfer
+			// instead.
+			assert!(assert_events_match!(
+				Runtime,
+				RuntimeEvent::SolanaIngressEgress(
+					pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::InvalidCcmRefunded {
+						asset,
+						destination_address,
+						..
+					}) if asset == SolAsset::Sol && destination_address == FALLBACK_ADDRESS => true
+			));
+
+			// Give enough time to schedule, egress and threshold-sign the transfer transaction.
+			testnet.move_forward_blocks(4);
+			let broadcast_id =
+				pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
+
+			// Transfer transaction should be created against the refund address.
+			assert!(pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get()
+				.contains(&broadcast_id));
+			assert!(matches!(
+				pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::get(broadcast_id),
+				Some(SolanaApi { call_type: SolanaTransactionType::Transfer, .. })
+			));
 		});
 }

@@ -17,7 +17,9 @@
 use cf_amm::common::{PoolPairsMap, Side};
 /// cf-rpc-types module defines all RPC related types
 /// Common types are defined in here
-use cf_chains::{address::ToHumanreadableAddress, Chain};
+use cf_chains::{
+	address::AddressString, address::ToHumanreadableAddress, Chain, ChannelRefundParameters,
+};
 use cf_primitives::{AccountId, Asset, FlipBalance, Tick};
 use frame_support::{Deserialize, Serialize};
 use std::ops::Range;
@@ -67,8 +69,10 @@ pub enum OrderFilled {
 		quote_asset: Asset,
 		id: U256,
 		range: Range<Tick>,
-		sold_amounts: PoolPairsMap<U256>,
+		bought_amounts: PoolPairsMap<U256>,
 		fees: PoolPairsMap<U256>,
 		liquidity: U256,
 	},
 }
+
+pub type RefundParametersRpc = ChannelRefundParameters<AddressString>;

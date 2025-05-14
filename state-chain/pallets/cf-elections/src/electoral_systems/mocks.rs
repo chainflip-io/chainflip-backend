@@ -392,21 +392,21 @@ macro_rules! single_check_new {
 /// ```
 #[macro_export]
 macro_rules! register_checks {
-    (
-        $system:ident {
-            $(
-                $check_name:ident($arg_1:ident, $arg_2:ident $(, $param:ident : $param_type:ty)? ) $check_body:block
-            ),* $(,)?
-        }
-    ) => {
-        impl Check<$system> {
-            $(
-                pub fn $check_name($($param: $param_type)?) -> Box<dyn $crate::electoral_systems::mocks::Checkable<$system> + 'static> {
+	(
+		$system:ident {
+			$(
+				$check_name:ident($arg_1:ident, $arg_2:ident $(, $param:ident : $param_type:ty)? ) $check_body:block
+			),* $(,)?
+		}
+	) => {
+		impl Check<$system> {
+			$(
+				pub fn $check_name($($param: $param_type)?) -> Box<dyn $crate::electoral_systems::mocks::Checkable<$system> + 'static> {
 					Box::new($crate::single_check_new!(&$crate::electoral_systems::mocks::ElectoralSystemState<$system>, $arg_1, $arg_2, $check_body $(, $param)? ))
 				}
-            )*
-        }
-    };
+			)*
+		}
+	};
 	(
 		$(
 			#[extra_constraints: $( $t:ty : $tc:path ),+]#

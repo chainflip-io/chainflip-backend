@@ -27,7 +27,7 @@ use cf_amm::{
 use cf_chains::{
 	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	eth::Address as EthereumAddress,
-	CcmChannelMetadata, Chain, VaultSwapExtraParametersRpc, MAX_CCM_MSG_LENGTH,
+	CcmChannelMetadataUnchecked, Chain, MAX_CCM_MSG_LENGTH,
 };
 use cf_node_client::events_decoder;
 use cf_primitives::{
@@ -35,7 +35,13 @@ use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
 	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
-use cf_rpc_apis::{call_error, internal_error, CfErrorCode, OrderFills, RpcApiError, RpcResult};
+use cf_rpc_apis::{
+	broker::{
+		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc,
+		VaultSwapExtraParametersRpc, VaultSwapInputRpc,
+	},
+	call_error, internal_error, CfErrorCode, OrderFills, RpcApiError, RpcResult,
+};
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
@@ -72,11 +78,12 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		ChannelActionType, CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		NetworkFees, RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo,
+		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+		VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash, NetworkFee, SolanaInstance,
+	Hash, SolanaInstance,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
@@ -222,6 +229,7 @@ pub enum RpcAccountInfo {
 		bound_redeem_address: Option<EthereumAddress>,
 		apy_bp: Option<u32>,
 		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
+		estimated_redeemable_balance: NumberOrHex,
 	},
 }
 
@@ -291,6 +299,7 @@ impl RpcAccountInfo {
 				.into_iter()
 				.map(|(address, balance)| (address, balance.into()))
 				.collect(),
+			estimated_redeemable_balance: info.estimated_redeemable_balance.into(),
 		}
 	}
 }
@@ -310,6 +319,7 @@ pub struct RpcAccountInfoV2 {
 	pub bound_redeem_address: Option<EthereumAddress>,
 	pub apy_bp: Option<u32>,
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
+	pub estimated_redeemable_balance: NumberOrHex,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -441,11 +451,13 @@ pub struct FundingEnvironment {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SwappingEnvironment {
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
+	#[deprecated(note = "Use network_fees field instead")]
 	network_fee_hundredth_pips: Permill,
 	swap_retry_delay_blocks: u32,
 	max_swap_retry_duration_blocks: u32,
 	max_swap_request_duration_blocks: u32,
 	minimum_chunk_size: any::AssetMap<NumberOrHex>,
+	network_fees: NetworkFees,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -663,6 +675,7 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfo>;
+	#[deprecated(note = "Please use `cf_account_info` instead.")]
 	#[method(name = "account_info_v2")]
 	fn cf_account_info_v2(
 		&self,
@@ -948,12 +961,20 @@ pub trait CustomApi {
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		extra_parameters: VaultSwapExtraParametersRpc,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapDetails<AddressString>>;
+
+	#[method(name = "decode_vault_swap_parameter")]
+	fn cf_decode_vault_swap_parameter(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		vault_swap: VaultSwapDetails<AddressString>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultSwapInputRpc>;
 
 	#[method(name = "get_open_deposit_channels")]
 	fn cf_get_open_deposit_channels(
@@ -1357,6 +1378,7 @@ where
 							.unwrap_or_default();
 
 						let info = if api_version < 3 {
+							#[allow(deprecated)]
 							api.cf_broker_info_before_version_3(hash, account_id.clone())?.into()
 						} else {
 							api.cf_broker_info(hash, account_id.clone())?
@@ -1402,6 +1424,7 @@ where
 			bound_redeem_address: account_info.bound_redeem_address,
 			apy_bp: account_info.apy_bp,
 			restricted_balances: account_info.restricted_balances,
+			estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 		})
 	}
 
@@ -1554,13 +1577,14 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
-				network_fee_hundredth_pips: NetworkFee::get(),
+				network_fee_hundredth_pips: api.cf_network_fees(hash)?.regular_network_fee.rate,
 				swap_retry_delay_blocks: api.cf_swap_retry_delay_blocks(hash)?,
 				max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
 				minimum_chunk_size: any::AssetMap::try_from_fn(|asset| {
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
 				})?,
+				network_fees: api.cf_network_fees(hash)?,
 			})
 		})
 	}
@@ -1822,7 +1846,7 @@ where
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		extra_parameters: VaultSwapExtraParametersRpc,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
@@ -1837,7 +1861,7 @@ where
 					destination_asset,
 					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
 					broker_commission,
-					extra_parameters.try_into_encoded_params(source_asset.into())?,
+					try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
 					channel_metadata,
 					boost_fee.unwrap_or_default(),
 					affiliate_fees.unwrap_or_default(),
@@ -1845,6 +1869,23 @@ where
 				)??
 				.map_btc_address(Into::into),
 			)
+		})
+	}
+
+	fn cf_decode_vault_swap_parameter(
+		&self,
+		broker: AccountId32,
+		vault_swap: VaultSwapDetails<AddressString>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultSwapInputRpc> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			Ok::<_, CfApiError>(vault_swap_input_encoded_to_rpc(
+				api.cf_decode_vault_swap_parameter(
+					hash,
+					broker,
+					vault_swap.map_btc_address(Into::into),
+				)??,
+			))
 		})
 	}
 
@@ -1915,6 +1956,7 @@ mod test {
 	use std::collections::BTreeSet;
 
 	use cf_chains::address::EncodedAddress;
+	use pallet_cf_swapping::FeeRateAndMinimum;
 
 	use super::*;
 	use cf_chains::{assets::sol, btc::ScriptPubkey};
@@ -2062,6 +2104,7 @@ mod test {
 				H160::from([1; 20]),
 				FLIPPERINOS_PER_FLIP,
 			)]),
+			estimated_redeemable_balance: 0,
 		});
 
 		insta::assert_snapshot!(serde_json::to_value(validator).unwrap());
@@ -2100,6 +2143,16 @@ mod test {
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: 101112_u32.into() },
 					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
+				},
+				network_fees: NetworkFees {
+					regular_network_fee: FeeRateAndMinimum {
+						rate: Permill::from_percent(1),
+						minimum: 123u32.into(),
+					},
+					internal_swap_network_fee: FeeRateAndMinimum {
+						rate: Permill::from_percent(2),
+						minimum: 456u32.into(),
+					},
 				},
 			},
 			ingress_egress: IngressEgressEnvironment {

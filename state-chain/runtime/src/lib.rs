@@ -46,7 +46,7 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+		NetworkFees, RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
 		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
 		VaultAddresses, VaultSwapDetails,
 	},
@@ -65,18 +65,16 @@ use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
-	ccm_checker::{
-		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
-		DecodedCcmAdditionalData,
-	},
+	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot,
-	Solana, TransactionBuilder, VaultSwapExtraParameters, VaultSwapExtraParametersEncoded,
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, DefaultRetryPolicy, ForeignChain,
+	Polkadot, Solana, TransactionBuilder, VaultSwapExtraParameters,
+	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -99,7 +97,8 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{
-	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, Swap,
+	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, NetworkFeeTracker,
+	Swap,
 };
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use runtime_apis::ChainAccounts;
@@ -129,7 +128,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::{offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
-use pallet_cf_funding::MinimumFunding;
+use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_pools::{PoolInfo, PoolOrders};
 use pallet_grandpa::AuthorityId as GrandpaId;
 use pallet_session::historical as session_historical;
@@ -173,8 +172,9 @@ pub use pallet_cf_validator::SetSizeParameters;
 use chainflip::{
 	boost_api::IngressEgressBoostApi, epoch_transition::ChainflipEpochTransitions,
 	multi_vault_activator::MultiVaultActivator, BroadcastReadyProvider, BtcEnvironment,
-	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment, HubEnvironment,
-	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
+	CfCcmAdditionalDataHandler, ChainAddressConverter, ChainflipHeartbeat, DotEnvironment,
+	EvmEnvironment, HubEnvironment, MinimumDepositProvider, SolEnvironment, SolanaLimit,
+	TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -317,7 +317,6 @@ impl pallet_cf_environment::Config for Runtime {
 }
 
 parameter_types! {
-	pub const NetworkFee: Permill = Permill::from_perthousand(1);
 	pub const ScreeningBrokerId: AccountId = AccountId::new(
 		// Screening Account: `cFHvfaLQ8prf25JCxY2tzGR8WuNiCLjkALzy5J3H8jbo3Brok`
 		hex_literal::hex!("026de9d675fae14536ce79a478f4d16215571984b8bad180463fa27ea78d9c4f")
@@ -335,8 +334,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
-	type CcmValidityChecker = CcmValidityChecker;
-	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
@@ -430,11 +427,11 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -459,11 +456,11 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -488,11 +485,11 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -517,11 +514,11 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -546,11 +543,11 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -575,11 +572,11 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
-	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
@@ -1589,6 +1586,7 @@ impl_runtime_apis! {
 			AssetBalances::free_balances(&account_id)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
+			LiquidityPools::sweep(&account_id).unwrap();
 			let free_balances = AssetBalances::free_balances(&account_id);
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 			let boost_pools_balances = IngressEgressBoostApi::boost_pool_account_balances(&account_id);
@@ -1608,6 +1606,12 @@ impl_runtime_apis! {
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
+			let calculate_redeem_amount = pallet_cf_funding::Pallet::<Runtime>::calculate_redeem_amount(
+				account_id,
+				&restricted_balances,
+				RedemptionAmount::Max,
+				None,
+			);
 			ValidatorInfo {
 				balance: account_info.total(),
 				bond: account_info.bond(),
@@ -1622,6 +1626,7 @@ impl_runtime_apis! {
 				bound_redeem_address,
 				apy_bp,
 				restricted_balances,
+				estimated_redeemable_balance: calculate_redeem_amount.redeem_amount,
 			}
 		}
 
@@ -1804,7 +1809,9 @@ impl_runtime_apis! {
 			let mut fees_vec = vec![];
 
 			if include_fee(FeeTypes::Network) {
-				fees_vec.push(FeeType::NetworkFee { min_fee_enforced: true });
+				fees_vec.push(FeeType::NetworkFee(NetworkFeeTracker::new(
+					pallet_cf_swapping::NetworkFee::<Runtime>::get(),
+				)));
 			}
 
 			if broker_commission > 0 {
@@ -1818,35 +1825,12 @@ impl_runtime_apis! {
 				));
 			}
 
-
-			// Initialize a dummy swap request so that the network fee calculation can be done when simulating the swap.
-			use cf_traits::SwapRequestHandler;
-			let swap_request_id = Swapping::init_swap_request(
-				input_asset,
-				amount_per_chunk,
-				output_asset,
-				cf_traits::SwapRequestType::Regular {
-					output_action: cf_traits::SwapOutputAction::CreditOnChain {
-						account_id: AccountId::new([0; 32]),
-					},
-				},
-				vec![Beneficiary {
-					account: AccountId::new([0xbb; 32]),
-					bps: broker_commission,
-				}]
-				.try_into()
-				.expect("Beneficiary with a length of 1 must be within length bound."),
-				None,
-				None,
-				cf_chains::SwapOrigin::OnChainAccount(AccountId::new([0xbb; 32])),
-			);
-
 			// Simulate the swap
 			let swap_output_per_chunk = Swapping::try_execute_without_violations(
 				vec![
 					Swap::new(
 						Default::default(), // Swap id
-						swap_request_id,
+						Default::default(), // Swap request id
 						input_asset,
 						output_asset,
 						amount_per_chunk,
@@ -2287,7 +2271,7 @@ impl_runtime_apis! {
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
 			extra_parameters: VaultSwapExtraParametersEncoded,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
@@ -2332,7 +2316,7 @@ impl_runtime_apis! {
 			})?;
 
 			// Validate CCM.
-			if let Some(ccm) = channel_metadata.as_ref() {
+			if let Some(channel_metadata) = channel_metadata.as_ref() {
 				if source_chain == ForeignChain::Bitcoin {
 					return Err(DispatchErrorWithMessage::from("Vault swaps with CCM are not supported for the Bitcoin Chain"));
 				}
@@ -2341,7 +2325,11 @@ impl_runtime_apis! {
 				}
 
 				// Ensure CCM message is valid
-				match CcmValidityChecker::check_and_decode(ccm, destination_asset, destination_address.clone())
+				match channel_metadata.clone().to_checked(
+					destination_asset,
+					ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+						.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
+				).map(|checked| checked.ccm_additional_data)
 				{
 					Ok(DecodedCcmAdditionalData::Solana(decoded)) => {
 						let ccm_accounts = decoded.ccm_accounts();
@@ -2417,7 +2405,7 @@ impl_runtime_apis! {
 					ForeignChain::Solana,
 					VaultSwapExtraParameters::Solana {
 						from,
-						event_data_account,
+						seed,
 						input_amount,
 						refund_parameters,
 						from_token_account,
@@ -2435,11 +2423,38 @@ impl_runtime_apis! {
 					affiliate_fees,
 					dca_parameters,
 					from,
-					event_data_account,
+					seed,
 					from_token_account,
 				),
 				_ => Err(DispatchErrorWithMessage::from(
 					"Incompatible or unsupported source_asset and extra_parameters"
+				)),
+			}
+		}
+
+		fn cf_decode_vault_swap_parameter(
+			broker: AccountId,
+			vault_swap: VaultSwapDetails<String>,
+		) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage> {
+			match vault_swap {
+				VaultSwapDetails::Bitcoin {
+					nulldata_payload,
+					deposit_address: _,
+				} => {
+					crate::chainflip::vault_swaps::decode_bitcoin_vault_swap(
+						broker,
+						nulldata_payload,
+					)
+				},
+				VaultSwapDetails::Solana {
+					instruction,
+				} => {
+					crate::chainflip::vault_swaps::decode_solana_vault_swap(
+						instruction.into(),
+					)
+				},
+				_ => Err(DispatchErrorWithMessage::from(
+					"Decoding Vault Swap only supports Bitcoin and Solana"
 				)),
 			}
 		}
@@ -2591,6 +2606,8 @@ impl_runtime_apis! {
 
 			fn to_strategy_info(lp_id: AccountId, strategy_id: AccountId, strategy: Strategy) -> TradingStrategyInfo<AssetAmount> {
 
+				LiquidityPools::sweep(&strategy_id).unwrap();
+
 				let free_balances = AssetBalances::free_balances(&strategy_id);
 				let open_order_balances = LiquidityPools::open_order_balances(&strategy_id);
 
@@ -2624,6 +2641,13 @@ impl_runtime_apis! {
 					.map(|(asset, balance)| (asset, Some(balance)))),
 				minimum_added_funds_amount: AssetMap::from_iter(pallet_cf_trading_strategy::MinimumAddedFundsToStrategy::<Runtime>::get().into_iter()
 					.map(|(asset, balance)| (asset, Some(balance)))),
+			}
+		}
+
+		fn cf_network_fees() -> NetworkFees{
+			NetworkFees {
+				regular_network_fee: pallet_cf_swapping::NetworkFee::<Runtime>::get(),
+				internal_swap_network_fee: pallet_cf_swapping::InternalSwapNetworkFee::<Runtime>::get(),
 			}
 		}
 	}
