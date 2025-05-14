@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{RejectCall, SetGovKeyWithAggKeyError};
+use crate::{ccm_checker::VersionedSolanaCcmAdditionalData, RejectCall, SetGovKeyWithAggKeyError};
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::marker::PhantomData;
