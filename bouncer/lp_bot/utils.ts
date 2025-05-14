@@ -31,7 +31,7 @@ class Order {
     public side: Side,
     public amount: number,
     public price: number,
-  ) { }
+  ) {}
 }
 
 /**

@@ -2,7 +2,7 @@
 import { initializeLiquidityProviderBot } from './lp_bot';
 import { globalLogger as logger } from '../shared/utils/logger';
 
-const main = async () => {
+const main = () => {
   const chain = 'Bitcoin';
   const asset = 'BTC';
 
