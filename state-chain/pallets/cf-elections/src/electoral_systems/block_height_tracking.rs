@@ -72,6 +72,26 @@ pub enum ChainProgress<T: ChainTypes> {
 	None,
 }
 
+impl<T: ChainTypes> ChainProgress<T> {
+	pub fn new_range(
+		map: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+		range: RangeInclusive<T::ChainBlockNumber>,
+	) -> Self {
+		ChainProgress::Range(map, range)
+	}
+
+	pub fn new_reorg(
+		map: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+		range: RangeInclusive<T::ChainBlockNumber>,
+	) -> Self {
+		ChainProgress::Reorg(map, range)
+	}
+
+	pub fn none() -> Self {
+		ChainProgress::None
+	}
+}
+
 impl<T: ChainTypes> Validate for ChainProgress<T> {
 	type Error = &'static str;
 

@@ -9,7 +9,7 @@ use crate::electoral_systems::state_machine::core::{Hook, IndexedValidate};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::MaxEncodedLen;
-use scale_info::TypeInfo;
+use scale_info::{prelude::format, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
 
