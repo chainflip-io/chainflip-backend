@@ -485,6 +485,18 @@ fn test_dispatch_at_validation() {
 			),
 			Error::<Test>::InvalidDispatchAt
 		);
+
+		assert_ok!(LiquidityPools::update_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Flip,
+			STABLE_ASSET,
+			Side::Buy,
+			0,
+			Some(0),
+			IncreaseOrDecrease::Decrease(55),
+			// Valid dispatch at
+			Some(CURRENT_BLOCK + (SCHEDULE_UPDATE_LIMIT_BLOCKS as u64))
+		));
 	});
 }
 
