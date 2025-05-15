@@ -1402,7 +1402,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV1_10,
-    migrations::btc_elections_migrations::Migration,
+	migrations::btc_elections_migrations::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1457,40 +1457,8 @@ impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
 		Default::default()
 	}
 }
-macro_rules! instanced_migrations {
-	(
-		module: $module:ident,
-		migration: $migration:ty,
-		from: $from:literal,
-		to: $to:literal,
-		include_instances: [$( $include:ident ),+ $(,)?],
-		exclude_instances: [$( $exclude:ident ),* $(,)?] $(,)?
-	) => {
-		(
-			$(
-				VersionedMigration<
-					$from,
-					$to,
-					$migration,
-					$module::Pallet<Runtime, $include>,
-					DbWeight,
-				>,
-			)+
-			$(
-				VersionedMigration<
-					$from,
-					$to,
-					NoopMigration,
-					$module::Pallet<Runtime, $exclude>,
-					DbWeight,
-				>,
-			)*
-		)
-	}
-}
 
-type MigrationsForV1_10 = (
-);
+type MigrationsForV1_10 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
