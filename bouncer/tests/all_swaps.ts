@@ -16,7 +16,7 @@ import {
 } from '../shared/utils';
 import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
 import { TestContext } from '../shared/utils/test_context';
-import { concurrentTest, serialTest } from '../shared/utils/vitest';
+import { manuallyAddTestToList, concurrentTest, serialTest } from '../shared/utils/vitest';
 
 export async function initiateSwap(
   testContext: TestContext,
@@ -119,6 +119,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
   appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
 
   describe('AllSwaps', () => {
+    manuallyAddTestToList('AllSwaps', 'testAllSwaps');
     serialTest(
       'OpenPrivateBtcChannel',
       async (context) => {
@@ -126,10 +127,10 @@ export function testAllSwaps(timeoutPerSwap: number) {
         context.logger.info(`🧪 Private broker channel opened`);
       },
       120,
-      'AllSwaps',
+      true,
     );
     for (const swap of allSwaps) {
-      concurrentTest(swap.name, swap.test, timeoutPerSwap, 'AllSwaps');
+      concurrentTest(swap.name, swap.test, timeoutPerSwap, true);
     }
   });
 }

@@ -4,10 +4,10 @@ import { TestContext } from './test_context';
 import { testInfoFile } from '../utils';
 
 // Write the test name and function name to a file to be used by the `run_test.ts` command
-function writeTestInfoFile(name: string, testFunction: (context: TestContext) => Promise<void>) {
+function writeTestInfoFile(name: string, functionName: string) {
   try {
     const existingContent = existsSync(testInfoFile) ? readFileSync(testInfoFile, 'utf-8') : '';
-    const newEntry = `${name},${testFunction.name}\n`;
+    const newEntry = `${name},${functionName}\n`;
     if (!existingContent.includes(newEntry)) {
       writeFileSync(testInfoFile, existingContent + newEntry);
     }
@@ -15,6 +15,10 @@ function writeTestInfoFile(name: string, testFunction: (context: TestContext) =>
     // This file is not needed for tests to run, so we just log and continue
     console.log('Unable to write test info', e);
   }
+}
+// Associate a test name with a function name to be used by the `run_test.ts` command.
+export function manuallyAddTestToList(name: string, functionName: string) {
+  writeTestInfoFile(name, functionName);
 }
 
 // Create a new SwapContext for each test
@@ -44,7 +48,8 @@ export function concurrentTest(
   name: string,
   testFunction: (context: TestContext) => Promise<void>,
   timeoutSeconds: number,
-  alternativeName?: string,
+  // Only affects the being able to run via the`run_test` command.
+  excludeFromList: boolean = false,
 ) {
   it.concurrent<{ testContext: TestContext }>(
     name,
@@ -52,13 +57,16 @@ export function concurrentTest(
     timeoutSeconds * 1000,
   );
 
-  writeTestInfoFile(alternativeName ?? name, testFunction);
+  if (!excludeFromList) {
+    writeTestInfoFile(name, testFunction.name);
+  }
 }
 export function serialTest(
   name: string,
   testFunction: (context: TestContext) => Promise<void>,
   timeoutSeconds: number,
-  alternativeName?: string,
+  // Only affects the being able to run via the`run_test` command.
+  excludeFromList: boolean = false,
 ) {
   it.sequential<{ testContext: TestContext }>(
     name,
@@ -66,5 +74,7 @@ export function serialTest(
     timeoutSeconds * 1000,
   );
 
-  writeTestInfoFile(alternativeName ?? name, testFunction);
+  if (!excludeFromList) {
+    writeTestInfoFile(name, testFunction.name);
+  }
 }
