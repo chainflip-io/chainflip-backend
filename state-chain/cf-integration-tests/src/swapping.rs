@@ -325,6 +325,8 @@ fn set_limit_order(
 		id,
 		tick,
 		sell_amount,
+		None, // Dispatch now
+		None, // No expiration
 	));
 	let new_sell_balance =
 		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, sell_asset);

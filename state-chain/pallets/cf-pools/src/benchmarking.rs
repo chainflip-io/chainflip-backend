@@ -74,6 +74,8 @@ mod benchmarks {
 				i,
 				Some(0),
 				1_000,
+				None,
+				None,
 			));
 		}
 	}
@@ -179,6 +181,7 @@ mod benchmarks {
 			0,
 			Some(100),
 			IncreaseOrDecrease::Increase(1_000_000),
+			None,
 		);
 	}
 
@@ -206,6 +209,8 @@ mod benchmarks {
 			0,
 			Some(100),
 			1_000,
+			None,
+			Some(BlockNumberFor::<T>::from(100u32)),
 		);
 	}
 
@@ -229,6 +234,8 @@ mod benchmarks {
 			0,
 			Some(0),
 			10_000,
+			None,
+			None,
 		));
 		assert_ok!(Pallet::<T>::set_limit_order(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -238,6 +245,8 @@ mod benchmarks {
 			1,
 			Some(0),
 			10_000,
+			None,
+			None,
 		));
 		assert_ok!(Pallet::<T>::swap_single_leg(STABLE_ASSET, Asset::Eth, 1_000));
 		let fee = 1_000;
@@ -260,35 +269,6 @@ mod benchmarks {
 			},
 			Err(_) => panic!("Pool not found"),
 		}
-	}
-
-	#[benchmark]
-	fn schedule_limit_order_update() {
-		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(
-			T::EnsureGovernance::try_successful_origin().unwrap(),
-			Asset::Eth,
-			Asset::Usdc,
-			0,
-			price_at_tick(0).unwrap()
-		));
-		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
-		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
-		#[extrinsic_call]
-		schedule_limit_order_update(
-			RawOrigin::Signed(caller.clone()),
-			Box::new(Call::<T>::set_limit_order {
-				base_asset: Asset::Eth,
-				quote_asset: Asset::Usdc,
-				side: Side::Sell,
-				id: 0,
-				option_tick: Some(0),
-				sell_amount: 100,
-			}),
-			BlockNumberFor::<T>::from(5u32),
-		);
-
-		assert!(!ScheduledLimitOrderUpdates::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
 	}
 
 	#[benchmark]

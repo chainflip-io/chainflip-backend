@@ -54,7 +54,6 @@ pub trait WeightInfo {
 	fn update_limit_order() -> Weight;
 	fn set_limit_order() -> Weight;
 	fn set_pool_fees() -> Weight;
-	fn schedule_limit_order_update() -> Weight;
 	fn set_maximum_price_impact(n: u32, ) -> Weight;
 	fn cancel_orders_batch(n: u32, ) -> Weight;
 }
@@ -171,19 +170,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(55_000_000, 7943)
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::ScheduledLimitOrderUpdates` (r:1 w:1)
-	/// Proof: `LiquidityPools::ScheduledLimitOrderUpdates` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn schedule_limit_order_update() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `579`
-		//  Estimated: `4044`
-		// Minimum execution time: 14_000_000 picoseconds.
-		Weight::from_parts(15_000_000, 4044)
-			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `LiquidityPools::MaximumPriceImpact` (r:0 w:6)
 	/// Proof: `LiquidityPools::MaximumPriceImpact` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -334,19 +320,6 @@ impl WeightInfo for () {
 		Weight::from_parts(55_000_000, 7943)
 			.saturating_add(ParityDbWeight::get().reads(5_u64))
 			.saturating_add(ParityDbWeight::get().writes(4_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::ScheduledLimitOrderUpdates` (r:1 w:1)
-	/// Proof: `LiquidityPools::ScheduledLimitOrderUpdates` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn schedule_limit_order_update() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `579`
-		//  Estimated: `4044`
-		// Minimum execution time: 14_000_000 picoseconds.
-		Weight::from_parts(15_000_000, 4044)
-			.saturating_add(ParityDbWeight::get().reads(2_u64))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `LiquidityPools::MaximumPriceImpact` (r:0 w:6)
 	/// Proof: `LiquidityPools::MaximumPriceImpact` (`max_values`: None, `max_size`: None, mode: `Measured`)

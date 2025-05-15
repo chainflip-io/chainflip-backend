@@ -390,7 +390,7 @@ pub enum MintError<E> {
 	/// The ratio of assets added to the position must match the required ratio of assets for the
 	/// given tick range and current price of the pool, but there are no amounts between the
 	/// specified maximum and minimum that could match that ratio
-	AssetRatioUnachieveable,
+	AssetRatioUnachievable,
 	/// Callback failed
 	CallbackFailed(E),
 }
@@ -409,7 +409,7 @@ pub enum BurnError {
 	/// The ratio of assets removed from the position must match the ratio of assets in the
 	/// position, so that the ratio of assets in the position is maintained, but there are no
 	/// amounts between the specified maximum and minimum that could match that ratio
-	AssetRatioUnachieveable,
+	AssetRatioUnachievable,
 }
 
 #[derive(Debug)]
@@ -578,7 +578,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 		let minted_liquidity = self
 			.size_as_liquidity(lower_tick, upper_tick, size)
-			.ok_or(PositionError::Other(MintError::AssetRatioUnachieveable))
+			.ok_or(PositionError::Other(MintError::AssetRatioUnachievable))
 			.and_then(|liquidity| {
 				if liquidity >
 					MAX_TICK_GROSS_LIQUIDITY -
@@ -688,7 +688,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 			let burnt_liquidity = self
 				.size_as_liquidity(lower_tick, upper_tick, size)
-				.ok_or(PositionError::Other(BurnError::AssetRatioUnachieveable))
+				.ok_or(PositionError::Other(BurnError::AssetRatioUnachievable))
 				.map(|liquidity| core::cmp::min(position.liquidity, liquidity))?;
 
 			let mut lower_delta = self.liquidity_map.get(&lower_tick).unwrap().clone();
