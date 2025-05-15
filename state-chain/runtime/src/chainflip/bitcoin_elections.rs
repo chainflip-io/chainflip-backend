@@ -172,7 +172,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesDepositChannel;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
-		type ElectionTrackerEventHook = Self;
+		type ElectionTrackerEventHook = EmptyHook;
 	}
 
 	/// Associating the ES related types to the struct
@@ -230,10 +230,6 @@ impls! {
 		}
 	}
 
-	Hook<HookTypeFor<Self, ElectionTrackerEventHook>> {
-		fn run(&mut self, _: <HookTypeFor<TypesFor<BitcoinDepositChannelWitnessing>, ElectionTrackerEventHook> as HookType>::Input) -> () {}
-	}
-
 }
 /// Generating the state machine-based electoral system
 pub type BitcoinDepositChannelWitnessingES =
@@ -270,7 +266,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesVaultDeposit;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
-		type ElectionTrackerEventHook = Self;
+		type ElectionTrackerEventHook = EmptyHook;
 	}
 
 	/// Associating the ES related types to the struct
@@ -335,10 +331,6 @@ impls! {
 		}
 	}
 
-	Hook<HookTypeFor<Self, ElectionTrackerEventHook>> {
-		fn run(&mut self, _: <HookTypeFor<TypesFor<BitcoinVaultDepositWitnessing>, ElectionTrackerEventHook> as HookType>::Input) -> () {}
-	}
-
 }
 
 /// Generating the state machine-based electoral system
@@ -377,7 +369,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesEgressWitnessing;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
-		type ElectionTrackerEventHook = Self;
+		type ElectionTrackerEventHook = EmptyHook;
 	}
 
 	/// Associating the ES related types to the struct
@@ -432,10 +424,6 @@ impls! {
 				.map(|(tx_id, _)| tx_id)
 				.collect::<Vec<_>>()
 		}
-	}
-
-	Hook<HookTypeFor<Self, ElectionTrackerEventHook>> {
-		fn run(&mut self, _: <HookTypeFor<TypesFor<BitcoinEgressWitnessing>, ElectionTrackerEventHook> as HookType>::Input) -> () {}
 	}
 
 }
@@ -532,9 +520,9 @@ impl
 			.clone()
 			.into_iter()
 			.map(|chain_progress| match chain_progress {
-				ChainProgress::Range(map, range) => ChainProgress::new_range(map, range),
-				ChainProgress::Reorg(map, range) => ChainProgress::new_reorg(map, range),
-				ChainProgress::None => ChainProgress::none(),
+				ChainProgress::Range(map, range) => ChainProgress::Range(map, range),
+				ChainProgress::Reorg(map, range) => ChainProgress::Reorg(map, range),
+				ChainProgress::None => ChainProgress::None,
 			})
 			.collect();
 		BitcoinDepositChannelWitnessingES::on_finalize::<
@@ -549,9 +537,9 @@ impl
 			.clone()
 			.into_iter()
 			.map(|chain_progress| match chain_progress {
-				ChainProgress::Range(map, range) => ChainProgress::new_range(map, range),
-				ChainProgress::Reorg(map, range) => ChainProgress::new_reorg(map, range),
-				ChainProgress::None => ChainProgress::none(),
+				ChainProgress::Range(map, range) => ChainProgress::Range(map, range),
+				ChainProgress::Reorg(map, range) => ChainProgress::Reorg(map, range),
+				ChainProgress::None => ChainProgress::None,
 			})
 			.collect();
 		BitcoinVaultDepositWitnessingES::on_finalize::<
@@ -568,9 +556,9 @@ impl
 		let chain_progress_egresses = chain_progress
 			.into_iter()
 			.map(|chain_progress| match chain_progress {
-				ChainProgress::Range(map, range) => ChainProgress::new_range(map, range),
-				ChainProgress::Reorg(map, range) => ChainProgress::new_reorg(map, range),
-				ChainProgress::None => ChainProgress::none(),
+				ChainProgress::Range(map, range) => ChainProgress::Range(map, range),
+				ChainProgress::Reorg(map, range) => ChainProgress::Reorg(map, range),
+				ChainProgress::None => ChainProgress::None,
 			})
 			.collect();
 		BitcoinEgressWitnessingES::on_finalize::<

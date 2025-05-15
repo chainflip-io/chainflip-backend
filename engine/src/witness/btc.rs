@@ -198,7 +198,6 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 				},
 				BWElectionType::ByHash(hash) => {
 					let block = self.client.block(bitcoin::BlockHash::hash(hash.as_ref())).await?;
-					response_block_hash = Some(block.header.hash);
 					txs.extend(block.txdata);
 				},
 				BWElectionType::SafeBlockHeight => {
@@ -251,7 +250,6 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 				},
 				BWElectionType::ByHash(hash) => {
 					let block = self.client.block(bitcoin::BlockHash::hash(hash.as_ref())).await?;
-					response_block_hash = Some(block.header.hash);
 					txs.extend(block.txdata);
 				},
 				BWElectionType::SafeBlockHeight => {
@@ -300,7 +298,6 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 				},
 				BWElectionType::ByHash(hash) => {
 					let block = self.client.block(bitcoin::BlockHash::hash(hash.as_ref())).await?;
-					response_block_hash = Some(block.header.hash);
 					txs.extend(block.txdata);
 				},
 				BWElectionType::SafeBlockHeight => {
