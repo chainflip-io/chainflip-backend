@@ -1695,6 +1695,7 @@ mod internal_swaps {
 						account_id: LP_ACCOUNT,
 						asset: INPUT_ASSET,
 						amount: EXPECTED_REFUND_AMOUNT,
+						refund_fee: MIN_NETWORK_FEE,
 					}),
 					RuntimeEvent::Swapping(Event::CreditedOnChain {
 						swap_request_id: SWAP_REQUEST_ID,

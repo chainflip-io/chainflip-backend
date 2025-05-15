@@ -21,8 +21,8 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	AccountOrAddress, ChannelRefundParametersEncoded, RefundParametersExtended, SwapOrigin,
-	SwapRefundParameters,
+	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersEncoded,
+	RefundParametersExtended, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
@@ -89,6 +89,11 @@ impl<T: Config> Get<BlockNumberFor<T>> for DefaultSwapRetryDelay<T> {
 pub struct FeeTaken {
 	pub remaining_amount: AssetAmount,
 	pub fee: AssetAmount,
+}
+
+enum EgressType {
+	Regular { maybe_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>> },
+	Refund { refund_fee: AssetAmount },
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Copy, Clone)]
@@ -465,8 +470,7 @@ pub mod pallet {
 	use cf_amm::math::output_amount_ceil;
 	use cf_chains::{
 		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
-		CcmDepositMetadataChecked, Chain, RefundParametersExtended,
-		RefundParametersExtendedEncoded,
+		Chain, RefundParametersExtended, RefundParametersExtendedEncoded,
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
@@ -726,6 +730,7 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			egress_fee: (AssetAmount, Asset),
+			refund_fee: AssetAmount,
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
@@ -788,6 +793,7 @@ pub mod pallet {
 			account_id: T::AccountId,
 			asset: Asset,
 			amount: AssetAmount,
+			refund_fee: AssetAmount,
 		},
 		PalletConfigUpdated {
 			update: PalletConfigUpdate<T>,
@@ -1739,19 +1745,20 @@ pub mod pallet {
 					};
 
 					let total_input_remaining = swap.input_amount + *remaining_input_amount;
-					let amount_to_refund = match Self::take_refund_fee(
-						total_input_remaining,
-						request.input_asset,
-						matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
-					) {
-						Ok(remaining) => remaining,
-						Err(e) => {
-							log_or_panic!(
+					let FeeTaken { remaining_amount: amount_to_refund, fee: refund_fee } =
+						match Self::take_refund_fee(
+							total_input_remaining,
+							request.input_asset,
+							matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
+						) {
+							Ok(fee_taken) => fee_taken,
+							Err(e) => {
+								log_or_panic!(
 								"Failed to calculate refund fee for swap request {swap_request_id}: {e:?}"
 							);
-							total_input_remaining
-						},
-					};
+								FeeTaken { remaining_amount: total_input_remaining, fee: 0 }
+							},
+						};
 
 					if amount_to_refund > 0 {
 						match &refund_params.refund_destination {
@@ -1761,8 +1768,7 @@ pub mod pallet {
 									amount_to_refund,
 									request.input_asset,
 									address.clone(),
-									None, /* refunds don't use ccm parameters */
-									true, /* refund */
+									EgressType::Refund { refund_fee },
 								);
 							},
 							AccountOrAddress::InternalAccount(account_id) => {
@@ -1771,6 +1777,7 @@ pub mod pallet {
 									account_id: account_id.clone(),
 									asset: request.input_asset,
 									amount: amount_to_refund,
+									refund_fee,
 								});
 
 								T::BalanceApi::credit_account(
@@ -1792,8 +1799,9 @@ pub mod pallet {
 									*accumulated_output_amount,
 									request.output_asset,
 									output_address.clone(),
-									ccm_deposit_metadata.clone(),
-									false, /* refund */
+									EgressType::Regular {
+										maybe_ccm_metadata: ccm_deposit_metadata.clone(),
+									},
 								);
 							},
 							SwapOutputAction::CreditOnChain { account_id } => {
@@ -1887,8 +1895,9 @@ pub mod pallet {
 									dca_state.accumulated_output_amount,
 									swap.output_asset(),
 									output_address.clone(),
-									ccm_deposit_metadata.clone(),
-									false, /* refund */
+									EgressType::Regular {
+										maybe_ccm_metadata: ccm_deposit_metadata.clone(),
+									},
 								);
 							},
 							SwapOutputAction::CreditOnChain { account_id } => {
@@ -2141,50 +2150,56 @@ pub mod pallet {
 			amount: AssetAmount,
 			asset: Asset,
 			address: ForeignChainAddress,
-			maybe_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-			is_refund: bool,
+			egress_type: EgressType,
 		) {
-			let is_ccm_swap = maybe_ccm_metadata.is_some();
-
-			match T::EgressHandler::schedule_egress(asset, amount, address, maybe_ccm_metadata) {
-				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
-					if is_refund {
-						Self::deposit_event(Event::<T>::RefundEgressScheduled {
-							swap_request_id,
-							egress_id,
-							asset,
-							amount: egress_amount,
-							egress_fee: (fee_withheld, asset),
-						});
-					} else {
-						Self::deposit_event(Event::<T>::SwapEgressScheduled {
-							swap_request_id,
-							egress_id,
-							asset,
-							amount: egress_amount,
-							egress_fee: (fee_withheld, asset),
-						});
-					},
-				Err(err) => {
-					if is_ccm_swap {
-						log_or_panic!("CCM egress scheduling should never fail.");
-					}
-
-					if is_refund {
-						Self::deposit_event(Event::<T>::RefundEgressIgnored {
+			match egress_type {
+				EgressType::Refund { refund_fee } => {
+					match T::EgressHandler::schedule_egress(asset, amount, address, None) {
+						Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
+							Self::deposit_event(Event::<T>::RefundEgressScheduled {
+								swap_request_id,
+								egress_id,
+								asset,
+								amount: egress_amount,
+								egress_fee: (fee_withheld, asset),
+								refund_fee,
+							}),
+						Err(err) => Self::deposit_event(Event::<T>::RefundEgressIgnored {
 							swap_request_id,
 							asset,
 							amount,
 							reason: err.into(),
-						});
-					} else {
-						Self::deposit_event(Event::<T>::SwapEgressIgnored {
-							swap_request_id,
-							asset,
-							amount,
-							reason: err.into(),
-						});
-					}
+						}),
+					};
+				},
+				EgressType::Regular { maybe_ccm_metadata } => {
+					let is_ccm = maybe_ccm_metadata.is_some();
+					match T::EgressHandler::schedule_egress(
+						asset,
+						amount,
+						address,
+						maybe_ccm_metadata,
+					) {
+						Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
+							Self::deposit_event(Event::<T>::SwapEgressScheduled {
+								swap_request_id,
+								egress_id,
+								asset,
+								amount: egress_amount,
+								egress_fee: (fee_withheld, asset),
+							}),
+						Err(err) => {
+							if is_ccm {
+								log_or_panic!("CCM egress scheduling should never fail.");
+							}
+							Self::deposit_event(Event::<T>::SwapEgressIgnored {
+								swap_request_id,
+								asset,
+								amount,
+								reason: err.into(),
+							})
+						},
+					};
 				},
 			};
 		}
@@ -2193,7 +2208,7 @@ pub mod pallet {
 			total_input_amount: AssetAmount,
 			input_asset: Asset,
 			is_internal_swap: bool,
-		) -> Result<AssetAmount, DispatchError> {
+		) -> Result<FeeTaken, DispatchError> {
 			// We use the network fee minimum as the refund fee
 			let refund_fee_usdc = if is_internal_swap {
 				InternalSwapNetworkFee::<T>::get().minimum
@@ -2201,7 +2216,7 @@ pub mod pallet {
 				NetworkFee::<T>::get().minimum
 			};
 			if refund_fee_usdc.is_zero() || total_input_amount.is_zero() {
-				return Ok(total_input_amount)
+				return Ok(FeeTaken { remaining_amount: total_input_amount, fee: 0 });
 			}
 
 			let required_refund_fee_as_input_asset = Self::calculate_input_for_desired_output(
@@ -2214,13 +2229,13 @@ pub mod pallet {
 
 			let refund_fee =
 				sp_std::cmp::min(required_refund_fee_as_input_asset, total_input_amount);
-			let remaining_amount_to_refund = total_input_amount.saturating_sub(refund_fee);
+			let remaining_amount = total_input_amount.saturating_sub(refund_fee);
 
 			if !refund_fee.is_zero() {
 				Self::init_network_fee_swap_request(input_asset, refund_fee);
 			}
 
-			Ok(remaining_amount_to_refund)
+			Ok(FeeTaken { remaining_amount, fee: refund_fee })
 		}
 
 		pub fn assemble_and_validate_broker_fees(

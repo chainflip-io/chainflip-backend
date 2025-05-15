@@ -991,27 +991,38 @@ fn minimum_network_fee_is_enforced_on_dca_swap() {
 
 #[test]
 fn test_refund_fee_calculation() {
+	fn take_refund_fee(
+		amount: AssetAmount,
+		asset: Asset,
+		is_internal_swap: bool,
+	) -> (AssetAmount, AssetAmount) {
+		let FeeTaken { remaining_amount, fee } =
+			Swapping::take_refund_fee(amount, asset, is_internal_swap).unwrap();
+		(remaining_amount, fee)
+	}
+
 	new_test_ext().execute_with(|| {
+		// The regular refund fee is actually just the minimum network fee
 		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::zero(), minimum: 10 });
 
 		// Usdc, no conversion needed, so the refund fee is just 10
-		assert_eq!(Swapping::take_refund_fee(1000, Asset::Usdc, false), Ok(990));
-		assert_eq!(Swapping::take_refund_fee(0, Asset::Usdc, false), Ok(0));
-		assert_eq!(Swapping::take_refund_fee(5, Asset::Usdc, false), Ok(0));
-		assert_eq!(Swapping::take_refund_fee(u128::MAX, Asset::Usdc, false), Ok(u128::MAX - 10));
+		assert_eq!(take_refund_fee(1000, Asset::Usdc, false), (990, 10));
+		assert_eq!(take_refund_fee(0, Asset::Usdc, false), (0, 0));
+		assert_eq!(take_refund_fee(5, Asset::Usdc, false), (0, 5));
+		assert_eq!(take_refund_fee(u128::MAX, Asset::Usdc, false), (u128::MAX - 10, 10));
 
 		// Conversion needed, so the refund fee is 10 / DEFAULT_SWAP_RATE = 5
-		assert_eq!(Swapping::take_refund_fee(1000, Asset::Eth, false), Ok(995));
-		assert_eq!(Swapping::take_refund_fee(0, Asset::Eth, false), Ok(0));
-		assert_eq!(Swapping::take_refund_fee(3, Asset::Eth, false), Ok(0));
+		assert_eq!(take_refund_fee(1000, Asset::Eth, false), (995, 5));
+		assert_eq!(take_refund_fee(0, Asset::Eth, false), (0, 0));
+		assert_eq!(take_refund_fee(3, Asset::Eth, false), (0, 3));
 
-		// Internal swaps use a different network fee
+		// Internal swaps use a different network fee (and therefore refund fee)
 		InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
 			rate: Permill::zero(),
 			minimum: 30,
 		});
-		assert_eq!(Swapping::take_refund_fee(1000, Asset::Usdc, true), Ok(970));
-		assert_eq!(Swapping::take_refund_fee(1000, Asset::Eth, true), Ok(985));
+		assert_eq!(take_refund_fee(1000, Asset::Usdc, true), (970, 30));
+		assert_eq!(take_refund_fee(1000, Asset::Eth, true), (985, 15));
 	});
 }
 
