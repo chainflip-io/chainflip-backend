@@ -1985,7 +1985,12 @@ impl_runtime_apis! {
 					)
 				},
 				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_ingress_fee(asset).into()),
-				ForeignChainAndAsset::Assethub(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_ingress_fee(asset)),
+				ForeignChainAndAsset::Assethub(asset) => {
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
+						asset,
+						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_ingress_fee(asset)
+					)
+				},
 			}
 		}
 
@@ -2006,7 +2011,12 @@ impl_runtime_apis! {
 					)
 				},
 				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_egress_fee(asset).into()),
-				ForeignChainAndAsset::Assethub(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_egress_fee(asset)),
+				ForeignChainAndAsset::Assethub(asset) => {
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
+						asset,
+						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_egress_fee(asset)
+					)
+				},
 			}
 		}
 
