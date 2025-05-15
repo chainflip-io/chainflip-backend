@@ -57,7 +57,10 @@ export async function testAllSwaps(textContext: TestContext) {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
 
   // Initialize the liquidity provider bot
-  const [stateChainWsConnection, lpWsConnection] = initializeLiquidityProviderBot('Bitcoin', 'BTC');
+  const [stateChainWsConnectionUSDT, lpWsConnectionUSDT] = initializeLiquidityProviderBot(
+    'Ethereum',
+    'USDT',
+  );
 
   // Open a private BTC channel to be used for btc vault swaps
   await openPrivateBtcChannel(textContext.logger, '//BROKER_1');
@@ -120,8 +123,8 @@ export async function testAllSwaps(textContext: TestContext) {
   textContext.logger.info(`🧪 All swaps appended`);
   await Promise.all(allSwaps);
 
-  stateChainWsConnection.complete();
-  lpWsConnection.complete();
+  stateChainWsConnectionUSDT.complete();
+  lpWsConnectionUSDT.complete();
 
   textContext.logger.info(`🧪 Liquidity provider bot closed`);
 }

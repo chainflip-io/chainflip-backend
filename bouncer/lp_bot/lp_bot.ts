@@ -3,14 +3,8 @@ import { Observable, Subject, from } from 'rxjs';
 import { filter, map, mergeMap } from 'rxjs/operators';
 import WebSocket from 'ws';
 import { lpApiRpc } from '../shared/json_rpc';
-import {
-  chainFromAsset,
-  createStateChainKeypair,
-  getContractAddress,
-  toAsset,
-} from '../shared/utils';
+import { assetDecimals, chainFromAsset, createStateChainKeypair, toAsset } from '../shared/utils';
 import { globalLogger as logger } from '../shared/utils/logger';
-import { sendErc20 } from '../shared/send_erc20';
 import {
   Order,
   Side,
@@ -20,7 +14,7 @@ import {
   TradeDecision,
   OutOfLiquidityEvent,
 } from './utils';
-import { sendBtc } from '../shared/send_btc';
+import { send } from '../shared/send';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (global as any).WebSocket = WebSocket;
@@ -107,7 +101,9 @@ const manageLimitOrders = async (state: LPBotState, decision: TradeDecision) => 
     );
     return orderId;
   } catch (error) {
-    logger.error(`Failed to execute order: ${error}`);
+    logger.warn(
+      `Insufficient liquidity for asset: ${decision.asset}, amount: ${decision.amount} 💸.`,
+    );
     outOfLiquiditySubject.next({
       side: decision.side,
       asset: decision.asset,
@@ -205,41 +201,30 @@ const createOrderFillStream = (wsConnection: WebSocketSubject<unknown>): Observa
  * @param rpcAsset - The RPC asset.
  * @param amount - The amount of liquidity to deposit.
  */
-const depositLiquidity = async (rpcAsset: string, amount: string) => {
+const depositLiquidity = async (rpcAsset: string, amount: number) => {
   logger.info(`Try to deposit liquidity for asset: ${rpcAsset}, amount: ${amount}`);
   const asset = toAsset(rpcAsset);
   const chain = chainFromAsset(asset);
-  let liquidityDepositAddress;
-  switch (chain) {
-    case 'Ethereum':
-      liquidityDepositAddress = await lpApiRpc(logger, 'lp_liquidity_deposit', [
-        { chain, asset: rpcAsset },
-        'InBlock',
-      ]);
-      await sendErc20(
-        logger,
-        chain,
-        liquidityDepositAddress.tx_details.response,
-        getContractAddress(chain, asset),
-        amount,
-      );
-      logger.info(`Liquidity sent: ${amount} ${asset}!`);
-      break;
-    case 'Bitcoin':
-      liquidityDepositAddress = await lpApiRpc(logger, 'lp_liquidity_deposit', [
-        { chain, asset: rpcAsset },
-        'InBlock',
-      ]);
-      await sendBtc(
-        logger,
-        chain,
-        liquidityDepositAddress.tx_details.response,
-        parseInt(amount, 16),
-      );
-      logger.info(`Liquidity sent: ${amount} ${asset}!`);
-      break;
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
+
+  const decimals = assetDecimals(asset);
+  const provisionalCharge = amount * 0.01;
+
+  // Amount in base units (e.x 1.4 ETH, 3.2 BTC, 500 USDT) + 10% of the amount as a provisional charge for fees, etc.
+  const amountInBaseUnits = ((amount + provisionalCharge) / 10 ** decimals).toString();
+
+  const liquidityDepositAddress = await lpApiRpc(logger, 'lp_liquidity_deposit', [
+    { chain, asset: rpcAsset },
+    'InBlock',
+  ]);
+
+  try {
+    logger.info(
+      `Sending ${amountInBaseUnits} ${asset} to ${liquidityDepositAddress.tx_details.response}...`,
+    );
+    await send(logger, asset, liquidityDepositAddress.tx_details.response, amountInBaseUnits);
+    logger.info(`Liquidity deposit successful 🤗.`);
+  } catch (error) {
+    logger.error(`Error sending liquidity: ${error} 🙅‍♂️.`);
   }
 };
 
@@ -283,12 +268,9 @@ const initializeLiquidityProviderBot = (chain: string, asset: string) => {
   });
 
   outOfLiquidity$.subscribe({
-    next: () => {
-      logger.info('Out of liquidity 💸!');
-      // let decAmount = parseInt(event.amount.toString(), 16);
-      // let decimals = assetDecimals(toAsset(event.asset));
-      // logger.info(`Depositing liquidity for asset: ${event.asset}, hexAmount: ${event.amount} 🤗 dexAmount: ${parseInt(event.amount.toString(), 16)} 🤗`);
-      // depositLiquidity(event.asset, event.amount);
+    next: async (event) => {
+      logger.info('Out of liquidity! Lets rebalance 💸.');
+      await depositLiquidity(event.asset, parseInt(event.amount.toString(), 16));
     },
   });
 

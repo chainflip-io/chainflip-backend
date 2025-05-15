@@ -86,7 +86,9 @@ type OutOfLiquidityEvent = {
 
 //   logger.info(`Try to close all orders for: ${lp.address}...`);
 //   try {
-//     const orders = await chainflip.rpc('cf_pool_orders', { chain, asset }, 'USDC', lp.address);
+
+//     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+//     const orders = (await chainflip.rpc('cf_pool_orders', { chain, asset }, 'USDC', lp.address)) as any;
 
 //     if (
 //       orders?.range_orders.length === 0 &&
@@ -108,7 +110,7 @@ type OutOfLiquidityEvent = {
 //       console.log(order);
 //       orderToDelete.push({
 //         Range: {
-//           base_asset: 'USDT',
+//           base_asset: asset,
 //           quote_asset: 'USDC',
 //           id: order.id,
 //         },
@@ -118,14 +120,14 @@ type OutOfLiquidityEvent = {
 //     for (const order of orders?.limit_orders.asks) {
 //       console.log(order);
 //       orderToDelete.push({
-//         Limit: { base_asset: 'USDT', quote_asset: 'USDC', side: 'sell', id: order.id },
+//         Limit: { base_asset: asset, quote_asset: 'USDC', side: 'sell', id: order.id },
 //       });
 //     }
 
 //     for (const order of orders?.limit_orders.bids) {
 //       console.log(order);
 //       orderToDelete.push({
-//         Limit: { base_asset: 'USDT', quote_asset: 'USDC', side: 'buy', id: order.id },
+//         Limit: { base_asset: asset, quote_asset: 'USDC', side: 'buy', id: order.id },
 //       });
 //     }
 
@@ -141,35 +143,6 @@ type OutOfLiquidityEvent = {
 //     logger.error(`Error: ${error}`);
 //   }
 // };
-
-// const manageRangeOrder = async (baseAsset: Asset, tick1: number, tick2: number, size: number) => {
-//     logger.info(`Managing range order for ${baseAsset} with tick1: ${tick1}, tick2: ${tick2}, size: ${size}`);
-//     let orderId = Math.floor(Math.random() * 10000) + 1;
-//     logger.info(`Sending order...`);
-//     const range = { start: tick1, end: tick2 };
-//     try {
-//         let response = await lpApiRpc(logger, 'lp_set_range_order', [
-//             {
-//                 chain: 'Ethereum',
-//                 asset: 'USDT'
-//             },
-//             'USDC',
-//             orderId,
-//             range,
-//             {
-//                 AssetAmounts: {
-//                     maximum: { base: size, quote: size },
-//                     minimum: { base: 0, quote: 0 },
-//                 },
-//             },
-//             'InBlock'
-//         ]);
-//         logger.info(`Range order set: ${orderId}`);
-//         logger.info(`Response: ${JSON.stringify(response, null, 2)}`);
-//     } catch (error) {
-//         logger.error(`Failed to execute order: ${error}`);
-//     }
-// }
 
 export {
   // cancelAllOrdersForLp,
