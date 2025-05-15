@@ -3,7 +3,7 @@ use super::{
 		core::Validate, state_machine::Statemachine, state_machine_es::SMInput,
 	},
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
-	ChainProgress, HWTypes, HeightWitnesserProperties,
+	ChainProgress, ChainProgressFor, HWTypes, HeightWitnesserProperties,
 };
 use crate::electoral_systems::state_machine::core::{Hook, IndexedValidate};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
@@ -124,7 +124,7 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type Input = SMInput<(HeightWitnesserProperties<T>, InputHeaders<T>), ()>;
 	type InputIndex = Vec<HeightWitnesserProperties<T>>;
 	type Settings = ();
-	type Output = Result<ChainProgress<T>, &'static str>;
+	type Output = Result<ChainProgressFor<T>, &'static str>;
 
 	fn input_index(s: &mut Self::State) -> Self::InputIndex {
 		let witness_from_index = match s.state {

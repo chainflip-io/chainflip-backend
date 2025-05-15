@@ -5,7 +5,7 @@ use super::{
 	primitives::{ElectionTracker, ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
-	block_height_tracking::{ChainProgress, ChainTypes},
+	block_height_tracking::{ChainProgress, ChainProgressFor, ChainTypes},
 	block_witnesser::{
 		block_processor::BlockProcessor, optimistic_block_cache::OptimisticBlock,
 		primitives::ChainProgressInner,
@@ -203,6 +203,7 @@ impl<T: BWTypes> IndexedValidate<BWElectionProperties<T>, (T::BlockData, Option<
 		(_, hash): &(T::BlockData, Option<T::ChainBlockHash>),
 	) -> Result<(), Self::Error> {
 		use BWElectionType::*;
+		// ensure that a hash is only provided for `Optimistic` elections.
 		match (&index.election_type, hash) {
 			(ByHash(_), None) | (Optimistic, Some(_)) | (SafeBlockHeight, None) => Ok(()),
 			_ => Err(()),
@@ -218,7 +219,7 @@ pub struct BWStatemachine<Types: BWTypes> {
 impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	type Input = SMInput<
 		(BWElectionProperties<T>, (T::BlockData, Option<T::ChainBlockHash>)),
-		ChainProgress<T>,
+		ChainProgressFor<T>,
 	>;
 	type InputIndex = Vec<BWElectionProperties<T>>;
 	type Settings = BlockWitnesserSettings;

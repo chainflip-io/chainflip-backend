@@ -56,23 +56,33 @@ pub struct HeightWitnesserProperties<T: ChainTypes> {
 	pub witness_from_index: T::ChainBlockNumber,
 }
 
-#[derive_where(
-	Debug, Clone, PartialEq, Eq;
-	// T::ChainBlockNumber: Debug + Clone + Ord
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq, // T::ChainBlockNumber: Debug + Clone + Ord
+	Encode,
+	Decode,
+	TypeInfo,
+	Deserialize,
+	Serialize,
 )]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ChainProgress<T: ChainTypes> {
+pub enum ChainProgress<ChainBlockNumber: Ord, ChainBlockHash> {
 	// Range of new block heights witnessed. If this is not consecutive, it means that
-	Range(BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>, RangeInclusive<T::ChainBlockNumber>),
-	Reorg(BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>, RangeInclusive<T::ChainBlockNumber>),
+	Range(BTreeMap<ChainBlockNumber, ChainBlockHash>, RangeInclusive<ChainBlockNumber>),
+	Reorg(BTreeMap<ChainBlockNumber, ChainBlockHash>, RangeInclusive<ChainBlockNumber>),
 	// Range of new block heights, only emitted when there is a consensus for the first time after
 	// being started.
 	// FirstConsensus(BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
 	// RangeInclusive<T::ChainBlockNumber>), there was no update to the witnessed block headers
 	None,
 }
+pub type ChainProgressFor<T> =
+	ChainProgress<<T as ChainTypes>::ChainBlockNumber, <T as ChainTypes>::ChainBlockHash>;
 
-impl<T: ChainTypes> Validate for ChainProgress<T> {
+impl<ChainBlockNumber: Ord + Step, ChainBlockHash> Validate
+	for ChainProgress<ChainBlockNumber, ChainBlockHash>
+{
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {

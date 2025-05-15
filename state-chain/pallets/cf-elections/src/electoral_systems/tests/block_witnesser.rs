@@ -23,7 +23,7 @@ use super::{
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
-		block_height_tracking::{ChainProgress, ChainTypes},
+		block_height_tracking::{ChainProgress, ChainProgressFor, ChainTypes},
 		block_witnesser::{
 			primitives::ElectionTracker,
 			state_machine::{
@@ -105,14 +105,14 @@ impl ElectoralSystemTypes for Types {
 	type VoteStorage =
 		vote_storage::bitmap::Bitmap<(BlockData, Option<<Self as ChainTypes>::ChainBlockHash>)>;
 	type Consensus = (BlockData, Option<<Self as ChainTypes>::ChainBlockHash>);
-	type OnFinalizeContext = Vec<ChainProgress<Self>>;
+	type OnFinalizeContext = Vec<ChainProgressFor<Self>>;
 	type OnFinalizeReturn = Vec<()>;
 }
 
 /// Associating the state machine and consensus mechanism to the struct
 impl StatemachineElectoralSystemTypes for Types {
 	// both context and return have to be vectors, these are the item types
-	type OnFinalizeContextItem = ChainProgress<Self>;
+	type OnFinalizeContextItem = ChainProgressFor<Self>;
 	type OnFinalizeReturnItem = ();
 
 	// the actual state machine and consensus mechanisms of this ES

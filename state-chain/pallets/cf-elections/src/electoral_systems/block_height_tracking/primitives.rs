@@ -6,7 +6,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
-use super::{super::state_machine::core::Validate, ChainProgress, ChainTypes};
+use super::{super::state_machine::core::Validate, ChainProgress, ChainProgressFor, ChainTypes};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -26,7 +26,7 @@ pub struct MergeInfo<T: ChainTypes> {
 }
 
 impl<T: ChainTypes> MergeInfo<T> {
-	pub fn into_chain_progress(&self) -> Option<ChainProgress<T>> {
+	pub fn into_chain_progress(&self) -> Option<ChainProgressFor<T>> {
 		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
 			let hashes = self
 				.added

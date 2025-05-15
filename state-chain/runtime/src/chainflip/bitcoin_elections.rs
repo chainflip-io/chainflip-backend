@@ -24,7 +24,8 @@ use pallet_cf_elections::{
 		block_height_tracking::{
 			consensus::BlockHeightTrackingConsensus,
 			state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders},
-			BlockHeightChangeHook, ChainProgress, ChainTypes, HWTypes, HeightWitnesserProperties,
+			BlockHeightChangeHook, ChainProgress, ChainProgressFor, ChainTypes, HWTypes,
+			HeightWitnesserProperties,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -110,7 +111,7 @@ impls! {
 		type VoteStorage = vote_storage::bitmap::Bitmap<InputHeaders<Self>>;
 		type Consensus = InputHeaders<Self>;
 		type OnFinalizeContext = Vec<()>;
-		type OnFinalizeReturn = Vec<ChainProgress<Self>>;
+		type OnFinalizeReturn = Vec<ChainProgressFor<Self>>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
 
@@ -118,7 +119,7 @@ impls! {
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
 		type OnFinalizeContextItem = ();
-		type OnFinalizeReturnItem = ChainProgress<Self>;
+		type OnFinalizeReturnItem = ChainProgressFor<Self>;
 
 		// the actual state machine and consensus mechanisms of this ES
 		type ConsensusMechanism = BlockHeightTrackingConsensus<Self>;
@@ -188,7 +189,7 @@ impls! {
 		type ElectionState = ();
 		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<btc::Hash>)>;
 		type Consensus = (BlockDataDepositChannel, Option<btc::Hash>);
-		type OnFinalizeContext = Vec<ChainProgress<Self>>;
+		type OnFinalizeContext = Vec<ChainProgressFor<Self>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
@@ -196,7 +197,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = ChainProgress<Self>;
+		type OnFinalizeContextItem = ChainProgressFor<Self>;
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -282,7 +283,7 @@ impls! {
 		type ElectionState = ();
 		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<btc::Hash>)>;
 		type Consensus = (BlockDataVaultDeposit, Option<btc::Hash>);
-		type OnFinalizeContext = Vec<ChainProgress<Self>>;
+		type OnFinalizeContext = Vec<ChainProgressFor<Self>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
@@ -290,7 +291,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = ChainProgress<Self>;
+		type OnFinalizeContextItem = ChainProgressFor<Self>;
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -385,7 +386,7 @@ impls! {
 		type ElectionState = ();
 		type VoteStorage = vote_storage::bitmap::Bitmap<(EgressBlockData, Option<btc::Hash>)>;
 		type Consensus = (EgressBlockData, Option<btc::Hash>);
-		type OnFinalizeContext = Vec<ChainProgress<Self>>;
+		type OnFinalizeContext = Vec<ChainProgressFor<Self>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
@@ -393,7 +394,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = ChainProgress<Self>;
+		type OnFinalizeContextItem = ChainProgressFor<Self>;
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -516,58 +517,32 @@ impl
 		>(block_height_tracking_identifiers, &Vec::from([()]))?;
 
 		log::info!("BitcoinElectionHooks::on_finalize: {:?}", chain_progress);
-		let chain_progress_deposit_channels = chain_progress
-			.clone()
-			.into_iter()
-			.map(|chain_progress| match chain_progress {
-				ChainProgress::Range(map, range) => ChainProgress::Range(map, range),
-				ChainProgress::Reorg(map, range) => ChainProgress::Reorg(map, range),
-				ChainProgress::None => ChainProgress::None,
-			})
-			.collect();
 		BitcoinDepositChannelWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
 				BitcoinDepositChannelWitnessingES,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress_deposit_channels)?;
+		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress.clone())?;
 
-		let chain_progress_vaults = chain_progress
-			.clone()
-			.into_iter()
-			.map(|chain_progress| match chain_progress {
-				ChainProgress::Range(map, range) => ChainProgress::Range(map, range),
-				ChainProgress::Reorg(map, range) => ChainProgress::Reorg(map, range),
-				ChainProgress::None => ChainProgress::None,
-			})
-			.collect();
 		BitcoinVaultDepositWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
 				BitcoinVaultDepositWitnessingES,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(vault_deposits_identifiers.clone(), &chain_progress_vaults)?;
+		>(vault_deposits_identifiers.clone(), &chain_progress.clone())?;
 
 		let last_btc_block =
 			pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap();
 
-		let chain_progress_egresses = chain_progress
-			.into_iter()
-			.map(|chain_progress| match chain_progress {
-				ChainProgress::Range(map, range) => ChainProgress::Range(map, range),
-				ChainProgress::Reorg(map, range) => ChainProgress::Reorg(map, range),
-				ChainProgress::None => ChainProgress::None,
-			})
-			.collect();
 		BitcoinEgressWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
 				BitcoinEgressWitnessingES,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(egress_identifiers, &chain_progress_egresses)?;
+		>(egress_identifiers, &chain_progress.clone())?;
 
 		BitcoinFeeTracking::on_finalize::<
 			DerivedElectoralAccess<
