@@ -66,15 +66,16 @@ use cf_chains::{
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
 	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
+	cf_parameters::build_cf_parameters,
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, DefaultRetryPolicy, ForeignChain,
-	Polkadot, Solana, TransactionBuilder, VaultSwapExtraParameters,
-	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChannelRefundParametersEncoded,
+	DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
+	VaultSwapExtraParameters, VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -2314,11 +2315,11 @@ impl_runtime_apis! {
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
 
 			// Validate broker fee
-			if broker_commission < pallet_cf_swapping::Pallet::<Runtime>::get_minimum_vault_swap_fee_for_broker(&broker_id) {
+			if broker_commission < pallet_cf_swapping::Pallet::<Runtime>::get_minimum_vault_swap_fee_for_broker(&broker) {
 				return Err(DispatchErrorWithMessage::from("Broker commission is too low"));
 			}
 			let _beneficiaries = pallet_cf_swapping::Pallet::<Runtime>::assemble_and_validate_broker_fees(
-				broker_id.clone(),
+				broker.clone(),
 				broker_commission,
 				affiliate_fees.clone(),
 			)?;
@@ -2485,7 +2486,7 @@ impl_runtime_apis! {
 			boost_fee: BasisPoints,
 			broker_commission: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		) -> Result<Vec<u8>, DispatchErrorWithMessage> {
 			// Validate the parameters
 			crate::chainflip::vault_swaps::validate_parameters(
