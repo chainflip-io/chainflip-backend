@@ -78,7 +78,7 @@ pub trait BrokerRpcApi {
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		refund_parameters: ChannelRefundParametersRpc,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,

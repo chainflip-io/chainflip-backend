@@ -28,10 +28,7 @@ use cf_chains::{
 	btc::vault_swap_encoding::{
 		encode_swap_params_in_nulldata_payload, BtcCfParameters, UtxoEncodedData,
 	},
-	ccm_checker::{
-		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker,
-		DecodedCcmAdditionalData,
-	},
+	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
 	cf_parameters::build_cf_parameters,
 	evm::api::{EvmCall, EvmEnvironmentProvider},
 	sol::{
@@ -469,7 +466,7 @@ pub fn validate_parameters(
 	broker_commission: BasisPoints,
 	affiliate_fees: &Affiliates<AccountId>,
 	retry_duration: BlockNumber,
-	channel_metadata: &Option<CcmChannelMetadata>,
+	channel_metadata: &Option<CcmChannelMetadataUnchecked>,
 ) -> Result<(), DispatchErrorWithMessage> {
 	let destination_chain = destination_address.chain();
 
@@ -510,11 +507,15 @@ pub fn validate_parameters(
 		}
 
 		// Ensure CCM message is valid
-		match CcmValidityChecker::check_and_decode(
-			ccm,
-			destination_asset,
-			destination_address.clone(),
-		) {
+		match ccm
+			.clone()
+			.to_checked(
+				destination_asset,
+				ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+					.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?,
+			)
+			.map(|checked| checked.ccm_additional_data)
+		{
 			Ok(DecodedCcmAdditionalData::Solana(decoded)) => {
 				let ccm_accounts = decoded.ccm_accounts();
 
