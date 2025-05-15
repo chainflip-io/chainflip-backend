@@ -609,8 +609,14 @@ export async function testBrokerLevelScreening(
   await ensureHealth();
   const previousMockmode = (await setMockmode('Manual')).previous;
 
-  // NOTE: we don't test FLIP rejections because they are currently disabled in the
-  // deposit monitor, since Elliptic doesn't provide Flip analysis.
+  // NOTE: We currently don't test the following assets:
+  // - Flip: we don't test Flip rejections because they are currently disabled in the
+  //         deposit monitor, since Elliptic doesn't provide Flip analysis.
+  // - ArbEth: we don't test ArbEth rejections since on localnet the safety margin for ArbEth
+  //           is too short for the DM, the rejections fail more often than not due
+  //           to being too late.
+  //           Most of the functionality is covered by testing `Eth` and `ArbUsdc`.
+  //           An alternative would be to increase the ArbEth safety margin on localnet.
 
   // test rejection of swaps by the responsible broker
   await Promise.all(
@@ -619,7 +625,6 @@ export async function testBrokerLevelScreening(
       testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      // testEvm(testContext, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
     ]
       .concat(testBitcoin(testContext, false))
       .concat(testBoostedDeposits ? testBitcoin(testContext, true) : []),
@@ -635,16 +640,12 @@ export async function testBrokerLevelScreening(
     testEvmLiquidityDeposit(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmLiquidityDeposit(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmLiquidityDeposit(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    // testEvmLiquidityDeposit(testContext, 'ArbEth', async (txId) =>
-    //   setTxRiskScore(txId, 9.0),
-    // ),
     testEvmLiquidityDeposit(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
 
     // --- vault swaps ---
     testBitcoinVaultSwap(testContext),
     testEvmVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    // testEvmVaultSwap(testContext, 'ArbEth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmVaultSwap(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
