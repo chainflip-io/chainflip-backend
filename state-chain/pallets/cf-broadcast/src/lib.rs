@@ -504,15 +504,6 @@ pub mod pallet {
 		/// requested signature, uses the configured [TransactionBuilder] to build the transaction.
 		/// Initiates the broadcast sequence if `should_broadcast` is set to true, otherwise insert
 		/// the signature result into the `PendingApiCalls` storage.
-		///
-		/// ## Events
-		///
-		/// - [Event::CallResigned] If the call was re-signed.
-		///
-		///
-		/// ## Errors
-		///
-		/// - [Error::ThresholdSignatureUnavailable]
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::on_signature_ready())]
 		pub fn on_signature_ready(
@@ -590,15 +581,6 @@ pub mod pallet {
 		/// We add to the deficit to later be refunded, and clean up storage related to
 		/// this broadcast, reporting any nodes who failed this particular broadcast before
 		/// this success.
-		///
-		/// ## Events
-		///
-		/// - [BroadcastSuccess](Event::BroadcastSuccess)
-		///
-		/// ## Errors
-		///
-		/// - [InvalidPayload](Event::InvalidPayload)
-		/// - [InvalidBroadcastId](Event::InvalidBroadcastId)
 		#[pallet::weight(T::WeightInfo::transaction_succeeded())]
 		#[pallet::call_index(2)]
 		pub fn transaction_succeeded(
@@ -630,14 +612,6 @@ pub mod pallet {
 
 		/// Submitted by the nominated node to signal that they were unable to broadcast the
 		/// transaction.
-		///
-		/// ## Events
-		///
-		/// - N/A
-		///
-		/// ## Errors
-		///
-		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
 		#[pallet::call_index(4)]
 		#[pallet::weight((T::WeightInfo::transaction_failed(), DispatchClass::Operational))]
 		pub fn transaction_failed(
@@ -678,10 +652,6 @@ pub mod pallet {
 		/// [GOVERNANCE] Update a pallet config item.
 		///
 		/// The dispatch origin of this function must be governance.
-		///
-		/// ## Events
-		///
-		/// - [PalletConfigUpdate](Event::PalletConfigUpdate)
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::update_pallet_config())]
 		pub fn update_pallet_config(
