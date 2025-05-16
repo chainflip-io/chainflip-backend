@@ -219,7 +219,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          pnpm vitest run -t "ConcurrentTests"
+          pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
 
       - name: Print chainflip-engine logs 🚗
         if: inputs.run-job

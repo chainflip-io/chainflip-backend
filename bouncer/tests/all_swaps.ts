@@ -1,4 +1,5 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { describe } from 'vitest';
 import { SwapParams } from '../shared/perform_swap';
 import {
   newCcmMetadata,
@@ -15,6 +16,7 @@ import {
 } from '../shared/utils';
 import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
 import { TestContext } from '../shared/utils/test_context';
+import { manuallyAddTestToList, concurrentTest, serialTest } from '../shared/utils/vitest';
 
 export async function initiateSwap(
   testContext: TestContext,
@@ -52,13 +54,9 @@ export async function initiateSwap(
   );
 }
 
-export async function testAllSwaps(textContext: TestContext) {
-  const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
-
-  // Open a private BTC channel to be used for btc vault swaps
-  await openPrivateBtcChannel(textContext.logger, '//BROKER_1');
-
-  textContext.logger.info(`🧪 Private broker channel opened`);
+export function testAllSwaps(timeoutPerSwap: number) {
+  const allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
+  let allSwapsCount = 0;
 
   function appendSwap(
     sourceAsset: Asset,
@@ -66,7 +64,14 @@ export async function testAllSwaps(textContext: TestContext) {
     functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
-    allSwaps.push(initiateSwap(textContext, sourceAsset, destAsset, functionCall, ccmSwap));
+    allSwapsCount++;
+    const swapType = functionCall === testSwap ? 'Swap' : 'VaultSwap';
+    allSwaps.push({
+      name: `Swap ${allSwapsCount}: ${sourceAsset} to ${destAsset} (${ccmSwap ? 'CCM ' : ''}${swapType})`,
+      test: async (context) => {
+        await initiateSwap(context, sourceAsset, destAsset, functionCall, ccmSwap);
+      },
+    });
   }
 
   function randomElement<Value>(items: Value[]): Value {
@@ -113,6 +118,19 @@ export async function testAllSwaps(textContext: TestContext) {
   appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
   appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
 
-  textContext.logger.info(`🧪 All swaps appended`);
-  await Promise.all(allSwaps);
+  describe('AllSwaps', () => {
+    manuallyAddTestToList('AllSwaps', 'testAllSwaps');
+    serialTest(
+      'OpenPrivateBtcChannel',
+      async (context) => {
+        await openPrivateBtcChannel(context.logger, '//BROKER_1');
+        context.logger.info(`🧪 Private broker channel opened`);
+      },
+      120,
+      true,
+    );
+    for (const swap of allSwaps) {
+      concurrentTest(swap.name, swap.test, timeoutPerSwap, true);
+    }
+  });
 }
