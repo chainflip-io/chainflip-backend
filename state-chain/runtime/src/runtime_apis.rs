@@ -22,8 +22,9 @@ use cf_amm::{
 };
 use cf_chains::{
 	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
-	sol::SolInstructionRpc, CcmChannelMetadataUnchecked, Chain, ChainCrypto, ForeignChainAddress,
-	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
+	sol::SolInstructionRpc, CcmChannelMetadataUnchecked, Chain, ChainCrypto,
+	ChannelRefundParametersEncoded, ForeignChainAddress, VaultSwapExtraParametersEncoded,
+	VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
@@ -550,6 +551,18 @@ decl_runtime_apis!(
 			broker: AccountId32,
 			vault_swap: VaultSwapDetails<String>,
 		) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage>;
+		fn cf_encode_cf_parameters(
+			broker: AccountId32,
+			source_asset: Asset,
+			destination_address: EncodedAddress,
+			destination_asset: Asset,
+			refund_parameters: ChannelRefundParametersEncoded,
+			dca_parameters: Option<DcaParameters>,
+			boost_fee: BasisPoints,
+			broker_commission: BasisPoints,
+			affiliate_fees: Affiliates<AccountId32>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
+		) -> Result<Vec<u8>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(

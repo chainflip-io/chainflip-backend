@@ -66,15 +66,16 @@ use cf_chains::{
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
 	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
+	cf_parameters::build_cf_parameters,
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, DefaultRetryPolicy, ForeignChain,
-	Polkadot, Solana, TransactionBuilder, VaultSwapExtraParameters,
-	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChannelRefundParametersEncoded,
+	DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
+	VaultSwapExtraParameters, VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -2265,7 +2266,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_request_swap_parameter_encoding(
-			broker_id: AccountId,
+			broker: AccountId,
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
@@ -2279,10 +2280,26 @@ impl_runtime_apis! {
 			let source_chain = ForeignChain::from(source_asset);
 			let destination_chain = ForeignChain::from(destination_asset);
 
-			// Validate parameters.
-			if let Some(params) = dca_parameters.as_ref() {
-				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
-			}
+			let retry_duration = match &extra_parameters {
+				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
+				VaultSwapExtraParametersEncoded::Ethereum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => extra_params.refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
+			};
+
+			crate::chainflip::vault_swaps::validate_parameters(
+				&broker,
+				source_chain,
+				&destination_address,
+				destination_asset,
+				&dca_parameters,
+				boost_fee,
+				broker_commission,
+				&affiliate_fees,
+				retry_duration,
+				&channel_metadata,
+			)?;
+
 			// Conversion implicitly verifies address validity.
 			frame_support::ensure!(
 				ChainAddressConverter::try_from_encoded_address(destination_address.clone())
@@ -2292,17 +2309,17 @@ impl_runtime_apis! {
 				"Destination address and asset are on different chains."
 			);
 
-			// Validate boost fee.
+			// Convert boost fee.
 			let boost_fee: u8 = boost_fee
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
 
 			// Validate broker fee
-			if broker_commission < pallet_cf_swapping::Pallet::<Runtime>::get_minimum_vault_swap_fee_for_broker(&broker_id) {
+			if broker_commission < pallet_cf_swapping::Pallet::<Runtime>::get_minimum_vault_swap_fee_for_broker(&broker) {
 				return Err(DispatchErrorWithMessage::from("Broker commission is too low"));
 			}
 			let _beneficiaries = pallet_cf_swapping::Pallet::<Runtime>::assemble_and_validate_broker_fees(
-				broker_id.clone(),
+				broker.clone(),
 				broker_commission,
 				affiliate_fees.clone(),
 			)?;
@@ -2368,7 +2385,7 @@ impl_runtime_apis! {
 					}
 				) => {
 					crate::chainflip::vault_swaps::bitcoin_vault_swap(
-						broker_id,
+						broker,
 						destination_asset,
 						destination_address,
 						broker_commission,
@@ -2388,7 +2405,7 @@ impl_runtime_apis! {
 					VaultSwapExtraParametersEncoded::Arbitrum(extra_params)
 				) => {
 					crate::chainflip::vault_swaps::evm_vault_swap(
-						broker_id,
+						broker,
 						source_asset,
 						extra_params.input_amount,
 						destination_asset,
@@ -2411,7 +2428,7 @@ impl_runtime_apis! {
 						from_token_account,
 					}
 				) => crate::chainflip::vault_swaps::solana_vault_swap(
-					broker_id,
+					broker,
 					input_amount,
 					source_asset,
 					destination_asset,
@@ -2457,6 +2474,68 @@ impl_runtime_apis! {
 					"Decoding Vault Swap only supports Bitcoin and Solana"
 				)),
 			}
+		}
+
+		fn cf_encode_cf_parameters(
+			broker: AccountId,
+			source_asset: Asset,
+			destination_address: EncodedAddress,
+			destination_asset: Asset,
+			refund_parameters: ChannelRefundParametersEncoded,
+			dca_parameters: Option<DcaParameters>,
+			boost_fee: BasisPoints,
+			broker_commission: BasisPoints,
+			affiliate_fees: Affiliates<AccountId>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
+		) -> Result<Vec<u8>, DispatchErrorWithMessage> {
+			// Validate the parameters
+			crate::chainflip::vault_swaps::validate_parameters(
+				&broker,
+				source_asset.into(),
+				&destination_address,
+				destination_asset,
+				&dca_parameters,
+				boost_fee,
+				broker_commission,
+				&affiliate_fees,
+				refund_parameters.retry_duration,
+				&channel_metadata,
+			)?;
+
+			let boost_fee: u8 = boost_fee
+				.try_into()
+				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?;
+
+			let affiliate_and_fees = crate::chainflip::vault_swaps::to_affiliate_and_fees(&broker, affiliate_fees)?
+				.try_into()
+				.map_err(|_| "Too many affiliates.")?;
+
+			macro_rules! build_cf_parameters_for_chain {
+				($chain:ty) => {
+					build_cf_parameters::<$chain>(
+						refund_parameters.try_map_address(|addr| {
+							Ok::<_, DispatchErrorWithMessage>(
+								ChainAddressConverter::try_from_encoded_address(addr)
+									.and_then(|addr| addr.try_into().map_err(|_| ()))
+									.map_err(|_| "Invalid refund address")?,
+							)
+						})?,
+						dca_parameters,
+						boost_fee,
+						broker,
+						broker_commission,
+						affiliate_and_fees,
+						channel_metadata.as_ref(),
+					)
+				}
+			}
+
+			Ok(match ForeignChain::from(source_asset) {
+				ForeignChain::Ethereum => build_cf_parameters_for_chain!(Ethereum),
+				ForeignChain::Arbitrum => build_cf_parameters_for_chain!(Arbitrum),
+				ForeignChain::Solana => build_cf_parameters_for_chain!(Solana),
+				_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for encoding cf_parameters"))?,
+			})
 		}
 
 		fn cf_get_open_deposit_channels(account_id: Option<<Runtime as frame_system::Config>::AccountId>) -> ChainAccounts {
