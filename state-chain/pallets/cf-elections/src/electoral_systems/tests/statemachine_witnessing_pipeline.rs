@@ -169,7 +169,6 @@ pub fn test_all() {
             safemode_enabled: MockHook::new(SafeModeStatus::Disabled),
             block_processor,
             _phantom: core::marker::PhantomData,
-            optimistic_blocks_cache: Default::default(),
         };
         let bw_settings = BlockWitnesserSettings {
             max_concurrent_elections: 4,

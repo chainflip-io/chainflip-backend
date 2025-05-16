@@ -1,15 +1,11 @@
 use super::{
 	super::state_machine::core::*,
 	block_processor::BlockProcessorEvent,
-	optimistic_block_cache::OptimisticBlockCache,
 	primitives::{ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
 	block_height_tracking::{ChainProgress, ChainProgressFor, ChainTypes},
-	block_witnesser::{
-		block_processor::BlockProcessor, optimistic_block_cache::OptimisticBlock,
-		primitives::ChainProgressInner,
-	},
+	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{core::Validate, state_machine::Statemachine, state_machine_es::SMInput},
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
@@ -132,7 +128,6 @@ pub struct BlockWitnesserState<T: BWTypes> {
 	pub generate_election_properties_hook: T::ElectionPropertiesHook,
 	pub safemode_enabled: T::SafeModeEnabledHook,
 	pub block_processor: BlockProcessor<T>,
-	pub optimistic_blocks_cache: OptimisticBlockCache<T>,
 	pub _phantom: sp_std::marker::PhantomData<T>,
 }
 
@@ -155,7 +150,6 @@ where
 			generate_election_properties_hook: Default::default(),
 			safemode_enabled: Default::default(),
 			block_processor: Default::default(),
-			optimistic_blocks_cache: Default::default(),
 			_phantom: Default::default(),
 		}
 	}
@@ -524,7 +518,6 @@ pub mod tests {
 					execute:Default::default(),
 					delete_data: Default::default()
 				},
-				optimistic_blocks_cache: Default::default(),
 				_phantom: core::marker::PhantomData,
 			})
 		}

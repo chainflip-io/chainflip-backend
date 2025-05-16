@@ -73,10 +73,7 @@ defx! {
 		pub queued_elections: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
 
 		/// Block heights which are queued but already past the safetymargin don't
-		/// have associated hashes. We just store the lowest height which we want
-		/// to query.
-		// pub queued_next_safe_height: Option<T::ChainBlockNumber>,
-
+		/// have associated hashes. We just store a list of block height ranges.
 		pub queued_safe_elections: CompactHeightTracker<T::ChainBlockNumber>,
 
 		/// Hashes of elections currently ongoing
