@@ -70,7 +70,7 @@ pub trait BrokerRpcApi {
 		vault_swap: VaultSwapDetails<AddressString>,
 	) -> RpcResult<VaultSwapInputRpc>;
 
-	#[method(name = "encode_cf_parameters", aliases = ["broker_EncodeCfParameter"])]
+	#[method(name = "encode_cf_parameters", aliases = ["broker_EncodeCfParameters"])]
 	async fn encode_cf_parameters(
 		&self,
 		source_asset: Asset,
