@@ -486,18 +486,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Create a new pool.
 		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On success](Event::NewPoolCreated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
-		/// - [InvalidTick](pallet_cf_pools::Error::InvalidTick)
-		/// - [InvalidInitialPrice](pallet_cf_pools::Error::InvalidInitialPrice)
-		/// - [PoolAlreadyExists](pallet_cf_pools::Error::PoolAlreadyExists)
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::new_pool())]
 		pub fn new_pool(
@@ -763,15 +751,6 @@ pub mod pallet {
 		/// Sets the Liquidity Pool fees. Also collect earned fees and bought amount for
 		/// all positions within the fee and accredit them to the liquidity provider.
 		/// Requires governance origin.
-		///
-		/// ## Events
-		///
-		/// - [On success](Event::PoolFeeSet)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::set_pool_fees())]
 		pub fn set_pool_fees(
@@ -808,12 +787,7 @@ pub mod pallet {
 		/// block number, and the validity of the order is checked at the block number it enters
 		/// the state-chain.
 		///
-		/// `dispatch_at` specifies the block at which to schedule the update. If the
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [UnsupportedCall](pallet_cf_pools::Error::UnsupportedCall)
+		/// `dispatch_at` specifies the block at which to schedule the update.
 		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::schedule_limit_order_update())]

@@ -521,10 +521,6 @@ pub mod pallet {
 		/// [GOVERNANCE] Update a pallet config item.
 		///
 		/// The dispatch origin of this function must be governance.
-		///
-		/// ## Events
-		///
-		/// - [PalletConfigUpdate](Event::PalletConfigUpdate)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::ValidatorWeightInfo::update_pallet_config())]
 		pub fn update_pallet_config(
@@ -579,15 +575,6 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this function must be governance.
 		///
-		/// ## Events
-		///
-		/// - [ForceRotationRequested](Event::ForceRotationRequested)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		/// - [RotationInProgress](Error::RotationInProgress)
-		///
 		/// ## Weight
 		///
 		/// The weight is related to the number of bidders. Getting that number is quite expensive
@@ -611,18 +598,6 @@ pub mod pallet {
 		/// Allow a node to set their keys for upcoming sessions
 		///
 		/// The dispatch origin of this function must be signed.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - None
-		///
-		/// ## Dependencies
-		///
-		/// - [Session Pallet](pallet_session::Config)
 		#[pallet::call_index(2)]
 		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
 		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
@@ -634,16 +609,6 @@ pub mod pallet {
 		/// Allow a node to link their validator id to a peer id
 		///
 		/// The dispatch origin of this function must be signed.
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		/// - [InvalidAccountPeerMappingSignature](Error::InvalidAccountPeerMappingSignature)
-		/// - [AccountPeerMappingOverlap](Error::AccountPeerMappingOverlap)
-		///
-		/// ## Dependencies
-		///
-		/// - None
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::ValidatorWeightInfo::register_peer_id(), DispatchClass::Operational))]
 		pub fn register_peer_id(
@@ -715,18 +680,6 @@ pub mod pallet {
 		/// version is different from storage.
 		///
 		/// The dispatch origin of this function must be signed.
-		///
-		/// ## Events
-		///
-		/// - [CFEVersionUpdated](Event::CFEVersionUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		///
-		/// ## Dependencies
-		///
-		/// - None
 		#[pallet::call_index(4)]
 		#[pallet::weight((T::ValidatorWeightInfo::cfe_version(), DispatchClass::Operational))]
 		pub fn cfe_version(origin: OriginFor<T>, new_version: Version) -> DispatchResult {
@@ -789,14 +742,6 @@ pub mod pallet {
 
 		/// Signals a non-bidding node's intent to start bidding, and participate in the
 		/// next auction. Should only be called if the account is in a non-bidding state.
-		///
-		/// ## Events
-		///
-		/// - [StartedBidding](Event::StartedBidding)
-		///
-		/// ## Errors
-		///
-		/// - [AlreadyBidding](Error::AlreadyBidding)
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::ValidatorWeightInfo::start_bidding())]
 		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResult {
@@ -810,15 +755,6 @@ pub mod pallet {
 		/// Signals a node's intent to withdraw their funds after the next auction and desist
 		/// from future auctions. Should only be called by accounts that are not already not
 		/// bidding.
-		///
-		/// ## Events
-		///
-		/// - [StoppedBidding](Event::StoppedBidding)
-		///
-		/// ## Errors
-		///
-		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
-		/// - [DuringAuctionPhase](Error::AuctionPhase)
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::ValidatorWeightInfo::stop_bidding())]
 		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResult {

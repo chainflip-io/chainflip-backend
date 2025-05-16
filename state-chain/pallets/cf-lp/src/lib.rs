@@ -264,10 +264,6 @@ pub mod pallet {
 		/// Registers a Liquidity Refund Address(LRA) for an account.
 		///
 		/// To request a deposit address for a chain, an LRA must be registered for that chain.
-		///
-		/// ## Events
-		///
-		/// - [On Success](Event::LiquidityRefundAddressRegistered)
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::register_liquidity_refund_address())]
 		pub fn register_liquidity_refund_address(

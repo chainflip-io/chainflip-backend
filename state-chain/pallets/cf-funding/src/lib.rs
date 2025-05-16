@@ -308,14 +308,6 @@ pub mod pallet {
 		/// Funds have been added to an account via the StateChainGateway Smart Contract.
 		///
 		/// If the account doesn't exist, we create it.
-		///
-		/// ## Events
-		///
-		/// - [Funded](Event::Funded)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::funded())]
 		pub fn funded(
@@ -502,15 +494,6 @@ pub mod pallet {
 		/// already been authorised by authority multisig. This merely signals that the
 		/// redeemer has in fact executed the redemption via the StateChainGateway Smart
 		/// Contract and has received their funds. This allows us to finalise any on-chain cleanup.
-		///
-		/// ## Events
-		///
-		/// - [RedemptionSettled](Event::RedemptionSettled)
-		///
-		/// ## Errors
-		///
-		/// - [NoPendingRedemption](Error::NoPendingRedemption)
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::redeemed())]
 		pub fn redeemed(
@@ -580,14 +563,6 @@ pub mod pallet {
 
 		/// Updates the minimum funding required for an account, the extrinsic is gated with
 		/// governance.
-		///
-		/// ## Events
-		///
-		/// - [MinimumFundingUpdated](Event::MinimumFundingUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::update_minimum_funding())]
 		pub fn update_minimum_funding(
@@ -605,15 +580,6 @@ pub mod pallet {
 		}
 
 		/// Adds/Removes restricted addresses to the list of restricted addresses.
-		///
-		/// ## Events
-		///
-		/// - [AddedRestrictedAddress](Event::AddedRestrictedAddress)
-		/// - [RemovedRestrictedAddress](Event::RemovedRestrictedAddress)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32, 10_u32))]
 		pub fn update_restricted_addresses(
@@ -642,11 +608,6 @@ pub mod pallet {
 
 		/// Binds an account to a redeem address. This is used to allow an account to redeem
 		/// their funds only to a specific address.
-		///
-		/// ## Errors
-		///
-		/// - [AccountAlreadyBound](Error::AccountAlreadyBound)
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::bind_redeem_address())]
 		pub fn bind_redeem_address(
@@ -666,10 +627,6 @@ pub mod pallet {
 		/// Updates the Withdrawal Tax, which is the amount levied on each withdrawal request.
 		///
 		/// Requires Governance
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::RedemptionTaxAmountUpdated)
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::update_redemption_tax())]
 		pub fn update_redemption_tax(origin: OriginFor<T>, amount: T::Amount) -> DispatchResult {
@@ -681,15 +638,6 @@ pub mod pallet {
 		}
 
 		/// Binds executor address to an account.
-		///
-		/// ## Events
-		///
-		/// - [BoundExecutorAddress](Event::BoundExecutorAddress)
-		///
-		/// ## Errors
-		///
-		/// - [ExecutorAddressAlreadyBound](Error::ExecutorAddressAlreadyBound)
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::bind_executor_address())]
 		pub fn bind_executor_address(

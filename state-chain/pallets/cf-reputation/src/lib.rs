@@ -236,14 +236,6 @@ pub mod pallet {
 		/// Updates the rate at which reputation points are accrued.
 		///
 		/// For every `number_of_blocks` blocks, `reputation_points` points are accrued.
-		///
-		/// ## Events
-		///
-		/// - [AccrualRateUpdated](Event::AccrualRateUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_accrual_ratio())]
 		pub fn update_accrual_ratio(
@@ -266,10 +258,6 @@ pub mod pallet {
 		}
 
 		/// Updates the penalty for missing a heartbeat.
-		///
-		/// ## Events
-		///
-		/// - [MissedHeartbeatPenaltyUpdated](Event::MissedHeartbeatPenaltyUpdated)
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::update_missed_heartbeat_penalty())]
 		pub fn update_missed_heartbeat_penalty(
@@ -316,14 +304,6 @@ pub mod pallet {
 		/// Failing this they would be considered offline. Suspended validators can continue to
 		/// submit heartbeats so that when their suspension has expired they would be considered
 		/// online again.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::WeightInfo::heartbeat(), DispatchClass::Operational))]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResult {

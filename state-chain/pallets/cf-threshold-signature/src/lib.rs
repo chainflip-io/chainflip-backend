@@ -969,16 +969,6 @@ pub mod pallet {
 		/// [ValidateUnsigned] implementation for this pallet. This means that this call can only be
 		/// triggered if the associated signature is valid, and therfore we don't need to check it
 		/// again inside the call.
-		///
-		/// ## Events
-		///
-		/// - [ThresholdSignatureSuccess](Event::ThresholdSignatureSuccess)
-		/// - [ThresholdDispatchComplete](Event::ThresholdDispatchComplete)
-		///
-		/// ## Errors
-		///
-		/// - [InvalidThresholdSignatureCeremonyId](sp_runtime::traits::InvalidThresholdSignatureCeremonyId)
-		/// - [BadOrigin](sp_runtime::traits::BadOrigin)
 		#[pallet::call_index(0)]
 		#[pallet::weight((T::Weights::signature_success(), DispatchClass::Operational))]
 		pub fn signature_success(
@@ -1030,15 +1020,6 @@ pub mod pallet {
 		/// participants.
 		///
 		/// The `offenders` argument takes a [BTreeSet]
-		///
-		/// ## Events
-		///
-		/// - [FailureReportProcessed](Event::FailureReportProcessed)
-		///
-		/// ## Errors
-		///
-		/// - [InvalidThresholdSignatureCeremonyId](Error::InvalidThresholdSignatureCeremonyId)
-		/// - [InvalidThresholdSignatureRespondent](Error::InvalidThresholdSignatureRespondent)
 		#[pallet::call_index(1)]
 		#[pallet::weight((T::Weights::report_signature_failed(offenders.len() as u32), DispatchClass::Operational))]
 		pub fn report_signature_failed(
@@ -1094,21 +1075,6 @@ pub mod pallet {
 		/// Report the outcome of a keygen ceremony.
 		///
 		/// See [`KeygenOutcome`] for possible outcomes.
-		///
-		/// ## Events
-		///
-		/// - [KeygenSuccessReported](Event::KeygenSuccessReported)
-		/// - [KeygenFailureReported](Event::KeygenFailureReported)
-		///
-		/// ## Errors
-		///
-		/// - [NoActiveRotation](Error::NoActiveRotation)
-		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		/// - [InvalidKeygenCeremonyId](Error::InvalidKeygenCeremonyId)
-		///
-		/// ## Dependencies
-		///
-		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::Weights::report_keygen_outcome(), DispatchClass::Operational))]
 		pub fn report_keygen_outcome(
@@ -1149,15 +1115,6 @@ pub mod pallet {
 
 		/// A callback to be used when the threshold signing ceremony used for keygen verification
 		/// completes.
-		///
-		/// ## Events
-		///
-		/// - [KeygenVerificationSuccess](Event::KeygenVerificationSuccess)
-		/// - [KeygenFailure](Event::KeygenFailure)
-		///
-		/// ## Errors
-		///
-		/// - [ThresholdSignatureUnavailable](Error::ThresholdSignatureUnavailable)
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::Weights::on_keygen_verification_result())]
 		pub fn on_keygen_verification_result(
@@ -1195,10 +1152,6 @@ pub mod pallet {
 		/// [GOVERNANCE] Update a pallet config item.
 		///
 		/// The dispatch origin of this function must be governance.
-		///
-		/// ## Events
-		///
-		/// - [PalletConfigUpdate](Event::PalletConfigUpdate)
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::Weights::update_pallet_config())]
 		pub fn update_pallet_config(
@@ -1230,7 +1183,6 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	/// Initiate a new signature request, returning the request id.
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
 		request_type: RequestType<

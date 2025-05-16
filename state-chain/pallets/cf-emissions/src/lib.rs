@@ -218,15 +218,6 @@ pub mod pallet {
 		/// Updates the emission rate to Validators.
 		///
 		/// Can only be called by the root origin.
-		///
-		/// ## Events
-		///
-		/// - [CurrentAuthorityInflationEmissionsUpdated](Event::
-		///   CurrentAuthorityInflationEmissionsUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_current_authority_emission_inflation())]
 		pub fn update_current_authority_emission_inflation(
@@ -240,14 +231,6 @@ pub mod pallet {
 		}
 
 		/// Updates the emission rate to Backup nodes.
-		///
-		/// ## Events
-		///
-		/// - [BackupNodeInflationEmissionsUpdated](Event:: BackupNodeInflationEmissionsUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::update_backup_node_emission_inflation())]
 		pub fn update_backup_node_emission_inflation(
@@ -261,14 +244,6 @@ pub mod pallet {
 		}
 
 		/// Updates the Supply Update interval.
-		///
-		/// ## Events
-		///
-		/// - [SupplyUpdateIntervalUpdated](Event:: SupplyUpdateIntervalUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::update_supply_update_interval())]
 		pub fn update_supply_update_interval(

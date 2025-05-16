@@ -1351,10 +1351,6 @@ pub mod pallet {
 
 		/// Sets if an asset is not allowed to be sent out of the chain via Egress.
 		/// Requires Governance
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::AssetEgressStatusChanged)
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::disable_asset_egress())]
 		pub fn enable_or_disable_egress(
@@ -1415,10 +1411,6 @@ pub mod pallet {
 
 		/// Stores information on failed Vault transfer.
 		/// Requires Witness origin.
-		///
-		/// ## Events
-		///
-		/// - [on_success](Event::TransferFallbackRequested)
 		#[pallet::weight(T::WeightInfo::vault_transfer_failed())]
 		#[pallet::call_index(4)]
 		pub fn vault_transfer_failed(
@@ -1462,10 +1454,6 @@ pub mod pallet {
 		/// Callback for when CCMs failed to be broadcasted. We will resign the call
 		/// so the user can broadcast the CCM themselves.
 		/// Requires Root origin.
-		///
-		/// ## Events
-		///
-		/// - [on_success](Event::CcmBroadcastFailed)
 		#[pallet::weight(T::WeightInfo::ccm_broadcast_failed())]
 		#[pallet::call_index(5)]
 		pub fn ccm_broadcast_failed(

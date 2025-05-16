@@ -946,10 +946,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Request a swap deposit address.
-		///
-		/// ## Events
-		///
-		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
 		pub fn request_swap_deposit_address(
@@ -977,10 +973,6 @@ pub mod pallet {
 		}
 
 		/// Brokers can withdraw their collected fees.
-		///
-		/// ## Events
-		///
-		/// - [WithdrawalRequested](Event::WithdrawalRequested)
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::withdraw())]
 		pub fn withdraw(
@@ -1154,10 +1146,6 @@ pub mod pallet {
 		}
 
 		/// Request a swap deposit address.
-		///
-		/// ## Events
-		///
-		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::request_swap_deposit_address_with_affiliates())]
 		pub fn request_swap_deposit_address_with_affiliates(
@@ -1258,10 +1246,6 @@ pub mod pallet {
 		/// Opens a private broker channel for Bitcoin vault swaps.
 		///
 		/// This requires the broker to have sufficient funds to cover the bond.
-		///
-		/// ## Events
-		///
-		/// - [PrivateBrokerChannelOpened](Event::PrivateBrokerChannelOpened)
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::open_private_btc_channel())]
 		pub fn open_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
@@ -1291,10 +1275,6 @@ pub mod pallet {
 		/// Closes the currently open private broker channel.
 		///
 		/// Closing the channel will unlock the bonded funds.
-		///
-		/// ## Events
-		///
-		/// - [PrivateBrokerChannelClosed](Event::PrivateBrokerChannelClosed)
 		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::close_private_btc_channel())]
 		pub fn close_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
@@ -1320,10 +1300,6 @@ pub mod pallet {
 		/// Affiliates have a unique account id that can only be accessed through the affiliate's
 		/// broker. The affiliate account id is derived from the broker account id using a short id
 		/// that is unique to that combination of broker and affiliate.
-		///
-		/// ## Events
-		///
-		/// - [AffiliateRegistration](Event::AffiliateRegistration)
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
@@ -1374,10 +1350,6 @@ pub mod pallet {
 		/// Triggers a withdrawal to the registered withdrawal address of the affiliate.
 		///
 		/// Note: This extrinsic is secured by the broker that has registered the affiliate account.
-		///
-		/// ## Events
-		///
-		/// - [WithdrawalRequested](Event::WithdrawalRequested)
 		#[pallet::call_index(16)]
 		#[pallet::weight(T::WeightInfo::affiliate_withdrawal_request())]
 		pub fn affiliate_withdrawal_request(
@@ -1400,10 +1372,6 @@ pub mod pallet {
 		/// Sets the brokers personal minimum fee for vault swaps.
 		/// This minimum is used to stop encoding vault swaps with a lower broker fee.
 		/// If a swap is witnessed with a lower fee, it will be changed to the minimum.
-		///
-		/// ## Events
-		///
-		/// - [VaultSwapMinimumBrokerFeeSet](Event::VaultSwapMinimumBrokerFeeSet)
 		#[pallet::call_index(17)]
 		#[pallet::weight(T::WeightInfo::set_vault_swap_minimum_broker_fee())]
 		pub fn set_vault_swap_minimum_broker_fee(
