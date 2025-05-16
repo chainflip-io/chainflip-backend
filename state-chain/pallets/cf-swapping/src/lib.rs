@@ -1176,14 +1176,6 @@ pub mod pallet {
 					dca_parameters.clone(),
 				)?;
 
-			// TODO: deduplicate this with assemble_and_validate_broker_fees
-			let affiliate_fees = affiliate_fees
-				.into_iter()
-				.filter(|beneficiary| beneficiary.bps > 0)
-				.collect::<Vec<_>>()
-				.try_into()
-				.expect("Filtering out will always fit");
-
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				destination_address,
