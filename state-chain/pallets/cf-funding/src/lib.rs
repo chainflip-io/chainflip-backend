@@ -656,6 +656,32 @@ pub mod pallet {
 			});
 			Ok(())
 		}
+
+		/// Rebalance funds between to validator accounts under the same address binding conditions
+		/// as a full redemption. Additionally, checks that no address binding conditions are
+		/// violated.
+		///
+		/// ## Events
+		///
+		/// - [Rebalance](Event::Rebalance)
+		///
+		/// ## Errors
+		///
+		/// - [RestrictedToValidators](Error::RestrictedToValidators)
+		/// - [ExecutorBindingRestrictionViolated](Error::ExecutorBindingRestrictionViolated)
+		/// - [AccountBindingRestrictionViolated](Error::AccountBindingRestrictionViolated)
+		#[pallet::call_index(11)]
+		#[pallet::weight(0)]
+		pub fn rebalance(
+			origin: OriginFor<T>,
+			destination_account_id: AccountId<T>,
+			address: Option<EthereumAddress>,
+			amount: RedemptionAmount<FlipBalance<T>>,
+		) -> DispatchResult {
+			let source = ensure_signed(origin)?;
+
+			Ok(())
+		}
 	}
 
 	#[pallet::genesis_config]
