@@ -867,6 +867,9 @@ pub mod pallet {
 		/// The affiliate has not withdrawn their earned fees. This is a pre-requisite for
 		/// deregistration of a broker.
 		AffiliateEarnedFeesNotWithdrawn,
+		/// Refund egress was not performed because no amount remained after deducting the refund
+		/// fee.
+		NoRefundAmountRemaining,
 	}
 
 	#[pallet::genesis_config]
@@ -1787,6 +1790,13 @@ pub mod pallet {
 								);
 							},
 						}
+					} else {
+						Self::deposit_event(Event::<T>::RefundEgressIgnored {
+							swap_request_id,
+							asset: request.input_asset,
+							amount: amount_to_refund,
+							reason: DispatchError::from(Error::<T>::NoRefundAmountRemaining),
+						});
 					}
 
 					// In case of DCA we may have partially swapped and now have some output
