@@ -30,6 +30,8 @@ pub trait ChainTypes: Ord + Clone + Debug + 'static {
 		+ 'static
 		+ Sized;
 	type ChainBlockHash: Serde + Ord + Clone + Debug + 'static;
+
+	const SAFETY_MARGIN: u32;
 }
 
 pub trait HWTypes: ChainTypes {

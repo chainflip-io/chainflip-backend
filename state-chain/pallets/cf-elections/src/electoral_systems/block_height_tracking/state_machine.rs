@@ -338,6 +338,9 @@ pub mod tests {
 	{
 		type ChainBlockNumber = N;
 		type ChainBlockHash = H;
+
+		// TODO we could make this a parameter to test with different margins
+		const SAFETY_MARGIN: u32 = 16;
 	}
 
 	impl<
@@ -354,7 +357,7 @@ pub mod tests {
 			D: Serde + Ord + Clone + Debug + 'static,
 		> HWTypes for (N, H, D)
 	{
-		const BLOCK_BUFFER_SIZE: usize = 6;
+		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
@@ -387,12 +390,14 @@ pub mod tests {
 	impl ChainTypes for TestTypes2 {
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
+
+		const SAFETY_MARGIN: u32 = 16;
 	}
 
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 	struct TestTypes2 {}
 	impl HWTypes for TestTypes2 {
-		const BLOCK_BUFFER_SIZE: usize = 6;
+		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 

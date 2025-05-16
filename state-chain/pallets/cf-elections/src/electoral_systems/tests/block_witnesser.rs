@@ -70,6 +70,8 @@ impl Hook<HookTypeFor<Types, SafeModeEnabledHook>> for Types {
 impl ChainTypes for Types {
 	type ChainBlockNumber = u64;
 	type ChainBlockHash = u64;
+
+	const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
 }
 
 impl BWProcessorTypes for Types {
