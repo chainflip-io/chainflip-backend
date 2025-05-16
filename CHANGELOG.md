@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.9.3] - 2025-05-16
+
+### Fixes
+
+- RPC endpoint now report ingress/egress fees for HubUSDC and HubUSDT in correct curreny
+- Adjusted egress fee calculation for Assethub CCM calls
+
 ## [1.9.2] - 2025-04-29
 
 ### Features

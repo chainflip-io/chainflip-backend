@@ -8,7 +8,7 @@ license = "Apache-2.0"
 
 [lib]
 crate-type = ["cdylib"]
-name = "chainflip_engine_v1_9_2"
+name = "chainflip_engine_v1_9_3"
 path = "src/lib.rs"
 
 [dependencies]
