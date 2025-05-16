@@ -324,6 +324,13 @@ impl<T: BWTypes> ElectionTracker2<T> {
 				self.queued_safe_elections.insert(height);
 			});
 
+		// move ongoing elections from ByHash to SafeBlockHeight if they become old enough
+		self.ongoing.iter_mut().for_each(|(height, ty)| {
+			if height.saturating_forward(safety_margin) < *range.end() {
+				*ty = BWElectionType::SafeBlockHeight;
+			}
+		});
+
 		optimistic_blocks.into_iter().collect()
 	}
 

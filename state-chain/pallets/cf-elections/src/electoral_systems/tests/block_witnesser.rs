@@ -25,7 +25,6 @@ use crate::{
 	electoral_systems::{
 		block_height_tracking::{ChainProgress, ChainProgressFor, ChainTypes},
 		block_witnesser::{
-			primitives::ElectionTracker,
 			state_machine::{
 				BWElectionProperties, BWProcessorTypes, ElectionPropertiesHook,
 				ElectionTrackerEventHook, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,

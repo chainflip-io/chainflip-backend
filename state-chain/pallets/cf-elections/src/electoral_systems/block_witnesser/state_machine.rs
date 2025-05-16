@@ -2,7 +2,7 @@ use super::{
 	super::state_machine::core::*,
 	block_processor::BlockProcessorEvent,
 	optimistic_block_cache::OptimisticBlockCache,
-	primitives::{ElectionTracker, ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
+	primitives::{ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
 	block_height_tracking::{ChainProgress, ChainProgressFor, ChainTypes},
