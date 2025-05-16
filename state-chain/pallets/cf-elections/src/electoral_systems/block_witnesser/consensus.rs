@@ -11,7 +11,7 @@ use super::state_machine::{BWElectionProperties, BWTypes};
 
 pub struct BWConsensus<T: BWTypes> {
 	pub consensus: SupermajorityConsensus<SharedDataHash>,
-	pub data: BTreeMap<SharedDataHash, T::BlockData>,
+	pub data: BTreeMap<SharedDataHash, (T::BlockData, Option<T::ChainBlockHash>)>,
 	pub _phantom: sp_std::marker::PhantomData<T>,
 }
 
@@ -27,10 +27,10 @@ impl<T: BWTypes> Default for BWConsensus<T> {
 
 impl<T: BWTypes> ConsensusMechanism for BWConsensus<T>
 where
-	T::BlockData: Hashable,
+	(T::BlockData, Option<T::ChainBlockHash>): Hashable,
 {
-	type Vote = T::BlockData;
-	type Result = T::BlockData;
+	type Vote = (T::BlockData, Option<T::ChainBlockHash>);
+	type Result = (T::BlockData, Option<T::ChainBlockHash>);
 	type Settings = (Threshold, BWElectionProperties<T>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {

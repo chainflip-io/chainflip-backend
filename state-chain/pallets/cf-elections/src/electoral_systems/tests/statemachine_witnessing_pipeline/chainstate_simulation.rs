@@ -10,6 +10,7 @@ use core::{
 	ops::{Range, RangeInclusive},
 };
 
+use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use proptest::{collection::*, prelude::*};
 
 /// The basic data structure involved is an ordered tree which:
@@ -68,6 +69,22 @@ pub fn generate_consumer(p: ConsumerParameters) -> impl Strategy<Value = Consume
 	)
 }
 
+pub fn trim_forked_block<A>(block: ForkedBlock<A>, max_length: usize) -> ForkedBlock<A> {
+	match block {
+		ForkedBlock::Block(block) => ForkedBlock::Block(block),
+		ForkedBlock::Fork(chain) => ForkedBlock::Fork(trim_forked_chain(chain, max_length)),
+	}
+}
+
+pub fn trim_forked_chain<A>(chain: ForkedChain<A>, max_length: usize) -> ForkedChain<A> {
+	chain
+		.into_iter()
+		.enumerate()
+		.map(|(height, block)| trim_forked_block(block, max_length.saturating_sub(height)))
+		.take(max_length)
+		.collect()
+}
+
 pub fn generate_consumer_block(
 	p: ConsumerChainParameters,
 ) -> impl Strategy<Value = ForkedBlock<Consumer>> {
@@ -78,6 +95,8 @@ pub fn generate_consumer_block(
 		p.max_fork_length as u32,
 		move |inner| vec(inner, 1..p.max_fork_length).prop_map(ForkedBlock::Fork),
 	)
+	// enforce fork length by deleting blocks that go over the limit
+	.prop_map(move |block| trim_forked_block(block, p.max_fork_length))
 }
 
 pub fn generate_consumer_chain(
@@ -112,6 +131,7 @@ pub struct Consumer {
 }
 
 pub struct FilledBlock<E> {
+	block_id: usize,
 	data: Vec<E>,
 	data_delays: Vec<usize>,
 }
@@ -119,25 +139,33 @@ pub struct FilledBlock<E> {
 pub fn fill_block<E: Clone>(
 	input: ForkedBlock<Consumer>,
 	events: &mut Vec<E>,
+	block_id: &mut usize,
 ) -> ForkedBlock<FilledBlock<E>> {
 	use ForkedBlock::*;
 	match input {
 		Block(Consumer { ignore, drop, take, data_delays }) => {
+			let current_block_id = block_id.clone();
+			*block_id = *block_id + 1;
 			{
 				let _dropped_events = events.drain(ignore..(ignore + drop));
 			}
 			let block_events = events.drain(ignore..(ignore + take));
-			Block(FilledBlock { data: block_events.collect(), data_delays: data_delays.clone() })
+			Block(FilledBlock {
+				data: block_events.collect(),
+				data_delays: data_delays.clone(),
+				block_id: current_block_id,
+			})
 		},
-		Fork(blocks) => Fork(fill_chain(blocks, &mut events.clone())),
+		Fork(blocks) => Fork(fill_chain(blocks, &mut events.clone(), block_id)),
 	}
 }
 
 pub fn fill_chain<E: Clone>(
 	chain: ForkedChain<Consumer>,
 	events: &mut Vec<E>,
+	block_id: &mut usize,
 ) -> ForkedChain<FilledBlock<E>> {
-	chain.into_iter().map(|block| fill_block(block, events)).collect()
+	chain.into_iter().map(|block| fill_block(block, events, block_id)).collect()
 }
 
 pub fn create_time_steps<E: Clone>(chain: &ForkedChain<FilledBlock<E>>) -> Vec<FlatChain<E>> {
@@ -146,8 +174,8 @@ pub fn create_time_steps<E: Clone>(chain: &ForkedChain<FilledBlock<E>>) -> Vec<F
 	use ForkedBlock::*;
 	for block in chain {
 		match block {
-			Block(FilledBlock { data, data_delays }) => {
-				current_blocks.push(FlatBlock { events: data.clone() });
+			Block(FilledBlock { data, data_delays, block_id }) => {
+				current_blocks.push(FlatBlock { events: data.clone(), block_id: *block_id });
 				chains.push(FlatChain {
 					blocks: current_blocks.clone(),
 					data_delays: data_delays.clone(),
@@ -173,6 +201,7 @@ pub fn create_time_steps<E: Clone>(chain: &ForkedChain<FilledBlock<E>>) -> Vec<F
 #[derive(Debug, Clone)]
 pub struct FlatBlock<E> {
 	pub events: Vec<E>,
+	pub block_id: usize,
 }
 
 // Temp
@@ -208,8 +237,14 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 	generate_consumer_chain(p)
 		// turn into chain progression
 		.prop_map(|mut blocks| {
+			// insert first empty parent block
+			blocks.insert(
+				0,
+				ForkedBlock::Block(Consumer { ignore: 0, drop: 0, take: 0, data_delays: vec![0] }),
+			);
+
 			// generate a large number of empty blocks, so all processors can run until completion
-			blocks.extend((0..5).map(|_| {
+			blocks.extend((0..=10).map(|_| {
 				ForkedBlock::Block(Consumer {
 					ignore: 0,
 					drop: 0,
@@ -218,7 +253,8 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 				})
 			}));
 
-			let filled_chain = fill_chain(blocks, &mut make_events());
+			let mut block_id = 0;
+			let filled_chain = fill_chain(blocks, &mut make_events(), &mut block_id);
 
 			ForkedFilledChain { blocks: filled_chain }
 		})
@@ -242,8 +278,8 @@ pub fn print_blocks(
 	for block in blocks {
 		match block {
 			Fork(blocks) => forks.push((current_string.len(), blocks)),
-			Block(FilledBlock { data, data_delays }) =>
-				current_string.push_str(&format!("{data:?} [{data_delays:?}] -> ")),
+			Block(FilledBlock { data, data_delays, block_id }) =>
+				current_string.push_str(&format!("{block_id}: {data:?} [{data_delays:?}] -> ")),
 		}
 	}
 
@@ -268,44 +304,74 @@ pub fn blocks_into_chain_progression(
 ) -> FlatChainProgression<char> {
 	let time_steps = create_time_steps(&filled_chain);
 
-	for step in &time_steps {
-		println!("step: {step:?}");
-	}
-
-	let mut chain_progression = FlatChainProgression { chains: time_steps, age: 0 };
-
-	// attach dummy first block
-	for chain in &mut chain_progression.chains {
-		chain.blocks.insert(0, FlatBlock { events: vec![] });
-	}
-
-	chain_progression
+	FlatChainProgression { chains: time_steps, age: 0 }
 }
 
-use crate::electoral_systems::block_height_tracking::primitives::Header;
-type MockChain<E> = Vec<FlatBlock<E>>;
+pub struct MockChain<E, T: ChainTypes<ChainBlockHash = usize>> {
+	// heights and blocks
+	pub chain: Vec<(T::ChainBlockNumber, FlatBlock<E>)>,
+	pub _phantom: std::marker::PhantomData<T>,
+}
+
+use crate::electoral_systems::block_height_tracking::{primitives::Header, ChainTypes};
+use sp_std::iter::Step;
+// type MockChain<E> = Vec<FlatBlock<E>>;
 type N = u8;
-pub fn get_block_height<E>(chain: &MockChain<E>) -> N {
-	chain.len() as u8 - 1
-}
-pub fn get_block_header<E: Clone>(chain: &MockChain<E>, height: N) -> Option<Header<Vec<E>, N>> {
-	let hash = chain.get(height as usize)?.events.clone();
-	let parent_hash = chain
-		.get(height.saturating_sub(1) as usize)
-		.map(|block| block.events.clone())
-		.unwrap_or(vec![]);
-	Some(Header { block_height: height, hash, parent_hash })
-}
-pub fn get_best_block<E: Clone>(chain: &MockChain<E>) -> Header<Vec<E>, N> {
-	let hash = chain.last().unwrap().events.clone();
-	let parent_hash = chain
-		.iter()
-		.rev()
-		.skip(1)
-		.next()
-		.map(|block| block.events.clone())
-		.unwrap_or(vec![]);
-	Header { block_height: chain.len() as u8 - 1, hash, parent_hash }
+
+impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = usize>> MockChain<E, T> {
+	pub fn new_with_offset(offset: usize, blocks: Vec<FlatBlock<E>>) -> MockChain<E, T> {
+		Self {
+			chain: blocks
+				.into_iter()
+				.enumerate()
+				.map(|(height, block)| {
+					(T::ChainBlockNumber::zero().saturating_forward(offset + height), block)
+				})
+				.collect(),
+			_phantom: Default::default(),
+		}
+	}
+
+	pub fn get_hash_by_height(&self, height: T::ChainBlockNumber) -> Option<usize> {
+		self.chain
+			.iter()
+			.find(|(h, block)| *h == height)
+			.map(|(_, block)| block.block_id)
+	}
+
+	pub fn get_best_block_height(&self) -> T::ChainBlockNumber {
+		self.chain
+			.iter()
+			.map(|(height, _)| height.clone())
+			.max()
+			.unwrap_or(T::ChainBlockNumber::zero())
+	}
+
+	pub fn get_block_header(&self, height: T::ChainBlockNumber) -> Option<Header<T>> {
+		let hash = self.get_hash_by_height(height)?;
+		let parent_hash = self.get_hash_by_height(height.saturating_backward(1)).unwrap_or(1234);
+
+		Some(Header { block_height: height, hash, parent_hash })
+	}
+	pub fn get_block_by_hash(&self, hash: T::ChainBlockHash) -> Option<Vec<E>> {
+		self.chain
+			.iter()
+			.find(|(height, block)| block.block_id == hash)
+			.map(|(height, block)| block.events.clone())
+	}
+	pub fn get_block_by_height(&self, number: T::ChainBlockNumber) -> Option<Vec<E>> {
+		self.chain
+			.iter()
+			.find(|(height, block)| *height == number)
+			.map(|(height, block)| block.events.clone())
+	}
+	pub fn get_best_block_header(&self) -> Header<T> {
+		let best_height = self.get_best_block_height();
+		self.get_block_header(best_height).expect(&format!(
+			"getting block for height {best_height:?} failed for chain {:?}",
+			self.chain
+		))
+	}
 }
 
 // Temp
