@@ -255,7 +255,6 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 
 				last_events.extend(self.process_rules_for_ages_and_block(
 					block_height,
-					block_height,
 					age_range,
 					&block_info.block_data,
 					block_info.safety_margin,
@@ -292,7 +291,6 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	fn process_rules_for_ages_and_block(
 		&mut self,
 		block_number: T::ChainBlockNumber,
-		block_number_for_expiry: T::ChainBlockNumber,
 		age: Range<u32>,
 		data: &T::BlockData,
 		safety_margin: u32,
@@ -343,9 +341,8 @@ pub(crate) mod tests {
 
 	use crate::{
 		electoral_systems::{
-			block_height_tracking::ChainTypes,
 			block_witnesser::{
-				block_processor::{BlockProcessor, SMBlockProcessorInput},
+				block_processor::BlockProcessor,
 				primitives::ChainProgressInner,
 				state_machine::{
 					BWProcessorTypes, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,
@@ -361,7 +358,6 @@ pub(crate) mod tests {
 		ops::{Range, RangeInclusive},
 	};
 	use frame_support::{Deserialize, Serialize};
-	use proptest::prelude::Strategy;
 	use proptest_derive::Arbitrary;
 	use sp_std::fmt::Debug;
 	use std::collections::BTreeMap;
@@ -572,7 +568,6 @@ pub(crate) mod tests {
 		// We reprocessed the reorged blocks, now all the deposit end up in block 11
 		let result = processor.process_rules_for_ages_and_block(
 			11,
-			11,
 			0..1,
 			&vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
 			SAFETY_MARGIN,
@@ -593,7 +588,7 @@ pub(crate) mod tests {
 		);
 		// we receive next block which contains a deposit already processed (reorg detected later)
 		let result =
-			processor.process_rules_for_ages_and_block(10, 10, 0..1, &vec![3, 4, 5], SAFETY_MARGIN);
+			processor.process_rules_for_ages_and_block(10, 0..1, &vec![3, 4, 5], SAFETY_MARGIN);
 		// The already processed events are saved, hence only the new one are present when
 		// processing the new block
 		assert_eq!(

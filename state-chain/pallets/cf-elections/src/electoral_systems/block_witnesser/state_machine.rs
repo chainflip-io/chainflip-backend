@@ -8,13 +8,12 @@ use crate::electoral_systems::{
 	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{core::Validate, state_machine::Statemachine, state_machine_es::SMInput},
 };
-use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
-use core::{iter::Step, ops::Range};
+use core::ops::Range;
 use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
+use sp_std::{fmt::Debug, vec::Vec};
 
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
@@ -456,11 +455,11 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 
 #[cfg(test)]
 pub mod tests {
+	use sp_std::iter::Step;
 	use std::collections::BTreeMap;
 
-	use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
+	use cf_chains::witness_period::{BlockZero, SaturatingStep};
 	use proptest::{
-		arbitrary::arbitrary,
 		prelude::{any, Arbitrary, BoxedStrategy, Just, Strategy},
 		prop_oneof,
 		sample::select,
@@ -484,12 +483,11 @@ pub mod tests {
 	{
 		prop_do! {
 			let (next_election, seen_heights_below,
-				 priority_elections_below, reorg_id,
+				 priority_elections_below,
 				safemode_enabled) in (
 				any::<T::ChainBlockNumber>(),
 				any::<T::ChainBlockNumber>(),
 				any::<T::ChainBlockNumber>(),
-				any::<u8>(),
 				any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else {SafeModeStatus::Disabled})
 			);
 
@@ -545,9 +543,6 @@ pub mod tests {
 							hashes.clone(),
 							a..=a.saturating_forward(hashes.len())
 						)),
-					// (any::<T::ChainBlockNumber>(), 0..20usize).prop_map(|(a, b)| {
-					// 	ChainProgress::FirstConsensus(a..=a.saturating_forward(b))
-					// })
 				]
 				.prop_map(SMInput::Context)
 			]

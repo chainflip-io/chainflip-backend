@@ -24,7 +24,7 @@ use pallet_cf_elections::{
 		block_height_tracking::{
 			consensus::BlockHeightTrackingConsensus,
 			state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders},
-			BlockHeightChangeHook, ChainProgress, ChainProgressFor, ChainTypes, HWTypes,
+			BlockHeightChangeHook, ChainProgressFor, ChainTypes, HWTypes,
 			HeightWitnesserProperties,
 		},
 		block_witnesser::{
@@ -32,8 +32,8 @@ use pallet_cf_elections::{
 			primitives::SafeModeStatus,
 			state_machine::{
 				BWElectionProperties, BWProcessorTypes, BWStatemachine, BWTypes,
-				BlockWitnesserSettings, BlockWitnesserState, ElectionPropertiesHook,
-				ElectionTrackerEventHook, HookTypeFor, SafeModeEnabledHook,
+				BlockWitnesserSettings, BlockWitnesserState, ElectionPropertiesHook, HookTypeFor,
+				SafeModeEnabledHook,
 			},
 		},
 		composite::{
@@ -42,7 +42,7 @@ use pallet_cf_elections::{
 		},
 		liveness::Liveness,
 		state_machine::{
-			core::{hook_test_utils::EmptyHook, Hook, HookType},
+			core::{hook_test_utils::EmptyHook, Hook},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 		unsafe_median::{UnsafeMedian, UpdateFeeHook},

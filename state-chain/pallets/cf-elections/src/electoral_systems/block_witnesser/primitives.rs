@@ -21,12 +21,6 @@ use crate::electoral_systems::state_machine::core::{fst, Hook, Validate};
 
 use super::state_machine::{BWElectionType, BWTypes};
 
-macro_rules! do_match {
-	($($tt:tt)*) => {
-		|x| match x {$($tt)*}
-	};
-}
-
 macro_rules! defx {
 	(
 		pub struct $Name:tt [$($ParamName:ident: $ParamType:tt),*] {
@@ -49,7 +43,7 @@ macro_rules! defx {
 
 			fn is_valid(&self) -> Result<(), Self::Error> {
 				let $this = self;
-				use frame_support::ensure;
+
 				$(
 					ensure!($prop, stringify!($prop_name));
 				)*

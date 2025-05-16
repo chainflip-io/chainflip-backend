@@ -1,5 +1,3 @@
-use core::hash::Hash;
-
 use crate::{
 	electoral_systems::state_machine::consensus::{
 		ConsensusMechanism, SupermajorityConsensus, Threshold,
