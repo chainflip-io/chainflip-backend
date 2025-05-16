@@ -8,8 +8,8 @@ use derive_where::derive_where;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
-	cmp::{max, min},
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque},
+	cmp::max,
+	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
 	iter,
 	vec::Vec,
 };
@@ -17,10 +17,7 @@ use sp_std::{
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-use crate::electoral_systems::{
-	block_height_tracking::ChainTypes,
-	state_machine::core::{fst, Hook, Validate},
-};
+use crate::electoral_systems::state_machine::core::{fst, Hook, Validate};
 
 use super::state_machine::{BWElectionType, BWTypes};
 
@@ -127,8 +124,6 @@ impl<T: BWTypes> ElectionTracker2<T> {
 		self.events.run(ElectionTrackerEvent::UpdateSafeElections { old, new, reason });
 	}
 
-	/// There are three types of elections:
-	///  - ByHash() elections are started
 	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
 		// In case of a reorg we still want to recreate elections for blocks which we had
 		// elections for previously AND were touched by the reorg
@@ -138,11 +133,6 @@ impl<T: BWTypes> ElectionTracker2<T> {
 		};
 
 		use BWElectionType::*;
-
-		// let safe_elections =
-		// 	self.queued_safe_elections
-		// 	.clone()
-		// 	.map(|height| (height, SafeBlockHeight));
 
 		// schedule at most `max_new_elections`
 		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
@@ -163,33 +153,8 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			safe_elections
 				.chain(hash_elections)
 				.chain(opti_elections)
-				// .inspect(|(height, election_type)| {
-				// 	match *election_type {
-				// 		Optimistic => (),
-				// 		ByHash(_) =>
-				// self.update_safe_elections(UpdateSafeElectionsReason::SafeElectionScheduled, |x|
-				// *x = *height..*height), 		SafeBlockHeight =>
-				// 			self.queued_safe_elections = self.queued_safe_elections.start..*height,
-				// 	}
-				// 	// if *election_type != Optimistic {
-				// 	// 	self.queued_next_safe_height = Some(height.saturating_forward(1))
-				// 	// }
-				// })
 				.take(max_new_elections),
 		);
-
-		let highest_non_optimistic_election = self
-			.ongoing
-			.iter()
-			.filter(|(height, t)| **t != Optimistic)
-			.map(fst)
-			.max()
-			.cloned();
-		if let Some(n) = highest_non_optimistic_election {
-			self.update_safe_elections(UpdateSafeElectionsReason::SafeElectionScheduled, |x| {
-				// x.start = n.saturating_forward(1)
-			});
-		}
 	}
 
 	/// If an election is done we remove it from the ongoing list.
@@ -304,12 +269,6 @@ impl<T: BWTypes> ElectionTracker2<T> {
 				// this block
 				self.priority_elections_below =
 					max(next_election, self.priority_elections_below.clone());
-
-				// We have to kick out scheduled safe-height elections that intersect with the reorg
-				// we're gonna create by-hash elections for the reorg range instead
-				// self.queued_next_safe_height = self.queued_next_safe_height.map(
-				// 	|next_safe_height| min(next_safe_height, *range.start())
-				// );
 			}
 		}
 
@@ -351,24 +310,7 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			.extract_if(|height, hash| {
 				optimistic_blocks.get(&height).map(|block| block.hash == *hash).unwrap_or(false)
 			})
-			.map(fst)
-			.min()
-			.inspect(|height| {
-				self.update_safe_elections(UpdateSafeElectionsReason::GotOptimisticBlock, |x|
-					// x.start = max(x.start, *height));
-
-					// NOTE: it seems like here we shouldn't do anything, remove the whole call if things work out
-					())
-			});
-
-		if is_reorg {
-			self.update_safe_elections(UpdateSafeElectionsReason::ReorgReceived, |x|
-
-				// NOTE, we shouldnt have to do this. This is scheduling new elections for blocks inside the safety margin,
-				// that were reorged
-				// x.start = min(x.start, *range.start()));
-				());
-		}
+			.collect::<Vec<_>>();
 
 		// adding all hashes to the queue
 		self.queued_elections.append(&mut hashes);
@@ -382,20 +324,11 @@ impl<T: BWTypes> ElectionTracker2<T> {
 				self.queued_safe_elections.insert(height);
 			});
 
-		// .max()
-		// .clone()
-		// .inspect(|height| {
-		// 	self.update_safe_elections(UpdateSafeElectionsReason::OutOfSafetyMargin, |x| {
-		// 		x.end = max(x.end, height.saturating_forward(1))
-		// 	});
-		// });
-
 		optimistic_blocks.into_iter().collect()
 	}
 
 	fn next_election(&self) -> Option<T::ChainBlockNumber> {
 		self.queued_elections.first_key_value().map(fst).cloned()
-		// .unwrap_or(self.seen_heights_below.clone())
 	}
 }
 
@@ -510,134 +443,10 @@ fn range_difference<N: Ord + Clone>(r: &mut Range<N>, s: &Range<N>) {
 	}
 }
 
-/// Keeps track of ongoing elections for the block witnesser.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub struct ElectionTracker<N: Ord> {
-	/// The highest block height for which an election was started in the past.
-	/// New elections are going to be started if there is the capacity to do so
-	/// and that height has been witnessed (`highest_witnessed > highest_election`).
-	pub next_election: N,
-
-	/// The highest block height that has been seen.
-	pub next_witnessed: N,
-
-	/// The highest block height that we had previously started elections for and
-	/// that was subsequently touched by a reorg.
-	pub next_priority_election: N,
-
-	/// Map containing all currently active elections.
-	/// The associated u8 "reord_id" is somewhat an artifact of the fact that
-	/// this is intended to be used in an electoral system state machine. And the state machine
-	/// has to know when to re-open an election which is currently ongoing.
-	/// The state machine wouldn't close and reopen an election if the election properties
-	/// stay the same, so we have (N, u8) as election properties. And when we want to reopen
-	/// an ongoing election we change the u8 reorg_id.
-	pub ongoing: BTreeMap<N, u8>,
-
-	/// When an election for a given block height is requested by inserting it in `ongoing`, it is
-	/// always inserted with the current `reorg_id` as value.
-	/// When a reorg is detected, this id is mutated to a new unique value that is not in
-	/// `ongoing`. Elections in the range of a reorg are thus recreated with the new id, which
-	/// causes them to be restarted by the electoral system.
-	pub reorg_id: u8,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum SafeModeStatus {
 	Enabled,
 	Disabled,
-}
-
-impl<N: Ord + SaturatingStep + Step + Copy> ElectionTracker<N> {
-	/// Given the current state, if there are less than `max_ongoing`
-	/// ongoing elections we push more elections into ongoing.
-	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
-		// In case of a reorg we still want to recreate elections for blocks which we had
-		// elections for previously AND were touched by the reorg
-		let start_up_to = match safemode {
-			SafeModeStatus::Disabled => self.next_witnessed,
-			SafeModeStatus::Enabled => self.next_priority_election,
-		};
-
-		// filter out all elections which are ongoing, but shouldn't be, because
-		// they are in the scheduled range (for example because there was a reorg)
-		self.ongoing.retain(|height, _| *height < self.next_election);
-
-		// schedule
-		for height in self.next_election..start_up_to {
-			if self.ongoing.len() < max_ongoing {
-				self.ongoing.insert(height, self.reorg_id);
-				self.next_election = height.saturating_forward(1);
-			} else {
-				break;
-			}
-		}
-	}
-
-	/// If an election is done we remove it from the ongoing list
-	pub fn mark_election_done(&mut self, election: N) {
-		if self.ongoing.remove(&election).is_none() {
-			panic!("marking an election done which wasn't ongoing!")
-		}
-	}
-
-	/// This function schedules all elections up to `range.end()`
-	pub fn schedule_range(&mut self, range: RangeInclusive<N>) {
-		// Check whether there is a reorg concerning elections we have started previously.
-		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
-		// range are going to be restarted once there is the capacity to do so.
-		if *range.start() < self.next_election {
-			// we set this value such that even in case of a reorg we create elections for up to
-			// this block
-			self.next_priority_election = max(self.next_election, self.next_priority_election);
-
-			// the next election we start is going to be the first block involved in the reorg
-			self.next_election = *range.start();
-
-			// and it's going to have a fresh `reorg_id` which forces the ES to recreate this
-			// election
-			self.reorg_id =
-				generate_new_reorg_id(&self.ongoing.values().cloned().collect::<Vec<_>>());
-		}
-
-		// QUESTION: currently, the following check ensures that
-		// the highest scheduled election never decreases. Do we want this?
-		// It's difficult to imagine a situation where the highest block number
-		// after a reorg is lower than it was previously, and also, even if, in that
-		// case we simply keep the higher number that doesn't seem to be too much of a problem.
-		if self.next_witnessed <= *range.end() {
-			self.next_witnessed = range.end().saturating_forward(1);
-		}
-	}
-}
-
-impl<N: Ord> Validate for ElectionTracker<N> {
-	type Error = &'static str;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
-impl<N: BlockZero + Ord> Default for ElectionTracker<N> {
-	fn default() -> Self {
-		Self {
-			next_witnessed: BlockZero::zero(),
-			next_priority_election: BlockZero::zero(),
-			next_election: BlockZero::zero(),
-			ongoing: Default::default(),
-			reorg_id: 0,
-		}
-	}
-}
-
-/// Generates an element which is not in `indices`.
-fn generate_new_reorg_id<N: BlockZero + SaturatingStep + Ord + 'static>(indices: &[N]) -> N {
-	let mut index = N::zero();
-	while indices.iter().any(|ix| *ix == index) {
-		index = index.saturating_forward(1);
-	}
-	index
 }
 
 #[cfg_attr(test, derive(Arbitrary))]
@@ -645,18 +454,4 @@ fn generate_new_reorg_id<N: BlockZero + SaturatingStep + Ord + 'static>(indices:
 pub enum ChainProgressInner<ChainBlockNumber: SaturatingStep + PartialOrd> {
 	Progress(ChainBlockNumber),
 	Reorg(RangeInclusive<ChainBlockNumber>),
-}
-
-#[cfg(test)]
-mod tests {
-
-	use super::generate_new_reorg_id;
-	use proptest::prelude::*;
-
-	proptest! {
-		#[test]
-		fn indices_are_new(xs in prop::collection::vec(any::<u8>(), 0..3)) {
-			assert!(!xs.contains(&generate_new_reorg_id(&xs)));
-		}
-	}
 }
