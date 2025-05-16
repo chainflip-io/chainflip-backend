@@ -507,7 +507,7 @@ pub mod tests {
 					seen_heights_below,
 					priority_elections_below,
 					ongoing: BTreeMap::from_iter(ongoing.clone()),
-					queued_safe_elections: T::ChainBlockNumber::zero()..T::ChainBlockNumber::zero(),
+					queued_safe_elections: Default::default(),
 					optimistic_block_cache: Default::default(),
 					events: Default::default()
 				},

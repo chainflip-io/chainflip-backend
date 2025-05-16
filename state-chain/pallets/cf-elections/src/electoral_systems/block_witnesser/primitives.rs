@@ -9,7 +9,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
 	cmp::{max, min},
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque},
 	iter,
 	vec::Vec,
 };
@@ -80,7 +80,7 @@ defx! {
 		/// to query.
 		// pub queued_next_safe_height: Option<T::ChainBlockNumber>,
 
-		pub queued_safe_elections: Range<T::ChainBlockNumber>,
+		pub queued_safe_elections: CompactHeightTracker<T::ChainBlockNumber>,
 
 		/// Hashes of elections currently ongoing
 		pub ongoing: BTreeMap<T::ChainBlockNumber, BWElectionType<T>>,
@@ -93,12 +93,12 @@ defx! {
 
 	} where this {
 
-		queued_elections_are_consequtive:
-			this.queued_elections.keys().zip(this.queued_elections.keys().skip(1))
-			.all(|(left, right)| left.saturating_forward(1) == *right),
+		// queued_elections_are_consequtive:
+		// 	this.queued_elections.keys().zip(this.queued_elections.keys().skip(1))
+		// 	.all(|(left, right)| left.saturating_forward(1) == *right),
 
-		queued_safe_height_is_not_queued:
-			this.queued_safe_elections.clone().all(|height| !this.queued_elections.contains_key(&height))
+		// queued_safe_height_is_not_queued:
+		// 	this.queued_safe_elections.clone().all(|height| !this.queued_elections.contains_key(&height))
 
 	} with {
 
@@ -119,7 +119,7 @@ impl<T: BWTypes> ElectionTracker2<T> {
 	pub fn update_safe_elections(
 		&mut self,
 		reason: UpdateSafeElectionsReason,
-		f: impl Fn(&mut Range<T::ChainBlockNumber>),
+		f: impl Fn(&mut CompactHeightTracker<T::ChainBlockNumber>),
 	) {
 		let old = self.queued_safe_elections.clone();
 		f(&mut self.queued_safe_elections);
@@ -138,21 +138,27 @@ impl<T: BWTypes> ElectionTracker2<T> {
 		};
 
 		use BWElectionType::*;
-		let safe_elections =
-			// self.queued_next_safe_height.zip(self.next_election())
-			// .map(|(safe_height, next_election)| (safe_height..min(next_election, start_all_below)))
-			self.queued_safe_elections
-			.clone()
-			// .unwrap_or(start_all_below..start_all_below)
+
+		// let safe_elections =
+		// 	self.queued_safe_elections
+		// 	.clone()
+		// 	.map(|height| (height, SafeBlockHeight));
+
+		// schedule at most `max_new_elections`
+		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
+
+		let safe_elections = self
+			.queued_safe_elections
+			.extract(max_new_elections)
+			.into_iter()
 			.map(|height| (height, SafeBlockHeight));
+
 		let hash_elections = self
 			.queued_elections
 			.extract_if(|n, _| *n < start_all_below)
 			.map(|(height, hash)| (height, ByHash(hash)));
 		let opti_elections = iter::once((self.seen_heights_below, Optimistic));
 
-		// schedule at most `max_new_elections`
-		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
 		self.ongoing.extend(
 			safe_elections
 				.chain(hash_elections)
@@ -181,7 +187,7 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			.cloned();
 		if let Some(n) = highest_non_optimistic_election {
 			self.update_safe_elections(UpdateSafeElectionsReason::SafeElectionScheduled, |x| {
-				x.start = n.saturating_forward(1)
+				// x.start = n.saturating_forward(1)
 			});
 		}
 	}
@@ -307,8 +313,9 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			}
 		}
 
-		self.queued_safe_elections =
-			self.queued_safe_elections.start..min(self.queued_safe_elections.end, *range.start());
+		// if there are safe elections scheduled for the reorg range, unschedule them,
+		// because it might be that we're gonna schedule them by-hash
+		self.queued_safe_elections.remove(range.clone());
 
 		// QUESTION: currently, the following check ensures that
 		// the highest scheduled election never decreases. Do we want this?
@@ -348,14 +355,19 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			.min()
 			.inspect(|height| {
 				self.update_safe_elections(UpdateSafeElectionsReason::GotOptimisticBlock, |x|
-					// x.end = max(x.end, height.saturating_forward(1))
-					x.start = max(x.start, *height));
+					// x.start = max(x.start, *height));
+
+					// NOTE: it seems like here we shouldn't do anything, remove the whole call if things work out
+					())
 			});
 
 		if is_reorg {
 			self.update_safe_elections(UpdateSafeElectionsReason::ReorgReceived, |x|
-				// x.end = max(x.end, height.saturating_forward(1))
-				x.start = min(x.start, *range.start()));
+
+				// NOTE, we shouldnt have to do this. This is scheduling new elections for blocks inside the safety margin,
+				// that were reorged
+				// x.start = min(x.start, *range.start()));
+				());
 		}
 
 		// adding all hashes to the queue
@@ -366,13 +378,17 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			.queued_elections
 			.extract_if(|height, _| height.saturating_forward(safety_margin) < *range.end())
 			.map(fst)
-			.max()
-			.clone()
-			.inspect(|height| {
-				self.update_safe_elections(UpdateSafeElectionsReason::OutOfSafetyMargin, |x| {
-					x.end = max(x.end, height.saturating_forward(1))
-				});
+			.for_each(|height| {
+				self.queued_safe_elections.insert(height);
 			});
+
+		// .max()
+		// .clone()
+		// .inspect(|height| {
+		// 	self.update_safe_elections(UpdateSafeElectionsReason::OutOfSafetyMargin, |x| {
+		// 		x.end = max(x.end, height.saturating_forward(1))
+		// 	});
+		// });
 
 		optimistic_blocks.into_iter().collect()
 	}
@@ -390,7 +406,7 @@ impl<T: BWTypes> Default for ElectionTracker2<T> {
 			priority_elections_below: T::ChainBlockNumber::zero(),
 			queued_elections: Default::default(),
 			ongoing: Default::default(),
-			queued_safe_elections: T::ChainBlockNumber::zero()..T::ChainBlockNumber::zero(),
+			queued_safe_elections: Default::default(),
 			optimistic_block_cache: Default::default(),
 			events: Default::default(),
 		}
@@ -419,8 +435,8 @@ pub enum ElectionTrackerEvent<T: BWTypes> {
 		current: BWElectionType<T>,
 	},
 	UpdateSafeElections {
-		old: Range<T::ChainBlockNumber>,
-		new: Range<T::ChainBlockNumber>,
+		old: CompactHeightTracker<T::ChainBlockNumber>,
+		new: CompactHeightTracker<T::ChainBlockNumber>,
 		reason: UpdateSafeElectionsReason,
 	},
 }
@@ -431,6 +447,67 @@ pub enum UpdateSafeElectionsReason {
 	SafeElectionScheduled,
 	GotOptimisticBlock,
 	ReorgReceived,
+}
+
+#[derive_where(Default; )]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub struct CompactHeightTracker<N> {
+	elections: VecDeque<Range<N>>,
+}
+
+impl<N: Step + Ord> CompactHeightTracker<N> {
+	pub fn extract(&mut self, max_elements: usize) -> Vec<N> {
+		let mut result = Vec::new();
+		for r in self.elections.iter_mut() {
+			while result.len() < max_elements {
+				if let Some(x) = r.next() {
+					result.push(x);
+				} else {
+					// TODO: delete ranges when they are empty
+					break;
+				}
+			}
+		}
+		result
+	}
+
+	pub fn insert(&mut self, item: N) {
+		for r in self.elections.iter_mut().rev() {
+			let end_plus_one = N::forward(r.end.clone(), 1);
+			if item == end_plus_one {
+				r.end = end_plus_one;
+				return;
+			}
+			if r.contains(&item) {
+				return;
+			}
+		}
+		self.elections.push_back(item.clone()..N::forward(item, 1));
+	}
+
+	pub fn remove(&mut self, range: RangeInclusive<N>) {
+		for r in self.elections.iter_mut() {
+			range_difference(r, &(range.start().clone()..N::forward(range.end().clone(), 1)))
+		}
+	}
+}
+
+fn range_difference<N: Ord + Clone>(r: &mut Range<N>, s: &Range<N>) {
+	// ```
+	// [-- r --]
+	//     [-- s --]
+	// ```
+	if s.contains(&r.end) {
+		r.end = s.start.clone();
+	}
+
+	// ```
+	//     [-- r --]
+	// [-- s --]
+	// ```
+	if s.contains(&r.start) {
+		r.start = s.end.clone();
+	}
 }
 
 /// Keeps track of ongoing elections for the block witnesser.
