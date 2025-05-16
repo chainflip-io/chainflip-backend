@@ -105,6 +105,11 @@ pub enum BlockProcessorEvent<T: BWProcessorTypes> {
 		events: Vec<T::Event>,
 		new_block_number: T::ChainBlockNumber,
 	},
+	UpdatingExpiry {
+		event: T::Event,
+		from: T::ChainBlockNumber,
+		to: T::ChainBlockNumber,
+	},
 }
 
 impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
@@ -194,10 +199,11 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 						}
 					}
 				}
-				for (_event, stored_expiry) in self.processed_events.iter_mut() {
-					let mut expiry = range.end().saturating_forward(highest_safety_margin as usize);
-					let new_expiry = stored_expiry.max(&mut expiry);
-					*stored_expiry = *new_expiry;
+				for (event, stored_expiry) in self.processed_events.iter_mut() {
+					let expiry = range.end().saturating_forward(highest_safety_margin as usize);
+					let new_expiry = stored_expiry.clone().max(expiry);
+					self.delete_data.run(BlockProcessorEvent::UpdatingExpiry { event: event.clone(), from: stored_expiry.clone(), to: new_expiry });
+					*stored_expiry = new_expiry;
 				}
 			},
 		}
