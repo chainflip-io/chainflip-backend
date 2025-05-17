@@ -506,6 +506,8 @@ mod tests {
 			.as_ref()
 			.expect("Expected return data to be Some");
 
+		// TODO: We could also assert that the return_data.program_id matches the programID we have
+		// serialized-encoded.
 		let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone()).unwrap();
 		assert_eq!(return_data.data.1, UiReturnDataEncoding::Base64);
 
