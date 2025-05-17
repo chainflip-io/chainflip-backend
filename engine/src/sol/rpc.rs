@@ -506,15 +506,15 @@ mod tests {
 			.as_ref()
 			.expect("Expected return data to be Some");
 
-		// TODO: We should check that return_data.data.1 is Base64
 		let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone()).unwrap();
+		assert_eq!(return_data.data.1, UiReturnDataEncoding::Base64);
 
 		println!("decoded_return_data: {:?}", decoded_return_data);
 
 		// Verify length (expect 32 bytes)
 		assert_eq!(decoded_return_data.len(), 32);
 
-		// Manually parse the bytes (little-endian)
+		// // Manually parse the bytes (little-endian). We could also borsh deserialize it.
 		// // Reference code: https://github.com/smartcontractkit/chainlink-solana/blob/develop/contracts/programs/store/src/lib.rs#L219
 		// // #[derive(AnchorSerialize, AnchorDeserialize)]
 		// // pub struct Round {
