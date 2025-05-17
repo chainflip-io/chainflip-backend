@@ -1,6 +1,6 @@
 services:
   eth-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.2-usdt-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.2-price-feed-test-5-${NODE_COUNT}
     pull_policy: if_not_present
     container_name: init
     platform: linux/amd64
@@ -11,7 +11,7 @@ services:
   solana-init:
     # Not using v1.1.0 because we want to test the Swap Endpoint upgrade logic to be run in mainnet.
     # The Swap Endpoint program is the only difference between the two images.
-    image: ghcr.io/chainflip-io/solana-localnet-ledger:v1.0.0-alt-manager
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:v1.2.0-rc1
     pull_policy: if_not_present
     container_name: init-solana
     platform: linux/amd64
@@ -20,7 +20,7 @@ services:
     command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
   arb-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-usdt-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-price-feed-test-5-${NODE_COUNT}
     restart: always
     container_name: arb-init
     pull_policy: if_not_present
@@ -36,7 +36,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.1.2-usdt-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.1.2-price-feed-test-5-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
