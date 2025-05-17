@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod address_checker;
+pub mod oracle_aggregator;
 pub mod node_interface;
 
 use anyhow::bail;

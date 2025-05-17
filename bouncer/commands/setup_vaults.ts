@@ -15,6 +15,7 @@ import {
   getEvmEndpoint,
   getSolConnection,
   deferredPromise,
+  amountToFineAmount,
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import {
@@ -32,6 +33,8 @@ import {
   DisposableApiPromise,
 } from '../shared/utils/substrate';
 import { brokerApiEndpoint, lpApiEndpoint } from '../shared/json_rpc';
+import { updateEvmPriceFeed } from '../shared/update_price_feed';
+import { price } from '../shared/setup_swaps';
 
 async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
@@ -208,6 +211,21 @@ async function main(): Promise<void> {
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),
   );
+
+  // Step 8
+  logger.info('Setting up price feeds');
+  const ethereumPriceFeedDecimals = 8;
+  await updateEvmPriceFeed(
+    'BTC',
+    amountToFineAmount(price.get('Btc')!.toString(), ethereumPriceFeedDecimals),
+  );
+  await updateEvmPriceFeed(
+    'ETH',
+    amountToFineAmount(price.get('Eth')!.toString(), ethereumPriceFeedDecimals),
+  );
+  // TODO: Maybe ipdate Solana price feed since we will need that for testing.
+  // Depends on whether we rely on a docker container and then we can keep the
+  // logic there. Same for EVM. TBD.
 
   // Confirmation
   logger.info('Waiting for new epoch...');
