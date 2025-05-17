@@ -172,6 +172,12 @@ pub trait SolRpcApi {
 		transaction: String,
 		config: RpcSendTransactionConfig,
 	) -> Result<SolSignature>;
+
+	async fn simulate_transaction(
+		&self,
+		transaction: String,
+		config: RpcSimulateTransactionConfig,
+	) -> Result<Response<RpcSimulateTransactionResult>>;
 }
 
 #[async_trait::async_trait]
@@ -264,11 +270,26 @@ impl SolRpcApi for SolRpcClient {
 			.map_err(|err| anyhow!("Failed to parse the resulting signature: {}", err))?;
 		Ok(signature)
 	}
+
+	async fn simulate_transaction(
+		&self,
+		transaction: String,
+		config: RpcSimulateTransactionConfig,
+	) -> Result<Response<RpcSimulateTransactionResult>> {
+		let response = self
+			.call_rpc("simulateTransaction", Some(json!([transaction, json!(config)])))
+			.await?;
+		let Response { context, value: simulation_result } =
+			serde_json::from_value::<Response<RpcSimulateTransactionResult>>(response.clone())?;
+
+		Ok(Response { context, value: simulation_result })
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use base64::{prelude::BASE64_STANDARD, Engine};
 
 	#[test]
 	fn test_encoding() {
@@ -391,5 +412,184 @@ mod tests {
 
 		println!("Signature status: {:?}", signature_status);
 		assert_eq!(confirmation_status, &TransactionConfirmationStatus::Finalized);
+	}
+
+	#[ignore = "requires access to external RPC"]
+	#[tokio::test]
+	async fn test_sol_simulate_transaction() {
+		let sol_rpc_client = SolRpcClient::new(
+			SecretUrl::from("https://api.devnet.solana.com".to_string()),
+			Some(SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap()),
+		)
+		.unwrap()
+		.await;
+
+		// Serialized Versioned transaction from:
+		// const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+		// const chainlinkProgramId = new PublicKey(
+		//   "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny"
+		// );
+		// const chainlinkFeed = new PublicKey(
+		// 	// "Cv4T27XbjVoKUYwP72NQQanvZeA7W4YF9L4EnYT9kx5o" // BTC Mainnet
+		// 	"6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe" // BTC Devnet
+		// 	// "CzZQBrJCLqjXRfMjRN3fhbxur2QYHUzkpaRwkWsiPqbz" /// From docs example
+		//   );
+
+		// Stands for "sha256("global:latest_round_data")[0:8]"
+		// const QUERY_INSTRUCTION_DISCRIMINATOR = Buffer.from([
+		//   0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9,
+		// ]);
+
+		// // enum Query {
+		// //     Version,
+		// //     Decimals,
+		// //     Description,
+		// //     RoundData { round_id: u32 },
+		// //     LatestRoundData,
+		// //     Aggregator,
+		// // }
+		// const queryByte = Buffer.from([0x04]); // Adjust based on your Query enum variant
+
+		// const instruction = new TransactionInstruction({
+		//   programId: chainlinkProgramId,
+		//   keys: [
+		// 	{
+		// 	  pubkey: chainlinkFeed,
+		// 	  isSigner: false,
+		// 	  isWritable: false,
+		// 	},
+		//   ],
+		//   data: Buffer.concat([QUERY_INSTRUCTION_DISCRIMINATOR, queryByte]), // 8-byte
+		// discriminator + query enun  });
+
+		// const { blockhash } = await connection.getLatestBlockhash("confirmed");
+		// const messageV0 = new TransactionMessage({
+		//   payerKey: pg.wallet.publicKey,
+		//   recentBlockhash: blockhash,
+		//   instructions: [instruction],
+		// }).compileToV0Message();
+		// const tx = new VersionedTransaction(messageV0);
+		// const serializedTx = tx.serialize();
+
+		// let serialized_transaction =
+		// hex::decode("
+		// 010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602b22f4bfe7b663a29da31c40b32ab0b6f96c8ab1946c517b2c056710a352719adb190c20c1c0414dc233cb92bd86b436aeacf0f00b72798464f22e4029ccaa68b010101020927fb829f2e88a4a90400"
+		// ).unwrap();
+
+		// BTC Devnet (`6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe`)
+		let serialized_transaction =  hex::decode("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f13dcef863a734d75a53ceea4596b64111f9577af432cf6c0c2aed5cb527a733f010101020927fb829f2e88a4a90400").unwrap();
+		let encoded_transaction = BASE64_STANDARD.encode(&serialized_transaction);
+
+		println!("encoded_transaction: {:?}", encoded_transaction);
+
+		let simulation_result = sol_rpc_client
+			.simulate_transaction(
+				encoded_transaction,
+				RpcSimulateTransactionConfig {
+					sig_verify: false,
+					replace_recent_blockhash: true,
+					commitment: Some(CommitmentConfig::processed()),
+					encoding: Some(UiTransactionEncoding::Base64),
+					accounts: None,
+					min_context_slot: None,
+					inner_instructions: false,
+				},
+			)
+			.await
+			.unwrap();
+		println!("simulation_result: {:?}", simulation_result);
+		println!("return data: {:?}", simulation_result.value.return_data);
+
+		let return_data = simulation_result
+			.value
+			.return_data
+			.as_ref()
+			.expect("Expected return data to be Some");
+
+		// TODO: We should check that return_data.data.1 is Base64
+		let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone()).unwrap();
+
+		println!("decoded_return_data: {:?}", decoded_return_data);
+
+		// Verify length (expect 32 bytes)
+		assert_eq!(decoded_return_data.len(), 32);
+
+		// Manually parse the bytes (little-endian)
+		// // Reference code: https://github.com/smartcontractkit/chainlink-solana/blob/develop/contracts/programs/store/src/lib.rs#L219
+		// // #[derive(AnchorSerialize, AnchorDeserialize)]
+		// // pub struct Round {
+		// // 	pub round_id: u32,
+		// // 	pub slot: u64,
+		// // 	pub timestamp: u32,
+		// // 	pub answer: i128,
+		// // }
+		let round_id = u32::from_le_bytes(decoded_return_data[0..4].try_into().unwrap());
+		let slot = u64::from_le_bytes(decoded_return_data[4..12].try_into().unwrap());
+		let timestamp = u32::from_le_bytes(decoded_return_data[12..16].try_into().unwrap());
+		let answer = i128::from_le_bytes(decoded_return_data[16..32].try_into().unwrap());
+
+		println!(
+			"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}",
+			round_id, slot, timestamp, answer
+		);
+	}
+
+	#[ignore = "requires access to external RPC"]
+	#[tokio::test]
+	async fn test_sol_simulate_transaction_decimals() {
+		let sol_rpc_client = SolRpcClient::new(
+			SecretUrl::from("https://api.devnet.solana.com".to_string()),
+			Some(SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap()),
+		)
+		.unwrap()
+		.await;
+
+		// Query decimals (same query just changing the queryByte)
+		// BTC Devnet
+		// let serialized_transaction =
+		// hex::decode("
+		// 010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f68fc98d59aef5e74ba3e29391f7c1be4701183c145c2fae4cb513d906bf53efb010101020927fb829f2e88a4a90100"
+		// ).unwrap(); ETH Devnet
+		// let serialized_transaction =
+		// hex::decode("
+		// 010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d1756024b9be964820950a986a6318e5c4639a02e3e1bcf24f4767ac622414d6690fd6a1c16a7f6351b28c0d5c39d8483ce2319373696d3ef6ed1cb0e836b6310d99b4e010101020927fb829f2e88a4a90100"
+		// ).unwrap(); Manual ETH Devnet => Using the BTC payload but insterting manually the ETH
+		// Address => Seems to work => Following bytes that change seem to be part of the recent
+		// blockhash, which doesn't matter. Therefore we can just have a hardcoded payload and
+		// just insert the address neeeded (decoded bs58) depending on the network.
+		let serialized_transaction = hex::decode("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d1756024b9be964820950a986a6318e5c4639a02e3e1bcf24f4767ac622414d6690fd6a68fc98d59aef5e74ba3e29391f7c1be4701183c145c2fae4cb513d906bf53efb010101020927fb829f2e88a4a90100").unwrap();
+
+		// Trying manually to insert a different address
+		let encoded_transaction = BASE64_STANDARD.encode(&serialized_transaction);
+
+		let simulation_result = sol_rpc_client
+			.simulate_transaction(
+				encoded_transaction,
+				RpcSimulateTransactionConfig {
+					sig_verify: false,
+					replace_recent_blockhash: true,
+					commitment: Some(CommitmentConfig::processed()),
+					encoding: Some(UiTransactionEncoding::Base64),
+					accounts: None,
+					min_context_slot: None,
+					inner_instructions: false,
+				},
+			)
+			.await
+			.unwrap();
+
+		let return_data = simulation_result
+			.value
+			.return_data
+			.as_ref()
+			.expect("Expected return data to be Some");
+
+		let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone()).unwrap();
+
+		assert_eq!(decoded_return_data.len(), 1);
+		let value: u8 = decoded_return_data[0];
+
+		// BTC has 8 decimals
+		assert_eq!(value, 8);
 	}
 }
