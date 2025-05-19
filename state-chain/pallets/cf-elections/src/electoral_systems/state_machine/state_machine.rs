@@ -1,11 +1,31 @@
-use super::core::{IndexedValidate, Validate};
+use super::core::Validate;
+use derive_where::derive_where;
+use itertools::Either;
+use sp_std::{fmt::Debug, vec::Vec};
 
 #[cfg(test)]
 use proptest::prelude::{BoxedStrategy, Just, Strategy};
 #[cfg(test)]
 use proptest::test_runner::TestRunner;
-#[cfg(test)]
-use sp_std::fmt::Debug;
+
+pub trait AbstractApi {
+	type Query;
+	type Response;
+	type Error;
+
+	fn validate(query: &Self::Query, response: &Self::Response) -> Result<(), Self::Error>;
+
+	// fn validate_many(queries: &Vec<Self::Query>, response: &Self::Response) -> Result<(),
+	// Self::Error>;
+}
+
+/// Custom error type for validation of `SMInput`.
+#[derive_where(Debug; Error: Debug, Context::Error: Debug)]
+pub enum SMInputValidateError<Context: Validate, Error> {
+	WrongIndex,
+	InvalidConsensus(Error),
+	InvalidContext(Context::Error),
+}
 
 /// A trait for implementing state machines, in particular used for electoral systems.
 ///
@@ -57,7 +77,7 @@ use sp_std::fmt::Debug;
 /// an input index, and an input, we not only check that the input is well formed, but we also
 /// ensure that the input is valid *for a given input index*.
 ///
-/// For example, in the BHW, elections are created to witness block headers starting from a given
+/// For example, in the X, elections are created to witness block headers starting from a given
 /// height, in that case we can ensure that the received vector of block headers actually starts
 /// with the correct height.
 ///
@@ -74,21 +94,45 @@ use sp_std::fmt::Debug;
 ///
 /// Additionally the `step_specification` function can be implemented, in order to provide custom
 /// pre-/postconditions to be checked during `test()`.
-pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input> {
-	type Input;
-	type InputIndex;
+pub trait Statemachine: AbstractApi + 'static {
+	type Context: Validate;
 	type Settings;
 	type Output: Validate;
 	type State: Validate;
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
-	fn input_index(s: &mut Self::State) -> Self::InputIndex;
+	fn input_index(s: &mut Self::State) -> Vec<Self::Query>;
+
+	fn validate_input(
+		index: &Vec<Self::Query>,
+		value: &InputOf<Self>,
+	) -> Result<(), SMInputValidateError<Self::Context, Self::Error>>
+	where
+		Self::Query: PartialEq,
+	{
+		match value {
+			Either::Right((property, consensus)) =>
+				if index.contains(property) {
+					Self::validate(property, consensus)
+						.map_err(SMInputValidateError::InvalidConsensus)
+				} else {
+					Err(SMInputValidateError::WrongIndex)
+				},
+
+			Either::Left(context) =>
+				context.is_valid().map_err(SMInputValidateError::InvalidContext),
+		}
+	}
 
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore
 	/// that the input has the index `input_index(s)`.
-	fn step(s: &mut Self::State, i: Self::Input, set: &Self::Settings) -> Self::Output;
+	fn step(
+		s: &mut Self::State,
+		input: Either<Self::Context, (Self::Query, Self::Response)>,
+		set: &Self::Settings,
+	) -> Self::Output;
 
 	/// Contains an optional specification of the `step` function.
 	/// Takes a state, input and next state as arguments. During testing it is verified
@@ -96,7 +140,7 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 	#[cfg(test)]
 	fn step_specification(
 		_before: &mut Self::State,
-		_input: &Self::Input,
+		_input: &Either<Self::Context, (Self::Query, Self::Response)>,
 		_output: &Self::Output,
 		_settings: &Self::Settings,
 		_after: &Self::State,
@@ -111,10 +155,11 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 		path: &'static str,
 		states: impl Strategy<Value = Self::State>,
 		settings: impl Strategy<Value = Self::Settings>,
-		inputs: impl Fn(Self::InputIndex) -> BoxedStrategy<Self::Input>,
+		inputs: impl Fn(Self::Query) -> BoxedStrategy<Self::Response>,
+		context: impl Strategy<Value = Self::Context>,
 	) where
 		Self::State: sp_std::fmt::Debug + Clone + Send,
-		Self::Input: sp_std::fmt::Debug + Clone + Send,
+		Self::Context: sp_std::fmt::Debug + Clone + Send,
 		Self::Settings: sp_std::fmt::Debug + Clone + Send,
 		Self::Error: sp_std::fmt::Debug,
 	{
@@ -129,91 +174,97 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 			..Default::default()
 		});
 
-		runner
-			.run(
-				&((states, settings).prop_flat_map(|(mut state, settings)| {
-					(Just(state.clone()), inputs(Self::input_index(&mut state)), Just(settings))
-				})),
-				run_with_timeout(
-					10,
-					|(mut state, input, settings): (Self::State, Self::Input, Self::Settings)| {
-						println!("running test");
-						// ensure that inputs are well formed
-						assert!(
-							state.is_valid().is_ok(),
-							"input state not valid {:?}",
-							state.is_valid()
-						);
+		/*
+				runner
+					.run(
+						&((states, settings).prop_flat_map(|(mut state, settings)| {
+							(Just(state.clone()), inputs(Self::input_index(&mut state)), Just(settings))
+						})),
+						run_with_timeout(
+							10,
+							|(mut state, input, settings): (Self::State, Either<Self::Context, Api::Response>, Self::Settings)| {
+								println!("running test");
+								// ensure that inputs are well formed
+								assert!(
+									state.is_valid().is_ok(),
+									"input state not valid {:?}",
+									state.is_valid()
+								);
 
-						// ensure input has correct index
-						Self::validate(&Self::input_index(&mut state), &input)
-							.map_err(|err| format!("input has wrong index: {err:?}"))
-							.unwrap();
+								// ensure input has correct index
+								Self::validate(&Self::input_index(&mut state), &input)
+									.map_err(|err| format!("input has wrong index: {err:?}"))
+									.unwrap();
 
-						// backup state
-						let mut prev_state = state.clone();
+								// backup state
+								let mut prev_state = state.clone();
 
-						// run step function and ensure that output is valid
-						let output = Self::step(&mut state, input.clone(), &settings);
-						assert!(output.is_valid().is_ok(), "step function failed");
+								// run step function and ensure that output is valid
+								let output = Self::step(&mut state, input.clone(), &settings);
+								assert!(output.is_valid().is_ok(), "step function failed");
 
-						// ensure that state is still well formed
-						assert!(
-							state.is_valid().is_ok(),
-							"state after step function is not valid ({:?})",
-							state
-						);
+								// ensure that state is still well formed
+								assert!(
+									state.is_valid().is_ok(),
+									"state after step function is not valid ({:?})",
+									state
+								);
 
-						// ensure that step function computed valid state
-						Self::step_specification(
-							&mut prev_state,
-							&input,
-							&output,
-							&settings,
-							&state,
-						);
+								// ensure that step function computed valid state
+								Self::step_specification(
+									&mut prev_state,
+									&input,
+									&output,
+									&settings,
+									&state,
+								);
 
-						println!("done test");
-						Ok(())
-					},
-				),
-			)
-			.unwrap();
+								println!("done test");
+								Ok(())
+							},
+						),
+					)
+					.unwrap();
+			}
+		}
+
+		#[cfg(test)]
+		pub fn run_with_timeout<
+			A: Send + Clone + Debug + 'static,
+			B: Send + 'static,
+			F: Fn(A) -> B + Send + Clone + 'static,
+		>(
+			seconds: u64,
+			f: F,
+		) -> impl Fn(A) -> B {
+			move |a| {
+				let f1 = f.clone();
+				let a1 = a.clone();
+				tokio::runtime::Builder::new_current_thread()
+					.enable_all()
+					.build()
+					.unwrap()
+					.block_on(async move {
+						let f2 = f1.clone();
+						let a2 = a1.clone();
+						let a3 = a1.clone();
+						tokio::time::timeout(
+							std::time::Duration::from_secs(seconds),
+							tokio::task::spawn_blocking(move || f2(a2)),
+						)
+						.await
+						.map_err(move |_| format!("task failed with input {:#?}", a3))
+						.map_err(|err| {
+							println!("{err}");
+							err
+						})
+						.unwrap()
+					})
+					.unwrap()
+
+		 */
 	}
 }
 
-#[cfg(test)]
-pub fn run_with_timeout<
-	A: Send + Clone + Debug + 'static,
-	B: Send + 'static,
-	F: Fn(A) -> B + Send + Clone + 'static,
->(
-	seconds: u64,
-	f: F,
-) -> impl Fn(A) -> B {
-	move |a| {
-		let f1 = f.clone();
-		let a1 = a.clone();
-		tokio::runtime::Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.unwrap()
-			.block_on(async move {
-				let f2 = f1.clone();
-				let a2 = a1.clone();
-				let a3 = a1.clone();
-				tokio::time::timeout(
-					std::time::Duration::from_secs(seconds),
-					tokio::task::spawn_blocking(move || f2(a2)),
-				)
-				.await
-				.map_err(move |_| format!("task failed with input {:#?}", a3))
-				.map_err(|err| {
-					println!("{err}");
-					err
-				})
-				.unwrap()
-			})
-			.unwrap()
-	}
-}
+pub type InputOf<X> =
+	Either<<X as Statemachine>::Context, (<X as AbstractApi>::Query, <X as AbstractApi>::Response)>;

@@ -10,7 +10,7 @@ use std::{
 };
 
 use frame_support::ensure;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 
 use crate::electoral_systems::{
@@ -29,8 +29,8 @@ use crate::electoral_systems::{
 		},
 	},
 	state_machine::{
-		core::{hook_test_utils::MockHook, IndexedValidate, TypesFor, Validate},
-		state_machine::Statemachine,
+		core::{hook_test_utils::MockHook, TypesFor, Validate},
+		state_machine::{AbstractApi, InputOf, Statemachine},
 		state_machine_es::SMInput,
 		test_utils::{BTreeMultiSet, Container},
 	},
@@ -50,7 +50,10 @@ macro_rules! try_get {
 }
 
 pub trait AbstractVoter<M: Statemachine> {
-	fn vote(&mut self, index: M::InputIndex) -> Option<Vec<M::Input>>;
+	fn vote(
+		&mut self,
+		index: Vec<M::Query>,
+	) -> Option<Vec<Either<M::Context, (M::Query, M::Response)>>>;
 }
 
 #[test]
@@ -62,10 +65,7 @@ pub fn test_all() {
 	const OFFSET: usize = 20;
 
 	impl AbstractVoter<BHW> for FlatChainProgression<char> {
-		fn vote(
-			&mut self,
-			indices: <BHW as Statemachine>::InputIndex,
-		) -> Option<Vec<<BHW as Statemachine>::Input>> {
+		fn vote(&mut self, indices: Vec<<BHW as AbstractApi>::Query>) -> Option<Vec<InputOf<BHW>>> {
 			let chain = MockChain::new_with_offset(OFFSET, self.get_next_chain()?);
 
 			let mut result = Vec::new();
@@ -94,7 +94,7 @@ pub fn test_all() {
 						},
 				};
 
-				result.push(SMInput::Consensus((index, bhw_input)));
+				result.push(Either::Right((index, bhw_input)));
 			}
 
 			Some(result)
@@ -102,10 +102,7 @@ pub fn test_all() {
 	}
 
 	impl AbstractVoter<BW> for FlatChainProgression<char> {
-		fn vote(
-			&mut self,
-			indices: <BW as Statemachine>::InputIndex,
-		) -> Option<Vec<<BW as Statemachine>::Input>> {
+		fn vote(&mut self, indices: Vec<<BW as AbstractApi>::Query>) -> Option<Vec<InputOf<BW>>> {
 			let mut inputs = Vec::new();
 			for index in indices {
 				let chain =
@@ -116,16 +113,15 @@ pub fn test_all() {
 					Optimistic =>
 						if let Some(block_data) = chain.get_block_by_height(index.block_height) {
 							let header = chain.get_block_header(index.block_height).unwrap();
-							inputs
-								.push(SMInput::Consensus((index, (block_data, Some(header.hash)))));
+							inputs.push(Either::Right((index, (block_data, Some(header.hash)))));
 						},
 					ByHash(hash) =>
 						if let Some(block_data) = chain.get_block_by_hash(hash) {
-							inputs.push(SMInput::Consensus((index, (block_data, None))));
+							inputs.push(Either::Right((index, (block_data, None))));
 						},
 					SafeBlockHeight =>
 						if let Some(block_data) = chain.get_block_by_height(index.block_height) {
-							inputs.push(SMInput::Consensus((index, (block_data, None))));
+							inputs.push(Either::Right((index, (block_data, None))));
 						},
 				}
 			}
@@ -177,8 +173,8 @@ pub fn test_all() {
 
         #[derive(Clone, Debug)]
         enum BWTrace<T: BWTypes, T0: HWTypes> {
-            Input(<BWStatemachine<T> as Statemachine>::Input),
-            InputBHW(<BlockHeightTrackingSM<T0> as Statemachine>::Input),
+            Input(InputOf<BWStatemachine<T>>),
+            InputBHW(InputOf<BlockHeightTrackingSM<T0>>),
             Output(Vec<(T::ChainBlockNumber, T::Event)>),
             Event(BlockProcessorEvent<T>),
             ET(ElectionTrackerEvent<T>)
@@ -196,7 +192,7 @@ pub fn test_all() {
                 let mut outputs = Vec::new();
                 for input in inputs {
                     // ensure that input is correct
-                    BHW::validate(&BHW::input_index(&mut bhw_state), &input).unwrap();
+                    BHW::validate_input(&BHW::input_index(&mut bhw_state), &input).unwrap();
 
                     bw_history.push(BWTrace::InputBHW(input.clone()));
 
@@ -219,13 +215,13 @@ pub fn test_all() {
 
                 // run BW on BHW outputs (context)
                 for bhw_output in bhw_outputs {
-                    bw_history.push(BWTrace::Input(SMInput::Context(bhw_output.clone())));
+                    bw_history.push(BWTrace::Input(Either::Left(bhw_output.clone())));
 
                     bw_state.elections.is_valid()
                         .map_err(|err| format!("err: {err} with history: {}", print_bw_history(&bw_history)))
                         .unwrap();
 
-                    BW::step(&mut bw_state, SMInput::Context(bhw_output), &bw_settings).unwrap();
+                    BW::step(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
 
                     bw_history.extend(
                         bw_state.elections.events

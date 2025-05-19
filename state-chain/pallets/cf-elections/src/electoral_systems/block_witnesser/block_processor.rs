@@ -804,6 +804,8 @@ pub struct SMBlockProcessor<T: BWProcessorTypes> {
 	_phantom: PhantomData<T>,
 }
 
+// TODO, rewrite this as AbstractApi
+/*
 use crate::electoral_systems::state_machine::core::IndexedValidate;
 impl<T: BWProcessorTypes + 'static + Debug>
 	IndexedValidate<BTreeSet<T::ChainBlockNumber>, SMBlockProcessorInput<T>> for SMBlockProcessor<T>
@@ -824,6 +826,9 @@ impl<T: BWProcessorTypes + 'static + Debug>
 		}
 	}
 }
+*/
+
+/*
 
 use crate::electoral_systems::state_machine::state_machine::Statemachine;
 
@@ -986,3 +991,4 @@ impl<
 		*/
 	}
 }
+ */

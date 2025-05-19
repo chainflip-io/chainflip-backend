@@ -147,14 +147,6 @@ pub mod hook_test_utils {
 	}
 }
 
-/// Dedicated `Validate` trait for cases where a value
-/// has to be validate with respect to an index, as is
-/// the case for the input type of state machines.
-pub trait IndexedValidate<Index, Value> {
-	type Error;
-	fn validate(index: &Index, value: &Value) -> Result<(), Self::Error>;
-}
-
 /// A type which can be validated.
 pub trait Validate {
 	type Error: sp_std::fmt::Debug;

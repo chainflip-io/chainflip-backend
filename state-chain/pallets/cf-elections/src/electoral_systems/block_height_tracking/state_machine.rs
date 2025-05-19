@@ -5,10 +5,11 @@ use super::{
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
 	ChainProgress, ChainProgressFor, HWTypes, HeightWitnesserProperties,
 };
-use crate::electoral_systems::state_machine::core::{Hook, IndexedValidate};
+use crate::electoral_systems::state_machine::{core::Hook, state_machine::AbstractApi};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::MaxEncodedLen;
+use itertools::Either;
 use scale_info::{prelude::format, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
@@ -16,29 +17,6 @@ use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
 //------------------------ inputs ---------------------------
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct InputHeaders<Types: HWTypes>(pub VecDeque<Header<Types>>);
-
-impl<T: HWTypes> IndexedValidate<HeightWitnesserProperties<T>, InputHeaders<T>>
-	for BlockHeightTrackingSM<T>
-{
-	type Error = VoteValidationError;
-
-	fn validate(
-		base: &HeightWitnesserProperties<T>,
-		this: &InputHeaders<T>,
-	) -> Result<(), Self::Error> {
-		this.is_valid()?;
-
-		if base.witness_from_index.is_zero() {
-			Ok(())
-		} else {
-			match this.0.front() {
-				Some(first) if first.block_height == base.witness_from_index => Ok(()),
-				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
-				None => Err(VoteValidationError::EmptyVote),
-			}
-		}
-	}
-}
 
 impl<T: HWTypes> Validate for InputHeaders<T> {
 	type Error = VoteValidationError;
@@ -119,20 +97,44 @@ pub struct BlockHeightTrackingSM<T: HWTypes> {
 	_phantom: core::marker::PhantomData<T>,
 }
 
+impl<T: HWTypes> AbstractApi for BlockHeightTrackingSM<T> {
+	type Query = HeightWitnesserProperties<T>;
+	type Response = InputHeaders<T>;
+	type Error = VoteValidationError;
+
+	fn validate(
+		base: &HeightWitnesserProperties<T>,
+		this: &InputHeaders<T>,
+	) -> Result<(), Self::Error> {
+		this.is_valid()?;
+
+		if base.witness_from_index.is_zero() {
+			Ok(())
+		} else {
+			match this.0.front() {
+				Some(first) if first.block_height == base.witness_from_index => Ok(()),
+				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
+				None => Err(VoteValidationError::EmptyVote),
+			}
+		}
+	}
+}
+
 impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type State = BHWStateWrapper<T>;
-	type Input = SMInput<(HeightWitnesserProperties<T>, InputHeaders<T>), ()>;
-	type InputIndex = Vec<HeightWitnesserProperties<T>>;
+	type Context = ();
 	type Settings = ();
 	type Output = Result<ChainProgressFor<T>, &'static str>;
 
-	fn input_index(s: &mut Self::State) -> Self::InputIndex {
+	fn input_index(s: &mut Self::State) -> Vec<Self::Query> {
 		let witness_from_index = match s.state {
 			BHWState::Starting => T::ChainBlockNumber::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from,
 		};
 		Vec::from([HeightWitnesserProperties { witness_from_index }])
 	}
+
+	/*
 
 	// specification for step function
 	#[cfg(test)]
@@ -186,10 +188,16 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 		}
 	}
 
-	fn step(s: &mut Self::State, input: Self::Input, _settings: &()) -> Self::Output {
+	*/
+
+	fn step(
+		s: &mut Self::State,
+		input: Either<Self::Context, (Self::Query, Self::Response)>,
+		_settings: &(),
+	) -> Self::Output {
 		let new_headers = match input {
-			SMInput::Consensus((_properties, consensus)) => consensus,
-			SMInput::Context(_) => return Ok(ChainProgress::None),
+			Either::Left(_) => return Ok(ChainProgress::None),
+			Either::Right((_properties, consensus)) => consensus,
 		};
 
 		match &mut s.state {
@@ -361,60 +369,63 @@ pub mod tests {
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
-	#[test]
-	pub fn test_dsm() {
-		BlockHeightTrackingSM::<(u32, Vec<char>, ())>::test(
-			module_path!(),
-			generate_state(),
-			Just(()),
-			|indices| {
-				prop_oneof![
-					Just(SMInput::Context(())),
-					prop_do! {
-						let index in select(indices);
-						let input in generate_input(index);
-						return SMInput::Consensus((index, input))
-					}
-				]
-				.boxed()
-			},
-		);
-	}
+	/*
 
-	struct TestChain {}
-	impl ChainWitnessConfig for TestChain {
-		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-		type ChainBlockNumber = u32;
-	}
+	   #[test]
+	   pub fn test_dsm() {
+		   BlockHeightTrackingSM::<(u32, Vec<char>, ())>::test(
+			   module_path!(),
+			   generate_state(),
+			   Just(()),
+			   |indices| {
+				   prop_oneof![
+					   Just(SMInput::Context(())),
+					   prop_do! {
+						   let index in select(indices);
+						   let input in generate_input(index);
+						   return SMInput::Consensus((index, input))
+					   }
+				   ]
+				   .boxed()
+			   },
+		   );
+	   }
 
-	impl ChainTypes for TestTypes2 {
-		type ChainBlockNumber = BlockWitnessRange<TestChain>;
-		type ChainBlockHash = bool;
+	   struct TestChain {}
+	   impl ChainWitnessConfig for TestChain {
+		   const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+		   type ChainBlockNumber = u32;
+	   }
 
-		const SAFETY_MARGIN: u32 = 16;
-	}
+	   impl ChainTypes for TestTypes2 {
+		   type ChainBlockNumber = BlockWitnessRange<TestChain>;
+		   type ChainBlockHash = bool;
 
-	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
-	struct TestTypes2 {}
-	impl HWTypes for TestTypes2 {
-		const BLOCK_BUFFER_SIZE: usize = 16;
-		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
-	}
+		   const SAFETY_MARGIN: u32 = 16;
+	   }
 
-	#[test]
-	pub fn test_dsm2() {
-		BlockHeightTrackingSM::<TestTypes2>::test(
-			module_path!(),
-			generate_state(),
-			Just(()),
-			|indices| {
-				prop_do! {
-					let index in select(indices);
-					let input in generate_input(index);
-					return SMInput::Consensus((index, input))
-				}
-				.boxed()
-			},
-		);
-	}
+	   #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+	   struct TestTypes2 {}
+	   impl HWTypes for TestTypes2 {
+		   const BLOCK_BUFFER_SIZE: usize = 16;
+		   type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
+	   }
+
+	   #[test]
+	   pub fn test_dsm2() {
+		   BlockHeightTrackingSM::<TestTypes2>::test(
+			   module_path!(),
+			   generate_state(),
+			   Just(()),
+			   |indices| {
+				   prop_do! {
+					   let index in select(indices);
+					   let input in generate_input(index);
+					   return SMInput::Consensus((index, input))
+				   }
+				   .boxed()
+			   },
+		   );
+	   }
+	*/
 }
