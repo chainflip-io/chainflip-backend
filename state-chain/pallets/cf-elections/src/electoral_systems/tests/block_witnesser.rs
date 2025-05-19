@@ -28,7 +28,7 @@ use crate::{
 			state_machine::{
 				BWElectionProperties, BWProcessorTypes, ElectionPropertiesHook,
 				ElectionTrackerEventHook, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,
-				SafeModeEnabledHook,
+				SafeModeEnabledHook, BWElectionType,
 			},
 			*,
 		},
@@ -45,6 +45,7 @@ use consensus::BWConsensus;
 use primitives::SafeModeStatus;
 use sp_std::collections::btree_set::BTreeSet;
 use state_machine::{BWStatemachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState};
+use crate::electoral_systems::state_machine::consensus::{ConsensusMechanism, Threshold};
 
 fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
 	assert!(count > 0);
@@ -211,7 +212,29 @@ fn create_votes_expectation(
 
 const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 const SAFETY_MARGIN: u32 = 3;
+const MOCK_BW_ELECTION_PROPERTIES: BWElectionProperties::<Types> = BWElectionProperties {
+	election_type: BWElectionType::<Types>::SafeBlockHeight,
+	block_height: 2,
+	properties: BTreeSet::new(),
+};
 
+#[test]
+fn block_witnesser_consensus() {
+	let mut bw_consensus: BWConsensus<Types> = Default::default();
+	bw_consensus.insert_vote((vec![1,3,5], Some(2)));
+	bw_consensus.insert_vote((vec![1,3,5], Some(2)));
+	bw_consensus.insert_vote((vec![1,3], Some(2)));
+	let consensus = bw_consensus.check_consensus(&(Threshold {threshold: 3}, MOCK_BW_ELECTION_PROPERTIES));
+	assert_eq!(consensus, None);
+
+	bw_consensus.insert_vote((vec![1,3,5], Some(3)));
+	let consensus = bw_consensus.check_consensus(&(Threshold {threshold: 3}, MOCK_BW_ELECTION_PROPERTIES));
+	assert_eq!(consensus, None);
+
+	bw_consensus.insert_vote((vec![1,3,5], Some(2)));
+	let consensus = bw_consensus.check_consensus(&(Threshold {threshold: 3}, MOCK_BW_ELECTION_PROPERTIES));
+	assert_eq!(consensus, Some((vec![1,3, 5], Some(2))));
+}
 /*
 
 // We start an election for a block and there is nothing there. The base case.
