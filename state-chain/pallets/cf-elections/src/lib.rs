@@ -136,6 +136,7 @@ extern crate core;
 
 pub mod electoral_system;
 pub mod electoral_system_runner;
+#[macro_use]
 pub mod electoral_systems;
 mod mock;
 mod tests;

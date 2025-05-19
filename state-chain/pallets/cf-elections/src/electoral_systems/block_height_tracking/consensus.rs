@@ -37,7 +37,7 @@ impl<T: HWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 			let mut consensus: MultipleVotes<SupermajorityConsensus<_>> = Default::default();
 
 			for vote in &self.votes {
-				consensus.insert_vote(vote.0.iter().map(Clone::clone).collect())
+				consensus.insert_vote(vote.headers.iter().map(Clone::clone).collect())
 			}
 
 			consensus
@@ -45,7 +45,7 @@ impl<T: HWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 				.map(|result| {
 					let mut headers = VecDeque::new();
 					headers.push_back(result);
-					InputHeaders(headers)
+					InputHeaders { headers }
 				})
 				.map(|result| {
 					log::info!("block_height: initial consensus: {result:?}");
@@ -59,15 +59,17 @@ impl<T: HWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 
 			for mut vote in self.votes.clone() {
 				// ensure that the vote is valid
-				if let Err(err) = validate_vote_and_height(properties.witness_from_index, &vote.0) {
+				if let Err(err) =
+					validate_vote_and_height(properties.witness_from_index, &vote.headers)
+				{
 					log::warn!("received invalid vote: {err:?} ");
 					continue;
 				}
 
 				// we count a given vote as multiple votes for all nonempty subchains
-				while !vote.0.is_empty() {
-					consensus.insert_vote((vote.0.len(), vote.clone()));
-					vote.0.pop_back();
+				while !vote.headers.is_empty() {
+					consensus.insert_vote((vote.headers.len(), vote.clone()));
+					vote.headers.pop_back();
 				}
 			}
 
@@ -75,8 +77,8 @@ impl<T: HWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 				log::info!(
 					"(witness_from: {:?}): successful consensus for ranges: {:?}..={:?}",
 					properties,
-					result.0.front(),
-					result.0.back()
+					result.headers.front(),
+					result.headers.back()
 				);
 			})
 		}

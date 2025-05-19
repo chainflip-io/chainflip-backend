@@ -6,7 +6,10 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
-use super::{super::state_machine::core::Validate, ChainProgress, ChainProgressFor, ChainTypes};
+use super::{
+	super::state_machine::core::Validate, state_machine::InputHeaderError, ChainProgress,
+	ChainProgressFor, ChainTypes,
+};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -99,6 +102,7 @@ pub enum VoteValidationError {
 	ParentHashMismatch,
 	EmptyVote,
 	BlockNotMatchingRequestedHeight,
+	InputHeaderError(InputHeaderError),
 }
 
 #[derive(

@@ -15,7 +15,7 @@ use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 
 use crate::electoral_systems::{
 	block_height_tracking::{
-		state_machine::{tests::*, BHWState, BHWStateWrapper, BlockHeightTrackingSM, InputHeaders},
+		state_machine::{tests::*, BHWState, BlockHeightWitnesser, InputHeaders},
 		HWTypes, HeightWitnesserProperties,
 	},
 	block_witnesser::{
@@ -60,7 +60,7 @@ pub trait AbstractVoter<M: Statemachine> {
 pub fn test_all() {
 	type Types = (u8, usize, Vec<char>);
 	type BW = BWStatemachine<Types>;
-	type BHW = BlockHeightTrackingSM<Types>;
+	type BHW = BlockHeightWitnesser<Types>;
 
 	const OFFSET: usize = 20;
 
@@ -79,7 +79,7 @@ pub fn test_all() {
 				let bhw_input = match index {
 					HeightWitnesserProperties { witness_from_index } =>
 						if witness_from_index == 0 {
-							InputHeaders(VecDeque::from([best_block]))
+							InputHeaders { headers: VecDeque::from([best_block]) }
 						} else {
 							let headers = (witness_from_index..=chain.get_best_block_height())
 								.map(|height| chain.get_block_header(height));
@@ -87,7 +87,7 @@ pub fn test_all() {
 								continue;
 							}
 							if let Some(headers) = headers.into_iter().collect::<Option<Vec<_>>>() {
-								InputHeaders(VecDeque::from_iter(headers))
+								InputHeaders { headers: VecDeque::from_iter(headers) }
 							} else {
 								continue
 							}
@@ -148,7 +148,7 @@ pub fn test_all() {
         let finalized_events : BTreeSet<_> = finalized_blocks.iter().flat_map(|block| block.events.iter()).collect();
 
         // prepare the state machines
-        let mut bhw_state: BHWStateWrapper<Types> = BHWStateWrapper {
+        let mut bhw_state: BlockHeightWitnesser<Types> = BlockHeightWitnesser {
             state: BHWState::Starting,
             block_height_update: MockHook::new(())
         };
@@ -174,7 +174,7 @@ pub fn test_all() {
         #[derive(Clone, Debug)]
         enum BWTrace<T: BWTypes, T0: HWTypes> {
             Input(InputOf<BWStatemachine<T>>),
-            InputBHW(InputOf<BlockHeightTrackingSM<T0>>),
+            InputBHW(InputOf<BlockHeightWitnesser<T0>>),
             Output(Vec<(T::ChainBlockNumber, T::Event)>),
             Event(BlockProcessorEvent<T>),
             ET(ElectionTrackerEvent<T>)

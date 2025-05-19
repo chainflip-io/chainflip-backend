@@ -25,6 +25,7 @@ pub mod mock;
 pub mod monotonic_change;
 pub mod monotonic_median;
 pub mod solana_vault_swap_accounts;
+#[macro_use]
 pub mod state_machine;
 pub mod unsafe_median;
 

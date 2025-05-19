@@ -36,6 +36,58 @@ macro_rules! impls {
     (for $name:ty $(where ($($bounds:tt)*))? :) => {}
 }
 
+macro_rules! defx {
+	(
+		pub $def:tt $Name:tt [$($ParamName:ident: $ParamType:tt),*] {
+			$($Definition:tt)*
+		} where $this:ident (else $Error:ident) {
+			$($prop_name:ident : $prop:expr),*
+
+			$(,
+			{ where
+				$(
+					$prop_var:ident = $prop_var_value:expr
+				),*
+			})?
+		} with {
+			$($Attributes:tt)*
+		}
+	) => {
+
+		#[derive(Debug)]
+		#[allow(non_camel_case_types)]
+		pub enum $Error {
+			$($prop_name),*
+		}
+
+		$($Attributes)*
+		pub $def $Name<$($ParamName: $ParamType),*> {
+			$($Definition)*
+		}
+
+		impl<$($ParamName: $ParamType),*> Validate for $Name<$($ParamName),*> {
+
+			type Error = $Error;
+
+			fn is_valid(&self) -> Result<(), Self::Error> {
+				let $this = self;
+
+				$(
+					$(
+						let $prop_var = $prop_var_value;
+					)*
+				)?
+
+				$(
+					frame_support::ensure!($prop, $Error::$prop_name);
+				)*
+				Ok(())
+			}
+		}
+	};
+}
+pub(crate) use defx; // <-- the trick
+
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
 /// the state machine based electoral systems.

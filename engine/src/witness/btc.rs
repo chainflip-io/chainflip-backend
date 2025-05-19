@@ -157,7 +157,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 					"bht: Submitting vote for (witness_from={latest_block_height})with {} headers",
 					headers.len()
 				);
-				Ok(Some(InputHeaders(headers)))
+				Ok(Some(InputHeaders { headers }))
 			} else {
 				Err(anyhow::anyhow!("bht: Headers do not form a chain"))
 			}

@@ -5,7 +5,10 @@ use super::{
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
 	ChainProgress, ChainProgressFor, HWTypes, HeightWitnesserProperties,
 };
-use crate::electoral_systems::state_machine::{core::Hook, state_machine::AbstractApi};
+use crate::electoral_systems::state_machine::{
+	core::{defx, Hook},
+	state_machine::AbstractApi,
+};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::MaxEncodedLen;
@@ -15,17 +18,24 @@ use serde::{Deserialize, Serialize};
 use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
 
 //------------------------ inputs ---------------------------
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct InputHeaders<Types: HWTypes>(pub VecDeque<Header<Types>>);
 
-impl<T: HWTypes> Validate for InputHeaders<T> {
-	type Error = VoteValidationError;
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		if self.0.is_empty() {
-			Err(VoteValidationError::EmptyVote)
-		} else {
-			ChainBlocks { headers: self.0.clone() }.is_valid()
+defx! {
+
+	pub struct InputHeaders[Types: HWTypes] {
+		pub headers: VecDeque<Header<Types>>
+	}
+	where this (else InputHeaderError) {
+
+		is_nonempty: this.headers.len() > 0,
+		block_heights_are_continuous: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
+		parent_hashes_match: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
+
+		{
+			where pairs = this.headers.iter().zip(this.headers.iter().skip(1))
 		}
+
+	} with {
+		#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	}
 }
 
@@ -54,7 +64,7 @@ impl<T: HWTypes> Validate for BHWState<T> {
 
 			BHWState::Running { headers, witness_from: _ } =>
 				if !headers.is_empty() {
-					InputHeaders::<T>(headers.clone())
+					InputHeaders::<T> { headers: headers.clone() }
 						.is_valid()
 						.map_err(|_| "blocks should be continuous")
 				} else {
@@ -78,12 +88,12 @@ impl<T: HWTypes> Validate for BHWState<T> {
 	PartialOrd,
 	Default,
 )]
-pub struct BHWStateWrapper<T: HWTypes> {
+pub struct BlockHeightWitnesser<T: HWTypes> {
 	pub state: BHWState<T>,
 	pub block_height_update: T::BlockHeightChangeHook,
 }
 
-impl<T: HWTypes> Validate for BHWStateWrapper<T> {
+impl<T: HWTypes> Validate for BlockHeightWitnesser<T> {
 	type Error = &'static str;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -93,11 +103,7 @@ impl<T: HWTypes> Validate for BHWStateWrapper<T> {
 
 //------------------------ state machine ---------------------------
 
-pub struct BlockHeightTrackingSM<T: HWTypes> {
-	_phantom: core::marker::PhantomData<T>,
-}
-
-impl<T: HWTypes> AbstractApi for BlockHeightTrackingSM<T> {
+impl<T: HWTypes> AbstractApi for BlockHeightWitnesser<T> {
 	type Query = HeightWitnesserProperties<T>;
 	type Response = InputHeaders<T>;
 	type Error = VoteValidationError;
@@ -106,12 +112,12 @@ impl<T: HWTypes> AbstractApi for BlockHeightTrackingSM<T> {
 		base: &HeightWitnesserProperties<T>,
 		this: &InputHeaders<T>,
 	) -> Result<(), Self::Error> {
-		this.is_valid()?;
+		this.is_valid().map_err(VoteValidationError::InputHeaderError)?;
 
 		if base.witness_from_index.is_zero() {
 			Ok(())
 		} else {
-			match this.0.front() {
+			match this.headers.front() {
 				Some(first) if first.block_height == base.witness_from_index => Ok(()),
 				Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
 				None => Err(VoteValidationError::EmptyVote),
@@ -120,8 +126,8 @@ impl<T: HWTypes> AbstractApi for BlockHeightTrackingSM<T> {
 	}
 }
 
-impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
-	type State = BHWStateWrapper<T>;
+impl<T: HWTypes> Statemachine for BlockHeightWitnesser<T> {
+	type State = BlockHeightWitnesser<T>;
 	type Context = ();
 	type Settings = ();
 	type Output = Result<ChainProgressFor<T>, &'static str>;
@@ -202,21 +208,24 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 
 		match &mut s.state {
 			BHWState::Starting => {
-				let first = new_headers.0.front().unwrap().block_height;
-				let last = new_headers.0.back().unwrap().block_height;
+				let first = new_headers.headers.front().unwrap().block_height;
+				let last = new_headers.headers.back().unwrap().block_height;
 				s.state = BHWState::Running {
-					headers: new_headers.0.clone(),
+					headers: new_headers.headers.clone(),
 					witness_from: last.saturating_forward(1),
 				};
-				let hashes =
-					new_headers.0.into_iter().map(|hash| (hash.block_height, hash.hash)).collect();
+				let hashes = new_headers
+					.headers
+					.into_iter()
+					.map(|hash| (hash.block_height, hash.hash))
+					.collect();
 				Ok(ChainProgress::Range(hashes, first..=last))
 			},
 
 			BHWState::Running { headers, witness_from } => {
 				let mut chainblocks = ChainBlocks { headers: headers.clone() };
 
-				match chainblocks.merge(new_headers.0) {
+				match chainblocks.merge(new_headers.headers) {
 					Ok(merge_info) => {
 						log::info!(
 							"added new blocks: {:?}, replacing these blocks: {:?}",
@@ -279,15 +288,13 @@ pub mod tests {
 	};
 	use sp_std::{fmt::Debug, iter::Step};
 
-	use crate::electoral_systems::block_height_tracking::state_machine::BHWStateWrapper;
-
 	use super::{
 		super::{
 			super::state_machine::{state_machine::Statemachine, state_machine_es::SMInput},
 			primitives::Header,
 			HWTypes, HeightWitnesserProperties,
 		},
-		BHWState, BlockHeightTrackingSM, InputHeaders,
+		BHWState, BlockHeightWitnesser, InputHeaders,
 	};
 
 	pub fn generate_input<T: HWTypes>(
@@ -308,12 +315,12 @@ pub mod tests {
 						hash: h1.clone(),
 						parent_hash: h0.clone(),
 					});
-				InputHeaders::<T>(headers.collect())
+				InputHeaders::<T>{ headers: headers.collect() }
 			}
 		}
 	}
 
-	pub fn generate_state<T: HWTypes>() -> impl Strategy<Value = BHWStateWrapper<T>>
+	pub fn generate_state<T: HWTypes>() -> impl Strategy<Value = BlockHeightWitnesser<T>>
 	where
 		T::ChainBlockHash: Arbitrary,
 		T::ChainBlockNumber: Arbitrary + BlockZero,
@@ -327,15 +334,15 @@ pub mod tests {
 				let headers in generate_input::<T>(n);
 				return {
 					let witness_from = if is_reorg_without_known_root {
-						headers.0.front().unwrap().block_height
+						headers.headers.front().unwrap().block_height
 					} else {
-						headers.0.back().unwrap().block_height.saturating_forward(1)
+						headers.headers.back().unwrap().block_height.saturating_forward(1)
 					};
-					BHWState::Running { headers: headers.0, witness_from }
+					BHWState::Running { headers: headers.headers, witness_from }
 				}
 			}
 		]
-		.prop_map(|state| BHWStateWrapper { state, block_height_update: Default::default() })
+		.prop_map(|state| BlockHeightWitnesser { state, block_height_update: Default::default() })
 	}
 
 	impl<

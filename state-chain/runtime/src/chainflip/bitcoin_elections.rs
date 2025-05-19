@@ -23,7 +23,7 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		block_height_tracking::{
 			consensus::BlockHeightTrackingConsensus,
-			state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders},
+			state_machine::{BlockHeightWitnesser, InputHeaders},
 			BlockHeightChangeHook, ChainProgressFor, ChainTypes, HWTypes,
 			HeightWitnesserProperties,
 		},
@@ -103,7 +103,7 @@ impls! {
 	/// Associating the ES related types to the struct
 	ElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type ElectoralUnsynchronisedState = BHWStateWrapper<Self>;
+		type ElectoralUnsynchronisedState = BlockHeightWitnesser<Self>;
 		type ElectoralUnsynchronisedStateMapKey = ();
 		type ElectoralUnsynchronisedStateMapValue = ();
 		type ElectoralUnsynchronisedSettings = ();
@@ -126,7 +126,7 @@ impls! {
 
 		// the actual state machine and consensus mechanisms of this ES
 		type ConsensusMechanism = BlockHeightTrackingConsensus<Self>;
-		type Statemachine = BlockHeightTrackingSM<Self>;
+		type Statemachine = BlockHeightWitnesser<Self>;
 	}
 
 	Hook<HookTypeFor<Self, BlockHeightChangeHook>> {
