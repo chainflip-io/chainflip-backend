@@ -37,7 +37,7 @@ where
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
 		let vote_hash = SharedDataHash::of(&vote);
-		self.data.insert(vote_hash, vote.clone());
+		self.data.entry(vote_hash).or_insert_with(|| vote.clone());
 		self.consensus.insert_vote(vote_hash);
 	}
 
