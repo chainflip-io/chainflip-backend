@@ -212,7 +212,33 @@
         {
           "name": "event_data_account",
           "writable": true,
-          "signer": true
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "from"
+              },
+              {
+                "kind": "arg",
+                "path": "seed"
+              }
+            ]
+          }
         },
         {
           "name": "swap_endpoint_data_account",
@@ -231,6 +257,10 @@
               "name": "SwapNativeParams"
             }
           }
+        },
+        {
+          "name": "_seed",
+          "type": "bytes"
         }
       ]
     },
@@ -353,7 +383,33 @@
         {
           "name": "event_data_account",
           "writable": true,
-          "signer": true
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  119,
+                  97,
+                  112,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "from"
+              },
+              {
+                "kind": "arg",
+                "path": "seed"
+              }
+            ]
+          }
         },
         {
           "name": "swap_endpoint_data_account",
@@ -382,6 +438,10 @@
               "name": "SwapTokenParams"
             }
           }
+        },
+        {
+          "name": "_seed",
+          "type": "bytes"
         }
       ]
     }

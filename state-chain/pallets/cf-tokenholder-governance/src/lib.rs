@@ -188,15 +188,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Submit a proposal. The caller will be charged a proposal fee equal to
 		/// [Config::ProposalFee].
-		///
-		/// ## Events
-		///
-		/// - [ProposalSubmitted](Event::ProposalSubmitted)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientLiquidity)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::submit_proposal())]
 		pub fn submit_proposal(origin: OriginFor<T>, proposal: Proposal) -> DispatchResult {
@@ -218,12 +209,6 @@ pub mod pallet {
 		}
 
 		/// Backs a proposal. The caller signals their support for a proposal.
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [ProposalDoesntExist](Error::ProposalDoesntExist)
-		/// - [AlreadyBacked](Error::AlreadyBacked)
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::back_proposal(Backers::<T>::decode_non_dedup_len(proposal).unwrap_or_default() as u32))]
 		pub fn back_proposal(origin: OriginFor<T>, proposal: Proposal) -> DispatchResult {

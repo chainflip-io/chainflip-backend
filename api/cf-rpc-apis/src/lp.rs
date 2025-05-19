@@ -121,6 +121,7 @@ pub trait LpRpcApi {
 		sell_amount: NumberOrHex,
 		dispatch_at: Option<BlockNumber>,
 		wait_for: Option<WaitFor>,
+		close_order_at: Option<BlockNumber>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
 
 	#[method(name = "free_balances", aliases = ["lp_asset_balances"])]

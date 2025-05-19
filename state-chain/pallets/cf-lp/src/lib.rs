@@ -51,7 +51,7 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, inte
 pub mod pallet {
 	use cf_chains::{AccountOrAddress, Chain};
 	use cf_primitives::{BlockNumber, ChannelId, EgressId, Price};
-	use cf_traits::{HistoricalFeeMigration, MinimumDeposit};
+	use cf_traits::MinimumDeposit;
 
 	use super::*;
 
@@ -99,11 +99,6 @@ pub mod pallet {
 		#[cfg(feature = "runtime-benchmarks")]
 		type FeePayment: cf_traits::FeePayment<
 			Amount = <Self as Chainflip>::Amount,
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
-
-		// TODO: Remove this after migration is complete.
-		type MigrationHelper: HistoricalFeeMigration<
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 
@@ -269,10 +264,6 @@ pub mod pallet {
 		/// Registers a Liquidity Refund Address(LRA) for an account.
 		///
 		/// To request a deposit address for a chain, an LRA must be registered for that chain.
-		///
-		/// ## Events
-		///
-		/// - [On Success](Event::LiquidityRefundAddressRegistered)
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::register_liquidity_refund_address())]
 		pub fn register_liquidity_refund_address(

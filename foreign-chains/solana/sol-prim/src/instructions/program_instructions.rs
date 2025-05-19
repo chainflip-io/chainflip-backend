@@ -248,6 +248,8 @@ impl SystemProgramInstruction {
 	}
 }
 
+pub type FunctionDiscriminator = [u8; 8];
+
 pub trait ProgramInstruction: BorshSerialize {
 	const CALL_NAME: &'static str;
 	const FN_DISCRIMINATOR_HASH: [u8; 32] = sha2_const::Sha256::new()
@@ -259,7 +261,7 @@ pub trait ProgramInstruction: BorshSerialize {
 		Instruction::new_with_borsh(program_id, &(Self::function_discriminator(), self), accounts)
 	}
 
-	fn function_discriminator() -> [u8; 8] {
+	fn function_discriminator() -> FunctionDiscriminator {
 		Self::FN_DISCRIMINATOR_HASH[..8].copy_to_array::<8>()
 	}
 }
@@ -361,10 +363,10 @@ macro_rules! solana_program {
 		}
 
 		$(
-			#[derive(BorshSerialize, Debug, Clone, PartialEq, Eq)]
+			#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 			pub struct $call {
 				$(
-					$call_arg: $arg_type,
+					pub $call_arg: $arg_type,
 				)*
 			}
 
@@ -818,12 +820,13 @@ pub mod swap_endpoints {
 			x_swap_native => XSwapNative {
 				args: [
 					swap_native_params: SwapNativeParams,
+					seed: Vec<u8>,
 				],
 				account_metas: [
 					data_account: { signer: false, writable: false },
 					native_vault: { signer: false, writable: true },
 					from: { signer: true, writable: true },
-					event_data_account: { signer: true, writable: true },
+					event_data_account: { signer: false, writable: true },
 					swap_endpoint_data_account: { signer: false, writable: true },
 					system_program: { signer: false, writable: false },
 				]
@@ -831,13 +834,14 @@ pub mod swap_endpoints {
 			x_swap_token => XSwapToken {
 				args: [
 					swap_token_params: SwapTokenParams,
+					seed: Vec<u8>,
 				],
 				account_metas: [
 					data_account: { signer: false, writable: false },
 					token_vault_associated_token_account: { signer: false, writable: true },
 					from: { signer: true, writable: true },
 					from_token_account: { signer: false, writable: true },
-					event_data_account: { signer: true, writable: true },
+					event_data_account: { signer: false, writable: true },
 					swap_endpoint_data_account: { signer: false, writable: true },
 					token_supported_account: { signer: false, writable: false },
 					token_program: { signer: false, writable: false },

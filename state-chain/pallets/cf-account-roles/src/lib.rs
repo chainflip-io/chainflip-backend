@@ -141,15 +141,6 @@ pub mod pallet {
 		/// UTF-8 bytes.
 		///
 		/// The dispatch origin of this function must be signed.
-		///
-		/// ## Events
-		///
-		/// - [VanityNameSet](Event::VanityNameSet)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		/// - [InvalidCharactersInName](Error::InvalidCharactersInName)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_vanity_name())]
 		pub fn set_vanity_name(origin: OriginFor<T>, name: VanityName) -> DispatchResult {

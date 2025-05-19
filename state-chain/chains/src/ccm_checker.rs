@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	address::EncodedAddress,
 	hub::AssethubRuntimeCall,
 	sol::{
 		sol_tx_core::consts::{
@@ -25,13 +24,14 @@ use crate::{
 		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_USER_ALTS, MAX_USER_CCM_BYTES_SOL,
 		MAX_USER_CCM_BYTES_USDC,
 	},
-	CcmAdditionalData, CcmChannelMetadata, Chain, ForeignChainAddress,
+	CcmChannelMetadataUnchecked, Chain, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH,
 };
 use cf_primitives::{Asset, ForeignChain};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_runtime::DispatchError;
-use sp_std::{collections::btree_set::BTreeSet, vec, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
@@ -60,25 +60,23 @@ impl From<CcmValidityError> for DispatchError {
 	}
 }
 
-pub trait CcmValidityCheck {
-	fn check_and_decode(
-		_ccm: &CcmChannelMetadata,
-		_egress_asset: cf_primitives::Asset,
-		_destination: EncodedAddress,
-	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
-		Ok(DecodedCcmAdditionalData::NotRequired)
-	}
-
-	fn decode_unchecked(
-		_ccm: CcmAdditionalData,
-		_chain: ForeignChain,
-	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
-		Ok(DecodedCcmAdditionalData::NotRequired)
-	}
-}
-
-#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+	Default,
+)]
 pub enum DecodedCcmAdditionalData {
+	#[default]
 	NotRequired,
 	Solana(VersionedSolanaCcmAdditionalData),
 }
@@ -98,10 +96,19 @@ impl DecodedCcmAdditionalData {
 	}
 }
 
-#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord,
+)]
 pub enum VersionedSolanaCcmAdditionalData {
 	V0(SolCcmAccounts),
 	V1 { ccm_accounts: SolCcmAccounts, alts: Vec<SolAddress> },
+}
+
+impl MaxEncodedLen for VersionedSolanaCcmAdditionalData {
+	fn max_encoded_len() -> usize {
+		1 + // For the Solana enum byte
+		MAX_CCM_ADDITIONAL_DATA_LENGTH as usize
+	}
 }
 
 impl VersionedSolanaCcmAdditionalData {
@@ -112,30 +119,33 @@ impl VersionedSolanaCcmAdditionalData {
 		}
 	}
 
-	pub fn address_lookup_tables(&self) -> Vec<SolAddress> {
+	pub fn alt_addresses(&self) -> Option<Vec<SolAddress>> {
 		match self {
-			VersionedSolanaCcmAdditionalData::V0(..) => vec![],
-			VersionedSolanaCcmAdditionalData::V1 { alts, .. } => alts.clone(),
+			VersionedSolanaCcmAdditionalData::V0(..) => None,
+			VersionedSolanaCcmAdditionalData::V1 { alts, .. } =>
+				(!alts.is_empty()).then_some(alts.clone()),
 		}
 	}
 }
 
-pub struct CcmValidityChecker;
+pub(crate) struct CcmValidityChecker;
 
-impl CcmValidityCheck for CcmValidityChecker {
+impl CcmValidityChecker {
 	/// Checks to see if a given CCM is valid. Currently this only applies to Solana and Assethub
 	/// chains. For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected
 	/// length. For Assethub Chain: Decodes the message into a supported extrinsic of the
 	/// PolkadotXcm pallet. Returns the decoded `cf_parameter`.
-	fn check_and_decode(
-		ccm: &CcmChannelMetadata,
+	pub fn check_and_decode(
+		ccm: &CcmChannelMetadataUnchecked,
 		egress_asset: Asset,
-		destination: EncodedAddress,
+		destination: ForeignChainAddress,
 	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
 		match ForeignChain::from(egress_asset) {
 			ForeignChain::Solana => {
-				let destination_address = SolPubkey::try_from(destination)
-					.map_err(|_| CcmValidityError::InvalidDestinationAddress)?;
+				let destination_address = match destination {
+					ForeignChainAddress::Sol(address) => Ok(address),
+					_ => Err(CcmValidityError::InvalidDestinationAddress),
+				}?;
 
 				let asset: SolAsset = egress_asset.try_into().expect(
 					"Only Solana chain's asset will be checked. This conversion must succeed.",
@@ -143,12 +153,12 @@ impl CcmValidityCheck for CcmValidityChecker {
 
 				// Check if the cf_parameter can be decoded
 				let decoded_data = VersionedSolanaCcmAdditionalData::decode(
-					&mut &ccm.ccm_additional_data.clone()[..],
+					&mut &ccm.ccm_additional_data.0.clone()[..],
 				)
 				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 
 				let ccm_accounts = decoded_data.ccm_accounts();
-				let address_lookup_tables = decoded_data.address_lookup_tables();
+				let address_lookup_tables = decoded_data.alt_addresses().unwrap_or_default();
 				let num_address_lookup_tables = address_lookup_tables.len();
 
 				if num_address_lookup_tables > MAX_CCM_USER_ALTS as usize {
@@ -208,7 +218,7 @@ impl CcmValidityCheck for CcmValidityChecker {
 				let mut seen_addresses = BTreeSet::from_iter([
 					SYSTEM_PROGRAM_ID,
 					SYS_VAR_INSTRUCTIONS,
-					destination_address.into(),
+					destination_address,
 					ccm_accounts.cf_receiver.pubkey.into(),
 				]);
 
@@ -242,26 +252,11 @@ impl CcmValidityCheck for CcmValidityChecker {
 					.map(|_| DecodedCcmAdditionalData::NotRequired)
 					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData),
 			_ =>
-				if !ccm.ccm_additional_data.is_empty() {
+				if !ccm.ccm_additional_data.0.is_empty() {
 					Err(CcmValidityError::RedundantDataSupplied)
 				} else {
 					Ok(DecodedCcmAdditionalData::NotRequired)
 				},
-		}
-	}
-
-	/// Decodes the `ccm_additional_data` without any additional checks.
-	/// Only fail if given bytes cannot be decoded into `VersionedSolanaCcmAdditionalData`.
-	fn decode_unchecked(
-		ccm_additional_data: CcmAdditionalData,
-		chain: ForeignChain,
-	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
-		if chain == ForeignChain::Solana {
-			VersionedSolanaCcmAdditionalData::decode(&mut &ccm_additional_data[..])
-				.map(DecodedCcmAdditionalData::Solana)
-				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)
-		} else {
-			Ok(DecodedCcmAdditionalData::NotRequired)
 		}
 	}
 }
@@ -286,19 +281,24 @@ pub fn check_ccm_for_blacklisted_accounts(
 mod test {
 	use codec::Encode;
 	use frame_support::{assert_err, assert_ok};
+	use sp_core::H160;
 	use Asset;
 
 	use super::*;
-	use crate::sol::{
-		sol_tx_core::sol_test_values::{self, ccm_accounts, ccm_parameter_v1, user_alt},
-		SolCcmAddress, SolPubkey, MAX_USER_CCM_BYTES_SOL,
+	use crate::{
+		sol::{
+			sol_tx_core::sol_test_values::{self, ccm_accounts, ccm_parameter_v1, user_alt},
+			SolCcmAddress, SolPubkey, MAX_USER_CCM_BYTES_SOL,
+		},
+		CcmChannelMetadata,
 	};
 
-	pub const DEST_ADDR: EncodedAddress = EncodedAddress::Sol([0x00; 32]);
+	pub const DEST_SOL_ADDR: SolAddress = SolAddress([0x00; 32]);
+	pub const DEST_ADDR: ForeignChainAddress = ForeignChainAddress::Sol(DEST_SOL_ADDR);
 	pub const MOCK_ADDR: SolPubkey = SolPubkey([0x01; 32]);
 	pub const CF_RECEIVER_ADDR: SolPubkey = SolPubkey([0xff; 32]);
 	pub const FALLBACK_ADDR: SolPubkey = SolPubkey([0xf0; 32]);
-	pub const INVALID_DEST_ADDR: EncodedAddress = EncodedAddress::Eth([0x00; 20]);
+	pub const INVALID_DEST_ADDR: ForeignChainAddress = ForeignChainAddress::Eth(H160([0x00; 20]));
 
 	#[test]
 	fn can_verify_valid_ccm() {
@@ -446,7 +446,7 @@ mod test {
 		);
 
 		// Always valid on other chains.
-		ccm.ccm_additional_data.clear();
+		ccm.ccm_additional_data.0.clear();
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth, DEST_ADDR),
 			DecodedCcmAdditionalData::NotRequired
@@ -578,14 +578,8 @@ mod test {
 				additional_accounts: vec![
 					SolCcmAddress { pubkey: SYSTEM_PROGRAM_ID.into(), is_writable: false },
 					SolCcmAddress { pubkey: MOCK_ADDR, is_writable: true },
-					SolCcmAddress {
-						pubkey: SolPubkey::try_from(DEST_ADDR).unwrap(),
-						is_writable: true,
-					},
-					SolCcmAddress {
-						pubkey: SolPubkey::try_from(DEST_ADDR).unwrap(),
-						is_writable: true,
-					},
+					SolCcmAddress { pubkey: SolPubkey::from(DEST_SOL_ADDR), is_writable: true },
+					SolCcmAddress { pubkey: SolPubkey::from(DEST_SOL_ADDR), is_writable: true },
 				],
 			})
 			.encode()
@@ -677,38 +671,6 @@ mod test {
 	}
 
 	#[test]
-	fn can_decode_unchecked() {
-		let ccm = sol_test_values::ccm_parameter().channel_metadata;
-		assert_ok!(CcmValidityChecker::decode_unchecked(
-			ccm.ccm_additional_data.clone(),
-			ForeignChain::Solana
-		));
-		assert_eq!(
-			CcmValidityChecker::decode_unchecked(
-				ccm.ccm_additional_data.clone(),
-				ForeignChain::Ethereum
-			),
-			Ok(DecodedCcmAdditionalData::NotRequired)
-		);
-	}
-
-	#[test]
-	fn can_decode_unchecked_ccm_v1() {
-		let ccm = sol_test_values::ccm_parameter_v1().channel_metadata;
-		assert_ok!(CcmValidityChecker::decode_unchecked(
-			ccm.ccm_additional_data.clone(),
-			ForeignChain::Solana
-		));
-		assert_eq!(
-			CcmValidityChecker::decode_unchecked(
-				ccm.ccm_additional_data.clone(),
-				ForeignChain::Ethereum
-			),
-			Ok(DecodedCcmAdditionalData::NotRequired)
-		);
-	}
-
-	#[test]
 	fn additional_data_v1_support_works() {
 		let mut ccm = sol_test_values::ccm_parameter_v1().channel_metadata;
 		assert_eq!(
@@ -724,7 +686,7 @@ mod test {
 			Err(CcmValidityError::RedundantDataSupplied)
 		);
 
-		ccm.ccm_additional_data.clear();
+		ccm.ccm_additional_data.0.clear();
 		assert_eq!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth, DEST_ADDR),
 			Ok(DecodedCcmAdditionalData::NotRequired)

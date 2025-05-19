@@ -133,14 +133,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Logs the latest known state of the external chain defined by [Config::TargetChain].
-		///
-		/// ## Events
-		///
-		/// - [Event::ChainStateUpdated]
-		///
-		/// ## Errors
-		///
-		/// - [Error::StaleDataSubmitted]
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_chain_state())]
 		pub fn update_chain_state(

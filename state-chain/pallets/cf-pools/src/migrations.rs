@@ -18,15 +18,15 @@ use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
-mod remove_limit_order_pool_fee;
+mod scheduled_limit_order_updates;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
-		5,
 		6,
-		remove_limit_order_pool_fee::Migration<T>,
+		7,
+		scheduled_limit_order_updates::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<6, Pallet<T>>,
+	PlaceholderMigration<7, Pallet<T>>,
 );

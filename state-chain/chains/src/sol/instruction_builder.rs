@@ -30,9 +30,9 @@ use crate::{
 				SwapEndpointProgram, SwapNativeParams, SwapTokenParams,
 			},
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolInstruction, SolPubkey,
+		SolAddress, SolAmount, SolApiEnvironment, SolInstruction, SolPubkey, SolSeed,
 	},
-	CcmChannelMetadata,
+	CcmChannelMetadataUnchecked,
 };
 use cf_primitives::chains::assets::any::Asset;
 use sp_std::vec::Vec;
@@ -54,10 +54,11 @@ impl SolanaInstructionBuilder {
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		from: SolPubkey,
+		seed: SolSeed,
 		event_data_account: SolPubkey,
 		input_amount: SolAmount,
 		cf_parameters: Vec<u8>,
-		ccm: Option<CcmChannelMetadata>,
+		ccm: Option<CcmChannelMetadataUnchecked>,
 	) -> SolInstruction {
 		SwapEndpointProgram::with_id(api_environment.swap_endpoint_program).x_swap_native(
 			SwapNativeParams {
@@ -68,6 +69,7 @@ impl SolanaInstructionBuilder {
 				ccm_parameters: ccm.map(|metadata| metadata.into()),
 				cf_parameters,
 			},
+			seed.into(),
 			api_environment.vault_program_data_account,
 			swap_endpoint_native_vault,
 			from,
@@ -83,11 +85,12 @@ impl SolanaInstructionBuilder {
 		destination_address: EncodedAddress,
 		from: SolPubkey,
 		from_token_account: SolPubkey,
+		seed: SolSeed,
 		event_data_account: SolPubkey,
 		token_supported_account: SolPubkey,
 		input_amount: SolAmount,
 		cf_parameters: Vec<u8>,
-		ccm: Option<CcmChannelMetadata>,
+		ccm: Option<CcmChannelMetadataUnchecked>,
 	) -> SolInstruction {
 		SwapEndpointProgram::with_id(api_environment.swap_endpoint_program).x_swap_token(
 			SwapTokenParams {
@@ -99,6 +102,7 @@ impl SolanaInstructionBuilder {
 				cf_parameters,
 				decimals: SOL_USDC_DECIMAL,
 			},
+			seed.into(),
 			api_environment.vault_program_data_account,
 			api_environment.usdc_token_vault_ata,
 			from,
@@ -121,6 +125,7 @@ mod test {
 		sol::{
 			signing_key::SolSigningKey,
 			sol_tx_core::{
+				self,
 				consts::{const_address, MAX_TRANSACTION_LENGTH},
 				sol_test_values::*,
 			},
@@ -157,13 +162,9 @@ mod test {
 		229, 147, 69, 73, 190, 10, 208, 151, 131, 194, 205, 116, 232,
 	];
 	const FROM: SolAddress = const_address("EwgZksaPybTUyhcEMn3aR46HZokR4NH6d1Wy8d51qZ6G");
+	const FROM_TOKEN: SolAddress = const_address("4dTsLjw5c75UXF59KAKHqyeBJVKZibA9a4LsDLc1CPbB");
 
-	const EVENT_DATA_ACCOUNT_KEY_BYTES: [u8; 32] = [
-		133, 220, 70, 223, 197, 127, 106, 46, 178, 73, 164, 200, 88, 128, 97, 144, 20, 132, 211,
-		34, 196, 159, 28, 118, 5, 209, 12, 245, 241, 223, 8, 67,
-	];
-	const EVENT_DATA_ACCOUNT: SolAddress =
-		const_address("9acHwMGmeoMr5o8Cw1V2U4HjMQwhced3eQP31yYEhYDU");
+	const VAULT_SWAP_SEED: &[u8] = &[1; 32];
 
 	//const TOKEN_SUPPORTED_ACCOUNT_KEY_BYTES: [u8; 32] = [0, 81, 206, 126, 204, 53, 163, 79, 5,
 	// 119, 184, 1, 97, 237, 114, 120, 23, 6, 227, 206, 239, 132, 130, 212, 241, 12, 21, 185, 66,
@@ -217,6 +218,17 @@ mod test {
 		)
 	}
 
+	fn vault_swap_account(seed: &[u8]) -> SolPubkey {
+		crate::sol::sol_tx_core::address_derivation::derive_vault_swap_account(
+			SWAP_ENDPOINT_PROGRAM,
+			FROM,
+			seed,
+		)
+		.unwrap()
+		.address
+		.into()
+	}
+
 	fn into_transaction(
 		instructions: SolInstruction,
 		payer: SolPubkey,
@@ -252,7 +264,8 @@ mod test {
 				Asset::Eth,
 				DESTINATION_ADDRESS_ETH,
 				FROM.into(),
-				EVENT_DATA_ACCOUNT.into(),
+				VAULT_SWAP_SEED.to_vec().try_into().unwrap(),
+				vault_swap_account(VAULT_SWAP_SEED),
 				INPUT_AMOUNT,
 				cf_parameter(false),
 				None,
@@ -261,16 +274,14 @@ mod test {
 			&[chainflip_alt()],
 		);
 
-		let expected_serialized_tx = hex_literal::hex!("02dfa8826b2ea2083529b313a8d40c8be9ab1516224c3a464bec13054f00522ac70564cd805a9dbd96de13a474ae2142dd65ec18dbb718a0d2f539cea29fe76c08eb0ac39fd749f5a2fca83c66617c56b4db6ab25b99b0374aece6b461df30184cc0ced32b72b2545337f4ce7adcb3caf8be792b17a30a6566674772e74bed1a0a8002000104cf2a079e1506b29d02c8feac98d589a9059a740891dcd3dab6c64b3160bc28317f799121d6c125f312c5f423a51959ce1d41df06af977e9a17f48b2c82ecf89ff79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb1ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc16229380000000000000000000000000000000000000000000000000000000000000000010306060200010405ab01a3265ce2f3698dc4d2029649000000000100000014000000756fbde9c71eae05c2f7169f816b0bd11d978020010000000076000000000a0000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0000000000000000000000000000000000000000000000000000000000000000010a0000001400000002a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e010008010a0214013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a10108020c02").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01a1297155b8c5e03c6a9d3da3319f0d0d5aee9e1314f5a5f40726a40e27cedb43fca0943d19c93b39b69b2fddb5c066a666f628c7c2f8f64e5414fefe1efdc7008001000104cf2a079e1506b29d02c8feac98d589a9059a740891dcd3dab6c64b3160bc2831e563af24863f1e2042e809741323618edbd325a60421e41dd9985a6af1188193f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb1ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc16229380000000000000000000000000000000000000000000000000000000000000000010306060200010405cf01a3265ce2f3698dc4d2029649000000000100000014000000756fbde9c71eae05c2f7169f816b0bd11d978020010000000076000000000a0000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0000000000000000000000000000000000000000000000000000000000000000010a0000001400000002a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e010008010a0214200000000101010101010101010101010101010101010101010101010101010101010101013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a10108020c02").to_vec();
 
 		let from_signing_key = SolSigningKey::from_bytes(&FROM_KEY_BYTES).unwrap();
-		let event_data_account_signing_key =
-			SolSigningKey::from_bytes(&EVENT_DATA_ACCOUNT_KEY_BYTES).unwrap();
 
 		test_constructed_transaction_with_signer(
 			transaction,
 			expected_serialized_tx,
-			vec![from_signing_key, event_data_account_signing_key].into(),
+			vec![from_signing_key].into(),
 			BLOCKHASH.into(),
 		);
 	}
@@ -284,7 +295,8 @@ mod test {
 				Asset::SolUsdc,
 				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
 				FROM.into(),
-				EVENT_DATA_ACCOUNT.into(),
+				VAULT_SWAP_SEED.to_vec().try_into().unwrap(),
+				vault_swap_account(VAULT_SWAP_SEED),
 				INPUT_AMOUNT,
 				cf_parameter(true),
 				Some(ccm_parameter().channel_metadata),
@@ -293,16 +305,14 @@ mod test {
 			&[chainflip_alt()],
 		);
 
-		let expected_serialized_tx = hex_literal::hex!("024490df7ab2ddfa198ddce8a14a6ed9a8050d070809689d776cc3f5b6608573b7259f53a87ac7c81f99658d35eb5da96e748e10d820ebe87c3265eefade844f0ff172bb8ac967412f261b470d61f80bbcff2f87ba84dcdbbce62ef4fd0192abdd61e2a444c39593531a7b33aedd1554a08ff123438e8a395795ea4c883417110e8002000104cf2a079e1506b29d02c8feac98d589a9059a740891dcd3dab6c64b3160bc28317f799121d6c125f312c5f423a51959ce1d41df06af977e9a17f48b2c82ecf89ff79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb1ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc16229380000000000000000000000000000000000000000000000000000000000000000010306060200010405ad02a3265ce2f3698dc4d20296490000000005000000200000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0a00000001040000007c1d0f070000000000000000dc000000009101007417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed480104a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e50090e0b0f5b60147b325842c1fc68f6c90fe26419ea7c4afeb982f71f1f54b5b440a0000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0000000000000000000000000000000000000000000000000000000000000000010a0000001400000002a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e010008010a0214013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a10108020c02").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0117ab2accbcc60812a6864c5ef4e2f1fc0632380cfb57ca968a72322adaab2afaea41b78a3f8cded1954fdcbbf045c0edae23ec4d2bd65b79f0409e545fdbf20c8001000104cf2a079e1506b29d02c8feac98d589a9059a740891dcd3dab6c64b3160bc2831e563af24863f1e2042e809741323618edbd325a60421e41dd9985a6af1188193f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb1ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc16229380000000000000000000000000000000000000000000000000000000000000000010306060200010405d102a3265ce2f3698dc4d20296490000000005000000200000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0a00000001040000007c1d0f070000000000000000dc000000009101007417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed480104a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e50090e0b0f5b60147b325842c1fc68f6c90fe26419ea7c4afeb982f71f1f54b5b440a0000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0000000000000000000000000000000000000000000000000000000000000000010a0000001400000002a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e010008010a0214200000000101010101010101010101010101010101010101010101010101010101010101013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a10108020c02").to_vec();
 
 		let from_signing_key = SolSigningKey::from_bytes(&FROM_KEY_BYTES).unwrap();
-		let event_data_account_signing_key =
-			SolSigningKey::from_bytes(&EVENT_DATA_ACCOUNT_KEY_BYTES).unwrap();
 
 		test_constructed_transaction_with_signer(
 			transaction,
 			expected_serialized_tx,
-			vec![from_signing_key, event_data_account_signing_key].into(),
+			vec![from_signing_key].into(),
 			BLOCKHASH.into(),
 		);
 	}
@@ -325,7 +335,8 @@ mod test {
 				DESTINATION_ADDRESS_ETH,
 				FROM.into(),
 				from_usdc_account,
-				EVENT_DATA_ACCOUNT.into(),
+				VAULT_SWAP_SEED.to_vec().try_into().unwrap(),
+				vault_swap_account(VAULT_SWAP_SEED),
 				TOKEN_SUPPORTED_ACCOUNT.into(),
 				INPUT_AMOUNT,
 				cf_parameter(false),
@@ -335,16 +346,14 @@ mod test {
 			&[chainflip_alt()],
 		);
 
-		let expected_serialized_tx = hex_literal::hex!("028eaffc1c79b1fbec9db2995f4080abd62aa61b1204099ad7d43826845550e9a9f95041056fd653b46fdf927c36dc633568a8d934bb54ba9ad6b3484e7485e30b1d3c580c7ba9ba467b1fb7ca07370a53c157bcd844bc425683328f02f31541922c1d6ef9015829061214f6e2225739ffc664d44fadb9ca004204d4c5d17bd8008002000205cf2a079e1506b29d02c8feac98d589a9059a740891dcd3dab6c64b3160bc28317f799121d6c125f312c5f423a51959ce1d41df06af977e9a17f48b2c82ecf89f27fefc7ec198ef3eacb0f17871e1fad81f07a40cd55f4f364c3915877d89bd8a1ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc16229382e9acf1ff8568fbe655e616a167591aeedc250afbc88d759ec959b1982e8769c000000000000000000000000000000000000000000000000000000000000000001030a0a060002010504080907ac014532fc63e55377ebd2029649000000000100000014000000756fbde9c71eae05c2f7169f816b0bd11d978020010000000076000000000a0000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0000000000000000000000000000000000000000000000000000000000000000010a0000001400000002a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e010008010a021406013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a1020805040c090302").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01d02bfb057763f487111f9d7acb7a1d85e83a16f51943b355dc845326f52100897ec72c3933d6fddab362ad8cb30e8b9a081f77c390c250ebbf425756b975f40d8001000205cf2a079e1506b29d02c8feac98d589a9059a740891dcd3dab6c64b3160bc283127fefc7ec198ef3eacb0f17871e1fad81f07a40cd55f4f364c3915877d89bd8ae563af24863f1e2042e809741323618edbd325a60421e41dd9985a6af11881931ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc16229382e9acf1ff8568fbe655e616a167591aeedc250afbc88d759ec959b1982e8769c000000000000000000000000000000000000000000000000000000000000000001030a0a060001020504080907d0014532fc63e55377ebd2029649000000000100000014000000756fbde9c71eae05c2f7169f816b0bd11d978020010000000076000000000a0000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0000000000000000000000000000000000000000000000000000000000000000010a0000001400000002a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e010008010a021406200000000101010101010101010101010101010101010101010101010101010101010101013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a1020805040c090302").to_vec();
 
 		let from_signing_key = SolSigningKey::from_bytes(&FROM_KEY_BYTES).unwrap();
-		let event_data_account_signing_key =
-			SolSigningKey::from_bytes(&EVENT_DATA_ACCOUNT_KEY_BYTES).unwrap();
 
 		test_constructed_transaction_with_signer(
 			transaction,
 			expected_serialized_tx,
-			vec![from_signing_key, event_data_account_signing_key].into(),
+			vec![from_signing_key].into(),
 			BLOCKHASH.into(),
 		);
 	}
@@ -367,7 +376,8 @@ mod test {
 				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
 				FROM.into(),
 				from_usdc_account,
-				EVENT_DATA_ACCOUNT.into(),
+				VAULT_SWAP_SEED.to_vec().try_into().unwrap(),
+				vault_swap_account(VAULT_SWAP_SEED),
 				TOKEN_SUPPORTED_ACCOUNT.into(),
 				INPUT_AMOUNT,
 				cf_parameter(true),
@@ -377,17 +387,111 @@ mod test {
 			&[chainflip_alt()],
 		);
 
-		let expected_serialized_tx = hex_literal::hex!("02dd78f8ce503f68376ad0789676fa58e37752adefdaf2211ce6b322e232d5c68722347eaef5e804ecb19de983d93f77cb5d17115d2a8c4d1a04c9024a8277ea0ed95dd220ce2b00229789680422f1e0174397e0b57265e372555a3d56ff158f12959064af8a8f18607e350b32c7e916e8b144f4bdb8235722ee382c186392d90a8002000205cf2a079e1506b29d02c8feac98d589a9059a740891dcd3dab6c64b3160bc28317f799121d6c125f312c5f423a51959ce1d41df06af977e9a17f48b2c82ecf89f27fefc7ec198ef3eacb0f17871e1fad81f07a40cd55f4f364c3915877d89bd8a1ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc16229382e9acf1ff8568fbe655e616a167591aeedc250afbc88d759ec959b1982e8769c000000000000000000000000000000000000000000000000000000000000000001030a0a060002010504080907ae024532fc63e55377ebd20296490000000005000000200000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0900000001040000007c1d0f070000000000000000dc000000009101007417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed480104a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e50090e0b0f5b60147b325842c1fc68f6c90fe26419ea7c4afeb982f71f1f54b5b440a0000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0000000000000000000000000000000000000000000000000000000000000000010a0000001400000002a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e010008010a021406013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a1020805040c090302").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0156c42a47646120a151a76892b28a58654087ab090f3c3c712f2d03fdd23840c8cd8af60d4fc73a8448fb8ce9757ddd8c7d431d25a58051f5e65e097de8ba780a8001000205cf2a079e1506b29d02c8feac98d589a9059a740891dcd3dab6c64b3160bc283127fefc7ec198ef3eacb0f17871e1fad81f07a40cd55f4f364c3915877d89bd8ae563af24863f1e2042e809741323618edbd325a60421e41dd9985a6af11881931ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc16229382e9acf1ff8568fbe655e616a167591aeedc250afbc88d759ec959b1982e8769c000000000000000000000000000000000000000000000000000000000000000001030a0a060001020504080907d2024532fc63e55377ebd20296490000000005000000200000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0900000001040000007c1d0f070000000000000000dc000000009101007417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed480104a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e50090e0b0f5b60147b325842c1fc68f6c90fe26419ea7c4afeb982f71f1f54b5b440a0000009e0d6a70e12d54edf90971cc977fa26a1d3bb4b0b26e72470171c36b0006b01f0000000000000000000000000000000000000000000000000000000000000000010a0000001400000002a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e010008010a021406200000000101010101010101010101010101010101010101010101010101010101010101013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a1020805040c090302").to_vec();
 
 		let from_signing_key = SolSigningKey::from_bytes(&FROM_KEY_BYTES).unwrap();
-		let event_data_account_signing_key =
-			SolSigningKey::from_bytes(&EVENT_DATA_ACCOUNT_KEY_BYTES).unwrap();
 
 		test_constructed_transaction_with_signer(
 			transaction,
 			expected_serialized_tx,
-			vec![from_signing_key, event_data_account_signing_key].into(),
+			vec![from_signing_key].into(),
 			BLOCKHASH.into(),
+		);
+	}
+
+	#[test]
+	fn instruction_accounts_len_matches_consts() {
+		assert_eq!(
+			SolanaInstructionBuilder::x_swap_native(
+				api_env(),
+				agg_key().into(),
+				Asset::Eth,
+				DESTINATION_ADDRESS_ETH,
+				FROM.into(),
+				VAULT_SWAP_SEED.to_vec().try_into().unwrap(),
+				vault_swap_account(VAULT_SWAP_SEED),
+				INPUT_AMOUNT,
+				cf_parameter(false),
+				None,
+			)
+			.accounts
+			.len(),
+			sol_tx_core::consts::X_SWAP_NATIVE_ACC_LEN as usize
+		);
+
+		assert_eq!(
+			SolanaInstructionBuilder::x_swap_usdc(
+				api_env(),
+				Asset::Sol,
+				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
+				Default::default(),
+				Default::default(),
+				VAULT_SWAP_SEED.to_vec().try_into().unwrap(),
+				vault_swap_account(VAULT_SWAP_SEED),
+				TOKEN_SUPPORTED_ACCOUNT.into(),
+				INPUT_AMOUNT,
+				cf_parameter(true),
+				Some(ccm_parameter().channel_metadata)
+			)
+			.accounts
+			.len(),
+			sol_tx_core::consts::X_SWAP_TOKEN_ACC_LEN as usize
+		);
+	}
+
+	#[test]
+	fn instruction_accounts_location_matches_consts() {
+		let native_instruction_acc = SolanaInstructionBuilder::x_swap_native(
+			api_env(),
+			agg_key().into(),
+			Asset::Eth,
+			DESTINATION_ADDRESS_ETH,
+			FROM.into(),
+			VAULT_SWAP_SEED.to_vec().try_into().unwrap(),
+			vault_swap_account(VAULT_SWAP_SEED),
+			INPUT_AMOUNT,
+			cf_parameter(false),
+			None,
+		)
+		.accounts;
+
+		assert_eq!(
+			native_instruction_acc[sol_tx_core::consts::X_SWAP_FROM_ACC_IDX as usize].pubkey,
+			FROM.into()
+		);
+		assert_eq!(
+			native_instruction_acc[sol_tx_core::consts::X_SWAP_NATIVE_EVENT_DATA_ACC_IDX as usize]
+				.pubkey,
+			vault_swap_account(VAULT_SWAP_SEED)
+		);
+
+		let token_instruction_acc = SolanaInstructionBuilder::x_swap_usdc(
+			api_env(),
+			Asset::Sol,
+			EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
+			FROM.into(),
+			FROM_TOKEN.into(),
+			VAULT_SWAP_SEED.to_vec().try_into().unwrap(),
+			vault_swap_account(VAULT_SWAP_SEED),
+			TOKEN_SUPPORTED_ACCOUNT.into(),
+			INPUT_AMOUNT,
+			cf_parameter(true),
+			Some(ccm_parameter().channel_metadata),
+		)
+		.accounts;
+		assert_eq!(
+			token_instruction_acc[sol_tx_core::consts::X_SWAP_FROM_ACC_IDX as usize].pubkey,
+			FROM.into()
+		);
+		assert_eq!(
+			token_instruction_acc[sol_tx_core::consts::X_SWAP_TOKEN_FROM_TOKEN_ACC_IDX as usize]
+				.pubkey,
+			FROM_TOKEN.into()
+		);
+		assert_eq!(
+			token_instruction_acc[sol_tx_core::consts::X_SWAP_TOKEN_EVENT_DATA_ACC_IDX as usize]
+				.pubkey,
+			vault_swap_account(VAULT_SWAP_SEED)
 		);
 	}
 }

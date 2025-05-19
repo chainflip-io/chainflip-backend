@@ -17,7 +17,7 @@
 use core::cell::Cell;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
-use cf_chains::{ccm_checker::CcmValidityCheck, AnyChain};
+use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
@@ -32,7 +32,7 @@ use cf_traits::{
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use sp_core::ConstU32;
-use sp_runtime::{BoundedBTreeMap, Permill};
+use sp_runtime::BoundedBTreeMap;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -56,7 +56,6 @@ impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 pub const DEFAULT_SWAP_RATE: u128 = 2;
 
 parameter_types! {
-	pub static NetworkFee: Permill = Permill::from_perthousand(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
 	pub static SwapRate: f64 = DEFAULT_SWAP_RATE as f64;
 	pub storage Liquidity: BoundedBTreeMap<Asset, AssetAmount, ConstU32<100>> = Default::default();
@@ -175,9 +174,6 @@ impl WeightInfo for MockWeightInfo {
 	}
 }
 
-pub struct AlwaysValid;
-impl CcmValidityCheck for AlwaysValid {}
-
 pub struct MockChannelIdAllocator {}
 
 impl ChannelIdAllocator for MockChannelIdAllocator {
@@ -200,8 +196,6 @@ impl pallet_cf_swapping::Config for Test {
 	type FeePayment = MockFeePayment<Self>;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
 	type BalanceApi = MockBalance;
-	type CcmValidityChecker = AlwaysValid;
-	type NetworkFee = NetworkFee;
 	type ChannelIdAllocator = MockChannelIdAllocator;
 	type Bonder = MockBonderFor<Self>;
 	type PoolPriceApi = MockPoolPriceApi;
