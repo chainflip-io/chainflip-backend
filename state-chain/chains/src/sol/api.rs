@@ -22,7 +22,7 @@ use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::RuntimeDebug;
-use sp_std::{vec, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, vec, vec::Vec};
 
 use crate::{
 	ccm_checker::{check_ccm_for_blacklisted_accounts, CcmValidityError, DecodedCcmAdditionalData},
@@ -87,7 +87,7 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
 	+ ChainEnvironment<
-		Vec<SolAddress>,
+		BTreeSet<SolAddress>,
 		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	> + RecoverDurableNonce
 {
@@ -122,7 +122,7 @@ pub trait SolanaEnvironment:
 
 	/// Get any user-defined Address lookup tables from the Environment.
 	fn get_address_lookup_tables(
-		alts: Vec<SolAddress>,
+		alts: BTreeSet<SolAddress>,
 	) -> Result<Vec<SolAddressLookupTableAccount>, SolanaTransactionBuildingError> {
 		match Self::lookup(alts) {
 			Some(AltWitnessingConsensusResult::Valid(witnessed_alts)) => Ok(witnessed_alts),
@@ -410,7 +410,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		// Get the Address lookup tables. Chainflip's ALT is proceeded with the User's.
 		let external_alts = ccm_additional_data
 			.alt_addresses()
-			.map(Environment::get_address_lookup_tables)
+			.map(|alts| Environment::get_address_lookup_tables(BTreeSet::from_iter(alts)))
 			.transpose()
 			.inspect_err(|_| {
 				// This can be removed once the transaction building is made transactional.
