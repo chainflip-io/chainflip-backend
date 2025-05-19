@@ -163,18 +163,6 @@ pub mod pallet {
 		///
 		/// This function activates CODE RED for the runtime's safe mode, which halts
 		/// many functions on the statechain.
-		///
-		/// ## Events
-		///
-		/// - [VaultRotatedExternally](Event::VaultRotatedExternally)
-		///
-		/// ## Errors
-		///
-		/// - None
-		///
-		/// ## Dependencies
-		///
-		/// - [Epoch Info Trait](EpochInfo)
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::vault_key_rotated_externally())]
 		pub fn vault_key_rotated_externally(
@@ -194,14 +182,6 @@ pub mod pallet {
 
 		/// Sets the ChainInitialized flag to true for this chain so that the chain can be
 		/// initialized on the next epoch rotation
-		///
-		/// ## Events
-		///
-		/// - [ChainInitialized](Event::ChainInitialized)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(5)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.

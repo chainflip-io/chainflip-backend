@@ -606,18 +606,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Create a new pool.
 		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On success](Event::NewPoolCreated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
-		/// - [InvalidTick](pallet_cf_pools::Error::InvalidTick)
-		/// - [InvalidInitialPrice](pallet_cf_pools::Error::InvalidInitialPrice)
-		/// - [PoolAlreadyExists](pallet_cf_pools::Error::PoolAlreadyExists)
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::new_pool())]
 		pub fn new_pool(
@@ -808,6 +796,7 @@ pub mod pallet {
 		/// for buy and sell limit orders i.e. those in different directions are independent.
 		/// Therefore you may have two limit orders with the same order_id in the same pool, one to
 		/// buy Eth and one to sell Eth for example.
+		/// `dispatch_at` specifies the block at which to schedule the update.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::update_limit_order())]
 		pub fn update_limit_order(
@@ -861,6 +850,7 @@ pub mod pallet {
 		/// limit orders i.e. those in different directions are independent. Therefore you may have
 		/// two limit orders with the same order_id in the same pool, one to buy Eth and one to sell
 		/// Eth for example.
+		/// `dispatch_at` specifies the block at which to schedule the update.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_limit_order())]
 		pub fn set_limit_order(
@@ -937,15 +927,6 @@ pub mod pallet {
 		/// Sets the Liquidity Pool fees. Also collect earned fees and bought amount for
 		/// all positions within the fee and accredit them to the liquidity provider.
 		/// Requires governance origin.
-		///
-		/// ## Events
-		///
-		/// - [On success](Event::PoolFeeSet)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::set_pool_fees())]
 		pub fn set_pool_fees(

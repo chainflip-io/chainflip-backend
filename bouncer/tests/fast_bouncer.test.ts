@@ -22,13 +22,13 @@ import { testAssethubXcm } from './assethub_xcm';
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
   // Specify the number of nodes via setting the env var.
-  // NODE_COUNT="3-node" pnpm vitest run -t "ConcurrentTests"
+  // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
 
   concurrentTest('SwapLessThanED', swapLessThanED, 400);
-  concurrentTest('AllSwaps', testAllSwaps, numberOfNodes === 1 ? 1400 : 2000); // TODO: find out what the 3-node timeout should be
+  testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
   concurrentTest('EvmDeposits', testEvmDeposits, 250);
   concurrentTest('FundRedeem', testFundRedeem, 1000);
   concurrentTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
@@ -51,4 +51,9 @@ describe('ConcurrentTests', () => {
   // Post test checks
   serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 150);
   serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
+});
+
+// Run only the broker level screening tests
+describe('BrokerLevelScreeningTest', () => {
+  concurrentTest('BrokerLevelScreening', (context) => testBrokerLevelScreening(context, true), 800);
 });
