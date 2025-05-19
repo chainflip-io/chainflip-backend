@@ -6,35 +6,44 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
-use super::{super::state_machine::core::Validate, ChainProgress};
+use super::{super::state_machine::core::Validate, ChainProgress, ChainProgressFor, ChainTypes};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
-pub struct Header<BlockHash, BlockNumber> {
-	pub block_height: BlockNumber,
-	pub hash: BlockHash,
-	pub parent_hash: BlockHash,
+pub struct Header<T: ChainTypes> {
+	pub block_height: T::ChainBlockNumber,
+	pub hash: T::ChainBlockHash,
+	pub parent_hash: T::ChainBlockHash,
 }
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
-pub struct MergeInfo<H, N> {
-	pub removed: VecDeque<Header<H, N>>,
-	pub added: VecDeque<Header<H, N>>,
+pub struct MergeInfo<T: ChainTypes> {
+	pub removed: VecDeque<Header<T>>,
+	pub added: VecDeque<Header<T>>,
 }
 
-impl<H, N: Copy> MergeInfo<H, N> {
-	pub fn into_chain_progress(&self) -> Option<ChainProgress<N>> {
+impl<T: ChainTypes> MergeInfo<T> {
+	pub fn into_chain_progress(&self) -> Option<ChainProgressFor<T>> {
 		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
-			Some(ChainProgress::Range(first_added.block_height..=last_added.block_height))
+			let hashes = self
+				.added
+				.iter()
+				.map(|header| (header.block_height, header.hash.clone()))
+				.collect();
+
+			let f =
+				if self.removed.is_empty() { ChainProgress::Range } else { ChainProgress::Reorg };
+
+			Some(f(hashes, first_added.block_height..=last_added.block_height))
 		} else {
 			None
 		}
 	}
 
-	pub fn get_added_block_heights(&self) -> Option<RangeInclusive<N>> {
+	pub fn get_added_block_heights(&self) -> Option<RangeInclusive<T::ChainBlockNumber>> {
 		if let (Some(first), Some(last)) = (self.added.front(), self.added.back()) {
 			Some(first.block_height..=last.block_height)
 		} else {
@@ -43,11 +52,11 @@ impl<H, N: Copy> MergeInfo<H, N> {
 	}
 }
 
-pub enum MergeFailure<H, N> {
+pub enum MergeFailure<T: ChainTypes> {
 	// If we get a new range of blocks, [lowest_new_block, ...], where the parent of
 	// `lowest_new_block` should, by block number, be `existing_wrong_parent`, but who's
 	// hash doesn't match with `lowest_new_block`'s parent hash.
-	ReorgWithUnknownRoot { new_block: Header<H, N>, existing_wrong_parent: Option<Header<H, N>> },
+	ReorgWithUnknownRoot { new_block: Header<T>, existing_wrong_parent: Option<Header<T>> },
 
 	// /// This means that we have requested blocks which start higher than our last highest
 	// block, /// should not happen if everything goes well.
@@ -97,21 +106,17 @@ pub enum VoteValidationError {
 )]
 /// Invariant:
 /// This should always be a continuous chain of block headers
-pub struct ChainBlocks<H, N> {
-	pub headers: VecDeque<Header<H, N>>,
+pub struct ChainBlocks<T: ChainTypes> {
+	pub headers: VecDeque<Header<T>>,
 }
 
-impl<H, N: Copy> ChainBlocks<H, N> {
-	pub fn first_height(&self) -> Option<N> {
+impl<T: ChainTypes> ChainBlocks<T> {
+	pub fn first_height(&self) -> Option<T::ChainBlockNumber> {
 		self.headers.front().map(|h| h.block_height)
 	}
 }
 
-impl<H, N> Validate for ChainBlocks<H, N>
-where
-	H: PartialEq + Clone,
-	N: PartialEq + Copy + SaturatingStep,
-{
+impl<T: ChainTypes> Validate for ChainBlocks<T> {
 	type Error = VoteValidationError;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -130,13 +135,10 @@ where
 	}
 }
 
-pub fn validate_vote_and_height<H: PartialEq + Clone, N>(
-	next_height: N,
-	other: &VecDeque<Header<H, N>>,
-) -> Result<(), VoteValidationError>
-where
-	N: Copy + SaturatingStep + PartialEq,
-{
+pub fn validate_vote_and_height<T: ChainTypes>(
+	next_height: T::ChainBlockNumber,
+	other: &VecDeque<Header<T>>,
+) -> Result<(), VoteValidationError> {
 	// a vote has to be nonempty
 	if other.is_empty() {
 		return Err(VoteValidationError::EmptyVote)
@@ -148,7 +150,7 @@ where
 	}
 
 	// a vote has to be continous
-	ChainBlocks { headers: other.clone() }.is_valid() // validate_continous_headers(other)
+	ChainBlocks::<T> { headers: other.clone() }.is_valid() // validate_continous_headers(other)
 }
 
 pub enum ChainBlocksMergeResult<N> {
@@ -156,7 +158,7 @@ pub enum ChainBlocksMergeResult<N> {
 	FailedMissing { range: Range<N> },
 }
 
-impl<H: Eq + Clone, N: Copy + SaturatingStep + PartialEq> ChainBlocks<H, N> {
+impl<T: ChainTypes> ChainBlocks<T> {
 	//
 	// We have the following assumptions:
 	//
@@ -167,10 +169,7 @@ impl<H: Eq + Clone, N: Copy + SaturatingStep + PartialEq> ChainBlocks<H, N> {
 	//       - case 1: `other` starts exactly after `self` ends OR self is `Default::default()`
 	//       - case 2: (`self` and `other` start at the same block) AND (self is nonempty)
 	//
-	pub fn merge(
-		&mut self,
-		other: VecDeque<Header<H, N>>,
-	) -> Result<MergeInfo<H, N>, MergeFailure<H, N>> {
+	pub fn merge(&mut self, other: VecDeque<Header<T>>) -> Result<MergeInfo<T>, MergeFailure<T>> {
 		// assumption (1b)
 		let other_head = other
 			.front()

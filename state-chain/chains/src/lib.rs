@@ -245,8 +245,6 @@ pub mod witness_period {
 	}
 
 	impl<C: ChainWitnessConfig> SaturatingStep for BlockWitnessRange<C> {
-		/// NOTE: This function is going to run for a very long time if count is very high
-		/// QUESTION: maybe don't loop `count` times?
 		fn saturating_forward(self, count: usize) -> Self {
 			let mut start = self;
 			start.root = start.root.saturating_add(C::WITNESS_PERIOD * (count as u32).into());
