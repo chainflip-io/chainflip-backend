@@ -130,6 +130,10 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
         case 'GATEWAY':
           return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
+        case 'PRICE_FEED_BTC':
+          return '0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44';
+        case 'PRICE_FEED_ETH':
+          return '0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }

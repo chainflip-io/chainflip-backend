@@ -79,7 +79,7 @@ mod tests {
 	const BTC_USD_AGGREGATOR_ARBITRUM_ADDRESS: &str = "0x6ce185860a4963106506C203335A2910413708e9"; // heartbeat: 86400s, Deviation 0.05%, Decimals 8
 	const ETH_USD_AGGREGATOR_ARBITRUM_ADDRESS: &str = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612"; // heartbeat: 86400s, Deviation 0.05%, Decimals 8
 
-	const LOCALNET_PRICE_FEED: &str = "0x";
+	const LOCALNET_PRICE_FEED: &str = "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44";
 
 	fn print_round_data(chain_name: &str, round_data: (u128, I256, U256, U256, u128)) {
 		println!(
@@ -147,18 +147,22 @@ mod tests {
 
 		let eth_client = EvmRpcSigningClient::new(
 			settings.clone().eth.private_key_file,
-			// "https://localhost:8545".into(), // This should be starting localnet
-			// 10997u64, // I believe this is the localnet chain id
-			"http://127.0.0.1:8545".into(), // This works when starting it with "npx hardhat node"
-			31337u64,                       // This works when starting it with "npx hardhat node"
+			"http://localhost:8545".into(), // This should be starting localnet
+			10997u64,                       // I believe this is the localnet chain id
+			// "http://127.0.0.1:8545".into(), // This works when starting it with "npx hardhat node"
+			// 31337u64,                       // This works when starting it with "npx hardhat
+			// node"
 			"Ethereum",
 		)
 		.unwrap()
 		.await;
 
-		eth_client
-			.latest_round_data(H160::from_str(LOCALNET_PRICE_FEED).unwrap())
-			.await
-			.unwrap();
+		print_round_data(
+			"Ethereum",
+			eth_client
+				.latest_round_data(H160::from_str(LOCALNET_PRICE_FEED).unwrap())
+				.await
+				.unwrap(),
+		);
 	}
 }

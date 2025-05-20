@@ -24,10 +24,7 @@ use crate::evm::retry_rpc::RequestLog;
 
 #[async_trait::async_trait]
 pub trait AggregatorV3InterfaceRetryRpcApi {
-	async fn latest_round_data(
-		&self,
-		aggregator_address: H160,
-	) -> (u128, I256, U256, U256, u128);
+	async fn latest_round_data(&self, aggregator_address: H160) -> (u128, I256, U256, U256, u128);
 }
 
 #[async_trait::async_trait]
