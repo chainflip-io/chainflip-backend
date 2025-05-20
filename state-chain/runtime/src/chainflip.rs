@@ -114,7 +114,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
-use sp_std::prelude::*;
+use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 
 impl Chainflip for Runtime {
 	type RuntimeCall = RuntimeCall;
@@ -687,12 +687,12 @@ impl RecoverDurableNonce for SolEnvironment {
 
 impl
 	ChainEnvironment<
-		Vec<SolAddress>,
+		BTreeSet<SolAddress>,
 		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	> for SolEnvironment
 {
 	fn lookup(
-		alts: Vec<SolAddress>,
+		alts: BTreeSet<SolAddress>,
 	) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
 		solana_elections::solana_alt_result(alts)
 	}
@@ -1167,7 +1167,9 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 			DecodedCcmAdditionalData::NotRequired => {},
 			DecodedCcmAdditionalData::Solana(versioned_solana_ccm_additional_data) => {
 				versioned_solana_ccm_additional_data.alt_addresses().inspect(|alt_addresses| {
-					solana_elections::initiate_solana_alt_election(alt_addresses.clone())
+					solana_elections::initiate_solana_alt_election(BTreeSet::from_iter(
+						alt_addresses.clone(),
+					))
 				});
 			},
 		}
