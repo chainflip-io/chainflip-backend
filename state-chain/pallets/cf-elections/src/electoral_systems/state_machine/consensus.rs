@@ -22,7 +22,8 @@ pub trait ConsensusMechanism: Default {
 //-----------------------------------------------
 // majority consensus
 
-/// Simple implementation of a (super-)majority consensus
+/// Simple implementation of a (super-)majority consensus, in case of ties the last element is
+/// chosen
 pub struct SupermajorityConsensus<Vote: PartialEq> {
 	votes: BTreeMap<Vote, u32>,
 }
@@ -51,15 +52,13 @@ impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensu
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-		let best = self.votes.iter().last();
-
-		if let Some((best_vote, best_count)) = best {
-			if best_count >= &settings.threshold {
-				return Some(best_vote.clone());
+		self.votes.iter().max_by_key(|(_, count)| *count).and_then(|(vote, count)| {
+			if *count >= settings.threshold {
+				Some(vote.clone())
+			} else {
+				None
 			}
-		}
-
-		None
+		})
 	}
 }
 
@@ -151,5 +150,79 @@ where
 		}
 
 		base.check_consensus(settings)
+	}
+}
+
+#[cfg(test)]
+mod testssss {
+	use crate::electoral_systems::state_machine::consensus::{
+		ConsensusMechanism, MultipleVotes, StagedConsensus, SupermajorityConsensus, Threshold,
+	};
+
+	#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+	struct MockVote(u32);
+
+	///Consensus is reached when the count of a vote is >= then the threshold
+	/// in case of a tie the last vote is the one chosen (based on the ordering)
+	#[test]
+	fn test_super_majority_consensus() {
+		let mut supermajority = SupermajorityConsensus::<MockVote>::default();
+
+		supermajority.insert_vote(MockVote(1));
+		supermajority.insert_vote(MockVote(1));
+		supermajority.insert_vote(MockVote(2));
+		supermajority.insert_vote(MockVote(2));
+		let consensus = supermajority.check_consensus(&Threshold { threshold: 3 });
+		assert_eq!(consensus, None);
+
+		supermajority.insert_vote(MockVote(1));
+		let consensus = supermajority.check_consensus(&Threshold { threshold: 3 });
+		assert_eq!(consensus, Some(MockVote(1)));
+
+		supermajority.insert_vote(MockVote(2));
+		let consensus = supermajority.check_consensus(&Threshold { threshold: 3 });
+		assert_eq!(consensus, Some(MockVote(2)));
+	}
+
+	#[test]
+	fn test_staged_consensus() {
+		let mut staged = StagedConsensus::<SupermajorityConsensus<MockVote>, u32>::default();
+		staged.insert_vote((1, MockVote(2)));
+		staged.insert_vote((1, MockVote(2)));
+		staged.insert_vote((1, MockVote(2)));
+		let consensus = staged.check_consensus(&Threshold { threshold: 3 });
+		assert_eq!(consensus, Some(MockVote(2)));
+
+		staged.insert_vote((2, MockVote(1)));
+		staged.insert_vote((2, MockVote(1)));
+		staged.insert_vote((2, MockVote(2)));
+		let consensus = staged.check_consensus(&Threshold { threshold: 3 });
+		assert_eq!(consensus, Some(MockVote(2)));
+
+		staged.insert_vote((3, MockVote(1)));
+		staged.insert_vote((3, MockVote(1)));
+		staged.insert_vote((3, MockVote(1)));
+		let consensus = staged.check_consensus(&Threshold { threshold: 3 });
+		assert_eq!(consensus, Some(MockVote(1)));
+
+		staged.insert_vote((4, MockVote(6)));
+		staged.insert_vote((4, MockVote(6)));
+		staged.insert_vote((4, MockVote(6)));
+		let consensus = staged.check_consensus(&Threshold { threshold: 3 });
+		assert_eq!(consensus, Some(MockVote(6)));
+	}
+
+	#[test]
+	fn test_multiple_votes_consensus() {
+		let mut multiple = MultipleVotes::<SupermajorityConsensus<MockVote>>::default();
+		multiple.insert_vote(vec![MockVote(1), MockVote(2)]);
+		multiple.insert_vote(vec![MockVote(1), MockVote(2)]);
+		multiple.insert_vote(vec![MockVote(3), MockVote(4)]);
+		let consensus = multiple.check_consensus(&Threshold { threshold: 3 });
+		assert_eq!(consensus, None);
+
+		multiple.insert_vote(vec![MockVote(2), MockVote(4)]);
+		let consensus = multiple.check_consensus(&Threshold { threshold: 3 });
+		assert_eq!(consensus, Some(MockVote(2)));
 	}
 }

@@ -93,7 +93,7 @@ pub fn head_and_tail<A: Clone>(items: &VecDeque<A>) -> Option<(A, VecDeque<A>)> 
 	items.clone().pop_front().map(|head| (head, items))
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VoteValidationError {
 	BlockHeightsNotContinuous,
 	ParentHashMismatch,
@@ -146,7 +146,7 @@ pub fn validate_vote_and_height<T: ChainTypes>(
 
 	// a vote has to start with the next block we expect
 	if other.front().unwrap().block_height != next_height {
-		return Err(VoteValidationError::BlockHeightsNotContinuous)
+		return Err(VoteValidationError::BlockNotMatchingRequestedHeight)
 	}
 
 	// a vote has to be continous
