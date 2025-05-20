@@ -1110,11 +1110,11 @@ fn test_get_network_fee() {
 	fn test_all(is_internal: bool) {
 		let network_fee = if is_internal { INTERNAL_SWAP_NETWORK_FEE } else { REGULAR_NETWORK_FEE };
 
-		// The normal network fee is used as fallback when no custom fee is set for either asset.
+		// The Standard network fee is used as a default when no custom fee is set
 		test_get_fee((Asset::Flip, None), (Asset::Eth, None), is_internal, network_fee);
-
-		// Test that the normal network fee is used if one asset is not set
 		test_get_fee(
+			// Using a fee that is lower than the standard network fee, so the standard fee of the
+			// other asset will be used.
 			(Asset::Flip, Some(network_fee - 1)),
 			(Asset::Eth, None),
 			is_internal,
@@ -1122,15 +1122,32 @@ fn test_get_network_fee() {
 		);
 		test_get_fee(
 			(Asset::Flip, None),
+			// Using a fee that is lower than the standard network fee, so the standard fee of the
+			// other asset will be used.
 			(Asset::Eth, Some(network_fee - 2)),
 			is_internal,
 			network_fee,
 		);
 
-		// Test that the highest fee is always used
-		test_get_fee((Asset::Flip, Some(20)), (Asset::Eth, Some(25)), is_internal, 25);
-		test_get_fee((Asset::Flip, None), (Asset::Eth, Some(25)), is_internal, 25);
-		test_get_fee((Asset::Flip, Some(25)), (Asset::Eth, Some(20)), is_internal, 25);
+		// When above the standard network fee, The highest of the 2 custom fees is used.
+		test_get_fee(
+			(Asset::Flip, Some(network_fee + 10)),
+			(Asset::Eth, Some(network_fee + 15)),
+			is_internal,
+			network_fee + 15,
+		);
+		test_get_fee(
+			(Asset::Flip, None),
+			(Asset::Eth, Some(network_fee + 15)),
+			is_internal,
+			network_fee + 15,
+		);
+		test_get_fee(
+			(Asset::Flip, Some(network_fee + 15)),
+			(Asset::Eth, Some(network_fee + 10)),
+			is_internal,
+			network_fee + 15,
+		);
 	}
 
 	// Run test for both internal and regular swaps
