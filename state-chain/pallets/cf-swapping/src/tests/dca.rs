@@ -250,9 +250,17 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 
 	// Allow for one retry for good measure:
 	const REFUND_BLOCK: u64 = CHUNK_1_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
+	const REFUND_FEE: AssetAmount = 10;
+	const REFUNDED_AMOUNT: AssetAmount = INPUT_AMOUNT - REFUND_FEE;
 
 	new_test_ext()
 		.execute_with(|| {
+			// Turn on the network fee minimum so we can check the refund fee works correctly
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: Permill::zero(),
+				minimum: REFUND_FEE,
+			});
+
 			setup_dca_swap(
 				NUMBER_OF_CHUNKS,
 				CHUNK_INTERVAL,
@@ -295,10 +303,18 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					input_asset: INPUT_ASSET,
+					input_amount: REFUND_FEE,
+					output_asset: Asset::Flip,
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapScheduled { input_amount: REFUND_FEE, .. }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					asset: INPUT_ASSET,
-					amount: INPUT_AMOUNT,
+					amount: REFUNDED_AMOUNT,
+					refund_fee: REFUND_FEE,
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
@@ -330,8 +346,9 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
 	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
 
+	const REFUND_FEE: AssetAmount = 10;
 	// The test will be set up as to execute one chunk only and refund the rest
-	const REFUNDED_AMOUNT: AssetAmount = INPUT_AMOUNT - CHUNK_AMOUNT;
+	const REFUNDED_AMOUNT: AssetAmount = INPUT_AMOUNT - CHUNK_AMOUNT - REFUND_FEE;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -368,12 +385,19 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 				get_dca_state(SWAP_REQUEST_ID),
 				DcaState {
 					status: DcaStatus::ChunkScheduled(2.into()),
-					remaining_input_amount: REFUNDED_AMOUNT - CHUNK_AMOUNT,
+					remaining_input_amount: INPUT_AMOUNT - CHUNK_AMOUNT * 2,
 					remaining_chunks: 2,
 					chunk_interval: CHUNK_INTERVAL,
 					accumulated_output_amount: CHUNK_OUTPUT,
 				}
 			);
+
+			// Now turn on the network fee minimum so we can check the refund fee works correctly
+			// without needing to take it into account on the other chunks.
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: Permill::zero(),
+				minimum: REFUND_FEE,
+			});
 		})
 		.then_process_blocks_until_block(CHUNK_2_RESCHEDULED_AT_BLOCK)
 		.then_execute_with(|_| {
@@ -388,10 +412,18 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					input_asset: INPUT_ASSET,
+					input_amount: REFUND_FEE,
+					output_asset: Asset::Flip,
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapScheduled { input_amount: REFUND_FEE, .. }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					asset: INPUT_ASSET,
 					amount: REFUNDED_AMOUNT,
+					refund_fee: REFUND_FEE,
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
