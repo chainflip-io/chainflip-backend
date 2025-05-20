@@ -26,7 +26,6 @@ use cf_chains::btc::{
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 
-use cf_chains::witness_period::BlockWitnessRange;
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
@@ -61,8 +60,6 @@ use crate::{
 	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
 use anyhow::Result;
-
-use pallet_cf_elections::electoral_systems::block_witnesser::state_machine::BWTypes;
 
 use state_chain_runtime::chainflip::bitcoin_elections::{
 	BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinVaultDepositWitnessingES,
@@ -178,40 +175,28 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 		properties: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties {
-			block_height: witness_range,
-			properties: deposit_addresses,
-			election_type,
-			..
+			block_height, properties: deposit_addresses, election_type, ..
 		} = properties;
-		let witness_range = BlockWitnessRange::try_new(witness_range)
-			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
-		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
 
-		let mut txs = vec![];
-		let mut response_block_hash: Option<H256> = None;
-		tracing::info!("Witness range: {:?}", witness_range);
-		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
-			match election_type {
-				BWElectionType::Optimistic => {
-					let block_hash = self.client.block_hash(block).await?;
-					let block = self.client.block(block_hash).await?;
-					response_block_hash = Some(block.header.hash.to_byte_array().into());
-					txs.extend(block.txdata);
-				},
-				BWElectionType::ByHash(hash) => {
-					let block = self
-						.client
-						.block(bitcoin::BlockHash::from_slice(hash.as_bytes()).unwrap())
-						.await?;
-					txs.extend(block.txdata);
-				},
-				BWElectionType::SafeBlockHeight => {
-					let block_hash = self.client.block_hash(block).await?;
-					let block = self.client.block(block_hash).await?;
-					txs.extend(block.txdata);
-				},
-			}
-		}
+		let (txs, response_block_hash) = match election_type {
+			BWElectionType::Optimistic => {
+				let block_hash = self.client.block_hash(block_height).await?;
+				let block = self.client.block(block_hash).await?;
+				(block.txdata, Some(block.header.hash.to_byte_array().into()))
+			},
+			BWElectionType::ByHash(hash) => {
+				let block = self
+					.client
+					.block(bitcoin::BlockHash::from_slice(hash.as_bytes()).unwrap())
+					.await?;
+				(block.txdata, None)
+			},
+			BWElectionType::SafeBlockHeight => {
+				let block_hash = self.client.block_hash(block_height).await?;
+				let block = self.client.block(block_hash).await?;
+				(block.txdata, None)
+			},
+		};
 
 		let deposit_addresses = map_script_addresses(deposit_addresses);
 
@@ -233,40 +218,28 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 		_settings: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinVaultDepositWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties {
-			block_height: witness_range,
-			properties: vaults,
-			election_type,
-			..
-		} = properties;
-		let witness_range = BlockWitnessRange::try_new(witness_range)
-			.map_err(|_| anyhow::anyhow!("Failed to create witness range"))?;
+		let BWElectionProperties { block_height, properties: vaults, election_type, .. } =
+			properties;
 
-		let mut txs = vec![];
-		let mut response_block_hash: Option<H256> = None;
-		tracing::info!("Witness range: {:?}", witness_range);
-		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
-			match election_type {
-				BWElectionType::Optimistic => {
-					let block_hash = self.client.block_hash(block).await?;
-					let block = self.client.block(block_hash).await?;
-					response_block_hash = Some(block.header.hash.to_byte_array().into());
-					txs.extend(block.txdata);
-				},
-				BWElectionType::ByHash(hash) => {
-					let block = self
-						.client
-						.block(bitcoin::BlockHash::from_slice(hash.as_bytes()).unwrap())
-						.await?;
-					txs.extend(block.txdata);
-				},
-				BWElectionType::SafeBlockHeight => {
-					let block_hash = self.client.block_hash(block).await?;
-					let block = self.client.block(block_hash).await?;
-					txs.extend(block.txdata);
-				},
-			}
-		}
+		let (txs, response_block_hash) = match election_type {
+			BWElectionType::Optimistic => {
+				let block_hash = self.client.block_hash(block_height).await?;
+				let block = self.client.block(block_hash).await?;
+				(block.txdata, Some(block.header.hash.to_byte_array().into()))
+			},
+			BWElectionType::ByHash(hash) => {
+				let block = self
+					.client
+					.block(bitcoin::BlockHash::from_slice(hash.as_bytes()).unwrap())
+					.await?;
+				(block.txdata, None)
+			},
+			BWElectionType::SafeBlockHeight => {
+				let block_hash = self.client.block_hash(block_height).await?;
+				let block = self.client.block(block_hash).await?;
+				(block.txdata, None)
+			},
+		};
 
 		let witnesses = vault_deposits(&txs, &vaults);
 		Ok(Some((witnesses, response_block_hash)))
@@ -285,47 +258,30 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 		_settings: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinEgressWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties {
-			block_height: witness_range,
-			properties: tx_hashes,
-			election_type,
-			..
-		} = properties;
-		let witness_range = BlockWitnessRange::try_new(witness_range).unwrap();
+		let BWElectionProperties { block_height, properties: tx_hashes, election_type, .. } =
+			properties;
 
-		let mut txs = vec![];
-		let mut response_block_hash: Option<H256> = None;
-		tracing::info!("Witness range: {:?}", witness_range);
-		for block in BlockWitnessRange::<cf_chains::Bitcoin>::into_range_inclusive(witness_range) {
-			match election_type {
-				BWElectionType::Optimistic => {
-					let block_hash = self.client.block_hash(block).await?;
-					let block = self.client.block(block_hash).await?;
-					response_block_hash = Some(block.header.hash.to_byte_array().into());
-					txs.extend(block.txdata);
-				},
-				BWElectionType::ByHash(hash) => {
-					let block = self
-						.client
-						.block(bitcoin::BlockHash::from_slice(hash.as_bytes()).unwrap())
-						.await?;
-					txs.extend(block.txdata);
-				},
-				BWElectionType::SafeBlockHeight => {
-					let block_hash = self.client.block_hash(block).await?;
-					let block = self.client.block(block_hash).await?;
-					txs.extend(block.txdata);
-				},
-			}
-		}
+		let (txs, response_block_hash) = match election_type {
+			BWElectionType::Optimistic => {
+				let block_hash = self.client.block_hash(block_height).await?;
+				let block = self.client.block(block_hash).await?;
+				(block.txdata, Some(block.header.hash.to_byte_array().into()))
+			},
+			BWElectionType::ByHash(hash) => {
+				let block = self
+					.client
+					.block(bitcoin::BlockHash::from_slice(hash.as_bytes()).unwrap())
+					.await?;
+				(block.txdata, None)
+			},
+			BWElectionType::SafeBlockHeight => {
+				let block_hash = self.client.block_hash(block_height).await?;
+				let block = self.client.block(block_hash).await?;
+				(block.txdata, None)
+			},
+		};
+
 		let witnesses = egress_witnessing(&txs, tx_hashes);
-
-		if witnesses.is_empty() {
-			tracing::info!("No witnesses found for BTCE");
-		} else {
-			tracing::info!("Witnesses from BTCE: {:?}", witnesses);
-		}
-
 		Ok(Some((witnesses, response_block_hash)))
 	}
 }
