@@ -71,8 +71,6 @@ fn setup_dca_swap(
 			remaining_chunks: number_of_chunks - 1,
 			chunk_interval,
 			accumulated_output_amount: 0,
-			network_fee_collected: 0,
-			accumulated_stable_amount: 0,
 		}
 	);
 }
@@ -113,8 +111,6 @@ fn assert_chunk_1_executed(number_of_chunks: u32) {
 			remaining_chunks: number_of_chunks - 2,
 			chunk_interval: CHUNK_INTERVAL,
 			accumulated_output_amount: chunk_amount_after_fee * DEFAULT_SWAP_RATE,
-			network_fee_collected: 0,
-			accumulated_stable_amount: chunk_amount,
 		}
 	);
 }
@@ -288,8 +284,6 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 					remaining_chunks: 1,
 					chunk_interval: CHUNK_INTERVAL,
 					accumulated_output_amount: 0,
-					network_fee_collected: 0,
-					accumulated_stable_amount: 0,
 				}
 			);
 		})
@@ -378,8 +372,6 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 					remaining_chunks: 2,
 					chunk_interval: CHUNK_INTERVAL,
 					accumulated_output_amount: CHUNK_OUTPUT,
-					network_fee_collected: 0,
-					accumulated_stable_amount: CHUNK_AMOUNT,
 				}
 			);
 		})
@@ -472,8 +464,6 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 					remaining_chunks: 1,
 					chunk_interval: CHUNK_INTERVAL,
 					accumulated_output_amount: 0,
-					network_fee_collected: 0,
-					accumulated_stable_amount: 0,
 				}
 			);
 		})
@@ -510,8 +500,6 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 					remaining_chunks: 0,
 					chunk_interval: CHUNK_INTERVAL,
 					accumulated_output_amount: CHUNK_OUTPUT,
-					network_fee_collected: 0,
-					accumulated_stable_amount: CHUNK_AMOUNT,
 				}
 			);
 		})
@@ -618,8 +606,6 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 					remaining_chunks: NUMBER_OF_CHUNKS - 1,
 					chunk_interval: CHUNK_INTERVAL,
 					accumulated_output_amount: 0,
-					network_fee_collected: 0,
-					accumulated_stable_amount: 0,
 				}
 			);
 		})
@@ -657,8 +643,6 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 					chunk_interval: CHUNK_INTERVAL,
 					// Should still be 0
 					accumulated_output_amount: 0,
-					network_fee_collected: 0,
-					accumulated_stable_amount: 0,
 				}
 			);
 		})

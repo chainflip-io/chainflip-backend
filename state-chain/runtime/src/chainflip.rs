@@ -54,8 +54,9 @@ use cf_chains::{
 	assets::any::ForeignChainAndAsset,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, Utxo, UtxoId,
+		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, Utxo, UtxoId,
 	},
+	ccm_checker::DecodedCcmAdditionalData,
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
 		PolkadotTransactionData, ResetProxyAccountNonce, RuntimeVersion,
@@ -72,19 +73,20 @@ use cf_chains::{
 	},
 	hub::{api::AssethubApi, OutputAccountId},
 	instances::{
-		ArbitrumInstance, AssethubInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+		ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
+		SolanaInstance,
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, CurrentOnChainKey,
-			DurableNonce, DurableNonceAndAccount, RecoverDurableNonce, SolanaApi,
-			SolanaEnvironment,
+			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
+			RecoverDurableNonce, SolanaApi, SolanaEnvironment, SolanaTransactionType,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
-		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
+		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
+		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
-	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
+	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadataChecked, CcmDepositMetadataChecked,
+	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
 	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	Solana, TransactionBuilder,
 };
@@ -94,13 +96,12 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
-	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
-	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails,
+	BroadcastAnyChainGovKey, Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster,
+	DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, Heartbeat,
+	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
-use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance, sol::api::SolanaTransactionType};
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -690,6 +691,19 @@ impl RecoverDurableNonce for SolEnvironment {
 	}
 }
 
+impl
+	ChainEnvironment<
+		Vec<SolAddress>,
+		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
+	> for SolEnvironment
+{
+	fn lookup(
+		alts: Vec<SolAddress>,
+	) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
+		solana_elections::solana_alt_result(alts)
+	}
+}
+
 impl SolanaEnvironment for SolEnvironment {}
 
 pub struct TokenholderGovernanceBroadcaster;
@@ -795,7 +809,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				destination_address: ForeignChainAddress,
 				broker_commission: Beneficiaries<Self::AccountId>,
 				broker_id: Self::AccountId,
-				channel_metadata: Option<CcmChannelMetadata>,
+				channel_metadata: Option<CcmChannelMetadataChecked>,
 				boost_fee: BasisPoints,
 				refund_parameters: ChannelRefundParametersDecoded,
 				dca_parameters: Option<DcaParameters>,
@@ -830,7 +844,7 @@ macro_rules! impl_egress_api_for_anychain {
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
-				maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
+				maybe_ccm_deposit_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
@@ -1013,6 +1027,7 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 pub struct BlockUpdate<Data> {
 	pub block_hash: Hash,
 	pub block_number: BlockNumber,
+	pub timestamp: u64,
 	// NOTE: Flatten requires Data types to be struct or map
 	// Also flatten is incompatible with u128, so AssetAmounts needs to be String type.
 	#[serde(flatten)]
@@ -1137,6 +1152,30 @@ impl CallIndexer<RuntimeCall> for LpOrderCallIndexer {
 				..
 			}) => Some(*base_asset),
 			_ => None,
+		}
+	}
+}
+
+// Timestamp of the header in seconds past the unix epoch.
+pub fn get_header_timestamp(header: &crate::Header) -> Option<u64> {
+	header
+		.digest
+		.logs()
+		.iter()
+		.find_map(missed_authorship_slots::extract_slot_from_digest_item)
+		.map(|slot| slot.saturating_mul(cf_primitives::SECONDS_PER_BLOCK))
+}
+
+pub struct CfCcmAdditionalDataHandler;
+impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
+	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData) {
+		match ccm_data {
+			DecodedCcmAdditionalData::NotRequired => {},
+			DecodedCcmAdditionalData::Solana(versioned_solana_ccm_additional_data) => {
+				versioned_solana_ccm_additional_data.alt_addresses().inspect(|alt_addresses| {
+					solana_elections::initiate_solana_alt_election(alt_addresses.clone())
+				});
+			},
 		}
 	}
 }

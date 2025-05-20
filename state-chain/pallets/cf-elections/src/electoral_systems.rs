@@ -18,7 +18,7 @@ pub mod block_height_tracking;
 pub mod block_witnesser;
 pub mod blockchain;
 pub mod composite;
-pub mod egress_success;
+pub mod exact_value;
 pub mod liveness;
 #[cfg(test)]
 pub mod mock;

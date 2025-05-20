@@ -23,7 +23,6 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
-  SOLANA_PROGRAMS_VERSION: v1.0.0-alt-manager
   NODE_COUNT: "1-node"
 
 permissions:
@@ -172,21 +171,8 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           touch ./localnet/.setup_complete
-          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana programs version. Remove after 1.9 is released.
-          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[^ ]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
-          sed -i '/🐛 Fix solana symlink issue ...\|ln -sf $SOLANA_BASE_PATH\/test-ledger\/accounts\/snapshot\/100/d' localnet/common.sh
           ./localnet/manage.sh
           git reset --hard
-
-      # TODO: This is a temporary workaround to insert the image nonces for versioned transactions. Remove after 1.9 is released.
-      - name: Nonce workaround
-        if: inputs.run-job
-        run: |
-          git checkout ${{ github.sha }}
-          git rev-parse HEAD
-          cd bouncer
-          pnpm install --frozen-lockfile
-          ./commands/force_sol_nonces.ts
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
@@ -196,17 +182,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./run.sh
-
-      # TODO: This is a temporary workaround to do the initial setup for the additional nonces. Remove after 1.9 is released.
-      - name: Setup additional nonces
-        if: inputs.run-job
-        run: |
-          git checkout ${{ github.sha }}
-          git rev-parse HEAD
-          cd bouncer
-          pnpm install --frozen-lockfile
-          ./commands/setup_additional_nonces.ts
+          ./fast_bouncer.sh
 
       - name: Upgrade network 🚀
         if: inputs.run-job
@@ -223,15 +199,17 @@ jobs:
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.OLD_BIN_VERSION }}"
 
-      # TODO: This is a temporary workaround to initialize assethub for bouncer after the update. Remove after 1.9 is released.
-      - name: Setup Assethub after update
+      # This step is to mimick the Swap Endpoint upgrade to be done in mainnet. After 1.10 we can
+      # consider updating the Solana image and removing this step.
+      - name: Upgrade Solana Swap Endpoint
         if: inputs.run-job
+        id: upgrade-solana-swap-endpoint
         run: |
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
-          pnpm install --frozen-lockfile
-          ./commands/setup_assethub_for_upgrade_test.ts
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          ./commands/upgrade_swap_endpoint.ts
 
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
@@ -241,7 +219,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          pnpm vitest run -t "ConcurrentTests"
+          pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
 
       - name: Print chainflip-engine logs 🚗
         if: inputs.run-job
@@ -329,6 +307,7 @@ jobs:
       - name: Write chain explorer to file 📝
         if: failure()
         continue-on-error: true
+        timeout-minutes: 10
         working-directory: bouncer
         run: |
           BLOCK_HEIGHT=$(curl -s -H "Content-Type: application/json" \

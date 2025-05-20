@@ -18,11 +18,11 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
-pub use cf_chains::{address::AddressString, RefundParametersRpc};
-use cf_chains::{evm::to_evm_address, CcmChannelMetadata};
+pub use cf_chains::address::AddressString;
+use cf_chains::{evm::to_evm_address, CcmChannelMetadataUnchecked};
 use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_rpc_types::RedemptionAmount;
+use cf_rpc_types::{RedemptionAmount, RefundParametersRpc};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::Serialize;
@@ -349,13 +349,14 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
+		wait_for_finality: Option<bool>,
 	) -> Result<SwapDepositAddress> {
-		let (_tx_hash, events, header, ..) = self
+		let extrinsic_progress = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
@@ -372,9 +373,13 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					dca_parameters,
 				},
 			)
-			.await?
-			.until_in_block()
 			.await?;
+
+		let (_tx_hash, events, header, ..) = if wait_for_finality.unwrap_or_default() {
+			extrinsic_progress.until_finalized().await?
+		} else {
+			extrinsic_progress.until_in_block().await?
+		};
 
 		extract_event!(
 			events,

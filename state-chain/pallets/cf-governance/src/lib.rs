@@ -244,14 +244,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Propose a governance ensured extrinsic
-		///
-		/// ## Events
-		///
-		/// - [Proposed](Event::Proposed)
-		///
-		/// ## Errors
-		///
-		/// - [NotMember](Error::NotMember)
 		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(0)]
 		#[pallet::weight((T::WeightInfo::propose_governance_extrinsic(), DispatchClass::Operational))]
@@ -276,14 +268,6 @@ pub mod pallet {
 		///
 		/// Sets a new set of governance members. Note that this can be called with an empty vector
 		/// to remove the possibility to govern the chain at all.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::new_membership_set())]
 		pub fn new_membership_set(
@@ -305,15 +289,6 @@ pub mod pallet {
 
 		/// Performs a runtime upgrade of the Chainflip runtime
 		/// **Can only be called via the Governance Origin**
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		/// - [UpgradeConditionsNotMet](Error::UpgradeConditionsNotMet)
 		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
@@ -341,16 +316,6 @@ pub mod pallet {
 
 		/// Approve a proposal by a given proposal id
 		/// Approve a Proposal.
-		///
-		/// ## Events
-		///
-		/// - [Approved](Event::Approved)
-		///
-		/// ## Errors
-		///
-		/// - [NotMember](Error::NotMember)
-		/// - [ProposalNotFound](Error::ProposalNotFound)
-		/// - [AlreadyApproved](Error::AlreadyApproved)
 		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::WeightInfo::approve(), DispatchClass::Operational))]
@@ -367,14 +332,6 @@ pub mod pallet {
 		/// **Can only be called via the Governance Origin**
 		///
 		/// Execute an extrinsic as root
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(clippy::useless_conversion)]
 		#[allow(clippy::boxed_local)]
 		#[pallet::call_index(4)]
@@ -392,14 +349,6 @@ pub mod pallet {
 		///
 		/// Set a whitelisted call hash, to be executed when someone submits a call
 		/// via `submit_govkey_call` that matches the hash whitelisted here.
-		///
-		/// ## Events
-		///
-		/// - [GovKeyCallHashWhitelisted](Event::GovKeyCallHashWhitelisted)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_whitelisted_call_hash())]
 		pub fn set_whitelisted_call_hash(
@@ -415,15 +364,6 @@ pub mod pallet {
 		/// **Can only be called via the Governance Origin or a Funded Party**
 		///
 		/// Submit a call to be executed if the gov key has already committed to it.
-		///
-		/// ## Events
-		///
-		/// - GovKeyCallDispatched
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		/// - [CallHashNotWhitelisted](Error::CallHashNotWhitelisted)
 		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(6)]
 		#[pallet::weight((T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight), DispatchClass::Operational))]

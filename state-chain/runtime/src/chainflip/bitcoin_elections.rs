@@ -24,7 +24,8 @@ use pallet_cf_elections::{
 		block_height_tracking::{
 			consensus::BlockHeightTrackingConsensus,
 			state_machine::{BHWStateWrapper, BlockHeightTrackingSM, InputHeaders},
-			BlockHeightChangeHook, ChainProgress, HWTypes, HeightWitnesserProperties,
+			BlockHeightChangeHook, ChainProgressFor, ChainTypes, HWTypes,
+			HeightWitnesserProperties,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -41,7 +42,7 @@ use pallet_cf_elections::{
 		},
 		liveness::Liveness,
 		state_machine::{
-			core::Hook,
+			core::{hook_test_utils::EmptyHook, Hook},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 		unsafe_median::{UnsafeMedian, UpdateFeeHook},
@@ -79,6 +80,8 @@ pub struct OpenChannelDetails<ChainBlockNumber> {
 	pub close_block: ChainBlockNumber,
 }
 
+const SAFETY_MARGIN: u32 = 8;
+
 // ------------------------ block height tracking ---------------------------
 /// The electoral system for block height tracking
 pub struct BitcoinBlockHeightTracking;
@@ -86,11 +89,14 @@ pub struct BitcoinBlockHeightTracking;
 impls! {
 	for TypesFor<BitcoinBlockHeightTracking>:
 
-	/// Associating the SM related types to the struct
-	HWTypes {
-		const BLOCK_BUFFER_SIZE: usize = 6;
+	ChainTypes {
 		type ChainBlockNumber = btc::BlockNumber;
 		type ChainBlockHash = btc::Hash;
+		const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
+	}
+	/// Associating the SM related types to the struct
+	HWTypes {
+		const BLOCK_BUFFER_SIZE: usize = SAFETY_MARGIN as usize;
 		type BlockHeightChangeHook = Self;
 	}
 
@@ -108,7 +114,7 @@ impls! {
 		type VoteStorage = vote_storage::bitmap::Bitmap<InputHeaders<Self>>;
 		type Consensus = InputHeaders<Self>;
 		type OnFinalizeContext = Vec<()>;
-		type OnFinalizeReturn = Vec<ChainProgress<btc::BlockNumber>>;
+		type OnFinalizeReturn = Vec<ChainProgressFor<Self>>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
 
@@ -116,7 +122,7 @@ impls! {
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
 		type OnFinalizeContextItem = ();
-		type OnFinalizeReturnItem = ChainProgress<btc::BlockNumber>;
+		type OnFinalizeReturnItem = ChainProgressFor<Self>;
 
 		// the actual state machine and consensus mechanisms of this ES
 		type ConsensusMechanism = BlockHeightTrackingConsensus<Self>;
@@ -150,14 +156,21 @@ pub(crate) type BlockDataDepositChannel = Vec<DepositWitness<Bitcoin>>;
 impls! {
 	for TypesFor<BitcoinDepositChannelWitnessing>:
 
+	ChainTypes {
+		type ChainBlockNumber = btc::BlockNumber;
+		type ChainBlockHash = btc::Hash;
+
+		const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
+	}
+
 	/// Associating BW processor types
 	BWProcessorTypes {
-		type ChainBlockNumber = btc::BlockNumber;
 		type BlockData = BlockDataDepositChannel;
 
 		type Event = BtcEvent<DepositWitness<Bitcoin>>;
 		type Rules = Self;
 		type Execute = Self;
+		type LogEventHook = EmptyHook;
 	}
 
 	/// Associating BW types to the struct
@@ -165,6 +178,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesDepositChannel;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
+		type ElectionTrackerEventHook = EmptyHook;
 	}
 
 	/// Associating the ES related types to the struct
@@ -178,9 +192,9 @@ impls! {
 		type ElectionIdentifierExtra = ();
 		type ElectionProperties = BWElectionProperties<Self>;
 		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<BlockDataDepositChannel>;
-		type Consensus = BlockDataDepositChannel;
-		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<btc::Hash>)>;
+		type Consensus = (BlockDataDepositChannel, Option<btc::Hash>);
+		type OnFinalizeContext = Vec<ChainProgressFor<Self>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
@@ -188,7 +202,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = ChainProgress<btc::BlockNumber>;
+		type OnFinalizeContextItem = ChainProgressFor<Self>;
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -237,14 +251,22 @@ pub(crate) type BlockDataVaultDeposit = Vec<VaultDepositWitness<Runtime, Bitcoin
 impls! {
 	for TypesFor<BitcoinVaultDepositWitnessing>:
 
+	ChainTypes {
+		type ChainBlockNumber = btc::BlockNumber;
+		type ChainBlockHash = btc::Hash;
+
+		const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
+	}
+
 	/// Associating BW processor types
 	BWProcessorTypes {
-		type ChainBlockNumber = BlockNumber;
 		type BlockData = BlockDataVaultDeposit;
 
 		type Event = BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
+
+		type LogEventHook = EmptyHook;
 	}
 
 	/// Associating BW types to the struct
@@ -252,6 +274,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesVaultDeposit;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
+		type ElectionTrackerEventHook = EmptyHook;
 	}
 
 	/// Associating the ES related types to the struct
@@ -265,9 +288,9 @@ impls! {
 		type ElectionIdentifierExtra = ();
 		type ElectionProperties = BWElectionProperties<Self>;
 		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<BlockDataVaultDeposit>;
-		type Consensus = BlockDataVaultDeposit;
-		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<btc::Hash>)>;
+		type Consensus = (BlockDataVaultDeposit, Option<btc::Hash>);
+		type OnFinalizeContext = Vec<ChainProgressFor<Self>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
@@ -275,7 +298,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = ChainProgress<btc::BlockNumber>;
+		type OnFinalizeContextItem = ChainProgressFor<Self>;
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -333,14 +356,22 @@ pub(crate) type EgressBlockData = Vec<TransactionConfirmation<Runtime, BitcoinIn
 impls! {
 	for TypesFor<BitcoinEgressWitnessing>:
 
+	ChainTypes {
+		type ChainBlockNumber = btc::BlockNumber;
+		type ChainBlockHash = btc::Hash;
+
+		const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
+	}
+
 	/// Associating BW processor types
 	BWProcessorTypes {
-		type ChainBlockNumber = BlockNumber;
 		type BlockData = EgressBlockData;
 
 		type Event = BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>;
 		type Rules = Self;
 		type Execute = Self;
+
+		type LogEventHook = EmptyHook;
 	}
 
 	/// Associating BW types to the struct
@@ -348,6 +379,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesEgressWitnessing;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
+		type ElectionTrackerEventHook = EmptyHook;
 	}
 
 	/// Associating the ES related types to the struct
@@ -361,9 +393,9 @@ impls! {
 		type ElectionIdentifierExtra = ();
 		type ElectionProperties = BWElectionProperties<Self>;
 		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<EgressBlockData>;
-		type Consensus = EgressBlockData;
-		type OnFinalizeContext = Vec<ChainProgress<btc::BlockNumber>>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(EgressBlockData, Option<btc::Hash>)>;
+		type Consensus = (EgressBlockData, Option<btc::Hash>);
+		type OnFinalizeContext = Vec<ChainProgressFor<Self>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
@@ -371,7 +403,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = ChainProgress<btc::BlockNumber>;
+		type OnFinalizeContextItem = ChainProgressFor<Self>;
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -500,7 +532,7 @@ impl
 				BitcoinDepositChannelWitnessingES,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress)?;
+		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress.clone())?;
 
 		BitcoinVaultDepositWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
@@ -508,7 +540,7 @@ impl
 				BitcoinVaultDepositWitnessingES,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(vault_deposits_identifiers.clone(), &chain_progress)?;
+		>(vault_deposits_identifiers.clone(), &chain_progress.clone())?;
 
 		let last_btc_block =
 			pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap();
@@ -519,7 +551,7 @@ impl
 				BitcoinEgressWitnessingES,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(egress_identifiers, &chain_progress)?;
+		>(egress_identifiers, &chain_progress.clone())?;
 
 		BitcoinFeeTracking::on_finalize::<
 			DerivedElectoralAccess<

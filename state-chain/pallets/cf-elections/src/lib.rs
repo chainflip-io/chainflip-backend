@@ -49,7 +49,7 @@
 //! Also having 150 authorities needing to exchange 150 vote extrinsics for every election is
 //! potentially expensive, so this pallet provides the ability for validators to both batch multiple
 //! votes into a single extrinsic, but also to vote using only the hash of the vote information
-//! (`PartialVote`), as long as alteast one other validator does provide the matching full vote
+//! (`PartialVote`), as long as at least one other validator does provide the matching full vote
 //! data. Note the `PartialVote` is not restricted to only being the hash of the full vote.
 //!
 //! This diagram shows how an authority's vote is formulated, and split up so it can be stored:
@@ -105,12 +105,12 @@
 //!   "split up" contain the same SharedData, only one copy of that SharedData will be stored. A
 //!   vote when split up, may be constructed from any number of SharedData values, including zero.
 //! - "IndividualComponent" is stored in a map from election id and validator id to
-//!   IndividualCompoment. This will consume a lot of storage as described above. A vote when split
-//!   up, can only contain upto a single "IndividualComponent" (This is enforced by the interfaces,
+//!   IndividualComponent. This will consume a lot of storage as described above. A vote when split
+//!   up, can only contain up to a single "IndividualComponent" (This is enforced by the interfaces,
 //!   and cannot be "messed up" by bad VoteStorage or ElectoralSystem impls).
-//! - "BitmapComponent" is stored once similiar to SharedData, but with a bitmap to indicate which
-//!   authorities votes used that "BitmapCompoment" value. A vote when split up, can only contain
-//!   upto a single "BitmapCompoment" (This is enforced by the interfaces, and cannot be "messed up"
+//! - "BitmapComponent" is stored once similar to SharedData, but with a bitmap to indicate which
+//!   authorities votes used that "BitmapComponent" value. A vote when split up, can only contain up
+//!   to a single "BitmapComponent" (This is enforced by the interfaces, and cannot be "messed up"
 //!   by bad VoteStorage or ElectoralSystem impls).
 //!
 //! Note that all these types "Vote", "PartialVote", "SharedData", "IndividualComponent", and
@@ -125,6 +125,7 @@
 #![feature(adt_const_params)]
 #![feature(unsized_const_params)]
 #![feature(btree_extract_if)]
+#![feature(impl_trait_in_assoc_type)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
@@ -233,9 +234,10 @@ pub mod pallet {
 		pub(crate) fn next_identifier(&self) -> Option<Self> {
 			self.0.checked_add(1).map(Self)
 		}
+	}
 
-		#[cfg(any(feature = "runtime-benchmarks", test))]
-		pub const fn from_u64(value: u64) -> Self {
+	impl From<u64> for UniqueMonotonicIdentifier {
+		fn from(value: u64) -> Self {
 			Self(value)
 		}
 	}
@@ -249,7 +251,7 @@ pub mod pallet {
 	)]
 	pub struct ElectionIdentifier<Extra>(UniqueMonotonicIdentifier, Extra);
 	impl<Extra> ElectionIdentifier<Extra> {
-		pub(crate) fn new(unique_monotonic: UniqueMonotonicIdentifier, extra: Extra) -> Self {
+		pub fn new(unique_monotonic: UniqueMonotonicIdentifier, extra: Extra) -> Self {
 			Self(unique_monotonic, extra)
 		}
 
@@ -451,7 +453,7 @@ pub mod pallet {
 	/// not been added, as this block number becomes older the probability a validator will submit
 	/// the associated SharedData increases. After a number of blocks without the SharedData being
 	/// added the reference will be removed which will invalidate any votes that reference it,
-	/// forcing validators who referenced it to revote.
+	/// forcing validators who referenced it to re-vote.
 	#[pallet::storage]
 	pub type SharedDataReferenceCount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
@@ -1047,9 +1049,9 @@ pub mod pallet {
 							} else {
 								// If we skipped multiple epochs then we should not transition any
 								// votes, as only votes from validators who were consistently
-								// authorites between this.epoch and current_epoch should have their
-								// votes kept across epoch transitions to avoid unexpected
-								// behaviours.
+								// authorities between this.epoch and current_epoch should have
+								// their votes kept across epoch transitions to avoid
+								// unexpected behaviours.
 								//
 								// Note this is *NOT* done for IndividualComponents, and so those
 								// components/votes may be kept across periods when the voter wasn't
@@ -1786,7 +1788,7 @@ pub mod pallet {
 												AuthorityElectionData {
 													settings: RunnerStorageAccess::<T, I>::electoral_settings_for_election(*election_identifier.unique_monotonic())?,
 													properties: RunnerStorageAccess::<T, I>::election_properties(election_identifier)?,
-													// We report the vote to the engine even though it is timeouted so the engine
+													// We report the vote to the engine even though it is timed out so the engine
 													// knows to delete it. As it may still later to reconstructed if the right
 													// `SharedData` is provided, unless it is delete.
 													option_existing_vote: option_current_authority_vote.as_ref().map(|(_, authority_vote)| {

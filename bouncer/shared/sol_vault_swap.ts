@@ -3,13 +3,13 @@ import * as anchor from '@coral-xyz/anchor';
 import { InternalAsset as Asset, Chains } from '@chainflip/cli';
 import {
   PublicKey,
-  Keypair,
   sendAndConfirmTransaction,
   TransactionInstruction,
   Transaction,
   AccountMeta,
 } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
+import { randomBytes } from 'crypto';
 import {
   getContractAddress,
   amountToFineAmount,
@@ -26,7 +26,7 @@ import {
 } from './utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-alt-manager/swap_endpoint';
+import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.1.0/swap_endpoint';
 import { getSolanaSwapEndpointIdl } from './contract_interfaces';
 import { getChainflipApi } from './utils/substrate';
 import { getBalance } from './get_balance';
@@ -51,7 +51,7 @@ type RpcAccountMeta = {
 interface SolanaVaultSwapExtraParameters {
   chain: 'Solana';
   from: string;
-  event_data_account: string;
+  seed: string;
   input_amount: string;
   refund_parameters: ChannelRefundParameters;
   from_token_account?: string;
@@ -86,8 +86,12 @@ export async function executeSolVaultSwap(
 
   const connection = getSolConnection();
 
-  const newEventAccountKeypair = Keypair.generate();
-  createdEventAccounts.push([newEventAccountKeypair.publicKey, srcAsset === 'Sol']);
+  const seed = randomBytes(32);
+  const [newEventAccountPublicKey] = PublicKey.findProgramAddressSync(
+    [Buffer.from('swap_event'), whaleKeypair.publicKey.toBuffer(), seed],
+    new PublicKey(getContractAddress('Solana', 'SWAP_ENDPOINT')),
+  );
+  createdEventAccounts.push([newEventAccountPublicKey, srcAsset === 'Sol']);
 
   const amountToSwap = amountToFineAmount(
     amount ?? defaultAssetAmounts(srcAsset),
@@ -103,11 +107,10 @@ export async function executeSolVaultSwap(
     ),
     min_price: fillOrKillParams?.minPriceX128 ?? '0x0',
   };
-
   const extraParameters: SolanaVaultSwapExtraParameters = {
     chain: 'Solana',
     from: decodeSolAddress(whaleKeypair.publicKey.toBase58()),
-    event_data_account: decodeSolAddress(newEventAccountKeypair.publicKey.toBase58()),
+    seed: seed.toString('hex'),
     input_amount: '0x' + new BigNumber(amountToSwap).toString(16),
     refund_parameters: refundParams,
     from_token_account: undefined,
@@ -163,12 +166,9 @@ export async function executeSolVaultSwap(
   transaction.add(instruction);
 
   logger.trace('Sending Solana vault swap transaction');
-  const txHash = await sendAndConfirmTransaction(
-    connection,
-    transaction,
-    [whaleKeypair, newEventAccountKeypair],
-    { commitment: 'confirmed' },
-  );
+  const txHash = await sendAndConfirmTransaction(connection, transaction, [whaleKeypair], {
+    commitment: 'confirmed',
+  });
 
   const transactionData = await connection.getTransaction(txHash, {
     commitment: 'confirmed',
@@ -177,7 +177,7 @@ export async function executeSolVaultSwap(
   if (transactionData === null) {
     throwError(logger, new Error('Solana TransactionData is empty'));
   }
-  return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountKeypair.publicKey };
+  return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountPublicKey };
 }
 
 const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES = 5;

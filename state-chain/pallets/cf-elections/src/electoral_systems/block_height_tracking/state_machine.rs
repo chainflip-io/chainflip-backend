@@ -3,21 +3,19 @@ use super::{
 		core::Validate, state_machine::Statemachine, state_machine_es::SMInput,
 	},
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
-	ChainProgress, HWTypes, HeightWitnesserProperties,
+	ChainProgress, ChainProgressFor, HWTypes, HeightWitnesserProperties,
 };
 use crate::electoral_systems::state_machine::core::{Hook, IndexedValidate};
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::MaxEncodedLen;
-use scale_info::TypeInfo;
+use scale_info::{prelude::format, TypeInfo};
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
+use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
 
 //------------------------ inputs ---------------------------
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct InputHeaders<Types: HWTypes>(
-	pub VecDeque<Header<Types::ChainBlockHash, Types::ChainBlockNumber>>,
-);
+pub struct InputHeaders<Types: HWTypes>(pub VecDeque<Header<Types>>);
 
 impl<T: HWTypes> IndexedValidate<HeightWitnesserProperties<T>, InputHeaders<T>>
 	for BlockHeightTrackingSM<T>
@@ -60,10 +58,7 @@ impl<T: HWTypes> Validate for InputHeaders<T> {
 )]
 pub enum BHWState<T: HWTypes> {
 	Starting,
-	Running {
-		headers: VecDeque<Header<T::ChainBlockHash, T::ChainBlockNumber>>,
-		witness_from: T::ChainBlockNumber,
-	},
+	Running { headers: VecDeque<Header<T>>, witness_from: T::ChainBlockNumber },
 }
 
 impl<T: HWTypes> Default for BHWState<T> {
@@ -129,7 +124,7 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 	type Input = SMInput<(HeightWitnesserProperties<T>, InputHeaders<T>), ()>;
 	type InputIndex = Vec<HeightWitnesserProperties<T>>;
 	type Settings = ();
-	type Output = Result<ChainProgress<T::ChainBlockNumber>, &'static str>;
+	type Output = Result<ChainProgressFor<T>, &'static str>;
 
 	fn input_index(s: &mut Self::State) -> Self::InputIndex {
 		let witness_from_index = match s.state {
@@ -144,6 +139,7 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 	fn step_specification(
 		before: &mut Self::State,
 		input: &Self::Input,
+		_output: &Self::Output,
 		_settings: &Self::Settings,
 		after: &Self::State,
 	) {
@@ -204,7 +200,9 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 					headers: new_headers.0.clone(),
 					witness_from: last.saturating_forward(1),
 				};
-				Ok(ChainProgress::Range(first..=last))
+				let hashes =
+					new_headers.0.into_iter().map(|hash| (hash.block_height, hash.hash)).collect();
+				Ok(ChainProgress::Range(hashes, first..=last))
 			},
 
 			BHWState::Running { headers, witness_from } => {
@@ -241,8 +239,9 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 					},
 
 					Err(MergeFailure::InternalError(reason)) => {
+						let str = format!("internal error in block height tracker: {reason}");
 						log::error!("internal error in block height tracker: {reason}");
-						Err("internal error in block height tracker")
+						Err(str.leak())
 					},
 				}
 			},
@@ -251,13 +250,12 @@ impl<T: HWTypes> Statemachine for BlockHeightTrackingSM<T> {
 }
 
 #[cfg(test)]
-mod tests {
-
+pub mod tests {
 	use crate::{
 		electoral_systems::{
-			block_height_tracking::BlockHeightChangeHook,
+			block_height_tracking::{BlockHeightChangeHook, ChainTypes},
 			block_witnesser::state_machine::HookTypeFor,
-			state_machine::core::hook_test_utils::MockHook,
+			state_machine::core::{hook_test_utils::MockHook, Serde},
 		},
 		prop_do,
 	};
@@ -271,6 +269,7 @@ mod tests {
 		prop_oneof,
 		sample::select,
 	};
+	use sp_std::{fmt::Debug, iter::Step};
 
 	use crate::electoral_systems::block_height_tracking::state_machine::BHWStateWrapper;
 
@@ -331,18 +330,40 @@ mod tests {
 		.prop_map(|state| BHWStateWrapper { state, block_height_update: Default::default() })
 	}
 
-	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
-	struct TestTypes1 {}
-	impl HWTypes for TestTypes1 {
-		const BLOCK_BUFFER_SIZE: usize = 6;
-		type ChainBlockNumber = u32;
-		type ChainBlockHash = bool;
+	impl<
+			N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static,
+			H: Serde + Ord + Clone + Debug + 'static,
+			D: Serde + Ord + Clone + Debug + 'static,
+		> ChainTypes for (N, H, D)
+	{
+		type ChainBlockNumber = N;
+		type ChainBlockHash = H;
+
+		// TODO we could make this a parameter to test with different margins
+		const SAFETY_MARGIN: u32 = 16;
+	}
+
+	impl<
+			N: Serde
+				+ Copy
+				+ Ord
+				+ SaturatingStep
+				+ Step
+				+ BlockZero
+				+ sp_std::fmt::Debug
+				+ Default
+				+ 'static,
+			H: Serde + Ord + Clone + Debug + 'static,
+			D: Serde + Ord + Clone + Debug + 'static,
+		> HWTypes for (N, H, D)
+	{
+		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
 	#[test]
 	pub fn test_dsm() {
-		BlockHeightTrackingSM::<TestTypes1>::test(
+		BlockHeightTrackingSM::<(u32, Vec<char>, ())>::test(
 			module_path!(),
 			generate_state(),
 			Just(()),
@@ -366,12 +387,17 @@ mod tests {
 		type ChainBlockNumber = u32;
 	}
 
+	impl ChainTypes for TestTypes2 {
+		type ChainBlockNumber = BlockWitnessRange<TestChain>;
+		type ChainBlockHash = bool;
+
+		const SAFETY_MARGIN: u32 = 16;
+	}
+
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 	struct TestTypes2 {}
 	impl HWTypes for TestTypes2 {
-		const BLOCK_BUFFER_SIZE: usize = 6;
-		type ChainBlockNumber = BlockWitnessRange<TestChain>;
-		type ChainBlockHash = bool;
+		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 

@@ -339,14 +339,6 @@ pub mod pallet {
 		/// creation transaction and the tx hash and block number of the Polkadot block the
 		/// vault creation transaction was witnessed in. This extrinsic should complete the Polkadot
 		/// initiation process and the vault should rotate successfully.
-		///
-		/// ## Events
-		///
-		/// - [PolkadotVaultCreationCallInitiated](Event::PolkadotVaultCreationCallInitiated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
 		#[pallet::call_index(1)]
 		// This weight is not strictly correct but since it's a governance call, weight is
@@ -373,14 +365,6 @@ pub mod pallet {
 
 		/// Manually witnesses the current Bitcoin block number to complete the pending vault
 		/// rotation.
-		///
-		/// ## Events
-		///
-		/// - [BitcoinBlockNumberSetForVault](Event::BitcoinBlockNumberSetForVault)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
 		#[pallet::call_index(2)]
 		// This weight is not strictly correct but since it's a governance call, weight is
@@ -443,14 +427,6 @@ pub mod pallet {
 
 		/// Manually witnesses the current Arbitrum block number to complete the pending vault
 		/// rotation.
-		///
-		/// ## Events
-		///
-		/// - [OnSuccess](Event::ArbitrumInitialized)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(5)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
@@ -494,16 +470,6 @@ pub mod pallet {
 		/// Allows Governance to recover a used Nonce.
 		/// If a Hash is supplied as well, update the associated Durable Hash as well.
 		/// Requires Governance Origin.
-		///
-		/// ## Events
-		///
-		/// - [DurableNonceSetForAccount](Event::DurableNonceSetForAccount)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		/// - [NonceAccountNotBeingUsed](Error::NonceAccountNotBeingUsedOrDoesNotExist)
-		/// - [NonceHashNotSuppliedWhereRequired](Error::NonceAccountNotBeingUsedOrDoesNotExist)
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::force_recover_sol_nonce())]
 		pub fn force_recover_sol_nonce(
@@ -554,14 +520,6 @@ pub mod pallet {
 		/// Requires Governance Origin. This action is allowed to consume any nonce account because
 		/// it's a high priority action. Therefore, **DO NOT** execute this governance function
 		/// around a rotation as it could consume the nonce saved for rotations.
-		///
-		/// ## Events
-		///
-		/// - [OnSuccess](Event::SolanaGovCallDispatched)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(8)]
 		#[pallet::weight(Weight::zero())]
 		pub fn dispatch_solana_gov_call(
@@ -590,10 +548,6 @@ pub mod pallet {
 		/// the assethub creation transaction and the tx hash and block number of the Assethub
 		/// block the vault creation transaction was witnessed in. This extrinsic should complete
 		/// the Assethub initiation process and the vault should rotate successfully.
-		///
-		/// ## Events
-		///
-		/// - [AssethubVaultCreationCallInitiated](Event::AssethubVaultCreationCallInitiated)
 		#[allow(unused_variables)]
 		#[pallet::call_index(9)]
 		// This weight is not strictly correct but since it's a governance call, weight is

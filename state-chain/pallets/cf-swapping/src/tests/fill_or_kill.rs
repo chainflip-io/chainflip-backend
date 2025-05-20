@@ -304,7 +304,10 @@ fn storage_state_rolls_back_on_fok_violation(is_ccm: bool) {
 
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
-			NetworkFee::set(Permill::from_percent(1));
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: Permill::from_percent(1),
+				minimum: 0,
+			});
 
 			MockSwappingApi::add_liquidity(INPUT_ASSET, 0);
 

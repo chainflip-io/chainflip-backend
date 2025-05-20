@@ -18,10 +18,11 @@ use std::collections::HashSet;
 
 use super::*;
 
+use cf_amm::input_amount_from_fee;
 use cf_primitives::AccountId;
 use cf_rpc_apis::{OrderFilled, OrderFills};
 use pallet_cf_pools::{AssetPair, OrderId, Pool};
-use state_chain_runtime::Runtime;
+use state_chain_runtime::{chainflip::get_header_timestamp, Runtime};
 
 pub(crate) fn order_fills_for_block<C, B, BE>(
 	client: &C,
@@ -62,6 +63,7 @@ where
 	Ok(BlockUpdate::<OrderFills> {
 		block_hash: hash,
 		block_number: header.number,
+		timestamp: get_header_timestamp(&header).unwrap_or_default(),
 		data: order_fills_from_block_updates(&prev_pools, &pools, lp_events),
 	})
 }
@@ -100,10 +102,10 @@ fn order_fills_for_pool<'a>(
 									.checked_sub(previous_collected.sold_amount)
 									.unwrap_or_else(|| {
 										log::info!(
-															"Ignored dust sold_amount underflow. Current: {}, Previous: {}",
-															collected.sold_amount,
-															previous_collected.sold_amount
-														);
+											"Ignored dust sold_amount underflow. Current: {}, Previous: {}",
+											collected.sold_amount,
+											previous_collected.sold_amount
+										);
 										0.into()
 									}),
 								collected.bought_amount - previous_collected.bought_amount,
@@ -154,6 +156,8 @@ fn order_fills_for_pool<'a>(
 					}
 				};
 
+				let fee_hundredth_pips = pool.pool_state.range_order_fee();
+
 				if fees == Default::default() {
 					None
 				} else {
@@ -162,6 +166,9 @@ fn order_fills_for_pool<'a>(
 						base_asset: asset_pair.assets().base,
 						quote_asset: asset_pair.assets().quote,
 						id: id.into(),
+						bought_amounts: fees.map(|amount| {
+							input_amount_from_fee(amount, fee_hundredth_pips).unwrap_or_default()
+						}),
 						range: range.clone(),
 						fees: fees.map(|fees| fees),
 						liquidity: position_info.liquidity.into(),
@@ -171,7 +178,7 @@ fn order_fills_for_pool<'a>(
 		))
 }
 
-fn order_fills_from_block_updates(
+pub fn order_fills_from_block_updates(
 	previous_pools: &BTreeMap<AssetPair, Pool<Runtime>>,
 	pools: &BTreeMap<AssetPair, Pool<Runtime>>,
 	events: Vec<pallet_cf_pools::Event<Runtime>>,

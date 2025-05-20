@@ -66,6 +66,14 @@ pub struct PendingRedemptionInfo<FlipBalance> {
 	pub redeem_address: EthereumAddress,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct CalculatedRedeemAmount<Amount: Copy + Clone> {
+	pub debit_amount: Amount,
+	pub redeem_amount: Amount,
+	pub redemption_fee: Amount,
+	pub restricted_deficit: Amount,
+}
+
 impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 
 #[frame_support::pallet]
@@ -300,14 +308,6 @@ pub mod pallet {
 		/// Funds have been added to an account via the StateChainGateway Smart Contract.
 		///
 		/// If the account doesn't exist, we create it.
-		///
-		/// ## Events
-		///
-		/// - [Funded](Event::Funded)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::funded())]
 		pub fn funded(
@@ -387,36 +387,17 @@ pub mod pallet {
 				);
 			}
 
-			// In case the balance is lower than the sum of restricted addresses we take this
-			// discrepancy into account so that restricted addresses can still redeem.
-			let restricted_deficit: FlipBalance<T> = restricted_balances
-				.values()
-				.copied()
-				.sum::<FlipBalance<T>>()
-				.saturating_sub(T::Flip::balance(&account_id));
-
-			// The available funds are the total balance minus whichever is larger from:
-			// - The bond.
-			// - The total restricted funds that need to remain in the account after the redemption.
-			let liquid_balance = T::Flip::balance(&account_id).saturating_sub(max(
-				T::Flip::bond(&account_id),
-				restricted_balances.values().copied().sum::<FlipBalance<T>>().saturating_sub(
-					restricted_deficit +
-						restricted_balances.get(&address).copied().unwrap_or_default(),
-				),
-			));
-
-			let redemption_fee = match amount {
-				RedemptionAmount::Max if liquid_balance == T::Flip::balance(&account_id) =>
-					Zero::zero(),
-				_ => RedemptionTax::<T>::get(),
-			};
-
-			let (debit_amount, redeem_amount) = match amount {
-				RedemptionAmount::Max =>
-					(liquid_balance, liquid_balance.saturating_sub(redemption_fee)),
-				RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
-			};
+			let CalculatedRedeemAmount {
+				debit_amount,
+				redeem_amount,
+				redemption_fee,
+				restricted_deficit,
+			} = Self::calculate_redeem_amount(
+				&account_id,
+				&restricted_balances,
+				amount,
+				Some(&address),
+			);
 
 			ensure!(
 				T::Flip::try_burn_fee(&account_id, redemption_fee).is_ok(),
@@ -513,15 +494,6 @@ pub mod pallet {
 		/// already been authorised by authority multisig. This merely signals that the
 		/// redeemer has in fact executed the redemption via the StateChainGateway Smart
 		/// Contract and has received their funds. This allows us to finalise any on-chain cleanup.
-		///
-		/// ## Events
-		///
-		/// - [RedemptionSettled](Event::RedemptionSettled)
-		///
-		/// ## Errors
-		///
-		/// - [NoPendingRedemption](Error::NoPendingRedemption)
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::redeemed())]
 		pub fn redeemed(
@@ -591,14 +563,6 @@ pub mod pallet {
 
 		/// Updates the minimum funding required for an account, the extrinsic is gated with
 		/// governance.
-		///
-		/// ## Events
-		///
-		/// - [MinimumFundingUpdated](Event::MinimumFundingUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::update_minimum_funding())]
 		pub fn update_minimum_funding(
@@ -616,15 +580,6 @@ pub mod pallet {
 		}
 
 		/// Adds/Removes restricted addresses to the list of restricted addresses.
-		///
-		/// ## Events
-		///
-		/// - [AddedRestrictedAddress](Event::AddedRestrictedAddress)
-		/// - [RemovedRestrictedAddress](Event::RemovedRestrictedAddress)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32, 10_u32))]
 		pub fn update_restricted_addresses(
@@ -653,11 +608,6 @@ pub mod pallet {
 
 		/// Binds an account to a redeem address. This is used to allow an account to redeem
 		/// their funds only to a specific address.
-		///
-		/// ## Errors
-		///
-		/// - [AccountAlreadyBound](Error::AccountAlreadyBound)
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::bind_redeem_address())]
 		pub fn bind_redeem_address(
@@ -677,10 +627,6 @@ pub mod pallet {
 		/// Updates the Withdrawal Tax, which is the amount levied on each withdrawal request.
 		///
 		/// Requires Governance
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::RedemptionTaxAmountUpdated)
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::update_redemption_tax())]
 		pub fn update_redemption_tax(origin: OriginFor<T>, amount: T::Amount) -> DispatchResult {
@@ -692,15 +638,6 @@ pub mod pallet {
 		}
 
 		/// Binds executor address to an account.
-		///
-		/// ## Events
-		///
-		/// - [BoundExecutorAddress](Event::BoundExecutorAddress)
-		///
-		/// ## Errors
-		///
-		/// - [ExecutorAddressAlreadyBound](Error::ExecutorAddressAlreadyBound)
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::bind_executor_address())]
 		pub fn bind_executor_address(
@@ -768,6 +705,47 @@ impl<T: Config> Pallet<T> {
 		}
 
 		T::Flip::credit_funds(account_id, amount)
+	}
+
+	pub fn calculate_redeem_amount(
+		account_id: &T::AccountId,
+		restricted_balances: &BTreeMap<EthereumAddress, FlipBalance<T>>,
+		amount: RedemptionAmount<FlipBalance<T>>,
+		maybe_address: Option<&EthereumAddress>,
+	) -> CalculatedRedeemAmount<T::Amount> {
+		// In case the balance is lower than the sum of restricted addresses we take this
+		// discrepancy into account so that restricted addresses can still redeem.
+		let restricted_deficit: FlipBalance<T> = restricted_balances
+			.values()
+			.copied()
+			.sum::<FlipBalance<T>>()
+			.saturating_sub(T::Flip::balance(account_id));
+
+		// The available funds are the total balance minus whichever is larger from:
+		// - The bond.
+		// - The total restricted funds that need to remain in the account after the redemption.
+		let liquid_balance = T::Flip::balance(account_id).saturating_sub(max(
+			T::Flip::bond(account_id),
+			restricted_balances.values().copied().sum::<FlipBalance<T>>().saturating_sub(
+				restricted_deficit +
+					maybe_address
+						.and_then(|address| restricted_balances.get(address).copied())
+						.unwrap_or_default(),
+			),
+		));
+
+		let redemption_fee = match amount {
+			RedemptionAmount::Max if liquid_balance == T::Flip::balance(account_id) => Zero::zero(),
+			_ => RedemptionTax::<T>::get(),
+		};
+
+		let (debit_amount, redeem_amount) = match amount {
+			RedemptionAmount::Max =>
+				(liquid_balance, liquid_balance.saturating_sub(redemption_fee)),
+			RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
+		};
+
+		CalculatedRedeemAmount { debit_amount, redeem_amount, redemption_fee, restricted_deficit }
 	}
 }
 
