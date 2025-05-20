@@ -675,10 +675,22 @@ pub mod pallet {
 		pub fn rebalance(
 			origin: OriginFor<T>,
 			destination_account_id: AccountId<T>,
-			address: Option<EthereumAddress>,
+			redemption_address: Option<EthereumAddress>,
 			amount: RedemptionAmount<FlipBalance<T>>,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
+
+			ensure!(
+				BoundExecutorAddress::<T>::get(&source) ==
+					BoundExecutorAddress::<T>::get(&destination_account_id),
+				Error::<T>::ExecutorBindingRestrictionViolated
+			);
+
+			ensure!(
+				BoundRedeemAddress::<T>::get(&source) ==
+					BoundRedeemAddress::<T>::get(&destination_account_id),
+				Error::<T>::AccountBindingRestrictionViolated
+			);
 
 			Ok(())
 		}
