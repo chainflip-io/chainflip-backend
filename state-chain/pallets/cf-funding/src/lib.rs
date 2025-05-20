@@ -299,6 +299,9 @@ pub mod pallet {
 
 		/// The account cannot be reaped before it is unregistered.
 		AccountMustBeUnregistered,
+
+		/// The execution of this extrinsic is restricted only to validators.
+		RestrictedToValidators,
 	}
 
 	#[pallet::call]

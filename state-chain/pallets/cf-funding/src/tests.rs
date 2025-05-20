@@ -1835,3 +1835,205 @@ fn only_governance_can_update_settings() {
 		);
 	});
 }
+
+#[test]
+fn rebalance_unrestricted_funds() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			1,
+			"Funding pallet should increment the provider count on account creation."
+		);
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT, "Total balance to be correct.");
+		assert_ok!(Funding::rebalance(
+			OriginTrait::signed(ALICE),
+			BOB,
+			Some(UNRESTRICTED_ADDRESS),
+			AMOUNT_MINUS_FEE.into()
+		));
+		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT_MINUS_FEE, "Total balance to be correct.");
+	});
+}
+
+#[test]
+fn can_only_rebalance_as_and_to_validator() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_noop!(
+			Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(UNRESTRICTED_ADDRESS),
+				AMOUNT_MINUS_FEE.into()
+			),
+			Error::<Test>::RestrictedToValidators
+		);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_noop!(
+			Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(UNRESTRICTED_ADDRESS),
+				AMOUNT_MINUS_FEE.into()
+			),
+			Error::<Test>::RestrictedToValidators
+		);
+	});
+}
+
+#[test]
+fn rebalance_restricted_funds() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			vec![],
+		));
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		assert_ok!(Funding::rebalance(
+			OriginTrait::signed(ALICE),
+			BOB,
+			Some(RESTRICTED_ADDRESS),
+			AMOUNT_MINUS_FEE.into()
+		));
+
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), None);
+		assert_eq!(
+			RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS),
+			Some(&AMOUNT_MINUS_FEE)
+		);
+	});
+}
+
+#[test]
+fn rebalance_only_a_apart_of_the_restricted_funds() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_MOVE: u128 = AMOUNT / 2;
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			vec![],
+		));
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		assert_ok!(Funding::rebalance(
+			OriginTrait::signed(ALICE),
+			BOB,
+			Some(RESTRICTED_ADDRESS),
+			RedemptionAmount::Exact(AMOUNT_MOVE)
+		));
+
+		// We burn the redemption tax from the restricted balance of the sender.
+		assert_eq!(
+			*RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS).unwrap(),
+			AMOUNT_MOVE
+		);
+
+		assert_eq!(
+			*RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
+			AMOUNT - AMOUNT_MOVE
+		);
+	});
+}
+
+#[test]
+fn ensure_bonded_address_condition_hold_during_rebalance() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), H160([0x02; 20])));
+		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(BOB), H160([0x03; 20])));
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		assert_noop!(
+			Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(RESTRICTED_ADDRESS),
+				AMOUNT_MINUS_FEE.into()
+			),
+			Error::<Test>::AccountBindingRestrictionViolated
+		);
+	});
+}
