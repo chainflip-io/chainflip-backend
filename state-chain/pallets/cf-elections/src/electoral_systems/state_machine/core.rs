@@ -36,22 +36,45 @@ macro_rules! impls {
     (for $name:ty $(where ($($bounds:tt)*))? :) => {}
 }
 
+macro_rules! implementations {
+	([$($Name:tt)*], [$($Parameters:tt)*], impl $Trait:tt { $($TraitDef:tt)* } $($rest:tt)* ) => {
+
+		impl <$($Parameters)*> $Trait for $($Name)* {
+			$($TraitDef)*
+		}
+
+		crate::electoral_systems::state_machine::core::implementations! {
+			[$($Name)*], [$($Parameters)*], $($rest)*
+		}
+		
+	};
+
+	([$($Name:tt)*], [$($Parameters:tt)*],) => {}
+}
+pub(crate) use implementations;
+
 macro_rules! defx {
 	(
 		pub $def:tt $Name:tt [$($ParamName:ident: $ParamType:tt),*] {
 			$($Definition:tt)*
-		} where $this:ident (else $Error:ident) {
+		} 
+		validate $this:ident $unused:tt (else $Error:ident) {
 			$($prop_name:ident : $prop:expr),*
 
 			$(,
-			{ where
+			( where
 				$(
 					$prop_var:ident = $prop_var_value:expr
 				),*
-			})?
-		} with {
-			$($Attributes:tt)*
+			))?
 		}
+		$(
+			with {
+				$($Attributes:tt)*
+			}
+		)?;
+
+		$($rest:tt)*
 	) => {
 
 		#[derive(Debug)]
@@ -60,7 +83,13 @@ macro_rules! defx {
 			$($prop_name),*
 		}
 
-		$($Attributes)*
+		#[derive(
+			Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize,
+		)]
+
+		$(
+			$($Attributes)*
+		)?
 		pub $def $Name<$($ParamName: $ParamType),*> {
 			$($Definition)*
 		}
@@ -84,9 +113,12 @@ macro_rules! defx {
 				Ok(())
 			}
 		}
+
+		crate::electoral_systems::state_machine::core::implementations!{[$Name<$($ParamName),*>], [ $($ParamName: $ParamType),* ], $($rest)*}
 	};
 }
 pub(crate) use defx; // <-- the trick
+
 
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of

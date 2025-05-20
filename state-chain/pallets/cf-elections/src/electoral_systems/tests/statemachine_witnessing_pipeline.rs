@@ -218,7 +218,7 @@ pub fn test_all() {
                     bw_history.push(BWTrace::Input(Either::Left(bhw_output.clone())));
 
                     bw_state.elections.is_valid()
-                        .map_err(|err| format!("err: {err} with history: {}", print_bw_history(&bw_history)))
+                        .map_err(|err| format!("err: {err:?} with history: {}", print_bw_history(&bw_history)))
                         .unwrap();
 
                     BW::step(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
@@ -248,7 +248,7 @@ pub fn test_all() {
                     bw_history.push(BWTrace::Input(input.clone()));
 
                     bw_state.elections.is_valid()
-                        .map_err(|err| format!("err: {err} with history: {}", print_bw_history(&bw_history)))
+                        .map_err(|err| format!("err: {err:?} with history: {}", print_bw_history(&bw_history)))
                         .unwrap();
 
                     BW::step(&mut bw_state, input, &bw_settings).unwrap();
