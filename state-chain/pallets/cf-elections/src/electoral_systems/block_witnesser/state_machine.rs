@@ -8,6 +8,7 @@ use crate::electoral_systems::{
 	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{core::Validate, state_machine::Statemachine, state_machine_es::SMInput},
 };
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use derive_where::derive_where;
@@ -286,11 +287,13 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					&blockhash,
 					blockdata,
 				) {
-					s.block_processor.process_block_data((
-						properties.block_height,
-						blockdata,
+					s.block_processor.process_block_data_and_chain_progress(
+						ChainProgressInner::Progress(
+							s.elections.seen_heights_below.saturating_backward(1),
+						),
+						Some((properties.block_height, blockdata, settings.safety_margin)),
 						settings.safety_margin,
-					));
+					)
 				}
 			},
 		};

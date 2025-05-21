@@ -197,7 +197,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 				last_block = last_height;
 			},
 			ChainProgressInner::Reorg(range) => {
-				last_block = (*range.start()).saturating_backward(1);
+				last_block = *range.start();
 
 				for n in range.clone() {
 					self.blocks_data.remove(&n);
