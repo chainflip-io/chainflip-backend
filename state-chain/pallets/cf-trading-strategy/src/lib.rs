@@ -491,13 +491,21 @@ impl<T: Config> Pallet<T> {
 			return None
 		}
 
+		// Check if the funding contains an unsupported asset
+		if funding.is_empty() ||
+			funding.keys().any(|asset| !strategy.supported_assets().contains(asset))
+		{
+			return None
+		}
+
 		Some(
 			strategy.supported_assets().into_iter().fold(FixedU64::default(), |acc, asset| {
 				let min_required = *minimum.get(&asset).expect("checked above");
-				let fraction_of_required = if min_required == 0 {
+				let funds = *funding.get(&asset).unwrap_or(&0);
+				let fraction_of_required = if funds >= min_required {
 					FixedU64::one()
 				} else {
-					FixedU64::from_rational(*funding.get(&asset).unwrap_or(&0), min_required)
+					FixedU64::from_rational(funds, min_required)
 				};
 				acc + fraction_of_required
 			}) >= FixedU64::one(),

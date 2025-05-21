@@ -29,8 +29,11 @@ use crate::{mock::*, *};
 
 const BASE_ASSET: Asset = Asset::Usdt;
 const QUOTE_ASSET: Asset = cf_primitives::STABLE_ASSET;
+const INVALID_ASSET: Asset = Asset::Flip;
 const BASE_AMOUNT: AssetAmount = 100_000;
 const QUOTE_AMOUNT: AssetAmount = 50_000;
+
+const THRESHOLD: AssetAmount = 1_000;
 
 const SPREAD_TICK: Tick = 1;
 
@@ -51,15 +54,16 @@ macro_rules! assert_balances {
 	};
 }
 
-fn turn_off_thresholds() {
-	let zero_thresholds = BTreeMap::from_iter([(BASE_ASSET, 0), (QUOTE_ASSET, 0)]);
-	MinimumDeploymentAmountForStrategy::<Test>::set(zero_thresholds.clone());
-	MinimumAddedFundsToStrategy::<Test>::set(zero_thresholds.clone());
-	LimitOrderUpdateThresholds::<Test>::set(zero_thresholds.clone());
+fn set_thresholds(amount: AssetAmount) {
+	let thresholds =
+		BTreeMap::from_iter([(BASE_ASSET, amount), (QUOTE_ASSET, amount), (INVALID_ASSET, amount)]);
+	MinimumDeploymentAmountForStrategy::<Test>::set(thresholds.clone());
+	MinimumAddedFundsToStrategy::<Test>::set(thresholds.clone());
+	LimitOrderUpdateThresholds::<Test>::set(thresholds.clone());
 }
 
 fn deploy_strategy() -> AccountId {
-	turn_off_thresholds();
+	set_thresholds(0);
 
 	let initial_amounts: BTreeMap<_, _> =
 		[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
@@ -111,23 +115,29 @@ fn check_asset_validation(f: impl Fn(BTreeMap<Asset, u128>) -> DispatchResult) {
 	// These attempts should fail due to invalid assets provided:
 	assert_err!(f(BTreeMap::from_iter([])), Error::<Test>::InvalidAssetsForStrategy);
 	assert_err!(
-		f(BTreeMap::from_iter([(Asset::Flip, 1000)])),
+		f(BTreeMap::from_iter([(INVALID_ASSET, THRESHOLD)])),
 		Error::<Test>::InvalidAssetsForStrategy
 	);
 	assert_err!(
-		f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT), (Asset::Flip, 1000)])),
+		f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT), (INVALID_ASSET, THRESHOLD)])),
 		Error::<Test>::InvalidAssetsForStrategy
 	);
 	assert_err!(
 		f(BTreeMap::from_iter([
 			(QUOTE_ASSET, QUOTE_AMOUNT),
 			(BASE_ASSET, BASE_AMOUNT),
-			(Asset::Flip, 1000)
+			(INVALID_ASSET, THRESHOLD)
 		])),
 		Error::<Test>::InvalidAssetsForStrategy
 	);
 
-	// Should be OK to provide one of &the assets (or both):
+	// Make sure we don't panic on unrealistic values. We should just get insufficient balance
+	// error:
+	assert!(f(BTreeMap::from_iter([(QUOTE_ASSET, u128::MAX), (BASE_ASSET, u128::MAX)])).is_err());
+	assert!(f(BTreeMap::from_iter([(QUOTE_ASSET, u128::MAX), (BASE_ASSET, 0)])).is_err());
+	assert!(f(BTreeMap::from_iter([(QUOTE_ASSET, 0), (BASE_ASSET, u128::MAX)])).is_err());
+
+	// Should be OK to provide one of the assets (or both):
 	assert_ok!(f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT)])));
 	assert_ok!(f(BTreeMap::from_iter([(BASE_ASSET, BASE_AMOUNT)])));
 	assert_ok!(f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT)])));
@@ -139,7 +149,7 @@ fn asset_validation_on_deploy_strategy() {
 		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
 		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
 
-		turn_off_thresholds();
+		set_thresholds(THRESHOLD);
 
 		check_asset_validation(|funding| {
 			TradingStrategyPallet::deploy_strategy(
@@ -155,6 +165,8 @@ fn asset_validation_on_deploy_strategy() {
 fn asset_validation_on_adding_funds_to_strategy() {
 	new_test_ext().then_execute_at_next_block(|_| {
 		let strategy_id = deploy_strategy();
+
+		set_thresholds(THRESHOLD);
 
 		check_asset_validation(|funding| {
 			TradingStrategyPallet::add_funds_to_strategy(
@@ -670,7 +682,7 @@ mod safe_mode {
 	#[test]
 	fn deploy_strategy_safe_mode() {
 		new_test_ext().then_execute_with(|_| {
-			turn_off_thresholds();
+			set_thresholds(0);
 
 			let initial_amounts: BTreeMap<_, _> =
 				[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
