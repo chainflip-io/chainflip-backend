@@ -680,7 +680,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn rebalance(
 			origin: OriginFor<T>,
-			destination_account_id: AccountId<T>,
+			recipient_account_id: AccountId<T>,
 			redemption_address: Option<EthereumAddress>,
 			amount: RedemptionAmount<FlipBalance<T>>,
 		) -> DispatchResult {
@@ -689,7 +689,7 @@ pub mod pallet {
 			ensure!(
 				T::AccountRoleRegistry::has_account_role(&source, AccountRole::Validator) &&
 					T::AccountRoleRegistry::has_account_role(
-						&destination_account_id,
+						&recipient_account_id,
 						AccountRole::Validator
 					),
 				Error::<T>::RestrictedToValidators
@@ -697,13 +697,13 @@ pub mod pallet {
 
 			ensure!(
 				BoundExecutorAddress::<T>::get(&source) ==
-					BoundExecutorAddress::<T>::get(&destination_account_id),
+					BoundExecutorAddress::<T>::get(&recipient_account_id),
 				Error::<T>::ExecutorBindingRestrictionViolated
 			);
 
 			ensure!(
 				BoundRedeemAddress::<T>::get(&source) ==
-					BoundRedeemAddress::<T>::get(&destination_account_id),
+					BoundRedeemAddress::<T>::get(&recipient_account_id),
 				Error::<T>::AccountBindingRestrictionViolated
 			);
 
@@ -744,7 +744,7 @@ pub mod pallet {
 						restricted_balances.remove(&address);
 					}
 					RestrictedBalances::<T>::insert(&source, &restricted_balances);
-					RestrictedBalances::<T>::mutate(&destination_account_id, |restrictions| {
+					RestrictedBalances::<T>::mutate(&recipient_account_id, |restrictions| {
 						restrictions
 							.entry(address)
 							.and_modify(|balance| *balance += redeem_amount)
@@ -770,19 +770,15 @@ pub mod pallet {
 				Error::<T>::InsufficientUnrestrictedFunds
 			);
 
-			T::Flip::try_transfer_funds_internally(
-				redeem_amount,
-				&source,
-				&destination_account_id,
-			)?;
+			T::Flip::try_transfer_funds_internally(redeem_amount, &source, &recipient_account_id)?;
 
 			if T::Flip::balance(&source).is_zero() {
-				frame_system::Provider::<T>::killed(&destination_account_id).unwrap_or_else(|e| {
+				frame_system::Provider::<T>::killed(&recipient_account_id).unwrap_or_else(|e| {
 					// This shouldn't happen, and not much we can do if it does except fix
 					// it on a subsequent release. Consequences are minor.
 					log::error!(
 						"Unexpected reference count error while reaping the account {:?}: {:?}.",
-						destination_account_id,
+						recipient_account_id,
 						e
 					);
 				})
