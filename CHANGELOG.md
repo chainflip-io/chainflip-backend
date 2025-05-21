@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.9.4] - 2025-05-21
+
+### Fixes
+
+- fix strategy funding validation
+
 ## [1.9.3] - 2025-05-16
 
 ### Fixes
