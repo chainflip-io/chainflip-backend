@@ -1,5 +1,6 @@
 use codec::{Decode, Encode};
 use derive_where::derive_where;
+use pallet_cf_elections::electoral_systems::state_machine::core::Validate;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +14,14 @@ use serde::{Deserialize, Serialize};
 #[scale_info(skip_type_params(Tag))]
 pub struct TypesFor<Tag> {
 	_phantom: sp_std::marker::PhantomData<Tag>,
+}
+
+impl<Tag> Validate for TypesFor<Tag> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
 }
 
 /// Syntax sugar for implementing multiple traits for a single type.

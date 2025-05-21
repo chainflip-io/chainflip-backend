@@ -1,11 +1,28 @@
-use super::core::{IndexedValidate, Validate};
+use super::core::Validate;
+use derive_where::derive_where;
+use itertools::Either;
+use sp_std::{fmt::Debug, vec::Vec};
 
 #[cfg(test)]
 use proptest::prelude::{BoxedStrategy, Just, Strategy};
 #[cfg(test)]
 use proptest::test_runner::TestRunner;
-#[cfg(test)]
-use sp_std::fmt::Debug;
+
+pub trait AbstractApi {
+	type Query;
+	type Response;
+	type Error;
+
+	fn validate(query: &Self::Query, response: &Self::Response) -> Result<(), Self::Error>;
+}
+
+/// Custom error type for validation of `SMInput`.
+#[derive_where(Debug; Error: Debug, Context::Error: Debug)]
+pub enum SMInputValidateError<Context: Validate, Error> {
+	WrongIndex,
+	InvalidConsensus(Error),
+	InvalidContext(Context::Error),
+}
 
 /// A trait for implementing state machines, in particular used for electoral systems.
 ///
@@ -57,7 +74,7 @@ use sp_std::fmt::Debug;
 /// an input index, and an input, we not only check that the input is well formed, but we also
 /// ensure that the input is valid *for a given input index*.
 ///
-/// For example, in the BHW, elections are created to witness block headers starting from a given
+/// For example, in the X, elections are created to witness block headers starting from a given
 /// height, in that case we can ensure that the received vector of block headers actually starts
 /// with the correct height.
 ///
@@ -74,21 +91,41 @@ use sp_std::fmt::Debug;
 ///
 /// Additionally the `step_specification` function can be implemented, in order to provide custom
 /// pre-/postconditions to be checked during `test()`.
-pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input> {
-	type Input;
-	type InputIndex;
+pub trait Statemachine: AbstractApi + 'static {
+	type Context: Validate;
 	type Settings;
 	type Output: Validate;
 	type State: Validate;
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
-	fn input_index(s: &mut Self::State) -> Self::InputIndex;
+	fn input_index(s: &mut Self::State) -> Vec<Self::Query>;
+
+	fn validate_input(
+		index: &Vec<Self::Query>,
+		value: &InputOf<Self>,
+	) -> Result<(), SMInputValidateError<Self::Context, Self::Error>>
+	where
+		Self::Query: PartialEq,
+	{
+		match value {
+			Either::Right((property, consensus)) =>
+				if index.contains(property) {
+					Self::validate(property, consensus)
+						.map_err(SMInputValidateError::InvalidConsensus)
+				} else {
+					Err(SMInputValidateError::WrongIndex)
+				},
+
+			Either::Left(context) =>
+				context.is_valid().map_err(SMInputValidateError::InvalidContext),
+		}
+	}
 
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore
 	/// that the input has the index `input_index(s)`.
-	fn step(s: &mut Self::State, i: Self::Input, set: &Self::Settings) -> Self::Output;
+	fn step(s: &mut Self::State, input: InputOf<Self>, set: &Self::Settings) -> Self::Output;
 
 	/// Contains an optional specification of the `step` function.
 	/// Takes a state, input and next state as arguments. During testing it is verified
@@ -96,7 +133,7 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 	#[cfg(test)]
 	fn step_specification(
 		_before: &mut Self::State,
-		_input: &Self::Input,
+		_input: &InputOf<Self>,
 		_output: &Self::Output,
 		_settings: &Self::Settings,
 		_after: &Self::State,
@@ -111,14 +148,21 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 		path: &'static str,
 		states: impl Strategy<Value = Self::State>,
 		settings: impl Strategy<Value = Self::Settings>,
-		inputs: impl Fn(Self::InputIndex) -> BoxedStrategy<Self::Input>,
+		inputs: impl Fn(Self::Query) -> BoxedStrategy<Self::Response>,
+		context: impl Strategy<Value = Self::Context> + Clone,
 	) where
+		Self::Query: sp_std::fmt::Debug + Clone + Send + PartialEq,
+		Self::Response: sp_std::fmt::Debug + Clone + Send,
 		Self::State: sp_std::fmt::Debug + Clone + Send,
-		Self::Input: sp_std::fmt::Debug + Clone + Send,
+		Self::Context: sp_std::fmt::Debug + Clone + Send,
 		Self::Settings: sp_std::fmt::Debug + Clone + Send,
 		Self::Error: sp_std::fmt::Debug,
 	{
-		use proptest::test_runner::{Config, FileFailurePersistence};
+		use proptest::{
+			prop_oneof,
+			sample::select,
+			test_runner::{Config, FileFailurePersistence},
+		};
 
 		let mut runner = TestRunner::new(Config {
 			source_file: Some(path),
@@ -132,11 +176,24 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 		runner
 			.run(
 				&((states, settings).prop_flat_map(|(mut state, settings)| {
-					(Just(state.clone()), inputs(Self::input_index(&mut state)), Just(settings))
+					(
+						Just(state.clone()),
+						prop_oneof![
+							context.clone().prop_map(Either::Left),
+							select(Self::input_index(&mut state))
+								.prop_flat_map(|index| (Just(index.clone()), inputs(index)))
+								.prop_map(Either::Right),
+						],
+						Just(settings),
+					)
 				})),
 				run_with_timeout(
 					10,
-					|(mut state, input, settings): (Self::State, Self::Input, Self::Settings)| {
+					|(mut state, input, settings): (
+						Self::State,
+						Either<Self::Context, (Self::Query, Self::Response)>,
+						Self::Settings,
+					)| {
 						println!("running test");
 						// ensure that inputs are well formed
 						assert!(
@@ -146,7 +203,7 @@ pub trait Statemachine: 'static + IndexedValidate<Self::InputIndex, Self::Input>
 						);
 
 						// ensure input has correct index
-						Self::validate(&Self::input_index(&mut state), &input)
+						Self::validate_input(&Self::input_index(&mut state), &input)
 							.map_err(|err| format!("input has wrong index: {err:?}"))
 							.unwrap();
 
@@ -217,3 +274,6 @@ pub fn run_with_timeout<
 			.unwrap()
 	}
 }
+
+pub type InputOf<X> =
+	Either<<X as Statemachine>::Context, (<X as AbstractApi>::Query, <X as AbstractApi>::Response)>;

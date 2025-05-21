@@ -1,6 +1,6 @@
-use crate::electoral_systems::state_machine::core::IndexedValidate;
 use cf_utilities::success_threshold_from_share_count;
 use derive_where::derive_where;
+use itertools::Either;
 use sp_std::{fmt::Debug, vec::Vec};
 
 use crate::{
@@ -12,7 +12,7 @@ use crate::{
 use super::{
 	consensus::{ConsensusMechanism, Threshold},
 	core::Validate,
-	state_machine::Statemachine,
+	state_machine::{AbstractApi, Statemachine},
 };
 
 /// The input type of electoral state machines.
@@ -32,50 +32,6 @@ pub enum SMInput<Consensus, Context> {
 	Context(Context),
 }
 
-/// Derivation of an instance of `IndexedValidate` for the input of an electoral state machine,
-/// The index is `Vec<ElectionProperties>`.
-///
-/// This validation trait is automatically derived if there is an instance of
-/// `IndexedValidate<Properties, Consensus>`, which is more straight-forward to implement when
-/// implementing an electoral state machine.
-impl<
-		T: IndexedValidate<Properties, Consensus>,
-		Properties: PartialEq,
-		Consensus,
-		Context: Validate,
-	> IndexedValidate<Vec<Properties>, SMInput<(Properties, Consensus), Context>> for T
-{
-	type Error = SMInputValidateError<Properties, Consensus, Context, T>;
-
-	fn validate(
-		index: &Vec<Properties>,
-		value: &SMInput<(Properties, Consensus), Context>,
-	) -> Result<(), Self::Error> {
-		match value {
-			SMInput::Consensus((property, consensus)) =>
-				if index.contains(property) {
-					T::validate(property, consensus).map_err(SMInputValidateError::InvalidConsensus)
-				} else {
-					Err(SMInputValidateError::WrongIndex)
-				},
-
-			SMInput::Context(context) =>
-				context.is_valid().map_err(SMInputValidateError::InvalidContext),
-		}
-	}
-}
-
-/// Custom error type for validation of `SMInput`.
-#[derive_where(Debug; T::Error: Debug, Context::Error: Debug)]
-pub enum SMInputValidateError<Properties, Consensus, Context: Validate, T>
-where
-	T: IndexedValidate<Properties, Consensus>,
-{
-	WrongIndex,
-	InvalidConsensus(T::Error),
-	InvalidContext(Context::Error),
-}
-
 /// Main trait for deriving an electoral system from a state machine and consensus mechanism.
 /// It ensures that all the associated types match up as required. See the documentation for
 /// `StatemachineElectoralSystem` for more information on how to implement it.
@@ -90,6 +46,11 @@ pub trait StatemachineElectoralSystemTypes:
 		ElectionState = (),
 		OnFinalizeContext = Vec<Self::OnFinalizeContextItem>,
 		OnFinalizeReturn = Vec<Self::OnFinalizeReturnItem>,
+
+		// NOTE, we currently require that the consensus has the same type as the votes,
+		// this makes a few bounds simpler, but is not an inherent restriction.
+		// If required this can be lifted in the future.
+		Consensus = VoteOf<Self>
 	>
 {
 	type OnFinalizeContextItem: Clone + Debug;
@@ -103,12 +64,13 @@ pub trait StatemachineElectoralSystemTypes:
 /// this trait defines the conditions on the state machine's associated types for it
 /// to be possible to derive an electoral system.
 pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine<
-		Input = SMInput<(ES::ElectionProperties, ES::Consensus), ES::OnFinalizeContextItem>,
-		InputIndex = Vec<ES::ElectionProperties>,
-		State = ES::ElectoralUnsynchronisedState,
-		Settings = ES::ElectoralUnsynchronisedSettings,
-		Output = Result<ES::OnFinalizeReturnItem, &'static str>,
-	> + IndexedValidate<ES::ElectionProperties, VoteOf<ES>>;
+	Context = ES::OnFinalizeContextItem,
+	State = ES::ElectoralUnsynchronisedState,
+	Settings = ES::ElectoralUnsynchronisedSettings,
+	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
+	Query = ES::ElectionProperties,
+	Response = ES::Consensus,
+>;
 
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the consensus mechanism's associated types for it
@@ -259,7 +221,7 @@ where
 		log::debug!("ESSM: stepping for each context (n = {:?})", contexts.len());
 		for context in contexts {
 			log::debug!("ESSM: stepping with context {context:?}");
-			step(SMInput::Context(context.clone()))?;
+			step(Either::Left(context.clone()))?;
 		}
 
 		// step for each election that reached consensus
@@ -269,7 +231,7 @@ where
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
 			if let Some(input) = election_access.check_consensus()?.has_consensus() {
 				log::debug!("ESSM: stepping with input {input:?}");
-				step(SMInput::Consensus((election_access.properties()?, input)))?;
+				step(Either::Right((election_access.properties()?, input)))?;
 			}
 		}
 
@@ -323,6 +285,8 @@ where
 		let num_authorities = consensus_votes.num_authorities();
 
 		for vote in consensus_votes.active_votes() {
+			// TODO call vote.is_valid here
+
 			// insert vote if it is valid for the given properties
 			if Bounds::Statemachine::validate(&properties, &vote).is_ok() {
 				log::info!("inserting vote {vote:?}");

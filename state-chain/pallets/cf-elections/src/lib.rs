@@ -122,7 +122,6 @@
 #![feature(step_trait)]
 #![feature(trait_alias)]
 #![feature(associated_type_defaults)]
-#![feature(adt_const_params)]
 #![feature(unsized_const_params)]
 #![feature(btree_extract_if)]
 #![feature(impl_trait_in_assoc_type)]
@@ -135,6 +134,7 @@ extern crate core;
 
 pub mod electoral_system;
 pub mod electoral_system_runner;
+#[macro_use]
 pub mod electoral_systems;
 mod mock;
 mod tests;

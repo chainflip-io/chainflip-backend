@@ -17,41 +17,9 @@ use sp_std::{
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-use crate::electoral_systems::state_machine::core::{fst, Hook, Validate};
+use crate::electoral_systems::state_machine::core::{defx, fst, Hook, Validate};
 
 use super::state_machine::{BWElectionType, BWTypes};
-
-macro_rules! defx {
-	(
-		pub struct $Name:tt [$($ParamName:ident: $ParamType:tt),*] {
-			$($Definition:tt)*
-		} where $this:ident {
-			$($prop_name:ident : $prop:expr),*
-		} with {
-			$($Attributes:tt)*
-		}
-	) => {
-
-		$($Attributes)*
-		pub struct $Name<$($ParamName: $ParamType),*> {
-			$($Definition)*
-		}
-
-		impl<$($ParamName: $ParamType),*> Validate for $Name<$($ParamName),*> {
-
-			type Error = &'static str;
-
-			fn is_valid(&self) -> Result<(), Self::Error> {
-				let $this = self;
-
-				$(
-					ensure!($prop, stringify!($prop_name));
-				)*
-				Ok(())
-			}
-		}
-	};
-}
 
 defx! {
 
@@ -79,7 +47,11 @@ defx! {
 		/// debug hook
 		pub events: T::ElectionTrackerEventHook,
 
-	} where this {
+	}
+
+	validate this (else ElectionTrackerError) {
+
+		is_valid: true
 
 		// queued_elections_are_consequtive:
 		// 	this.queued_elections.keys().zip(this.queued_elections.keys().skip(1))
@@ -90,8 +62,6 @@ defx! {
 
 	} with {
 
-		#[derive_where(Debug, Clone, PartialEq, Eq;)]
-		#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 		#[codec(encode_bound(
 			T::ChainBlockNumber: Encode,
 			T::ChainBlockHash: Encode,
@@ -99,7 +69,7 @@ defx! {
 			T::ElectionTrackerEventHook: Encode
 		))]
 
-	}
+	};
 
 }
 
@@ -356,6 +326,14 @@ pub struct OptimisticBlock<T: BWTypes> {
 	pub data: T::BlockData,
 }
 
+impl<T: BWTypes> Validate for OptimisticBlock<T> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum ElectionTrackerEvent<T: BWTypes> {
@@ -384,6 +362,14 @@ pub enum UpdateSafeElectionsReason {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct CompactHeightTracker<N> {
 	elections: VecDeque<Range<N>>,
+}
+
+impl<N> Validate for CompactHeightTracker<N> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
 }
 
 impl<N: Step + Ord> CompactHeightTracker<N> {

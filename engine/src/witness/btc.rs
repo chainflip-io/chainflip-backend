@@ -32,8 +32,8 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
 		block_height_tracking::{
-			primitives::Header, state_machine::InputHeaders, ChainTypes, HWTypes,
-			HeightWitnesserProperties,
+			primitives::{Header, NonemptyContinuousHeaders},
+			ChainTypes, HWTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::state_machine::{BWElectionProperties, BWElectionType},
 	},
@@ -155,7 +155,7 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 					"bht: Submitting vote for (witness_from={latest_block_height})with {} headers",
 					headers.len()
 				);
-				Ok(Some(InputHeaders(headers)))
+				Ok(Some(NonemptyContinuousHeaders { headers }))
 			} else {
 				Err(anyhow::anyhow!("bht: Headers do not form a chain"))
 			}

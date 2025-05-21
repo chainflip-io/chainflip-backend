@@ -1,7 +1,12 @@
+use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
+use sp_std::collections::{btree_map::BTreeMap, vec_deque::VecDeque};
+
 use codec::{Decode, Encode};
 use derive_where::derive_where;
+use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use sp_std::{fmt::Debug, vec::Vec};
 
 /// Syntax sugar for implementing multiple traits for a single type.
@@ -36,6 +41,146 @@ macro_rules! impls {
     (for $name:ty $(where ($($bounds:tt)*))? :) => {}
 }
 
+/// Adds the type parameters to all given implementatios
+macro_rules! implementations {
+	([$($Name:tt)*], [$($Parameters:tt)*], impl $Trait:tt { $($TraitDef:tt)* } $($rest:tt)* ) => {
+
+		impl <$($Parameters)*> $Trait for $($Name)* {
+			$($TraitDef)*
+		}
+
+		crate::electoral_systems::state_machine::core::implementations! {
+			[$($Name)*], [$($Parameters)*], $($rest)*
+		}
+
+	};
+
+	([$($Name:tt)*], [$($Parameters:tt)*],) => {}
+}
+pub(crate) use implementations;
+
+/// Derive error enum cases from a struct or enum definition
+macro_rules! derive_error_enum {
+	($Error:ident [$($ParamsDef:tt)*], struct { $( $(#[doc = $doc_text:tt])* pub $Field:ident: $Type:ty, )* } { $( $property:ident ),* }
+	) => {
+
+		#[derive_where::derive_where(Debug)]
+		#[allow(non_camel_case_types)]
+		pub enum $Error<$($ParamsDef)*> {
+
+			$(
+				$Field(<$Type as Validate>::Error),
+			)*
+
+			$(
+				$property,
+			)*
+		}
+
+	};
+
+	($Error:ident [$($ParamName:ident: $ParamType:tt),*], enum { $( $anything:tt )* } { $( $property:ident ),* }
+	) => {
+
+		#[derive_where::derive_where(Debug; )]
+		#[allow(non_camel_case_types)]
+		pub enum $Error<$($ParamName: $ParamType),*> {
+
+			// $(
+			// 	$Field(<$Type as Validate>::Error),
+			// )*
+
+			$(
+				$property,
+			)*
+
+			PhantomCase(sp_std::marker::PhantomData<($($ParamName),*)>)
+		}
+
+	};
+}
+pub(crate) use derive_error_enum;
+
+macro_rules! derive_validation_statements {
+	($this:ident, $Error:ident, struct { $( $(#[doc = $doc_text:tt])* pub $Field:ident: $Type:ty, )* }
+	) => {
+		$(
+			$this.$Field.is_valid().map_err($Error::$Field)?;
+		)*
+	};
+
+	($Error:ident, $this:ident, enum { $( $anything:tt )* }
+	) => {
+	};
+}
+pub(crate) use derive_validation_statements;
+
+/// Syntax sugar for adding validation code to types with validity requirements
+macro_rules! defx {
+	(
+		pub $def:tt $Name:tt [$($ParamName:ident: $ParamType:tt),*] {
+			$($Definition:tt)*
+		}
+		validate $this:ident (else $Error:ident) {
+			$($prop_name:ident : $prop:expr),*
+
+			$(,
+			( where
+				$(
+					$prop_var:ident = $prop_var_value:expr
+				),*
+			))?
+		}
+		$(
+			with {
+				$($Attributes:tt)*
+			}
+		)?;
+
+		$($rest:tt)*
+	) => {
+
+		crate::electoral_systems::state_machine::core::derive_error_enum!{$Error [ $($ParamName: $ParamType),* ], $def { $($Definition)* } { $($prop_name),* } }
+
+
+		#[derive(
+			Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize,
+		)]
+
+		$(
+			$($Attributes)*
+		)?
+		pub $def $Name<$($ParamName: $ParamType),*> {
+			$($Definition)*
+		}
+
+		impl<$($ParamName: $ParamType),*> Validate for $Name<$($ParamName),*> {
+
+			type Error = $Error<$($ParamName),*>;
+
+			fn is_valid(&self) -> Result<(), Self::Error> {
+				let $this = self;
+
+				$(
+					$(
+						let $prop_var = $prop_var_value;
+					)*
+				)?
+
+				crate::electoral_systems::state_machine::core::derive_validation_statements!($this, $Error, $def { $($Definition)* } );
+
+				$(
+					frame_support::ensure!($prop, $Error::$prop_name);
+				)*
+				Ok(())
+			}
+		}
+
+		crate::electoral_systems::state_machine::core::implementations!{[$Name<$($ParamName),*>], [ $($ParamName: $ParamType),* ], $($rest)*}
+	};
+}
+pub(crate) use defx; // <-- the trick
+
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
 /// the state machine based electoral systems.
@@ -48,12 +193,20 @@ pub(crate) struct TypesFor<Tag> {
 	_phantom: sp_std::marker::PhantomData<Tag>,
 }
 
+impl<Tag> Validate for TypesFor<Tag> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 pub trait HookType {
 	type Input;
 	type Output;
 }
 
-pub trait Hook<T: HookType> {
+pub trait Hook<T: HookType>: Validate {
 	fn run(&mut self, input: T::Input) -> T::Output;
 }
 
@@ -96,6 +249,14 @@ pub mod hook_test_utils {
 
 			pub fn take_history(&mut self) -> Vec<T::Input> {
 				sp_std::mem::take(&mut self.call_history)
+			}
+		}
+
+		impl Validate {
+			type Error = ();
+
+			fn is_valid(&self) -> Result<(), ()> {
+				Ok(())
 			}
 		}
 
@@ -145,14 +306,14 @@ pub mod hook_test_utils {
 			()
 		}
 	}
-}
 
-/// Dedicated `Validate` trait for cases where a value
-/// has to be validate with respect to an index, as is
-/// the case for the input type of state machines.
-pub trait IndexedValidate<Index, Value> {
-	type Error;
-	fn validate(index: &Index, value: &Value) -> Result<(), Self::Error>;
+	impl Validate for EmptyHook {
+		type Error = ();
+
+		fn is_valid(&self) -> Result<(), Self::Error> {
+			Ok(())
+		}
+	}
 }
 
 /// A type which can be validated.
@@ -169,6 +330,31 @@ impl Validate for () {
 	}
 }
 
+impl<A: Validate, B: Validate> Validate for BTreeMap<A, B> {
+	type Error = Either<A::Error, B::Error>;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		// TODO implement!
+		Ok(())
+	}
+}
+
+impl<A: Validate> Validate for Vec<A> {
+	type Error = A::Error;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.iter().map(Validate::is_valid).collect()
+	}
+}
+
+impl<A: Validate> Validate for VecDeque<A> {
+	type Error = A::Error;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.iter().map(Validate::is_valid).collect()
+	}
+}
+
 impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
 	type Error = B;
 
@@ -177,6 +363,71 @@ impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
 			Ok(_) => Ok(()),
 			Err(err) => Err(err.clone()),
 		}
+	}
+}
+
+impl<C: ChainWitnessConfig> Validate for BlockWitnessRange<C> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		// TODO, actually check something
+		Ok(())
+	}
+}
+
+impl Validate for bool {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl Validate for u8 {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl Validate for u32 {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl Validate for u64 {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl Validate for usize {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl Validate for char {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl Validate for H256 {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
 	}
 }
 
