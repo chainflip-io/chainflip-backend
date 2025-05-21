@@ -32,7 +32,8 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
 		block_height_tracking::{
-			primitives::Header, state_machine::InputHeaders, HWTypes, HeightWitnesserProperties,
+			primitives::Header, state_machine::InputHeaders, ChainTypes, HWTypes,
+			HeightWitnesserProperties,
 		},
 		block_witnesser::state_machine::{BWElectionProperties, BWElectionType},
 	},
@@ -162,6 +163,33 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 	}
 }
 
+async fn query_election_block<T: ChainTypes>(
+	client: &BtcCachingClient,
+	block_height: btc::BlockNumber,
+	election_type: BWElectionType<T>,
+) -> Result<(Vec<VerboseTransaction>, Option<btc::Hash>)>
+where
+	T::ChainBlockHash: AsRef<[u8]>,
+{
+	match election_type {
+		BWElectionType::Optimistic => {
+			let block_hash = client.block_hash(block_height).await?;
+			let block = client.block(block_hash).await?;
+			Ok((block.txdata, Some(block.header.hash.to_byte_array().into())))
+		},
+		BWElectionType::ByHash(hash) => {
+			let block =
+				client.block(bitcoin::BlockHash::from_slice(hash.as_ref()).unwrap()).await?;
+			Ok((block.txdata, None))
+		},
+		BWElectionType::SafeBlockHeight => {
+			let block_hash = client.block_hash(block_height).await?;
+			let block = client.block(block_hash).await?;
+			Ok((block.txdata, None))
+		},
+	}
+}
+
 #[derive(Clone)]
 pub struct BitcoinDepositChannelWitnessingVoter {
 	client: BtcCachingClient,
@@ -178,25 +206,8 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 			block_height, properties: deposit_addresses, election_type, ..
 		} = properties;
 
-		let (txs, response_block_hash) = match election_type {
-			BWElectionType::Optimistic => {
-				let block_hash = self.client.block_hash(block_height).await?;
-				let block = self.client.block(block_hash).await?;
-				(block.txdata, Some(block.header.hash.to_byte_array().into()))
-			},
-			BWElectionType::ByHash(hash) => {
-				let block = self
-					.client
-					.block(bitcoin::BlockHash::from_slice(hash.as_bytes()).unwrap())
-					.await?;
-				(block.txdata, None)
-			},
-			BWElectionType::SafeBlockHeight => {
-				let block_hash = self.client.block_hash(block_height).await?;
-				let block = self.client.block(block_hash).await?;
-				(block.txdata, None)
-			},
-		};
+		let (txs, response_block_hash) =
+			query_election_block(&self.client, block_height, election_type).await?;
 
 		let deposit_addresses = map_script_addresses(deposit_addresses);
 
@@ -221,25 +232,8 @@ impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessing
 		let BWElectionProperties { block_height, properties: vaults, election_type, .. } =
 			properties;
 
-		let (txs, response_block_hash) = match election_type {
-			BWElectionType::Optimistic => {
-				let block_hash = self.client.block_hash(block_height).await?;
-				let block = self.client.block(block_hash).await?;
-				(block.txdata, Some(block.header.hash.to_byte_array().into()))
-			},
-			BWElectionType::ByHash(hash) => {
-				let block = self
-					.client
-					.block(bitcoin::BlockHash::from_slice(hash.as_bytes()).unwrap())
-					.await?;
-				(block.txdata, None)
-			},
-			BWElectionType::SafeBlockHeight => {
-				let block_hash = self.client.block_hash(block_height).await?;
-				let block = self.client.block(block_hash).await?;
-				(block.txdata, None)
-			},
-		};
+		let (txs, response_block_hash) =
+			query_election_block(&self.client, block_height, election_type).await?;
 
 		let witnesses = vault_deposits(&txs, &vaults);
 		Ok(Some((witnesses, response_block_hash)))
@@ -261,25 +255,8 @@ impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
 		let BWElectionProperties { block_height, properties: tx_hashes, election_type, .. } =
 			properties;
 
-		let (txs, response_block_hash) = match election_type {
-			BWElectionType::Optimistic => {
-				let block_hash = self.client.block_hash(block_height).await?;
-				let block = self.client.block(block_hash).await?;
-				(block.txdata, Some(block.header.hash.to_byte_array().into()))
-			},
-			BWElectionType::ByHash(hash) => {
-				let block = self
-					.client
-					.block(bitcoin::BlockHash::from_slice(hash.as_bytes()).unwrap())
-					.await?;
-				(block.txdata, None)
-			},
-			BWElectionType::SafeBlockHeight => {
-				let block_hash = self.client.block_hash(block_height).await?;
-				let block = self.client.block(block_hash).await?;
-				(block.txdata, None)
-			},
-		};
+		let (txs, response_block_hash) =
+			query_election_block(&self.client, block_height, election_type).await?;
 
 		let witnesses = egress_witnessing(&txs, tx_hashes);
 		Ok(Some((witnesses, response_block_hash)))
